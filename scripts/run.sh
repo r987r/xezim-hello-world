@@ -4,7 +4,20 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 XEZIM_VERSION="${XEZIM_VERSION:-0.11.3}"
 XEZIM_DIR="${XEZIM_DIR:-$ROOT/.tools/xezim}"
-XEZIM_BIN="${XEZIM_BIN:-$XEZIM_DIR/target/release/xezim}"
+# Prefer an explicit binary, then the cached executable, then one on PATH.
+# Only build Xezim from source if none of these is available.
+if [[ -n "${XEZIM_BIN:-}" ]]; then
+    if [[ ! -x "$XEZIM_BIN" ]]; then
+        echo "ERROR: XEZIM_BIN is not an executable: $XEZIM_BIN" >&2
+        exit 1
+    fi
+elif [[ -x "$XEZIM_DIR/target/release/xezim" ]]; then
+    XEZIM_BIN="$XEZIM_DIR/target/release/xezim"
+elif command -v xezim >/dev/null 2>&1; then
+    XEZIM_BIN="$(command -v xezim)"
+else
+    XEZIM_BIN="$XEZIM_DIR/target/release/xezim"
+fi
 
 if [[ ! -x "$XEZIM_BIN" ]]; then
     if ! command -v git >/dev/null 2>&1; then
@@ -31,6 +44,7 @@ fi
 
 LOG="$(mktemp)"
 trap 'rm -f "$LOG"' EXIT
+echo "Using Xezim binary: $XEZIM_BIN"
 echo 'Compiling, elaborating, and simulating the Hello World testbench ...'
 "$XEZIM_BIN" -s hello_world_tb "$ROOT/rtl/hello_world.sv" "$ROOT/tb/hello_world_tb.sv" 2>&1 | tee "$LOG"
 if ! grep -Fxq 'PASS: hello_world_tb' "$LOG"; then
