@@ -6,6 +6,6 @@ help:
 	@echo 'Set XEZIM_BIN=/path/to/xezim to use an existing simulator build.'
 
 test:
-	./scripts/run.sh
+	bash ./scripts/run.sh
 
 run: test
