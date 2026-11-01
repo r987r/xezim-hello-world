@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "buses": {
+    "data": {
+      "protocol": "axi4",
+      "width": 64,
+      "address_bits": 64,
+      "id_bits": 4
+    },
+    "config": {
+      "protocol": "axi4_lite"
+    }
+  },
+  "subsystems": [
+    "compute0",
+    "compute1",
+    "memory0"
+  ],
+  "fabrics": {
+    "global_config": {
+      "backend": "pulp_axi",
+      "topology": "tree",
+      "emitter_available": false
+    },
+    "global_data": {
+      "backend": "floonoc",
+      "topology": "mesh",
+      "emitter_available": false
+    },
+    "local_config": {
+      "backend": "pulp_axi",
+      "topology": "crossbar",
+      "emitter_available": false
+    },
+    "local_data": {
+      "backend": "pulp_axi",
+      "topology": "crossbar",
+      "emitter_available": false
+    },
+    "memory_data": {
+      "backend": "verilog_axi",
+      "topology": "crossbar",
+      "emitter_available": true
+    }
+  },
+  "memory": {
+    "ingress_ports": 2,
+    "targets": [
+      "memory0.hbm0",
+      "memory0.ddr0"
+    ],
+    "routing": [
+      {
+        "ingress": "memory_ingress0",
+        "target": "memory0.hbm0"
+      },
+      {
+        "ingress": "memory_ingress1",
+        "target": "memory0.ddr0"
+      }
+    ]
+  },
+  "cpu_instances": [
+    {
+      "subsystem": "compute0",
+      "ip": "picorv32",
+      "bus": "axi4_lite",
+      "adapter": "picorv32_axi"
+    },
+    {
+      "subsystem": "compute1",
+      "ip": "serv",
+      "bus": "wishbone",
+      "adapter": "serv_wishbone"
+    }
+  ],
+  "common_dma": "pulp_idma",
+  "addresses": [
+    {
+      "name": "compute0.sram",
+      "base": 268435456,
+      "size": 1048576
+    },
+    {
+      "name": "compute1.sram",
+      "base": 285212672,
+      "size": 1048576
+    },
+    {
+      "name": "memory0.hbm0",
+      "base": 4294967296,
+      "size": 1073741824
+    },
+    {
+      "name": "memory0.ddr0",
+      "base": 5368709120,
+      "size": 1073741824
+    }
+  ]
+}

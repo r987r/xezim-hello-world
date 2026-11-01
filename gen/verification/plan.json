@@ -1,0 +1,103 @@
+{
+  "buses": {
+    "config": {
+      "addr_bits": 32,
+      "data_bits": 32,
+      "protocol": "axi4_lite"
+    },
+    "data": {
+      "addr_bits": 64,
+      "data_bits": 64,
+      "id_bits": 4,
+      "protocol": "axi4"
+    }
+  },
+  "memory": {
+    "burst_beats": 4,
+    "dut": "memory0.memory_data",
+    "ingress_master_agents": 2,
+    "note": "Behavioral AXI RAM, not integrated DRAM controller/PHY",
+    "target_names": [
+      "memory0.hbm0",
+      "memory0.ddr0"
+    ],
+    "testbench_source": "gen/memory/memory_tb.sv"
+  },
+  "schema_version": 1,
+  "scopes": [
+    {
+      "checks": [
+        "addresses",
+        "hierarchy",
+        "backends",
+        "reproducibility"
+      ],
+      "command": "make check-config",
+      "dut": "soc_definition",
+      "name": "configuration",
+      "status": "executable"
+    },
+    {
+      "checks": [
+        "all_memory_routes",
+        "axi_responses",
+        "readback",
+        "id_routing"
+      ],
+      "command": "make dv-memory",
+      "dut": "memory0.memory_data",
+      "name": "memory_fabric",
+      "status": "executable"
+    },
+    {
+      "checks": [
+        "injected_mismatch_detected"
+      ],
+      "command": "make dv-memory-negative",
+      "dut": "memory0.memory_data",
+      "name": "negative_readback",
+      "status": "executable"
+    },
+    {
+      "checks": [
+        "picorv32_fetch",
+        "serv_fetch"
+      ],
+      "command": "make dv-cpu",
+      "dut": "compute0.cpu+compute1.cpu",
+      "name": "cpu_smoke",
+      "status": "executable"
+    },
+    {
+      "checks": [
+        "local_fabric",
+        "dma_csr",
+        "dma_copy"
+      ],
+      "dut": "compute_subsystem",
+      "name": "compute_subsystem",
+      "status": "planned"
+    },
+    {
+      "checks": [
+        "routes",
+        "ordering",
+        "separate_control_traffic"
+      ],
+      "dut": "global_data+global_config",
+      "name": "global_nocs",
+      "status": "planned"
+    },
+    {
+      "checks": [
+        "cpu_dma_hbm_ddr",
+        "interrupts",
+        "congestion"
+      ],
+      "dut": "soc_top",
+      "name": "full_chip",
+      "status": "planned"
+    }
+  ],
+  "source_config": "config/soc.yaml"
+}

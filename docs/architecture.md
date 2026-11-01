@@ -1,6 +1,8 @@
 # Architecture and IP contracts
 
-This document specifies **logical connectivity separately from RTL implementation**. `config/soc.yaml` is authoritative; nothing under `generated/` is hand-edited.
+This document specifies **logical connectivity separately from RTL implementation**. `config/soc.yaml` is authoritative; nothing under `gen/` is hand-edited. All generated outputs (including generated RTL, 2D architecture/connectivity/verification diagrams, and machine-readable graph metadata) are checked into `gen/`. `make gen` replaces the tree and deletes stale files; `make check-generated` verifies exact output bytes and names without changing the repository.
+
+The [README](../README.md) embeds the 2D architecture, actual memory RTL connectivity, and verification diagrams. The source-controlled Mermaid and graph JSON files are in [`gen/diagrams/`](../gen/diagrams/). For each subsystem, the generated `.md` diagram can be opened directly in GitHub. Connectivity metadata follows the explicit instances/connections model in the owner's `Diagram-gen` and `Sv-diagrams` repositories; verification scopes follow `Sv-test`. There is no 3D viewer dependency.
 
 ## Structure
 

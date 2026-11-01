@@ -1,0 +1,146 @@
+{
+  "name": "xezim_soc_dv",
+  "memory_subsystem": "memory0",
+  "address_bits": 64,
+  "data_bits": 64,
+  "id_bits": 4,
+  "ingress": 2,
+  "targets": [
+    {
+      "name": "memory0.hbm0",
+      "kind": "hbm",
+      "controller": "hisa_hbm",
+      "sim_backend": "axi_ram",
+      "sim_pipeline": false,
+      "base": 4294967296,
+      "size": 1073741824
+    },
+    {
+      "name": "memory0.ddr0",
+      "kind": "ddr",
+      "controller": "litedram",
+      "sim_backend": "axi_ram",
+      "sim_pipeline": true,
+      "base": 5368709120,
+      "size": 1073741824
+    }
+  ],
+  "backing_addr_bits": 16,
+  "burst_beats": 4,
+  "subsystems": [
+    {
+      "name": "compute0",
+      "type": "compute",
+      "cpu": {
+        "ip": "picorv32",
+        "bus": "axi4_lite",
+        "adapter": "picorv32_axi"
+      }
+    },
+    {
+      "name": "compute1",
+      "type": "compute",
+      "cpu": {
+        "ip": "serv",
+        "bus": "wishbone",
+        "adapter": "serv_wishbone"
+      }
+    },
+    {
+      "name": "memory0",
+      "type": "memory"
+    }
+  ],
+  "cpu_instances": [
+    {
+      "subsystem": "compute0",
+      "ip": "picorv32",
+      "bus": "axi4_lite",
+      "adapter": "picorv32_axi"
+    },
+    {
+      "subsystem": "compute1",
+      "ip": "serv",
+      "bus": "wishbone",
+      "adapter": "serv_wishbone"
+    }
+  ],
+  "common_dma": "pulp_idma",
+  "global_data_outputs": [
+    {
+      "name": "memory_ingress0",
+      "target": "memory0.hbm0"
+    },
+    {
+      "name": "memory_ingress1",
+      "target": "memory0.ddr0"
+    }
+  ],
+  "fabrics": {
+    "local_data": {
+      "topology": "crossbar",
+      "backend": "pulp_axi"
+    },
+    "local_config": {
+      "topology": "crossbar",
+      "backend": "pulp_axi"
+    },
+    "memory_data": {
+      "topology": "crossbar",
+      "backend": "verilog_axi"
+    },
+    "global_data": {
+      "topology": "mesh",
+      "backend": "floonoc"
+    },
+    "global_config": {
+      "topology": "tree",
+      "backend": "pulp_axi"
+    }
+  },
+  "data_regions": [
+    {
+      "name": "compute0.sram",
+      "base": 268435456,
+      "size": 1048576
+    },
+    {
+      "name": "compute1.sram",
+      "base": 285212672,
+      "size": 1048576
+    },
+    {
+      "name": "memory0.hbm0",
+      "base": 4294967296,
+      "size": 1073741824
+    },
+    {
+      "name": "memory0.ddr0",
+      "base": 5368709120,
+      "size": 1073741824
+    }
+  ],
+  "config_regions": [
+    {
+      "name": "compute0.dma",
+      "base": 1073741824,
+      "size": 65536
+    },
+    {
+      "name": "compute1.dma",
+      "base": 1073807360,
+      "size": 65536
+    },
+    {
+      "name": "memory0.hbm0",
+      "base": 1342177280,
+      "size": 65536
+    },
+    {
+      "name": "memory0.ddr0",
+      "base": 1342242816,
+      "size": 65536
+    }
+  ],
+  "target_count": 2
+}

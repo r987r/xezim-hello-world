@@ -1,0 +1,25 @@
+# Subsystems / Memory0
+
+Generated from `config/soc.yaml`. Do not edit.
+
+```mermaid
+flowchart TB
+  classDef cpu fill:#e8f0fe,stroke:#2869c9,color:#172a4b,stroke-width:1px;
+  classDef dma fill:#e7f2ff,stroke:#2869c9,color:#172a4b,stroke-width:1px;
+  classDef fabric fill:#e3f4ec,stroke:#20824e,color:#153c26,stroke-width:1px;
+  classDef memory fill:#fff0e6,stroke:#c46b2f,color:#563115,stroke-width:1px;
+  classDef config fill:#f1edff,stroke:#7654b5,color:#342451,stroke-width:1px;
+  classDef verification fill:#e3f4ec,stroke:#20824e,color:#153c26,stroke-width:1px;
+  classDef model fill:#f2f2f2,stroke:#888888,color:#333333,stroke-width:1px;
+  subgraph memory0_subsystem["memory0: subsystem contract"]
+    direction TB
+    memory0_ingress["2 AXI4 ingress ports"]:::cpu
+    memory0_data["Local 2×2 crossbar<br/>verilog_axi"]:::fabric
+    memory0_config["Controller CSRs<br/>AXI4-Lite pending"]:::config
+    memory0_hbm0["HBM hisa_hbm<br/>axi_ram simulation<br/>0x100000000 + 0x40000000"]:::memory
+    memory0_ddr0["DDR litedram<br/>axi_ram simulation<br/>0x140000000 + 0x40000000"]:::memory
+  end
+  memory0_ingress -.->|2 AXI4 ports| memory0_data
+  memory0_data -->|AXI4 model in testbench| memory0_hbm0
+  memory0_data -->|AXI4 model in testbench| memory0_ddr0
+```

@@ -1,0 +1,27 @@
+{
+  "config_sha256": "b8486635b7f74d7ca8a2bbeef56510fc28a7fc548c74390679285ec7500a5068",
+  "files_sha256": {
+    ".generated-root": "0db72ba0ceee7c322b275cc197d8ab0a147283c068aaa89cf374b42a9765e013",
+    "README.md": "4d8bc45041802a2c6a726bfd30a8996eae743ce4c096e40293f496dbf4396322",
+    "diagrams/architecture.md": "57ddeef7b4c6df8b5da636f13d5a4de1b20377c65eacfb4e5ea87916a11604c9",
+    "diagrams/architecture.mmd": "aaaffc14a0a9ac5f83264c6ab69b2acc8ce27c9ec9f854eb83d27cc45c50244d",
+    "diagrams/graphs.json": "804ad0036c4c00b9e1a8fac880d1b574d85ede1ea6c5a44a17c7e65dda8b5e14",
+    "diagrams/rtl-connectivity.md": "0d5edd371ca39289e855ac7f7013288432417b6a7c90aac21a3b66f2f4f505fb",
+    "diagrams/rtl-connectivity.mmd": "85e62549ef400160854a97c007d278831c5a5549f55f060af728b6cce0b28da7",
+    "diagrams/subsystems/compute0.md": "833684e28dd5adf2e8277ee0f231c35bbecbb65cec6f53129942b859c310e5f2",
+    "diagrams/subsystems/compute0.mmd": "3c5fc96539a02513f0dcb60fc4bc464e3a1f0382121d970b4801f8e6ff4bc894",
+    "diagrams/subsystems/compute1.md": "a5e6c5699605b1156d06a632adb7b5e1e914f840f375fc0ef4f863578f5879d9",
+    "diagrams/subsystems/compute1.mmd": "57056d1a7cdeebf66121b60b158c4f4f3a5fea8bfef784ffeb83aaf9b6ac4920",
+    "diagrams/subsystems/memory0.md": "0be892ea78ee7832488ed2a363fb1307818fbc12ad429b72fd64acebe8e45062",
+    "diagrams/subsystems/memory0.mmd": "821e096234d011d48e43e8a7647de2ac79d97a9ec3e52e5107ae97f0796fa759",
+    "diagrams/verification.md": "ed18a03dd56dff6bd589a628c4b57f87996923e32be18c1fcf9708633a05bacf",
+    "diagrams/verification.mmd": "c832875680e54d2042bb71d6399f444b13af65a3570d004873fd3ec6ed99201e",
+    "memory/manifest.json": "9d4e74b89d197c9d9c12cab4646a1a68df2eb81e9fed81a71eb516320487215e",
+    "memory/memory_tb.sv": "69904e507109d279e3294ce7e57ec43dd9da2711630dca8140ff2d9022144d8c",
+    "noc/fabric_ir.json": "cd6b9573d8c5da79898883f949c9ce02e4b972471a30c9f2b0e03892a830bb97",
+    "verification/plan.json": "dcb35716ae37136bcc9d4e3bab5f337f25091216701104eece8148d7bb63be47",
+    "verification/routes.json": "b3422dcb7d7550ab7db1614af7569b5abbbfd15c1f038060394eab8f9b697c71"
+  },
+  "note": "No timestamp; regenerated files should be byte-for-byte stable.",
+  "schema_version": 2
+}

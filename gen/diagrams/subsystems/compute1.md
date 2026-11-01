@@ -1,0 +1,25 @@
+# Subsystems / Compute1
+
+Generated from `config/soc.yaml`. Do not edit.
+
+```mermaid
+flowchart TB
+  classDef cpu fill:#e8f0fe,stroke:#2869c9,color:#172a4b,stroke-width:1px;
+  classDef dma fill:#e7f2ff,stroke:#2869c9,color:#172a4b,stroke-width:1px;
+  classDef fabric fill:#e3f4ec,stroke:#20824e,color:#153c26,stroke-width:1px;
+  classDef memory fill:#fff0e6,stroke:#c46b2f,color:#563115,stroke-width:1px;
+  classDef config fill:#f1edff,stroke:#7654b5,color:#342451,stroke-width:1px;
+  classDef verification fill:#e3f4ec,stroke:#20824e,color:#153c26,stroke-width:1px;
+  classDef model fill:#f2f2f2,stroke:#888888,color:#333333,stroke-width:1px;
+  subgraph compute1_subsystem["compute1: subsystem contract"]
+    direction TB
+    compute1_cpu["serv<br/>wishbone / serv_wishbone"]:::cpu
+    compute1_dma["pulp_idma"]:::dma
+    compute1_data["Local data fabric<br/>pulp_axi"]:::fabric
+    compute1_config["Local config fabric<br/>pulp_axi"]:::config
+    compute1_sram["SRAM<br/>0x11000000 + 0x100000"]:::memory
+  end
+  compute1_cpu -.->|adapter required| compute1_config
+  compute1_dma -.->|AXI4 pending| compute1_data
+  compute1_data -.->|local| compute1_sram
+```

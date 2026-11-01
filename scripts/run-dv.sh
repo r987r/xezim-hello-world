@@ -3,7 +3,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/scripts/common.sh"
 cd "$ROOT"
-python3 tools/socgen.py
+python3 tools/generate.py --check
 python3 tools/ip_fetch.py verilog_axi
 vendor="$ROOT/.tools/verilog_axi"
 files=(
@@ -19,7 +19,7 @@ files=(
   "$ROOT/rtl/adapters/axi_memory_target_model.sv"
   "$ROOT/dv/common/axi_master_bfm.sv"
   "$ROOT/dv/common/axi_route_monitor.sv"
-  "$ROOT/generated/memory/memory_tb.sv"
+  "$ROOT/gen/memory/memory_tb.sv"
 )
 for file in "${files[@]}"; do
   [[ -s "$file" ]] || { echo "Missing RTL source: $file" >&2; exit 1; }

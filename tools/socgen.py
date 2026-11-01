@@ -330,7 +330,7 @@ def run(config_file: Path, output_dir: Path):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config",type=Path,default=ROOT/"config/soc.yaml")
-    parser.add_argument("--out",type=Path,default=ROOT/"generated/memory")
+    parser.add_argument("--out",type=Path,default=ROOT/"gen/memory")
     args=parser.parse_args()
     try:
         run(args.config,args.out)

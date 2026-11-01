@@ -1,0 +1,52 @@
+{
+  "expected_routes": [
+    {
+      "address_base": "0x100000000",
+      "address_size": "0x40000000",
+      "bursts": 4,
+      "destination": "memory0.hbm0",
+      "destination_port": 0,
+      "read": true,
+      "source": "master0",
+      "source_port": 0,
+      "write": true
+    },
+    {
+      "address_base": "0x140000000",
+      "address_size": "0x40000000",
+      "bursts": 4,
+      "destination": "memory0.ddr0",
+      "destination_port": 1,
+      "read": true,
+      "source": "master0",
+      "source_port": 0,
+      "write": true
+    },
+    {
+      "address_base": "0x100000000",
+      "address_size": "0x40000000",
+      "bursts": 4,
+      "destination": "memory0.hbm0",
+      "destination_port": 0,
+      "read": true,
+      "source": "master1",
+      "source_port": 1,
+      "write": true
+    },
+    {
+      "address_base": "0x140000000",
+      "address_size": "0x40000000",
+      "bursts": 4,
+      "destination": "memory0.ddr0",
+      "destination_port": 1,
+      "read": true,
+      "source": "master1",
+      "source_port": 1,
+      "write": true
+    }
+  ],
+  "ingress_count": 2,
+  "schema_version": 1,
+  "scope": "memory_fabric",
+  "target_count": 2
+}

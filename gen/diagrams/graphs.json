@@ -1,0 +1,468 @@
+{
+  "architecture": {
+    "connections": [
+      {
+        "from": "compute0.cpu",
+        "label": "MMIO via adapter",
+        "status": "planned",
+        "to": "compute0.local_config"
+      },
+      {
+        "from": "compute0.dma",
+        "label": "AXI4",
+        "status": "planned",
+        "to": "compute0.local_data"
+      },
+      {
+        "from": "compute0.local_data",
+        "label": "local SRAM",
+        "status": "planned",
+        "to": "compute0.sram"
+      },
+      {
+        "from": "compute0.local_data",
+        "label": "AXI4 uplink",
+        "status": "planned",
+        "to": "global_data"
+      },
+      {
+        "from": "compute0.local_config",
+        "label": "config uplink",
+        "status": "planned",
+        "to": "global_config"
+      },
+      {
+        "from": "compute1.cpu",
+        "label": "MMIO via adapter",
+        "status": "planned",
+        "to": "compute1.local_config"
+      },
+      {
+        "from": "compute1.dma",
+        "label": "AXI4",
+        "status": "planned",
+        "to": "compute1.local_data"
+      },
+      {
+        "from": "compute1.local_data",
+        "label": "local SRAM",
+        "status": "planned",
+        "to": "compute1.sram"
+      },
+      {
+        "from": "compute1.local_data",
+        "label": "AXI4 uplink",
+        "status": "planned",
+        "to": "global_data"
+      },
+      {
+        "from": "compute1.local_config",
+        "label": "config uplink",
+        "status": "planned",
+        "to": "global_config"
+      },
+      {
+        "from": "memory0.local_data",
+        "label": "AXI4 \u2192 HBM model",
+        "status": "rtl",
+        "to": "memory0.hbm0"
+      },
+      {
+        "from": "memory0.local_data",
+        "label": "AXI4 \u2192 DDR model",
+        "status": "rtl",
+        "to": "memory0.ddr0"
+      },
+      {
+        "from": "global_config",
+        "label": "CSR ingress",
+        "status": "planned",
+        "to": "memory0.local_config"
+      },
+      {
+        "from": "global_data",
+        "label": "output0 / memory0.hbm0",
+        "status": "planned",
+        "to": "memory0.local_data"
+      },
+      {
+        "from": "global_data",
+        "label": "output1 / memory0.ddr0",
+        "status": "planned",
+        "to": "memory0.local_data"
+      },
+      {
+        "from": "global_config",
+        "label": "remote MMIO",
+        "status": "planned",
+        "to": "compute0.local_config"
+      },
+      {
+        "from": "global_config",
+        "label": "remote MMIO",
+        "status": "planned",
+        "to": "compute1.local_config"
+      }
+    ],
+    "meaning": "Logical architecture. Only memory-local model paths have tested RTL.",
+    "nodes": [
+      {
+        "category": "cpu",
+        "id": "compute0.cpu",
+        "label": "picorv32\naxi4_lite / picorv32_axi",
+        "parent": "compute0"
+      },
+      {
+        "category": "dma",
+        "id": "compute0.dma",
+        "label": "pulp_idma\nDMA RTL: pending",
+        "parent": "compute0"
+      },
+      {
+        "category": "fabric",
+        "id": "compute0.local_data",
+        "label": "Local data fabric\npulp_axi (pending)",
+        "parent": "compute0"
+      },
+      {
+        "category": "config",
+        "id": "compute0.local_config",
+        "label": "Local config fabric\npulp_axi (pending)",
+        "parent": "compute0"
+      },
+      {
+        "category": "memory",
+        "id": "compute0.sram",
+        "label": "SRAM\n0x10000000 + 0x100000",
+        "parent": "compute0"
+      },
+      {
+        "category": "cpu",
+        "id": "compute1.cpu",
+        "label": "serv\nwishbone / serv_wishbone",
+        "parent": "compute1"
+      },
+      {
+        "category": "dma",
+        "id": "compute1.dma",
+        "label": "pulp_idma\nDMA RTL: pending",
+        "parent": "compute1"
+      },
+      {
+        "category": "fabric",
+        "id": "compute1.local_data",
+        "label": "Local data fabric\npulp_axi (pending)",
+        "parent": "compute1"
+      },
+      {
+        "category": "config",
+        "id": "compute1.local_config",
+        "label": "Local config fabric\npulp_axi (pending)",
+        "parent": "compute1"
+      },
+      {
+        "category": "memory",
+        "id": "compute1.sram",
+        "label": "SRAM\n0x11000000 + 0x100000",
+        "parent": "compute1"
+      },
+      {
+        "category": "fabric",
+        "id": "memory0.local_data",
+        "label": "2-input AXI4 fabric\nverilog_axi (RTL tested)",
+        "parent": "memory0"
+      },
+      {
+        "category": "config",
+        "id": "memory0.local_config",
+        "label": "Memory config fabric\npulp_axi (pending)",
+        "parent": "memory0"
+      },
+      {
+        "category": "memory",
+        "id": "memory0.hbm0",
+        "label": "HBM hisa_hbm\nAXI model: axi_ram\n0x100000000 + 0x40000000",
+        "parent": "memory0"
+      },
+      {
+        "category": "memory",
+        "id": "memory0.ddr0",
+        "label": "DDR litedram\nAXI model: axi_ram\n0x140000000 + 0x40000000",
+        "parent": "memory0"
+      },
+      {
+        "category": "fabric",
+        "id": "global_data",
+        "label": "Global data NoC\nmesh / floonoc\nAXI4 64-bit (pending)",
+        "parent": ""
+      },
+      {
+        "category": "config",
+        "id": "global_config",
+        "label": "Global config NoC\ntree / pulp_axi\nAXI4-Lite (pending)",
+        "parent": ""
+      }
+    ]
+  },
+  "rtl_connectivity": {
+    "address_bits": 64,
+    "clock": "clk",
+    "connections": [
+      {
+        "channels": [
+          "AW",
+          "W",
+          "B",
+          "AR",
+          "R"
+        ],
+        "from": "ingress0",
+        "from_instance": "ingress0",
+        "from_port": "masters[0].u_agent",
+        "label": "AXI4 ingress 0 (AW,W,B,AR,R)",
+        "protocol": "axi4",
+        "status": "wired",
+        "to": "xbar",
+        "to_instance": "xbar",
+        "to_port": "fabric.s_axi[0]"
+      },
+      {
+        "channels": [
+          "AW",
+          "W",
+          "B",
+          "AR",
+          "R"
+        ],
+        "from": "ingress1",
+        "from_instance": "ingress1",
+        "from_port": "masters[1].u_agent",
+        "label": "AXI4 ingress 1 (AW,W,B,AR,R)",
+        "protocol": "axi4",
+        "status": "wired",
+        "to": "xbar",
+        "to_instance": "xbar",
+        "to_port": "fabric.s_axi[1]"
+      },
+      {
+        "channels": [
+          "AW",
+          "W",
+          "B",
+          "AR",
+          "R"
+        ],
+        "from": "xbar",
+        "from_instance": "xbar",
+        "from_port": "fabric.m_axi[0]",
+        "label": "AXI4 port 0 (AW,W,B,AR,R)",
+        "protocol": "axi4",
+        "status": "wired",
+        "to": "memory0.hbm0",
+        "to_instance": "memory0.hbm0",
+        "to_port": "memories[0].u_mem.s_axi"
+      },
+      {
+        "channels": [
+          "AW",
+          "W",
+          "B",
+          "AR",
+          "R"
+        ],
+        "from": "xbar",
+        "from_instance": "xbar",
+        "from_port": "fabric.m_axi[1]",
+        "label": "AXI4 port 1 (AW,W,B,AR,R)",
+        "protocol": "axi4",
+        "status": "wired",
+        "to": "memory0.ddr0",
+        "to_instance": "memory0.ddr0",
+        "to_port": "memories[1].u_mem.s_axi"
+      },
+      {
+        "channels": [],
+        "from": "xbar",
+        "from_instance": "xbar",
+        "from_port": null,
+        "label": "passive observation",
+        "protocol": "monitor",
+        "status": "observe",
+        "to": "route_monitor",
+        "to_instance": "route_monitor",
+        "to_port": null
+      }
+    ],
+    "data_bits": 64,
+    "nodes": [
+      {
+        "category": "cpu",
+        "id": "ingress0",
+        "label": "AXI master BFM 0\n64-bit / ID 4"
+      },
+      {
+        "category": "cpu",
+        "id": "ingress1",
+        "label": "AXI master BFM 1\n64-bit / ID 4"
+      },
+      {
+        "category": "fabric",
+        "id": "xbar",
+        "label": "verilog_axi axi_crossbar\n2 inputs \u00d7 2 outputs\n64-bit address, 64-bit data"
+      },
+      {
+        "category": "memory",
+        "id": "memory0.hbm0",
+        "label": "memory0.hbm0\nHBM simulation target\naxi_ram\n0x100000000 + 0x40000000"
+      },
+      {
+        "category": "memory",
+        "id": "memory0.ddr0",
+        "label": "memory0.ddr0\nDDR simulation target\naxi_ram\n0x140000000 + 0x40000000"
+      },
+      {
+        "category": "verification",
+        "id": "route_monitor",
+        "label": "AXI route monitor\nchecks source/target and ID"
+      }
+    ],
+    "protocol": "axi4",
+    "reset": "rst",
+    "scope": "memory_fabric",
+    "source": "gen/memory/memory_tb.sv",
+    "source_id_bits": 4,
+    "status": "executable",
+    "target_id_bits": 5
+  },
+  "verification": {
+    "connections": [
+      {
+        "from": "generator",
+        "status": "executable",
+        "to": "configuration"
+      },
+      {
+        "from": "generator",
+        "status": "executable",
+        "to": "memory_fabric"
+      },
+      {
+        "from": "generator",
+        "status": "executable",
+        "to": "negative_readback"
+      },
+      {
+        "from": "generator",
+        "status": "executable",
+        "to": "cpu_smoke"
+      },
+      {
+        "from": "generator",
+        "status": "planned",
+        "to": "compute_subsystem"
+      },
+      {
+        "from": "generator",
+        "status": "planned",
+        "to": "global_nocs"
+      },
+      {
+        "from": "generator",
+        "status": "planned",
+        "to": "full_chip"
+      }
+    ],
+    "generator": "make gen",
+    "memory_agents": 2,
+    "memory_targets": [
+      "memory0.hbm0",
+      "memory0.ddr0"
+    ],
+    "notes": "Executable means the testbench exists; a green simulation requires CI to run.",
+    "scopes": [
+      {
+        "checks": [
+          "addresses",
+          "hierarchy",
+          "backends",
+          "reproducibility"
+        ],
+        "command": "make check-config",
+        "dut": "soc_definition",
+        "id": "configuration",
+        "label": "configuration\nDUT: soc_definition\nmake check-config\naddresses, hierarchy, backends",
+        "status": "executable"
+      },
+      {
+        "checks": [
+          "all_memory_routes",
+          "axi_responses",
+          "readback",
+          "id_routing"
+        ],
+        "command": "make dv-memory",
+        "dut": "memory0.memory_data",
+        "id": "memory_fabric",
+        "label": "memory_fabric\nDUT: memory0.memory_data\nmake dv-memory\nall_memory_routes, axi_responses, readback",
+        "status": "executable"
+      },
+      {
+        "checks": [
+          "injected_mismatch_detected"
+        ],
+        "command": "make dv-memory-negative",
+        "dut": "memory0.memory_data",
+        "id": "negative_readback",
+        "label": "negative_readback\nDUT: memory0.memory_data\nmake dv-memory-negative\ninjected_mismatch_detected",
+        "status": "executable"
+      },
+      {
+        "checks": [
+          "picorv32_fetch",
+          "serv_fetch"
+        ],
+        "command": "make dv-cpu",
+        "dut": "compute0.cpu+compute1.cpu",
+        "id": "cpu_smoke",
+        "label": "cpu_smoke\nDUT: compute0.cpu+compute1.cpu\nmake dv-cpu\npicorv32_fetch, serv_fetch",
+        "status": "executable"
+      },
+      {
+        "checks": [
+          "local_fabric",
+          "dma_csr",
+          "dma_copy"
+        ],
+        "command": null,
+        "dut": "compute_subsystem",
+        "id": "compute_subsystem",
+        "label": "compute_subsystem\nDUT: compute_subsystem\nfuture\nlocal_fabric, dma_csr, dma_copy",
+        "status": "planned"
+      },
+      {
+        "checks": [
+          "routes",
+          "ordering",
+          "separate_control_traffic"
+        ],
+        "command": null,
+        "dut": "global_data+global_config",
+        "id": "global_nocs",
+        "label": "global_nocs\nDUT: global_data+global_config\nfuture\nroutes, ordering, separate_control_traffic",
+        "status": "planned"
+      },
+      {
+        "checks": [
+          "cpu_dma_hbm_ddr",
+          "interrupts",
+          "congestion"
+        ],
+        "command": null,
+        "dut": "soc_top",
+        "id": "full_chip",
+        "label": "full_chip\nDUT: soc_top\nfuture\ncpu_dma_hbm_ddr, interrupts, congestion",
+        "status": "planned"
+      }
+    ]
+  }
+}

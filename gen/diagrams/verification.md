@@ -1,0 +1,38 @@
+# Verification
+
+Generated from `config/soc.yaml`. Do not edit.
+
+```mermaid
+flowchart TB
+  classDef cpu fill:#e8f0fe,stroke:#2869c9,color:#172a4b,stroke-width:1px;
+  classDef dma fill:#e7f2ff,stroke:#2869c9,color:#172a4b,stroke-width:1px;
+  classDef fabric fill:#e3f4ec,stroke:#20824e,color:#153c26,stroke-width:1px;
+  classDef memory fill:#fff0e6,stroke:#c46b2f,color:#563115,stroke-width:1px;
+  classDef config fill:#f1edff,stroke:#7654b5,color:#342451,stroke-width:1px;
+  classDef verification fill:#e3f4ec,stroke:#20824e,color:#153c26,stroke-width:1px;
+  classDef model fill:#f2f2f2,stroke:#888888,color:#333333,stroke-width:1px;
+  cfg["config/soc.yaml<br/>validated source of truth"]:::config
+  gen["make gen<br/>RTL + NoC IR + DV plan + diagrams"]:::fabric
+  cfg -->|generates| gen
+  subgraph executable["EXECUTABLE CHECKS"]
+    direction LR
+    configuration["configuration<br/>DUT: soc_definition<br/>make check-config<br/>addresses, hierarchy, backends"]:::verification
+    memory_fabric["memory_fabric<br/>DUT: memory0.memory_data<br/>make dv-memory<br/>all_memory_routes, axi_responses, readback"]:::verification
+    negative_readback["negative_readback<br/>DUT: memory0.memory_data<br/>make dv-memory-negative<br/>injected_mismatch_detected"]:::verification
+    cpu_smoke["cpu_smoke<br/>DUT: compute0.cpu+compute1.cpu<br/>make dv-cpu<br/>picorv32_fetch, serv_fetch"]:::verification
+  end
+  subgraph planned["NOT YET IMPLEMENTED"]
+    direction LR
+    compute_subsystem["compute_subsystem<br/>DUT: compute_subsystem<br/>future<br/>local_fabric, dma_csr, dma_copy"]:::model
+    global_nocs["global_nocs<br/>DUT: global_data+global_config<br/>future<br/>routes, ordering, separate_control_traffic"]:::model
+    full_chip["full_chip<br/>DUT: soc_top<br/>future<br/>cpu_dma_hbm_ddr, interrupts, congestion"]:::model
+  end
+  gen -->|scope inputs| configuration
+  gen -->|scope inputs| memory_fabric
+  gen -->|scope inputs| negative_readback
+  gen -->|scope inputs| cpu_smoke
+  gen -.->|scope inputs| compute_subsystem
+  gen -.->|scope inputs| global_nocs
+  gen -.->|scope inputs| full_chip
+  %% Planned tests are placeholders only and do not imply RTL was simulated.
+```

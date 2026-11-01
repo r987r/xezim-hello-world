@@ -9,6 +9,8 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'tools'))
 import socgen
+import diagram_gen
+import generate
 
 
 class SocConfigTest(unittest.TestCase):
@@ -105,6 +107,79 @@ class SocConfigTest(unittest.TestCase):
         for ip in ('verilog_axi','picorv32','serv','pulp_idma','litedram','hisa_hbm','pulp_axi'):
             self.assertIn(ip,locked)
             self.assertRegex(locked[ip]['commit'],r'^[a-f0-9]{40}$')
+
+    def test_diagram_generation_and_readme_markers(self):
+        meta = socgen.validate(copy.deepcopy(self.base))
+        with tempfile.TemporaryDirectory() as tmp:
+            diagrams = diagram_gen.render(copy.deepcopy(self.base), meta, Path(tmp) / "diagrams")
+            for name in ("architecture", "rtl-connectivity", "verification"):
+                self.assertIn("flowchart", diagrams[name])
+                self.assertTrue((Path(tmp)/"diagrams"/f"{name}.mmd").is_file())
+            self.assertIn("picorv32", diagrams["architecture"])
+            self.assertIn("memory0.hbm0", diagrams["architecture"])
+            self.assertIn("memory_tb", diagrams["rtl-connectivity"])
+            self.assertIn("memory_fabric", diagrams["verification"])
+            self.assertIn("subsystems/compute0", diagrams)
+            self.assertIn("subsystems/compute1", diagrams)
+            self.assertIn("subsystems/memory0", diagrams)
+            graphs = json.loads((Path(tmp)/"diagrams"/"graphs.json").read_text())
+            for section in ("architecture", "rtl_connectivity"):
+                nodes = {n["id"] for n in graphs[section]["nodes"]}
+                self.assertTrue(all(e["from"] in nodes and e["to"] in nodes
+                                    for e in graphs[section]["connections"]))
+            self.assertIn(generate.START, (ROOT/"README.md").read_text())
+            self.assertIn(generate.END, (ROOT/"README.md").read_text())
+
+    def test_complete_generated_tree_and_stale_cleanup(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)/"gen"
+            readme = Path(tmp)/"README.md"
+            readme.write_text((ROOT/"README.md").read_text())
+            cfg = ROOT/"config/soc.yaml"
+            self.assertEqual(generate.execute(cfg,out,readme),0)
+            first = generate.tree_files(out)
+            self.assertEqual(generate.execute(cfg,out,readme,check=True),0)
+            (out/"obsolete.sv").write_text("not generated anymore")
+            self.assertEqual(generate.execute(cfg,out,readme,check=True),1)
+            self.assertEqual(generate.execute(cfg,out,readme),0)
+            self.assertFalse((out/"obsolete.sv").exists())
+            self.assertEqual(first, generate.tree_files(out))
+            self.assertEqual(generate.execute(cfg,out,readme,check=True),0)
+            (out/"memory"/"memory_tb.sv").write_text("incorrect")
+            self.assertEqual(generate.execute(cfg,out,readme,check=True),1)
+            self.assertEqual(generate.execute(cfg,out,readme),0)
+            self.assertEqual(first, generate.tree_files(out))
+
+    def test_stale_subsystem_diagram_deleted_when_configuration_changes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)/"gen"
+            readme = Path(tmp)/"README.md"
+            readme.write_text((ROOT/"README.md").read_text())
+            cfg_path = Path(tmp)/"soc.yaml"
+            doc = copy.deepcopy(self.base)
+            doc["subsystems"].append({"name":"compute2", "type":"compute", "cpu":
+                                      {"ip":"serv", "bus":"wishbone", "adapter":"serv_wishbone"}})
+            doc["networks"]["global_config"]["reachable_subsystems"].append("compute2")
+            cfg_path.write_text(yaml.safe_dump(doc,sort_keys=False))
+            self.assertEqual(generate.execute(cfg_path,out,readme),0)
+            extra = out/"diagrams"/"subsystems"/"compute2.mmd"
+            self.assertTrue(extra.exists())
+            cfg_path.write_text(yaml.safe_dump(self.base,sort_keys=False))
+            self.assertEqual(generate.execute(cfg_path,out,readme,check=True),1)
+            self.assertEqual(generate.execute(cfg_path,out,readme),0)
+            self.assertFalse(extra.exists())
+            self.assertEqual(generate.execute(cfg_path,out,readme,check=True),0)
+
+    def test_unmarked_gen_tree_is_protected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)/"gen"
+            out.mkdir()
+            (out/"valuable.txt").write_text("keep me")
+            readme = Path(tmp)/"README.md"
+            readme.write_text((ROOT/"README.md").read_text())
+            with self.assertRaisesRegex(generate.GenerationError,"unmarked"):
+                generate.execute(ROOT/"config/soc.yaml",out,readme)
+            self.assertEqual((out/"valuable.txt").read_text(),"keep me")
 
 
 if __name__=='__main__': unittest.main()

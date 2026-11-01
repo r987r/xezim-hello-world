@@ -1,6 +1,6 @@
 # Hierarchical verification plan
 
-All scopes consume the same `config/soc.yaml` and use shared AXI monitors, reference models, and route manifests. The testbench verifies the **RTL actually under test**, rather than reporting a green result from a VIP-to-VIP loop.
+All scopes consume the same `config/soc.yaml` and use shared AXI monitors, reference models, and route manifests. Their executable/planned status is declared in `verification.scopes` in the SoC config and appears in `gen/verification/plan.json` and the generated README verification diagram. `gen/verification/routes.json` enumerates ingress/target AXI path expectations for the current memory test. `make check-generated` detects missing, modified or obsolete generated test artifacts. The testbench verifies the **RTL actually under test**, rather than reporting a green result from a VIP-to-VIP loop.
 
 ## Implemented scopes
 
