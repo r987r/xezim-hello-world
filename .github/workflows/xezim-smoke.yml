@@ -16,12 +16,16 @@ on:
       - 'Makefile'
       - '.github/workflows/xezim-smoke.yml'
   workflow_dispatch:
+  workflow_run:
+    workflows: [Publish pinned Xezim Linux executable]
+    types: [completed]
 
 permissions:
   contents: read
 
 jobs:
   compile-and-simulate:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
