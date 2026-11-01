@@ -37,3 +37,11 @@ You can supply `XEZIM_BIN=/path/to/xezim` to use an existing simulator binary; s
 **Upstream releases have no precompiled release assets** as checked on 2026-11-01 ([0.11.3](https://github.com/aionhw/xezim/releases/tag/0.11.3), [0.11.4](https://github.com/aionhw/xezim/releases/tag/0.11.4)); their GitHub release archives are source-only. Build Xezim just once on each target platform, or retrieve the CI-cached binary.
 
 The optimized upstream release build needed more than 4 GiB of RAM. This runner reduces memory use by compiling with one job, without LTO, with 16 codegen units and opt-level 1.
+
+## CI: binary build is separate from SystemVerilog tests
+
+The normal [SV smoke test](.github/workflows/xezim-smoke.yml) downloads a pinned `xezim` Linux x86_64 executable from this repository's GitHub Release named `xezim-bin-v0.11.3-linux-x86_64`, checks its SHA-256, then executes `make test`. It does **not** install Rust or invoke Cargo. Only SV inputs and test-runner changes trigger this workflow.
+
+The [one-time binary publisher](.github/workflows/publish-xezim.yml) checks whether the versioned executable already exists; if missing, it restores an existing simulator binary cache if possible, otherwise compiles Xezim from pinned upstream commit `058f2bba58648452e5799d17572356ebcae7d163`, smoke-tests it, and publishes the executable plus SHA-256 checksum. SV changes never trigger this publisher. To change Xezim versions, deliberately update both workflows and publish a new versioned executable.
+
+**First-run ordering:** publishing the simulator executable must succeed before the binary-only SV workflow can run. Later SV pushes use only the released binary. The release asset is platform-specific (`Linux x86_64`).
