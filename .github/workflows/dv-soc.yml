@@ -1,0 +1,79 @@
+name: Heterogeneous SoC AXI and CPU verification
+
+on:
+  push:
+    paths:
+      - 'config/**'
+      - 'tools/**'
+      - 'tests/**'
+      - 'dv/**'
+      - 'rtl/**'
+      - 'scripts/**'
+      - 'Makefile'
+      - '.github/workflows/dv-soc.yml'
+  pull_request:
+    paths:
+      - 'config/**'
+      - 'tools/**'
+      - 'tests/**'
+      - 'dv/**'
+      - 'rtl/**'
+      - 'scripts/**'
+      - 'Makefile'
+      - '.github/workflows/dv-soc.yml'
+  workflow_dispatch:
+  workflow_run:
+    workflows: [Publish pinned Xezim Linux executable]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  simulate:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install configuration parser
+        run: python -m pip install --disable-pip-version-check 'PyYAML==6.0.3'
+      - name: Validate SoC configuration and generator
+        run: make check-config
+      - name: Download pinned Xezim executable (no simulator rebuild)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          source toolchains/xezim.env
+          mkdir -p .tools/bin
+          gh release download "$XEZIM_RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "$XEZIM_ASSET_NAME" \
+            --pattern "$XEZIM_ASSET_NAME.sha256" \
+            --dir .tools/bin
+          (cd .tools/bin && sha256sum -c "$XEZIM_ASSET_NAME.sha256")
+          chmod +x ".tools/bin/$XEZIM_ASSET_NAME"
+          echo "XEZIM_BIN=$GITHUB_WORKSPACE/.tools/bin/$XEZIM_ASSET_NAME" >> "$GITHUB_ENV"
+      - name: Exercise both memory destinations through AXI4 fabric
+        run: make dv-memory | tee memory-dv.log
+      - name: Prove scoreboard detects incorrect memory data
+        run: make dv-memory-negative | tee memory-negative.log
+      - name: Elaborate and exercise PicoRV32 and SERV CPUs
+        run: make dv-cpu | tee cpu-dv.log
+      - name: Upload failed test logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: heterogeneous-soc-debug
+          path: |
+            memory-dv.log
+            memory-negative.log
+            cpu-dv.log
+            generated/memory/manifest.json
+            generated/noc/fabric_ir.json
+          if-no-files-found: ignore

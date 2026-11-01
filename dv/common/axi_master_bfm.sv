@@ -1,6 +1,6 @@
 `timescale 1ns/1ps
 // Reusable AXI4 master: writes and reads deterministic INCR bursts to every
-// configured HBM target. The expected data comes from a separate function,
+// configured memory target. The expected data comes from a separate function,
 // not from peeking into the RAM model.
 module axi_master_bfm #(
     parameter integer MASTER_INDEX = 0,

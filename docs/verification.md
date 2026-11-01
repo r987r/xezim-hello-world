@@ -1,72 +1,33 @@
-# Hierarchical SoC verification
+# Hierarchical verification plan
 
-The architecture in `config/soc.yaml` is the source of truth for subsystem
-instances, network boundaries, address maps and IP implementation choices.
-`tools/socgen.py` validates it and generates simulation metadata and an HBM
-fabric test harness. Tool and vendor revisions are recorded in
-`config/ip.lock.yaml` and `toolchains/xezim.env`.
+All scopes consume the same `config/soc.yaml` and use shared AXI monitors, reference models, and route manifests. The testbench verifies the **RTL actually under test**, rather than reporting a green result from a VIP-to-VIP loop.
 
-## Scopes and status
+## Implemented scopes
 
-| Scope | DUT / planned boundary | Status |
-|---|---|---|
-| HBM fabric | Real AXI4 2x2 crossbar, two independent AXI RAM models, two master BFMs | Implemented; run `make dv-hbm` |
-| Local data NoC | Local compute crossbar; CPU/DMA boundary BFMs | Planned |
-| Local config NoC | AXI4-Lite crossbar and CSR models | Planned |
-| Compute subsystem | Local NoCs + actual DMA, synthetic remote endpoints | Planned |
-| Global data NoC | Compute ingress/egress and HBM data boundary | Planned |
-| Global config NoC | Remote CSR accesses between subsystems | Planned |
-| Full chip | Both compute subsystems, memory subsystem, two global networks | Planned |
+| Scope | RTL under test | Check |
+| --- | --- | --- |
+| Generator/configuration | SoC schema, address maps, fabric backend registry | Determinism, invalid configurations rejected |
+| Memory-local fabric | Verilog-AXI 2×2 crossbar with HBM and DDR behavioral AXI targets | Every ingress writes/reads both targets, ID route, data, ordering of burst beats |
+| Negative memory check | Same RTL, corrupted expected read data | Must produce `FAIL AXI read` |
+| CPU instance smoke | Public PicoRV32 + SERV RTL | Both elaborate and independently issue fetch requests |
 
-"Implemented" describes code checked in, not a claim that a particular simulator
-has passed it; the GitHub Actions badge/logs show actual results.
+A memory model responding to AXI does **not** test its selected HBM/DDR controller or PHY. The two CPU smoke instances have no software/SoC network attached.
 
-## HBM test
+## Expansion sequence
 
-The first suite uses the pinned upstream `verilog-axi` **AXI4** crossbar as the
-real fabric DUT. AXI RAMs act as protocol-correct memory endpoints, not physical
-HBM controllers/PHYs. Their backing memory is deliberately small and should not
-be confused with the configured HBM address windows.
+1. **Local compute fabrics:** instantiate local AXI4 and AXI4-Lite crossbars; connect PicoRV32 and SERV to protocol bridges and local SRAM; prove local accesses.
+2. **DMA subsystem:** integrate PULP iDMA in each compute instance; execute SRAM-to-remote DDR/HBM copies; independently compare memory contents.
+3. **Global NoCs:** generate FlooNoC data topology and a separate config fabric from vendor-neutral IR; test routing, outstanding IDs, fairness, and congestion.
+4. **Controller integration:** separately verify LiteDRAM with open DDR DFI model; investigate HiSA HBM with necessary vendor IP or alternative fully open model, without claiming silicon-grade PHY fidelity.
+5. **Full chip:** real CPU firmware programs DMAs, simultaneous access to HBM/DDR, memory consistency, interrupts, and independent progress of config traffic under bulk data congestion.
+6. **Scalability:** add compute2 and memory1 using configuration only; regenerate topology and auto-expand source-to-destination coverage.
 
-For each ingress and each HBM target, the corresponding master BFM performs a
-4-beat INCR write followed by a 4-beat read and compares the result against an
-independent deterministic data function. The passive route monitor checks AXI
-address routing, crossbar-expanded source IDs, and that **every** ingress-target
-pair completed read and write address handshakes. The negative regression changes
-one expected read value and must fail for a `FAIL AXI read` mismatch.
+## Acceptance gates
 
-### Run
-
-```sh
-python3 -m pip install PyYAML==6.0.3
-make check-config
-XEZIM_BIN=/path/to/xezim make dv-hbm
-```
-
-The runner fetches the pinned crossbar RTL source once, regenerates the harness,
-and invokes the existing Xezim binary; **it never builds Xezim or Rust**.
-
-### Scaling and swapping IP
-
-Add compute instances to `config/soc.yaml`; every scope reads the same canonical
-instance names and address map. Change HBM ingress/controller counts and update
-explicit address windows plus the VIP ingress count; the HBM harness is generated
-for the new dimensions. Changing third-party RTL means updating the lockfile and,
-if its ports differ, the fabric adapter/port mapper. YAML alone does **not** make
-arbitrary third-party IP plug-compatible.
-
-## Verification progression
-
-1. HBM local fabric: route and data integrity for all ingress-target pairs.
-2. Compute local NoCs and a real DMA (iDMA is a candidate); drive CPU-like MMIO
-   and DMA traffic through passive AXI monitors.
-3. Independently verified global data and config NoCs with synthetic endpoints.
-4. Full-chip SoC: compose existing passive agents and scoreboards, synchronize
-   DMA0/DMA1 cross-HBM transfers, inject congestion, and prove control-plane
-   forward progress under data-plane load.
-5. Add full CPU RTL and software after the fabric is stable.
-
-Future testbenches should reuse common agents/checkers rather than instantiate
-multiple `run_test()` contexts. Every suite must use finite simulation timeouts,
-seeded stimulus, nonzero transaction counts and a negative test that proves a
-checker can detect an error.
+- Every configured and reachable source/target path performs a real completed transaction.
+- A scoreboard independently checks memory contents and read/write responses.
+- AXI VALID/READY, bursts, ID extension, ordering and unmapped-address errors are checked.
+- A negative mutation must be detected for the intended reason.
+- Each regression has a finite simulation timeout, deterministic seed, and failure logs.
+- Backends and IP adapters have explicit capability/status declarations and reject unsupported use.
+- Simulator provisioning is separate: only HDL/configuration changes cause HDL re-elaboration; Rust/Xezim is not rebuilt.

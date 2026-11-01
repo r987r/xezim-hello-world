@@ -3,26 +3,26 @@
 // address window and that crossbar ID extension identifies the source master.
 module axi_route_monitor #(
     parameter integer N_IN = 2,
-    parameter integer N_HBM = 2,
+    parameter integer N_MEM = 2,
     parameter integer ADDR_BITS = 64,
     parameter integer IN_ID_BITS = 4,
     parameter integer OUT_ID_BITS = 5,
-    parameter [N_HBM*ADDR_BITS-1:0] TARGET_BASES = '0,
-    parameter [N_HBM*32-1:0] TARGET_WIDTHS = '0
+    parameter [N_MEM*ADDR_BITS-1:0] TARGET_BASES = '0,
+    parameter [N_MEM*32-1:0] TARGET_WIDTHS = '0
 ) (
     input wire clk,
     input wire rst,
-    input wire [N_HBM-1:0] m_awvalid,
-    input wire [N_HBM-1:0] m_awready,
-    input wire [N_HBM*ADDR_BITS-1:0] m_awaddr,
-    input wire [N_HBM*OUT_ID_BITS-1:0] m_awid,
-    input wire [N_HBM-1:0] m_arvalid,
-    input wire [N_HBM-1:0] m_arready,
-    input wire [N_HBM*ADDR_BITS-1:0] m_araddr,
-    input wire [N_HBM*OUT_ID_BITS-1:0] m_arid
+    input wire [N_MEM-1:0] m_awvalid,
+    input wire [N_MEM-1:0] m_awready,
+    input wire [N_MEM*ADDR_BITS-1:0] m_awaddr,
+    input wire [N_MEM*OUT_ID_BITS-1:0] m_awid,
+    input wire [N_MEM-1:0] m_arvalid,
+    input wire [N_MEM-1:0] m_arready,
+    input wire [N_MEM*ADDR_BITS-1:0] m_araddr,
+    input wire [N_MEM*OUT_ID_BITS-1:0] m_arid
 );
-    integer writes [0:N_IN-1][0:N_HBM-1];
-    integer reads  [0:N_IN-1][0:N_HBM-1];
+    integer writes [0:N_IN-1][0:N_MEM-1];
+    integer reads  [0:N_IN-1][0:N_MEM-1];
     integer i, j, target, src;
     reg [ADDR_BITS-1:0] addr;
     reg [ADDR_BITS-1:0] lo, hi;
@@ -30,7 +30,7 @@ module axi_route_monitor #(
 
     initial begin
         for (integer m = 0; m < N_IN; m = m + 1)
-            for (integer h = 0; h < N_HBM; h = h + 1) begin
+            for (integer h = 0; h < N_MEM; h = h + 1) begin
                 writes[m][h] = 0;
                 reads[m][h] = 0;
             end
@@ -38,7 +38,7 @@ module axi_route_monitor #(
 
     always @(posedge clk) begin
         if (!rst) begin
-            for (target = 0; target < N_HBM; target = target + 1) begin
+            for (target = 0; target < N_MEM; target = target + 1) begin
                 lo = TARGET_BASES[target*ADDR_BITS +: ADDR_BITS];
                 width = TARGET_WIDTHS[target*32 +: 32];
                 hi = lo + (ADDR_BITS'(1) << width);
@@ -63,9 +63,9 @@ module axi_route_monitor #(
     task check_coverage;
         begin
             for (integer m = 0; m < N_IN; m = m + 1)
-                for (integer h = 0; h < N_HBM; h = h + 1) begin
+                for (integer h = 0; h < N_MEM; h = h + 1) begin
                     if (writes[m][h] < 1 || reads[m][h] < 1)
-                        $fatal(1,"FAIL missing route coverage: master=%0d HBM=%0d writes=%0d reads=%0d",m,h,writes[m][h],reads[m][h]);
+                        $fatal(1,"FAIL missing route coverage: master=%0d memory=%0d writes=%0d reads=%0d",m,h,writes[m][h],reads[m][h]);
                     $display("COVER ROUTE master=%0d hbm=%0d writes=%0d reads=%0d",m,h,writes[m][h],reads[m][h]);
                 end
         end
