@@ -91,9 +91,21 @@ module boot_memory_model #(
     assign c0_arready = !rst && !c0_rvalid;
 
     wire cpu1_rst = rst || !cpu1_release;
-    assign c1_ibus_ack   = !cpu1_rst && c1_ibus_cyc;
+    // Registered Wishbone acknowledgments: the request and write byte enables
+    // must settle before the responder acknowledges and consumes the access.
+    reg c1_i_ack_q, c1_d_ack_q;
+    always @(posedge clk) begin
+        if (cpu1_rst) begin
+            c1_i_ack_q <= 0;
+            c1_d_ack_q <= 0;
+        end else begin
+            c1_i_ack_q <= c1_ibus_cyc && !c1_i_ack_q;
+            c1_d_ack_q <= c1_dbus_cyc && !c1_d_ack_q;
+        end
+    end
+    assign c1_ibus_ack   = c1_i_ack_q;
     assign c1_ibus_rdata = read_word(c1_ibus_addr);
-    assign c1_dbus_ack   = !cpu1_rst && c1_dbus_cyc;
+    assign c1_dbus_ack   = c1_d_ack_q;
     assign c1_dbus_rdata = read_word(c1_dbus_addr);
 
     always @(posedge clk) begin
@@ -163,16 +175,16 @@ module boot_memory_model #(
                 c0_bvalid <= 1;
             end
             if (!cpu1_rst) begin
-                if (c1_ibus_cyc) begin
+                if (c1_ibus_cyc && c1_ibus_ack) begin
                     if (!(c1_ibus_addr >= SRAM1_BASE && c1_ibus_addr < SRAM1_BASE + SRAM_BYTES))
                         $fatal(1, "BOOT: CPU1 fetched outside assigned SRAM %h", c1_ibus_addr);
                     c1_inst_count <= c1_inst_count + 1;
                 end
-                if (c1_dbus_cyc && c1_dbus_write) begin
+                if (c1_dbus_cyc && c1_dbus_ack && c1_dbus_write) begin
                     if (!(c1_dbus_addr >= SRAM1_BASE && c1_dbus_addr < SRAM1_BASE + SRAM_BYTES))
                         $fatal(1, "BOOT: CPU1 data store outside assigned SRAM %h", c1_dbus_addr);
                     if (c1_dbus_select != 4'hf)
-                        $fatal(1, "BOOT: CPU1 prototype supports full-word stores");
+                        $fatal(1, "BOOT: CPU1 prototype supports full-word stores addr=%h sel=%h data=%h", c1_dbus_addr, c1_dbus_select, c1_dbus_data);
                     sram1[(c1_dbus_addr-SRAM1_BASE) >> 2] <= c1_dbus_data;
                     if (c1_dbus_addr == SRAM1_BASE + 'h100 && c1_dbus_data == 32'h66)
                         cpu1_app_signature_count <= cpu1_app_signature_count + 1;
