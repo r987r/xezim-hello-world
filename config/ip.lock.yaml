@@ -1,0 +1,18 @@
+schema_version: 1
+# Upstream modules are fetched at these immutable revisions.
+# Neither cloning these sources nor running SystemVerilog builds Rust/xezim.
+third_party:
+  verilog_axi:
+    git: https://github.com/alexforencich/verilog-axi.git
+    commit: 516bd5dadc3365b7f9e225d2af8fe0b8d804fe53
+    license: MIT
+    modules:
+      - rtl/axi_crossbar.v
+      - rtl/axi_crossbar_wr.v
+      - rtl/axi_crossbar_rd.v
+      - rtl/axi_crossbar_addr.v
+      - rtl/axi_register_wr.v
+      - rtl/axi_register_rd.v
+      - rtl/arbiter.v
+      - rtl/priority_encoder.v
+      - rtl/axi_ram.v

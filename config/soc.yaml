@@ -1,0 +1,64 @@
+schema_version: 1
+name: xezim_soc_dv
+
+# The data and control planes have independent routing and address maps.
+buses:
+  data: {protocol: axi4, addr_bits: 64, data_bits: 64, id_bits: 4}
+  config: {protocol: axi4_lite, addr_bits: 32, data_bits: 32}
+
+ip:
+  cpu: {provider: bfm, replacement: openhw_cva6}
+  dma: {provider: bfm, replacement: pulp_idma}
+  local_data_fabric: {provider: alexforencich_verilog_axi, replacement: pulp_axi}
+  global_data_fabric: {provider: alexforencich_verilog_axi, replacement: floonoc}
+  local_config_fabric: {provider: pulp_axi_lite}
+  global_config_fabric: {provider: pulp_axi_lite}
+  hbm_controller: {provider: axi_ram_model, replacement: vendor_hbm_wrapper}
+
+subsystem_types:
+  compute:
+    cpu_count: 1
+    dma_count: 1
+    local_sram_count: 1
+    data_noc: {global_uplinks: 1}
+    config_noc: {enabled: true}
+  hbm:
+    data_noc: {ingress_ports: 2}
+    config_noc: {enabled: true}
+    hbm_controllers: 2
+
+subsystems:
+  - {name: compute0, type: compute}
+  - {name: compute1, type: compute}
+  - {name: memory0, type: hbm}
+
+networks:
+  global_data:
+    protocol: axi4
+    implementation: verilog_axi_crossbar
+    # Two outputs go into the HBM subsystem. Each maps to a distinct
+    # target window for the initial build; routing can change independently.
+    hbm_outputs:
+      - {name: hbm_ingress0, target: memory0.hbm0}
+      - {name: hbm_ingress1, target: memory0.hbm1}
+  global_config:
+    protocol: axi4_lite
+    implementation: hierarchical_crossbar
+
+address_map:
+  data:
+    - {name: compute0.sram, base: '0x10000000', size: '0x00100000'}
+    - {name: compute1.sram, base: '0x11000000', size: '0x00100000'}
+    - {name: memory0.hbm0, base: '0x100000000', size: '0x40000000'}
+    - {name: memory0.hbm1, base: '0x140000000', size: '0x40000000'}
+  config:
+    - {name: compute0.dma, base: '0x40000000', size: '0x10000'}
+    - {name: compute1.dma, base: '0x40010000', size: '0x10000'}
+    - {name: memory0.hbm0, base: '0x50000000', size: '0x10000'}
+    - {name: memory0.hbm1, base: '0x50010000', size: '0x10000'}
+
+verification:
+  hbm:
+    ingress_master_agents: 2
+    model_address_bits: 16  # A small backing model; NOT a 1-GiB memory model.
+    burst_beats: 4

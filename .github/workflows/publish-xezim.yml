@@ -48,7 +48,7 @@ jobs:
             echo 'exists=false' >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Restore built simulator cache
+      - name: Restore previously built simulator
         id: cache
         if: steps.released.outputs.exists != 'true'
         uses: actions/cache/restore@v4
@@ -81,18 +81,18 @@ jobs:
           set -euo pipefail
           binary=.tools/xezim/target/release/xezim
           test -x "$binary"
-          "$binary" -s hello_world_tb rtl/hello_world.sv tb/hello_world_tb.sv | tee "$RUNNER_TEMP/xezim-test.log"
+          "$binary" -s hello_world_tb dv/smoke/hello_world_tb.sv | tee "$RUNNER_TEMP/xezim-test.log"
           grep -Fxq "=== xezim $XEZIM_VERSION ===" "$RUNNER_TEMP/xezim-test.log"
           grep -Fxq 'PASS: hello_world_tb' "$RUNNER_TEMP/xezim-test.log"
 
-      - name: Save simulator cache before publishing
+      - name: Cache simulator for future publishing attempts
         if: steps.released.outputs.exists != 'true' && steps.cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
           path: .tools/xezim/target/release/xezim
           key: xezim-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('toolchains/xezim.env') }}-lowmem
 
-      - name: Publish verified versioned binary and checksum
+      - name: Publish executable and checksum
         if: steps.released.outputs.exists != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -104,8 +104,6 @@ jobs:
           chmod 755 "$RUNNER_TEMP/xezim-release/$XEZIM_ASSET_NAME"
           cd "$RUNNER_TEMP/xezim-release"
           sha256sum "$XEZIM_ASSET_NAME" > "$XEZIM_ASSET_NAME.sha256"
-          # Release tags must target the CURRENT default branch, not this run's
-          # potentially stale GITHUB_SHA: that may lack workflow-write permission.
           default_branch="$(gh repo view "$GITHUB_REPOSITORY" --json defaultBranchRef --jq '.defaultBranchRef.name')"
           gh release create "$XEZIM_RELEASE_TAG" "$XEZIM_ASSET_NAME" "$XEZIM_ASSET_NAME.sha256" \
             --repo "$GITHUB_REPOSITORY" \
@@ -114,7 +112,7 @@ jobs:
             --notes "Pinned Xezim executable built from upstream commit $XEZIM_UPSTREAM_COMMIT. Check the accompanying SHA-256 checksum before running." \
             --latest=false
 
-      - name: Verify the release can be downloaded
+      - name: Verify published binary and checksum
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash

@@ -1,7 +1,8 @@
 .tools/
+generated/
 *.vcd
 *.fst
-*.vpd
 *.log
-xezim_cov.json
-.DS_Store
+__pycache__/
+.pytest_cache/
+*.pyc

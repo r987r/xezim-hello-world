@@ -1,50 +1,86 @@
-# Xezim SystemVerilog smoke test
+# Configurable SoC Fabric Verification with Xezim
 
-[![SystemVerilog CI](https://github.com/r987r/xezim-hello-world/actions/workflows/xezim-smoke.yml/badge.svg)](https://github.com/r987r/xezim-hello-world/actions/workflows/xezim-smoke.yml)
+[![HBM AXI4 verification](https://github.com/r987r/xezim-hello-world/actions/workflows/dv-hbm.yml/badge.svg)](https://github.com/r987r/xezim-hello-world/actions/workflows/dv-hbm.yml)
 
-A small, self-checking SystemVerilog project that demonstrates how to compile, elaborate, and run a testbench with [Xezim](https://github.com/aionhw/xezim).
+A **configuration-driven, hierarchical SoC verification platform** built around
+open-source synthesizable AXI interconnects and the [Xezim](https://github.com/aionhw/xezim)
+SystemVerilog simulator. The architecture defines compute subsystems, a memory
+subsystem, and separate data and configuration networks. Verification is built
+incrementally, from fabric and subsystem testbenches toward a full-chip regression.
 
-The example adds two 8-bit values and checks ordinary addition, carry propagation, and unknown-value behavior. It succeeds only when the simulator prints `PASS: hello_world_tb`.
+## Architecture
 
-## Run locally
+`config/soc.yaml` is the source of truth for subsystem instances, NoC boundaries,
+address windows, implementation selections, and verification parameters.
 
-With an installed `xezim` on `PATH`, no Rust installation is needed:
+- **Compute 0 and Compute 1:** each defines one CPU, one DMA, local SRAM, a
+  local AXI4 data fabric, and a separate AXI4-Lite configuration fabric.
+- **HBM subsystem:** two AXI4 data ingress ports from the global data fabric,
+  a local crossbar, and two controller/memory targets. Either compute subsystem
+  can route accesses to either HBM target by address.
+- **Global networks:** separate data and configuration planes. Their full RTL
+  integration is a later scope; the configuration already describes them.
+
+The initial implemented **HBM fabric DV** uses a genuine 2-input × 2-output
+[Verilog-AXI](https://github.com/alexforencich/verilog-axi) AXI4 crossbar,
+two independent AXI RAM endpoints, two AXI master stimulus modules, and a
+passive route checker. The AXI RAMs are *simulation models*, not HBM PHYs.
+The repo also includes a negative test that must detect corrupted expected data.
+See [verification architecture and scope](docs/verification.md) for coverage
+requirements and the planned compute/global/full-chip levels.
+
+## Quick start
+
+Prerequisites: Linux, `python3`, PyYAML, `git`, and a **prebuilt Xezim**
+executable on `PATH` or specified with `XEZIM_BIN`. No Rust build is needed
+for HDL tests. The first HBM run fetches pinned public Verilog-AXI RTL.
 
 ```bash
-git clone https://github.com/r987r/xezim-hello-world.git
-cd xezim-hello-world
-make test
+python3 -m pip install 'PyYAML==6.0.3'
+make check-config
+make gen
+XEZIM_BIN=/path/to/xezim make dv-hbm
+XEZIM_BIN=/path/to/xezim make dv-hbm-negative
 ```
 
-To select a specific executable, run `XEZIM_BIN=/path/to/xezim make test`. If no simulator executable is available, the runner clones and compiles the pinned Xezim version **once**, under the ignored `.tools/` directory. This first-time local fallback requires Git, Rust/Cargo (1.92+), and a C compiler.
+Run `make help` for commands. To substitute configurations, edit
+`config/soc.yaml`; to change the upstream AXI RTL revision, edit
+`config/ip.lock.yaml` and validate the replacement.
+Generated files and downloaded dependencies live under ignored directories
+(`generated/`, `.tools/`). `make gen` creates `generated/hbm/hbm_tb.sv` and
+`generated/hbm/manifest.json` deterministically.
 
-`make test` invokes `scripts/run.sh`, which performs HDL compilation, elaboration, simulation, and PASS-marker validation.
-
-## Repository layout
+## Source layout
 
 | Path | Purpose |
 | --- | --- |
-| `rtl/hello_world.sv` | Combinational example design |
-| `tb/hello_world_tb.sv` | Self-checking testbench |
-| `scripts/run.sh` | Repeatable command-line test runner |
-| `toolchains/xezim.env` | Pinned simulator version, upstream commit, and Linux release asset |
-| `.github/workflows/publish-xezim.yml` | Provision the versioned Linux executable when needed |
-| `.github/workflows/xezim-smoke.yml` | Run SystemVerilog tests using that executable |
+| `config/soc.yaml` | Subsystems, interfaces, address maps and test dimensions |
+| `config/ip.lock.yaml` | Pinned upstream AXI RTL revision and dependency list |
+| `tools/socgen.py` | Schema checks, deterministic testbench generation and metadata |
+| `dv/common/` | Reusable AXI master stimulus and passive route monitor |
+| `dv/smoke/` | Small dependency-free simulator self-test |
+| `scripts/run-dv.sh` | Fetch pinned AXI RTL, run generated SystemVerilog testbench |
+| `tests/` | Configuration and generator regression |
+| `docs/verification.md` | Verification levels, targets and acceptance criteria |
+| `toolchains/xezim.env` | Versioned Linux Xezim release reference |
 
-## Continuous integration
+## CI and simulator provisioning
 
-**SV test workflow:** Changes to RTL, testbench, or the test runner automatically run `make test`. The job downloads the pinned Linux x86_64 executable from this repository's GitHub Releases, verifies its SHA-256 checksum, and runs the simulation. **It does not install Rust or rebuild Xezim.**
+On code/config changes, [HBM fabric CI](.github/workflows/dv-hbm.yml)
+validates the generator, downloads the pinned prebuilt Xezim release, verifies
+SHA-256, then simulates the HBM fabric and checks that the negative test fails
+for the expected reason. **This job does not install Rust or build Xezim.**
 
-**Simulator publishing workflow:** Only a change to the simulator pin or the publisher workflow (or an intentional manual dispatch) starts provisioning. It checks for an existing release before building, validates the simulator with the smoke test, and publishes the binary alongside its checksum. A successful publication triggers the SV workflow automatically.
+[The simulator publisher](.github/workflows/publish-xezim.yml) runs only when
+its definition or simulator version changes (or when explicitly dispatched).
+It first checks whether the binary release already exists and avoids building
+when possible. Upstream versions and the published Linux asset are pinned in
+`toolchains/xezim.env`. CPU/DMA/NoC changes do not run the publisher.
 
-Releases are durable versioned assets; CI caches are only a speed-up for retrying the publisher. Ordinary SV changes never trigger the publisher.
+## Extension model
 
-## Upgrading Xezim
-
-Edit the values in `toolchains/xezim.env`: version, full upstream commit, release tag, and asset name. Commit the change to `main`. The publisher will prepare the new pinned simulator if it is not already available, and then the SV smoke test will run. The prior binary remains available for existing users.
-
-The current automated distribution targets **Linux x86_64**. Other platforms can use a locally installed Xezim binary and can be added as separately versioned release assets.
-
-## Adding tests
-
-Place RTL in `rtl/` and testbenches in `tb/`. Update the top module and source list passed to Xezim in `scripts/run.sh` when adding a new design or test suite. Keep each test self-checking and return a nonzero exit status on failure.
+Verification scopes share architecture metadata and reuse AXI components;
+changing one IP requires an adapter if its interface differs. The full-chip
+implementation is **not** yet present. Follow `docs/verification.md` to add
+local NoC, compute, global NoC, and top-level testbenches as separately tested
+scopes, rather than duplicating one monolithic testbench.
