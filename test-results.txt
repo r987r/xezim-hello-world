@@ -1,0 +1,9 @@
+Xezim v0.11.3 Linux test, 2026-11-01
+Command: xezim -s hello_world_tb rtl/hello_world.sv tb/hello_world_tb.sv
+Exit code: 0
+
+=== xezim 0.11.3 ===
+git 058f2bb (2026-10-23T17:05:55-07:00)
+Hello, World! Running on Xezim.
+PASS: hello_world_tb
+Simulation finished at time 3000 ($finish called)
