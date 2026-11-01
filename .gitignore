@@ -1,0 +1,7 @@
+.tools/
+*.vcd
+*.fst
+*.vpd
+*.log
+xezim_cov.json
+.DS_Store
