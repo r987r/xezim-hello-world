@@ -84,6 +84,8 @@ module boot_memory_model #(
     endfunction
 
     reg have_aw, have_w;
+    integer c1_debug_count;
+    initial c1_debug_count = 0;
     reg [31:0] pending_awaddr, pending_wdata;
     reg [3:0] pending_wstrb;
     assign c0_awready = !rst && !have_aw && !c0_bvalid;
@@ -164,9 +166,16 @@ module boot_memory_model #(
             end
             if (!cpu1_rst) begin
                 if (c1_ibus_cyc) begin
+                    if (c1_debug_count < 24) begin
+                        $display("BOOT SERV FETCH idx=%0d pc=%h instr=%h", c1_debug_count, c1_ibus_addr, c1_ibus_rdata);
+                        c1_debug_count = c1_debug_count + 1;
+                    end
                     if (!(c1_ibus_addr >= SRAM1_BASE && c1_ibus_addr < SRAM1_BASE + SRAM_BYTES))
                         $fatal(1, "BOOT: CPU1 fetched outside assigned SRAM %h", c1_ibus_addr);
                     c1_inst_count <= c1_inst_count + 1;
+                end
+                if (c1_dbus_cyc) begin
+                    $display("BOOT SERV DATA addr=%h write=%b data=%h sel=%h", c1_dbus_addr, c1_dbus_write, c1_dbus_data, c1_dbus_select);
                 end
                 if (c1_dbus_cyc && c1_dbus_write) begin
                     if (!(c1_dbus_addr >= SRAM1_BASE && c1_dbus_addr < SRAM1_BASE + SRAM_BYTES))
