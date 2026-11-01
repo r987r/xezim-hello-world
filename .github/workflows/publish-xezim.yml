@@ -1,0 +1,99 @@
+name: Publish pinned Xezim Linux executable
+
+# This workflow builds Xezim only when the versioned binary release is missing.
+# Updating SystemVerilog does not run this workflow.
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/publish-xezim.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-xezim-v0.11.3-linux-x86_64
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      RELEASE_TAG: xezim-bin-v0.11.3-linux-x86_64
+      ASSET_NAME: xezim-linux-x86_64
+      UPSTREAM_REV: 058f2bba58648452e5799d17572356ebcae7d163
+    steps:
+      - name: Check out example
+        uses: actions/checkout@v4
+
+      - name: Check for published executable
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" -R "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -Fxq "$ASSET_NAME"; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Xezim binary already published; no Rust build needed."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Restore previously built simulator
+        id: simulator-cache
+        if: steps.release.outputs.exists != 'true'
+        uses: actions/cache/restore@v4
+        with:
+          path: .tools/xezim/target/release/xezim
+          key: xezim-0.11.3-ubuntu-x64-lowmem-v1
+
+      - name: Install Rust (only if binary is missing)
+        if: steps.release.outputs.exists != 'true' && steps.simulator-cache.outputs.cache-hit != 'true'
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Compile pinned Xezim (only once)
+        if: steps.release.outputs.exists != 'true' && steps.simulator-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --branch 0.11.3 https://github.com/aionhw/xezim.git .tools/xezim
+          test "$(git -C .tools/xezim rev-parse HEAD)" = "$UPSTREAM_REV"
+          CARGO_BUILD_JOBS=1 \
+          CARGO_PROFILE_RELEASE_LTO=false \
+          CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16 \
+          CARGO_PROFILE_RELEASE_OPT_LEVEL=1 \
+          CARGO_PROFILE_RELEASE_DEBUG=0 \
+            cargo build --release --bin xezim --manifest-path .tools/xezim/Cargo.toml
+
+      - name: Test pinned binary before publishing
+        if: steps.release.outputs.exists != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          binary=.tools/xezim/target/release/xezim
+          test -x "$binary"
+          "$binary" -s hello_world_tb rtl/hello_world.sv tb/hello_world_tb.sv | tee "$RUNNER_TEMP/xezim-publish-test.log"
+          grep -Fxq '=== xezim 0.11.3 ===' "$RUNNER_TEMP/xezim-publish-test.log"
+          grep -Fxq 'PASS: hello_world_tb' "$RUNNER_TEMP/xezim-publish-test.log"
+
+      - name: Publish executable and checksum as GitHub Release
+        if: steps.release.outputs.exists != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/xezim-release"
+          cp .tools/xezim/target/release/xezim "$RUNNER_TEMP/xezim-release/$ASSET_NAME"
+          chmod 755 "$RUNNER_TEMP/xezim-release/$ASSET_NAME"
+          cd "$RUNNER_TEMP/xezim-release"
+          sha256sum "$ASSET_NAME" > "$ASSET_NAME.sha256"
+          gh release create "$RELEASE_TAG" "$ASSET_NAME" "$ASSET_NAME.sha256" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "Xezim v0.11.3 Linux x86_64 executable" \
+            --notes "Built from aionhw/xezim commit $UPSTREAM_REV. Smoke-tested against rtl/hello_world.sv and tb/hello_world_tb.sv. Download both assets and verify with sha256sum -c $ASSET_NAME.sha256 before running." \
+            --latest=false
