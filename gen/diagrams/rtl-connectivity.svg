@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="820" viewBox="0 0 1440 820" role="img" aria-label="Generated two-dimensional SoC diagram">
+<rect width="1440" height="820" fill="#F7F9FC"/>
+<text x="64.0" y="28.0" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#255BAE" text-anchor="start" dominant-baseline="hanging">RTL CONNECTIVITY  -  EXECUTABLE SCOPE</text>
+<text x="64.0" y="55.0" font-size="32" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">Memory fabric: actual SystemVerilog wiring</text>
+<text x="64.0" y="101.0" font-size="18" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">Generated memory_tb.sv  |  2 AXI masters  -&gt;  Verilog-AXI crossbar  -&gt;  HBM0 / DDR0 behavioral targets</text>
+<polyline points="64.0,137.0 1376.0,137.0" fill="none" stroke="#D8E1EB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="64.0" y="161.0" width="1312.0" height="550.0" rx="20.0" fill="#FFFFFF" stroke="#D8E1EB" stroke-width="2"/>
+<text x="91.0" y="185.0" font-size="18" font-family="Arial, Helvetica, sans-serif" fill="#255BAE" text-anchor="start" dominant-baseline="hanging">EXISTING MEMORY TESTBENCH</text>
+<rect x="96.0" y="283.0" width="310.0" height="101.0" rx="12.0" fill="#E9F1FD" stroke="#255BAE" stroke-width="1"/>
+<text x="112.0" y="295.0" font-size="22" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">AXI master BFM 0</text>
+<text x="112.0" y="327.0" font-size="16" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">AW / W / B / AR / R</text>
+<text x="112.0" y="347.8" font-size="16" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">64-bit  -  ID 4</text>
+<polyline points="406.0,332.0 528.0,332.0" fill="none" stroke="#255BAE" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="528.0,332.0 519.3,337.0 519.3,327.0" fill="#255BAE"/>
+<text x="413.0" y="300.0" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">AXI4 ingress 0</text>
+<rect x="96.0" y="445.0" width="310.0" height="101.0" rx="12.0" fill="#E9F1FD" stroke="#255BAE" stroke-width="1"/>
+<text x="112.0" y="457.0" font-size="22" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">AXI master BFM 1</text>
+<text x="112.0" y="489.0" font-size="16" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">AW / W / B / AR / R</text>
+<text x="112.0" y="509.8" font-size="16" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">64-bit  -  ID 4</text>
+<polyline points="406.0,494.0 528.0,494.0" fill="none" stroke="#255BAE" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="528.0,494.0 519.3,499.0 519.3,489.0" fill="#255BAE"/>
+<text x="413.0" y="462.0" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">AXI4 ingress 1</text>
+<rect x="529.0" y="330.0" width="377.0" height="151.0" rx="12.0" fill="#E6F6EC" stroke="#19734B" stroke-width="1"/>
+<text x="545.0" y="342.0" font-size="28" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">axi_crossbar</text>
+<text x="545.0" y="374.0" font-size="17" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">2 inputs  x  2 outputs</text>
+<text x="545.0" y="396.1" font-size="17" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">64-bit addresses</text>
+<text x="545.0" y="418.2" font-size="17" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">64-bit data  -  real open-source RTL</text>
+<rect x="1028.0" y="283.0" width="316.0" height="101.0" rx="12.0" fill="#FFF2E4" stroke="#B66B22" stroke-width="1"/>
+<text x="1044.0" y="295.0" font-size="19" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">memory0.hbm0  -  HBM</text>
+<text x="1044.0" y="327.0" font-size="16" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">axi_ram AXI model</text>
+<text x="1044.0" y="347.8" font-size="16" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">0x100000000 / 0x40000000</text>
+<polyline points="906.0,335.0 1028.0,335.0" fill="none" stroke="#19734B" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="1028.0,335.0 1019.3,340.0 1019.3,330.0" fill="#19734B"/>
+<text x="912.0" y="305.0" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">AXI4 output 0</text>
+<rect x="1028.0" y="445.0" width="316.0" height="101.0" rx="12.0" fill="#FFF2E4" stroke="#B66B22" stroke-width="1"/>
+<text x="1044.0" y="457.0" font-size="19" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">memory0.ddr0  -  DDR</text>
+<text x="1044.0" y="489.0" font-size="16" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">axi_ram AXI model</text>
+<text x="1044.0" y="509.8" font-size="16" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">0x140000000 / 0x40000000</text>
+<polyline points="906.0,497.0 1028.0,497.0" fill="none" stroke="#19734B" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="1028.0,497.0 1019.3,502.0 1019.3,492.0" fill="#19734B"/>
+<text x="912.0" y="467.0" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">AXI4 output 1</text>
+<rect x="545.0" y="562.0" width="339.0" height="86.0" rx="12.0" fill="#FFFFFF" stroke="#D8E1EB" stroke-width="1"/>
+<text x="561.0" y="574.0" font-size="20" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">Passive AXI route monitor</text>
+<text x="561.0" y="606.0" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">Checks ID, source, target and address</text>
+<polyline points="714.0,481.0 714.0,562.0" fill="none" stroke="#68778A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="9 6"/>
+<polygon points="714.0,562.0 709.0,553.3 719.0,553.3" fill="#68778A"/>
+<text x="92.0" y="674.0" font-size="16" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">Only these solid AXI connections are executable today; CPU/DMA and global fabric paths are not yet integrated.</text>
+<polyline points="64.0,747.0 1376.0,747.0" fill="none" stroke="#D8E1EB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="74.0" y="761.0" font-size="18" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">Protocol: AXI4  -  Read / write bursts  -  2 source ingress ports  -  2 independently addressed targets</text>
+</svg>

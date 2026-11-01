@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1220" height="630" viewBox="0 0 1220 630" role="img" aria-label="Generated two-dimensional SoC diagram">
+<rect width="1220" height="630" fill="#F7F9FC"/>
+<text x="64.0" y="28.0" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#255BAE" text-anchor="start" dominant-baseline="hanging">SUBSYSTEM  -  CONFIGURABLE BOUNDARY</text>
+<text x="64.0" y="55.0" font-size="32" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">compute1  /  compute</text>
+<text x="64.0" y="101.0" font-size="18" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">Generated from config/soc.yaml  |  dashed links = future subsystem RTL integration</text>
+<polyline points="64.0,137.0 1156.0,137.0" fill="none" stroke="#D8E1EB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="64.0" y="160.0" width="1092.0" height="408.0" rx="18.0" fill="#FFFFFF" stroke="#D8E1EB" stroke-width="2"/>
+<rect x="104.0" y="216.0" width="420.0" height="95.0" rx="12.0" fill="#E9F1FD" stroke="#255BAE" stroke-width="1"/>
+<text x="120.0" y="228.0" font-size="21" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">CPU  -  serv</text>
+<text x="120.0" y="260.0" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">wishbone / serv_wishbone</text>
+<rect x="641.0" y="216.0" width="431.0" height="95.0" rx="12.0" fill="#E9F1FD" stroke="#255BAE" stroke-width="1"/>
+<text x="657.0" y="228.0" font-size="21" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">DMA  -  pulp_idma</text>
+<text x="657.0" y="260.0" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">selected; RTL integration pending</text>
+<rect x="104.0" y="379.0" width="420.0" height="96.0" rx="12.0" fill="#E6F6EC" stroke="#19734B" stroke-width="1"/>
+<text x="120.0" y="391.0" font-size="21" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">Local AXI data NoC</text>
+<text x="120.0" y="423.0" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">pulp_axi (selected)</text>
+<rect x="641.0" y="379.0" width="431.0" height="96.0" rx="12.0" fill="#F3EDFD" stroke="#7047B5" stroke-width="1"/>
+<text x="657.0" y="391.0" font-size="21" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">Local config fabric</text>
+<text x="657.0" y="423.0" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">pulp_axi (selected)</text>
+<polyline points="313.0,311.0 313.0,379.0" fill="none" stroke="#255BAE" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="9 6"/>
+<polygon points="313.0,379.0 308.0,370.3 318.0,370.3" fill="#255BAE"/>
+<polyline points="850.0,311.0 850.0,379.0" fill="none" stroke="#7047B5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="9 6"/>
+<polygon points="850.0,379.0 845.0,370.3 855.0,370.3" fill="#7047B5"/>
+<text x="106.0" y="507.0" font-size="18" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">SRAM address: 0x11000000  -  size: 0x100000</text>
+</svg>

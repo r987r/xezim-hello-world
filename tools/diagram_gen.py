@@ -1,4 +1,4 @@
-"""Generate 2D GitHub Mermaid diagrams from validated SoC configuration.
+"""Generate 2D diagrams and metadata from validated SoC configuration.
 
 The architectural graph is explicitly logical/planned. The RTL graph instead
 models exactly the executable memory testbench emitted by socgen.py; it must
@@ -6,7 +6,8 @@ not imply that not-yet-connected CPUs, DMAs, or global NoCs are fabricated RTL.
 
 Inspired by the structured instance/connection metadata model used by
 r987r/Diagram-gen and r987r/Sv-diagrams, and by verification-boundary metadata
-from r987r/Sv-test. No 3D viewer or external diagram renderer is required.
+from r987r/Sv-test. Static SVGs are generated as a reliable GitHub/mobile README preview; Mermaid
+sources remain available for review and editing. No 3D viewer is required.
 """
 from __future__ import annotations
 
@@ -255,6 +256,7 @@ def build_subsystem(cfg: dict, meta: dict, inst: dict) -> str:
 def render(cfg: dict, meta: dict, destination: Path) -> dict:
     """Return exactly the generated files as a map for README embedding."""
     destination.mkdir(parents=True, exist_ok=True)
+    import diagram_svg
     arch, arch_meta = build_architecture(cfg, meta)
     rtl, rtl_meta = build_rtl_connectivity(cfg, meta)
     dv, dv_meta = build_verification(cfg, meta)
@@ -268,8 +270,11 @@ def render(cfg: dict, meta: dict, destination: Path) -> dict:
         title = name.replace("-", " ").replace("/", " / ").title()
         (destination / f"{name}.md").write_text(
             f"# {title}\n\nGenerated from `config/soc.yaml`. Do not edit.\n\n"
-            f"```mermaid\n{diagram}```\n"
+            f"[![{title} 2D diagram]({path.name.removesuffix('.mmd')}.svg)]"
+            f"({path.name.removesuffix('.mmd')}.svg)\n\n"
+            f"[View editable Mermaid source]({path.name})\n"
         )
     graph_meta = {"architecture": arch_meta, "rtl_connectivity": rtl_meta, "verification": dv_meta}
     (destination / "graphs.json").write_text(json.dumps(graph_meta, indent=2, sort_keys=True) + "\n")
+    diagram_svg.render_images(cfg, meta, destination)
     return diagrams

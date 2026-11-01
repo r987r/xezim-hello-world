@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1220" height="630" viewBox="0 0 1220 630" role="img" aria-label="Generated two-dimensional SoC diagram">
+<rect width="1220" height="630" fill="#F7F9FC"/>
+<text x="64.0" y="28.0" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#255BAE" text-anchor="start" dominant-baseline="hanging">SUBSYSTEM  -  CONFIGURABLE BOUNDARY</text>
+<text x="64.0" y="55.0" font-size="32" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">memory0  /  memory</text>
+<text x="64.0" y="101.0" font-size="18" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">Generated from config/soc.yaml  |  dashed links = future subsystem RTL integration</text>
+<polyline points="64.0,137.0 1156.0,137.0" fill="none" stroke="#D8E1EB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="64.0" y="160.0" width="1092.0" height="408.0" rx="18.0" fill="#FFFFFF" stroke="#D8E1EB" stroke-width="2"/>
+<rect x="105.0" y="200.0" width="329.0" height="80.0" rx="12.0" fill="#E9F1FD" stroke="#255BAE" stroke-width="1"/>
+<text x="121.0" y="212.0" font-size="21" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">AXI ingress 0</text>
+<text x="121.0" y="244.0" font-size="14" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">from global data network (planned)</text>
+<polyline points="267.0,280.0 267.0,323.0" fill="none" stroke="#255BAE" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="9 6"/>
+<polygon points="267.0,323.0 262.0,314.3 272.0,314.3" fill="#255BAE"/>
+<rect x="480.0" y="200.0" width="329.0" height="80.0" rx="12.0" fill="#E9F1FD" stroke="#255BAE" stroke-width="1"/>
+<text x="496.0" y="212.0" font-size="21" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">AXI ingress 1</text>
+<text x="496.0" y="244.0" font-size="14" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">from global data network (planned)</text>
+<polyline points="642.0,280.0 642.0,323.0" fill="none" stroke="#255BAE" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="9 6"/>
+<polygon points="642.0,323.0 637.0,314.3 647.0,314.3" fill="#255BAE"/>
+<rect x="105.0" y="323.0" width="932.0" height="83.0" rx="12.0" fill="#E6F6EC" stroke="#19734B" stroke-width="1"/>
+<text x="121.0" y="335.0" font-size="21" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">Local AXI data crossbar</text>
+<text x="121.0" y="367.0" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">verilog_axi / 2x2  -  executed memory test</text>
+<polyline points="333.5,406.0 333.5,427.0" fill="none" stroke="#19734B" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="333.5,427.0 328.5,418.3 338.5,418.3" fill="#19734B"/>
+<rect x="105.0" y="427.0" width="457.0" height="98.0" rx="12.0" fill="#FFF2E4" stroke="#B66B22" stroke-width="1"/>
+<text x="121.0" y="439.0" font-size="20" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">memory0.hbm0  -  HBM</text>
+<text x="121.0" y="471.0" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">hisa_hbm (candidate)</text>
+<text x="121.0" y="490.5" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">axi_ram model / 0x100000000</text>
+<polyline points="808.5,406.0 808.5,427.0" fill="none" stroke="#19734B" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="808.5,427.0 803.5,418.3 813.5,418.3" fill="#19734B"/>
+<rect x="580.0" y="427.0" width="457.0" height="98.0" rx="12.0" fill="#FFF2E4" stroke="#B66B22" stroke-width="1"/>
+<text x="596.0" y="439.0" font-size="20" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">memory0.ddr0  -  DDR</text>
+<text x="596.0" y="471.0" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">litedram (candidate)</text>
+<text x="596.0" y="490.5" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">axi_ram model / 0x140000000</text>
+</svg>

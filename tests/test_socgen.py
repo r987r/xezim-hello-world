@@ -1,10 +1,12 @@
 import copy
 import json
+import re
 from pathlib import Path
 import sys
 import tempfile
 import unittest
 import yaml
+from xml.etree import ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'tools'))
@@ -122,6 +124,12 @@ class SocConfigTest(unittest.TestCase):
             self.assertIn("subsystems/compute0", diagrams)
             self.assertIn("subsystems/compute1", diagrams)
             self.assertIn("subsystems/memory0", diagrams)
+            for name in diagrams:
+                image_path = Path(tmp) / "diagrams" / f"{name}.svg"
+                self.assertTrue(image_path.is_file(), image_path)
+                self.assertEqual(ET.parse(image_path).getroot().tag,
+                                 "{http://www.w3.org/2000/svg}svg")
+                self.assertIn(f"{Path(name).name}.svg", (Path(tmp)/"diagrams"/f"{name}.md").read_text())
             graphs = json.loads((Path(tmp)/"diagrams"/"graphs.json").read_text())
             for section in ("architecture", "rtl_connectivity"):
                 nodes = {n["id"] for n in graphs[section]["nodes"]}
@@ -129,6 +137,20 @@ class SocConfigTest(unittest.TestCase):
                                     for e in graphs[section]["connections"]))
             self.assertIn(generate.START, (ROOT/"README.md").read_text())
             self.assertIn(generate.END, (ROOT/"README.md").read_text())
+
+    def test_readme_embeds_real_images_that_exist(self):
+        readme = (ROOT / "README.md").read_text()
+        section = readme.split(generate.START, 1)[1].split(generate.END, 1)[0]
+        image_paths = re.findall(r"!\[[^]]+\]\((gen/diagrams/[^)]+\.svg)\)", section)
+        self.assertEqual(len(image_paths), 3)
+        for relative in image_paths:
+            path = ROOT / relative
+            self.assertTrue(path.is_file(), f"missing README image {relative}")
+            self.assertEqual(ET.parse(path).getroot().tag,
+                             "{http://www.w3.org/2000/svg}svg")
+        for name in ("architecture", "rtl-connectivity", "verification"):
+            self.assertIn(f"gen/diagrams/{name}.svg", image_paths)
+            self.assertTrue((ROOT / "gen" / "diagrams" / f"{name}.mmd").is_file())
 
     def test_complete_generated_tree_and_stale_cleanup(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -164,10 +186,13 @@ class SocConfigTest(unittest.TestCase):
             self.assertEqual(generate.execute(cfg_path,out,readme),0)
             extra = out/"diagrams"/"subsystems"/"compute2.mmd"
             self.assertTrue(extra.exists())
+            extra_svg = out / "diagrams" / "subsystems" / "compute2.svg"
+            self.assertTrue(extra_svg.exists())
             cfg_path.write_text(yaml.safe_dump(self.base,sort_keys=False))
             self.assertEqual(generate.execute(cfg_path,out,readme,check=True),1)
             self.assertEqual(generate.execute(cfg_path,out,readme),0)
             self.assertFalse(extra.exists())
+            self.assertFalse(extra_svg.exists())
             self.assertEqual(generate.execute(cfg_path,out,readme,check=True),0)
 
     def test_unmarked_gen_tree_is_protected(self):

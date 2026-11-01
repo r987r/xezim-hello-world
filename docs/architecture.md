@@ -51,3 +51,7 @@ HiSA HBMController's public RTL uses AMD/Xilinx HBM IP for PHY and a documented 
 - No unbuffered combinational loops between interconnect stages.
 - No implicit coherence. Explicit synchronization is required for CPU/DMA shared buffers.
 - Any generated executable scope must reject an unavailable backend (never produce a pretend substitute).
+
+## Generated 2D previews
+
+The README embeds committed static SVG diagrams generated from the validated SoC metadata. Editable Mermaid source and `graphs.json` are retained in `gen/diagrams/`. `make check-generated` verifies the images and README links byte-for-byte, and obsolete generated images are removed by `make gen`. The vector renderer uses only the Python standard library; GitHub/mobile clients do not need Mermaid support.

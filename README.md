@@ -13,128 +13,25 @@ A reusable, **configuration-driven hierarchical SoC test vehicle** built from pu
 
 The diagram below shows **logical** chip connectivity. Dashed links are **planned, not integrated RTL**; solid memory-model paths are exercised in the memory testbench.
 
-```mermaid
-flowchart TB
-  classDef cpu fill:#e8f0fe,stroke:#2869c9,color:#172a4b,stroke-width:1px;
-  classDef dma fill:#e7f2ff,stroke:#2869c9,color:#172a4b,stroke-width:1px;
-  classDef fabric fill:#e3f4ec,stroke:#20824e,color:#153c26,stroke-width:1px;
-  classDef memory fill:#fff0e6,stroke:#c46b2f,color:#563115,stroke-width:1px;
-  classDef config fill:#f1edff,stroke:#7654b5,color:#342451,stroke-width:1px;
-  classDef verification fill:#e3f4ec,stroke:#20824e,color:#153c26,stroke-width:1px;
-  classDef model fill:#f2f2f2,stroke:#888888,color:#333333,stroke-width:1px;
-  subgraph box_compute0["compute0 : compute"]
-    direction TB
-    compute0_cpu["picorv32<br/>axi4_lite / picorv32_axi"]:::cpu
-    compute0_dma["pulp_idma<br/>DMA RTL: pending"]:::dma
-    compute0_local_data["Local data fabric<br/>pulp_axi (pending)"]:::fabric
-    compute0_local_config["Local config fabric<br/>pulp_axi (pending)"]:::config
-    compute0_sram["SRAM<br/>0x10000000 + 0x100000"]:::memory
-  end
-  subgraph box_compute1["compute1 : compute"]
-    direction TB
-    compute1_cpu["serv<br/>wishbone / serv_wishbone"]:::cpu
-    compute1_dma["pulp_idma<br/>DMA RTL: pending"]:::dma
-    compute1_local_data["Local data fabric<br/>pulp_axi (pending)"]:::fabric
-    compute1_local_config["Local config fabric<br/>pulp_axi (pending)"]:::config
-    compute1_sram["SRAM<br/>0x11000000 + 0x100000"]:::memory
-  end
-  subgraph box_memory0["memory0 : memory"]
-    direction TB
-    memory0_local_data["2-input AXI4 fabric<br/>verilog_axi (RTL tested)"]:::fabric
-    memory0_local_config["Memory config fabric<br/>pulp_axi (pending)"]:::config
-    memory0_hbm0["HBM hisa_hbm<br/>AXI model: axi_ram<br/>0x100000000 + 0x40000000"]:::memory
-    memory0_ddr0["DDR litedram<br/>AXI model: axi_ram<br/>0x140000000 + 0x40000000"]:::memory
-  end
-  global_data["Global data NoC<br/>mesh / floonoc<br/>AXI4 64-bit (pending)"]:::fabric
-  global_config["Global config NoC<br/>tree / pulp_axi<br/>AXI4-Lite (pending)"]:::config
-  compute0_cpu -.->|MMIO via adapter| compute0_local_config
-  compute0_dma -.->|AXI4| compute0_local_data
-  compute0_local_data -.->|local SRAM| compute0_sram
-  compute0_local_data -.->|AXI4 uplink| global_data
-  compute0_local_config -.->|config uplink| global_config
-  compute1_cpu -.->|MMIO via adapter| compute1_local_config
-  compute1_dma -.->|AXI4| compute1_local_data
-  compute1_local_data -.->|local SRAM| compute1_sram
-  compute1_local_data -.->|AXI4 uplink| global_data
-  compute1_local_config -.->|config uplink| global_config
-  memory0_local_data -->|AXI4 → HBM model| memory0_hbm0
-  memory0_local_data -->|AXI4 → DDR model| memory0_ddr0
-  global_config -.->|CSR ingress| memory0_local_config
-  global_data -.->|output0 / memory0.hbm0| memory0_local_data
-  global_data -.->|output1 / memory0.ddr0| memory0_local_data
-  global_config -.->|remote MMIO| compute0_local_config
-  global_config -.->|remote MMIO| compute1_local_config
-  %% Dashed links = planned full-chip integration; solid links = memory model RTL scope.
-```
+[![Generated SoC architecture — PicoRV32, SERV, two global fabrics, HBM and DDR](gen/diagrams/architecture.svg)](gen/diagrams/architecture.svg)
+
+[Full-size image](gen/diagrams/architecture.svg) · [Mermaid source](gen/diagrams/architecture.mmd) · [Detailed view](gen/diagrams/architecture.md)
 
 ### Executable RTL connectivity — memory testbench
 
 This is the wiring generated in `gen/memory/memory_tb.sv`: two AXI4 master BFMs, the real open-source AXI crossbar, two AXI memory models, and a passive route monitor. It is **not** a full-chip elaboration.
 
-```mermaid
-flowchart LR
-  classDef cpu fill:#e8f0fe,stroke:#2869c9,color:#172a4b,stroke-width:1px;
-  classDef dma fill:#e7f2ff,stroke:#2869c9,color:#172a4b,stroke-width:1px;
-  classDef fabric fill:#e3f4ec,stroke:#20824e,color:#153c26,stroke-width:1px;
-  classDef memory fill:#fff0e6,stroke:#c46b2f,color:#563115,stroke-width:1px;
-  classDef config fill:#f1edff,stroke:#7654b5,color:#342451,stroke-width:1px;
-  classDef verification fill:#e3f4ec,stroke:#20824e,color:#153c26,stroke-width:1px;
-  classDef model fill:#f2f2f2,stroke:#888888,color:#333333,stroke-width:1px;
-  subgraph TB["EXISTING RTL testbench: memory_tb"]
-    direction LR
-    ingress0["AXI master BFM 0<br/>64-bit / ID 4"]:::cpu
-    ingress1["AXI master BFM 1<br/>64-bit / ID 4"]:::cpu
-    xbar["verilog_axi axi_crossbar<br/>2 inputs × 2 outputs<br/>64-bit address, 64-bit data"]:::fabric
-    memory0_hbm0["memory0.hbm0<br/>HBM simulation target<br/>axi_ram<br/>0x100000000 + 0x40000000"]:::memory
-    memory0_ddr0["memory0.ddr0<br/>DDR simulation target<br/>axi_ram<br/>0x140000000 + 0x40000000"]:::memory
-    route_monitor["AXI route monitor<br/>checks source/target and ID"]:::verification
-  end
-  ingress0 -->|AXI4 ingress 0 (AW,W,B,AR,R)| xbar
-  ingress1 -->|AXI4 ingress 1 (AW,W,B,AR,R)| xbar
-  xbar -->|AXI4 port 0 (AW,W,B,AR,R)| memory0_hbm0
-  xbar -->|AXI4 port 1 (AW,W,B,AR,R)| memory0_ddr0
-  xbar -.->|passive observation| route_monitor
-  %% Only these connections are instantiated by gen/memory/memory_tb.sv.
-```
+[![Executable 2x2 AXI RTL connectivity diagram with BFMs and HBM/DDR models](gen/diagrams/rtl-connectivity.svg)](gen/diagrams/rtl-connectivity.svg)
+
+[Full-size image](gen/diagrams/rtl-connectivity.svg) · [Mermaid source](gen/diagrams/rtl-connectivity.mmd) · [Detailed view](gen/diagrams/rtl-connectivity.md)
 
 ### Hierarchical verification plan
 
 Green scope boxes are **implemented testbenches**, not a claim that the entire SoC was simulated. Grey scope boxes are planned; CI separately determines whether executable scopes pass.
 
-```mermaid
-flowchart TB
-  classDef cpu fill:#e8f0fe,stroke:#2869c9,color:#172a4b,stroke-width:1px;
-  classDef dma fill:#e7f2ff,stroke:#2869c9,color:#172a4b,stroke-width:1px;
-  classDef fabric fill:#e3f4ec,stroke:#20824e,color:#153c26,stroke-width:1px;
-  classDef memory fill:#fff0e6,stroke:#c46b2f,color:#563115,stroke-width:1px;
-  classDef config fill:#f1edff,stroke:#7654b5,color:#342451,stroke-width:1px;
-  classDef verification fill:#e3f4ec,stroke:#20824e,color:#153c26,stroke-width:1px;
-  classDef model fill:#f2f2f2,stroke:#888888,color:#333333,stroke-width:1px;
-  cfg["config/soc.yaml<br/>validated source of truth"]:::config
-  gen["make gen<br/>RTL + NoC IR + DV plan + diagrams"]:::fabric
-  cfg -->|generates| gen
-  subgraph executable["EXECUTABLE CHECKS"]
-    direction LR
-    configuration["configuration<br/>DUT: soc_definition<br/>make check-config<br/>addresses, hierarchy, backends"]:::verification
-    memory_fabric["memory_fabric<br/>DUT: memory0.memory_data<br/>make dv-memory<br/>all_memory_routes, axi_responses, readback"]:::verification
-    negative_readback["negative_readback<br/>DUT: memory0.memory_data<br/>make dv-memory-negative<br/>injected_mismatch_detected"]:::verification
-    cpu_smoke["cpu_smoke<br/>DUT: compute0.cpu+compute1.cpu<br/>make dv-cpu<br/>picorv32_fetch, serv_fetch"]:::verification
-  end
-  subgraph planned["NOT YET IMPLEMENTED"]
-    direction LR
-    compute_subsystem["compute_subsystem<br/>DUT: compute_subsystem<br/>future<br/>local_fabric, dma_csr, dma_copy"]:::model
-    global_nocs["global_nocs<br/>DUT: global_data+global_config<br/>future<br/>routes, ordering, separate_control_traffic"]:::model
-    full_chip["full_chip<br/>DUT: soc_top<br/>future<br/>cpu_dma_hbm_ddr, interrupts, congestion"]:::model
-  end
-  gen -->|scope inputs| configuration
-  gen -->|scope inputs| memory_fabric
-  gen -->|scope inputs| negative_readback
-  gen -->|scope inputs| cpu_smoke
-  gen -.->|scope inputs| compute_subsystem
-  gen -.->|scope inputs| global_nocs
-  gen -.->|scope inputs| full_chip
-  %% Planned tests are placeholders only and do not imply RTL was simulated.
-```
+[![Generated SoC verification hierarchy, implemented versus planned scopes](gen/diagrams/verification.svg)](gen/diagrams/verification.svg)
+
+[Full-size image](gen/diagrams/verification.svg) · [Mermaid source](gen/diagrams/verification.mmd) · [Detailed view](gen/diagrams/verification.md)
 
 ### Generated architecture reference
 
@@ -186,13 +83,13 @@ flowchart TB
 Everything under **[`gen/`](gen/)** is committed to Git for version-to-version diffs. The directory is exclusively generator-owned and contains a marker protecting against accidental replacement of user-owned trees.
 
 ```bash
-python3 -m pip install 'PyYAML==6.0.3'
+python3 -m pip install -r requirements.txt
 make gen                 # regenerate code, metadata, diagrams, README
 make check-generated     # non-mutating drift and stale-file check
 make check-config        # generator/config test suite
 ```
 
-`make gen` builds all outputs in a staging directory before replacing the complete `gen/` tree. **Obsolete generated files are removed** when a block, network, subsystem, or diagram disappears from YAML. No file outside `gen/` is deleted; only the explicitly marked README section is rewritten. `make check-generated` compares both file *names* and bytes, so CI catches missing, modified, and stale files without committing or modifying anything. Generation does not depend on a GPU, web service, 3D viewer, or Graphviz: the README uses GitHub-native **2D Mermaid** diagrams.
+`make gen` builds all outputs in a staging directory before replacing the complete `gen/` tree. **Obsolete generated files are removed** when a block, network, subsystem, or diagram disappears from YAML. No file outside `gen/` is deleted; only the explicitly marked README section is rewritten. `make check-generated` compares both file *names* and bytes, so CI catches missing, modified, and stale files without committing or modifying anything. Generation does not depend on a GPU, web service, 3D viewer, or Graphviz: the README embeds static **2D SVG diagrams**, with Mermaid source files alongside for editing and review.
 
 The generated artifacts include:
 
@@ -205,6 +102,8 @@ The generated artifacts include:
 | [`gen/verification/routes.json`](gen/verification/routes.json) | Source/target AXI reachability expectations for the executable memory test |
 | [`gen/diagrams/`](gen/diagrams/) | Source-controlled 2D diagrams (`.mmd`) and structured graph metadata (`graphs.json`) |
 | [`gen/manifest.json`](gen/manifest.json) | Deterministic SHA-256 index of every generated output |
+
+The static SVG previews display directly in GitHub README and mobile clients, even when Mermaid rendering is unavailable. Each has a full-resolution link; the `.mmd` sources and structured graph metadata remain committed for diffs.
 
 The 2D visualizations follow the instance/connection metadata ideas in [Sv-diagrams](https://github.com/r987r/Sv-diagrams) and [Diagram-gen](https://github.com/r987r/Diagram-gen); verification scope metadata follows the YAML testbench pattern in [Sv-test](https://github.com/r987r/Sv-test). There is **no 3D dependency** and no duplication of architecture definitions in the diagram sources.
 
