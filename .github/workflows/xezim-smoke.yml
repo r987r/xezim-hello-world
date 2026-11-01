@@ -12,7 +12,14 @@ jobs:
     steps:
       - name: Check out testbench repo
         uses: actions/checkout@v4
-      - name: Install Rust
+      - name: Restore cached Xezim executable
+        id: cached-xezim
+        uses: actions/cache@v4
+        with:
+          path: .tools/xezim/target/release/xezim
+          key: xezim-0.11.3-ubuntu-x64-lowmem-v1
+      - name: Install Rust (cache miss only)
+        if: steps.cached-xezim.outputs.cache-hit != 'true'
         uses: dtolnay/rust-toolchain@stable
-      - name: Build Xezim and run testbench
+      - name: Build Xezim on cache miss, then run testbench
         run: make test
