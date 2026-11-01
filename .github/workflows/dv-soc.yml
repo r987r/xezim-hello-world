@@ -71,6 +71,8 @@ jobs:
         run: make dv-memory-negative | tee memory-negative.log
       - name: Elaborate and exercise PicoRV32 and SERV CPUs
         run: make dv-cpu | tee cpu-dv.log
+      - name: Boot both CPUs from ROM and flash into blank SRAM
+        run: make dv-boot | tee boot-dv.log
       - name: Upload failed test logs
         if: failure()
         uses: actions/upload-artifact@v4
@@ -80,6 +82,8 @@ jobs:
             memory-dv.log
             memory-negative.log
             cpu-dv.log
+            boot-dv.log
+            gen/boot/manifest.json
             gen/memory/manifest.json
             gen/noc/fabric_ir.json
             gen/verification/routes.json

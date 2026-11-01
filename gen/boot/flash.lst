@@ -1,0 +1,8 @@
+0x20000000: 100002b7  compute0: lui t0, 0x10000
+0x20000004: 05500313  compute0: addi t1, zero, 85
+0x20000008: 1062a023  compute0: sw t1, 0x100(t0)  # completion signature
+0x2000000c: 0000006f  compute0: jal zero, 0  # parked
+0x20000100: 110002b7  compute1: lui t0, 0x11000
+0x20000104: 06600313  compute1: addi t1, zero, 102
+0x20000108: 1062a023  compute1: sw t1, 0x100(t0)  # completion signature
+0x2000010c: 0000006f  compute1: jal zero, 0  # parked

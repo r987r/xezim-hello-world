@@ -19,6 +19,7 @@ import tempfile
 import yaml
 
 import diagram_gen
+import bootgen
 import socgen
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -52,6 +53,12 @@ def generated_section(cfg: dict, meta: dict, diagrams: dict[str, str]) -> str:
         "",
         "[![Executable 2x2 AXI RTL connectivity diagram with BFMs and HBM/DDR models](gen/diagrams/rtl-connectivity.svg)](gen/diagrams/rtl-connectivity.svg)",
         "", "[Full-size image](gen/diagrams/rtl-connectivity.svg) · [Mermaid source](gen/diagrams/rtl-connectivity.mmd) · [Detailed view](gen/diagrams/rtl-connectivity.md)", "",
+        "### Cold-boot flow — CPU0 programs SRAM and releases CPU1",
+        "",
+        "Unlike the fetch-only smoke test, this scope **executes real RISC-V code**: CPU0 fetches immutable ROM, reads a flash image, writes two initially blank SRAMs via AXI-Lite, releases SERV via an MMIO reset bit, then both cores write a completion signature. Flash is a memory-mapped simulation model, not SPI/QSPI controller RTL. This is a scoped boot test, **not full-chip NoC integration**.",
+        "",
+        "[![Generated cold-boot ROM to flash to SRAM flow](gen/diagrams/boot.svg)](gen/diagrams/boot.svg)",
+        "", "[Full-size image](gen/diagrams/boot.svg) · [Mermaid source](gen/diagrams/boot.mmd) · [Boot firmware disassembly](gen/boot/bootrom.lst)", "",
         "### Hierarchical verification plan",
         "",
         "Green scope boxes are **implemented testbenches**, not a claim that the entire SoC was simulated. Grey scope boxes are planned; CI separately determines whether executable scopes pass.",
@@ -81,6 +88,7 @@ def generated_section(cfg: dict, meta: dict, diagrams: dict[str, str]) -> str:
     for scope in cfg["verification"]["scopes"]:
         results.append(f'| `{scope["name"]}` | {scope["status"]} | `{scope.get("command", "not implemented")}` |')
     results += [
+        "", "**Boot images:** [Boot ROM](gen/boot/bootrom.hex) · [flash image](gen/boot/flash.hex) · [boot register/memory manifest](gen/boot/manifest.json).",
         "", "**Explore generated artifacts:** [NoC intermediate representation](gen/noc/fabric_ir.json) · [RTL connection metadata](gen/diagrams/graphs.json) · [verification plan](gen/verification/plan.json) · [route matrix](gen/verification/routes.json) · [memory testbench](gen/memory/memory_tb.sv) · [generated manifest](gen/manifest.json).",
         "", "**Detailed subsystem diagrams:** " + " · ".join(f'[{s["name"]}](gen/diagrams/subsystems/{s["name"]}.md)' for s in meta["subsystems"]) + ".",
     ]
@@ -142,13 +150,15 @@ def build(cfg_path: Path, out: Path, readme: Path) -> str:
     socgen.run(cfg_path, out / "memory")
     # socgen.run populates target_count on its own validation copy.
     meta["target_count"] = len(meta["targets"])
+    bootgen.emit(cfg, out / "boot")
     diagrams = diagram_gen.render(cfg, meta, out / "diagrams")
     dump(out / "verification" / "plan.json", verification_plan(cfg, meta))
     dump(out / "verification" / "routes.json", route_matrix(meta))
     (out / "README.md").write_text(
         "# Generated SoC reference\n\nDo not edit. Run `make gen` to atomically regenerate this tree "
         "from `config/soc.yaml`. All output files are version-controlled for diffs.\n\n"
-        "The `memory/` SystemVerilog is executable; the global NoC backend choices "
+        "The `memory/` SystemVerilog and `boot/` firmware images are executable "
+        "in separate scoped testbenches. The global NoC backend choices "
         "in `noc/` are not currently emitted into a full-chip top.\n"
     )
     (out / STAMP).write_text("socgen-v2\n")

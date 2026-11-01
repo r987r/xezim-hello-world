@@ -25,6 +25,14 @@ This is the wiring generated in `gen/memory/memory_tb.sv`: two AXI4 master BFMs,
 
 [Full-size image](gen/diagrams/rtl-connectivity.svg) · [Mermaid source](gen/diagrams/rtl-connectivity.mmd) · [Detailed view](gen/diagrams/rtl-connectivity.md)
 
+### Cold-boot flow — CPU0 programs SRAM and releases CPU1
+
+Unlike the fetch-only smoke test, this scope **executes real RISC-V code**: CPU0 fetches immutable ROM, reads a flash image, writes two initially blank SRAMs via AXI-Lite, releases SERV via an MMIO reset bit, then both cores write a completion signature. Flash is a memory-mapped simulation model, not SPI/QSPI controller RTL. This is a scoped boot test, **not full-chip NoC integration**.
+
+[![Generated cold-boot ROM to flash to SRAM flow](gen/diagrams/boot.svg)](gen/diagrams/boot.svg)
+
+[Full-size image](gen/diagrams/boot.svg) · [Mermaid source](gen/diagrams/boot.mmd) · [Boot firmware disassembly](gen/boot/bootrom.lst)
+
 ### Hierarchical verification plan
 
 Green scope boxes are **implemented testbenches**, not a claim that the entire SoC was simulated. Grey scope boxes are planned; CI separately determines whether executable scopes pass.
@@ -54,8 +62,7 @@ Green scope boxes are **implemented testbenches**, not a claim that the entire S
 | --- | --- | --- |
 | `compute0.dma` | `0x40000000` | `0x10000` |
 | `compute1.dma` | `0x40010000` | `0x10000` |
-| `memory0.hbm0` | `0x50000000` | `0x10000` |
-| `memory0.ddr0` | `0x50010000` | `0x10000` |
+| `boot.reset_ctrl` | `0x40020000` | `0x1000` |
 
 | Global output | Configured target | Memory ingress |
 | --- | --- | --- |
@@ -68,9 +75,12 @@ Green scope boxes are **implemented testbenches**, not a claim that the entire S
 | `memory_fabric` | executable | `make dv-memory` |
 | `negative_readback` | executable | `make dv-memory-negative` |
 | `cpu_smoke` | executable | `make dv-cpu` |
+| `cpu_cold_boot` | executable | `make dv-boot` |
 | `compute_subsystem` | planned | `not implemented` |
 | `global_nocs` | planned | `not implemented` |
 | `full_chip` | planned | `not implemented` |
+
+**Boot images:** [Boot ROM](gen/boot/bootrom.hex) · [flash image](gen/boot/flash.hex) · [boot register/memory manifest](gen/boot/manifest.json).
 
 **Explore generated artifacts:** [NoC intermediate representation](gen/noc/fabric_ir.json) · [RTL connection metadata](gen/diagrams/graphs.json) · [verification plan](gen/verification/plan.json) · [route matrix](gen/verification/routes.json) · [memory testbench](gen/memory/memory_tb.sv) · [generated manifest](gen/manifest.json).
 
@@ -115,11 +125,14 @@ The regression reuses the pinned Xezim executable; it does **not** rebuild Rust 
 make gen
 XEZIM_BIN=/path/to/xezim make dv-memory
 XEZIM_BIN=/path/to/xezim make dv-memory-negative
-XEZIM_BIN=/path/to/xezim make dv-cpu
+XEZIM_BIN=/path/to/xezim make dv-cpu     # request-only legacy smoke
+XEZIM_BIN=/path/to/xezim make dv-boot    # real ROM->SRAM CPU execution
 XEZIM_BIN=/path/to/xezim make test
 ```
 
-The memory regression instantiates the publicly available Verilog-AXI crossbar and behavioral AXI RAM. It issues four-beat reads and writes from two independent AXI masters to HBM0 and DDR0 address regions, then checks responses, IDs, data, and reachability. The negative test intentionally corrupts an expectation and confirms the checker rejects it. The CPU smoke checks instantiate actual PicoRV32 and SERV RTL and observe instruction fetches.
+The memory regression instantiates the publicly available Verilog-AXI crossbar and behavioral AXI RAM. It issues four-beat reads and writes from two independent AXI masters to HBM0 and DDR0 address regions, then checks responses, IDs, data, and reachability. The negative test intentionally corrupts an expectation and confirms the checker rejects it. The CPU smoke merely observes fetch requests; **`dv-boot` executes instructions** from ROM and then from SRAM, proving actual CPU-controlled SRAM loading.
+
+**Boot status:** The standalone boot test instantiates both real CPUs. CPU0 must copy two flash-resident programs into initially blank SRAM, release SERV through MMIO and execute SRAM code. [Boot flow and memory map](docs/boot.md) details what is and is not integrated.
 
 **Not yet implemented:** real PULP iDMA integration, full-chip CPU/data/config NoC wiring, FlooNoC or PULP AXI backend emission, and the physical HBM/DDR controller/PHY integration. Selected controller projects are research/integration candidates; the simulated `axi_ram` targets are **not timing-accurate HBM or DDR controllers**. The HBM candidate currently relies on vendor HBM PHY IP.
 

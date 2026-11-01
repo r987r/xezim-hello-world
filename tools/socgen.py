@@ -12,6 +12,7 @@ from pathlib import Path
 import sys
 
 import yaml
+import bootgen
 from noc_backends import BACKENDS, BackendError, get_backend, emit_memory_crossbar_parameters
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -90,6 +91,11 @@ def validate(doc):
             raise ConfigError(f"{sub['name']}: incorrect bus/adapter for CPU {ip}")
         cpu_instances.append({"subsystem": sub["name"], "ip": ip,
                               "bus": spec["bus"], "adapter": spec["adapter"]})
+    try:
+        bootgen.build(doc)
+    except (KeyError, ValueError, TypeError) as exc:
+        raise ConfigError(f"invalid boot configuration: {exc}") from exc
+
     if types["compute"]["dma"] != "pulp_idma":
         raise ConfigError("compute template currently requires common pulp_idma")
 

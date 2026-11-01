@@ -70,6 +70,18 @@
     },
     {
       "checks": [
+        "cpu0_rom_fetch",
+        "flash_to_sram_stores",
+        "secondary_reset_release",
+        "both_cpu_signatures"
+      ],
+      "command": "make dv-boot",
+      "dut": "compute0.cpu+compute1.cpu+boot_rom+flash+sram+reset_ctrl",
+      "name": "cpu_cold_boot",
+      "status": "executable"
+    },
+    {
+      "checks": [
         "local_fabric",
         "dma_csr",
         "dma_copy"

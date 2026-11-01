@@ -77,6 +77,16 @@
   "common_dma": "pulp_idma",
   "addresses": [
     {
+      "name": "boot.rom",
+      "base": 0,
+      "size": 4096
+    },
+    {
+      "name": "boot.flash",
+      "base": 536870912,
+      "size": 65536
+    },
+    {
       "name": "compute0.sram",
       "base": 268435456,
       "size": 1048576

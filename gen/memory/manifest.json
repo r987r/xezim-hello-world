@@ -100,6 +100,16 @@
   },
   "data_regions": [
     {
+      "name": "boot.rom",
+      "base": 0,
+      "size": 4096
+    },
+    {
+      "name": "boot.flash",
+      "base": 536870912,
+      "size": 65536
+    },
+    {
       "name": "compute0.sram",
       "base": 268435456,
       "size": 1048576
@@ -132,14 +142,9 @@
       "size": 65536
     },
     {
-      "name": "memory0.hbm0",
-      "base": 1342177280,
-      "size": 65536
-    },
-    {
-      "name": "memory0.ddr0",
-      "base": 1342242816,
-      "size": 65536
+      "name": "boot.reset_ctrl",
+      "base": 1073872896,
+      "size": 4096
     }
   ],
   "target_count": 2

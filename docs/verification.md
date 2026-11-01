@@ -9,13 +9,16 @@ All scopes consume the same `config/soc.yaml` and use shared AXI monitors, refer
 | Generator/configuration | SoC schema, address maps, fabric backend registry | Determinism, invalid configurations rejected |
 | Memory-local fabric | Verilog-AXI 2×2 crossbar with HBM and DDR behavioral AXI targets | Every ingress writes/reads both targets, ID route, data, ordering of burst beats |
 | Negative memory check | Same RTL, corrupted expected read data | Must produce `FAIL AXI read` |
-| CPU instance smoke | Public PicoRV32 + SERV RTL | Both elaborate and independently issue fetch requests |
+| CPU fetch smoke | Public PicoRV32 + SERV RTL | Both elaborate and issue fetch requests (no execution) |
+| CPU cold boot | PicoRV32 + SERV, ROM, flash model, blank SRAMs and reset MMIO | CPU0 actually copies both programs, releases CPU1 and both execute to SRAM signatures |
 
 A memory model responding to AXI does **not** test its selected HBM/DDR controller or PHY. The two CPU smoke instances have no software/SoC network attached.
 
+The boot scope is documented in [boot.md](boot.md). It verifies real instruction execution, unlike the legacy fetch-only smoke. Boot uses a functional standalone bus model, **not** global NoC or physical SPI, HBM or DDR RTL.
+
 ## Expansion sequence
 
-1. **Local compute fabrics:** instantiate local AXI4 and AXI4-Lite crossbars; connect PicoRV32 and SERV to protocol bridges and local SRAM; prove local accesses.
+1. **Local compute fabrics:** connect the already-exercised CPU boot/SRAM contract through generated local AXI4/AXI-Lite fabrics and a SERV Wishbone-to-AXI adapter; replace the standalone bootstrap bus model.
 2. **DMA subsystem:** integrate PULP iDMA in each compute instance; execute SRAM-to-remote DDR/HBM copies; independently compare memory contents.
 3. **Global NoCs:** generate FlooNoC data topology and a separate config fabric from vendor-neutral IR; test routing, outstanding IDs, fairness, and congestion.
 4. **Controller integration:** separately verify LiteDRAM with open DDR DFI model; investigate HiSA HBM with necessary vendor IP or alternative fully open model, without claiming silicon-grade PHY fidelity.

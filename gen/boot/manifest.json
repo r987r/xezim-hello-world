@@ -1,0 +1,23 @@
+{
+  "addresses": {
+    "bootrom": 0,
+    "flash": 536870912,
+    "flash_slot_stride": 256,
+    "reset_ctrl": 1073872896,
+    "signature0": 268435712,
+    "signature1": 285212928,
+    "sram0": 268435456,
+    "sram1": 285212672
+  },
+  "boot_mode": "primary_cpu_rom_to_sram",
+  "cpu0_signature_value": 85,
+  "cpu1_signature_value": 102,
+  "physical_flash_transport": "not integrated; memory-mapped read-only flash model",
+  "primary": "compute0",
+  "program_words": 4,
+  "release_method": "CPU0 MMIO write to boot.reset_ctrl",
+  "schema_version": 1,
+  "secondary": "compute1",
+  "simulated_sram_bytes": 16384,
+  "sram_initialization": "none: CPU0 copies both images with AXI-Lite stores"
+}

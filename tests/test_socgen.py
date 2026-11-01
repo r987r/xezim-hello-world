@@ -48,6 +48,35 @@ class SocConfigTest(unittest.TestCase):
             self.assertEqual(ir['fabrics']['global_data']['backend'],'floonoc')
             self.assertFalse(ir['fabrics']['global_data']['emitter_available'])
 
+    def test_boot_generator_uses_real_cpu_programs(self):
+        import bootgen
+        fw = bootgen.build(copy.deepcopy(self.base))
+        self.assertEqual(fw['addresses']['bootrom'], 0)
+        self.assertEqual(fw['addresses']['sram0'], 0x10000000)
+        self.assertEqual(fw['addresses']['sram1'], 0x11000000)
+        self.assertEqual(fw['addresses']['reset_ctrl'], 0x40020000)
+        with tempfile.TemporaryDirectory() as t:
+            out = Path(t) / 'boot'
+            bootgen.emit(self.base, out)
+            words = [int(w, 16) for w in (out/'bootrom.hex').read_text().split()]
+            flash = [int(w, 16) for w in (out/'flash.hex').read_text().split()]
+            self.assertEqual(words[0], 0x200002b7)  # LUI t0, FLASH_BASE
+            self.assertEqual(words[-1], 0x00028067)  # JALR x0, 0(t0)
+            self.assertEqual(len(flash), 128)
+            self.assertNotEqual(flash[0], 0)
+            self.assertNotEqual(flash[64], 0)
+            self.assertEqual(flash[4], 0)
+            self.assertEqual(json.loads((out/'manifest.json').read_text())['sram_initialization'],
+                             'none: CPU0 copies both images with AXI-Lite stores')
+
+    def test_boot_missing_reset_controller_rejected(self):
+        doc = copy.deepcopy(self.base)
+        doc['address_map']['config'] = [r for r in doc['address_map']['config']
+                                         if r['name'] != 'boot.reset_ctrl']
+        with self.assertRaisesRegex(socgen.ConfigError, 'missing boot.reset_ctrl'):
+            socgen.validate(doc)
+
+
     def test_overlap_rejected(self):
         doc=copy.deepcopy(self.base)
         doc['address_map']['data'][3]['base']='0x100000000'
@@ -114,7 +143,7 @@ class SocConfigTest(unittest.TestCase):
         meta = socgen.validate(copy.deepcopy(self.base))
         with tempfile.TemporaryDirectory() as tmp:
             diagrams = diagram_gen.render(copy.deepcopy(self.base), meta, Path(tmp) / "diagrams")
-            for name in ("architecture", "rtl-connectivity", "verification"):
+            for name in ("architecture", "rtl-connectivity", "verification", "boot"):
                 self.assertIn("flowchart", diagrams[name])
                 self.assertTrue((Path(tmp)/"diagrams"/f"{name}.mmd").is_file())
             self.assertIn("picorv32", diagrams["architecture"])
@@ -142,13 +171,13 @@ class SocConfigTest(unittest.TestCase):
         readme = (ROOT / "README.md").read_text()
         section = readme.split(generate.START, 1)[1].split(generate.END, 1)[0]
         image_paths = re.findall(r"!\[[^]]+\]\((gen/diagrams/[^)]+\.svg)\)", section)
-        self.assertEqual(len(image_paths), 3)
+        self.assertEqual(len(image_paths), 4)
         for relative in image_paths:
             path = ROOT / relative
             self.assertTrue(path.is_file(), f"missing README image {relative}")
             self.assertEqual(ET.parse(path).getroot().tag,
                              "{http://www.w3.org/2000/svg}svg")
-        for name in ("architecture", "rtl-connectivity", "verification"):
+        for name in ("architecture", "rtl-connectivity", "verification", "boot"):
             self.assertIn(f"gen/diagrams/{name}.svg", image_paths)
             self.assertTrue((ROOT / "gen" / "diagrams" / f"{name}.mmd").is_file())
 

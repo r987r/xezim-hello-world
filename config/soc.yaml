@@ -27,6 +27,17 @@ subsystems:
     cpu: {ip: serv, bus: wishbone, adapter: serv_wishbone}
   - {name: memory0, type: memory}
 
+# One primary CPU boots from immutable ROM, copies both firmware images from
+# a modeled read-only flash window into uninitialized local SRAM, then releases
+# the secondary CPU via an actual MMIO reset controller. No separate boot CPU.
+# ASIC version will replace the flash model with SPI/QSPI and real SRAM macros.
+boot:
+  primary: compute0
+  secondary: compute1
+  flash_slot_stride: 256
+  program_words: 4
+  simulation_sram_bytes: 16384  # fail on out-of-bounds, never wrap/alias
+
 # Architectural topology and backend selection are separate. This allows
 # a different vendor's NoC backend without changing subsystem definitions.
 fabrics:
@@ -62,6 +73,8 @@ memory_targets:
 
 address_map:
   data:
+    - {name: boot.rom, base: '0x00000000', size: '0x00001000'}
+    - {name: boot.flash, base: '0x20000000', size: '0x00010000'}
     - {name: compute0.sram, base: '0x10000000', size: '0x00100000'}
     - {name: compute1.sram, base: '0x11000000', size: '0x00100000'}
     - {name: memory0.hbm0, base: '0x100000000', size: '0x40000000'}
@@ -69,8 +82,7 @@ address_map:
   config:
     - {name: compute0.dma, base: '0x40000000', size: '0x10000'}
     - {name: compute1.dma, base: '0x40010000', size: '0x10000'}
-    - {name: memory0.hbm0, base: '0x50000000', size: '0x10000'}
-    - {name: memory0.ddr0, base: '0x50010000', size: '0x10000'}
+    - {name: boot.reset_ctrl, base: '0x40020000', size: '0x1000'}
 
 verification:
   memory:
@@ -101,6 +113,11 @@ verification:
       status: executable
       command: make dv-cpu
       checks: [picorv32_fetch, serv_fetch]
+    - name: cpu_cold_boot
+      dut: compute0.cpu+compute1.cpu+boot_rom+flash+sram+reset_ctrl
+      status: executable
+      command: make dv-boot
+      checks: [cpu0_rom_fetch, flash_to_sram_stores, secondary_reset_release, both_cpu_signatures]
     - name: compute_subsystem
       dut: compute_subsystem
       status: planned

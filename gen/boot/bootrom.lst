@@ -1,0 +1,24 @@
+0x0000: 200002b7  lui t0, 0x20000  # compute0 flash
+0x0004: 10000337  lui t1, 0x10000  # compute0 SRAM
+0x0008: 00400393  addi t2, zero, 4
+0x000c: 0002ae03  lw t3, 0(t0)
+0x0010: 01c32023  sw t3, 0(t1)
+0x0014: 00428293  addi t0, t0, 4
+0x0018: 00430313  addi t1, t1, 4
+0x001c: fff38393  addi t2, t2, -1
+0x0020: fe0396e3  bne t2, zero, -20  # compute0 copy
+0x0024: 200002b7  lui t0, 0x20000  # compute1 flash
+0x0028: 10028293  addi t0, t0, 256
+0x002c: 11000337  lui t1, 0x11000  # compute1 SRAM
+0x0030: 00400393  addi t2, zero, 4
+0x0034: 0002ae03  lw t3, 0(t0)
+0x0038: 01c32023  sw t3, 0(t1)
+0x003c: 00428293  addi t0, t0, 4
+0x0040: 00430313  addi t1, t1, 4
+0x0044: fff38393  addi t2, t2, -1
+0x0048: fe0396e3  bne t2, zero, -20  # compute1 copy
+0x004c: 400202b7  lui t0, 0x40020  # reset control
+0x0050: 00100313  addi t1, zero, 1  # release CPU1
+0x0054: 0062a023  sw t1, 0(t0)
+0x0058: 100002b7  lui t0, 0x10000  # execute loaded image
+0x005c: 00028067  jalr zero, 0(t0)

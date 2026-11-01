@@ -175,7 +175,7 @@
       {
         "category": "config",
         "id": "memory0.local_config",
-        "label": "Memory config fabric\npulp_axi (pending)",
+        "label": "Controller config reserved\npulp_axi (not integrated)",
         "parent": "memory0"
       },
       {
@@ -203,6 +203,114 @@
         "parent": ""
       }
     ]
+  },
+  "boot": {
+    "connections": [
+      {
+        "from": "por",
+        "label": "CPU0 reset PC",
+        "status": "wired",
+        "to": "bootrom"
+      },
+      {
+        "from": "bootrom",
+        "label": "CPU0 reads firmware words",
+        "status": "wired",
+        "to": "flash"
+      },
+      {
+        "from": "flash",
+        "label": "CPU0 copies image0",
+        "status": "wired",
+        "to": "sram0"
+      },
+      {
+        "from": "flash",
+        "label": "CPU0 copies image1",
+        "status": "wired",
+        "to": "sram1"
+      },
+      {
+        "from": "bootrom",
+        "label": "MMIO release after copy",
+        "status": "wired",
+        "to": "resetctrl"
+      },
+      {
+        "from": "resetctrl",
+        "label": "release SERV reset",
+        "status": "wired",
+        "to": "c1prog"
+      },
+      {
+        "from": "sram0",
+        "label": "CPU0 jump",
+        "status": "wired",
+        "to": "c0prog"
+      },
+      {
+        "from": "sram1",
+        "label": "CPU1 instruction fetch",
+        "status": "wired",
+        "to": "c1prog"
+      },
+      {
+        "from": "flash",
+        "label": "real flash controller not integrated",
+        "status": "planned",
+        "to": "future"
+      }
+    ],
+    "limitation": "Executable scope uses direct memory-mapped flash model; no SPI/QSPI or full-chip fabric",
+    "nodes": [
+      {
+        "category": "config",
+        "id": "por",
+        "label": "Power-on reset\nCPU0 running / CPU1 held"
+      },
+      {
+        "category": "cpu",
+        "id": "bootrom",
+        "label": "CPU0 executes Boot ROM\n0x00000000 / immutable model"
+      },
+      {
+        "category": "memory",
+        "id": "flash",
+        "label": "Read-only flash image MODEL\n0x20000000 / ROM preloaded from hex"
+      },
+      {
+        "category": "memory",
+        "id": "sram0",
+        "label": "Blank SRAM0 -> firmware\n0x10000000 / AXI4-Lite stores"
+      },
+      {
+        "category": "memory",
+        "id": "sram1",
+        "label": "Blank SRAM1 -> firmware\n0x11000000 / AXI4-Lite stores"
+      },
+      {
+        "category": "config",
+        "id": "resetctrl",
+        "label": "Reset-control MMIO\n0x40020000 = 1"
+      },
+      {
+        "category": "verification",
+        "id": "c0prog",
+        "label": "CPU0 runs SRAM0\nwrites signature 0x55"
+      },
+      {
+        "category": "verification",
+        "id": "c1prog",
+        "label": "CPU1 released -> runs SRAM1\nwrites signature 0x66"
+      },
+      {
+        "category": "model",
+        "id": "future",
+        "label": "Future: SPI/QSPI + image validation + full-chip NoC"
+      }
+    ],
+    "scope": "cpu_cold_boot",
+    "source": "dv/boot/boot_tb.sv"
   },
   "rtl_connectivity": {
     "address_bits": 64,
@@ -358,6 +466,11 @@
       },
       {
         "from": "generator",
+        "status": "executable",
+        "to": "cpu_cold_boot"
+      },
+      {
+        "from": "generator",
         "status": "planned",
         "to": "compute_subsystem"
       },
@@ -425,6 +538,19 @@
         "dut": "compute0.cpu+compute1.cpu",
         "id": "cpu_smoke",
         "label": "cpu_smoke\nDUT: compute0.cpu+compute1.cpu\nmake dv-cpu\npicorv32_fetch, serv_fetch",
+        "status": "executable"
+      },
+      {
+        "checks": [
+          "cpu0_rom_fetch",
+          "flash_to_sram_stores",
+          "secondary_reset_release",
+          "both_cpu_signatures"
+        ],
+        "command": "make dv-boot",
+        "dut": "compute0.cpu+compute1.cpu+boot_rom+flash+sram+reset_ctrl",
+        "id": "cpu_cold_boot",
+        "label": "cpu_cold_boot\nDUT: compute0.cpu+compute1.cpu+boot_rom+flash+sram+reset_ctrl\nmake dv-boot\ncpu0_rom_fetch, flash_to_sram_stores, secondary_reset_release",
         "status": "executable"
       },
       {

@@ -10,7 +10,7 @@ flowchart TB
     direction TB
     memory0_ingress["2 AXI4 ingress ports"]:::cpu
     memory0_data["Local 2×2 crossbar<br/>verilog_axi"]:::fabric
-    memory0_config["Controller CSRs<br/>AXI4-Lite pending"]:::config
+    memory0_config["Controller CSR ports only if IP provides them"]:::config
     memory0_hbm0["HBM hisa_hbm<br/>axi_ram simulation<br/>0x100000000 + 0x40000000"]:::memory
     memory0_ddr0["DDR litedram<br/>axi_ram simulation<br/>0x140000000 + 0x40000000"]:::memory
   end

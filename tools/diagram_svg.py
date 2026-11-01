@@ -199,7 +199,9 @@ def verif_svg(cfg,meta,path:Path):
     scopes=cfg['verification']['scopes']
     impl=[s for s in scopes if s['status']=='executable']
     planned=[s for s in scopes if s['status']!='executable']
-    H=max(1020, 605+68+((len(planned)+1)//2)*121+115)
+    impl_rows = (len(impl)+1)//2
+    plan_y=max(605, 159+70+impl_rows*163+28)
+    H=max(1020, plan_y+68+((len(planned)+1)//2)*121+115)
     a=Art(1440,H)
     a.heading('Verification · generated coverage scope','Hierarchical verification plan',
               'Green = executable testbench exists • Grey = planned • status does not imply successful silicon verification')
@@ -207,7 +209,7 @@ def verif_svg(cfg,meta,path:Path):
     a.box_label(405,237,260,103,'make gen','SV + NoC IR + route plans\n2D diagrams + README','fabric',title_size=24,detail_size=15)
     a.line([(356,286),(405,286)],BLUE,3,False,True)
     a.line([(665,286),(722,286)],GREEN,3,False,True)
-    a.rect(725,159,651,418,WHITE,GREEN,r=17,width=2)
+    a.rect(725,159,651,70+impl_rows*163,WHITE,GREEN,r=17,width=2)
     a.text(749,180,'EXISTING TEST SCOPES',23,GREEN)
     for i,s in enumerate(impl):
         col=i%2;row=i//2
@@ -215,7 +217,6 @@ def verif_svg(cfg,meta,path:Path):
         title=s['name'].replace('_',' ')
         info=f"DUT: {s['dut']}\n{s.get('command','') or 'configured'}"
         a.box_label(x,y,292,132,title,info,'rtl',title_size=20,detail_size=16)
-    plan_y=605
     rows=(len(planned)+1)//2
     a.rect(725,plan_y,651,68+rows*121,WHITE,GRAY,r=17,width=2)
     a.text(749,plan_y+19,'PLANNED TEST SCOPES',23,GRAY)
@@ -265,9 +266,45 @@ def subsystem_svg(cfg,meta,inst,path:Path):
     a.save(path)
 
 
+
+def boot_svg(cfg,meta,path:Path):
+    import bootgen
+    a0=bootgen.build(cfg)['addresses']
+    a=Art(1440,990)
+    a.heading('Boot · executable scope','CPU0 Boot ROM loads two SRAMs',
+              'No dedicated boot CPU | Flash is read-only model, not SPI/QSPI | CPU1 held in reset until firmware copied')
+    a.box_label(80,186,380,105,'Power-on reset','CPU0 active / SERV held in reset','config',title_size=24)
+    a.box_label(530,186,380,105,'PicoRV32 executes Boot ROM',
+                f'0x{a0["bootrom"]:08x} | real instruction fetch','cpu',title_size=21)
+    a.line([(460,238),(530,238)],BLUE,3,False,True)
+    a.box_label(955,186,395,105,'Simulated flash image',
+                f'0x{a0["flash"]:08x} | read-only, hex initialized','memory',title_size=22)
+    a.line([(910,238),(955,238)],BLUE,3,False,True)
+    a.rect(80,346,1270,224,WHITE,FAINT,r=20,width=2)
+    a.text(109,359,'CPU0 executes ROM copy loops; actual AXI4-Lite loads and stores',23,INK)
+    a.box_label(125,423,535,112,'SRAM0: CPU0 firmware',
+                f'0x{a0["sram0"]:08x} | initially zero, then 4 stores','memory',title_size=22)
+    a.box_label(770,423,535,112,'SRAM1: SERV firmware',
+                f'0x{a0["sram1"]:08x} | initially zero, then 4 stores','memory',title_size=22)
+    a.line([(1130,291),(1130,423)],ORANGE,3,False,True)
+    a.line([(1060,291),(650,394),(392,423)],ORANGE,3,False,True)
+    a.box_label(80,642,535,112,'CPU0 executes SRAM0 program',
+                f'Writes 0x55 to 0x{a0["signature0"]:08x}','rtl',title_size=21)
+    a.box_label(765,642,535,112,'CPU1 executes SRAM1 program',
+                f'Writes 0x66 to 0x{a0["signature1"]:08x}','rtl',title_size=21)
+    a.line([(393,535),(393,642)],GREEN,3,False,True)
+    a.line([(1038,535),(1038,642)],GREEN,3,False,True)
+    a.box_label(80,812,1220,104,'Boot control CSR + scoreboard',
+                f'CPU0 store 0x{a0["reset_ctrl"]:08x}=1 releases CPU1. Test requires flash reads, SRAM writes, both signatures.',
+                'config',title_size=23,detail_size=17)
+    a.line([(1038,754),(1038,812)],PURPLE,2,False,True)
+    a.text(91,931,'Future: replace memory-mapped flash model with QSPI; integrate real local/global NoC and DMA.',18,MUTED)
+    a.save(path)
+
 def render_images(cfg,meta,output_dir:Path):
     arch_svg(cfg,meta,output_dir/'architecture.svg')
     rtl_svg(cfg,meta,output_dir/'rtl-connectivity.svg')
     verif_svg(cfg,meta,output_dir/'verification.svg')
+    boot_svg(cfg,meta,output_dir/'boot.svg')
     for inst in meta['subsystems']:
         subsystem_svg(cfg,meta,inst,output_dir/'subsystems'/f"{inst['name']}.svg")

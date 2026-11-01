@@ -4,6 +4,10 @@ This document specifies **logical connectivity separately from RTL implementatio
 
 The [README](../README.md) embeds the 2D architecture, actual memory RTL connectivity, and verification diagrams. The source-controlled Mermaid and graph JSON files are in [`gen/diagrams/`](../gen/diagrams/). For each subsystem, the generated `.md` diagram can be opened directly in GitHub. Connectivity metadata follows the explicit instances/connections model in the owner's `Diagram-gen` and `Sv-diagrams` repositories; verification scopes follow `Sv-test`. There is no 3D viewer dependency.
 
+## Boot and SRAM loading
+
+CPU0 (PicoRV32) is the primary boot core. CPU1 (SERV) stays in reset until CPU0 has copied both firmware images from the read-only flash model into blank SRAM, then writes the reset-control MMIO register. This is proven in a standalone CPU0/CPU1 boot scope; neither the global NoC nor a physical flash controller is integrated in that scope. Read [boot.md](boot.md) for the exact address map, bus transactions, limitations and next steps. The speculative HBM/DDR control windows have been removed.
+
 ## Structure
 
 - Compute 0 contains `picorv32` (AXI4-Lite CPU interface), `pulp_idma`, SRAM, local data/config fabric.
@@ -13,7 +17,7 @@ The [README](../README.md) embeds the 2D architecture, actual memory RTL connect
 
 ## Stable contract vs backend
 
-The generator first validates an abstract graph of **initiators, targets, boundaries, address windows, and NoC ports**. It produces `generated/noc/fabric_ir.json`. A backend then consumes that intermediate representation and emits implementation-specific modules/typedefs/source lists.
+The generator first validates an abstract graph of **initiators, targets, boundaries, address windows, and NoC ports**. It produces `gen/noc/fabric_ir.json`. A backend then consumes that intermediate representation and emits implementation-specific modules/typedefs/source lists.
 
 | Network | Selected backend | Status |
 | --- | --- | --- |

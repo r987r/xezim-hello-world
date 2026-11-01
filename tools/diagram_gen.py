@@ -104,7 +104,7 @@ def build_architecture(cfg: dict, meta: dict) -> tuple[str, dict]:
             add(sram, f'SRAM\n{span(r) if r is not None else "address not configured"}', "memory", name)
         else:
             add(f"{name}.local_data", f'{meta["ingress"]}-input AXI4 fabric\n{cfg["fabrics"]["memory_data"]["backend"]} (RTL tested)', "fabric", name)
-            add(f"{name}.local_config", f'Memory config fabric\n{cfg["fabrics"]["local_config"]["backend"]} (pending)', "config", name)
+            add(f"{name}.local_config", f'Controller config reserved\n{cfg["fabrics"]["local_config"]["backend"]} (not integrated)', "config", name)
             for t in meta["targets"]:
                 add(t["name"], f'{t["kind"].upper()} {t["controller"]}\nAXI model: {t["sim_backend"]}\n{span(t)}', "memory", name)
         lines.append("  end")
@@ -237,7 +237,7 @@ def build_subsystem(cfg: dict, meta: dict, inst: dict) -> str:
         lines += [
             block(f"{name}.ingress", f'{meta["ingress"]} AXI4 ingress ports', "cpu", "    "),
             block(f"{name}.data", f'Local {meta["ingress"]}×{len(meta["targets"])} crossbar\n{cfg["fabrics"]["memory_data"]["backend"]}', "fabric", "    "),
-            block(f"{name}.config", 'Controller CSRs\nAXI4-Lite pending', "config", "    "),
+            block(f"{name}.config", 'Controller CSR ports only if IP provides them', "config", "    "),
         ]
         for t in meta['targets']:
             lines.append(block(t['name'], f'{t["kind"].upper()} {t["controller"]}\n{t["sim_backend"]} simulation\n{span(t)}', "memory", "    "))
@@ -253,6 +253,46 @@ def build_subsystem(cfg: dict, meta: dict, inst: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
+
+def build_boot_flow(cfg: dict, meta: dict) -> tuple[str, dict]:
+    """Actual standalone ROM/flash/SRAM test versus proposed real SPI/NoC."""
+    import bootgen
+    fw = bootgen.build(cfg)
+    a = fw["addresses"]
+    lines = header("TB")
+    nodes = [
+        ("por", "Power-on reset\nCPU0 running / CPU1 held", "config"),
+        ("bootrom", f'CPU0 executes Boot ROM\n0x{a["bootrom"]:08x} / immutable model', "cpu"),
+        ("flash", f'Read-only flash image MODEL\n0x{a["flash"]:08x} / ROM preloaded from hex', "memory"),
+        ("sram0", f'Blank SRAM0 -> firmware\n0x{a["sram0"]:08x} / AXI4-Lite stores', "memory"),
+        ("sram1", f'Blank SRAM1 -> firmware\n0x{a["sram1"]:08x} / AXI4-Lite stores', "memory"),
+        ("resetctrl", f'Reset-control MMIO\n0x{a["reset_ctrl"]:08x} = 1', "config"),
+        ("c0prog", "CPU0 runs SRAM0\nwrites signature 0x55", "verification"),
+        ("c1prog", "CPU1 released -> runs SRAM1\nwrites signature 0x66", "verification"),
+        ("future", "Future: SPI/QSPI + image validation + full-chip NoC", "model"),
+    ]
+    for name, label, category in nodes:
+        lines.append(block(name, label, category))
+    conns = [
+        ("por", "bootrom", "CPU0 reset PC", "wired"),
+        ("bootrom", "flash", "CPU0 reads firmware words", "wired"),
+        ("flash", "sram0", "CPU0 copies image0", "wired"),
+        ("flash", "sram1", "CPU0 copies image1", "wired"),
+        ("bootrom", "resetctrl", "MMIO release after copy", "wired"),
+        ("resetctrl", "c1prog", "release SERV reset", "wired"),
+        ("sram0", "c0prog", "CPU0 jump", "wired"),
+        ("sram1", "c1prog", "CPU1 instruction fetch", "wired"),
+        ("flash", "future", "real flash controller not integrated", "planned"),
+    ]
+    for src, dst, label, status in conns:
+        lines.append(link(src, dst, label, style="rtl" if status == "wired" else "planned"))
+    return "\n".join(lines)+"\n", {
+        "scope": "cpu_cold_boot", "source": "dv/boot/boot_tb.sv",
+        "nodes": [{"id": name, "label": label, "category": category} for name, label, category in nodes],
+        "connections": [{"from": src, "to": dst, "label": label, "status": status}
+                        for src, dst, label, status in conns],
+        "limitation": "Executable scope uses direct memory-mapped flash model; no SPI/QSPI or full-chip fabric"}
+
 def render(cfg: dict, meta: dict, destination: Path) -> dict:
     """Return exactly the generated files as a map for README embedding."""
     destination.mkdir(parents=True, exist_ok=True)
@@ -260,7 +300,8 @@ def render(cfg: dict, meta: dict, destination: Path) -> dict:
     arch, arch_meta = build_architecture(cfg, meta)
     rtl, rtl_meta = build_rtl_connectivity(cfg, meta)
     dv, dv_meta = build_verification(cfg, meta)
-    diagrams = {"architecture": arch, "rtl-connectivity": rtl, "verification": dv}
+    boot, boot_meta = build_boot_flow(cfg, meta)
+    diagrams = {"architecture": arch, "rtl-connectivity": rtl, "verification": dv, "boot": boot}
     for inst in meta["subsystems"]:
         diagrams[f'subsystems/{inst["name"]}'] = build_subsystem(cfg, meta, inst)
     for name, diagram in diagrams.items():
@@ -274,7 +315,7 @@ def render(cfg: dict, meta: dict, destination: Path) -> dict:
             f"({path.name.removesuffix('.mmd')}.svg)\n\n"
             f"[View editable Mermaid source]({path.name})\n"
         )
-    graph_meta = {"architecture": arch_meta, "rtl_connectivity": rtl_meta, "verification": dv_meta}
+    graph_meta = {"architecture": arch_meta, "rtl_connectivity": rtl_meta, "verification": dv_meta, "boot": boot_meta}
     (destination / "graphs.json").write_text(json.dumps(graph_meta, indent=2, sort_keys=True) + "\n")
     diagram_svg.render_images(cfg, meta, destination)
     return diagrams
