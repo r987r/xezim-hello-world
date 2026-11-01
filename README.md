@@ -1,47 +1,50 @@
-# Xezim Hello World testbench
+# Xezim SystemVerilog smoke test
 
-A minimal self-checking SystemVerilog smoke test for [Xezim](https://github.com/aionhw/xezim) 0.11.3.
+[![SystemVerilog CI](https://github.com/r987r/xezim-hello-world/actions/workflows/xezim-smoke.yml/badge.svg)](https://github.com/r987r/xezim-hello-world/actions/workflows/xezim-smoke.yml)
 
-The example contains an 8-bit two-input adder and a testbench that prints Hello World, checks 20 + 22 = 42, checks 255 + 1 = 256 (carry), checks unknown-value propagation, and reports **PASS**.
+A small, self-checking SystemVerilog project that demonstrates how to compile, elaborate, and run a testbench with [Xezim](https://github.com/aionhw/xezim).
+
+The example adds two 8-bit values and checks ordinary addition, carry propagation, and unknown-value behavior. It succeeds only when the simulator prints `PASS: hello_world_tb`.
 
 ## Run locally
 
-Requirements: Linux/macOS and Make. Rust/Cargo 1.92+, Git and a C compiler are needed only if Xezim must be built from source.
+With an installed `xezim` on `PATH`, no Rust installation is needed:
 
-    git clone https://github.com/r987r/xezim-hello-world.git
-    cd xezim-hello-world
-    make test
+```bash
+git clone https://github.com/r987r/xezim-hello-world.git
+cd xezim-hello-world
+make test
+```
 
-The runner prefers an executable specified by `XEZIM_BIN`, then a cached local build, then an `xezim` executable found on `PATH`. Only if no executable is available does it download Xezim into the ignored `.tools` directory and build it from source with low-memory Rust release settings. CI caches the resulting executable, so later jobs normally skip the Rust build.
+To select a specific executable, run `XEZIM_BIN=/path/to/xezim make test`. If no simulator executable is available, the runner clones and compiles the pinned Xezim version **once**, under the ignored `.tools/` directory. This first-time local fallback requires Git, Rust/Cargo (1.92+), and a C compiler.
 
-## Verified output (Linux, Nov 1, 2026)
+`make test` invokes `scripts/run.sh`, which performs HDL compilation, elaboration, simulation, and PASS-marker validation.
 
-    === xezim 0.11.3 ===
-    git 058f2bb (2026-10-23T17:05:55-07:00)
-    Hello, World! Running on Xezim.
-    PASS: hello_world_tb
-    Simulation finished at time 3000 ($finish called)
+## Repository layout
 
-Xezim compilation and execution completed with exit code 0. The real run is also captured in [test-results.txt](test-results.txt).
+| Path | Purpose |
+| --- | --- |
+| `rtl/hello_world.sv` | Combinational example design |
+| `tb/hello_world_tb.sv` | Self-checking testbench |
+| `scripts/run.sh` | Repeatable command-line test runner |
+| `toolchains/xezim.env` | Pinned simulator version, upstream commit, and Linux release asset |
+| `.github/workflows/publish-xezim.yml` | Provision the versioned Linux executable when needed |
+| `.github/workflows/xezim-smoke.yml` | Run SystemVerilog tests using that executable |
 
-## Files
+## Continuous integration
 
-- [rtl/hello_world.sv](rtl/hello_world.sv): combinational RTL
-- [tb/hello_world_tb.sv](tb/hello_world_tb.sv): self-checking testbench
-- [scripts/run.sh](scripts/run.sh): reproducible build and run
-- [Makefile](Makefile): make test
-- [.github/workflows/xezim-smoke.yml](.github/workflows/xezim-smoke.yml): CI on pushes/PRs or manually
+**SV test workflow:** Changes to RTL, testbench, or the test runner automatically run `make test`. The job downloads the pinned Linux x86_64 executable from this repository's GitHub Releases, verifies its SHA-256 checksum, and runs the simulation. **It does not install Rust or rebuild Xezim.**
 
-You can supply `XEZIM_BIN=/path/to/xezim` to use an existing simulator binary; set `XEZIM_VERSION` to select another tag on first clone.
+**Simulator publishing workflow:** Only a change to the simulator pin or the publisher workflow (or an intentional manual dispatch) starts provisioning. It checks for an existing release before building, validates the simulator with the smoke test, and publishes the binary alongside its checksum. A successful publication triggers the SV workflow automatically.
 
-**Upstream releases have no precompiled release assets** as checked on 2026-11-01 ([0.11.3](https://github.com/aionhw/xezim/releases/tag/0.11.3), [0.11.4](https://github.com/aionhw/xezim/releases/tag/0.11.4)); their GitHub release archives are source-only. Build Xezim just once on each target platform, or retrieve the CI-cached binary.
+Releases are durable versioned assets; CI caches are only a speed-up for retrying the publisher. Ordinary SV changes never trigger the publisher.
 
-The optimized upstream release build needed more than 4 GiB of RAM. This runner reduces memory use by compiling with one job, without LTO, with 16 codegen units and opt-level 1.
+## Upgrading Xezim
 
-## CI: binary build is separate from SystemVerilog tests
+Edit the values in `toolchains/xezim.env`: version, full upstream commit, release tag, and asset name. Commit the change to `main`. The publisher will prepare the new pinned simulator if it is not already available, and then the SV smoke test will run. The prior binary remains available for existing users.
 
-The normal [SV smoke test](.github/workflows/xezim-smoke.yml) downloads a pinned `xezim` Linux x86_64 executable from this repository's GitHub Release named `xezim-bin-v0.11.3-linux-x86_64`, checks its SHA-256, then executes `make test`. It does **not** install Rust or invoke Cargo. Only SV inputs and test-runner changes trigger this workflow.
+The current automated distribution targets **Linux x86_64**. Other platforms can use a locally installed Xezim binary and can be added as separately versioned release assets.
 
-The [one-time binary publisher](.github/workflows/publish-xezim.yml) checks whether the versioned executable already exists; if missing, it restores an existing simulator binary cache if possible, otherwise compiles Xezim from pinned upstream commit `058f2bba58648452e5799d17572356ebcae7d163`, smoke-tests it, and publishes the executable plus SHA-256 checksum. SV changes never trigger this publisher. To change Xezim versions, deliberately update both workflows and publish a new versioned executable.
+## Adding tests
 
-**First-run ordering:** publishing the simulator executable must succeed before the binary-only SV workflow can run. Later SV pushes use only the released binary. The release asset is platform-specific (`Linux x86_64`).
+Place RTL in `rtl/` and testbenches in `tb/`. Update the top module and source list passed to Xezim in `scripts/run.sh` when adding a new design or test suite. Keep each test self-checking and return a nonzero exit status on failure.

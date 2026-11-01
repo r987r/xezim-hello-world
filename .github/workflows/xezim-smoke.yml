@@ -7,13 +7,13 @@ on:
       - 'tb/**'
       - 'scripts/run.sh'
       - 'Makefile'
-      - '.github/workflows/xezim-smoke.yml'
   pull_request:
     paths:
       - 'rtl/**'
       - 'tb/**'
       - 'scripts/run.sh'
       - 'Makefile'
+      - 'toolchains/xezim.env'
       - '.github/workflows/xezim-smoke.yml'
   workflow_dispatch:
   workflow_run:
@@ -32,24 +32,31 @@ jobs:
       - name: Check out testbench
         uses: actions/checkout@v4
 
-      - name: Download pinned simulator, no Rust or Cargo
+      - name: Load pinned simulator release
+        shell: bash
+        run: |
+          set -euo pipefail
+          source toolchains/xezim.env
+          for name in XEZIM_RELEASE_TAG XEZIM_ASSET_NAME; do
+            printf '%s=%s\n' "$name" "${!name}" >> "$GITHUB_ENV"
+          done
+
+      - name: Download and verify simulator binary (no Rust build)
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: xezim-bin-v0.11.3-linux-x86_64
-          ASSET_NAME: xezim-linux-x86_64
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p .tools/bin
-          gh release download "$RELEASE_TAG" \
+          gh release download "$XEZIM_RELEASE_TAG" \
             --repo "$GITHUB_REPOSITORY" \
-            --pattern "$ASSET_NAME" \
-            --pattern "$ASSET_NAME.sha256" \
+            --pattern "$XEZIM_ASSET_NAME" \
+            --pattern "$XEZIM_ASSET_NAME.sha256" \
             --dir .tools/bin
-          (cd .tools/bin && sha256sum -c "$ASSET_NAME.sha256")
-          chmod +x ".tools/bin/$ASSET_NAME"
+          (cd .tools/bin && sha256sum -c "$XEZIM_ASSET_NAME.sha256")
+          chmod +x ".tools/bin/$XEZIM_ASSET_NAME"
 
-      - name: Compile/elaborate/run SystemVerilog only
-        env:
-          XEZIM_BIN: ${{ github.workspace }}/.tools/bin/xezim-linux-x86_64
-        run: make test
+      - name: Compile, elaborate and simulate SystemVerilog
+        shell: bash
+        run: |
+          XEZIM_BIN="$GITHUB_WORKSPACE/.tools/bin/$XEZIM_ASSET_NAME" make test
