@@ -66,13 +66,13 @@ jobs:
           chmod +x ".tools/bin/$XEZIM_ASSET_NAME"
           echo "XEZIM_BIN=$GITHUB_WORKSPACE/.tools/bin/$XEZIM_ASSET_NAME" >> "$GITHUB_ENV"
       - name: Exercise both memory destinations through AXI4 fabric
-        run: make dv-memory | tee memory-dv.log
+        run: bash -o pipefail -c 'make dv-memory | tee memory-dv.log'
       - name: Prove scoreboard detects incorrect memory data
-        run: make dv-memory-negative | tee memory-negative.log
+        run: bash -o pipefail -c 'make dv-memory-negative | tee memory-negative.log'
       - name: Elaborate and exercise PicoRV32 and SERV CPUs
-        run: make dv-cpu | tee cpu-dv.log
+        run: bash -o pipefail -c 'make dv-cpu | tee cpu-dv.log'
       - name: Boot both CPUs from ROM and flash into blank SRAM
-        run: make dv-boot | tee boot-dv.log
+        run: bash -o pipefail -c 'make dv-boot | tee boot-dv.log'
       - name: Upload failed test logs
         if: failure()
         uses: actions/upload-artifact@v4
