@@ -2,24 +2,50 @@ name: Xezim Hello World smoke test
 
 on:
   push:
+    paths:
+      - 'rtl/**'
+      - 'tb/**'
+      - 'scripts/run.sh'
+      - 'Makefile'
+      - '.github/workflows/xezim-smoke.yml'
   pull_request:
+    paths:
+      - 'rtl/**'
+      - 'tb/**'
+      - 'scripts/run.sh'
+      - 'Makefile'
+      - '.github/workflows/xezim-smoke.yml'
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   compile-and-simulate:
-    runs-on: ubuntu-latest
-    timeout-minutes: 35
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
-      - name: Check out testbench repo
+      - name: Check out testbench
         uses: actions/checkout@v4
-      - name: Restore cached Xezim executable
-        id: cached-xezim
-        uses: actions/cache@v4
-        with:
-          path: .tools/xezim/target/release/xezim
-          key: xezim-0.11.3-ubuntu-x64-lowmem-v1
-      - name: Install Rust (cache miss only)
-        if: steps.cached-xezim.outputs.cache-hit != 'true'
-        uses: dtolnay/rust-toolchain@stable
-      - name: Build Xezim on cache miss, then run testbench
+
+      - name: Download pinned simulator, no Rust or Cargo
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: xezim-bin-v0.11.3-linux-x86_64
+          ASSET_NAME: xezim-linux-x86_64
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .tools/bin
+          gh release download "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "$ASSET_NAME" \
+            --pattern "$ASSET_NAME.sha256" \
+            --dir .tools/bin
+          (cd .tools/bin && sha256sum -c "$ASSET_NAME.sha256")
+          chmod +x ".tools/bin/$ASSET_NAME"
+
+      - name: Compile/elaborate/run SystemVerilog only
+        env:
+          XEZIM_BIN: ${{ github.workspace }}/.tools/bin/xezim-linux-x86_64
         run: make test
