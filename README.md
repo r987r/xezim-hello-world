@@ -6,13 +6,13 @@ The example contains an 8-bit two-input adder and a testbench that prints Hello 
 
 ## Run locally
 
-Requirements: Linux/macOS, Git, Make, Rust/Cargo 1.92+, and a C compiler.
+Requirements: Linux/macOS and Make. Rust/Cargo 1.92+, Git and a C compiler are needed only if Xezim must be built from source.
 
     git clone https://github.com/r987r/xezim-hello-world.git
     cd xezim-hello-world
     make test
 
-The runner downloads Xezim into the ignored .tools directory, builds it with low-memory Rust release settings, and invokes the simulator with the testbench.
+The runner prefers an executable specified by `XEZIM_BIN`, then a cached local build, then an `xezim` executable found on `PATH`. Only if no executable is available does it download Xezim into the ignored `.tools` directory and build it from source with low-memory Rust release settings. CI caches the resulting executable, so later jobs normally skip the Rust build.
 
 ## Verified output (Linux, Nov 1, 2026)
 
@@ -32,6 +32,8 @@ Xezim compilation and execution completed with exit code 0. The real run is also
 - [Makefile](Makefile): make test
 - [.github/workflows/xezim-smoke.yml](.github/workflows/xezim-smoke.yml): CI on pushes/PRs or manually
 
-You can supply XEZIM_BIN=/path/to/xezim to use an existing simulator binary; set XEZIM_VERSION to select another tag on first clone.
+You can supply `XEZIM_BIN=/path/to/xezim` to use an existing simulator binary; set `XEZIM_VERSION` to select another tag on first clone.
+
+**Upstream releases have no precompiled release assets** as checked on 2026-11-01 ([0.11.3](https://github.com/aionhw/xezim/releases/tag/0.11.3), [0.11.4](https://github.com/aionhw/xezim/releases/tag/0.11.4)); their GitHub release archives are source-only. Build Xezim just once on each target platform, or retrieve the CI-cached binary.
 
 The optimized upstream release build needed more than 4 GiB of RAM. This runner reduces memory use by compiling with one job, without LTO, with 16 codegen units and opt-level 1.
