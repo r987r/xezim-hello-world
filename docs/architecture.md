@@ -64,6 +64,25 @@ HiSA HBMController's public RTL uses AMD/Xilinx HBM IP for PHY and a documented 
 - No implicit coherence. Explicit synchronization is required for CPU/DMA shared buffers.
 - Any generated executable scope must reject an unavailable backend (never produce a pretend substitute).
 
+## Whole-chip FlooNoC network visualization
+
+FlooNoC's upstream FlooGen supplies the machine-readable mesh/router
+placement, endpoint-to-router connections and structural SystemVerilog.
+**FlooNoC does not directly run the separate `r987r/Diagram-gen`
+viewer**; we bridge the generated FlooGen configurations into the same
+instance/connection/group metadata model used by Diagram-gen. The
+generator creates [whole-chip topology](../gen/diagrams/noc-hierarchy.svg),
+[Mermaid](../gen/diagrams/noc-hierarchy.mmd),
+[Diagram-gen-style metadata](../gen/diagrams/noc-topology.json), and
+[each actual router mesh](../gen/diagrams/noc/global_data.svg)
+under `gen/diagrams/noc/`. The README embeds the entire NoC hierarchy.
+
+The diagrams distinguish **generated router/NI links** from **planned
+inter-subsystem links**. The existing memory crossbar's working
+standalone read/write test is not proof its interface is integrated
+with the generated memory-local or global NoCs. Never mark such edges
+as connected until integrated RTL and simulation verifies them.
+
 ## Generated 2D previews
 
 The README embeds committed static SVG diagrams generated from the validated SoC metadata. Editable Mermaid source and `graphs.json` are retained in `gen/diagrams/`. `make check-generated` verifies the images and README links byte-for-byte, and obsolete generated images are removed by `make gen`. The vector renderer uses only the Python standard library; GitHub/mobile clients do not need Mermaid support.
