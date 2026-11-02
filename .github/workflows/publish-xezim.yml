@@ -85,6 +85,14 @@ jobs:
           grep -Fxq "=== xezim $XEZIM_VERSION ===" "$RUNNER_TEMP/xezim-test.log"
           grep -Fxq 'PASS: hello_world_tb' "$RUNNER_TEMP/xezim-test.log"
 
+      - name: Verify fixed nonzero-index input port behavior before publishing
+        if: steps.released.outputs.exists != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          .tools/xezim/target/release/xezim --no-cache -s port_slice_repro \
+            dv/simulator/port_slice_repro.sv | tee "$RUNNER_TEMP/xezim-port-slice.log"
+
       - name: Cache simulator for future publishing attempts
         if: steps.released.outputs.exists != 'true' && steps.cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
