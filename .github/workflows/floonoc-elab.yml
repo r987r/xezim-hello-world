@@ -1,0 +1,68 @@
+name: FlooNoC structural RTL compile and elaborate
+
+on:
+  push:
+    paths:
+      - 'gen/noc/floonoc/**'
+      - 'tools/floonoc_gen.py'
+      - '.github/workflows/floonoc-elab.yml'
+  pull_request:
+    paths:
+      - 'gen/noc/floonoc/**'
+      - 'tools/floonoc_gen.py'
+      - '.github/workflows/floonoc-elab.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  elaborate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch locked FlooNoC source and upstream Bender dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install -r requirements.txt
+          python3 tools/ip_fetch.py floonoc
+          mkdir -p .tools/bin
+          gh release download v0.32.1 --repo pulp-platform/bender \
+            --pattern 'bender-x86_64-unknown-linux-gnu.tar.xz' \
+            --pattern 'bender-x86_64-unknown-linux-gnu.tar.xz.sha256' --dir .tools/bin
+          (cd .tools/bin && sha256sum -c bender-x86_64-unknown-linux-gnu.tar.xz.sha256)
+          tar -xJf .tools/bin/bender-x86_64-unknown-linux-gnu.tar.xz -C .tools/bin
+          echo "$GITHUB_WORKSPACE/.tools/bin" >> "$GITHUB_PATH"
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Resolve pinned upstream FlooNoC compile filelist
+        run: |
+          set -euo pipefail
+          cd .tools/floonoc
+          bender --version
+          bender checkout
+          bender script flist -t rtl -t cc_no_deprecated > "$GITHUB_WORKSPACE/.tools/floonoc-rtl.f"
+          test -s "$GITHUB_WORKSPACE/.tools/floonoc-rtl.f"
+      - name: Install Verilator
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y verilator
+          verilator --version
+      - name: Elaborate real generated global AXI data mesh
+        run: |
+          set -euo pipefail
+          verilator --lint-only --timing --top-module floo_xezim_global_data_noc \
+            -Wno-fatal \
+            -f .tools/floonoc-rtl.f \
+            gen/noc/floonoc/global_data/floo_xezim_global_data_noc_pkg.sv \
+            gen/noc/floonoc/global_data/floo_xezim_global_data_noc.sv
+      - name: Elaborate real generated global AXI config mesh
+        run: |
+          set -euo pipefail
+          verilator --lint-only --timing --top-module floo_xezim_global_config_noc \
+            -Wno-fatal \
+            -f .tools/floonoc-rtl.f \
+            gen/noc/floonoc/global_config/floo_xezim_global_config_noc_pkg.sv \
+            gen/noc/floonoc/global_config/floo_xezim_global_config_noc.sv
