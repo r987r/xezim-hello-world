@@ -146,6 +146,28 @@ def diagram_gen_metadata(cfg: dict, networks: dict) -> dict:
                        "info": {"plane": plane, "router_count": entry["routers"],
                                 "source": entry["top"], "status": "generated_structural"}})
 
+    # Show actual CPU/DMA/SRAM/CSR block boundaries in Diagram-gen too.
+    # Their links to the generated FlooNoCs are PLANNED, not instantiated.
+    for ci, subsystem in enumerate(s for s in cfg["subsystems"] if s["type"] == "compute"):
+        name = subsystem["name"]
+        for suffix, kind in (("cpu", subsystem["cpu"]["ip"]), ("dma", cfg["subsystem_types"]["compute"]["dma"]),
+                             ("sram", "local_sram"), ("dma_csr", "dma_registers")):
+            instances.append({"name": f"{name}.{suffix}", "module": "soc_boundary",
+                              "position": {"x": 20 + ci * 12, "y": 72 + 3 * len(instances) % 12, "z": 0},
+                              "info": {"ip": kind, "status": "planned_noc_endpoint_integration"}})
+        ld, lc = name+"_local_data", name+"_local_config"
+        edge(name+".cpu", _inst(ld,"cpu"), "CPU adapter to local data", "planned_integration", width=64)
+        edge(name+".cpu", _inst(lc,"cpu"), "upstream protocol-to-AXI4-Lite adapter", "planned_integration", width=32)
+        edge(name+".dma", _inst(ld,"dma"), "PULP iDMA AXI4 initiator", "planned_integration", width=64)
+        edge(_inst(ld,"sram"), name+".sram", "local SRAM AXI destination", "planned_integration", width=64)
+        edge(_inst(lc,"dma_regs"), name+".dma_csr", "PULP iDMA CSR port", "planned_integration", width=32)
+        if name == cfg["boot"]["primary"]:
+            instances.append({"name": name+".reset_ctrl", "module": "soc_boundary",
+                              "position": {"x": 20, "y": 89, "z": 0},
+                              "info": {"status": "planned_noc_endpoint_integration"}})
+            edge(_inst(lc,"reset_ctrl"), name+".reset_ctrl",
+                 "reset-control CSR", "planned_integration", width=32)
+
     # These are planned inter-fabric and subsystem endpoint links. Never
     # present them as real continuous RTL until an actual SoC top is compiled.
     for compute in (s["name"] for s in cfg["subsystems"] if s["type"] == "compute"):
@@ -176,6 +198,11 @@ def diagram_gen_metadata(cfg: dict, networks: dict) -> dict:
                                "source": "gen/memory/memory_tb.sv"}})
     edge(_inst(memory + "_local_data", "target_crossbar"), xbar,
          "memory0 local-to-crossbar link (planned)", "planned_integration", width=64)
+    instances.append({"name": memory + ".ctrl", "module": "soc_boundary",
+                      "position": {"x": 21, "y": 90, "z": 0},
+                      "info": {"status": "reserved_controller_csr_no_RTL"}})
+    edge(_inst(memory+"_local_config", "controller_regs"), memory+".ctrl",
+         "reserved memory controller CSR", "planned_integration", width=32)
     for target in cfg["memory_targets"]:
         ep = target["name"]
         instances.append({"name": ep, "module": "soc_boundary",
@@ -187,7 +214,7 @@ def diagram_gen_metadata(cfg: dict, networks: dict) -> dict:
     for sub in cfg["subsystems"]:
         prefix = sub["name"] + "_"
         group_members = [e["name"] for e in instances if
-                         e["name"].startswith(prefix) or e["name"] == sub["name"] + ".internal_target_crossbar"]
+                         e["name"].startswith(prefix) or e["name"].startswith(sub["name"] + ".")]
         if group_members:
             groups.append({"name": sub["name"] + "_subsystem", "instances": group_members,
                            "color": "#62758C", "padding": 4.0})
