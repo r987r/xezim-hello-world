@@ -34,6 +34,17 @@ class FabricConfigTest(unittest.TestCase):
         ir = socgen.fabric_ir(meta)
         self.assertEqual(ir["memory"]["connectivity"]["agent_mask"], 15)
 
+    def test_sparse_example_is_executable(self):
+        p = ROOT / "config/examples/memory-fabric-sparse.yaml"
+        doc = yaml.safe_load(p.read_text())
+        meta = socgen.validate(doc)
+        self.assertEqual(meta["memory_connectivity"]["native_read_mask"], 9)
+        self.assertEqual(meta["memory_connectivity"]["agent_mask"], 9)
+        meta["target_count"] = len(meta["targets"])
+        rtl = socgen.generate_top(meta)
+        self.assertIn(".M_CONNECT_READ(4'h9)", rtl)
+        self.assertIn("TARGET_ALLOW = 4'h9", rtl)
+
     def test_sparse_matrix_is_not_ignored(self):
         doc = copy.deepcopy(self.base)
         fabric = doc["fabrics"]["memory_data"]
