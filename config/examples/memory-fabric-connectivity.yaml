@@ -1,0 +1,160 @@
+schema_version: 2
+name: xezim_soc_dv
+
+# Stable, vendor-neutral interface contracts. Generated adapters match these.
+buses:
+  data: {protocol: axi4, addr_bits: 64, data_bits: 64, id_bits: 4}
+  config: {protocol: axi4_lite, addr_bits: 32, data_bits: 32}
+
+# One DMA implementation reused for both compute subsystems. CPU IPs differ.
+subsystem_types:
+  compute:
+    dma: pulp_idma
+    sram_count: 1
+    local_data_fabric: local_data
+    local_config_fabric: local_config
+  memory:
+    local_data_fabric: memory_data
+    local_config_fabric: local_config
+    data_ingress_ports: 2
+
+subsystems:
+  - name: compute0
+    type: compute
+    cpu: {ip: picorv32, bus: axi4_lite, adapter: picorv32_axi}
+  - name: compute1
+    type: compute
+    cpu: {ip: serv, bus: wishbone, adapter: serv_wishbone}
+  - {name: memory0, type: memory}
+
+# One primary CPU boots from immutable ROM, copies both firmware images from
+# a modeled read-only flash window into uninitialized local SRAM, then releases
+# the secondary CPU via an actual MMIO reset controller. No separate boot CPU.
+# ASIC version will replace the flash model with SPI/QSPI and real SRAM macros.
+boot:
+  # Explicit boot policy: changing strategy/source/release requires a matching
+  # implementation; unsupported choices FAIL generation rather than falling back.
+  strategy: rom_copy
+  image_source: mapped_flash
+  secondary_release: mmio
+  sram_powerup: unspecified
+  primary: compute0
+  secondary: compute1
+  flash_slot_stride: 256
+  program_words: 4
+  simulation_sram_bytes: 16384  # fail on out-of-bounds, never wrap/alias
+
+# Architectural topology and backend selection are separate. This allows
+# a different vendor's NoC backend without changing subsystem definitions.
+fabrics:
+  local_data: {topology: crossbar, backend: pulp_axi}
+  local_config: {topology: crossbar, backend: pulp_axi}
+  memory_data:
+    topology: crossbar
+    backend: verilog_axi
+    # Native upstream axi_crossbar parameters (not custom RTL).
+    # Scalar, ingress/target-ordered array, or name-keyed map.
+    parameters:
+      S_THREADS: 2
+      S_ACCEPT: 16
+      M_ISSUE: {memory0.hbm0: 4, memory0.ddr0: 4}
+    # Explicit per-ingress reachability. Both directions currently must
+    # match because the scoped DV checks write followed by readback.
+    connectivity:
+      read:
+        memory_ingress0: [memory0.hbm0, memory0.ddr0]
+        memory_ingress1: [memory0.hbm0, memory0.ddr0]
+      write:
+        memory_ingress0: [memory0.hbm0, memory0.ddr0]
+        memory_ingress1: [memory0.hbm0, memory0.ddr0]
+  global_data: {topology: mesh, backend: floonoc}
+  global_config: {topology: tree, backend: pulp_axi}
+
+networks:
+  global_data:
+    protocol: axi4
+    # Two global NoC AXI output interfaces into the memory subsystem.
+    outputs:
+      - {name: memory_ingress0, target: memory0.hbm0}
+      - {name: memory_ingress1, target: memory0.ddr0}
+  global_config:
+    protocol: axi4_lite
+    reachable_subsystems: [compute0, compute1, memory0]
+
+# HBM and DDR use different controller profiles, but the same AXI4 port
+# contract. AXI RAM is the explicitly *behavioral* backing model used for
+# fast Xezim fabric verification, NOT an HBM/DDR physical controller.
+memory_targets:
+  - name: memory0.hbm0
+    kind: hbm
+    controller: hisa_hbm
+    simulation: {backend: axi_ram, pipeline_output: false}
+  - name: memory0.ddr0
+    kind: ddr
+    controller: litedram
+    simulation: {backend: axi_ram, pipeline_output: true}
+
+address_map:
+  data:
+    - {name: boot.rom, base: '0x00000000', size: '0x00001000'}
+    - {name: boot.flash, base: '0x20000000', size: '0x00010000'}
+    - {name: compute0.sram, base: '0x10000000', size: '0x00100000'}
+    - {name: compute1.sram, base: '0x11000000', size: '0x00100000'}
+    - {name: memory0.hbm0, base: '0x100000000', size: '0x40000000'}
+    - {name: memory0.ddr0, base: '0x140000000', size: '0x40000000'}
+  config:
+    - {name: compute0.dma, base: '0x40000000', size: '0x10000'}
+    - {name: compute1.dma, base: '0x40010000', size: '0x10000'}
+    - {name: boot.reset_ctrl, base: '0x40020000', size: '0x1000'}
+
+verification:
+  memory:
+    ingress_master_agents: 2
+    model_address_bits: 16
+    burst_beats: 4
+  # Scope names and statuses feed the generated test plan and 2D DV diagrams.
+  # "executable" means its standalone RTL check exists, not that full-chip
+  # wiring or real memory controller/PHY is integrated.
+  scopes:
+    - name: configuration
+      dut: soc_definition
+      status: executable
+      command: make check-config
+      checks: [addresses, hierarchy, backends, reproducibility]
+    - name: memory_fabric
+      dut: memory0.memory_data
+      status: executable
+      command: make dv-memory
+      checks: [all_memory_routes, axi_responses, readback, id_routing]
+    - name: negative_readback
+      dut: memory0.memory_data
+      status: executable
+      command: make dv-memory-negative
+      checks: [injected_mismatch_detected]
+    - name: serv_minimal
+      dut: compute1.cpu+standalone_sram
+      status: executable
+      command: make dv-serv
+      checks: [real_serv_instruction_fetch, lui_addi_sw_execution, expected_data_store]
+    - name: local_sram
+      dut: local_sram
+      status: executable
+      command: make dv-sram
+      checks: [uninitialized_powerup, byte_write_strobes, independent_port_reads]
+    - name: cpu_cold_boot
+      dut: compute0.cpu+compute1.cpu+boot_rom+flash+sram+reset_ctrl
+      status: executable
+      command: make dv-boot
+      checks: [cpu0_rom_fetch, flash_to_sram_stores, secondary_reset_release, both_cpu_signatures]
+    - name: compute_subsystem
+      dut: compute_subsystem
+      status: planned
+      checks: [local_fabric, dma_csr, dma_copy]
+    - name: global_nocs
+      dut: global_data+global_config
+      status: planned
+      checks: [routes, ordering, separate_control_traffic]
+    - name: full_chip
+      dut: soc_top
+      status: planned
+      checks: [cpu_dma_hbm_ddr, interrupts, congestion]
