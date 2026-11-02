@@ -1722,10 +1722,230 @@
     },
     {
       "from": {
-        "instance": "compute0_local_data.global_out",
+        "instance": "compute0.cpu",
         "port": "out"
       },
       "id": "noc_link_0087",
+      "name": "CPU adapter to local data",
+      "signals": [
+        {
+          "name": "AXI4",
+          "width": 64
+        }
+      ],
+      "status": "planned_integration",
+      "to": {
+        "instance": "compute0_local_data.cpu",
+        "port": "in"
+      },
+      "type": "planned_interconnect"
+    },
+    {
+      "from": {
+        "instance": "compute0.cpu",
+        "port": "out"
+      },
+      "id": "noc_link_0088",
+      "name": "upstream protocol-to-AXI4-Lite adapter",
+      "signals": [
+        {
+          "name": "AXI4",
+          "width": 32
+        }
+      ],
+      "status": "planned_integration",
+      "to": {
+        "instance": "compute0_local_config.cpu",
+        "port": "in"
+      },
+      "type": "planned_interconnect"
+    },
+    {
+      "from": {
+        "instance": "compute0.dma",
+        "port": "out"
+      },
+      "id": "noc_link_0089",
+      "name": "PULP iDMA AXI4 initiator",
+      "signals": [
+        {
+          "name": "AXI4",
+          "width": 64
+        }
+      ],
+      "status": "planned_integration",
+      "to": {
+        "instance": "compute0_local_data.dma",
+        "port": "in"
+      },
+      "type": "planned_interconnect"
+    },
+    {
+      "from": {
+        "instance": "compute0_local_data.sram",
+        "port": "out"
+      },
+      "id": "noc_link_0090",
+      "name": "local SRAM AXI destination",
+      "signals": [
+        {
+          "name": "AXI4",
+          "width": 64
+        }
+      ],
+      "status": "planned_integration",
+      "to": {
+        "instance": "compute0.sram",
+        "port": "in"
+      },
+      "type": "planned_interconnect"
+    },
+    {
+      "from": {
+        "instance": "compute0_local_config.dma_regs",
+        "port": "out"
+      },
+      "id": "noc_link_0091",
+      "name": "PULP iDMA CSR port",
+      "signals": [
+        {
+          "name": "AXI4",
+          "width": 32
+        }
+      ],
+      "status": "planned_integration",
+      "to": {
+        "instance": "compute0.dma_csr",
+        "port": "in"
+      },
+      "type": "planned_interconnect"
+    },
+    {
+      "from": {
+        "instance": "compute0_local_config.reset_ctrl",
+        "port": "out"
+      },
+      "id": "noc_link_0092",
+      "name": "reset-control CSR",
+      "signals": [
+        {
+          "name": "AXI4",
+          "width": 32
+        }
+      ],
+      "status": "planned_integration",
+      "to": {
+        "instance": "compute0.reset_ctrl",
+        "port": "in"
+      },
+      "type": "planned_interconnect"
+    },
+    {
+      "from": {
+        "instance": "compute1.cpu",
+        "port": "out"
+      },
+      "id": "noc_link_0093",
+      "name": "CPU adapter to local data",
+      "signals": [
+        {
+          "name": "AXI4",
+          "width": 64
+        }
+      ],
+      "status": "planned_integration",
+      "to": {
+        "instance": "compute1_local_data.cpu",
+        "port": "in"
+      },
+      "type": "planned_interconnect"
+    },
+    {
+      "from": {
+        "instance": "compute1.cpu",
+        "port": "out"
+      },
+      "id": "noc_link_0094",
+      "name": "upstream protocol-to-AXI4-Lite adapter",
+      "signals": [
+        {
+          "name": "AXI4",
+          "width": 32
+        }
+      ],
+      "status": "planned_integration",
+      "to": {
+        "instance": "compute1_local_config.cpu",
+        "port": "in"
+      },
+      "type": "planned_interconnect"
+    },
+    {
+      "from": {
+        "instance": "compute1.dma",
+        "port": "out"
+      },
+      "id": "noc_link_0095",
+      "name": "PULP iDMA AXI4 initiator",
+      "signals": [
+        {
+          "name": "AXI4",
+          "width": 64
+        }
+      ],
+      "status": "planned_integration",
+      "to": {
+        "instance": "compute1_local_data.dma",
+        "port": "in"
+      },
+      "type": "planned_interconnect"
+    },
+    {
+      "from": {
+        "instance": "compute1_local_data.sram",
+        "port": "out"
+      },
+      "id": "noc_link_0096",
+      "name": "local SRAM AXI destination",
+      "signals": [
+        {
+          "name": "AXI4",
+          "width": 64
+        }
+      ],
+      "status": "planned_integration",
+      "to": {
+        "instance": "compute1.sram",
+        "port": "in"
+      },
+      "type": "planned_interconnect"
+    },
+    {
+      "from": {
+        "instance": "compute1_local_config.dma_regs",
+        "port": "out"
+      },
+      "id": "noc_link_0097",
+      "name": "PULP iDMA CSR port",
+      "signals": [
+        {
+          "name": "AXI4",
+          "width": 32
+        }
+      ],
+      "status": "planned_integration",
+      "to": {
+        "instance": "compute1.dma_csr",
+        "port": "in"
+      },
+      "type": "planned_interconnect"
+    },
+    {
+      "from": {
+        "instance": "compute0_local_data.global_out",
+        "port": "out"
+      },
+      "id": "noc_link_0098",
       "name": "64b AXI4 uplink (planned)",
       "signals": [
         {
@@ -1745,7 +1965,7 @@
         "instance": "global_data.compute0_sram",
         "port": "out"
       },
-      "id": "noc_link_0088",
+      "id": "noc_link_0099",
       "name": "64b AXI4 remote SRAM return path (planned)",
       "signals": [
         {
@@ -1765,7 +1985,7 @@
         "instance": "compute0_local_config.global_out",
         "port": "out"
       },
-      "id": "noc_link_0089",
+      "id": "noc_link_0100",
       "name": "32b AXI4 control transport (planned)",
       "signals": [
         {
@@ -1785,7 +2005,7 @@
         "instance": "global_config.compute0_regs",
         "port": "out"
       },
-      "id": "noc_link_0090",
+      "id": "noc_link_0101",
       "name": "32b AXI4 control ingress (planned)",
       "signals": [
         {
@@ -1805,7 +2025,7 @@
         "instance": "compute1_local_data.global_out",
         "port": "out"
       },
-      "id": "noc_link_0091",
+      "id": "noc_link_0102",
       "name": "64b AXI4 uplink (planned)",
       "signals": [
         {
@@ -1825,7 +2045,7 @@
         "instance": "global_data.compute1_sram",
         "port": "out"
       },
-      "id": "noc_link_0092",
+      "id": "noc_link_0103",
       "name": "64b AXI4 remote SRAM return path (planned)",
       "signals": [
         {
@@ -1845,7 +2065,7 @@
         "instance": "compute1_local_config.global_out",
         "port": "out"
       },
-      "id": "noc_link_0093",
+      "id": "noc_link_0104",
       "name": "32b AXI4 control transport (planned)",
       "signals": [
         {
@@ -1865,7 +2085,7 @@
         "instance": "global_config.compute1_regs",
         "port": "out"
       },
-      "id": "noc_link_0094",
+      "id": "noc_link_0105",
       "name": "32b AXI4 control ingress (planned)",
       "signals": [
         {
@@ -1885,7 +2105,7 @@
         "instance": "global_data.memory_ingress0",
         "port": "out"
       },
-      "id": "noc_link_0095",
+      "id": "noc_link_0106",
       "name": "64b AXI4 memory ingress (planned)",
       "signals": [
         {
@@ -1905,7 +2125,7 @@
         "instance": "global_data.memory_ingress1",
         "port": "out"
       },
-      "id": "noc_link_0096",
+      "id": "noc_link_0107",
       "name": "64b AXI4 memory ingress (planned)",
       "signals": [
         {
@@ -1925,7 +2145,7 @@
         "instance": "global_config.memory0_regs",
         "port": "out"
       },
-      "id": "noc_link_0097",
+      "id": "noc_link_0108",
       "name": "32b AXI4 memory control (planned)",
       "signals": [
         {
@@ -1945,7 +2165,7 @@
         "instance": "memory0_local_data.target_crossbar",
         "port": "out"
       },
-      "id": "noc_link_0098",
+      "id": "noc_link_0109",
       "name": "memory0 local-to-crossbar link (planned)",
       "signals": [
         {
@@ -1962,10 +2182,30 @@
     },
     {
       "from": {
+        "instance": "memory0_local_config.controller_regs",
+        "port": "out"
+      },
+      "id": "noc_link_0110",
+      "name": "reserved memory controller CSR",
+      "signals": [
+        {
+          "name": "AXI4",
+          "width": 32
+        }
+      ],
+      "status": "planned_integration",
+      "to": {
+        "instance": "memory0.ctrl",
+        "port": "in"
+      },
+      "type": "planned_interconnect"
+    },
+    {
+      "from": {
         "instance": "memory0.internal_target_crossbar",
         "port": "out"
       },
-      "id": "noc_link_0099",
+      "id": "noc_link_0111",
       "name": "Memory0 testbench AXI RAM route",
       "signals": [
         {
@@ -1985,7 +2225,7 @@
         "instance": "memory0.internal_target_crossbar",
         "port": "out"
       },
-      "id": "noc_link_0100",
+      "id": "noc_link_0112",
       "name": "Memory0 testbench AXI RAM route",
       "signals": [
         {
@@ -2215,7 +2455,12 @@
         "compute0_local_data.sram",
         "compute0_local_data.global_out",
         "compute0_local_data.boot_rom",
-        "compute0_local_data.boot_flash"
+        "compute0_local_data.boot_flash",
+        "compute0.cpu",
+        "compute0.dma",
+        "compute0.sram",
+        "compute0.dma_csr",
+        "compute0.reset_ctrl"
       ],
       "name": "compute0_subsystem",
       "padding": 4.0
@@ -2241,7 +2486,11 @@
         "compute1_local_data.dma",
         "compute1_local_data.global_in",
         "compute1_local_data.sram",
-        "compute1_local_data.global_out"
+        "compute1_local_data.global_out",
+        "compute1.cpu",
+        "compute1.dma",
+        "compute1.sram",
+        "compute1.dma_csr"
       ],
       "name": "compute1_subsystem",
       "padding": 4.0
@@ -2260,7 +2509,10 @@
         "memory0_local_data.memory_ingress0",
         "memory0_local_data.memory_ingress1",
         "memory0_local_data.target_crossbar",
-        "memory0.internal_target_crossbar"
+        "memory0.internal_target_crossbar",
+        "memory0.ctrl",
+        "memory0.hbm0",
+        "memory0.ddr0"
       ],
       "name": "memory0_subsystem",
       "padding": 4.0
@@ -3971,6 +4223,122 @@
     },
     {
       "info": {
+        "ip": "picorv32",
+        "status": "planned_noc_endpoint_integration"
+      },
+      "module": "soc_boundary",
+      "name": "compute0.cpu",
+      "position": {
+        "x": 20,
+        "y": 72,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "ip": "pulp_idma",
+        "status": "planned_noc_endpoint_integration"
+      },
+      "module": "soc_boundary",
+      "name": "compute0.dma",
+      "position": {
+        "x": 20,
+        "y": 75,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "ip": "local_sram",
+        "status": "planned_noc_endpoint_integration"
+      },
+      "module": "soc_boundary",
+      "name": "compute0.sram",
+      "position": {
+        "x": 20,
+        "y": 78,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "ip": "dma_registers",
+        "status": "planned_noc_endpoint_integration"
+      },
+      "module": "soc_boundary",
+      "name": "compute0.dma_csr",
+      "position": {
+        "x": 20,
+        "y": 81,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "status": "planned_noc_endpoint_integration"
+      },
+      "module": "soc_boundary",
+      "name": "compute0.reset_ctrl",
+      "position": {
+        "x": 20,
+        "y": 89,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "ip": "serv",
+        "status": "planned_noc_endpoint_integration"
+      },
+      "module": "soc_boundary",
+      "name": "compute1.cpu",
+      "position": {
+        "x": 32,
+        "y": 75,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "ip": "pulp_idma",
+        "status": "planned_noc_endpoint_integration"
+      },
+      "module": "soc_boundary",
+      "name": "compute1.dma",
+      "position": {
+        "x": 32,
+        "y": 78,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "ip": "local_sram",
+        "status": "planned_noc_endpoint_integration"
+      },
+      "module": "soc_boundary",
+      "name": "compute1.sram",
+      "position": {
+        "x": 32,
+        "y": 81,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "ip": "dma_registers",
+        "status": "planned_noc_endpoint_integration"
+      },
+      "module": "soc_boundary",
+      "name": "compute1.dma_csr",
+      "position": {
+        "x": 32,
+        "y": 72,
+        "z": 0
+      }
+    },
+    {
+      "info": {
         "source": "gen/memory/memory_tb.sv",
         "status": "verified_separate_memory_tb"
       },
@@ -3984,6 +4352,18 @@
     },
     {
       "info": {
+        "status": "reserved_controller_csr_no_RTL"
+      },
+      "module": "soc_boundary",
+      "name": "memory0.ctrl",
+      "position": {
+        "x": 21,
+        "y": 90,
+        "z": 0
+      }
+    },
+    {
+      "info": {
         "kind": "hbm",
         "model": "axi_ram",
         "status": "verified_separate_memory_tb"
@@ -3992,7 +4372,7 @@
       "name": "memory0.hbm0",
       "position": {
         "x": 8,
-        "y": 85,
+        "y": 88,
         "z": 0
       }
     },
@@ -4006,7 +4386,7 @@
       "name": "memory0.ddr0",
       "position": {
         "x": 8,
-        "y": 88,
+        "y": 91,
         "z": 0
       }
     }
