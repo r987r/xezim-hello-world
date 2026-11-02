@@ -17,6 +17,16 @@ The diagram below shows **logical** chip connectivity. Dashed links are **planne
 
 [Full-size image](gen/diagrams/architecture.svg) · [Mermaid source](gen/diagrams/architecture.mmd) · [Detailed view](gen/diagrams/architecture.md)
 
+### Entire SoC NoC hierarchy — all local and global FlooNoCs
+
+This overview comes from **the actual eight checked-in upstream FlooGen topology configurations**: routers, AXI network interfaces, endpoint placement and memory/compute links. Each mesh is real generated structural SystemVerilog; **dashed lines between different NoCs and CPU/DMA/CSR endpoints are not yet integrated RTL**. Green crossbar links are independently verified only in the standalone memory testbench.
+
+[![Generated whole-chip data and config FlooNoC hierarchy with compute and memory subsystems](gen/diagrams/noc-hierarchy.svg)](gen/diagrams/noc-hierarchy.svg)
+
+[Full-size NoC hierarchy](gen/diagrams/noc-hierarchy.svg) · [Mermaid overview](gen/diagrams/noc-hierarchy.mmd) · [Diagram-gen-compatible physical router/link metadata](gen/diagrams/noc-topology.json) · [Network manifest](gen/noc/floonoc/manifest.json)
+
+Each NoC also has an individual **physical XY router mesh diagram** derived directly from its own generated FlooGen YAML.
+
 ### Executable RTL connectivity — memory testbench
 
 This is the wiring generated in `gen/memory/memory_tb.sv`: two AXI4 master BFMs, the real open-source AXI crossbar, two AXI memory models, and a passive route monitor. It is **not** a full-chip elaboration.
@@ -44,8 +54,8 @@ Green scope boxes are **implemented testbenches**, not a claim that the entire S
 ### Generated architecture reference
 
 - **Subsystems:** 2 compute, 1 memory; **data:** AXI4 64-bit, 64-bit addressing; **config:** AXI4-Lite 32-bit.
-- **Global data NoC:** floonoc / mesh (selected, emitter pending).
-- **Global config NoC:** floonoc / mesh (selected, emitter pending).
+- **Global data NoC:** floonoc / mesh (generated structural RTL; no routed traffic test).
+- **Global config NoC:** floonoc / mesh (generated structural RTL; no routed CSR traffic test).
 - **Local memory crossbar:** verilog_axi; 2 ingress × 2 targets (executable RTL testbench).
 
 | Subsystem | CPU | CPU bus/adapter | DMA | Detailed 2D diagram |
@@ -86,16 +96,16 @@ Green scope boxes are **implemented testbenches**, not a claim that the entire S
 
 Every local and global data/config NoC below has an **actual generated SystemVerilog module and package** committed under `gen/noc/floonoc/`. These instantiate upstream FlooNoC routers/chimneys; RTL elaboration and end-to-end AXI traffic are **not yet verified**.
 
-| Generated NoC | Routers | Structural Verilog | Package | FlooGen inputs |
-| --- | ---: | --- | --- | --- |
-| `compute0_local_config` | 6 | [top](gen/noc/floonoc/compute0/local_config/floo_xezim_compute0_local_config_noc.sv) | [package](gen/noc/floonoc/compute0/local_config/floo_xezim_compute0_local_config_noc_pkg.sv) | [generated config](gen/noc/floonoc/compute0/local_config/floogen.yaml) |
-| `compute0_local_data` | 9 | [top](gen/noc/floonoc/compute0/local_data/floo_xezim_compute0_local_data_noc.sv) | [package](gen/noc/floonoc/compute0/local_data/floo_xezim_compute0_local_data_noc_pkg.sv) | [generated config](gen/noc/floonoc/compute0/local_data/floogen.yaml) |
-| `compute1_local_config` | 4 | [top](gen/noc/floonoc/compute1/local_config/floo_xezim_compute1_local_config_noc.sv) | [package](gen/noc/floonoc/compute1/local_config/floo_xezim_compute1_local_config_noc_pkg.sv) | [generated config](gen/noc/floonoc/compute1/local_config/floogen.yaml) |
-| `compute1_local_data` | 6 | [top](gen/noc/floonoc/compute1/local_data/floo_xezim_compute1_local_data_noc.sv) | [package](gen/noc/floonoc/compute1/local_data/floo_xezim_compute1_local_data_noc_pkg.sv) | [generated config](gen/noc/floonoc/compute1/local_data/floogen.yaml) |
-| `global_config` | 6 | [top](gen/noc/floonoc/global_config/floo_xezim_global_config_noc.sv) | [package](gen/noc/floonoc/global_config/floo_xezim_global_config_noc_pkg.sv) | [generated config](gen/noc/floonoc/global_config/floogen.yaml) |
-| `global_data` | 6 | [top](gen/noc/floonoc/global_data/floo_xezim_global_data_noc.sv) | [package](gen/noc/floonoc/global_data/floo_xezim_global_data_noc_pkg.sv) | [generated config](gen/noc/floonoc/global_data/floogen.yaml) |
-| `memory0_local_config` | 2 | [top](gen/noc/floonoc/memory0/local_config/floo_xezim_memory0_local_config_noc.sv) | [package](gen/noc/floonoc/memory0/local_config/floo_xezim_memory0_local_config_noc_pkg.sv) | [generated config](gen/noc/floonoc/memory0/local_config/floogen.yaml) |
-| `memory0_local_data` | 4 | [top](gen/noc/floonoc/memory0/local_data/floo_xezim_memory0_local_data_noc.sv) | [package](gen/noc/floonoc/memory0/local_data/floo_xezim_memory0_local_data_noc_pkg.sv) | [generated config](gen/noc/floonoc/memory0/local_data/floogen.yaml) |
+| Generated NoC | Routers | Mesh diagram | Structural Verilog | Package | FlooGen inputs |
+| --- | ---: | --- | --- | --- | --- |
+| `compute0_local_config` | 6 | [topology](gen/diagrams/noc/compute0_local_config.svg) | [top](gen/noc/floonoc/compute0/local_config/floo_xezim_compute0_local_config_noc.sv) | [package](gen/noc/floonoc/compute0/local_config/floo_xezim_compute0_local_config_noc_pkg.sv) | [generated config](gen/noc/floonoc/compute0/local_config/floogen.yaml) |
+| `compute0_local_data` | 9 | [topology](gen/diagrams/noc/compute0_local_data.svg) | [top](gen/noc/floonoc/compute0/local_data/floo_xezim_compute0_local_data_noc.sv) | [package](gen/noc/floonoc/compute0/local_data/floo_xezim_compute0_local_data_noc_pkg.sv) | [generated config](gen/noc/floonoc/compute0/local_data/floogen.yaml) |
+| `compute1_local_config` | 4 | [topology](gen/diagrams/noc/compute1_local_config.svg) | [top](gen/noc/floonoc/compute1/local_config/floo_xezim_compute1_local_config_noc.sv) | [package](gen/noc/floonoc/compute1/local_config/floo_xezim_compute1_local_config_noc_pkg.sv) | [generated config](gen/noc/floonoc/compute1/local_config/floogen.yaml) |
+| `compute1_local_data` | 6 | [topology](gen/diagrams/noc/compute1_local_data.svg) | [top](gen/noc/floonoc/compute1/local_data/floo_xezim_compute1_local_data_noc.sv) | [package](gen/noc/floonoc/compute1/local_data/floo_xezim_compute1_local_data_noc_pkg.sv) | [generated config](gen/noc/floonoc/compute1/local_data/floogen.yaml) |
+| `global_config` | 6 | [topology](gen/diagrams/noc/global_config.svg) | [top](gen/noc/floonoc/global_config/floo_xezim_global_config_noc.sv) | [package](gen/noc/floonoc/global_config/floo_xezim_global_config_noc_pkg.sv) | [generated config](gen/noc/floonoc/global_config/floogen.yaml) |
+| `global_data` | 6 | [topology](gen/diagrams/noc/global_data.svg) | [top](gen/noc/floonoc/global_data/floo_xezim_global_data_noc.sv) | [package](gen/noc/floonoc/global_data/floo_xezim_global_data_noc_pkg.sv) | [generated config](gen/noc/floonoc/global_data/floogen.yaml) |
+| `memory0_local_config` | 2 | [topology](gen/diagrams/noc/memory0_local_config.svg) | [top](gen/noc/floonoc/memory0/local_config/floo_xezim_memory0_local_config_noc.sv) | [package](gen/noc/floonoc/memory0/local_config/floo_xezim_memory0_local_config_noc_pkg.sv) | [generated config](gen/noc/floonoc/memory0/local_config/floogen.yaml) |
+| `memory0_local_data` | 4 | [topology](gen/diagrams/noc/memory0_local_data.svg) | [top](gen/noc/floonoc/memory0/local_data/floo_xezim_memory0_local_data_noc.sv) | [package](gen/noc/floonoc/memory0/local_data/floo_xezim_memory0_local_data_noc_pkg.sv) | [generated config](gen/noc/floonoc/memory0/local_data/floogen.yaml) |
 
 **Boot images:** [Boot ROM](gen/boot/bootrom.hex) · [flash image](gen/boot/flash.hex) · [boot register/memory manifest](gen/boot/manifest.json).
 

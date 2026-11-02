@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="990" height="505" viewBox="0 0 990 505" role="img" aria-label="Generated two-dimensional SoC diagram">
+<rect width="990" height="505" fill="#F7F9FC"/>
+<text x="64.0" y="28.0" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#255BAE" text-anchor="start" dominant-baseline="hanging">FLOOGEN REAL STRUCTURAL ROUTER AND CHIMNEY RTL</text>
+<text x="64.0" y="55.0" font-size="32" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">Memory0 Local Config</text>
+<text x="64.0" y="101.0" font-size="18" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">2 x 1 XY mesh / 2 routers / 2 AXI4 network interfaces</text>
+<polyline points="64.0,137.0 926.0,137.0" fill="none" stroke="#D8E1EB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="75.0" y="245.0" width="100.0" height="60.0" rx="12.0" fill="#E6F6EC" stroke="#19734B" stroke-width="1"/>
+<text x="91.0" y="257.0" font-size="18" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">R0,0</text>
+<text x="91.0" y="289.0" font-size="13" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">router</text>
+<polyline points="164.0,275.0 336.0,275.0" fill="none" stroke="#19734B" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="325.0" y="245.0" width="100.0" height="60.0" rx="12.0" fill="#E6F6EC" stroke="#19734B" stroke-width="1"/>
+<text x="341.0" y="257.0" font-size="18" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">R1,0</text>
+<text x="341.0" y="289.0" font-size="13" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">router</text>
+<polyline points="125.0,245.0 125.0,207.0" fill="none" stroke="#255BAE" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="12.0" y="157.0" width="226.0" height="46.0" rx="8.0" fill="#FFFFFF" stroke="#255BAE" stroke-width="1"/>
+<text x="125.0" y="163.0" font-size="14" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="middle" dominant-baseline="hanging">global_in</text>
+<text x="125.0" y="182.0" font-size="12" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="middle" dominant-baseline="hanging">AXI in</text>
+<polyline points="375.0,245.0 375.0,207.0" fill="none" stroke="#255BAE" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="262.0" y="157.0" width="226.0" height="46.0" rx="8.0" fill="#FFFFFF" stroke="#255BAE" stroke-width="1"/>
+<text x="375.0" y="163.0" font-size="14" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="middle" dominant-baseline="hanging">controller_regs</text>
+<text x="375.0" y="182.0" font-size="12" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="middle" dominant-baseline="hanging">AXI out</text>
+<text x="60.0" y="457.0" font-size="16" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">Solid wires: upstream FlooGen-generated router/router and NI/router connections.</text>
+</svg>

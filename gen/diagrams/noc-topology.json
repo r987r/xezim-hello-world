@@ -1,0 +1,4101 @@
+{
+  "connections": [
+    {
+      "from": {
+        "instance": "compute0_local_config.router_0_0",
+        "port": "E"
+      },
+      "id": "noc_link_0001",
+      "name": "east/west FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "compute0_local_config.router_1_0",
+        "port": "W"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "compute0_local_config.router_1_0",
+        "port": "E"
+      },
+      "id": "noc_link_0002",
+      "name": "east/west FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "compute0_local_config.router_2_0",
+        "port": "W"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "compute0_local_config.router_0_0",
+        "port": "S"
+      },
+      "id": "noc_link_0003",
+      "name": "north/south FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "compute0_local_config.router_0_1",
+        "port": "N"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "compute0_local_config.router_0_1",
+        "port": "E"
+      },
+      "id": "noc_link_0004",
+      "name": "east/west FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "compute0_local_config.router_1_1",
+        "port": "W"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "compute0_local_config.router_1_0",
+        "port": "S"
+      },
+      "id": "noc_link_0005",
+      "name": "north/south FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "compute0_local_config.router_1_1",
+        "port": "N"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "compute0_local_config.router_1_1",
+        "port": "E"
+      },
+      "id": "noc_link_0006",
+      "name": "east/west FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "compute0_local_config.router_2_1",
+        "port": "W"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "compute0_local_config.router_2_0",
+        "port": "S"
+      },
+      "id": "noc_link_0007",
+      "name": "north/south FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "compute0_local_config.router_2_1",
+        "port": "N"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "compute0_local_config.cpu",
+        "port": "NoC"
+      },
+      "id": "noc_link_0008",
+      "name": "cpu NI Eject",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "compute0_local_config.router_0_0",
+        "port": "Eject"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "compute0_local_config.global_in",
+        "port": "NoC"
+      },
+      "id": "noc_link_0009",
+      "name": "global_in NI Eject",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "compute0_local_config.router_1_0",
+        "port": "Eject"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "compute0_local_config.dma_regs",
+        "port": "NoC"
+      },
+      "id": "noc_link_0010",
+      "name": "dma_regs NI Eject",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "compute0_local_config.router_2_0",
+        "port": "Eject"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "compute0_local_config.reset_ctrl",
+        "port": "NoC"
+      },
+      "id": "noc_link_0011",
+      "name": "reset_ctrl NI Eject",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "compute0_local_config.router_0_1",
+        "port": "Eject"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "compute0_local_config.global_out",
+        "port": "NoC"
+      },
+      "id": "noc_link_0012",
+      "name": "global_out NI Eject",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "compute0_local_config.router_1_1",
+        "port": "Eject"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "compute0_local_data.router_0_0",
+        "port": "E"
+      },
+      "id": "noc_link_0013",
+      "name": "east/west FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "compute0_local_data.router_1_0",
+        "port": "W"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "compute0_local_data.router_1_0",
+        "port": "E"
+      },
+      "id": "noc_link_0014",
+      "name": "east/west FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "compute0_local_data.router_2_0",
+        "port": "W"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "compute0_local_data.router_0_0",
+        "port": "S"
+      },
+      "id": "noc_link_0015",
+      "name": "north/south FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "compute0_local_data.router_0_1",
+        "port": "N"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "compute0_local_data.router_0_1",
+        "port": "E"
+      },
+      "id": "noc_link_0016",
+      "name": "east/west FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "compute0_local_data.router_1_1",
+        "port": "W"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "compute0_local_data.router_1_0",
+        "port": "S"
+      },
+      "id": "noc_link_0017",
+      "name": "north/south FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "compute0_local_data.router_1_1",
+        "port": "N"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "compute0_local_data.router_1_1",
+        "port": "E"
+      },
+      "id": "noc_link_0018",
+      "name": "east/west FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "compute0_local_data.router_2_1",
+        "port": "W"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "compute0_local_data.router_2_0",
+        "port": "S"
+      },
+      "id": "noc_link_0019",
+      "name": "north/south FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "compute0_local_data.router_2_1",
+        "port": "N"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "compute0_local_data.router_0_1",
+        "port": "S"
+      },
+      "id": "noc_link_0020",
+      "name": "north/south FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "compute0_local_data.router_0_2",
+        "port": "N"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "compute0_local_data.router_0_2",
+        "port": "E"
+      },
+      "id": "noc_link_0021",
+      "name": "east/west FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "compute0_local_data.router_1_2",
+        "port": "W"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "compute0_local_data.router_1_1",
+        "port": "S"
+      },
+      "id": "noc_link_0022",
+      "name": "north/south FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "compute0_local_data.router_1_2",
+        "port": "N"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "compute0_local_data.router_1_2",
+        "port": "E"
+      },
+      "id": "noc_link_0023",
+      "name": "east/west FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "compute0_local_data.router_2_2",
+        "port": "W"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "compute0_local_data.router_2_1",
+        "port": "S"
+      },
+      "id": "noc_link_0024",
+      "name": "north/south FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "compute0_local_data.router_2_2",
+        "port": "N"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "compute0_local_data.cpu",
+        "port": "NoC"
+      },
+      "id": "noc_link_0025",
+      "name": "cpu NI Eject",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "compute0_local_data.router_0_0",
+        "port": "Eject"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "compute0_local_data.dma",
+        "port": "NoC"
+      },
+      "id": "noc_link_0026",
+      "name": "dma NI Eject",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "compute0_local_data.router_1_0",
+        "port": "Eject"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "compute0_local_data.global_in",
+        "port": "NoC"
+      },
+      "id": "noc_link_0027",
+      "name": "global_in NI Eject",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "compute0_local_data.router_2_0",
+        "port": "Eject"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "compute0_local_data.sram",
+        "port": "NoC"
+      },
+      "id": "noc_link_0028",
+      "name": "sram NI Eject",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "compute0_local_data.router_0_1",
+        "port": "Eject"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "compute0_local_data.global_out",
+        "port": "NoC"
+      },
+      "id": "noc_link_0029",
+      "name": "global_out NI Eject",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "compute0_local_data.router_1_1",
+        "port": "Eject"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "compute0_local_data.boot_rom",
+        "port": "NoC"
+      },
+      "id": "noc_link_0030",
+      "name": "boot_rom NI Eject",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "compute0_local_data.router_2_1",
+        "port": "Eject"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "compute0_local_data.boot_flash",
+        "port": "NoC"
+      },
+      "id": "noc_link_0031",
+      "name": "boot_flash NI Eject",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "compute0_local_data.router_0_2",
+        "port": "Eject"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "compute1_local_config.router_0_0",
+        "port": "E"
+      },
+      "id": "noc_link_0032",
+      "name": "east/west FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "compute1_local_config.router_1_0",
+        "port": "W"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "compute1_local_config.router_0_0",
+        "port": "S"
+      },
+      "id": "noc_link_0033",
+      "name": "north/south FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "compute1_local_config.router_0_1",
+        "port": "N"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "compute1_local_config.router_0_1",
+        "port": "E"
+      },
+      "id": "noc_link_0034",
+      "name": "east/west FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "compute1_local_config.router_1_1",
+        "port": "W"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "compute1_local_config.router_1_0",
+        "port": "S"
+      },
+      "id": "noc_link_0035",
+      "name": "north/south FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "compute1_local_config.router_1_1",
+        "port": "N"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "compute1_local_config.cpu",
+        "port": "NoC"
+      },
+      "id": "noc_link_0036",
+      "name": "cpu NI Eject",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "compute1_local_config.router_0_0",
+        "port": "Eject"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "compute1_local_config.global_in",
+        "port": "NoC"
+      },
+      "id": "noc_link_0037",
+      "name": "global_in NI Eject",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "compute1_local_config.router_1_0",
+        "port": "Eject"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "compute1_local_config.dma_regs",
+        "port": "NoC"
+      },
+      "id": "noc_link_0038",
+      "name": "dma_regs NI Eject",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "compute1_local_config.router_0_1",
+        "port": "Eject"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "compute1_local_config.global_out",
+        "port": "NoC"
+      },
+      "id": "noc_link_0039",
+      "name": "global_out NI Eject",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "compute1_local_config.router_1_1",
+        "port": "Eject"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "compute1_local_data.router_0_0",
+        "port": "E"
+      },
+      "id": "noc_link_0040",
+      "name": "east/west FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "compute1_local_data.router_1_0",
+        "port": "W"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "compute1_local_data.router_1_0",
+        "port": "E"
+      },
+      "id": "noc_link_0041",
+      "name": "east/west FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "compute1_local_data.router_2_0",
+        "port": "W"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "compute1_local_data.router_0_0",
+        "port": "S"
+      },
+      "id": "noc_link_0042",
+      "name": "north/south FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "compute1_local_data.router_0_1",
+        "port": "N"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "compute1_local_data.router_0_1",
+        "port": "E"
+      },
+      "id": "noc_link_0043",
+      "name": "east/west FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "compute1_local_data.router_1_1",
+        "port": "W"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "compute1_local_data.router_1_0",
+        "port": "S"
+      },
+      "id": "noc_link_0044",
+      "name": "north/south FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "compute1_local_data.router_1_1",
+        "port": "N"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "compute1_local_data.router_1_1",
+        "port": "E"
+      },
+      "id": "noc_link_0045",
+      "name": "east/west FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "compute1_local_data.router_2_1",
+        "port": "W"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "compute1_local_data.router_2_0",
+        "port": "S"
+      },
+      "id": "noc_link_0046",
+      "name": "north/south FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "compute1_local_data.router_2_1",
+        "port": "N"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "compute1_local_data.cpu",
+        "port": "NoC"
+      },
+      "id": "noc_link_0047",
+      "name": "cpu NI Eject",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "compute1_local_data.router_0_0",
+        "port": "Eject"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "compute1_local_data.dma",
+        "port": "NoC"
+      },
+      "id": "noc_link_0048",
+      "name": "dma NI Eject",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "compute1_local_data.router_1_0",
+        "port": "Eject"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "compute1_local_data.global_in",
+        "port": "NoC"
+      },
+      "id": "noc_link_0049",
+      "name": "global_in NI Eject",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "compute1_local_data.router_2_0",
+        "port": "Eject"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "compute1_local_data.sram",
+        "port": "NoC"
+      },
+      "id": "noc_link_0050",
+      "name": "sram NI Eject",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "compute1_local_data.router_0_1",
+        "port": "Eject"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "compute1_local_data.global_out",
+        "port": "NoC"
+      },
+      "id": "noc_link_0051",
+      "name": "global_out NI Eject",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "compute1_local_data.router_1_1",
+        "port": "Eject"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "global_config.router_0_0",
+        "port": "E"
+      },
+      "id": "noc_link_0052",
+      "name": "east/west FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "global_config.router_1_0",
+        "port": "W"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "global_config.router_1_0",
+        "port": "E"
+      },
+      "id": "noc_link_0053",
+      "name": "east/west FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "global_config.router_2_0",
+        "port": "W"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "global_config.router_0_0",
+        "port": "S"
+      },
+      "id": "noc_link_0054",
+      "name": "north/south FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "global_config.router_0_1",
+        "port": "N"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "global_config.router_0_1",
+        "port": "E"
+      },
+      "id": "noc_link_0055",
+      "name": "east/west FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "global_config.router_1_1",
+        "port": "W"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "global_config.router_1_0",
+        "port": "S"
+      },
+      "id": "noc_link_0056",
+      "name": "north/south FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "global_config.router_1_1",
+        "port": "N"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "global_config.router_1_1",
+        "port": "E"
+      },
+      "id": "noc_link_0057",
+      "name": "east/west FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "global_config.router_2_1",
+        "port": "W"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "global_config.router_2_0",
+        "port": "S"
+      },
+      "id": "noc_link_0058",
+      "name": "north/south FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "global_config.router_2_1",
+        "port": "N"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "global_config.compute0",
+        "port": "NoC"
+      },
+      "id": "noc_link_0059",
+      "name": "compute0 NI Eject",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "global_config.router_0_0",
+        "port": "Eject"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "global_config.compute1",
+        "port": "NoC"
+      },
+      "id": "noc_link_0060",
+      "name": "compute1 NI Eject",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "global_config.router_1_0",
+        "port": "Eject"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "global_config.compute0_regs",
+        "port": "NoC"
+      },
+      "id": "noc_link_0061",
+      "name": "compute0_regs NI Eject",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "global_config.router_2_0",
+        "port": "Eject"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "global_config.compute1_regs",
+        "port": "NoC"
+      },
+      "id": "noc_link_0062",
+      "name": "compute1_regs NI Eject",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "global_config.router_0_1",
+        "port": "Eject"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "global_config.memory0_regs",
+        "port": "NoC"
+      },
+      "id": "noc_link_0063",
+      "name": "memory0_regs NI Eject",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "global_config.router_1_1",
+        "port": "Eject"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "global_data.router_0_0",
+        "port": "E"
+      },
+      "id": "noc_link_0064",
+      "name": "east/west FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "global_data.router_1_0",
+        "port": "W"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "global_data.router_1_0",
+        "port": "E"
+      },
+      "id": "noc_link_0065",
+      "name": "east/west FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "global_data.router_2_0",
+        "port": "W"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "global_data.router_0_0",
+        "port": "S"
+      },
+      "id": "noc_link_0066",
+      "name": "north/south FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "global_data.router_0_1",
+        "port": "N"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "global_data.router_0_1",
+        "port": "E"
+      },
+      "id": "noc_link_0067",
+      "name": "east/west FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "global_data.router_1_1",
+        "port": "W"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "global_data.router_1_0",
+        "port": "S"
+      },
+      "id": "noc_link_0068",
+      "name": "north/south FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "global_data.router_1_1",
+        "port": "N"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "global_data.router_1_1",
+        "port": "E"
+      },
+      "id": "noc_link_0069",
+      "name": "east/west FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "global_data.router_2_1",
+        "port": "W"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "global_data.router_2_0",
+        "port": "S"
+      },
+      "id": "noc_link_0070",
+      "name": "north/south FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "global_data.router_2_1",
+        "port": "N"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "global_data.compute0",
+        "port": "NoC"
+      },
+      "id": "noc_link_0071",
+      "name": "compute0 NI Eject",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "global_data.router_0_0",
+        "port": "Eject"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "global_data.compute1",
+        "port": "NoC"
+      },
+      "id": "noc_link_0072",
+      "name": "compute1 NI Eject",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "global_data.router_1_0",
+        "port": "Eject"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "global_data.compute0_sram",
+        "port": "NoC"
+      },
+      "id": "noc_link_0073",
+      "name": "compute0_sram NI Eject",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "global_data.router_2_0",
+        "port": "Eject"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "global_data.compute1_sram",
+        "port": "NoC"
+      },
+      "id": "noc_link_0074",
+      "name": "compute1_sram NI Eject",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "global_data.router_0_1",
+        "port": "Eject"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "global_data.memory_ingress0",
+        "port": "NoC"
+      },
+      "id": "noc_link_0075",
+      "name": "memory_ingress0 NI Eject",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "global_data.router_1_1",
+        "port": "Eject"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "global_data.memory_ingress1",
+        "port": "NoC"
+      },
+      "id": "noc_link_0076",
+      "name": "memory_ingress1 NI Eject",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "global_data.router_2_1",
+        "port": "Eject"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "memory0_local_config.router_0_0",
+        "port": "E"
+      },
+      "id": "noc_link_0077",
+      "name": "east/west FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "memory0_local_config.router_1_0",
+        "port": "W"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "memory0_local_config.global_in",
+        "port": "NoC"
+      },
+      "id": "noc_link_0078",
+      "name": "global_in NI Eject",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "memory0_local_config.router_0_0",
+        "port": "Eject"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "memory0_local_config.controller_regs",
+        "port": "NoC"
+      },
+      "id": "noc_link_0079",
+      "name": "controller_regs NI Eject",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "memory0_local_config.router_1_0",
+        "port": "Eject"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "memory0_local_data.router_0_0",
+        "port": "E"
+      },
+      "id": "noc_link_0080",
+      "name": "east/west FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "memory0_local_data.router_1_0",
+        "port": "W"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "memory0_local_data.router_0_0",
+        "port": "S"
+      },
+      "id": "noc_link_0081",
+      "name": "north/south FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "memory0_local_data.router_0_1",
+        "port": "N"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "memory0_local_data.router_0_1",
+        "port": "E"
+      },
+      "id": "noc_link_0082",
+      "name": "east/west FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "memory0_local_data.router_1_1",
+        "port": "W"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "memory0_local_data.router_1_0",
+        "port": "S"
+      },
+      "id": "noc_link_0083",
+      "name": "north/south FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "memory0_local_data.router_1_1",
+        "port": "N"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "memory0_local_data.memory_ingress0",
+        "port": "NoC"
+      },
+      "id": "noc_link_0084",
+      "name": "memory_ingress0 NI Eject",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "memory0_local_data.router_0_0",
+        "port": "Eject"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "memory0_local_data.memory_ingress1",
+        "port": "NoC"
+      },
+      "id": "noc_link_0085",
+      "name": "memory_ingress1 NI Eject",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "memory0_local_data.router_1_0",
+        "port": "Eject"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "memory0_local_data.target_crossbar",
+        "port": "NoC"
+      },
+      "id": "noc_link_0086",
+      "name": "target_crossbar NI Eject",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "memory0_local_data.router_0_1",
+        "port": "Eject"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "compute0_local_data.global_out",
+        "port": "out"
+      },
+      "id": "noc_link_0087",
+      "name": "64b AXI4 uplink (planned)",
+      "signals": [
+        {
+          "name": "AXI4",
+          "width": 64
+        }
+      ],
+      "status": "planned_integration",
+      "to": {
+        "instance": "global_data.compute0",
+        "port": "in"
+      },
+      "type": "planned_interconnect"
+    },
+    {
+      "from": {
+        "instance": "global_data.compute0_sram",
+        "port": "out"
+      },
+      "id": "noc_link_0088",
+      "name": "64b AXI4 remote SRAM return path (planned)",
+      "signals": [
+        {
+          "name": "AXI4",
+          "width": 64
+        }
+      ],
+      "status": "planned_integration",
+      "to": {
+        "instance": "compute0_local_data.global_in",
+        "port": "in"
+      },
+      "type": "planned_interconnect"
+    },
+    {
+      "from": {
+        "instance": "compute0_local_config.global_out",
+        "port": "out"
+      },
+      "id": "noc_link_0089",
+      "name": "32b AXI4 control transport (planned)",
+      "signals": [
+        {
+          "name": "AXI4",
+          "width": 32
+        }
+      ],
+      "status": "planned_integration",
+      "to": {
+        "instance": "global_config.compute0",
+        "port": "in"
+      },
+      "type": "planned_interconnect"
+    },
+    {
+      "from": {
+        "instance": "global_config.compute0_regs",
+        "port": "out"
+      },
+      "id": "noc_link_0090",
+      "name": "32b AXI4 control ingress (planned)",
+      "signals": [
+        {
+          "name": "AXI4",
+          "width": 32
+        }
+      ],
+      "status": "planned_integration",
+      "to": {
+        "instance": "compute0_local_config.global_in",
+        "port": "in"
+      },
+      "type": "planned_interconnect"
+    },
+    {
+      "from": {
+        "instance": "compute1_local_data.global_out",
+        "port": "out"
+      },
+      "id": "noc_link_0091",
+      "name": "64b AXI4 uplink (planned)",
+      "signals": [
+        {
+          "name": "AXI4",
+          "width": 64
+        }
+      ],
+      "status": "planned_integration",
+      "to": {
+        "instance": "global_data.compute1",
+        "port": "in"
+      },
+      "type": "planned_interconnect"
+    },
+    {
+      "from": {
+        "instance": "global_data.compute1_sram",
+        "port": "out"
+      },
+      "id": "noc_link_0092",
+      "name": "64b AXI4 remote SRAM return path (planned)",
+      "signals": [
+        {
+          "name": "AXI4",
+          "width": 64
+        }
+      ],
+      "status": "planned_integration",
+      "to": {
+        "instance": "compute1_local_data.global_in",
+        "port": "in"
+      },
+      "type": "planned_interconnect"
+    },
+    {
+      "from": {
+        "instance": "compute1_local_config.global_out",
+        "port": "out"
+      },
+      "id": "noc_link_0093",
+      "name": "32b AXI4 control transport (planned)",
+      "signals": [
+        {
+          "name": "AXI4",
+          "width": 32
+        }
+      ],
+      "status": "planned_integration",
+      "to": {
+        "instance": "global_config.compute1",
+        "port": "in"
+      },
+      "type": "planned_interconnect"
+    },
+    {
+      "from": {
+        "instance": "global_config.compute1_regs",
+        "port": "out"
+      },
+      "id": "noc_link_0094",
+      "name": "32b AXI4 control ingress (planned)",
+      "signals": [
+        {
+          "name": "AXI4",
+          "width": 32
+        }
+      ],
+      "status": "planned_integration",
+      "to": {
+        "instance": "compute1_local_config.global_in",
+        "port": "in"
+      },
+      "type": "planned_interconnect"
+    },
+    {
+      "from": {
+        "instance": "global_data.memory_ingress0",
+        "port": "out"
+      },
+      "id": "noc_link_0095",
+      "name": "64b AXI4 memory ingress (planned)",
+      "signals": [
+        {
+          "name": "AXI4",
+          "width": 64
+        }
+      ],
+      "status": "planned_integration",
+      "to": {
+        "instance": "memory0_local_data.memory_ingress0",
+        "port": "in"
+      },
+      "type": "planned_interconnect"
+    },
+    {
+      "from": {
+        "instance": "global_data.memory_ingress1",
+        "port": "out"
+      },
+      "id": "noc_link_0096",
+      "name": "64b AXI4 memory ingress (planned)",
+      "signals": [
+        {
+          "name": "AXI4",
+          "width": 64
+        }
+      ],
+      "status": "planned_integration",
+      "to": {
+        "instance": "memory0_local_data.memory_ingress1",
+        "port": "in"
+      },
+      "type": "planned_interconnect"
+    },
+    {
+      "from": {
+        "instance": "global_config.memory0_regs",
+        "port": "out"
+      },
+      "id": "noc_link_0097",
+      "name": "32b AXI4 memory control (planned)",
+      "signals": [
+        {
+          "name": "AXI4",
+          "width": 32
+        }
+      ],
+      "status": "planned_integration",
+      "to": {
+        "instance": "memory0_local_config.global_in",
+        "port": "in"
+      },
+      "type": "planned_interconnect"
+    },
+    {
+      "from": {
+        "instance": "memory0_local_data.target_crossbar",
+        "port": "out"
+      },
+      "id": "noc_link_0098",
+      "name": "memory0 local-to-crossbar link (planned)",
+      "signals": [
+        {
+          "name": "AXI4",
+          "width": 64
+        }
+      ],
+      "status": "planned_integration",
+      "to": {
+        "instance": "memory0.internal_target_crossbar",
+        "port": "in"
+      },
+      "type": "planned_interconnect"
+    },
+    {
+      "from": {
+        "instance": "memory0.internal_target_crossbar",
+        "port": "out"
+      },
+      "id": "noc_link_0099",
+      "name": "Memory0 testbench AXI RAM route",
+      "signals": [
+        {
+          "name": "AXI4",
+          "width": 64
+        }
+      ],
+      "status": "verified_separate_memory_tb",
+      "to": {
+        "instance": "memory0.hbm0",
+        "port": "in"
+      },
+      "type": "planned_interconnect"
+    },
+    {
+      "from": {
+        "instance": "memory0.internal_target_crossbar",
+        "port": "out"
+      },
+      "id": "noc_link_0100",
+      "name": "Memory0 testbench AXI RAM route",
+      "signals": [
+        {
+          "name": "AXI4",
+          "width": 64
+        }
+      ],
+      "status": "verified_separate_memory_tb",
+      "to": {
+        "instance": "memory0.ddr0",
+        "port": "in"
+      },
+      "type": "planned_interconnect"
+    }
+  ],
+  "groups": [
+    {
+      "color": "#8055B7",
+      "info": {
+        "plane": "config",
+        "router_count": 6,
+        "source": "compute0/local_config/floo_xezim_compute0_local_config_noc.sv",
+        "status": "generated_structural"
+      },
+      "instances": [
+        "compute0_local_config.router_0_0",
+        "compute0_local_config.router_1_0",
+        "compute0_local_config.router_2_0",
+        "compute0_local_config.router_0_1",
+        "compute0_local_config.router_1_1",
+        "compute0_local_config.router_2_1",
+        "compute0_local_config.cpu",
+        "compute0_local_config.global_in",
+        "compute0_local_config.dma_regs",
+        "compute0_local_config.reset_ctrl",
+        "compute0_local_config.global_out"
+      ],
+      "name": "compute0_local_config",
+      "padding": 2.0
+    },
+    {
+      "color": "#16845D",
+      "info": {
+        "plane": "data",
+        "router_count": 9,
+        "source": "compute0/local_data/floo_xezim_compute0_local_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "instances": [
+        "compute0_local_data.router_0_0",
+        "compute0_local_data.router_1_0",
+        "compute0_local_data.router_2_0",
+        "compute0_local_data.router_0_1",
+        "compute0_local_data.router_1_1",
+        "compute0_local_data.router_2_1",
+        "compute0_local_data.router_0_2",
+        "compute0_local_data.router_1_2",
+        "compute0_local_data.router_2_2",
+        "compute0_local_data.cpu",
+        "compute0_local_data.dma",
+        "compute0_local_data.global_in",
+        "compute0_local_data.sram",
+        "compute0_local_data.global_out",
+        "compute0_local_data.boot_rom",
+        "compute0_local_data.boot_flash"
+      ],
+      "name": "compute0_local_data",
+      "padding": 2.0
+    },
+    {
+      "color": "#8055B7",
+      "info": {
+        "plane": "config",
+        "router_count": 4,
+        "source": "compute1/local_config/floo_xezim_compute1_local_config_noc.sv",
+        "status": "generated_structural"
+      },
+      "instances": [
+        "compute1_local_config.router_0_0",
+        "compute1_local_config.router_1_0",
+        "compute1_local_config.router_0_1",
+        "compute1_local_config.router_1_1",
+        "compute1_local_config.cpu",
+        "compute1_local_config.global_in",
+        "compute1_local_config.dma_regs",
+        "compute1_local_config.global_out"
+      ],
+      "name": "compute1_local_config",
+      "padding": 2.0
+    },
+    {
+      "color": "#16845D",
+      "info": {
+        "plane": "data",
+        "router_count": 6,
+        "source": "compute1/local_data/floo_xezim_compute1_local_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "instances": [
+        "compute1_local_data.router_0_0",
+        "compute1_local_data.router_1_0",
+        "compute1_local_data.router_2_0",
+        "compute1_local_data.router_0_1",
+        "compute1_local_data.router_1_1",
+        "compute1_local_data.router_2_1",
+        "compute1_local_data.cpu",
+        "compute1_local_data.dma",
+        "compute1_local_data.global_in",
+        "compute1_local_data.sram",
+        "compute1_local_data.global_out"
+      ],
+      "name": "compute1_local_data",
+      "padding": 2.0
+    },
+    {
+      "color": "#8055B7",
+      "info": {
+        "plane": "config",
+        "router_count": 6,
+        "source": "global_config/floo_xezim_global_config_noc.sv",
+        "status": "generated_structural"
+      },
+      "instances": [
+        "global_config.router_0_0",
+        "global_config.router_1_0",
+        "global_config.router_2_0",
+        "global_config.router_0_1",
+        "global_config.router_1_1",
+        "global_config.router_2_1",
+        "global_config.compute0",
+        "global_config.compute1",
+        "global_config.compute0_regs",
+        "global_config.compute1_regs",
+        "global_config.memory0_regs"
+      ],
+      "name": "global_config",
+      "padding": 2.0
+    },
+    {
+      "color": "#16845D",
+      "info": {
+        "plane": "data",
+        "router_count": 6,
+        "source": "global_data/floo_xezim_global_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "instances": [
+        "global_data.router_0_0",
+        "global_data.router_1_0",
+        "global_data.router_2_0",
+        "global_data.router_0_1",
+        "global_data.router_1_1",
+        "global_data.router_2_1",
+        "global_data.compute0",
+        "global_data.compute1",
+        "global_data.compute0_sram",
+        "global_data.compute1_sram",
+        "global_data.memory_ingress0",
+        "global_data.memory_ingress1"
+      ],
+      "name": "global_data",
+      "padding": 2.0
+    },
+    {
+      "color": "#8055B7",
+      "info": {
+        "plane": "config",
+        "router_count": 2,
+        "source": "memory0/local_config/floo_xezim_memory0_local_config_noc.sv",
+        "status": "generated_structural"
+      },
+      "instances": [
+        "memory0_local_config.router_0_0",
+        "memory0_local_config.router_1_0",
+        "memory0_local_config.global_in",
+        "memory0_local_config.controller_regs"
+      ],
+      "name": "memory0_local_config",
+      "padding": 2.0
+    },
+    {
+      "color": "#16845D",
+      "info": {
+        "plane": "data",
+        "router_count": 4,
+        "source": "memory0/local_data/floo_xezim_memory0_local_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "instances": [
+        "memory0_local_data.router_0_0",
+        "memory0_local_data.router_1_0",
+        "memory0_local_data.router_0_1",
+        "memory0_local_data.router_1_1",
+        "memory0_local_data.memory_ingress0",
+        "memory0_local_data.memory_ingress1",
+        "memory0_local_data.target_crossbar"
+      ],
+      "name": "memory0_local_data",
+      "padding": 2.0
+    },
+    {
+      "color": "#62758C",
+      "instances": [
+        "compute0_local_config.router_0_0",
+        "compute0_local_config.router_1_0",
+        "compute0_local_config.router_2_0",
+        "compute0_local_config.router_0_1",
+        "compute0_local_config.router_1_1",
+        "compute0_local_config.router_2_1",
+        "compute0_local_config.cpu",
+        "compute0_local_config.global_in",
+        "compute0_local_config.dma_regs",
+        "compute0_local_config.reset_ctrl",
+        "compute0_local_config.global_out",
+        "compute0_local_data.router_0_0",
+        "compute0_local_data.router_1_0",
+        "compute0_local_data.router_2_0",
+        "compute0_local_data.router_0_1",
+        "compute0_local_data.router_1_1",
+        "compute0_local_data.router_2_1",
+        "compute0_local_data.router_0_2",
+        "compute0_local_data.router_1_2",
+        "compute0_local_data.router_2_2",
+        "compute0_local_data.cpu",
+        "compute0_local_data.dma",
+        "compute0_local_data.global_in",
+        "compute0_local_data.sram",
+        "compute0_local_data.global_out",
+        "compute0_local_data.boot_rom",
+        "compute0_local_data.boot_flash"
+      ],
+      "name": "compute0_subsystem",
+      "padding": 4.0
+    },
+    {
+      "color": "#62758C",
+      "instances": [
+        "compute1_local_config.router_0_0",
+        "compute1_local_config.router_1_0",
+        "compute1_local_config.router_0_1",
+        "compute1_local_config.router_1_1",
+        "compute1_local_config.cpu",
+        "compute1_local_config.global_in",
+        "compute1_local_config.dma_regs",
+        "compute1_local_config.global_out",
+        "compute1_local_data.router_0_0",
+        "compute1_local_data.router_1_0",
+        "compute1_local_data.router_2_0",
+        "compute1_local_data.router_0_1",
+        "compute1_local_data.router_1_1",
+        "compute1_local_data.router_2_1",
+        "compute1_local_data.cpu",
+        "compute1_local_data.dma",
+        "compute1_local_data.global_in",
+        "compute1_local_data.sram",
+        "compute1_local_data.global_out"
+      ],
+      "name": "compute1_subsystem",
+      "padding": 4.0
+    },
+    {
+      "color": "#62758C",
+      "instances": [
+        "memory0_local_config.router_0_0",
+        "memory0_local_config.router_1_0",
+        "memory0_local_config.global_in",
+        "memory0_local_config.controller_regs",
+        "memory0_local_data.router_0_0",
+        "memory0_local_data.router_1_0",
+        "memory0_local_data.router_0_1",
+        "memory0_local_data.router_1_1",
+        "memory0_local_data.memory_ingress0",
+        "memory0_local_data.memory_ingress1",
+        "memory0_local_data.target_crossbar",
+        "memory0.internal_target_crossbar"
+      ],
+      "name": "memory0_subsystem",
+      "padding": 4.0
+    }
+  ],
+  "instances": [
+    {
+      "info": {
+        "grid": [
+          0,
+          0
+        ],
+        "network": "compute0_local_config",
+        "plane": "config",
+        "source": "compute0/local_config/floo_xezim_compute0_local_config_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "compute0_local_config.router_0_0",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          1,
+          0
+        ],
+        "network": "compute0_local_config",
+        "plane": "config",
+        "source": "compute0/local_config/floo_xezim_compute0_local_config_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "compute0_local_config.router_1_0",
+      "position": {
+        "x": 4,
+        "y": 0,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          2,
+          0
+        ],
+        "network": "compute0_local_config",
+        "plane": "config",
+        "source": "compute0/local_config/floo_xezim_compute0_local_config_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "compute0_local_config.router_2_0",
+      "position": {
+        "x": 8,
+        "y": 0,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          0,
+          1
+        ],
+        "network": "compute0_local_config",
+        "plane": "config",
+        "source": "compute0/local_config/floo_xezim_compute0_local_config_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "compute0_local_config.router_0_1",
+      "position": {
+        "x": 0,
+        "y": 4,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          1,
+          1
+        ],
+        "network": "compute0_local_config",
+        "plane": "config",
+        "source": "compute0/local_config/floo_xezim_compute0_local_config_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "compute0_local_config.router_1_1",
+      "position": {
+        "x": 4,
+        "y": 4,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          2,
+          1
+        ],
+        "network": "compute0_local_config",
+        "plane": "config",
+        "source": "compute0/local_config/floo_xezim_compute0_local_config_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "compute0_local_config.router_2_1",
+      "position": {
+        "x": 8,
+        "y": 4,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "address_bits": 32,
+        "address_ranges": null,
+        "data_bits": 32,
+        "id_bits": 1,
+        "network": "compute0_local_config",
+        "plane": "config",
+        "protocol": "AXI4",
+        "role": "initiator",
+        "source": "compute0/local_config/floo_xezim_compute0_local_config_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_chimney",
+      "name": "compute0_local_config.cpu",
+      "position": {
+        "x": 0,
+        "y": -1.6,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "address_bits": 32,
+        "address_ranges": null,
+        "data_bits": 32,
+        "id_bits": 1,
+        "network": "compute0_local_config",
+        "plane": "config",
+        "protocol": "AXI4",
+        "role": "initiator",
+        "source": "compute0/local_config/floo_xezim_compute0_local_config_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_chimney",
+      "name": "compute0_local_config.global_in",
+      "position": {
+        "x": 4,
+        "y": -1.6,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "address_bits": 32,
+        "address_ranges": {
+          "base": 1073741824,
+          "size": 65536
+        },
+        "data_bits": 32,
+        "id_bits": 1,
+        "network": "compute0_local_config",
+        "plane": "config",
+        "protocol": "AXI4",
+        "role": "target",
+        "source": "compute0/local_config/floo_xezim_compute0_local_config_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_chimney",
+      "name": "compute0_local_config.dma_regs",
+      "position": {
+        "x": 8,
+        "y": -1.6,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "address_bits": 32,
+        "address_ranges": {
+          "base": 1073872896,
+          "size": 4096
+        },
+        "data_bits": 32,
+        "id_bits": 1,
+        "network": "compute0_local_config",
+        "plane": "config",
+        "protocol": "AXI4",
+        "role": "target",
+        "source": "compute0/local_config/floo_xezim_compute0_local_config_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_chimney",
+      "name": "compute0_local_config.reset_ctrl",
+      "position": {
+        "x": 0,
+        "y": 2.4,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "address_bits": 32,
+        "address_ranges": [
+          {
+            "base": 1073807360,
+            "size": 65536
+          },
+          {
+            "base": 1073938432,
+            "size": 4096
+          }
+        ],
+        "data_bits": 32,
+        "id_bits": 1,
+        "network": "compute0_local_config",
+        "plane": "config",
+        "protocol": "AXI4",
+        "role": "target",
+        "source": "compute0/local_config/floo_xezim_compute0_local_config_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_chimney",
+      "name": "compute0_local_config.global_out",
+      "position": {
+        "x": 4,
+        "y": 2.4,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          0,
+          0
+        ],
+        "network": "compute0_local_data",
+        "plane": "data",
+        "source": "compute0/local_data/floo_xezim_compute0_local_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "compute0_local_data.router_0_0",
+      "position": {
+        "x": 16,
+        "y": 0,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          1,
+          0
+        ],
+        "network": "compute0_local_data",
+        "plane": "data",
+        "source": "compute0/local_data/floo_xezim_compute0_local_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "compute0_local_data.router_1_0",
+      "position": {
+        "x": 20,
+        "y": 0,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          2,
+          0
+        ],
+        "network": "compute0_local_data",
+        "plane": "data",
+        "source": "compute0/local_data/floo_xezim_compute0_local_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "compute0_local_data.router_2_0",
+      "position": {
+        "x": 24,
+        "y": 0,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          0,
+          1
+        ],
+        "network": "compute0_local_data",
+        "plane": "data",
+        "source": "compute0/local_data/floo_xezim_compute0_local_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "compute0_local_data.router_0_1",
+      "position": {
+        "x": 16,
+        "y": 4,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          1,
+          1
+        ],
+        "network": "compute0_local_data",
+        "plane": "data",
+        "source": "compute0/local_data/floo_xezim_compute0_local_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "compute0_local_data.router_1_1",
+      "position": {
+        "x": 20,
+        "y": 4,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          2,
+          1
+        ],
+        "network": "compute0_local_data",
+        "plane": "data",
+        "source": "compute0/local_data/floo_xezim_compute0_local_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "compute0_local_data.router_2_1",
+      "position": {
+        "x": 24,
+        "y": 4,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          0,
+          2
+        ],
+        "network": "compute0_local_data",
+        "plane": "data",
+        "source": "compute0/local_data/floo_xezim_compute0_local_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "compute0_local_data.router_0_2",
+      "position": {
+        "x": 16,
+        "y": 8,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          1,
+          2
+        ],
+        "network": "compute0_local_data",
+        "plane": "data",
+        "source": "compute0/local_data/floo_xezim_compute0_local_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "compute0_local_data.router_1_2",
+      "position": {
+        "x": 20,
+        "y": 8,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          2,
+          2
+        ],
+        "network": "compute0_local_data",
+        "plane": "data",
+        "source": "compute0/local_data/floo_xezim_compute0_local_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "compute0_local_data.router_2_2",
+      "position": {
+        "x": 24,
+        "y": 8,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "address_bits": 64,
+        "address_ranges": null,
+        "data_bits": 64,
+        "id_bits": 4,
+        "network": "compute0_local_data",
+        "plane": "data",
+        "protocol": "AXI4",
+        "role": "initiator",
+        "source": "compute0/local_data/floo_xezim_compute0_local_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_chimney",
+      "name": "compute0_local_data.cpu",
+      "position": {
+        "x": 16,
+        "y": -1.6,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "address_bits": 64,
+        "address_ranges": null,
+        "data_bits": 64,
+        "id_bits": 4,
+        "network": "compute0_local_data",
+        "plane": "data",
+        "protocol": "AXI4",
+        "role": "initiator",
+        "source": "compute0/local_data/floo_xezim_compute0_local_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_chimney",
+      "name": "compute0_local_data.dma",
+      "position": {
+        "x": 20,
+        "y": -1.6,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "address_bits": 64,
+        "address_ranges": null,
+        "data_bits": 64,
+        "id_bits": 4,
+        "network": "compute0_local_data",
+        "plane": "data",
+        "protocol": "AXI4",
+        "role": "initiator",
+        "source": "compute0/local_data/floo_xezim_compute0_local_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_chimney",
+      "name": "compute0_local_data.global_in",
+      "position": {
+        "x": 24,
+        "y": -1.6,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "address_bits": 64,
+        "address_ranges": {
+          "base": 268435456,
+          "size": 1048576
+        },
+        "data_bits": 64,
+        "id_bits": 5,
+        "network": "compute0_local_data",
+        "plane": "data",
+        "protocol": "AXI4",
+        "role": "target",
+        "source": "compute0/local_data/floo_xezim_compute0_local_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_chimney",
+      "name": "compute0_local_data.sram",
+      "position": {
+        "x": 16,
+        "y": 2.4,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "address_bits": 64,
+        "address_ranges": [
+          {
+            "base": 285212672,
+            "size": 1048576
+          },
+          {
+            "base": 4294967296,
+            "size": 1073741824
+          },
+          {
+            "base": 5368709120,
+            "size": 1073741824
+          }
+        ],
+        "data_bits": 64,
+        "id_bits": 5,
+        "network": "compute0_local_data",
+        "plane": "data",
+        "protocol": "AXI4",
+        "role": "target",
+        "source": "compute0/local_data/floo_xezim_compute0_local_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_chimney",
+      "name": "compute0_local_data.global_out",
+      "position": {
+        "x": 20,
+        "y": 2.4,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "address_bits": 64,
+        "address_ranges": {
+          "base": 0,
+          "size": 4096
+        },
+        "data_bits": 64,
+        "id_bits": 5,
+        "network": "compute0_local_data",
+        "plane": "data",
+        "protocol": "AXI4",
+        "role": "target",
+        "source": "compute0/local_data/floo_xezim_compute0_local_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_chimney",
+      "name": "compute0_local_data.boot_rom",
+      "position": {
+        "x": 24,
+        "y": 2.4,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "address_bits": 64,
+        "address_ranges": {
+          "base": 536870912,
+          "size": 65536
+        },
+        "data_bits": 64,
+        "id_bits": 5,
+        "network": "compute0_local_data",
+        "plane": "data",
+        "protocol": "AXI4",
+        "role": "target",
+        "source": "compute0/local_data/floo_xezim_compute0_local_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_chimney",
+      "name": "compute0_local_data.boot_flash",
+      "position": {
+        "x": 16,
+        "y": 6.4,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          0,
+          0
+        ],
+        "network": "compute1_local_config",
+        "plane": "config",
+        "source": "compute1/local_config/floo_xezim_compute1_local_config_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "compute1_local_config.router_0_0",
+      "position": {
+        "x": 0,
+        "y": 16,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          1,
+          0
+        ],
+        "network": "compute1_local_config",
+        "plane": "config",
+        "source": "compute1/local_config/floo_xezim_compute1_local_config_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "compute1_local_config.router_1_0",
+      "position": {
+        "x": 4,
+        "y": 16,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          0,
+          1
+        ],
+        "network": "compute1_local_config",
+        "plane": "config",
+        "source": "compute1/local_config/floo_xezim_compute1_local_config_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "compute1_local_config.router_0_1",
+      "position": {
+        "x": 0,
+        "y": 20,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          1,
+          1
+        ],
+        "network": "compute1_local_config",
+        "plane": "config",
+        "source": "compute1/local_config/floo_xezim_compute1_local_config_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "compute1_local_config.router_1_1",
+      "position": {
+        "x": 4,
+        "y": 20,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "address_bits": 32,
+        "address_ranges": null,
+        "data_bits": 32,
+        "id_bits": 1,
+        "network": "compute1_local_config",
+        "plane": "config",
+        "protocol": "AXI4",
+        "role": "initiator",
+        "source": "compute1/local_config/floo_xezim_compute1_local_config_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_chimney",
+      "name": "compute1_local_config.cpu",
+      "position": {
+        "x": 0,
+        "y": 14.4,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "address_bits": 32,
+        "address_ranges": null,
+        "data_bits": 32,
+        "id_bits": 1,
+        "network": "compute1_local_config",
+        "plane": "config",
+        "protocol": "AXI4",
+        "role": "initiator",
+        "source": "compute1/local_config/floo_xezim_compute1_local_config_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_chimney",
+      "name": "compute1_local_config.global_in",
+      "position": {
+        "x": 4,
+        "y": 14.4,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "address_bits": 32,
+        "address_ranges": {
+          "base": 1073807360,
+          "size": 65536
+        },
+        "data_bits": 32,
+        "id_bits": 1,
+        "network": "compute1_local_config",
+        "plane": "config",
+        "protocol": "AXI4",
+        "role": "target",
+        "source": "compute1/local_config/floo_xezim_compute1_local_config_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_chimney",
+      "name": "compute1_local_config.dma_regs",
+      "position": {
+        "x": 0,
+        "y": 18.4,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "address_bits": 32,
+        "address_ranges": [
+          {
+            "base": 1073741824,
+            "size": 65536
+          },
+          {
+            "base": 1073872896,
+            "size": 4096
+          },
+          {
+            "base": 1073938432,
+            "size": 4096
+          }
+        ],
+        "data_bits": 32,
+        "id_bits": 1,
+        "network": "compute1_local_config",
+        "plane": "config",
+        "protocol": "AXI4",
+        "role": "target",
+        "source": "compute1/local_config/floo_xezim_compute1_local_config_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_chimney",
+      "name": "compute1_local_config.global_out",
+      "position": {
+        "x": 4,
+        "y": 18.4,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          0,
+          0
+        ],
+        "network": "compute1_local_data",
+        "plane": "data",
+        "source": "compute1/local_data/floo_xezim_compute1_local_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "compute1_local_data.router_0_0",
+      "position": {
+        "x": 16,
+        "y": 16,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          1,
+          0
+        ],
+        "network": "compute1_local_data",
+        "plane": "data",
+        "source": "compute1/local_data/floo_xezim_compute1_local_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "compute1_local_data.router_1_0",
+      "position": {
+        "x": 20,
+        "y": 16,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          2,
+          0
+        ],
+        "network": "compute1_local_data",
+        "plane": "data",
+        "source": "compute1/local_data/floo_xezim_compute1_local_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "compute1_local_data.router_2_0",
+      "position": {
+        "x": 24,
+        "y": 16,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          0,
+          1
+        ],
+        "network": "compute1_local_data",
+        "plane": "data",
+        "source": "compute1/local_data/floo_xezim_compute1_local_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "compute1_local_data.router_0_1",
+      "position": {
+        "x": 16,
+        "y": 20,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          1,
+          1
+        ],
+        "network": "compute1_local_data",
+        "plane": "data",
+        "source": "compute1/local_data/floo_xezim_compute1_local_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "compute1_local_data.router_1_1",
+      "position": {
+        "x": 20,
+        "y": 20,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          2,
+          1
+        ],
+        "network": "compute1_local_data",
+        "plane": "data",
+        "source": "compute1/local_data/floo_xezim_compute1_local_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "compute1_local_data.router_2_1",
+      "position": {
+        "x": 24,
+        "y": 20,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "address_bits": 64,
+        "address_ranges": null,
+        "data_bits": 64,
+        "id_bits": 4,
+        "network": "compute1_local_data",
+        "plane": "data",
+        "protocol": "AXI4",
+        "role": "initiator",
+        "source": "compute1/local_data/floo_xezim_compute1_local_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_chimney",
+      "name": "compute1_local_data.cpu",
+      "position": {
+        "x": 16,
+        "y": 14.4,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "address_bits": 64,
+        "address_ranges": null,
+        "data_bits": 64,
+        "id_bits": 4,
+        "network": "compute1_local_data",
+        "plane": "data",
+        "protocol": "AXI4",
+        "role": "initiator",
+        "source": "compute1/local_data/floo_xezim_compute1_local_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_chimney",
+      "name": "compute1_local_data.dma",
+      "position": {
+        "x": 20,
+        "y": 14.4,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "address_bits": 64,
+        "address_ranges": null,
+        "data_bits": 64,
+        "id_bits": 4,
+        "network": "compute1_local_data",
+        "plane": "data",
+        "protocol": "AXI4",
+        "role": "initiator",
+        "source": "compute1/local_data/floo_xezim_compute1_local_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_chimney",
+      "name": "compute1_local_data.global_in",
+      "position": {
+        "x": 24,
+        "y": 14.4,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "address_bits": 64,
+        "address_ranges": {
+          "base": 285212672,
+          "size": 1048576
+        },
+        "data_bits": 64,
+        "id_bits": 5,
+        "network": "compute1_local_data",
+        "plane": "data",
+        "protocol": "AXI4",
+        "role": "target",
+        "source": "compute1/local_data/floo_xezim_compute1_local_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_chimney",
+      "name": "compute1_local_data.sram",
+      "position": {
+        "x": 16,
+        "y": 18.4,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "address_bits": 64,
+        "address_ranges": [
+          {
+            "base": 268435456,
+            "size": 1048576
+          },
+          {
+            "base": 4294967296,
+            "size": 1073741824
+          },
+          {
+            "base": 5368709120,
+            "size": 1073741824
+          }
+        ],
+        "data_bits": 64,
+        "id_bits": 5,
+        "network": "compute1_local_data",
+        "plane": "data",
+        "protocol": "AXI4",
+        "role": "target",
+        "source": "compute1/local_data/floo_xezim_compute1_local_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_chimney",
+      "name": "compute1_local_data.global_out",
+      "position": {
+        "x": 20,
+        "y": 18.4,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          0,
+          0
+        ],
+        "network": "global_config",
+        "plane": "config",
+        "source": "global_config/floo_xezim_global_config_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "global_config.router_0_0",
+      "position": {
+        "x": 0,
+        "y": 32,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          1,
+          0
+        ],
+        "network": "global_config",
+        "plane": "config",
+        "source": "global_config/floo_xezim_global_config_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "global_config.router_1_0",
+      "position": {
+        "x": 4,
+        "y": 32,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          2,
+          0
+        ],
+        "network": "global_config",
+        "plane": "config",
+        "source": "global_config/floo_xezim_global_config_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "global_config.router_2_0",
+      "position": {
+        "x": 8,
+        "y": 32,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          0,
+          1
+        ],
+        "network": "global_config",
+        "plane": "config",
+        "source": "global_config/floo_xezim_global_config_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "global_config.router_0_1",
+      "position": {
+        "x": 0,
+        "y": 36,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          1,
+          1
+        ],
+        "network": "global_config",
+        "plane": "config",
+        "source": "global_config/floo_xezim_global_config_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "global_config.router_1_1",
+      "position": {
+        "x": 4,
+        "y": 36,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          2,
+          1
+        ],
+        "network": "global_config",
+        "plane": "config",
+        "source": "global_config/floo_xezim_global_config_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "global_config.router_2_1",
+      "position": {
+        "x": 8,
+        "y": 36,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "address_bits": 32,
+        "address_ranges": null,
+        "data_bits": 32,
+        "id_bits": 1,
+        "network": "global_config",
+        "plane": "config",
+        "protocol": "AXI4",
+        "role": "initiator",
+        "source": "global_config/floo_xezim_global_config_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_chimney",
+      "name": "global_config.compute0",
+      "position": {
+        "x": 0,
+        "y": 30.4,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "address_bits": 32,
+        "address_ranges": null,
+        "data_bits": 32,
+        "id_bits": 1,
+        "network": "global_config",
+        "plane": "config",
+        "protocol": "AXI4",
+        "role": "initiator",
+        "source": "global_config/floo_xezim_global_config_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_chimney",
+      "name": "global_config.compute1",
+      "position": {
+        "x": 4,
+        "y": 30.4,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "address_bits": 32,
+        "address_ranges": [
+          {
+            "base": 1073741824,
+            "size": 65536
+          },
+          {
+            "base": 1073872896,
+            "size": 4096
+          }
+        ],
+        "data_bits": 32,
+        "id_bits": 1,
+        "network": "global_config",
+        "plane": "config",
+        "protocol": "AXI4",
+        "role": "target",
+        "source": "global_config/floo_xezim_global_config_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_chimney",
+      "name": "global_config.compute0_regs",
+      "position": {
+        "x": 8,
+        "y": 30.4,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "address_bits": 32,
+        "address_ranges": {
+          "base": 1073807360,
+          "size": 65536
+        },
+        "data_bits": 32,
+        "id_bits": 1,
+        "network": "global_config",
+        "plane": "config",
+        "protocol": "AXI4",
+        "role": "target",
+        "source": "global_config/floo_xezim_global_config_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_chimney",
+      "name": "global_config.compute1_regs",
+      "position": {
+        "x": 0,
+        "y": 34.4,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "address_bits": 32,
+        "address_ranges": {
+          "base": 1073938432,
+          "size": 4096
+        },
+        "data_bits": 32,
+        "id_bits": 1,
+        "network": "global_config",
+        "plane": "config",
+        "protocol": "AXI4",
+        "role": "target",
+        "source": "global_config/floo_xezim_global_config_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_chimney",
+      "name": "global_config.memory0_regs",
+      "position": {
+        "x": 4,
+        "y": 34.4,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          0,
+          0
+        ],
+        "network": "global_data",
+        "plane": "data",
+        "source": "global_data/floo_xezim_global_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "global_data.router_0_0",
+      "position": {
+        "x": 16,
+        "y": 32,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          1,
+          0
+        ],
+        "network": "global_data",
+        "plane": "data",
+        "source": "global_data/floo_xezim_global_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "global_data.router_1_0",
+      "position": {
+        "x": 20,
+        "y": 32,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          2,
+          0
+        ],
+        "network": "global_data",
+        "plane": "data",
+        "source": "global_data/floo_xezim_global_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "global_data.router_2_0",
+      "position": {
+        "x": 24,
+        "y": 32,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          0,
+          1
+        ],
+        "network": "global_data",
+        "plane": "data",
+        "source": "global_data/floo_xezim_global_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "global_data.router_0_1",
+      "position": {
+        "x": 16,
+        "y": 36,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          1,
+          1
+        ],
+        "network": "global_data",
+        "plane": "data",
+        "source": "global_data/floo_xezim_global_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "global_data.router_1_1",
+      "position": {
+        "x": 20,
+        "y": 36,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          2,
+          1
+        ],
+        "network": "global_data",
+        "plane": "data",
+        "source": "global_data/floo_xezim_global_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "global_data.router_2_1",
+      "position": {
+        "x": 24,
+        "y": 36,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "address_bits": 64,
+        "address_ranges": null,
+        "data_bits": 64,
+        "id_bits": 5,
+        "network": "global_data",
+        "plane": "data",
+        "protocol": "AXI4",
+        "role": "initiator",
+        "source": "global_data/floo_xezim_global_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_chimney",
+      "name": "global_data.compute0",
+      "position": {
+        "x": 16,
+        "y": 30.4,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "address_bits": 64,
+        "address_ranges": null,
+        "data_bits": 64,
+        "id_bits": 5,
+        "network": "global_data",
+        "plane": "data",
+        "protocol": "AXI4",
+        "role": "initiator",
+        "source": "global_data/floo_xezim_global_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_chimney",
+      "name": "global_data.compute1",
+      "position": {
+        "x": 20,
+        "y": 30.4,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "address_bits": 64,
+        "address_ranges": {
+          "base": 268435456,
+          "size": 1048576
+        },
+        "data_bits": 64,
+        "id_bits": 4,
+        "network": "global_data",
+        "plane": "data",
+        "protocol": "AXI4",
+        "role": "target",
+        "source": "global_data/floo_xezim_global_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_chimney",
+      "name": "global_data.compute0_sram",
+      "position": {
+        "x": 24,
+        "y": 30.4,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "address_bits": 64,
+        "address_ranges": {
+          "base": 285212672,
+          "size": 1048576
+        },
+        "data_bits": 64,
+        "id_bits": 4,
+        "network": "global_data",
+        "plane": "data",
+        "protocol": "AXI4",
+        "role": "target",
+        "source": "global_data/floo_xezim_global_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_chimney",
+      "name": "global_data.compute1_sram",
+      "position": {
+        "x": 16,
+        "y": 34.4,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "address_bits": 64,
+        "address_ranges": {
+          "base": 4294967296,
+          "size": 1073741824
+        },
+        "data_bits": 64,
+        "id_bits": 4,
+        "network": "global_data",
+        "plane": "data",
+        "protocol": "AXI4",
+        "role": "target",
+        "source": "global_data/floo_xezim_global_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_chimney",
+      "name": "global_data.memory_ingress0",
+      "position": {
+        "x": 20,
+        "y": 34.4,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "address_bits": 64,
+        "address_ranges": {
+          "base": 5368709120,
+          "size": 1073741824
+        },
+        "data_bits": 64,
+        "id_bits": 4,
+        "network": "global_data",
+        "plane": "data",
+        "protocol": "AXI4",
+        "role": "target",
+        "source": "global_data/floo_xezim_global_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_chimney",
+      "name": "global_data.memory_ingress1",
+      "position": {
+        "x": 24,
+        "y": 34.4,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          0,
+          0
+        ],
+        "network": "memory0_local_config",
+        "plane": "config",
+        "source": "memory0/local_config/floo_xezim_memory0_local_config_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "memory0_local_config.router_0_0",
+      "position": {
+        "x": 0,
+        "y": 48,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          1,
+          0
+        ],
+        "network": "memory0_local_config",
+        "plane": "config",
+        "source": "memory0/local_config/floo_xezim_memory0_local_config_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "memory0_local_config.router_1_0",
+      "position": {
+        "x": 4,
+        "y": 48,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "address_bits": 32,
+        "address_ranges": null,
+        "data_bits": 32,
+        "id_bits": 1,
+        "network": "memory0_local_config",
+        "plane": "config",
+        "protocol": "AXI4",
+        "role": "initiator",
+        "source": "memory0/local_config/floo_xezim_memory0_local_config_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_chimney",
+      "name": "memory0_local_config.global_in",
+      "position": {
+        "x": 0,
+        "y": 46.4,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "address_bits": 32,
+        "address_ranges": {
+          "base": 1073938432,
+          "size": 4096
+        },
+        "data_bits": 32,
+        "id_bits": 1,
+        "network": "memory0_local_config",
+        "plane": "config",
+        "protocol": "AXI4",
+        "role": "target",
+        "source": "memory0/local_config/floo_xezim_memory0_local_config_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_chimney",
+      "name": "memory0_local_config.controller_regs",
+      "position": {
+        "x": 4,
+        "y": 46.4,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          0,
+          0
+        ],
+        "network": "memory0_local_data",
+        "plane": "data",
+        "source": "memory0/local_data/floo_xezim_memory0_local_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "memory0_local_data.router_0_0",
+      "position": {
+        "x": 16,
+        "y": 48,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          1,
+          0
+        ],
+        "network": "memory0_local_data",
+        "plane": "data",
+        "source": "memory0/local_data/floo_xezim_memory0_local_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "memory0_local_data.router_1_0",
+      "position": {
+        "x": 20,
+        "y": 48,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          0,
+          1
+        ],
+        "network": "memory0_local_data",
+        "plane": "data",
+        "source": "memory0/local_data/floo_xezim_memory0_local_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "memory0_local_data.router_0_1",
+      "position": {
+        "x": 16,
+        "y": 52,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          1,
+          1
+        ],
+        "network": "memory0_local_data",
+        "plane": "data",
+        "source": "memory0/local_data/floo_xezim_memory0_local_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "memory0_local_data.router_1_1",
+      "position": {
+        "x": 20,
+        "y": 52,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "address_bits": 64,
+        "address_ranges": null,
+        "data_bits": 64,
+        "id_bits": 4,
+        "network": "memory0_local_data",
+        "plane": "data",
+        "protocol": "AXI4",
+        "role": "initiator",
+        "source": "memory0/local_data/floo_xezim_memory0_local_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_chimney",
+      "name": "memory0_local_data.memory_ingress0",
+      "position": {
+        "x": 16,
+        "y": 46.4,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "address_bits": 64,
+        "address_ranges": null,
+        "data_bits": 64,
+        "id_bits": 4,
+        "network": "memory0_local_data",
+        "plane": "data",
+        "protocol": "AXI4",
+        "role": "initiator",
+        "source": "memory0/local_data/floo_xezim_memory0_local_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_chimney",
+      "name": "memory0_local_data.memory_ingress1",
+      "position": {
+        "x": 20,
+        "y": 46.4,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "address_bits": 64,
+        "address_ranges": [
+          {
+            "base": 4294967296,
+            "size": 1073741824
+          },
+          {
+            "base": 5368709120,
+            "size": 1073741824
+          }
+        ],
+        "data_bits": 64,
+        "id_bits": 4,
+        "network": "memory0_local_data",
+        "plane": "data",
+        "protocol": "AXI4",
+        "role": "target",
+        "source": "memory0/local_data/floo_xezim_memory0_local_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_chimney",
+      "name": "memory0_local_data.target_crossbar",
+      "position": {
+        "x": 16,
+        "y": 50.4,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "source": "gen/memory/memory_tb.sv",
+        "status": "verified_separate_memory_tb"
+      },
+      "module": "axi_crossbar",
+      "name": "memory0.internal_target_crossbar",
+      "position": {
+        "x": 8,
+        "y": 80,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "kind": "hbm",
+        "model": "axi_ram",
+        "status": "verified_separate_memory_tb"
+      },
+      "module": "soc_boundary",
+      "name": "memory0.hbm0",
+      "position": {
+        "x": 8,
+        "y": 85,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "kind": "ddr",
+        "model": "axi_ram",
+        "status": "verified_separate_memory_tb"
+      },
+      "module": "soc_boundary",
+      "name": "memory0.ddr0",
+      "position": {
+        "x": 8,
+        "y": 88,
+        "z": 0
+      }
+    }
+  ],
+  "modules": {
+    "axi_crossbar": {
+      "color": "#16A34A",
+      "description": "Existing standalone Verilog-AXI memory crossbar",
+      "ports": []
+    },
+    "floo_axi_chimney": {
+      "color": "#2877B5",
+      "description": "Real upstream AXI network interface",
+      "ports": []
+    },
+    "floo_axi_router": {
+      "color": "#14845A",
+      "description": "Real upstream FlooNoC router",
+      "ports": []
+    },
+    "soc_boundary": {
+      "color": "#64748B",
+      "description": "Planned SoC component or protocol adapter",
+      "ports": []
+    }
+  },
+  "networks": {
+    "compute0_local_config": {
+      "config": "compute0/local_config/floogen.yaml",
+      "endpoints": 5,
+      "plane": "config",
+      "routers": 6,
+      "top": "compute0/local_config/floo_xezim_compute0_local_config_noc.sv"
+    },
+    "compute0_local_data": {
+      "config": "compute0/local_data/floogen.yaml",
+      "endpoints": 7,
+      "plane": "data",
+      "routers": 9,
+      "top": "compute0/local_data/floo_xezim_compute0_local_data_noc.sv"
+    },
+    "compute1_local_config": {
+      "config": "compute1/local_config/floogen.yaml",
+      "endpoints": 4,
+      "plane": "config",
+      "routers": 4,
+      "top": "compute1/local_config/floo_xezim_compute1_local_config_noc.sv"
+    },
+    "compute1_local_data": {
+      "config": "compute1/local_data/floogen.yaml",
+      "endpoints": 5,
+      "plane": "data",
+      "routers": 6,
+      "top": "compute1/local_data/floo_xezim_compute1_local_data_noc.sv"
+    },
+    "global_config": {
+      "config": "global_config/floogen.yaml",
+      "endpoints": 5,
+      "plane": "config",
+      "routers": 6,
+      "top": "global_config/floo_xezim_global_config_noc.sv"
+    },
+    "global_data": {
+      "config": "global_data/floogen.yaml",
+      "endpoints": 6,
+      "plane": "data",
+      "routers": 6,
+      "top": "global_data/floo_xezim_global_data_noc.sv"
+    },
+    "memory0_local_config": {
+      "config": "memory0/local_config/floogen.yaml",
+      "endpoints": 2,
+      "plane": "config",
+      "routers": 2,
+      "top": "memory0/local_config/floo_xezim_memory0_local_config_noc.sv"
+    },
+    "memory0_local_data": {
+      "config": "memory0/local_data/floogen.yaml",
+      "endpoints": 3,
+      "plane": "data",
+      "routers": 4,
+      "top": "memory0/local_data/floo_xezim_memory0_local_data_noc.sv"
+    }
+  },
+  "schema_version": 1,
+  "source_of_truth": [
+    "config/soc.yaml",
+    "config/interface_contracts.yaml",
+    "gen/noc/floonoc/*/floogen.yaml"
+  ],
+  "status": "real_structural_networks_with_planned_inter_network_links"
+}

@@ -335,6 +335,68 @@
     "scope": "cpu_cold_boot",
     "source": "dv/boot/boot_tb.sv"
   },
+  "noc_hierarchy": {
+    "networks": {
+      "compute0_local_config": {
+        "config": "compute0/local_config/floogen.yaml",
+        "endpoints": 5,
+        "plane": "config",
+        "routers": 6,
+        "top": "compute0/local_config/floo_xezim_compute0_local_config_noc.sv"
+      },
+      "compute0_local_data": {
+        "config": "compute0/local_data/floogen.yaml",
+        "endpoints": 7,
+        "plane": "data",
+        "routers": 9,
+        "top": "compute0/local_data/floo_xezim_compute0_local_data_noc.sv"
+      },
+      "compute1_local_config": {
+        "config": "compute1/local_config/floogen.yaml",
+        "endpoints": 4,
+        "plane": "config",
+        "routers": 4,
+        "top": "compute1/local_config/floo_xezim_compute1_local_config_noc.sv"
+      },
+      "compute1_local_data": {
+        "config": "compute1/local_data/floogen.yaml",
+        "endpoints": 5,
+        "plane": "data",
+        "routers": 6,
+        "top": "compute1/local_data/floo_xezim_compute1_local_data_noc.sv"
+      },
+      "global_config": {
+        "config": "global_config/floogen.yaml",
+        "endpoints": 5,
+        "plane": "config",
+        "routers": 6,
+        "top": "global_config/floo_xezim_global_config_noc.sv"
+      },
+      "global_data": {
+        "config": "global_data/floogen.yaml",
+        "endpoints": 6,
+        "plane": "data",
+        "routers": 6,
+        "top": "global_data/floo_xezim_global_data_noc.sv"
+      },
+      "memory0_local_config": {
+        "config": "memory0/local_config/floogen.yaml",
+        "endpoints": 2,
+        "plane": "config",
+        "routers": 2,
+        "top": "memory0/local_config/floo_xezim_memory0_local_config_noc.sv"
+      },
+      "memory0_local_data": {
+        "config": "memory0/local_data/floogen.yaml",
+        "endpoints": 3,
+        "plane": "data",
+        "routers": 4,
+        "top": "memory0/local_data/floo_xezim_memory0_local_data_noc.sv"
+      }
+    },
+    "source": "gen/noc/floonoc/manifest.json",
+    "status": "real_structural_networks_with_planned_inter_network_links"
+  },
   "rtl_connectivity": {
     "address_bits": 64,
     "clock": "clk",
