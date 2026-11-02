@@ -6,6 +6,8 @@ on:
       - 'config/**'
       - 'gen/**'
       - 'README.md'
+      - 'AGENTS.md'
+      - 'docs/**'
       - 'tools/**'
       - 'tests/**'
       - 'dv/**'
