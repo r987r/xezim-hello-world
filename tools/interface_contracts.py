@@ -18,7 +18,7 @@ import floonoc_gen
 ROOT = Path(__file__).resolve().parents[1]
 NUMERIC = {"max_pending_reads", "max_pending_writes", "max_burst_beats"}
 PORT_KNOBS = NUMERIC | {"addr_bits", "data_bits", "id_bits", "adapter"}
-FLOO_KEYS = {"MaxTxns", "MaxUniqueIds", "RRoBType", "BRoBType", "RRoBSize", "BRoBSize"}
+FLOO_KEYS = {"MaxTxns", "MaxTxnsPerId", "MaxUniqueIds", "RRoBType", "BRoBType", "RRoBSize", "BRoBSize"}
 NATIVE_KEYS = {name: FLOO_KEYS for name in
                ("local_data", "local_config", "memory_local_data", "global_data", "global_config")}
 NATIVE_KEYS["memory_data"] = {"S_THREADS", "S_ACCEPT", "M_ISSUE"}
@@ -158,6 +158,14 @@ def build(soc, contract, floogen=None):
                        ("max_pending_reads", "max_pending_writes"))
         if params[local]["MaxTxns"] < required:
             raise InterfaceError(f"{local}.MaxTxns below planned combined budget")
+        if params[local]["MaxTxnsPerId"] < params[local]["MaxTxns"]:
+            raise InterfaceError(f"{local}.MaxTxnsPerId cannot be below MaxTxns")
+        if ((params[local]["RRoBType"] != "NoRoB" or
+             params[local]["BRoBType"] != "NoRoB") and
+                params[local]["MaxTxnsPerId"] &
+                (params[local]["MaxTxnsPerId"] - 1) == 0):
+            raise InterfaceError(f"{local}: upstream FlooNoC RoB FIFO usage width "
+                                 "requires non-power-of-two MaxTxnsPerId")
         id_width = iw if protocol == "axi4" else 1
         if params[local]["MaxUniqueIds"] > (1 << id_width):
             raise InterfaceError(f"{local}.MaxUniqueIds exceeds physical ID capacity")
