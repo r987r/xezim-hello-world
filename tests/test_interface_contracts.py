@@ -97,6 +97,12 @@ class InterfaceSizingTests(unittest.TestCase):
         soc["subsystems"].insert(2, {"name":"compute2", "type":"compute",
                                      "cpu":{"ip":"picorv32", "bus":"axi4_lite", "adapter":"picorv32_axi"}})
         soc["networks"]["global_config"]["reachable_subsystems"].insert(2,"compute2")
+        # Adding a compute instance requires explicit non-overlapping
+        # SRAM and DMA-CSR address windows. The RTL generator must not invent them.
+        soc["address_map"]["data"].append(
+            {"name": "compute2.sram", "base": "0x12000000", "size": "0x00100000"})
+        soc["address_map"]["config"].append(
+            {"name": "compute2.dma", "base": "0x40040000", "size": "0x10000"})
         floo = copy.deepcopy(self.floo)
         floo = floonoc_gen.profiles(soc, self.knobs)["global_data"]["config"]
         graph = self.validate(soc=soc, floo=floo)
