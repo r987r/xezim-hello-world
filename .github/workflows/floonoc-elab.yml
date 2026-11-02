@@ -61,7 +61,13 @@ jobs:
           # tech_cells_generic pad_functional contains legacy switch-level
           # MOSFET primitives unsupported by Verilator and unrelated to the
           # NoC. We exclude only that unreachable vendor-pad simulation cell.
-          grep -v '/src/deprecated/pad_functional.sv' "$GITHUB_WORKSPACE/.tools/floonoc-rtl.f" > "$GITHUB_WORKSPACE/.tools/floonoc-lint.f"
+          # The upstream Bender.lock resolves the whole SoC dependency graph,
+          # including iDMA, APB, OBI and FPnew. Those are NOT part of a
+          # standalone router/chimney elaboration, so compile only the pinned
+          # FlooNoC/AXI/common_cells/tech_cells source subset.
+          grep -Ev '/(idma|fpnew|fpu_div_sqrt_mvp|register_interface|obi|axi_stream|apb|common_verification)-[^/]+/|/src/deprecated/pad_functional[.]sv' \
+            "$GITHUB_WORKSPACE/.tools/floonoc-rtl.f" > "$GITHUB_WORKSPACE/.tools/floonoc-lint.f"
+          echo "NoC dependency filelist lines: $(wc -l < "$GITHUB_WORKSPACE/.tools/floonoc-lint.f")"
       - name: Install Verilator
         run: |
           sudo apt-get update -qq
