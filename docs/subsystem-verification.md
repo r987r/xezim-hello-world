@@ -40,8 +40,9 @@ address widths, transaction IDs, independent pending read/write targets,
 burst lengths and adapters; `tests/test_interface_contracts.py` validates
 link alignment and dynamically creates contracts for new compute instances.
 Native Floo `MaxTxns`/
-`MaxUniqueIds`/RoBs and Verilog-AXI `S_ACCEPT`/`M_ISSUE` are recorded.
-These are **targets pending RTL parameter binding**, not proof that
+`MaxUniqueIds`/RoBs are now bound in each generated chimney, while
+Verilog-AXI `S_ACCEPT`/`M_ISSUE` are separately configurable.
+These are **RTL parameters but not traffic-verified capacities**, not proof that
 the actual NoC accepts that many transactions. Each local data and config FlooNoC belongs to its own subsystem; memory0 also has local data and config FlooNoCs before the internal tested AXI target crossbar. Global data and global
 config are separate top-level networks.
 
@@ -106,8 +107,8 @@ source rather than separately maintained copies.
 | Scope | Desired substantive end-to-end behavior |
 |---|---|
 | `memory0_tb` | Both AXI ingress ports, real Verilog-AXI crossbar, separate HBM/DDR behavioral target windows |
-| `compute0_tb` | Real PicoRV32 boots and drives local PULP AXI, local SRAM and PULP iDMA CSR/traffic |
-| `compute1_tb` | Real SERV runs firmware, through its upstream protocol adapter, local PULP AXI, SRAM and iDMA |
+| `compute0_tb` | Real PicoRV32 boots and drives local FlooNoC data/config, local SRAM and PULP iDMA CSR/traffic |
+| `compute1_tb` | Real SERV runs firmware through an upstream adapter, local FlooNoC data/config, SRAM and iDMA |
 | `global_data_tb` | FlooGen-generated *real* FlooNoC 2x2 routers and AXI interfaces between two initiators and two memory ingress ports |
 | `global_config_tb` | Separate upstream FlooNoC AXI4 control transport with real PULP AXI-Lite adapters, CSR request/response destinations |
 | `soc_top_tb` | Combine compute0, compute1, memory0, data and config NoCs; CPU-programmed DMA accesses to both memories |
@@ -131,6 +132,6 @@ the new FlooGen input uses **64-bit addresses** matching SoC YAML;
 validate the resulting AXI ID-width and upstream endpoint address-routing
 contracts before compiling the integrated network.
 
-Other outstanding areas (local PULP AXI, actual iDMA, global config
+Other outstanding areas (local FlooNoC endpoint wiring, actual iDMA, global config
 network, and HBM/DDR controller models) remain unimplemented. Do not
 confuse a generated YAML config or static diagram with a running NoC.
