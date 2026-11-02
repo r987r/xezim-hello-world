@@ -21,6 +21,7 @@ import yaml
 import diagram_gen
 import bootgen
 import socgen
+import floonoc_gen
 
 ROOT = Path(__file__).resolve().parents[1]
 START = "<!-- BEGIN GENERATED SOC -->"
@@ -36,7 +37,7 @@ def sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def generated_section(cfg: dict, meta: dict, diagrams: dict[str, str]) -> str:
+def generated_section(cfg: dict, meta: dict, diagrams: dict[str, str], nocs: dict) -> str:
     compute = [s for s in meta["subsystems"] if s["type"] == "compute"]
     memory = [s for s in meta["subsystems"] if s["type"] == "memory"]
     results = [
@@ -87,6 +88,19 @@ def generated_section(cfg: dict, meta: dict, diagrams: dict[str, str]) -> str:
     results += ["", "| Verification scope | Status | Entry point |", "| --- | --- | --- |"]
     for scope in cfg["verification"]["scopes"]:
         results.append(f'| `{scope["name"]}` | {scope["status"]} | `{scope.get("command", "not implemented")}` |')
+    results += ["", "### Checked-in upstream FlooNoC structural RTL", "",
+                "Every local and global data/config NoC below has an **actual generated SystemVerilog module and package** committed under `gen/noc/floonoc/`. These instantiate upstream FlooNoC routers/chimneys; RTL elaboration and end-to-end AXI traffic are **not yet verified**.",
+                "",
+                "| Generated NoC | Routers | Structural Verilog | Package | FlooGen inputs |",
+                "| --- | ---: | --- | --- | --- |"]
+    for name, entry in sorted(nocs["networks"].items()):
+        base = "gen/noc/floonoc/"
+        results.append(
+            f'| `{name}` | {entry["routers"]} | '
+            f'[top]({base + entry["top"]}) | '
+            f'[package]({base + entry["package"]}) | '
+            f'[generated config]({base + entry["config"]}) |'
+        )
     results += [
         "", "**Boot images:** [Boot ROM](gen/boot/bootrom.hex) · [flash image](gen/boot/flash.hex) · [boot register/memory manifest](gen/boot/manifest.json).",
         "", "**Explore generated artifacts:** [NoC intermediate representation](gen/noc/fabric_ir.json) · [RTL connection metadata](gen/diagrams/graphs.json) · [verification plan](gen/verification/plan.json) · [route matrix](gen/verification/routes.json) · [memory testbench](gen/memory/memory_tb.sv) · [generated manifest](gen/manifest.json).",
@@ -151,6 +165,10 @@ def build(cfg_path: Path, out: Path, readme: Path) -> str:
     # socgen.run populates target_count on its own validation copy.
     meta["target_count"] = len(meta["targets"])
     bootgen.emit(cfg, out / "boot")
+    # FlooGen is installed from the immutable IP lock and emits actual
+    # checked-in RTL alongside all diagrams and the generated NoC IR.
+    knobs = yaml.safe_load((ROOT / "config/interface_contracts.yaml").read_text())
+    nocs = floonoc_gen.generate_all(cfg, knobs, out / "noc" / "floonoc")
     diagrams = diagram_gen.render(cfg, meta, out / "diagrams")
     dump(out / "verification" / "plan.json", verification_plan(cfg, meta))
     dump(out / "verification" / "routes.json", route_matrix(meta))
@@ -158,8 +176,9 @@ def build(cfg_path: Path, out: Path, readme: Path) -> str:
         "# Generated SoC reference\n\nDo not edit. Run `make gen` to atomically regenerate this tree "
         "from `config/soc.yaml`. All output files are version-controlled for diffs.\n\n"
         "The `memory/` SystemVerilog and `boot/` firmware images are executable "
-        "in separate scoped testbenches. The global NoC backend choices "
-        "in `noc/` are not currently emitted into a full-chip top.\n"
+        "in separate scoped testbenches. All configured local/global FlooNoC "
+        "networks have checked-in structural SystemVerilog in noc/floonoc; "
+        "compilation and end-to-end traffic remain unverified.\n"
     )
     (out / STAMP).write_text("socgen-v2\n")
     files = {p.relative_to(out).as_posix(): sha(p.read_bytes())
@@ -169,7 +188,7 @@ def build(cfg_path: Path, out: Path, readme: Path) -> str:
         "files_sha256": files,
         "note": "No timestamp; regenerated files should be byte-for-byte stable.",
     })
-    return embed(readme.read_text(), generated_section(cfg, meta, diagrams))
+    return embed(readme.read_text(), generated_section(cfg, meta, diagrams, nocs))
 
 
 def tree_files(folder: Path) -> dict[str, bytes]:
