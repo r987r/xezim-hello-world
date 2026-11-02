@@ -13,7 +13,7 @@ for the exact SHA before reporting regression results.
 | Part | Actual executable RTL scope | Limit |
 | --- | --- | --- |
 | Real `verilog-axi` AXI4 crossbar | `make dv-memory` with two master BFMs, HBM/DDR **behavioral AXI RAM** targets | No CPU/DMA or global NoC in this scope |
-| Full/sparse native crossbar settings | `AXI_CONFIG=config/examples/memory-fabric-*.yaml make dv-memory` | Examples are separate opt-in workloads, not the default full-chip topology |
+| Full/sparse native crossbar settings | `AXI_CONFIG=config/examples/memory-fabric-connectivity.yaml make dv-memory; AXI_CONFIG=config/examples/memory-fabric-sparse.yaml make dv-memory` | Examples are separate opt-in workloads, not the default full-chip topology |
 | Negative memory checker | `make dv-memory-negative` | Demonstrates data corruption is caught |
 | Local two-port SRAM model | `make dv-sram` | Custom test model, not a silicon SRAM macro |
 | Real SERV instruction test | `make dv-serv` | Small standalone core+RAM test |
