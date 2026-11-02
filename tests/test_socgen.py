@@ -143,7 +143,7 @@ class SocConfigTest(unittest.TestCase):
         meta = socgen.validate(copy.deepcopy(self.base))
         with tempfile.TemporaryDirectory() as tmp:
             diagrams = diagram_gen.render(copy.deepcopy(self.base), meta, Path(tmp) / "diagrams")
-            for name in ("architecture", "rtl-connectivity", "verification", "boot"):
+            for name in ("architecture", "rtl-connectivity", "verification", "boot", "noc-hierarchy"):
                 self.assertIn("flowchart", diagrams[name])
                 self.assertTrue((Path(tmp)/"diagrams"/f"{name}.mmd").is_file())
             self.assertIn("picorv32", diagrams["architecture"])
@@ -171,7 +171,7 @@ class SocConfigTest(unittest.TestCase):
         readme = (ROOT / "README.md").read_text()
         section = readme.split(generate.START, 1)[1].split(generate.END, 1)[0]
         image_paths = re.findall(r"!\[[^]]+\]\((gen/diagrams/[^)]+\.svg)\)", section)
-        self.assertEqual(len(image_paths), 4)
+        self.assertEqual(len(image_paths), 5)
         for relative in image_paths:
             path = ROOT / relative
             self.assertTrue(path.is_file(), f"missing README image {relative}")
