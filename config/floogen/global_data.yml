@@ -16,7 +16,7 @@ protocols:
     protocol: AXI4
     data_width: 64
     addr_width: 64
-    id_width: 4
+    id_width: 5
     user_width: 1
     type_prefix:
   - name: axi_out
