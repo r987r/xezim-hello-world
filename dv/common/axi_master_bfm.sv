@@ -9,6 +9,7 @@ module axi_master_bfm #(
     parameter integer DATA_BITS = 64,
     parameter integer ID_BITS = 4,
     parameter integer BURST_BEATS = 4,
+    parameter [N_TARGETS-1:0] ENABLED_TARGETS = {N_TARGETS{1'b1}},
     parameter [N_TARGETS*ADDR_BITS-1:0] TARGET_BASES = '0
 ) (
     input  wire                     clk,
@@ -134,7 +135,7 @@ module axi_master_bfm #(
         arlock = 0; arcache = 0; arprot = 0; arqos = 0; arvalid = 0; rready = 0;
         wait (!rst);
         repeat (3) @(negedge clk);
-        for (target = 0; target < N_TARGETS; target = target + 1) begin
+        for (target = 0; target < N_TARGETS; target = target + 1) if (ENABLED_TARGETS[target]) begin
             // Unique location per master avoids a false pass from racing writes.
             addr = TARGET_BASES[target*ADDR_BITS +: ADDR_BITS] + ADDR_BITS'(256 + MASTER_INDEX*256);
             send_write(addr, target);
