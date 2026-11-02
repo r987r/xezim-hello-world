@@ -51,7 +51,7 @@ fabrics:
   local_config: {topology: crossbar, backend: pulp_axi}
   memory_data: {topology: crossbar, backend: verilog_axi}
   global_data: {topology: mesh, backend: floonoc}
-  global_config: {topology: tree, backend: pulp_axi}
+  global_config: {topology: mesh, backend: floonoc}
 
 networks:
   global_data:
