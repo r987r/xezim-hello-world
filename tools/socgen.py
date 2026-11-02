@@ -14,6 +14,8 @@ import sys
 import yaml
 import bootgen
 from noc_backends import BACKENDS, BackendError, get_backend, emit_memory_crossbar_parameters
+from fabric_config import (FabricConfigError, memory_parameters, memory_connectivity,
+                           parameter_packed_literal)
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -158,6 +160,19 @@ def validate(doc):
             raise ConfigError(str(exc)) from exc
     if fabrics["memory_data"]["topology"] != "crossbar":
         raise ConfigError("memory data fabric must be crossbar in first executable scope")
+    # Do not silently accept knobs for NoC emitters that do not exist yet.
+    for name, fabric in fabrics.items():
+        if name != "memory_data" and ("parameters" in fabric or "connectivity" in fabric):
+            raise ConfigError(f"{name}: parameters/connectivity require an executable backend emitter")
+    try:
+        ingress_names = [x["name"] for x in outs]
+        target_names = [t["name"] for t in targets]
+        crossbar_params = memory_parameters(
+            fabrics["memory_data"].get("parameters"), ingress_names, target_names)
+        routing = memory_connectivity(
+            fabrics["memory_data"].get("connectivity"), ingress_names, target_names)
+    except FabricConfigError as exc:
+        raise ConfigError(str(exc)) from exc
 
     mem_bits = integer(doc["verification"]["memory"]["model_address_bits"])
     beats = integer(doc["verification"]["memory"]["burst_beats"])
@@ -167,7 +182,7 @@ def validate(doc):
         raise ConfigError("test address offsets exceed memory backing model")
     if min(t["size"] for t in targets) < 1 << mem_bits:
         raise ConfigError("backing memory model larger than a target window")
-    return {"name": doc["name"], "memory_subsystem": memory_name,
+    result = {"name": doc["name"], "memory_subsystem": memory_name,
             "address_bits": aw, "data_bits": dw, "id_bits": iw,
             "ingress": ingress, "targets": targets,
             "backing_addr_bits": mem_bits, "burst_beats": beats,
@@ -176,11 +191,18 @@ def validate(doc):
             "global_data_outputs": outs, "fabrics": fabrics,
             "data_regions": [{"name": n,"base": b,"size": s} for b,s,n in data_ranges],
             "config_regions": [{"name": n,"base": b,"size": s} for b,s,n in config_ranges]}
+    # Preserve the existing generator output byte-for-byte for legacy configs.
+    # Explicit knobs and connectivity become part of the emitted metadata.
+    if crossbar_params:
+        result["memory_crossbar_parameters"] = crossbar_params
+    if routing is not None:
+        result["memory_connectivity"] = routing
+    return result
 
 
 def fabric_ir(meta):
     """Vendor-neutral intermediate representation for future NoC backends."""
-    return {
+    ir = {
         "schema_version": 1,
         "buses": {"data": {"protocol": "axi4", "width": meta["data_bits"],
                            "address_bits": meta["address_bits"], "id_bits": meta["id_bits"]},
@@ -197,6 +219,11 @@ def fabric_ir(meta):
         "common_dma": meta["common_dma"],
         "addresses": meta["data_regions"],
     }
+    if "memory_crossbar_parameters" in meta:
+        ir["fabrics"]["memory_data"]["parameters"] = meta["memory_crossbar_parameters"]
+    if "memory_connectivity" in meta:
+        ir["memory"]["connectivity"] = meta["memory_connectivity"]
+    return ir
 
 
 def packed_concat(items, width):
@@ -255,6 +282,13 @@ def generate_top(meta):
     p=[".S_COUNT(N_IN)",".M_COUNT(N_MEM)",".DATA_WIDTH(DATA_BITS)",".ADDR_WIDTH(ADDR_BITS)",
        ".S_ID_WIDTH(IN_ID_BITS)",".M_ID_WIDTH(OUT_ID_BITS)",".M_REGIONS(1)",
        ".M_BASE_ADDR(TARGET_BASES)",".M_ADDR_WIDTH(TARGET_ADDR_WIDTHS)"]
+    for name, values in sorted(meta.get("memory_crossbar_parameters", {}).items()):
+        p.append(f".{name}({parameter_packed_literal(name, values)})")
+    routing = meta.get("memory_connectivity")
+    if routing is not None:
+        width = ni * nt
+        p.append(f".M_CONNECT_READ({width}'h{routing['native_read_mask']:x})")
+        p.append(f".M_CONNECT_WRITE({width}'h{routing['native_write_mask']:x})")
     lines.append("    "+",\n    ".join(p))
     lines.append("  ) fabric (")
     conn=[".clk(clk)",".rst(rst)"]
@@ -270,10 +304,15 @@ def generate_top(meta):
     lines.append("    "+",\n    ".join(conn))
     lines.append("  );\n")
     # Agent instances & AXI RAM models are generic in port counts (not hand-wired).
+    if routing is not None:
+        lines.append(f"  localparam [N_IN*N_MEM-1:0] TARGET_ALLOW = {ni*nt}'h{routing['agent_mask']:x};")
     lines.append("  for (genvar i=0; i<N_IN; i=i+1) begin : masters")
     lines.append("    axi_master_bfm #(.MASTER_INDEX(i), .N_TARGETS(N_MEM), .ADDR_BITS(ADDR_BITS),")
     lines.append("      .DATA_BITS(DATA_BITS), .ID_BITS(IN_ID_BITS), .BURST_BEATS(BURST_BEATS),")
-    lines.append("      .TARGET_BASES(TARGET_BASES)) u_agent (")
+    if routing is None:
+        lines.append("      .TARGET_BASES(TARGET_BASES)) u_agent (")
+    else:
+        lines.append("      .TARGET_BASES(TARGET_BASES), .ENABLED_TARGETS(TARGET_ALLOW[i*N_MEM +: N_MEM])) u_agent (")
     lines.append("      .clk(clk), .rst(rst), .done(master_done[i]),")
     agent=[]
     for name,width,flow in channels:
@@ -300,7 +339,10 @@ def generate_top(meta):
     lines.append("    );\n  end\n")
     lines.append("  axi_route_monitor #(.N_IN(N_IN), .N_MEM(N_MEM), .ADDR_BITS(ADDR_BITS),")
     lines.append("    .IN_ID_BITS(IN_ID_BITS), .OUT_ID_BITS(OUT_ID_BITS), .TARGET_BASES(TARGET_BASES),")
-    lines.append("    .TARGET_WIDTHS(TARGET_ADDR_WIDTHS)) u_monitor (")
+    if routing is None:
+        lines.append("    .TARGET_WIDTHS(TARGET_ADDR_WIDTHS)) u_monitor (")
+    else:
+        lines.append("    .TARGET_WIDTHS(TARGET_ADDR_WIDTHS), .ENABLED_ROUTES(TARGET_ALLOW)) u_monitor (")
     lines.append("    .clk(clk), .rst(rst), .m_awvalid(m_awvalid), .m_awready(m_awready),")
     lines.append("    .m_awaddr(m_awaddr), .m_awid(m_awid), .m_arvalid(m_arvalid),")
     lines.append("    .m_arready(m_arready), .m_araddr(m_araddr), .m_arid(m_arid));")
