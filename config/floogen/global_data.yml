@@ -15,7 +15,7 @@ protocols:
     type: narrow
     protocol: AXI4
     data_width: 64
-    addr_width: 48
+    addr_width: 64
     id_width: 4
     user_width: 1
     type_prefix:
@@ -23,7 +23,7 @@ protocols:
     type: narrow
     protocol: AXI4
     data_width: 64
-    addr_width: 48
+    addr_width: 64
     id_width: 4
     user_width: 1
     type_prefix:
