@@ -62,6 +62,22 @@ module boot_tb;
     );
 
     integer cycles = 0;
+    integer debug_transactions = 0;
+    // Optional waveform and bus transaction trace, off for normal regressions.
+    initial if ($test$plusargs("BOOT_WAVE")) begin
+        $dumpfile("boot-trace.vcd");
+        $dumpvars(0, boot_tb);
+    end
+    always @(posedge clk) if (!rst && $test$plusargs("BOOT_TRACE")) begin
+        if (c1_ibus_cyc && c1_ibus_ack && debug_transactions < 160) begin
+            $display("BOOT_TXN I time=%0t pc=%h instr=%h", $time, c1_ibus_addr, c1_ibus_rdata);
+            debug_transactions <= debug_transactions + 1;
+        end
+        if (c1_dbus_cyc && c1_dbus_ack && debug_transactions < 160) begin
+            $display("BOOT_TXN D time=%0t addr=%h data=%h sel=%h wr=%b", $time, c1_dbus_addr, c1_dbus_data, c1_dbus_select, c1_dbus_write);
+            debug_transactions <= debug_transactions + 1;
+        end
+    end
     reg saw_cpu0_sram_fetch = 0;
     always @(posedge clk) if (!rst) begin
         cycles <= cycles+1;

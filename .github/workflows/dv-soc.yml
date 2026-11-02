@@ -72,7 +72,7 @@ jobs:
       - name: Elaborate and exercise PicoRV32 and SERV CPUs
         run: bash -o pipefail -c 'make dv-cpu | tee cpu-dv.log'
       - name: Boot both CPUs from ROM and flash into blank SRAM
-        run: bash -o pipefail -c 'make dv-boot | tee boot-dv.log'
+        run: bash -o pipefail -c 'BOOT_WAVE=1 BOOT_TRACE=1 make dv-boot | tee boot-dv.log'
       - name: Upload failed test logs
         if: failure()
         uses: actions/upload-artifact@v4
@@ -83,6 +83,7 @@ jobs:
             memory-negative.log
             cpu-dv.log
             boot-dv.log
+            boot-trace.vcd
             gen/boot/manifest.json
             gen/memory/manifest.json
             gen/noc/fabric_ir.json

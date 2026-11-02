@@ -14,4 +14,7 @@ sources=("$ROOT/.tools/picorv32/picorv32.v")
 for file in "${serv_modules[@]}"; do sources+=("$ROOT/.tools/serv/$file"); done
 sources+=("$ROOT/rtl/adapters/picorv32_cpu_adapter.sv" "$ROOT/rtl/adapters/serv_cpu_adapter.sv"
           "$ROOT/rtl/boot/boot_memory_model.sv" "$ROOT/dv/boot/boot_tb.sv")
-"$XEZIM_BIN" +define+SERV_CLEAR_RAM --max-time 1500us -s boot_tb "${sources[@]}"
+args=(-D SERV_CLEAR_RAM --max-time 1500us -s boot_tb)
+if [[ "${BOOT_WAVE:-0}" == "1" ]]; then args+=(--wave +BOOT_WAVE); fi
+if [[ "${BOOT_TRACE:-0}" == "1" ]]; then args+=(+BOOT_TRACE); fi
+"$XEZIM_BIN" "${args[@]}" "${sources[@]}"
