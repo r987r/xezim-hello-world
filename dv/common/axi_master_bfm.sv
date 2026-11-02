@@ -124,6 +124,56 @@ module axi_master_bfm #(
         end
     endtask
 
+    // Verify disabled crossbar routes really return DECERR. Merely omitting
+    // forbidden routes from the stimulus would miss a broken M_CONNECT mask.
+    task automatic check_denied_route(input [ADDR_BITS-1:0] address, input integer denied_target);
+        begin
+            @(negedge clk);
+            awid = TRANSACTION_ID;
+            awaddr = address;
+            awlen = 0;
+            awsize = BEAT_SIZE;
+            awburst = 2'b01;
+            awvalid = 1;
+            do @(posedge clk); while (awready !== 1'b1);
+            @(negedge clk);
+            awvalid = 0;
+            wdata = expected_data(denied_target, 0);
+            wstrb = '1;
+            wlast = 1;
+            wvalid = 1;
+            do @(posedge clk); while (wready !== 1'b1);
+            @(negedge clk);
+            wvalid = 0;
+            bready = 1;
+            do @(posedge clk); while (bvalid !== 1'b1);
+            if (bresp !== 2'b11 || bid !== TRANSACTION_ID)
+                $fatal(1, "FAIL forbidden AXI write: master=%0d target=%0d resp=%h id=%h",
+                       MASTER_INDEX, denied_target, bresp, bid);
+            @(negedge clk);
+            bready = 0;
+
+            arid = TRANSACTION_ID;
+            araddr = address;
+            arlen = 0;
+            arsize = BEAT_SIZE;
+            arburst = 2'b01;
+            arvalid = 1;
+            do @(posedge clk); while (arready !== 1'b1);
+            @(negedge clk);
+            arvalid = 0;
+            rready = 1;
+            do @(posedge clk); while (rvalid !== 1'b1);
+            if (rresp !== 2'b11 || rid !== TRANSACTION_ID || rlast !== 1'b1)
+                $fatal(1, "FAIL forbidden AXI read: master=%0d target=%0d resp=%h id=%h last=%b",
+                       MASTER_INDEX, denied_target, rresp, rid, rlast);
+            @(negedge clk);
+            rready = 0;
+            $display("COVER AXI DENIED master=%0d target=%0d DECERR read+write",
+                     MASTER_INDEX, denied_target);
+        end
+    endtask
+
     integer target;
     reg [ADDR_BITS-1:0] addr;
     initial begin
@@ -135,12 +185,17 @@ module axi_master_bfm #(
         arlock = 0; arcache = 0; arprot = 0; arqos = 0; arvalid = 0; rready = 0;
         wait (!rst);
         repeat (3) @(negedge clk);
-        for (target = 0; target < N_TARGETS; target = target + 1) if (ENABLED_TARGETS[target]) begin
-            // Unique location per master avoids a false pass from racing writes.
+        for (target = 0; target < N_TARGETS; target = target + 1) begin
+            // Unique locations avoid false passes from concurrent masters.
             addr = TARGET_BASES[target*ADDR_BITS +: ADDR_BITS] + ADDR_BITS'(256 + MASTER_INDEX*256);
-            send_write(addr, target);
-            check_read(addr, target);
-            $display("COVER AXI master=%0d target=%0d burst_beats=%0d", MASTER_INDEX, target, BURST_BEATS);
+            if (ENABLED_TARGETS[target]) begin
+                send_write(addr, target);
+                check_read(addr, target);
+                $display("COVER AXI master=%0d target=%0d burst_beats=%0d",
+                         MASTER_INDEX, target, BURST_BEATS);
+            end else begin
+                check_denied_route(addr, target);
+            end
         end
         done = 1;
     end
