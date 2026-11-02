@@ -32,6 +32,20 @@ The only new high-level RTL scopes should be **compute0**, **compute1**,
 Reuse upstream modules within each TB; no separate testbench for every
 bridge, FIFO, decoder, SRAM, router, or BFM.
 
+## Pinned upstream FlooNoC RoB depth caveat
+
+When `NormalRoB` is enabled, upstream
+[`hw/floo_rob.sv`](https://github.com/pulp-platform/FlooNoC/blob/05368bdff914f91a48b47c4ceddfc6ff266c6b3a/hw/floo_rob.sv)
+defines its status FIFO usage width as `$clog2(MaxTxnsPerId)`, while
+`cc_fifo` drives `$clog2(Depth+1)` bits. At a depth of exactly 8,
+Verilator rightfully identifies a 3-versus-4-bit connection mismatch.
+The checked-in `config/interface_contracts.yaml` therefore exposes a
+**deliberate native MaxTxnsPerId=9** for `MaxTxns=8`: enough capacity
+with matching 4-bit usage width. This is a parameter choice, not copied
+or patched router RTL. The generator fails explicitly if a power-of-two
+depth is selected with a real RoB. Reassess this only when the pinned
+upstream implementation is corrected; never suppress the width error.
+
 ## Local and global AXI interface sizes
 
 `config/interface_contracts.yaml` plus
