@@ -270,22 +270,23 @@ def subsystem_svg(cfg,meta,inst,path:Path):
 def boot_svg(cfg,meta,path:Path):
     import bootgen
     a0=bootgen.build(cfg)['addresses']
+    policy=cfg['boot']
     a=Art(1440,990)
     a.heading('Boot · executable scope','CPU0 Boot ROM loads two SRAMs',
-              'No dedicated boot CPU | Flash is read-only model, not SPI/QSPI | CPU1 held in reset until firmware copied')
-    a.box_label(80,186,380,105,'Power-on reset','CPU0 active / SERV held in reset','config',title_size=24)
+              f'Boot: {policy["strategy"]} / {policy["image_source"]} / {policy["secondary_release"]} | no dedicated boot CPU | no global NoC')
+    a.box_label(80,186,380,105,'Power-on reset',f'{policy["primary"]} active / {policy["secondary"]} held in reset','config',title_size=24)
     a.box_label(530,186,380,105,'PicoRV32 executes Boot ROM',
                 f'0x{a0["bootrom"]:08x} | real instruction fetch','cpu',title_size=21)
     a.line([(460,238),(530,238)],BLUE,3,False,True)
-    a.box_label(955,186,395,105,'Simulated flash image',
+    a.box_label(955,186,395,105,'Mapped flash model (not QSPI)',
                 f'0x{a0["flash"]:08x} | read-only, hex initialized','memory',title_size=22)
     a.line([(910,238),(955,238)],BLUE,3,False,True)
     a.rect(80,346,1270,224,WHITE,FAINT,r=20,width=2)
-    a.text(109,359,'CPU0 executes ROM copy loops; actual AXI4-Lite loads and stores',23,INK)
+    a.text(109,359,'boot_local_decode RTL routes CPU0 AXI-Lite reads/writes to dual-port SRAM RTL',21,INK)
     a.box_label(125,423,535,112,'SRAM0: CPU0 firmware',
-                f'0x{a0["sram0"]:08x} | initially zero, then 4 stores','memory',title_size=22)
+                f'0x{a0["sram0"]:08x} | uninitialized SRAM RTL, then {policy["program_words"]} stores','memory',title_size=22)
     a.box_label(770,423,535,112,'SRAM1: SERV firmware',
-                f'0x{a0["sram1"]:08x} | initially zero, then 4 stores','memory',title_size=22)
+                f'0x{a0["sram1"]:08x} | uninitialized SRAM RTL, then {policy["program_words"]} stores','memory',title_size=22)
     a.line([(1130,291),(1130,423)],ORANGE,3,False,True)
     a.line([(1060,291),(650,394),(392,423)],ORANGE,3,False,True)
     a.box_label(80,642,535,112,'CPU0 executes SRAM0 program',

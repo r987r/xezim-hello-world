@@ -259,13 +259,15 @@ def build_boot_flow(cfg: dict, meta: dict) -> tuple[str, dict]:
     import bootgen
     fw = bootgen.build(cfg)
     a = fw["addresses"]
+    boot_cfg = cfg["boot"]
     lines = header("TB")
     nodes = [
-        ("por", "Power-on reset\nCPU0 running / CPU1 held", "config"),
+        ("por", f'Power-on reset / {boot_cfg["strategy"]}\n{boot_cfg["primary"]} running / {boot_cfg["secondary"]} held', "config"),
         ("bootrom", f'CPU0 executes Boot ROM\n0x{a["bootrom"]:08x} / immutable model', "cpu"),
-        ("flash", f'Read-only flash image MODEL\n0x{a["flash"]:08x} / ROM preloaded from hex', "memory"),
-        ("sram0", f'Blank SRAM0 -> firmware\n0x{a["sram0"]:08x} / AXI4-Lite stores', "memory"),
-        ("sram1", f'Blank SRAM1 -> firmware\n0x{a["sram1"]:08x} / AXI4-Lite stores', "memory"),
+        ("flash", f'Read-only {boot_cfg["image_source"]} image MODEL\n0x{a["flash"]:08x} / ROM preloaded from hex', "memory"),
+        ("sram0", f'SRAM0 (local_sram RTL, uninitialized) -> firmware\n0x{a["sram0"]:08x} / AXI4-Lite stores', "memory"),
+        ("sram1", f'SRAM1 (local_sram RTL, uninitialized) -> firmware\n0x{a["sram1"]:08x} / AXI4-Lite + Wishbone', "memory"),
+        ("local", "RTL local address decode\nboot_local_decode (not global NoC)", "fabric"),
         ("resetctrl", f'Reset-control MMIO\n0x{a["reset_ctrl"]:08x} = 1', "config"),
         ("c0prog", "CPU0 runs SRAM0\nwrites signature 0x55", "verification"),
         ("c1prog", "CPU1 released -> runs SRAM1\nwrites signature 0x66", "verification"),
@@ -276,6 +278,9 @@ def build_boot_flow(cfg: dict, meta: dict) -> tuple[str, dict]:
     conns = [
         ("por", "bootrom", "CPU0 reset PC", "wired"),
         ("bootrom", "flash", "CPU0 reads firmware words", "wired"),
+        ("bootrom", "local", "address decode", "wired"),
+        ("local", "sram0", "routes SRAM0", "wired"),
+        ("local", "sram1", "routes SRAM1", "wired"),
         ("flash", "sram0", "CPU0 copies image0", "wired"),
         ("flash", "sram1", "CPU0 copies image1", "wired"),
         ("bootrom", "resetctrl", "MMIO release after copy", "wired"),

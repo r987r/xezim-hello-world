@@ -67,6 +67,18 @@ def _lui_base(address: int) -> int:
 
 def build(cfg: dict) -> dict:
     boot = cfg["boot"]
+    supported = {
+        "strategy": "rom_copy",
+        "image_source": "mapped_flash",
+        "secondary_release": "mmio",
+        "sram_powerup": "unspecified",
+    }
+    for field, implemented in supported.items():
+        if boot.get(field) != implemented:
+            raise ValueError(
+                f"boot.{field}={boot.get(field)!r} is not implemented; "
+                f"this generator supports only {implemented!r}"
+            )
     primary, secondary = boot["primary"], boot["secondary"]
     compute = {s['name']: s for s in cfg['subsystems'] if s['type'] == 'compute'}
     if primary == secondary or primary not in compute or secondary not in compute or compute[primary]['cpu']['ip'] != 'picorv32' or compute[secondary]['cpu']['ip'] != 'serv':

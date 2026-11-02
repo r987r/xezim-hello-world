@@ -32,6 +32,12 @@ subsystems:
 # the secondary CPU via an actual MMIO reset controller. No separate boot CPU.
 # ASIC version will replace the flash model with SPI/QSPI and real SRAM macros.
 boot:
+  # Explicit boot policy: changing strategy/source/release requires a matching
+  # implementation; unsupported choices FAIL generation rather than falling back.
+  strategy: rom_copy
+  image_source: mapped_flash
+  secondary_release: mmio
+  sram_powerup: unspecified
   primary: compute0
   secondary: compute1
   flash_slot_stride: 256
@@ -108,16 +114,16 @@ verification:
       status: executable
       command: make dv-memory-negative
       checks: [injected_mismatch_detected]
-    - name: cpu_smoke
-      dut: compute0.cpu+compute1.cpu
-      status: executable
-      command: make dv-cpu
-      checks: [picorv32_fetch, serv_fetch]
     - name: serv_minimal
       dut: compute1.cpu+standalone_sram
       status: executable
       command: make dv-serv
       checks: [real_serv_instruction_fetch, lui_addi_sw_execution, expected_data_store]
+    - name: local_sram
+      dut: local_sram
+      status: executable
+      command: make dv-sram
+      checks: [uninitialized_powerup, byte_write_strobes, independent_port_reads]
     - name: cpu_cold_boot
       dut: compute0.cpu+compute1.cpu+boot_rom+flash+sram+reset_ctrl
       status: executable

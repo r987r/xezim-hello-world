@@ -13,7 +13,7 @@ management/security processor is an optional *replacement*, not a prerequisite.
 3. The boot ROM executes real RV32I loads from a **read-only flash model** at
    `0x20000000`. In simulation only, the ROM and flash models are initialized
    from `gen/boot/bootrom.hex` and `gen/boot/flash.hex`.
-4. CPU0 copies four words of its program into previously blank `compute0.sram`
+4. CPU0 copies four words of its program into previously uninitialized `compute0.sram`
    at `0x10000000`, then four words for SERV into `compute1.sram` at
    `0x11000000` (second flash slot begins at `0x20000100`). **No SRAM
    `$readmemh` is used.** The stores are real PicoRV32 AXI4-Lite transactions.
@@ -109,3 +109,38 @@ permissions. Secure boot is **not implemented**.
 The system remains intentionally **non-cache-coherent** for now. Once caches
 are added, DMA/shared-memory synchronization and cache maintenance must be
 specified and verified, not assumed.
+
+## Bootstrap local memory integration (implemented)
+
+`rtl/interconnect/boot_local_decode.sv` is a synthesizable one-hot
+address decoder instantiated for both CPU0 AXI-Lite AR and captured AW
+transactions. It rejects unmapped reads and writes instead of aliasing
+addresses. `rtl/memory/local_sram.sv` is a reusable two-initiator RTL
+memory bank (CPU0 AXI-Lite-facing access, SERV registered Wishbone
+access), with byte strobes and no power-on initialization. Each bank is
+an independent RTL module; the standalone SRAM test verifies both ports.
+
+The cold-boot test connects *real* CPU0/CPU1 bus handshakes to this
+decoder and these banks. Firmware is copied through CPU0 stores, not
+via a testbench backdoor. The memory model still contains the
+AXI-Lite/Wishbone protocol responders and a read mux: this is **not**
+yet a configurable full-chip AXI crossbar or Wishbone-to-AXI bridge.
+A future fabric backend must preserve the exact boot and SRAM tests
+without relying on this bootstrap-only protocol responder.
+
+Boot policy is explicit under `boot.strategy`, `boot.image_source`,
+`boot.secondary_release`, and `boot.sram_powerup`. Unsupported choices
+are rejected by the generator, not quietly remapped to this ROM-copy
+implementation. The ROM/flash model is deliberately kept for this
+supported boot mode, and actual physical SRAM macro selection is pending.
+
+## Verification scope review
+
+Required CI scopes are configuration and deterministic generation, AXI crossbar
+memory/negative scoreboard, independent uninitialized dual-port SRAM, standalone
+SERV instruction execution, and ROM/flash-to-SRAM cold boot. The earlier
+`dv-cpu` request-only fetch smoke remains an optional manual diagnostic but
+is **not** a CI pass condition: full instruction execution is already proved.
+We no longer pass `SERV_CLEAR_RAM`: the SERV architectural register file
+starts without a testbench initialization and the real program executes.
+Boot SRAM contains unspecified contents, never zero-preloaded firmware.

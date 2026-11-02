@@ -30,13 +30,13 @@
 <text x="765.0" y="434.0" font-size="16" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">DUT: memory0.memory_data</text>
 <text x="765.0" y="454.8" font-size="16" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">make dv-memory-negative</text>
 <rect x="1060.0" y="390.0" width="292.0" height="132.0" rx="12.0" fill="#E6F6EC" stroke="#19734B" stroke-width="1"/>
-<text x="1076.0" y="402.0" font-size="20" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">cpu smoke</text>
-<text x="1076.0" y="434.0" font-size="16" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">DUT: compute0.cpu+compute1.cpu</text>
-<text x="1076.0" y="454.8" font-size="16" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">make dv-cpu</text>
+<text x="1076.0" y="402.0" font-size="20" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">serv minimal</text>
+<text x="1076.0" y="434.0" font-size="16" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">DUT: compute1.cpu+standalone_sram</text>
+<text x="1076.0" y="454.8" font-size="16" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">make dv-serv</text>
 <rect x="749.0" y="553.0" width="292.0" height="132.0" rx="12.0" fill="#E6F6EC" stroke="#19734B" stroke-width="1"/>
-<text x="765.0" y="565.0" font-size="20" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">serv minimal</text>
-<text x="765.0" y="597.0" font-size="16" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">DUT: compute1.cpu+standalone_sram</text>
-<text x="765.0" y="617.8" font-size="16" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">make dv-serv</text>
+<text x="765.0" y="565.0" font-size="20" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">local sram</text>
+<text x="765.0" y="597.0" font-size="16" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">DUT: local_sram</text>
+<text x="765.0" y="617.8" font-size="16" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">make dv-sram</text>
 <rect x="1060.0" y="553.0" width="292.0" height="132.0" rx="12.0" fill="#E6F6EC" stroke="#19734B" stroke-width="1"/>
 <text x="1076.0" y="565.0" font-size="20" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">cpu cold boot</text>
 <text x="1076.0" y="597.0" font-size="16" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">DUT: compute0.cpu+compute1.cpu+boot_rom+flash+sram+reset_ctrl</text>

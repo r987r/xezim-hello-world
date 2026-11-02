@@ -51,37 +51,80 @@ module boot_memory_model #(
     output reg [31:0] c1_inst_count
 );
     localparam integer SRAM_WORDS = SRAM_BYTES / 4;
+    // Real synthesizable address decoder, separate from the AXI-Lite protocol
+    // responder. The selected SRAM banks are independent reusable RTL blocks.
+    wire [4:0] read_sel, write_sel;
+    boot_local_decode #(
+        .ROM_BASE(BOOTROM_BASE), .FLASH_BASE(FLASH_BASE),
+        .SRAM0_BASE(SRAM0_BASE), .SRAM1_BASE(SRAM1_BASE),
+        .RESET_BASE(RESET_CTRL_BASE), .SRAM_BYTES(SRAM_BYTES)
+    ) u_read_decode (.addr(c0_araddr), .select_target(read_sel));
+    boot_local_decode #(
+        .ROM_BASE(BOOTROM_BASE), .FLASH_BASE(FLASH_BASE),
+        .SRAM0_BASE(SRAM0_BASE), .SRAM1_BASE(SRAM1_BASE),
+        .RESET_BASE(RESET_CTRL_BASE), .SRAM_BYTES(SRAM_BYTES)
+    ) u_write_decode (.addr(pending_awaddr), .select_target(write_sel));
+
     // SRAM intentionally starts with invalid RISC-V instruction (zero) and
     // no firmware image. Only CPU0 stores may initialize the program words.
     reg [31:0] rom [0:1023];
     reg [31:0] flash [0:16383];
-    reg [31:0] sram0 [0:SRAM_WORDS-1];
-    reg [31:0] sram1 [0:SRAM_WORDS-1];
+    // Distinct, reusable RTL SRAM banks. SRAM bits are NOT reset/preloaded;
+    // only CPU0 memory transactions supply firmware in the cold-boot scope.
+    wire [31:0] sram0_cpu0_rdata, sram1_cpu0_rdata;
+    wire [31:0] sram1_cpu1_rdata;
+    wire sram0_cpu0_we, sram1_cpu0_we, sram1_cpu1_we;
+    wire [31:0] sram0_cpu0_waddr, sram1_cpu0_waddr;
+    wire [31:0] sram0_cpu0_wdata, sram1_cpu0_wdata;
+    wire [3:0] sram0_cpu0_wstrb, sram1_cpu0_wstrb;
+    assign sram0_cpu0_waddr = pending_awaddr - SRAM0_BASE;
+    assign sram1_cpu0_waddr = pending_awaddr - SRAM1_BASE;
+    assign sram0_cpu0_wdata = pending_wdata;
+    assign sram1_cpu0_wdata = pending_wdata;
+    assign sram0_cpu0_wstrb = pending_wstrb;
+    assign sram1_cpu0_wstrb = pending_wstrb;
+    assign sram0_cpu0_we = !rst && have_aw && have_w && !c0_bvalid &&
+        write_sel[2];
+    assign sram1_cpu0_we = !rst && have_aw && have_w && !c0_bvalid &&
+        write_sel[3];
+    assign sram1_cpu1_we = !cpu1_rst && c1_dbus_cyc && c1_dbus_ack &&
+        c1_dbus_write && c1_dbus_addr >= SRAM1_BASE && c1_dbus_addr < SRAM1_BASE + SRAM_BYTES;
+    local_sram #(.BYTES(SRAM_BYTES)) u_sram0 (
+        .clk(clk), .a_read_addr(c0_araddr - SRAM0_BASE),
+        .a_rdata(sram0_cpu0_rdata), .a_we(sram0_cpu0_we),
+        .a_write_addr(sram0_cpu0_waddr), .a_wdata(sram0_cpu0_wdata),
+        .a_wstrb(sram0_cpu0_wstrb),
+        .b_read_addr(32'b0), .b_read_en(1'b0), .b_rdata(),
+        .b_we(1'b0), .b_write_addr(32'b0), .b_wdata(32'b0), .b_wstrb(4'b0)
+    );
+    local_sram #(.BYTES(SRAM_BYTES)) u_sram1 (
+        .clk(clk), .a_read_addr(c0_araddr - SRAM1_BASE),
+        .a_rdata(sram1_cpu0_rdata), .a_we(sram1_cpu0_we),
+        .a_write_addr(sram1_cpu0_waddr), .a_wdata(sram1_cpu0_wdata),
+        .a_wstrb(sram1_cpu0_wstrb),
+        .b_read_addr(c1_ibus_cyc ? c1_ibus_addr-SRAM1_BASE : c1_dbus_addr-SRAM1_BASE),
+        .b_read_en(!cpu1_rst), .b_rdata(sram1_cpu1_rdata),
+        .b_we(sram1_cpu1_we), .b_write_addr(c1_dbus_addr-SRAM1_BASE),
+        .b_wdata(c1_dbus_data), .b_wstrb(c1_dbus_select)
+    );
     initial begin
         for (integer n=0; n<1024; n=n+1) rom[n] = 32'h00000000;
         for (integer n=0; n<16384; n=n+1) flash[n] = 32'h00000000;
-        for (integer n=0; n<SRAM_WORDS; n=n+1) begin
-            sram0[n] = 32'h00000000;
-            sram1[n] = 32'h00000000;
-        end
         $readmemh(BOOTROM_FILE, rom);
         $readmemh(FLASH_FILE, flash);
     end
 
-    function automatic [31:0] read_word(input [31:0] addr);
-        if (addr >= BOOTROM_BASE && addr < BOOTROM_BASE + 4096)
-            read_word = rom[(addr - BOOTROM_BASE) >> 2];
-        else if (addr >= FLASH_BASE && addr < FLASH_BASE + 65536)
-            read_word = flash[(addr - FLASH_BASE) >> 2];
-        else if (addr >= SRAM0_BASE && addr < SRAM0_BASE + SRAM_BYTES)
-            read_word = sram0[(addr - SRAM0_BASE) >> 2];
-        else if (addr >= SRAM1_BASE && addr < SRAM1_BASE + SRAM_BYTES)
-            read_word = sram1[(addr - SRAM1_BASE) >> 2];
-        else if (addr == RESET_CTRL_BASE)
-            read_word = {31'b0, cpu1_release};
-        else
-            read_word = 32'h00000000;
-    endfunction
+    reg [31:0] cpu0_read_mux;
+    always @* begin
+        case (read_sel)
+            5'b00001: cpu0_read_mux = rom[(c0_araddr - BOOTROM_BASE) >> 2];
+            5'b00010: cpu0_read_mux = flash[(c0_araddr - FLASH_BASE) >> 2];
+            5'b00100: cpu0_read_mux = sram0_cpu0_rdata;
+            5'b01000: cpu0_read_mux = sram1_cpu0_rdata;
+            5'b10000: cpu0_read_mux = {31'b0, cpu1_release};
+            default: cpu0_read_mux = 32'bx; // invalid/unmapped, never masquerade as zero
+        endcase
+    end
 
     reg have_aw, have_w;
     reg [31:0] pending_awaddr, pending_wdata;
@@ -105,14 +148,9 @@ module boot_memory_model #(
     end
     assign c1_ibus_ack   = c1_i_ack_q;
     // Match upstream SERV's registered Wishbone instruction/data read timing.
-    reg [31:0] c1_ibus_rdata_q, c1_dbus_rdata_q;
-    always @(posedge clk) begin
-        c1_ibus_rdata_q <= read_word(c1_ibus_addr);
-        c1_dbus_rdata_q <= read_word(c1_dbus_addr);
-    end
-    assign c1_ibus_rdata = c1_ibus_rdata_q;
+    assign c1_ibus_rdata = sram1_cpu1_rdata;
     assign c1_dbus_ack   = c1_d_ack_q;
-    assign c1_dbus_rdata = c1_dbus_rdata_q;
+    assign c1_dbus_rdata = sram1_cpu1_rdata;
 
     always @(posedge clk) begin
         if (rst) begin
@@ -144,13 +182,9 @@ module boot_memory_model #(
             if (c0_arvalid && c0_arready) begin
                 if (c0_araddr[1:0] != 2'b00)
                     $fatal(1, "BOOT: unaligned CPU0 read %h", c0_araddr);
-                if (!((c0_araddr >= BOOTROM_BASE && c0_araddr < BOOTROM_BASE + 4096) ||
-                      (c0_araddr >= FLASH_BASE && c0_araddr < FLASH_BASE + 65536) ||
-                      (c0_araddr >= SRAM0_BASE && c0_araddr < SRAM0_BASE + SRAM_BYTES) ||
-                      (c0_araddr >= SRAM1_BASE && c0_araddr < SRAM1_BASE + SRAM_BYTES) ||
-                      c0_araddr == RESET_CTRL_BASE))
-                    $fatal(1, "BOOT: unmapped CPU0 read %h (no address aliasing)", c0_araddr);
-                c0_rdata <= read_word(c0_araddr);
+                if (read_sel == 5'b0 || (read_sel & (read_sel-1'b1)) != 5'b0)
+                    $fatal(1, "BOOT: unmapped/overlapping CPU0 read %h", c0_araddr);
+                c0_rdata <= cpu0_read_mux;
                 c0_rvalid <= 1;
                 if (c0_araddr >= BOOTROM_BASE && c0_araddr < BOOTROM_BASE + 4096)
                     rom_read_count <= rom_read_count + 1;
@@ -158,19 +192,17 @@ module boot_memory_model #(
                     flash_read_count <= flash_read_count + 1;
             end
             if (have_aw && have_w && !c0_bvalid) begin
-                if (pending_awaddr[1:0] != 2'b00 || pending_wstrb != 4'hf)
-                    $fatal(1, "BOOT: prototype only supports aligned 32-bit CPU0 stores at %h", pending_awaddr);
-                if (pending_awaddr >= SRAM0_BASE && pending_awaddr < SRAM0_BASE + SRAM_BYTES) begin
-                    sram0[(pending_awaddr-SRAM0_BASE) >> 2] <= pending_wdata;
-                    if (pending_awaddr < SRAM0_BASE + 16)
+                if (pending_awaddr[1:0] != 2'b00)
+                    $fatal(1, "BOOT: prototype only supports aligned CPU0 stores at %h", pending_awaddr);
+                if (write_sel[2]) begin
+                    if (pending_awaddr < SRAM0_BASE + 16 && pending_wstrb == 4'hf)
                         sram0_copy_count <= sram0_copy_count + 1;
-                    if (pending_awaddr == SRAM0_BASE + 'h100 && pending_wdata == 32'h55)
+                    if (pending_awaddr == SRAM0_BASE + 'h100 && pending_wdata == 32'h55 && pending_wstrb == 4'hf)
                         cpu0_app_signature_count <= cpu0_app_signature_count + 1;
-                end else if (pending_awaddr >= SRAM1_BASE && pending_awaddr < SRAM1_BASE + SRAM_BYTES) begin
-                    sram1[(pending_awaddr-SRAM1_BASE) >> 2] <= pending_wdata;
-                    if (pending_awaddr < SRAM1_BASE + 16)
+                end else if (write_sel[3]) begin
+                    if (pending_awaddr < SRAM1_BASE + 16 && pending_wstrb == 4'hf)
                         sram1_copy_count <= sram1_copy_count + 1;
-                end else if (pending_awaddr == RESET_CTRL_BASE) begin
+                end else if (write_sel[4]) begin
                     if (pending_wdata != 1)
                         $fatal(1, "BOOT: unsupported reset control value %h", pending_wdata);
                     cpu1_release <= 1;
@@ -181,6 +213,8 @@ module boot_memory_model #(
                 c0_bvalid <= 1;
             end
             if (!cpu1_rst) begin
+                if (c1_ibus_cyc && c1_dbus_cyc)
+                    $fatal(1, "BOOT: concurrent SERV I/D requests require an arbiter");
                 if (c1_ibus_cyc && c1_ibus_ack) begin
                     if (!(c1_ibus_addr >= SRAM1_BASE && c1_ibus_addr < SRAM1_BASE + SRAM_BYTES))
                         $fatal(1, "BOOT: CPU1 fetched outside assigned SRAM %h", c1_ibus_addr);
@@ -191,7 +225,6 @@ module boot_memory_model #(
                         $fatal(1, "BOOT: CPU1 data store outside assigned SRAM %h", c1_dbus_addr);
                     if (c1_dbus_select != 4'hf)
                         $fatal(1, "BOOT: CPU1 prototype supports full-word stores addr=%h sel=%h data=%h", c1_dbus_addr, c1_dbus_select, c1_dbus_data);
-                    sram1[(c1_dbus_addr-SRAM1_BASE) >> 2] <= c1_dbus_data;
                     if (c1_dbus_addr == SRAM1_BASE + 'h100 && c1_dbus_data == 32'h66)
                         cpu1_app_signature_count <= cpu1_app_signature_count + 1;
                 end

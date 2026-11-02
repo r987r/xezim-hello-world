@@ -13,4 +13,4 @@ for module in lock["third_party"]["serv"]["modules"]:
 PY
 )
 sources+=("$ROOT/rtl/adapters/serv_cpu_adapter.sv" "$ROOT/dv/cpu/serv_minimal_tb.sv")
-"$XEZIM_BIN" --no-cache -D SERV_CLEAR_RAM --max-time 40us -s serv_minimal_tb "${sources[@]}"
+"$XEZIM_BIN" --no-cache --max-time 40us -s serv_minimal_tb "${sources[@]}"

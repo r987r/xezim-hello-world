@@ -14,8 +14,8 @@ flowchart TB
     configuration["configuration<br/>DUT: soc_definition<br/>make check-config<br/>addresses, hierarchy, backends"]:::verification
     memory_fabric["memory_fabric<br/>DUT: memory0.memory_data<br/>make dv-memory<br/>all_memory_routes, axi_responses, readback"]:::verification
     negative_readback["negative_readback<br/>DUT: memory0.memory_data<br/>make dv-memory-negative<br/>injected_mismatch_detected"]:::verification
-    cpu_smoke["cpu_smoke<br/>DUT: compute0.cpu+compute1.cpu<br/>make dv-cpu<br/>picorv32_fetch, serv_fetch"]:::verification
     serv_minimal["serv_minimal<br/>DUT: compute1.cpu+standalone_sram<br/>make dv-serv<br/>real_serv_instruction_fetch, lui_addi_sw_execution, expected_data_store"]:::verification
+    local_sram["local_sram<br/>DUT: local_sram<br/>make dv-sram<br/>uninitialized_powerup, byte_write_strobes, independent_port_reads"]:::verification
     cpu_cold_boot["cpu_cold_boot<br/>DUT: compute0.cpu+compute1.cpu+boot_rom+flash+sram+reset_ctrl<br/>make dv-boot<br/>cpu0_rom_fetch, flash_to_sram_stores, secondary_reset_release"]:::verification
   end
   subgraph planned["NOT YET IMPLEMENTED"]
@@ -27,8 +27,8 @@ flowchart TB
   gen -->|scope inputs| configuration
   gen -->|scope inputs| memory_fabric
   gen -->|scope inputs| negative_readback
-  gen -->|scope inputs| cpu_smoke
   gen -->|scope inputs| serv_minimal
+  gen -->|scope inputs| local_sram
   gen -->|scope inputs| cpu_cold_boot
   gen -.->|scope inputs| compute_subsystem
   gen -.->|scope inputs| global_nocs

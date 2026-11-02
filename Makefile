@@ -1,4 +1,4 @@
-.PHONY: help gen check-generated check-config dv-memory dv-memory-negative dv-cpu dv-serv dv-boot smoke test
+.PHONY: help gen check-generated check-config dv-memory dv-memory-negative dv-cpu dv-serv dv-sram dv-boot smoke test
 
 help:
 	@echo 'make gen                Generate all tracked gen/ artifacts and README diagrams'
@@ -6,7 +6,8 @@ help:
 	@echo 'make check-config       Validate architecture and generator behavior'
 	@echo 'make dv-memory          Verify 2x2 AXI4 crossbar with HBM + DDR models'
 	@echo 'make dv-memory-negative Prove readback checker detects corruption'
-	@echo 'make dv-cpu             Fetch-only CPU smoke (not execution)'
+	@echo 'make dv-cpu             Optional fetch-only diagnostic (excluded from CI)'
+	@echo 'make dv-sram            Exercise standalone RTL SRAM ports and byte strobes'
 	@echo 'make dv-serv            Minimal standalone SERV execution (no bootloader)'
 	@echo 'make dv-boot            ROM -> flash -> SRAM -> CPU1 reset release -> real firmware'
 	@echo 'make test               Run checked-in generation and all RTL tests'
@@ -34,6 +35,9 @@ dv-memory-negative:
 dv-cpu:
 	bash scripts/run-cpu.sh
 
+dv-sram:
+	bash scripts/run-local-sram.sh
+
 dv-serv:
 	bash scripts/run-serv-minimal.sh
 
@@ -43,4 +47,4 @@ dv-boot:
 smoke:
 	@$${XEZIM_BIN:-xezim} -s hello_world_tb dv/smoke/hello_world_tb.sv
 
-test: check-config check-generated dv-memory dv-memory-negative dv-cpu dv-serv dv-boot
+test: check-config check-generated dv-memory dv-memory-negative dv-serv dv-sram dv-boot

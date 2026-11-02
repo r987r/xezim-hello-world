@@ -219,6 +219,24 @@
         "to": "flash"
       },
       {
+        "from": "bootrom",
+        "label": "address decode",
+        "status": "wired",
+        "to": "local"
+      },
+      {
+        "from": "local",
+        "label": "routes SRAM0",
+        "status": "wired",
+        "to": "sram0"
+      },
+      {
+        "from": "local",
+        "label": "routes SRAM1",
+        "status": "wired",
+        "to": "sram1"
+      },
+      {
         "from": "flash",
         "label": "CPU0 copies image0",
         "status": "wired",
@@ -266,7 +284,7 @@
       {
         "category": "config",
         "id": "por",
-        "label": "Power-on reset\nCPU0 running / CPU1 held"
+        "label": "Power-on reset / rom_copy\ncompute0 running / compute1 held"
       },
       {
         "category": "cpu",
@@ -276,17 +294,22 @@
       {
         "category": "memory",
         "id": "flash",
-        "label": "Read-only flash image MODEL\n0x20000000 / ROM preloaded from hex"
+        "label": "Read-only mapped_flash image MODEL\n0x20000000 / ROM preloaded from hex"
       },
       {
         "category": "memory",
         "id": "sram0",
-        "label": "Blank SRAM0 -> firmware\n0x10000000 / AXI4-Lite stores"
+        "label": "SRAM0 (local_sram RTL, uninitialized) -> firmware\n0x10000000 / AXI4-Lite stores"
       },
       {
         "category": "memory",
         "id": "sram1",
-        "label": "Blank SRAM1 -> firmware\n0x11000000 / AXI4-Lite stores"
+        "label": "SRAM1 (local_sram RTL, uninitialized) -> firmware\n0x11000000 / AXI4-Lite + Wishbone"
+      },
+      {
+        "category": "fabric",
+        "id": "local",
+        "label": "RTL local address decode\nboot_local_decode (not global NoC)"
       },
       {
         "category": "config",
@@ -462,12 +485,12 @@
       {
         "from": "generator",
         "status": "executable",
-        "to": "cpu_smoke"
+        "to": "serv_minimal"
       },
       {
         "from": "generator",
         "status": "executable",
-        "to": "serv_minimal"
+        "to": "local_sram"
       },
       {
         "from": "generator",
@@ -536,17 +559,6 @@
       },
       {
         "checks": [
-          "picorv32_fetch",
-          "serv_fetch"
-        ],
-        "command": "make dv-cpu",
-        "dut": "compute0.cpu+compute1.cpu",
-        "id": "cpu_smoke",
-        "label": "cpu_smoke\nDUT: compute0.cpu+compute1.cpu\nmake dv-cpu\npicorv32_fetch, serv_fetch",
-        "status": "executable"
-      },
-      {
-        "checks": [
           "real_serv_instruction_fetch",
           "lui_addi_sw_execution",
           "expected_data_store"
@@ -555,6 +567,18 @@
         "dut": "compute1.cpu+standalone_sram",
         "id": "serv_minimal",
         "label": "serv_minimal\nDUT: compute1.cpu+standalone_sram\nmake dv-serv\nreal_serv_instruction_fetch, lui_addi_sw_execution, expected_data_store",
+        "status": "executable"
+      },
+      {
+        "checks": [
+          "uninitialized_powerup",
+          "byte_write_strobes",
+          "independent_port_reads"
+        ],
+        "command": "make dv-sram",
+        "dut": "local_sram",
+        "id": "local_sram",
+        "label": "local_sram\nDUT: local_sram\nmake dv-sram\nuninitialized_powerup, byte_write_strobes, independent_port_reads",
         "status": "executable"
       },
       {

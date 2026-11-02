@@ -74,8 +74,8 @@ Green scope boxes are **implemented testbenches**, not a claim that the entire S
 | `configuration` | executable | `make check-config` |
 | `memory_fabric` | executable | `make dv-memory` |
 | `negative_readback` | executable | `make dv-memory-negative` |
-| `cpu_smoke` | executable | `make dv-cpu` |
 | `serv_minimal` | executable | `make dv-serv` |
+| `local_sram` | executable | `make dv-sram` |
 | `cpu_cold_boot` | executable | `make dv-boot` |
 | `compute_subsystem` | planned | `not implemented` |
 | `global_nocs` | planned | `not implemented` |
@@ -126,8 +126,9 @@ The regression reuses the pinned Xezim executable; it does **not** rebuild Rust 
 make gen
 XEZIM_BIN=/path/to/xezim make dv-memory
 XEZIM_BIN=/path/to/xezim make dv-memory-negative
-XEZIM_BIN=/path/to/xezim make dv-cpu     # request-only legacy smoke
+XEZIM_BIN=/path/to/xezim make dv-cpu     # optional fetch-only diagnostic (not CI)
 XEZIM_BIN=/path/to/xezim make dv-serv    # standalone SERV execution, four instructions
+XEZIM_BIN=/path/to/xezim make dv-sram    # real RTL SRAM, no power-on preload
 XEZIM_BIN=/path/to/xezim make dv-boot    # real ROM->SRAM CPU execution
 XEZIM_BIN=/path/to/xezim make test
 ```

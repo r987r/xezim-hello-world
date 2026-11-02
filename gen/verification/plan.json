@@ -60,16 +60,6 @@
     },
     {
       "checks": [
-        "picorv32_fetch",
-        "serv_fetch"
-      ],
-      "command": "make dv-cpu",
-      "dut": "compute0.cpu+compute1.cpu",
-      "name": "cpu_smoke",
-      "status": "executable"
-    },
-    {
-      "checks": [
         "real_serv_instruction_fetch",
         "lui_addi_sw_execution",
         "expected_data_store"
@@ -77,6 +67,17 @@
       "command": "make dv-serv",
       "dut": "compute1.cpu+standalone_sram",
       "name": "serv_minimal",
+      "status": "executable"
+    },
+    {
+      "checks": [
+        "uninitialized_powerup",
+        "byte_write_strobes",
+        "independent_port_reads"
+      ],
+      "command": "make dv-sram",
+      "dut": "local_sram",
+      "name": "local_sram",
       "status": "executable"
     },
     {

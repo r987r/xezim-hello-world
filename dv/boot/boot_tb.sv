@@ -93,10 +93,10 @@ module boot_tb;
             if (!cpu1_release || rom_reads < 1 || flash_reads < 8 ||
                 sram0_copies != 4 || sram1_copies != 4 || !saw_cpu0_sram_fetch || c1_fetches < 1)
                 $fatal(1, "BOOT FAIL: incomplete actual boot traffic rom=%0d flash=%0d copy0=%0d copy1=%0d c1fetch=%0d",rom_reads,flash_reads,sram0_copies,sram1_copies,c1_fetches);
-            if (u_memory.sram0[0] !== u_memory.flash[0] ||
-                u_memory.sram0[1] !== u_memory.flash[1] ||
-                u_memory.sram1[0] !== u_memory.flash[64] ||
-                u_memory.sram1[1] !== u_memory.flash[65])
+            if (u_memory.u_sram0.mem[0] !== u_memory.flash[0] ||
+                u_memory.u_sram0.mem[1] !== u_memory.flash[1] ||
+                u_memory.u_sram1.mem[0] !== u_memory.flash[64] ||
+                u_memory.u_sram1.mem[1] !== u_memory.flash[65])
                 $fatal(1, "BOOT FAIL: SRAM does not match flash image");
             $display("PASS: cpu_cold_boot CPU0 ROM=%0d flash=%0d copy0=%0d copy1=%0d CPU1 fetch=%0d cycles=%0d", rom_reads, flash_reads, sram0_copies, sram1_copies, c1_fetches, cycles);
             $finish;
