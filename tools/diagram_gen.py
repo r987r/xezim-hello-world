@@ -298,7 +298,7 @@ def build_boot_flow(cfg: dict, meta: dict) -> tuple[str, dict]:
                         for src, dst, label, status in conns],
         "limitation": "Executable scope uses direct memory-mapped flash model; no SPI/QSPI or full-chip fabric"}
 
-def render(cfg: dict, meta: dict, destination: Path) -> dict:
+def render(cfg: dict, meta: dict, destination: Path, noc_root: Path | None = None) -> dict:
     """Return exactly the generated files as a map for README embedding."""
     destination.mkdir(parents=True, exist_ok=True)
     import diagram_svg
@@ -321,6 +321,13 @@ def render(cfg: dict, meta: dict, destination: Path) -> dict:
             f"[View editable Mermaid source]({path.name})\n"
         )
     graph_meta = {"architecture": arch_meta, "rtl_connectivity": rtl_meta, "verification": dv_meta, "boot": boot_meta}
+    if noc_root is not None:
+        import noc_diagrams
+        noc_graph, noc_mmd = noc_diagrams.render(cfg, noc_root, destination)
+        graph_meta["noc_hierarchy"] = {"source": "gen/noc/floonoc/manifest.json",
+                                       "status": noc_graph["status"],
+                                       "networks": noc_graph["networks"]}
+        diagrams.update(noc_mmd)
     (destination / "graphs.json").write_text(json.dumps(graph_meta, indent=2, sort_keys=True) + "\n")
     diagram_svg.render_images(cfg, meta, destination)
     return diagrams
