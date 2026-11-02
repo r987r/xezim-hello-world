@@ -156,7 +156,7 @@ read/write targets, and native IP parameter names. This is a validated
 accepts these limits yet. CI tests keep FlooGen AXI widths and memory
 windows in sync.
 
-## Subsystem-level tests and FlooNoC bring-up\n\nUse [subsystem verification plan](docs/subsystem-verification.md) as the\nauthoritative scope definition (compute0, compute1, memory0, global data,\nglobal config, full SoC). [FlooGen topology](config/floogen/global_data.yml)\nis an **initial pinned upstream generator input**, not proof of operational\nrouters: see the separate FlooGen CI workflow for generator validation.\nNo bridge- or simulator-repro TB proliferation.\n\n## Reproducible generation
+## Subsystem-level tests and FlooNoC bring-up\n\nUse [subsystem verification plan](docs/subsystem-verification.md) as the\nauthoritative scope definition (compute0, compute1, memory0, global data,\nglobal config, full SoC). [All eight generated FlooNoC topologies](gen/noc/floonoc/manifest.json)\nare committed actual upstream-generated SystemVerilog, not proof of\nrouter elaboration or AXI traffic; see FlooGen and elaboration CI.\nNo bridge- or simulator-repro TB proliferation.\n\n## Reproducible generation
 
 Everything under **[`gen/`](gen/)** is committed to Git for version-to-version diffs. The directory is exclusively generator-owned and contains a marker protecting against accidental replacement of user-owned trees.
 
