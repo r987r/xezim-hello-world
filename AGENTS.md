@@ -37,13 +37,22 @@ resolved in pinned Xezim 0.11.4 and the historical bug reproducer was removed fr
 4. `tools/bootgen.py`, `tools/diagram_gen.py`,
    `tools/diagram_svg.py`, `tools/generate.py`: boot, neutral graphs and
    diagrams. Change their input/config logic, **not** generated outputs.
-5. `gen/` is exclusively generator-owned and has a protective
+5. Every local/global data/config FlooNoC is GENERATED into tracked
+   `gen/noc/floonoc/{instance}/` from `config/soc.yaml` and the
+   `config/interface_contracts.yaml` native hardware parameter budget.
+   `tools/floonoc_gen.py` emits upstream FlooGen profiles, structural
+   Verilog tops, package files and a manifest; no custom router RTL. The
+   upstream Bender dependency graph supplies implementation modules.
+   `make gen` requires pinned upstream FlooGen installed first (see below).
+   Source files in `config/floogen/` were removed to avoid duplicate
+   manually maintained topology.
+6. `gen/` is exclusively generator-owned and has a protective
    `.generated-root` marker. `make gen` replaces its complete tree,
    including deletions of stale diagram files. Never edit files under
    `gen/` manually. `README.md` contains one generated section between
    `BEGIN GENERATED SOC` and `END GENERATED SOC` comments. Edit the
    generator for content in that section.
-6. Every change affecting architecture, mapping, generator, or diagram
+7. Every change affecting architecture, mapping, generator, or diagram
    content needs `make gen` and a review of ALL generated views:
    `architecture`, `rtl-connectivity`, `boot`, `verification`,
    `subsystems/compute0`, `subsystems/compute1`,
@@ -51,9 +60,24 @@ resolved in pinned Xezim 0.11.4 and the historical bug reproducer was removed fr
    automatically; removed ones must disappear. SVG, Mermaid and graph JSON
    must agree with the emitted RTL and whether each link is *planned* or
    *actually exercised*.
-7. `make check-generated` is a nonmutating exact file-name/content/drift
+8. `make check-generated` is a nonmutating exact file-name/content/drift
    check, not a substitute for regenerating files. Keep generated `gen/`
    and the marked README section committed with a config/generator change.
+
+## Reuse upstream config network IP
+
+For both local/global configuration FlooNoCs, **AXI4 is the network's
+physical transport and AXI4-Lite remains the CSR-facing protocol**.
+Use pinned PULP `axi_lite_to_axi` and `axi_to_axi_lite` upstream
+adapters, never a custom bridge. See
+[docs/axi-lite-over-floonoc.md](docs/axi-lite-over-floonoc.md) and the
+upstream PULP AXI bridge tests. For every NoC, review checked-in
+`gen/noc/floonoc/manifest.json`, `floogen.yaml`,
+`floo_xezim_*_noc.sv` and `*_pkg.sv` rather than a CI-only archive.
+Commit generated outputs alongside their input config. A checked-in
+NoC is **structural RTL** until actual upstream dependency compilation,
+elaboration and request/response traffic pass; the backend must remain
+non-executable until then.
 
 ## Linkable interface sizing gate
 
@@ -76,6 +100,8 @@ an already downloaded simulator), compatible Linux x86_64 host.
 
 ```bash
 python3 -m pip install -r requirements.txt
+python3 tools/ip_fetch.py floonoc
+python3 -m pip install -e .tools/floonoc
 source toolchains/xezim.env
 mkdir -p .tools/bin
 gh release download "$XEZIM_RELEASE_TAG" --repo r987r/xezim-hello-world \
