@@ -17,14 +17,11 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 NUMERIC = {"max_pending_reads", "max_pending_writes", "max_burst_beats"}
 PORT_KNOBS = NUMERIC | {"addr_bits", "data_bits", "id_bits", "adapter"}
-NATIVE_KEYS = {
-    "local_data": {"MaxMstTrans", "MaxSlvTrans", "FallThrough", "LatencyMode"},
-    "local_config": {"MaxMstTrans", "MaxSlvTrans", "FallThrough", "LatencyMode"},
-    "memory_data": {"S_THREADS", "S_ACCEPT", "M_ISSUE"},
-    "global_data": {"MaxTxns", "MaxUniqueIds", "RRoBType",
-                    "BRoBType", "RRoBSize", "BRoBSize"},
-    "global_config": {"MaxMstTrans", "MaxSlvTrans", "FallThrough", "LatencyMode"},
-}
+FLOO_KEYS = {"MaxTxns", "MaxUniqueIds", "RRoBType", "BRoBType", "RRoBSize", "BRoBSize"}
+NATIVE_KEYS = {name: FLOO_KEYS for name in
+               ("local_data", "local_config", "memory_local_data", "global_data", "global_config")}
+NATIVE_KEYS["memory_data"] = {"S_THREADS", "S_ACCEPT", "M_ISSUE"}
+
 
 
 class InterfaceError(ValueError):
@@ -89,9 +86,6 @@ def build(soc, contract, floogen=None):
                     raise InterfaceError(f"{kind}.{key}: unknown upstream RoB type")
             else:
                 positive(value, f"fabric_parameters.{kind}.{key}")
-    if any(type(x) is not bool for x in
-           [params["local_data"]["FallThrough"], params["global_config"]["FallThrough"]]):
-        raise InterfaceError("FallThrough must be boolean")
 
     buses = soc["buses"]
     data, config = buses["data"], buses["config"]
@@ -154,13 +148,17 @@ def build(soc, contract, floogen=None):
                             if response == "R" else defaults["axi4"]["max_pending_writes"])
             if params["global_data"][response + "RoBSize"] < min_required:
                 raise InterfaceError(f"FlooNoC {response}RoBSize below pending budget")
-    for local, protocol in (("local_data", "axi4"), ("local_config", "axi4_lite"),
+    for local, protocol in (("local_data", "axi4"),
+                             ("memory_local_data", "axi4"),
+                             ("local_config", "axi4_lite"),
                              ("global_config", "axi4_lite")):
-        required = sum(defaults[protocol][key]
-                       for key in ("max_pending_reads", "max_pending_writes"))
-        for parameter in ("MaxMstTrans", "MaxSlvTrans"):
-            if params[local][parameter] < required:
-                raise InterfaceError(f"{local}.{parameter} below planned combined budget")
+        required = sum(defaults[protocol][key] for key in
+                       ("max_pending_reads", "max_pending_writes"))
+        if params[local]["MaxTxns"] < required:
+            raise InterfaceError(f"{local}.MaxTxns below planned combined budget")
+        id_width = iw if protocol == "axi4" else 1
+        if params[local]["MaxUniqueIds"] > (1 << id_width):
+            raise InterfaceError(f"{local}.MaxUniqueIds exceeds physical ID capacity")
     if any(params["memory_data"][k] < defaults["axi4"][required]
            for k, required in (("S_ACCEPT", "max_pending_reads"),
                                ("S_ACCEPT", "max_pending_writes"))):
@@ -241,7 +239,7 @@ def build(soc, contract, floogen=None):
         port(name + ".local_data.global_out", "axi4", out_id, subsystem=name, fabric="local_data")
         fabrics[name + ".local_config"] = {
             "backend": soc["fabrics"]["local_config"]["backend"],
-            "module": "axi_lite_xbar", "rtl_status": "planned",
+            "module": "floo_axi_router", "rtl_status": "planned",
             "native_cpu_protocol": native, "parameters": deepcopy(params["local_config"]),
             "sources": ["cpu", "global_ingress"], "targets": ["dma_csr", "global_egress"] +
                        (["reset_ctrl"] if name == soc["boot"]["primary"] else []),
@@ -260,6 +258,12 @@ def build(soc, contract, floogen=None):
         link("global_config." + name + "_out", name + ".local_config.global_in", "config")
 
     m_id = iw + (ingress - 1).bit_length()
+    fabrics[memory + ".local_data"] = {
+        "backend": soc["fabrics"]["memory_local_data"]["backend"],
+        "rtl_status": "planned", "module": "floo_axi_router",
+        "parameters": deepcopy(params["memory_local_data"]),
+        "note": "FlooNoC routes to existing internal memory_data AXI crossbar",
+    }
     fabrics[memory + ".memory_data"] = {
         "backend": soc["fabrics"]["memory_data"]["backend"],
         "rtl_status": "executable_in_scoped_memory_tb",
@@ -277,7 +281,7 @@ def build(soc, contract, floogen=None):
         port(memory + ".memory_data." + t["name"].split(".")[-1] + "_out", "axi4", m_id)
     fabrics[memory + ".local_config"] = {
         "backend": soc["fabrics"]["local_config"]["backend"],
-        "module": "axi_lite_xbar", "rtl_status": "planned",
+        "module": "floo_axi_router", "rtl_status": "planned",
         "parameters": deepcopy(params["local_config"]),
         "note": "No memory-controller CSR registers implemented yet",
     }
@@ -298,7 +302,7 @@ def build(soc, contract, floogen=None):
         raise InterfaceError("heterogeneous global ingress IDs require explicit remapper")
     fabrics["global_config"] = {
         "backend": soc["fabrics"]["global_config"]["backend"],
-        "module": "axi_lite_xbar", "rtl_status": "planned",
+        "module": "floo_axi_router", "rtl_status": "planned",
         "n_sources": len(computes),
         "n_targets": len(soc["networks"]["global_config"]["reachable_subsystems"]),
         "parameters": deepcopy(params["global_config"]),
