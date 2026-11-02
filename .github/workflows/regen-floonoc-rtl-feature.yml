@@ -6,6 +6,7 @@ on:
       - feat/checked-in-floonoc-rtl-20261102
     paths:
       - 'config/**'
+      - 'tests/**'
       - 'tools/floonoc_gen.py'
       - 'tools/generate.py'
       - 'tools/interface_contracts.py'
