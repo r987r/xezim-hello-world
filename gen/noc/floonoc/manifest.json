@@ -9,6 +9,7 @@
         "BRoBSize": 2,
         "BRoBType": "NoRoB",
         "MaxTxns": 2,
+        "MaxTxnsPerId": 3,
         "MaxUniqueIds": 2,
         "RRoBSize": 2,
         "RRoBType": "NoRoB"
@@ -29,6 +30,7 @@
         "BRoBSize": 8,
         "BRoBType": "NormalRoB",
         "MaxTxns": 8,
+        "MaxTxnsPerId": 9,
         "MaxUniqueIds": 4,
         "RRoBSize": 8,
         "RRoBType": "NormalRoB"
@@ -49,6 +51,7 @@
         "BRoBSize": 2,
         "BRoBType": "NoRoB",
         "MaxTxns": 2,
+        "MaxTxnsPerId": 3,
         "MaxUniqueIds": 2,
         "RRoBSize": 2,
         "RRoBType": "NoRoB"
@@ -69,6 +72,7 @@
         "BRoBSize": 8,
         "BRoBType": "NormalRoB",
         "MaxTxns": 8,
+        "MaxTxnsPerId": 9,
         "MaxUniqueIds": 4,
         "RRoBSize": 8,
         "RRoBType": "NormalRoB"
@@ -89,6 +93,7 @@
         "BRoBSize": 2,
         "BRoBType": "NoRoB",
         "MaxTxns": 2,
+        "MaxTxnsPerId": 3,
         "MaxUniqueIds": 2,
         "RRoBSize": 2,
         "RRoBType": "NoRoB"
@@ -109,6 +114,7 @@
         "BRoBSize": 8,
         "BRoBType": "NormalRoB",
         "MaxTxns": 8,
+        "MaxTxnsPerId": 9,
         "MaxUniqueIds": 4,
         "RRoBSize": 8,
         "RRoBType": "NormalRoB"
@@ -129,6 +135,7 @@
         "BRoBSize": 2,
         "BRoBType": "NoRoB",
         "MaxTxns": 2,
+        "MaxTxnsPerId": 3,
         "MaxUniqueIds": 2,
         "RRoBSize": 2,
         "RRoBType": "NoRoB"
@@ -149,6 +156,7 @@
         "BRoBSize": 8,
         "BRoBType": "NormalRoB",
         "MaxTxns": 8,
+        "MaxTxnsPerId": 9,
         "MaxUniqueIds": 4,
         "RRoBSize": 8,
         "RRoBType": "NormalRoB"

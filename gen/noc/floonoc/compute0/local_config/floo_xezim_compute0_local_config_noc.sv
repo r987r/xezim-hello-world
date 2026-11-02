@@ -29,7 +29,7 @@ module floo_xezim_compute0_local_config_noc
     c = ChimneyDefaultCfg;
     c.MaxTxns = 2;
     c.MaxUniqueIds = 2;
-    c.MaxTxnsPerId = 2;
+    c.MaxTxnsPerId = 3;
     c.BRoBType = NoRoB;
     c.BRoBSize = 2;
     c.RRoBType = NoRoB;
