@@ -19,9 +19,9 @@ for the exact SHA before reporting regression results.
 | Real SERV instruction test | `make dv-serv` | Small standalone core+RAM test |
 | Dual-CPU cold boot | `make dv-boot`: real PicoRV32 ROM fetch, flash reads, SRAM writes, SERV MMIO release, two signatures | Standalone bootstrap memory/bus model, not the generated full-chip NoC |
 | PULP iDMA | **No executable subsystem** | Source commit only; frontend, CSR and data connections pending |
-| Local PULP AXI | **No executable emitter** | Backend named in YAML only |
-| Global FlooNoC mesh | **No executable emitter or router instantiated** | `floonoc` is a design selection, NOT a running NoC |
-| Config AXI-Lite NoC | **No executable emitter** | Global tree and local AXI selected only |
+| Local FlooNoC | **Generated structural Verilog for all local data/config meshes** | CPU/DMA/CSR endpoint wiring, elaboration and traffic NOT yet integrated |
+| Global FlooNoC mesh | **Upstream-generated structural Verilog tracked in gen/noc/floonoc/global_data** | Router/chimney modules generated; dependency elaboration and AXI traffic NOT demonstrated |
+| Global config FlooNoC | **Generated structural AXI4 transport RTL** | Real PULP AXI-Lite boundary adapters and CSR transfers NOT yet connected |
 | LiteDRAM / HiSA HBM | **No executable physical controller/PHY path** | Verification models are generic AXI RAM, not DDR/HBM controllers |
 | End-to-end SOC `soc_top` | **No executable RTL** | CPU to DMA to NoC to memory not proven |
 
@@ -43,7 +43,7 @@ flowchart LR
     XB --> D[DDR-labeled AXI RAM]
   end
   BOOT -. "NOT CONNECTED IN FULL CHIP" .-> MEM
-  C0 -. "PLANNED local PULP AXI + iDMA" .-> F[Global FlooNoC mesh: NOT INSTANTIATED]
+  C0 -. "PLANNED local PULP AXI + iDMA" .-> F[Global FlooNoC: GENERATED, NOT SIMULATED]
   F -. "PLANNED" .-> XB
 ```
 
@@ -52,7 +52,7 @@ scope* only; all dashed lines are plans. No HBM/DDR PHY behavior is implied.
 
 ## Generated diagrams: open all seven views
 
-The `make gen` pipeline generates both static SVG and Mermaid sources
+The `make gen` pipeline generates eight actual FlooGen network tops/packages, plus static SVG and Mermaid sources
 from the same validated configuration. CI runs `make check-generated`
 to require that all files, SVG images, graph metadata, and the generated
 README section agree with source. **Never edit an SVG or `gen/` directly.**
@@ -88,3 +88,4 @@ Verilog-AXI crossbar test.
 
 The Xezim 0.11.3 part-select workaround is removed. Pinned Xezim 0.11.4,
 upstream SERV and the real CPU boot regression must continue\npassing. See [boot-debug](boot-debug.md) for timing and VCD details.
+\n## Generated structural NoC RTL\n\nAll eight structural NoC SystemVerilog modules and packages are in [`gen/noc/floonoc`](../gen/noc/floonoc/), indexed by [manifest](../gen/noc/floonoc/manifest.json). These are upstream FlooGen output, **not** vendor RTL copied into the repository. Config FlooNoCs use AXI4 as the wire transport with planned upstream PULP AXI-Lite adapters (see [protocol reuse guide](axi-lite-over-floonoc.md)). The system currently has no integrated NoC traffic test.\n
