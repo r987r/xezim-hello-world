@@ -142,7 +142,7 @@ class SocConfigTest(unittest.TestCase):
     def test_diagram_generation_and_readme_markers(self):
         meta = socgen.validate(copy.deepcopy(self.base))
         with tempfile.TemporaryDirectory() as tmp:
-            diagrams = diagram_gen.render(copy.deepcopy(self.base), meta, Path(tmp) / "diagrams")
+            diagrams = diagram_gen.render(copy.deepcopy(self.base), meta, Path(tmp) / "diagrams", ROOT / "gen/noc/floonoc")
             for name in ("architecture", "rtl-connectivity", "verification", "boot", "noc-hierarchy"):
                 self.assertIn("flowchart", diagrams[name])
                 self.assertTrue((Path(tmp)/"diagrams"/f"{name}.mmd").is_file())
