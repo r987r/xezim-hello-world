@@ -107,6 +107,17 @@ Xezim binary installation, `make gen`, `make check-generated`, the full
 regression and the two AXI routing profile simulations. Never hand-edit
 `gen/` or silently replace a missing upstream backend.
 
+## Explicit interface sizing
+
+[AXI interface budgets](config/interface_contracts.yaml) and the
+[contract checker](tools/interface_contracts.py) now validate named local
+and global subsystem fabric ports, 64-bit AXI4 data/address, PULP-local
+ID growth (4 to 5 bits for two initiators), independent pending
+read/write targets, and native IP parameter names. This is a validated
+**design contract**, not a claim that the planned PULP or FlooNoC RTL
+accepts these limits yet. CI tests keep FlooGen AXI widths and memory
+windows in sync.
+
 ## Subsystem-level tests and FlooNoC bring-up\n\nUse [subsystem verification plan](docs/subsystem-verification.md) as the\nauthoritative scope definition (compute0, compute1, memory0, global data,\nglobal config, full SoC). [FlooGen topology](config/floogen/global_data.yml)\nis an **initial pinned upstream generator input**, not proof of operational\nrouters: see the separate FlooGen CI workflow for generator validation.\nNo bridge- or simulator-repro TB proliferation.\n\n## Reproducible generation
 
 Everything under **[`gen/`](gen/)** is committed to Git for version-to-version diffs. The directory is exclusively generator-owned and contains a marker protecting against accidental replacement of user-owned trees.
