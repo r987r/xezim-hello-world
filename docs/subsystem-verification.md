@@ -1,5 +1,32 @@
 # Subsystem-level verification only
 
+## Unified FlooNoC decision (2026-11-02)
+
+ALL **local and global NoCs** select pinned upstream FlooNoC:
+compute0.local_data, compute0.local_config, compute1.local_data,
+compute1.local_config, memory0.local_data, memory0.local_config,
+global_data, and global_config. Separate instances prevent bulk DMA from
+blocking CSR traffic. **The existing tested Verilog-AXI crossbar is not
+a NoC**: it remains an *internal target crossbar* behind memory0.local_data,
+so its known-good 2x2 AXI RAM verification is not lost.
+
+**Protocol boundary:** FlooNoC transports AXI4; a config network can
+transport AXI-Lite semantics using a 32-bit AXI4 wire format, fixed
+one-beat transfers, and upstream `axi_lite_to_axi` /
+`axi_to_axi_lite` adapters. This transport is NOT itself AXI4-Lite.
+Keep the network's AXI4 ID, LEN and response rules explicit and do not
+connect an AXI-Lite struct directly to an AXI4 chimney. The independent
+global_config FlooGen config, local FlooGen generators, endpoint adapters,
+and RTL regression are future implementation work, not yet claimed as
+operational hardware.
+
+Use `config/interface_contracts.yaml` for pending read/write budgets,
+native FlooNoC queue/ID/ROB settings and explicit port link widths.
+Do not instantiate arbitrary custom routers, AXI crossbars, or behavioral
+NoC substitutes. The global_data FlooGen generation is already passing,
+but **no FlooNoC fabric is currently simulated with real traffic**.
+
+
 The only new high-level RTL scopes should be **compute0**, **compute1**,
 **memory0**, **global_data NoC**, **global_config NoC**, and **full SoC**.
 Reuse upstream modules within each TB; no separate testbench for every
@@ -15,9 +42,7 @@ link alignment and dynamically creates contracts for new compute instances.
 Native PULP `MaxMstTrans`/`MaxSlvTrans`, Floo `MaxTxns`/
 `MaxUniqueIds`/RoBs and Verilog-AXI `S_ACCEPT`/`M_ISSUE` are recorded.
 These are **targets pending RTL parameter binding**, not proof that
-the actual NoC accepts that many transactions. Each local data and
-local config NoC belongs to its *own* compute subsystem; memory0 has
-its own local data/config fabrics as well. Global data and global
+the actual NoC accepts that many transactions. Each local data and config FlooNoC belongs to its own subsystem; memory0 also has local data and config FlooNoCs before the internal tested AXI target crossbar. Global data and global
 config are separate top-level networks.
 
 ## Priority: real FlooNoC, not mock NoC
