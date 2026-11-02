@@ -1,0 +1,53 @@
+name: FlooGen global-data topology generation
+
+on:
+  push:
+    paths:
+      - 'config/floogen/**'
+      - 'toolchains/floogen.env'
+      - 'docs/subsystem-verification.md'
+      - '.github/workflows/floogen.yml'
+  pull_request:
+    paths:
+      - 'config/floogen/**'
+      - 'toolchains/floogen.env'
+      - 'docs/subsystem-verification.md'
+      - '.github/workflows/floogen.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  floogen:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Fetch pinned upstream FlooNoC/FlooGen
+        run: |
+          set -euo pipefail
+          python3 -m pip install -r requirements.txt
+          python3 tools/ip_fetch.py floonoc
+          python3 -m pip install -e .tools/floonoc
+      - name: Generate upstream FlooNoC topology and validate actual RTL outputs
+        run: |
+          set -euo pipefail
+          mkdir -p .tools/floogen-out
+          floogen rtl -c config/floogen/global_data.yml -o .tools/floogen-out --no-format
+          test -s .tools/floogen-out/floo_xezim_global_data_noc_pkg.sv
+          test -s .tools/floogen-out/floo_xezim_global_data_noc.sv
+          grep -q 'module floo_xezim_global_data_noc' .tools/floogen-out/floo_xezim_global_data_noc.sv
+          grep -q 'floo_axi_router' .tools/floogen-out/floo_xezim_global_data_noc.sv
+          grep -q 'floo_axi_chimney' .tools/floogen-out/floo_xezim_global_data_noc.sv
+          echo 'PASS FlooGen emits real upstream router and chimney instances (RTL elaboration NOT yet proven)'
+      - name: Upload generated RTL for compile integration
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: floogen-network-rtl
+          path: .tools/floogen-out/
+          if-no-files-found: ignore

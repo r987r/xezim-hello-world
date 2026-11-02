@@ -22,7 +22,7 @@ Keep boot cold: CPU0 must really read ROM/flash, write **uninitialized**
 SRAM over its bus, release CPU1 via MMIO, and both CPUs must execute code
 from SRAM. Do not use $readmemh/backdoor SRAM preload in the cold-boot test.
 Do not reintroduce Xezim 0.11.3 SERV part-select shims: the issue was
-resolved in pinned Xezim 0.11.4 and has a dedicated regression.
+resolved in pinned Xezim 0.11.4 and the historical bug reproducer was removed from this SoC repo.
 
 ## Source of truth, generation, diagrams
 
@@ -130,7 +130,7 @@ window, source-ID budget and downstream reachability. Follow the
 `r987r/Sv-test` YAML interface/UVC/provider ideas without copying
 unnecessary custom verification RTL.
 
-Next actual integration work: PULP AXI compute-local emitter, tested
+Primary verification scopes: compute0, compute1, memory0, global_data NoC, global_config NoC, soc_top. Avoid adding separate bridge/SRAM/router/logic unit TBs; retain existing smoke/boot/memory diagnostics only as regression gates. See docs/subsystem-verification.md and the pinned upstream FlooGen CI generator workflow.\n\nNext actual integration work: FlooGen real global data NoC, then PULP AXI compute-local emitter, tested
 CPU-to-local-fabric/SRAM path, upstream iDMA frontend and 64-bit AXI
 datapath, then FlooNoC through FlooGen. Real HBM/DDR controller/PHY
 simulation is a **separate** integration stage.

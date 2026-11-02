@@ -87,5 +87,4 @@ Verilog-AXI crossbar test.
 ## No regressions hidden by the boot model
 
 The Xezim 0.11.3 part-select workaround is removed. Pinned Xezim 0.11.4,
-upstream SERV and `dv/simulator/port_slice_repro.sv` must all continue
-passing. See [boot-debug](boot-debug.md) for timing and VCD details.
+upstream SERV and the real CPU boot regression must continue\npassing. See [boot-debug](boot-debug.md) for timing and VCD details.
