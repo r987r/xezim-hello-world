@@ -94,10 +94,18 @@ class FlooNoCProfilesTest(unittest.TestCase):
         modified, count = floonoc_gen.native_bindings(minimal, params)
         self.assertEqual(count, 1)
         self.assertIn("c.MaxTxns = 8;", modified)
+        self.assertIn("c.MaxTxnsPerId = 9;", modified)
         self.assertIn("c.MaxUniqueIds = 4;", modified)
         self.assertIn(".ChimneyCfg(set_ports(xezim_chimney_cfg(),", modified)
         with self.assertRaisesRegex(floonoc_gen.NoCGenerationError, "anchor"):
             floonoc_gen.native_bindings("module empty; endmodule", params)
+
+    def test_reject_upstream_power_of_two_rob_usage_counter_mismatch(self):
+        knobs = copy.deepcopy(self.knobs)
+        knobs["fabric_parameters"]["global_data"]["MaxTxnsPerId"] = 8
+        with self.assertRaisesRegex(
+                floonoc_gen.NoCGenerationError, "power-of-two MaxTxnsPerId"):
+            floonoc_gen.profiles(self.soc, knobs)
 
     def test_new_compute_instance_produces_two_more_local_nocs(self):
         soc = copy.deepcopy(self.soc)
