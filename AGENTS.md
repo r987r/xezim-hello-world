@@ -43,6 +43,10 @@ resolved in pinned Xezim 0.11.4 and the historical bug reproducer was removed fr
    (`gen/diagrams/noc-topology.json`). The local router-router/NI
    edges are **generated structural RTL**; all cross-NoC and CPU/DMA/CSR
    links are **planned** until a real SoC top and traffic tests pass.
+   FlooNoC does not directly render Diagram-gen; use our generated
+   Diagram-gen-style instance/connection/group metadata, and avoid
+   inventing router positions or claiming a 3D viewer integration test
+   that has not actually run.
    Do not fabricate topology in the diagram generator; do not edit
    generated outputs manually.
 5. Every local/global data/config FlooNoC is GENERATED into tracked
@@ -156,9 +160,15 @@ transaction regressions. The independent
 and its upstream Bender.lock dependency tree, then **elaborates all
 eight FlooGen-generated local/global meshes with Verilator**.
 These are *different verification gates*; report them separately.
-If Xezim can also compile the same generated mesh, compare the two
-tool diagnostics and use both for upcoming subsystem testbenches.
-Do not count elaboration as a successful AXI transaction test.
+The **same generated global data and global config meshes now also
+compile with pinned Xezim 0.11.4** using
+`scripts/run-floonoc-xezim.sh global_data global_config` and the
+*same upstream Bender filelist* as the Verilator elaboration gate.
+The Xezim compile stage is a separately logged compatibility probe
+(`continue-on-error` until broader FlooNoC support is characterized).
+Use both tool diagnostics to isolate simulator issues and run actual
+AXI transaction tests with each simulator as their support permits.
+Do not count elaboration or compilation as successful AXI traffic.
 Avoid adding a new micro-testbench for every bridge or router.
 
 ## CI and debugging
