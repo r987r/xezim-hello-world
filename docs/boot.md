@@ -41,6 +41,19 @@ image sizes, reset policy, completion signatures and model limitations.
 `make gen` removes obsolete image files, and `make check-generated` catches
 drift.
 
+## Minimal bring-up ladder
+
+1. Run `make dv-serv`: one real SERV core, one small synchronous Wishbone
+   RAM, and a four-word RV32I test with a checked data store.
+2. Run `make dv-boot`: CPU0 executes Boot ROM, reads flash, writes both blank
+   SRAMs, releases CPU1 via reset MMIO, and requires **both** CPU signatures.
+3. Only after that integrate local AXI/AXI-Lite fabrics and the real
+   programmable PULP iDMA.
+
+The Xezim 0.11.3 compatibility shim and the independent simulator
+reproducer are documented in [boot-debug.md](boot-debug.md). The shim only
+rewrites two port slice connections in a derived copy of locked SERV RTL.
+
 ## Why there is no prefilled ASIC SRAM
 
 ASIC SRAM macros are normally volatile; their power-on contents must not be

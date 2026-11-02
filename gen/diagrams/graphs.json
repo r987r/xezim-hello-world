@@ -467,6 +467,11 @@
       {
         "from": "generator",
         "status": "executable",
+        "to": "serv_minimal"
+      },
+      {
+        "from": "generator",
+        "status": "executable",
         "to": "cpu_cold_boot"
       },
       {
@@ -538,6 +543,18 @@
         "dut": "compute0.cpu+compute1.cpu",
         "id": "cpu_smoke",
         "label": "cpu_smoke\nDUT: compute0.cpu+compute1.cpu\nmake dv-cpu\npicorv32_fetch, serv_fetch",
+        "status": "executable"
+      },
+      {
+        "checks": [
+          "real_serv_instruction_fetch",
+          "lui_addi_sw_execution",
+          "expected_data_store"
+        ],
+        "command": "make dv-serv",
+        "dut": "compute1.cpu+standalone_sram",
+        "id": "serv_minimal",
+        "label": "serv_minimal\nDUT: compute1.cpu+standalone_sram\nmake dv-serv\nreal_serv_instruction_fetch, lui_addi_sw_execution, expected_data_store",
         "status": "executable"
       },
       {

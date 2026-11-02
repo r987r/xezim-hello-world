@@ -113,6 +113,11 @@ verification:
       status: executable
       command: make dv-cpu
       checks: [picorv32_fetch, serv_fetch]
+    - name: serv_minimal
+      dut: compute1.cpu+standalone_sram
+      status: executable
+      command: make dv-serv
+      checks: [real_serv_instruction_fetch, lui_addi_sw_execution, expected_data_store]
     - name: cpu_cold_boot
       dut: compute0.cpu+compute1.cpu+boot_rom+flash+sram+reset_ctrl
       status: executable

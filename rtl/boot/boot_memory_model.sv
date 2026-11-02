@@ -104,9 +104,15 @@ module boot_memory_model #(
         end
     end
     assign c1_ibus_ack   = c1_i_ack_q;
-    assign c1_ibus_rdata = read_word(c1_ibus_addr);
+    // Match upstream SERV's registered Wishbone instruction/data read timing.
+    reg [31:0] c1_ibus_rdata_q, c1_dbus_rdata_q;
+    always @(posedge clk) begin
+        c1_ibus_rdata_q <= read_word(c1_ibus_addr);
+        c1_dbus_rdata_q <= read_word(c1_dbus_addr);
+    end
+    assign c1_ibus_rdata = c1_ibus_rdata_q;
     assign c1_dbus_ack   = c1_d_ack_q;
-    assign c1_dbus_rdata = read_word(c1_dbus_addr);
+    assign c1_dbus_rdata = c1_dbus_rdata_q;
 
     always @(posedge clk) begin
         if (rst) begin

@@ -70,6 +70,17 @@
     },
     {
       "checks": [
+        "real_serv_instruction_fetch",
+        "lui_addi_sw_execution",
+        "expected_data_store"
+      ],
+      "command": "make dv-serv",
+      "dut": "compute1.cpu+standalone_sram",
+      "name": "serv_minimal",
+      "status": "executable"
+    },
+    {
+      "checks": [
         "cpu0_rom_fetch",
         "flash_to_sram_stores",
         "secondary_reset_release",

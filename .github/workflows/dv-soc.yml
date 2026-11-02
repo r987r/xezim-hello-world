@@ -71,6 +71,8 @@ jobs:
         run: bash -o pipefail -c 'make dv-memory-negative | tee memory-negative.log'
       - name: Elaborate and exercise PicoRV32 and SERV CPUs
         run: bash -o pipefail -c 'make dv-cpu | tee cpu-dv.log'
+      - name: Execute a minimal SERV-only 4-instruction program
+        run: bash -o pipefail -c 'make dv-serv | tee serv-minimal.log'
       - name: Boot both CPUs from ROM and flash into blank SRAM
         run: bash -o pipefail -c 'BOOT_WAVE=1 BOOT_TRACE=1 make dv-boot | tee boot-dv.log'
       - name: Upload failed test logs
@@ -83,6 +85,7 @@ jobs:
             memory-negative.log
             cpu-dv.log
             boot-dv.log
+            serv-minimal.log
             boot-trace.vcd
             gen/boot/manifest.json
             gen/memory/manifest.json
