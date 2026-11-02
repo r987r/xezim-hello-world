@@ -35,8 +35,16 @@ resolved in pinned Xezim 0.11.4 and the historical bug reproducer was removed fr
 3. `tools/socgen.py`, `tools/noc_backends.py`, `tools/fabric_config.py`:
    config validation, actual RTL generation and backend capabilities.
 4. `tools/bootgen.py`, `tools/diagram_gen.py`,
-   `tools/diagram_svg.py`, `tools/generate.py`: boot, neutral graphs and
-   diagrams. Change their input/config logic, **not** generated outputs.
+   `tools/noc_diagrams.py`, `tools/diagram_svg.py`,
+   `tools/generate.py`: boot, neutral graphs and diagrams.
+   `tools/noc_diagrams.py` reads **actual generated** FlooGen YAML and
+   manifest for every mesh; it produces one full-chip hierarchy preview,
+   eight physical mesh previews, Mermaid and Diagram-gen-style JSON
+   (`gen/diagrams/noc-topology.json`). The local router-router/NI
+   edges are **generated structural RTL**; all cross-NoC and CPU/DMA/CSR
+   links are **planned** until a real SoC top and traffic tests pass.
+   Do not fabricate topology in the diagram generator; do not edit
+   generated outputs manually.
 5. Every local/global data/config FlooNoC is GENERATED into tracked
    `gen/noc/floonoc/{instance}/` from `config/soc.yaml` and the
    `config/interface_contracts.yaml` native hardware parameter budget.
@@ -55,6 +63,8 @@ resolved in pinned Xezim 0.11.4 and the historical bug reproducer was removed fr
 7. Every change affecting architecture, mapping, generator, or diagram
    content needs `make gen` and a review of ALL generated views:
    `architecture`, `rtl-connectivity`, `boot`, `verification`,
+   `noc-hierarchy`, `noc/global_data`, `noc/global_config`,
+   all compute/memory local `noc/*` views, `noc-topology.json`,
    `subsystems/compute0`, `subsystems/compute1`,
    `subsystems/memory0`. Additional subsystem diagrams must appear
    automatically; removed ones must disappear. SVG, Mermaid and graph JSON
@@ -136,6 +146,21 @@ ignored `.tools/`. No `cargo build` or recompilation of Xezim for
 normal RTL edits. Simulator releases are built separately in
 `.github/workflows/publish-xezim.yml`.
 
+## Two-simulator strategy
+
+Retain **both Xezim 0.11.4 and Verilator**, without a custom RTL clone.
+The default `.github/workflows/dv-soc.yml` downloads checksum-verified
+Xezim and executes the existing CPU boot, SRAM and AXI crossbar
+transaction regressions. The independent
+`.github/workflows/floonoc-elab.yml` downloads immutable FlooNoC
+and its upstream Bender.lock dependency tree, then **elaborates all
+eight FlooGen-generated local/global meshes with Verilator**.
+These are *different verification gates*; report them separately.
+If Xezim can also compile the same generated mesh, compare the two
+tool diagnostics and use both for upcoming subsystem testbenches.
+Do not count elaboration as a successful AXI transaction test.
+Avoid adding a new micro-testbench for every bridge or router.
+
 ## CI and debugging
 
 - `.github/workflows/dv-soc.yml` runs on pushes and pull requests,
@@ -170,7 +195,13 @@ window, source-ID budget and downstream reachability. Follow the
 `r987r/Sv-test` YAML interface/UVC/provider ideas without copying
 unnecessary custom verification RTL.
 
-Primary verification scopes: compute0, compute1, memory0, global_data NoC, global_config NoC, soc_top. Avoid adding separate bridge/SRAM/router/logic unit TBs; retain existing smoke/boot/memory diagnostics only as regression gates. See docs/subsystem-verification.md and the pinned upstream FlooGen CI generator workflow.\n\nNext actual integration work: FlooGen real global data NoC, then PULP AXI compute-local emitter, tested
-CPU-to-local-fabric/SRAM path, upstream iDMA frontend and 64-bit AXI
-datapath, then FlooNoC through FlooGen. Real HBM/DDR controller/PHY
-simulation is a **separate** integration stage.
+Primary verification scopes: compute0, compute1, memory0, global_data
+NoC, global_config NoC, and soc_top. Avoid new per-bridge/SRAM/router
+testbench proliferation. See docs/subsystem-verification.md.
+
+Next actual integration work: use the generated FlooNoC modules in
+subsystem-level testbenches, connect real upstream AXI-Lite adapters,
+CPU and DMA/SRAM ports, and demonstrate bidirectional AXI traffic
+through local and global routers with both simulator toolchains where
+supported. Preserve the existing bus-driven cold-boot proof. HBM/DDR
+controller/PHY integration is a separate stage.
