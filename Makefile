@@ -1,7 +1,7 @@
 .PHONY: help gen check-generated check-config dv-memory dv-memory-negative dv-cpu dv-serv dv-sram dv-boot smoke test
 
 help:
-	@echo 'make gen                Generate all tracked gen/ artifacts and README diagrams'
+	@echo 'make gen                Generate all tracked gen/ artifacts, FlooNoC RTL and README diagrams'
 	@echo 'make check-generated    Fail on missing/changed/stale generated files'
 	@echo 'make check-config       Validate architecture and generator behavior'
 	@echo 'make dv-memory          Verify 2x2 AXI4 crossbar with HBM + DDR models'

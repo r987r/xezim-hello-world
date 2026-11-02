@@ -1,0 +1,63 @@
+name: xezim_memory0_local_data
+description: 'Xezim memory0_local_data: independent data FlooNoC from SoC config'
+network_type: axi
+routing:
+  route_algo: XY
+  use_id_table: true
+protocols:
+- name: axi_in
+  type: narrow
+  protocol: AXI4
+  data_width: 64
+  addr_width: 64
+  id_width: 4
+  user_width: 1
+  type_prefix: null
+- name: axi_out
+  type: narrow
+  protocol: AXI4
+  data_width: 64
+  addr_width: 64
+  id_width: 4
+  user_width: 1
+  type_prefix: null
+endpoints:
+- name: memory_ingress0
+  mgr_port_protocol:
+  - axi_in
+- name: memory_ingress1
+  mgr_port_protocol:
+  - axi_in
+- name: target_crossbar
+  sbr_port_protocol:
+  - axi_out
+  addr_range:
+  - base: 4294967296
+    size: 1073741824
+  - base: 5368709120
+    size: 1073741824
+routers:
+- name: router
+  array:
+  - 2
+  - 2
+  degree: 5
+connections:
+- src: memory_ingress0
+  dst: router
+  dst_idx:
+  - 0
+  - 0
+  dst_dir: Eject
+- src: memory_ingress1
+  dst: router
+  dst_idx:
+  - 1
+  - 0
+  dst_dir: Eject
+- src: target_crossbar
+  dst: router
+  dst_idx:
+  - 0
+  - 1
+  dst_dir: Eject

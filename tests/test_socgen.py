@@ -142,8 +142,8 @@ class SocConfigTest(unittest.TestCase):
     def test_diagram_generation_and_readme_markers(self):
         meta = socgen.validate(copy.deepcopy(self.base))
         with tempfile.TemporaryDirectory() as tmp:
-            diagrams = diagram_gen.render(copy.deepcopy(self.base), meta, Path(tmp) / "diagrams")
-            for name in ("architecture", "rtl-connectivity", "verification", "boot"):
+            diagrams = diagram_gen.render(copy.deepcopy(self.base), meta, Path(tmp) / "diagrams", ROOT / "gen/noc/floonoc")
+            for name in ("architecture", "rtl-connectivity", "verification", "boot", "noc-hierarchy"):
                 self.assertIn("flowchart", diagrams[name])
                 self.assertTrue((Path(tmp)/"diagrams"/f"{name}.mmd").is_file())
             self.assertIn("picorv32", diagrams["architecture"])
@@ -171,7 +171,7 @@ class SocConfigTest(unittest.TestCase):
         readme = (ROOT / "README.md").read_text()
         section = readme.split(generate.START, 1)[1].split(generate.END, 1)[0]
         image_paths = re.findall(r"!\[[^]]+\]\((gen/diagrams/[^)]+\.svg)\)", section)
-        self.assertEqual(len(image_paths), 4)
+        self.assertEqual(len(image_paths), 5)
         for relative in image_paths:
             path = ROOT / relative
             self.assertTrue(path.is_file(), f"missing README image {relative}")
@@ -211,6 +211,12 @@ class SocConfigTest(unittest.TestCase):
             doc["subsystems"].append({"name":"compute2", "type":"compute", "cpu":
                                       {"ip":"serv", "bus":"wishbone", "adapter":"serv_wishbone"}})
             doc["networks"]["global_config"]["reachable_subsystems"].append("compute2")
+            # Each new compute subsystem supplies its own mapped SRAM
+            # and CSR apertures; FlooGen derives the NoC wires automatically.
+            doc["address_map"]["data"].append({
+                "name": "compute2.sram", "base": "0x12000000", "size": "0x00100000"})
+            doc["address_map"]["config"].append({
+                "name": "compute2.dma", "base": "0x40040000", "size": "0x10000"})
             cfg_path.write_text(yaml.safe_dump(doc,sort_keys=False))
             self.assertEqual(generate.execute(cfg_path,out,readme),0)
             extra = out/"diagrams"/"subsystems"/"compute2.mmd"

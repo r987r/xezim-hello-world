@@ -23,6 +23,11 @@ defaults:
 fabric_parameters:
   local_data: &local_data_floo
     MaxTxns: 8
+    # Pinned upstream floo_rob_status_table fifo_usage_t is clog2(Depth).
+    # Use non-power-of-two per-ID FIFO depth >= aggregate outstanding cap:
+    # Depth=8 misconnects cc_fifo usage width (4) to $clog2(8)=3.
+    # Depth=9 uses the correct 4-bit usage width without forking RTL.
+    MaxTxnsPerId: 9
     MaxUniqueIds: 4
     RRoBType: NormalRoB
     BRoBType: NormalRoB
@@ -30,6 +35,7 @@ fabric_parameters:
     BRoBSize: 8
   local_config: &config_floo
     MaxTxns: 2
+    MaxTxnsPerId: 3
     MaxUniqueIds: 2
     RRoBType: NoRoB
     BRoBType: NoRoB
@@ -41,6 +47,11 @@ fabric_parameters:
     M_ISSUE: 4
   global_data:
     MaxTxns: 8
+    # Pinned upstream floo_rob_status_table fifo_usage_t is clog2(Depth).
+    # Use non-power-of-two per-ID FIFO depth >= aggregate outstanding cap:
+    # Depth=8 misconnects cc_fifo usage width (4) to $clog2(8)=3.
+    # Depth=9 uses the correct 4-bit usage width without forking RTL.
+    MaxTxnsPerId: 9
     MaxUniqueIds: 4
     RRoBType: NormalRoB
     BRoBType: NormalRoB

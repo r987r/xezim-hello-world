@@ -91,6 +91,8 @@ address_map:
     - {name: compute0.dma, base: '0x40000000', size: '0x10000'}
     - {name: compute1.dma, base: '0x40010000', size: '0x10000'}
     - {name: boot.reset_ctrl, base: '0x40020000', size: '0x1000'}
+    # Reserved controller CSR aperture; behavioral controller RTL is not integrated.
+    - {name: memory0.ctrl, base: '0x40030000', size: '0x1000'}
 
 verification:
   memory:

@@ -15,22 +15,36 @@ transport AXI-Lite semantics using a 32-bit AXI4 wire format, fixed
 one-beat transfers, and upstream `axi_lite_to_axi` /
 `axi_to_axi_lite` adapters. This transport is NOT itself AXI4-Lite.
 Keep the network's AXI4 ID, LEN and response rules explicit and do not
-connect an AXI-Lite struct directly to an AXI4 chimney. The independent
-global_config FlooGen config, local FlooGen generators, endpoint adapters,
-and RTL regression are future implementation work, not yet claimed as
-operational hardware.
+connect an AXI-Lite struct directly to an AXI4 chimney. The local/global FlooGen **structural RTL is now checked in** at
+`gen/noc/floonoc/`. Physical CSR endpoint adapters, elaboration and
+transaction-level regression remain future work, not operational hardware.
 
 Use `config/interface_contracts.yaml` for pending read/write budgets,
 native FlooNoC queue/ID/ROB settings and explicit port link widths.
 Do not instantiate arbitrary custom routers, AXI crossbars, or behavioral
-NoC substitutes. The global_data FlooGen generation is already passing,
-but **no FlooNoC fabric is currently simulated with real traffic**.
+NoC substitutes. The eight FlooGen-generated module/package pairs are checked into
+`gen/noc/floonoc/`; **no FlooNoC fabric has yet passed a real
+transaction-level simulation**.
 
 
 The only new high-level RTL scopes should be **compute0**, **compute1**,
 **memory0**, **global_data NoC**, **global_config NoC**, and **full SoC**.
 Reuse upstream modules within each TB; no separate testbench for every
 bridge, FIFO, decoder, SRAM, router, or BFM.
+
+## Pinned upstream FlooNoC RoB depth caveat
+
+When `NormalRoB` is enabled, upstream
+[`hw/floo_rob.sv`](https://github.com/pulp-platform/FlooNoC/blob/05368bdff914f91a48b47c4ceddfc6ff266c6b3a/hw/floo_rob.sv)
+defines its status FIFO usage width as `$clog2(MaxTxnsPerId)`, while
+`cc_fifo` drives `$clog2(Depth+1)` bits. At a depth of exactly 8,
+Verilator rightfully identifies a 3-versus-4-bit connection mismatch.
+The checked-in `config/interface_contracts.yaml` therefore exposes a
+**deliberate native MaxTxnsPerId=9** for `MaxTxns=8`: enough capacity
+with matching 4-bit usage width. This is a parameter choice, not copied
+or patched router RTL. The generator fails explicitly if a power-of-two
+depth is selected with a real RoB. Reassess this only when the pinned
+upstream implementation is corrected; never suppress the width error.
 
 ## Local and global AXI interface sizes
 
@@ -39,9 +53,10 @@ bridge, FIFO, decoder, SRAM, router, or BFM.
 address widths, transaction IDs, independent pending read/write targets,
 burst lengths and adapters; `tests/test_interface_contracts.py` validates
 link alignment and dynamically creates contracts for new compute instances.
-Native PULP `MaxMstTrans`/`MaxSlvTrans`, Floo `MaxTxns`/
-`MaxUniqueIds`/RoBs and Verilog-AXI `S_ACCEPT`/`M_ISSUE` are recorded.
-These are **targets pending RTL parameter binding**, not proof that
+Native Floo `MaxTxns`/
+`MaxUniqueIds`/RoBs are now bound in each generated chimney, while
+Verilog-AXI `S_ACCEPT`/`M_ISSUE` are separately configurable.
+These are **RTL parameters but not traffic-verified capacities**, not proof that
 the actual NoC accepts that many transactions. Each local data and config FlooNoC belongs to its own subsystem; memory0 also has local data and config FlooNoCs before the internal tested AXI target crossbar. Global data and global
 config are separate top-level networks.
 
@@ -51,14 +66,16 @@ The baseline Xezim `global_data` network is named `floonoc` in
 `config/soc.yaml`, but **is not instantiated**. `verilog_axi` is the
 only currently tested interconnect, inside memory0's scoped TB.
 
-For the first actual FlooNoC bring-up, a pinned upstream FlooGen config
-lives at [`config/floogen/global_data.yml`](../config/floogen/global_data.yml).
-It selects XY routing, a 2x2 mesh and four AXI4 endpoints. Each compute
+All FlooGen YAML inputs are now derived from the SoC definition by
+`tools/floonoc_gen.py` and live beside their committed RTL under
+`gen/noc/floonoc/`.
+The global data network dynamically sizes its XY mesh for both compute
+initiators, two SRAM destinations and two memory ingress destinations. Each compute
 subsystem supplies one AXI4 initiator. The memory subsystem has **two
 separate incoming NoC AXI4 ports** (not physical HBM/DDR controllers).
 
 Do not mark the backend executable or diagram links solid until:
-- `floogen rtl -c config/floogen/global_data.yml -o <temporary directory>`
+- `make gen`
   executes with the pinned FlooGen checkout;
 - the generated upstream `floo_xezim_global_data_noc_pkg.sv` and
   `floo_xezim_global_data_noc.sv`, plus their **actual** FlooNoC,
@@ -84,14 +101,16 @@ Command sequence for a suitable build environment:
 ```bash
 python3 tools/ip_fetch.py floonoc
 python3 -m pip install -e .tools/floonoc
-floogen rtl -c config/floogen/global_data.yml -o .tools/floogen-out --no-format
+make gen
+make check-generated
 # Check actual outputs; pin/fetch Bender dependencies before elaboration.
 # bender checkout && bender script ... uses the upstream Bender.yml.
 make test
 ```
 
-`config/floogen/global_data.yml` is **an initial generator input**,
-not a proven functional NoC. If the vendor parser rejects the endpoint
+The generator-owned `gen/noc/floonoc/*/floogen.yaml` are the
+upstream generator inputs, not independent source files; structural
+outputs alone are not proven functional NoCs. If the vendor parser rejects the endpoint
 mapping/width parameters, fix the schema against upstream FlooGen tests;
 do not silently switch to a hand-built router. The generic NoC intermediate
 representation and `config/soc.yaml` must later be the sole authoritative
@@ -102,10 +121,10 @@ source rather than separately maintained copies.
 | Scope | Desired substantive end-to-end behavior |
 |---|---|
 | `memory0_tb` | Both AXI ingress ports, real Verilog-AXI crossbar, separate HBM/DDR behavioral target windows |
-| `compute0_tb` | Real PicoRV32 boots and drives local PULP AXI, local SRAM and PULP iDMA CSR/traffic |
-| `compute1_tb` | Real SERV runs firmware, through its upstream protocol adapter, local PULP AXI, SRAM and iDMA |
+| `compute0_tb` | Real PicoRV32 boots and drives local FlooNoC data/config, local SRAM and PULP iDMA CSR/traffic |
+| `compute1_tb` | Real SERV runs firmware through an upstream adapter, local FlooNoC data/config, SRAM and iDMA |
 | `global_data_tb` | FlooGen-generated *real* FlooNoC 2x2 routers and AXI interfaces between two initiators and two memory ingress ports |
-| `global_config_tb` | Separate global config network with real AXI-Lite request/response destinations |
+| `global_config_tb` | Separate upstream FlooNoC AXI4 control transport with real PULP AXI-Lite adapters, CSR request/response destinations |
 | `soc_top_tb` | Combine compute0, compute1, memory0, data and config NoCs; CPU-programmed DMA accesses to both memories |
 
 Maintain existing standalone cold-boot and SRAM regressions as **bring-up
@@ -127,6 +146,6 @@ the new FlooGen input uses **64-bit addresses** matching SoC YAML;
 validate the resulting AXI ID-width and upstream endpoint address-routing
 contracts before compiling the integrated network.
 
-Other outstanding areas (local PULP AXI, actual iDMA, global config
+Other outstanding areas (local FlooNoC endpoint wiring, actual iDMA, global config
 network, and HBM/DDR controller models) remain unimplemented. Do not
 confuse a generated YAML config or static diagram with a running NoC.

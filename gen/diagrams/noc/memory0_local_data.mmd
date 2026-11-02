@@ -1,0 +1,18 @@
+flowchart TB
+  classDef router fill:#e6f6ec,stroke:#16845D,color:#133A29;
+  classDef endpoint fill:#e9f1fd,stroke:#255BAE,color:#1A3155;
+  %% Real FlooGen top structural router and NI links only.
+  n_r0_0["Router (0,0)"]:::router
+  n_r1_0["Router (1,0)"]:::router
+  n_r0_0 <--> n_r1_0
+  n_r0_1["Router (0,1)"]:::router
+  n_r0_0 <--> n_r0_1
+  n_r1_1["Router (1,1)"]:::router
+  n_r0_1 <--> n_r1_1
+  n_r1_0 <--> n_r1_1
+  n_memory_ingress0["memory_ingress0 / Manager NI"]:::endpoint
+  n_memory_ingress0 <--> n_r0_0
+  n_memory_ingress1["memory_ingress1 / Manager NI"]:::endpoint
+  n_memory_ingress1 <--> n_r1_0
+  n_target_crossbar["target_crossbar / Target NI"]:::endpoint
+  n_target_crossbar <--> n_r0_1

@@ -35,25 +35,63 @@ resolved in pinned Xezim 0.11.4 and the historical bug reproducer was removed fr
 3. `tools/socgen.py`, `tools/noc_backends.py`, `tools/fabric_config.py`:
    config validation, actual RTL generation and backend capabilities.
 4. `tools/bootgen.py`, `tools/diagram_gen.py`,
-   `tools/diagram_svg.py`, `tools/generate.py`: boot, neutral graphs and
-   diagrams. Change their input/config logic, **not** generated outputs.
-5. `gen/` is exclusively generator-owned and has a protective
+   `tools/noc_diagrams.py`, `tools/diagram_svg.py`,
+   `tools/generate.py`: boot, neutral graphs and diagrams.
+   `tools/noc_diagrams.py` reads **actual generated** FlooGen YAML and
+   manifest for every mesh; it produces one full-chip hierarchy preview,
+   eight physical mesh previews, Mermaid and Diagram-gen-style JSON
+   (`gen/diagrams/noc-topology.json`). The local router-router/NI
+   edges are **generated structural RTL**; all cross-NoC and CPU/DMA/CSR
+   links are **planned** until a real SoC top and traffic tests pass.
+   FlooNoC does not directly render Diagram-gen; use our generated
+   Diagram-gen-style instance/connection/group metadata, and avoid
+   inventing router positions or claiming a 3D viewer integration test
+   that has not actually run.
+   Do not fabricate topology in the diagram generator; do not edit
+   generated outputs manually.
+5. Every local/global data/config FlooNoC is GENERATED into tracked
+   `gen/noc/floonoc/{instance}/` from `config/soc.yaml` and the
+   `config/interface_contracts.yaml` native hardware parameter budget.
+   `tools/floonoc_gen.py` emits upstream FlooGen profiles, structural
+   Verilog tops, package files and a manifest; no custom router RTL. The
+   upstream Bender dependency graph supplies implementation modules.
+   `make gen` requires pinned upstream FlooGen installed first (see below).
+   Source files in `config/floogen/` were removed to avoid duplicate
+   manually maintained topology.
+6. `gen/` is exclusively generator-owned and has a protective
    `.generated-root` marker. `make gen` replaces its complete tree,
    including deletions of stale diagram files. Never edit files under
    `gen/` manually. `README.md` contains one generated section between
    `BEGIN GENERATED SOC` and `END GENERATED SOC` comments. Edit the
    generator for content in that section.
-6. Every change affecting architecture, mapping, generator, or diagram
+7. Every change affecting architecture, mapping, generator, or diagram
    content needs `make gen` and a review of ALL generated views:
    `architecture`, `rtl-connectivity`, `boot`, `verification`,
+   `noc-hierarchy`, `noc/global_data`, `noc/global_config`,
+   all compute/memory local `noc/*` views, `noc-topology.json`,
    `subsystems/compute0`, `subsystems/compute1`,
    `subsystems/memory0`. Additional subsystem diagrams must appear
    automatically; removed ones must disappear. SVG, Mermaid and graph JSON
    must agree with the emitted RTL and whether each link is *planned* or
    *actually exercised*.
-7. `make check-generated` is a nonmutating exact file-name/content/drift
+8. `make check-generated` is a nonmutating exact file-name/content/drift
    check, not a substitute for regenerating files. Keep generated `gen/`
    and the marked README section committed with a config/generator change.
+
+## Reuse upstream config network IP
+
+For both local/global configuration FlooNoCs, **AXI4 is the network's
+physical transport and AXI4-Lite remains the CSR-facing protocol**.
+Use pinned PULP `axi_lite_to_axi` and `axi_to_axi_lite` upstream
+adapters, never a custom bridge. See
+[docs/axi-lite-over-floonoc.md](docs/axi-lite-over-floonoc.md) and the
+upstream PULP AXI bridge tests. For every NoC, review checked-in
+`gen/noc/floonoc/manifest.json`, `floogen.yaml`,
+`floo_xezim_*_noc.sv` and `*_pkg.sv` rather than a CI-only archive.
+Commit generated outputs alongside their input config. A checked-in
+NoC is **structural RTL** until actual upstream dependency compilation,
+elaboration and request/response traffic pass; the backend must remain
+non-executable until then.
 
 ## Linkable interface sizing gate
 
@@ -76,6 +114,8 @@ an already downloaded simulator), compatible Linux x86_64 host.
 
 ```bash
 python3 -m pip install -r requirements.txt
+python3 tools/ip_fetch.py floonoc
+python3 -m pip install -e .tools/floonoc
 source toolchains/xezim.env
 mkdir -p .tools/bin
 gh release download "$XEZIM_RELEASE_TAG" --repo r987r/xezim-hello-world \
@@ -109,6 +149,27 @@ suite by itself **does not** prove new RTL integration.
 ignored `.tools/`. No `cargo build` or recompilation of Xezim for
 normal RTL edits. Simulator releases are built separately in
 `.github/workflows/publish-xezim.yml`.
+
+## Two-simulator strategy
+
+Retain **both Xezim 0.11.4 and Verilator**, without a custom RTL clone.
+The default `.github/workflows/dv-soc.yml` downloads checksum-verified
+Xezim and executes the existing CPU boot, SRAM and AXI crossbar
+transaction regressions. The independent
+`.github/workflows/floonoc-elab.yml` downloads immutable FlooNoC
+and its upstream Bender.lock dependency tree, then **elaborates all
+eight FlooGen-generated local/global meshes with Verilator**.
+These are *different verification gates*; report them separately.
+The **same generated global data and global config meshes now also
+compile with pinned Xezim 0.11.4** using
+`scripts/run-floonoc-xezim.sh global_data global_config` and the
+*same upstream Bender filelist* as the Verilator elaboration gate.
+The Xezim compile stage is a separately logged compatibility probe
+(`continue-on-error` until broader FlooNoC support is characterized).
+Use both tool diagnostics to isolate simulator issues and run actual
+AXI transaction tests with each simulator as their support permits.
+Do not count elaboration or compilation as successful AXI traffic.
+Avoid adding a new micro-testbench for every bridge or router.
 
 ## CI and debugging
 
@@ -144,7 +205,13 @@ window, source-ID budget and downstream reachability. Follow the
 `r987r/Sv-test` YAML interface/UVC/provider ideas without copying
 unnecessary custom verification RTL.
 
-Primary verification scopes: compute0, compute1, memory0, global_data NoC, global_config NoC, soc_top. Avoid adding separate bridge/SRAM/router/logic unit TBs; retain existing smoke/boot/memory diagnostics only as regression gates. See docs/subsystem-verification.md and the pinned upstream FlooGen CI generator workflow.\n\nNext actual integration work: FlooGen real global data NoC, then PULP AXI compute-local emitter, tested
-CPU-to-local-fabric/SRAM path, upstream iDMA frontend and 64-bit AXI
-datapath, then FlooNoC through FlooGen. Real HBM/DDR controller/PHY
-simulation is a **separate** integration stage.
+Primary verification scopes: compute0, compute1, memory0, global_data
+NoC, global_config NoC, and soc_top. Avoid new per-bridge/SRAM/router
+testbench proliferation. See docs/subsystem-verification.md.
+
+Next actual integration work: use the generated FlooNoC modules in
+subsystem-level testbenches, connect real upstream AXI-Lite adapters,
+CPU and DMA/SRAM ports, and demonstrate bidirectional AXI traffic
+through local and global routers with both simulator toolchains where
+supported. Preserve the existing bus-driven cold-boot proof. HBM/DDR
+controller/PHY integration is a separate stage.

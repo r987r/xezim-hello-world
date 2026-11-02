@@ -1,11 +1,11 @@
-name: FlooGen global-data topology generation
+name: Checked-in FlooGen local and global NoC RTL
 
 on:
   push:
     paths:
-      - 'config/floogen/**'
-      - 'toolchains/floogen.env'
-      - 'docs/subsystem-verification.md'
+      - 'config/**'
+      - 'gen/noc/floonoc/**'
+      - 'tools/floonoc_gen.py'
       - '.github/workflows/floogen.yml'
   pull_request:
     paths:
@@ -37,21 +37,25 @@ jobs:
         run: |
           python3 tools/interface_contracts.py --output .tools/interface-contracts.json
           python3 -m unittest discover -s tests -p test_interface_contracts.py -v
-      - name: Generate upstream FlooNoC topology and validate actual RTL outputs
+      - name: Recreate and verify all tracked upstream FlooNoC RTL
         run: |
           set -euo pipefail
-          mkdir -p .tools/floogen-out
-          floogen rtl -c config/floogen/global_data.yml -o .tools/floogen-out --no-format
-          test -s .tools/floogen-out/floo_xezim_global_data_noc_pkg.sv
-          test -s .tools/floogen-out/floo_xezim_global_data_noc.sv
-          grep -q 'module floo_xezim_global_data_noc' .tools/floogen-out/floo_xezim_global_data_noc.sv
-          grep -q 'floo_axi_router' .tools/floogen-out/floo_xezim_global_data_noc.sv
-          grep -q 'floo_axi_chimney' .tools/floogen-out/floo_xezim_global_data_noc.sv
-          echo 'PASS FlooGen emits real upstream router and chimney instances (RTL elaboration NOT yet proven)'
-      - name: Upload generated RTL for compile integration
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: floogen-network-rtl
-          path: .tools/floogen-out/
-          if-no-files-found: ignore
+          make check-generated
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path("gen/noc/floonoc")
+          manifest=json.loads((root/"manifest.json").read_text())
+          if len(manifest["networks"]) != 8:
+              raise SystemExit("missing expected eight independent FlooNoCs")
+          for name, entry in manifest["networks"].items():
+              top=(root / entry["top"]).read_text()
+              pkg=(root / entry["package"]).read_text()
+              if "floo_axi_router" not in top or "floo_axi_chimney" not in top:
+                  raise SystemExit("missing real upstream router or chimney: "+name)
+              if "xezim_chimney_cfg()" not in top:
+                  raise SystemExit("native AXI pending limits not bound: "+name)
+              if not pkg.strip() or "package " not in pkg:
+                  raise SystemExit("missing generated FlooNoC package: "+name)
+          print("PASS: all eight checked-in upstream FlooNoC modules/packages and configs are reproducible")
+          PY

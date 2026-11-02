@@ -7,13 +7,14 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 from interface_contracts import InterfaceError, build
+import floonoc_gen
 
 class InterfaceSizingTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.soc = yaml.safe_load((ROOT / "config/soc.yaml").read_text())
         cls.knobs = yaml.safe_load((ROOT / "config/interface_contracts.yaml").read_text())
-        cls.floo = yaml.safe_load((ROOT / "config/floogen/global_data.yml").read_text())
+        cls.floo = floonoc_gen.profiles(cls.soc, cls.knobs)["global_data"]["config"]
 
     def validate(self, soc=None, knobs=None, floo=None):
         return build(soc or copy.deepcopy(self.soc),
@@ -57,7 +58,7 @@ class InterfaceSizingTests(unittest.TestCase):
 
     def test_wrong_floogen_memory_map_fails(self):
         floo = copy.deepcopy(self.floo)
-        floo["endpoints"][2]["addr_range"]["base"] = 0xdead0000
+        next(e for e in floo["endpoints"] if e["name"] == "memory_ingress0")["addr_range"]["base"] = 0xdead0000
         with self.assertRaisesRegex(InterfaceError, "address range"):
             self.validate(floo=floo)
 
@@ -96,8 +97,14 @@ class InterfaceSizingTests(unittest.TestCase):
         soc["subsystems"].insert(2, {"name":"compute2", "type":"compute",
                                      "cpu":{"ip":"picorv32", "bus":"axi4_lite", "adapter":"picorv32_axi"}})
         soc["networks"]["global_config"]["reachable_subsystems"].insert(2,"compute2")
+        # Adding a compute instance requires explicit non-overlapping
+        # SRAM and DMA-CSR address windows. The RTL generator must not invent them.
+        soc["address_map"]["data"].append(
+            {"name": "compute2.sram", "base": "0x12000000", "size": "0x00100000"})
+        soc["address_map"]["config"].append(
+            {"name": "compute2.dma", "base": "0x40040000", "size": "0x10000"})
         floo = copy.deepcopy(self.floo)
-        floo["endpoints"].insert(2, {"name":"compute2", "mgr_port_protocol":["axi_in"]})
+        floo = floonoc_gen.profiles(soc, self.knobs)["global_data"]["config"]
         graph = self.validate(soc=soc, floo=floo)
         self.assertIn("compute2.local_data", graph["fabrics"])
         self.assertIn("global_data.compute2_in", graph["ports"])

@@ -17,6 +17,16 @@ The diagram below shows **logical** chip connectivity. Dashed links are **planne
 
 [Full-size image](gen/diagrams/architecture.svg) · [Mermaid source](gen/diagrams/architecture.mmd) · [Detailed view](gen/diagrams/architecture.md)
 
+### Entire SoC NoC hierarchy — all local and global FlooNoCs
+
+This overview comes from **the actual eight checked-in upstream FlooGen topology configurations**: routers, AXI network interfaces, endpoint placement and memory/compute links. Each mesh is real generated structural SystemVerilog; **dashed lines between different NoCs and CPU/DMA/CSR endpoints are not yet integrated RTL**. Green crossbar links are independently verified only in the standalone memory testbench.
+
+[![Generated whole-chip data and config FlooNoC hierarchy with compute and memory subsystems](gen/diagrams/noc-hierarchy.svg)](gen/diagrams/noc-hierarchy.svg)
+
+[Full-size NoC hierarchy](gen/diagrams/noc-hierarchy.svg) · [Mermaid overview](gen/diagrams/noc-hierarchy.mmd) · [Diagram-gen-compatible physical router/link metadata](gen/diagrams/noc-topology.json) · [Network manifest](gen/noc/floonoc/manifest.json)
+
+Each NoC also has an individual **physical XY router mesh diagram** derived directly from its own generated FlooGen YAML.
+
 ### Executable RTL connectivity — memory testbench
 
 This is the wiring generated in `gen/memory/memory_tb.sv`: two AXI4 master BFMs, the real open-source AXI crossbar, two AXI memory models, and a passive route monitor. It is **not** a full-chip elaboration.
@@ -44,8 +54,8 @@ Green scope boxes are **implemented testbenches**, not a claim that the entire S
 ### Generated architecture reference
 
 - **Subsystems:** 2 compute, 1 memory; **data:** AXI4 64-bit, 64-bit addressing; **config:** AXI4-Lite 32-bit.
-- **Global data NoC:** floonoc / mesh (selected, emitter pending).
-- **Global config NoC:** floonoc / mesh (selected, emitter pending).
+- **Global data NoC:** floonoc / mesh (generated structural RTL; no routed traffic test).
+- **Global config NoC:** floonoc / mesh (generated structural RTL; no routed CSR traffic test).
 - **Local memory crossbar:** verilog_axi; 2 ingress × 2 targets (executable RTL testbench).
 
 | Subsystem | CPU | CPU bus/adapter | DMA | Detailed 2D diagram |
@@ -63,6 +73,7 @@ Green scope boxes are **implemented testbenches**, not a claim that the entire S
 | `compute0.dma` | `0x40000000` | `0x10000` |
 | `compute1.dma` | `0x40010000` | `0x10000` |
 | `boot.reset_ctrl` | `0x40020000` | `0x1000` |
+| `memory0.ctrl` | `0x40030000` | `0x1000` |
 
 | Global output | Configured target | Memory ingress |
 | --- | --- | --- |
@@ -81,6 +92,21 @@ Green scope boxes are **implemented testbenches**, not a claim that the entire S
 | `global_nocs` | planned | `not implemented` |
 | `full_chip` | planned | `not implemented` |
 
+### Checked-in upstream FlooNoC structural RTL
+
+Every local and global data/config NoC below has an **actual generated SystemVerilog module and package** committed under `gen/noc/floonoc/`. These instantiate upstream FlooNoC routers/chimneys; RTL elaboration and end-to-end AXI traffic are **not yet verified**.
+
+| Generated NoC | Routers | Mesh diagram | Structural Verilog | Package | FlooGen inputs |
+| --- | ---: | --- | --- | --- | --- |
+| `compute0_local_config` | 6 | [topology](gen/diagrams/noc/compute0_local_config.svg) | [top](gen/noc/floonoc/compute0/local_config/floo_xezim_compute0_local_config_noc.sv) | [package](gen/noc/floonoc/compute0/local_config/floo_xezim_compute0_local_config_noc_pkg.sv) | [generated config](gen/noc/floonoc/compute0/local_config/floogen.yaml) |
+| `compute0_local_data` | 9 | [topology](gen/diagrams/noc/compute0_local_data.svg) | [top](gen/noc/floonoc/compute0/local_data/floo_xezim_compute0_local_data_noc.sv) | [package](gen/noc/floonoc/compute0/local_data/floo_xezim_compute0_local_data_noc_pkg.sv) | [generated config](gen/noc/floonoc/compute0/local_data/floogen.yaml) |
+| `compute1_local_config` | 4 | [topology](gen/diagrams/noc/compute1_local_config.svg) | [top](gen/noc/floonoc/compute1/local_config/floo_xezim_compute1_local_config_noc.sv) | [package](gen/noc/floonoc/compute1/local_config/floo_xezim_compute1_local_config_noc_pkg.sv) | [generated config](gen/noc/floonoc/compute1/local_config/floogen.yaml) |
+| `compute1_local_data` | 6 | [topology](gen/diagrams/noc/compute1_local_data.svg) | [top](gen/noc/floonoc/compute1/local_data/floo_xezim_compute1_local_data_noc.sv) | [package](gen/noc/floonoc/compute1/local_data/floo_xezim_compute1_local_data_noc_pkg.sv) | [generated config](gen/noc/floonoc/compute1/local_data/floogen.yaml) |
+| `global_config` | 6 | [topology](gen/diagrams/noc/global_config.svg) | [top](gen/noc/floonoc/global_config/floo_xezim_global_config_noc.sv) | [package](gen/noc/floonoc/global_config/floo_xezim_global_config_noc_pkg.sv) | [generated config](gen/noc/floonoc/global_config/floogen.yaml) |
+| `global_data` | 6 | [topology](gen/diagrams/noc/global_data.svg) | [top](gen/noc/floonoc/global_data/floo_xezim_global_data_noc.sv) | [package](gen/noc/floonoc/global_data/floo_xezim_global_data_noc_pkg.sv) | [generated config](gen/noc/floonoc/global_data/floogen.yaml) |
+| `memory0_local_config` | 2 | [topology](gen/diagrams/noc/memory0_local_config.svg) | [top](gen/noc/floonoc/memory0/local_config/floo_xezim_memory0_local_config_noc.sv) | [package](gen/noc/floonoc/memory0/local_config/floo_xezim_memory0_local_config_noc_pkg.sv) | [generated config](gen/noc/floonoc/memory0/local_config/floogen.yaml) |
+| `memory0_local_data` | 4 | [topology](gen/diagrams/noc/memory0_local_data.svg) | [top](gen/noc/floonoc/memory0/local_data/floo_xezim_memory0_local_data_noc.sv) | [package](gen/noc/floonoc/memory0/local_data/floo_xezim_memory0_local_data_noc_pkg.sv) | [generated config](gen/noc/floonoc/memory0/local_data/floogen.yaml) |
+
 **Boot images:** [Boot ROM](gen/boot/bootrom.hex) · [flash image](gen/boot/flash.hex) · [boot register/memory manifest](gen/boot/manifest.json).
 
 **Explore generated artifacts:** [NoC intermediate representation](gen/noc/fabric_ir.json) · [RTL connection metadata](gen/diagrams/graphs.json) · [verification plan](gen/verification/plan.json) · [route matrix](gen/verification/routes.json) · [memory testbench](gen/memory/memory_tb.sv) · [generated manifest](gen/manifest.json).
@@ -91,13 +117,14 @@ Green scope boxes are **implemented testbenches**, not a claim that the entire S
 
 ## Current implementation status and agent runbook
 
-**Working today:** independently simulated real PicoRV32/SERV cold boot and
-a real open-source 2x2 Verilog-AXI memory crossbar. The crossbar's full and
-sparse routing profiles run with native RTL parameters, AXI reads/writes and
-denied-route DECERR responses. **Not working yet:** FlooNoC routers/links,
-PULP AXI local fabrics, PULP iDMA integration, full-chip `soc_top`, or
-real DDR/HBM controller/PHY paths. `backend: floonoc` is an architectural
-choice and **does not instantiate a functioning NoC**.
+**Working today:** Xezim executes real PicoRV32/SERV cold boot and the
+open-source 2x2 Verilog-AXI memory crossbar (full and sparse routing).
+**All eight local/global FlooNoC structural RTL modules are generated
+and checked in**, and Verilator has independently elaborated all eight
+using pinned upstream Bender dependencies. **Not working yet:** AXI
+traffic through those routers, inter-NoC connection wiring, CPU/DMA/CSR
+endpoints, full-chip `soc_top`, and real HBM/DDR controllers/PHY. Do
+not confuse generated/elaborated RTL with a working interconnected SoC.
 
 For source-backed status, every architecture/RTL/boot/verification/subsystem
 diagram and implementation limits, see
@@ -107,14 +134,32 @@ Xezim binary installation, `make gen`, `make check-generated`, the full
 regression and the two AXI routing profile simulations. Never hand-edit
 `gen/` or silently replace a missing upstream backend.
 
+## View real generated FlooNoC Verilog
+
+The tracked `gen/noc/floonoc/` directory holds **eight upstream
+FlooGen-generated router/chimney structural SystemVerilog tops, typed
+packages, exact generated configuration profiles, and a source manifest**.
+They are regenerated by `make gen` from the SoC YAML and the native
+interface sizing contracts, and verified by `make check-generated`. The
+[full network diagram](gen/diagrams/noc-hierarchy.svg) and
+[Diagram-gen-compatible connectivity metadata](gen/diagrams/noc-topology.json)
+come from the same generated FlooGen mesh configurations, not a second
+hand-maintained topology.
+The upstream FlooNoC/AXI/common_cells libraries are not copied into
+`gen/`; they are resolved from pinned sources. **Generated != elaborated
+or traffic-tested**. For AXI-Lite control networks, reuse the real PULP
+AXI adapters documented in
+[AXI-Lite-over-FlooNoC](docs/axi-lite-over-floonoc.md).
+
 ## FlooNoC fabric policy
 
 All **local data/config** and **global data/config** NoCs use pinned upstream
 FlooNoC, with independent mesh instances. Inside memory0, the verified
 Verilog-AXI target crossbar remains downstream of its local FlooNoC.
 AXI4-Lite control endpoints need real upstream AXI-Lite/AXI4 adapters.
-Only the global data FlooGen output is currently generated; no new
-local/global FlooNoC path is yet proven in RTL simulation.
+All eight local/global FlooGen outputs are generated and reviewable in
+`gen/noc/floonoc/`; each has a router-level mesh image in
+`gen/diagrams/noc/`. **None yet passes end-to-end routed AXI traffic.**
 
 ## Explicit interface sizing
 
@@ -127,7 +172,7 @@ read/write targets, and native IP parameter names. This is a validated
 accepts these limits yet. CI tests keep FlooGen AXI widths and memory
 windows in sync.
 
-## Subsystem-level tests and FlooNoC bring-up\n\nUse [subsystem verification plan](docs/subsystem-verification.md) as the\nauthoritative scope definition (compute0, compute1, memory0, global data,\nglobal config, full SoC). [FlooGen topology](config/floogen/global_data.yml)\nis an **initial pinned upstream generator input**, not proof of operational\nrouters: see the separate FlooGen CI workflow for generator validation.\nNo bridge- or simulator-repro TB proliferation.\n\n## Reproducible generation
+## Subsystem-level tests and FlooNoC bring-up\n\nUse [subsystem verification plan](docs/subsystem-verification.md) as the\nauthoritative scope definition (compute0, compute1, memory0, global data,\nglobal config, full SoC). [All eight generated FlooNoC topologies](gen/noc/floonoc/manifest.json)\nare committed actual upstream-generated SystemVerilog, not proof of\nrouter elaboration or AXI traffic; see FlooGen and elaboration CI.\nNo bridge- or simulator-repro TB proliferation.\n\n## Reproducible generation
 
 Everything under **[`gen/`](gen/)** is committed to Git for version-to-version diffs. The directory is exclusively generator-owned and contains a marker protecting against accidental replacement of user-owned trees.
 
