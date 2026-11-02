@@ -6,26 +6,34 @@ The [README](../README.md) embeds the 2D architecture, actual memory RTL connect
 
 ## Boot and SRAM loading
 
-CPU0 (PicoRV32) is the primary boot core. CPU1 (SERV) stays in reset until CPU0 has copied both firmware images from the read-only flash model into blank SRAM, then writes the reset-control MMIO register. This is proven in a standalone CPU0/CPU1 boot scope; neither the global NoC nor a physical flash controller is integrated in that scope. Read [boot.md](boot.md) for the exact address map, bus transactions, limitations and next steps. The speculative HBM/DDR control windows have been removed.
+CPU0 (PicoRV32) is the primary boot core. CPU1 (SERV) stays in reset until CPU0 has copied both firmware images from the read-only flash model into blank SRAM, then writes the reset-control MMIO register. This is proven in a standalone CPU0/CPU1 boot scope; neither the global NoC nor a physical flash controller is integrated in that scope. Read [boot.md](boot.md) for the exact address map, bus transactions, limitations and next steps. A controller configuration aperture at 0x40030000 is reserved in the generated global/local config NoCs; real controller CSR RTL remains absent.
 
 ## Structure
 
 - Compute 0 contains `picorv32` (AXI4-Lite CPU interface), `pulp_idma`, SRAM, local data/config fabric.
 - Compute 1 contains `serv` (Wishbone-style separate instruction/data interface), the same `pulp_idma`, SRAM, local data/config fabric.
-- Memory 0 contains one HBM profile and one DDR profile. The global data NoC exposes two AXI4 outputs into the memory subsystem. Its local 2×2 crossbar decodes addresses to HBM0 and DDR0; both ingress ports may access either target.
-- Global AXI4 data and AXI4-Lite configuration networks are independent. Their providers and topologies are configurable.
+- Memory 0 contains independently generated local data and configuration FlooNoCs and one HBM + one DDR behavioral model. Its *internal* 2×2 Verilog-AXI crossbar remains separately tested: both inputs can reach either target.
+- Global data and global configuration FlooNoC meshes are independent. The config NoC uses AXI4 wire transport with AXI4-Lite protocol adapters at CSR boundaries. Both compute SRAM destinations are present in the global data address map for future CPU0-to-CPU1 SRAM cold boot.
 
 ## Stable contract vs backend
 
-The generator first validates an abstract graph of **initiators, targets, boundaries, address windows, and NoC ports**. It produces `gen/noc/fabric_ir.json`. A backend then consumes that intermediate representation and emits implementation-specific modules/typedefs/source lists.
+The generator first validates an abstract graph of **initiators, targets, boundaries, address windows, and NoC ports**. It produces `gen/noc/fabric_ir.json`. The pinned upstream FlooGen generator now emits real structural module/package pairs under `gen/noc/floonoc/` for every local/global network, while the fully integrated SoC emitter and RTL simulation are still missing.
 
-| Network | Selected backend | Status |
+| Network | Backend | Actual status |
 | --- | --- | --- |
-| Memory-local AXI4 fabric | `verilog_axi` | Executable 2×2 crossbar verified by Xezim regression |
-| Compute-local AXI4 fabric | `pulp_axi` | Selected, not emitted |
-| Local AXI-Lite config | `pulp_axi` | Selected, not emitted |
-| Global AXI4 data NoC | `floonoc` | Selected, FlooGen emitter not yet implemented |
-| Global AXI-Lite config fabric | `pulp_axi` | Selected, not emitted |
+| Memory0 internal 2×2 AXI target crossbar | `verilog_axi` | Real executable, independently Xezim-verified |
+| Compute0 local data + config | `floonoc` | Generated, tracked upstream structural RTL; no assembled endpoints |
+| Compute1 local data + config | `floonoc` | Generated, tracked upstream structural RTL; no assembled endpoints |
+| Memory0 local data + config | `floonoc` | Generated, tracked upstream structural RTL; internal crossbar still separate |
+| Global data | `floonoc` | Generated six-router XY mesh with compute SRAM + memory destinations; not traffic-verified |
+| Global config | `floonoc` | Generated six-router XY mesh; upstream AXI-Lite adapters not yet connected |
+
+All eight structural tops/packages, generated upstream FlooGen YAML inputs,
+and native MaxTxns/MaxUniqueIds/read/write RoB bindings are tracked in
+[the NoC manifest](../gen/noc/floonoc/manifest.json). For AXI-Lite
+control traffic follow [the no-custom-bridge upstream reuse guide](axi-lite-over-floonoc.md).
+**Generated SystemVerilog is not proof of independent elaboration, IP
+integration, or successful AXI transactions.**
 
 `tools/noc_backends.py` is an explicit backend registry. A new vendor implementation must provide port transformations, parameter translation, source resolution, ID widening or remapping, address decoding, and ordering/route checks. A vendor switch is not guaranteed safe merely because the configuration parses.
 
