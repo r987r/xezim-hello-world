@@ -10,8 +10,8 @@ flowchart TB
     direction TB
     compute1_cpu["serv<br/>wishbone / serv_wishbone"]:::cpu
     compute1_dma["pulp_idma"]:::dma
-    compute1_data["Local data fabric<br/>pulp_axi"]:::fabric
-    compute1_config["Local config fabric<br/>pulp_axi"]:::config
+    compute1_data["Local data fabric<br/>floonoc"]:::fabric
+    compute1_config["Local config fabric<br/>floonoc"]:::config
     compute1_sram["SRAM<br/>0x11000000 + 0x100000"]:::memory
   end
   compute1_cpu -.->|adapter required| compute1_config

@@ -10,27 +10,27 @@ flowchart TB
     direction TB
     compute0_cpu["picorv32<br/>axi4_lite / picorv32_axi"]:::cpu
     compute0_dma["pulp_idma<br/>DMA RTL: pending"]:::dma
-    compute0_local_data["Local data fabric<br/>pulp_axi (pending)"]:::fabric
-    compute0_local_config["Local config fabric<br/>pulp_axi (pending)"]:::config
+    compute0_local_data["Local data fabric<br/>floonoc (pending)"]:::fabric
+    compute0_local_config["Local config fabric<br/>floonoc (pending)"]:::config
     compute0_sram["SRAM<br/>0x10000000 + 0x100000"]:::memory
   end
   subgraph box_compute1["compute1 : compute"]
     direction TB
     compute1_cpu["serv<br/>wishbone / serv_wishbone"]:::cpu
     compute1_dma["pulp_idma<br/>DMA RTL: pending"]:::dma
-    compute1_local_data["Local data fabric<br/>pulp_axi (pending)"]:::fabric
-    compute1_local_config["Local config fabric<br/>pulp_axi (pending)"]:::config
+    compute1_local_data["Local data fabric<br/>floonoc (pending)"]:::fabric
+    compute1_local_config["Local config fabric<br/>floonoc (pending)"]:::config
     compute1_sram["SRAM<br/>0x11000000 + 0x100000"]:::memory
   end
   subgraph box_memory0["memory0 : memory"]
     direction TB
     memory0_local_data["2-input AXI4 fabric<br/>verilog_axi (RTL tested)"]:::fabric
-    memory0_local_config["Controller config reserved<br/>pulp_axi (not integrated)"]:::config
+    memory0_local_config["Controller config reserved<br/>floonoc (not integrated)"]:::config
     memory0_hbm0["HBM hisa_hbm<br/>AXI model: axi_ram<br/>0x100000000 + 0x40000000"]:::memory
     memory0_ddr0["DDR litedram<br/>AXI model: axi_ram<br/>0x140000000 + 0x40000000"]:::memory
   end
   global_data["Global data NoC<br/>mesh / floonoc<br/>AXI4 64-bit (pending)"]:::fabric
-  global_config["Global config NoC<br/>tree / pulp_axi<br/>AXI4-Lite (pending)"]:::config
+  global_config["Global config NoC<br/>mesh / floonoc<br/>AXI4-Lite (pending)"]:::config
   compute0_cpu -.->|MMIO via adapter| compute0_local_config
   compute0_dma -.->|AXI4| compute0_local_data
   compute0_local_data -.->|local SRAM| compute0_sram

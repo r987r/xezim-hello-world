@@ -18,8 +18,8 @@
   ],
   "fabrics": {
     "global_config": {
-      "backend": "pulp_axi",
-      "topology": "tree",
+      "backend": "floonoc",
+      "topology": "mesh",
       "emitter_available": false
     },
     "global_data": {
@@ -28,19 +28,24 @@
       "emitter_available": false
     },
     "local_config": {
-      "backend": "pulp_axi",
-      "topology": "crossbar",
+      "backend": "floonoc",
+      "topology": "mesh",
       "emitter_available": false
     },
     "local_data": {
-      "backend": "pulp_axi",
-      "topology": "crossbar",
+      "backend": "floonoc",
+      "topology": "mesh",
       "emitter_available": false
     },
     "memory_data": {
       "backend": "verilog_axi",
       "topology": "crossbar",
       "emitter_available": true
+    },
+    "memory_local_data": {
+      "backend": "floonoc",
+      "topology": "mesh",
+      "emitter_available": false
     }
   },
   "memory": {

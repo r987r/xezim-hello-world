@@ -45,7 +45,7 @@ Green scope boxes are **implemented testbenches**, not a claim that the entire S
 
 - **Subsystems:** 2 compute, 1 memory; **data:** AXI4 64-bit, 64-bit addressing; **config:** AXI4-Lite 32-bit.
 - **Global data NoC:** floonoc / mesh (selected, emitter pending).
-- **Global config NoC:** pulp_axi / tree (selected, emitter pending).
+- **Global config NoC:** floonoc / mesh (selected, emitter pending).
 - **Local memory crossbar:** verilog_axi; 2 ingress × 2 targets (executable RTL testbench).
 
 | Subsystem | CPU | CPU bus/adapter | DMA | Detailed 2D diagram |
