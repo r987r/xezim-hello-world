@@ -89,6 +89,24 @@ Green scope boxes are **implemented testbenches**, not a claim that the entire S
 
 <!-- END GENERATED SOC -->
 
+## Current implementation status and agent runbook
+
+**Working today:** independently simulated real PicoRV32/SERV cold boot and
+a real open-source 2x2 Verilog-AXI memory crossbar. The crossbar's full and
+sparse routing profiles run with native RTL parameters, AXI reads/writes and
+denied-route DECERR responses. **Not working yet:** FlooNoC routers/links,
+PULP AXI local fabrics, PULP iDMA integration, full-chip `soc_top`, or
+real DDR/HBM controller/PHY paths. `backend: floonoc` is an architectural
+choice and **does not instantiate a functioning NoC**.
+
+For source-backed status, every architecture/RTL/boot/verification/subsystem
+diagram and implementation limits, see
+[Implementation status & seven-diagram index](docs/implementation-status.md).
+Future coding agents **must** follow [AGENTS.md](AGENTS.md), including pinned
+Xezim binary installation, `make gen`, `make check-generated`, the full
+regression and the two AXI routing profile simulations. Never hand-edit
+`gen/` or silently replace a missing upstream backend.
+
 ## Reproducible generation
 
 Everything under **[`gen/`](gen/)** is committed to Git for version-to-version diffs. The directory is exclusively generator-owned and contains a marker protecting against accidental replacement of user-owned trees.
