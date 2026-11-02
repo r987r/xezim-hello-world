@@ -45,7 +45,7 @@ Green scope boxes are **implemented testbenches**, not a claim that the entire S
 
 - **Subsystems:** 2 compute, 1 memory; **data:** AXI4 64-bit, 64-bit addressing; **config:** AXI4-Lite 32-bit.
 - **Global data NoC:** floonoc / mesh (selected, emitter pending).
-- **Global config NoC:** pulp_axi / tree (selected, emitter pending).
+- **Global config NoC:** floonoc / mesh (selected, emitter pending).
 - **Local memory crossbar:** verilog_axi; 2 ingress × 2 targets (executable RTL testbench).
 
 | Subsystem | CPU | CPU bus/adapter | DMA | Detailed 2D diagram |
@@ -106,6 +106,15 @@ Future coding agents **must** follow [AGENTS.md](AGENTS.md), including pinned
 Xezim binary installation, `make gen`, `make check-generated`, the full
 regression and the two AXI routing profile simulations. Never hand-edit
 `gen/` or silently replace a missing upstream backend.
+
+## FlooNoC fabric policy
+
+All **local data/config** and **global data/config** NoCs use pinned upstream
+FlooNoC, with independent mesh instances. Inside memory0, the verified
+Verilog-AXI target crossbar remains downstream of its local FlooNoC.
+AXI4-Lite control endpoints need real upstream AXI-Lite/AXI4 adapters.
+Only the global data FlooGen output is currently generated; no new
+local/global FlooNoC path is yet proven in RTL simulation.
 
 ## Explicit interface sizing
 

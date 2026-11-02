@@ -78,24 +78,28 @@
   ],
   "fabrics": {
     "local_data": {
-      "topology": "crossbar",
-      "backend": "pulp_axi"
+      "topology": "mesh",
+      "backend": "floonoc"
     },
     "local_config": {
-      "topology": "crossbar",
-      "backend": "pulp_axi"
+      "topology": "mesh",
+      "backend": "floonoc"
     },
     "memory_data": {
       "topology": "crossbar",
       "backend": "verilog_axi"
+    },
+    "memory_local_data": {
+      "topology": "mesh",
+      "backend": "floonoc"
     },
     "global_data": {
       "topology": "mesh",
       "backend": "floonoc"
     },
     "global_config": {
-      "topology": "tree",
-      "backend": "pulp_axi"
+      "topology": "mesh",
+      "backend": "floonoc"
     }
   },
   "data_regions": [

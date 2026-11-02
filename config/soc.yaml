@@ -47,11 +47,13 @@ boot:
 # Architectural topology and backend selection are separate. This allows
 # a different vendor's NoC backend without changing subsystem definitions.
 fabrics:
-  local_data: {topology: crossbar, backend: pulp_axi}
-  local_config: {topology: crossbar, backend: pulp_axi}
+  local_data: {topology: mesh, backend: floonoc}
+  local_config: {topology: mesh, backend: floonoc}
+  # Retain the tested memory target crossbar behind the memory-local NoC.
   memory_data: {topology: crossbar, backend: verilog_axi}
+  memory_local_data: {topology: mesh, backend: floonoc}
   global_data: {topology: mesh, backend: floonoc}
-  global_config: {topology: tree, backend: pulp_axi}
+  global_config: {topology: mesh, backend: floonoc}
 
 networks:
   global_data:

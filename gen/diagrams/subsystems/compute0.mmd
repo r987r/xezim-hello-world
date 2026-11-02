@@ -10,8 +10,8 @@ flowchart TB
     direction TB
     compute0_cpu["picorv32<br/>axi4_lite / picorv32_axi"]:::cpu
     compute0_dma["pulp_idma"]:::dma
-    compute0_data["Local data fabric<br/>pulp_axi"]:::fabric
-    compute0_config["Local config fabric<br/>pulp_axi"]:::config
+    compute0_data["Local data fabric<br/>floonoc"]:::fabric
+    compute0_config["Local config fabric<br/>floonoc"]:::config
     compute0_sram["SRAM<br/>0x10000000 + 0x100000"]:::memory
   end
   compute0_cpu -.->|adapter required| compute0_config

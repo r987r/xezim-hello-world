@@ -121,13 +121,13 @@
       {
         "category": "fabric",
         "id": "compute0.local_data",
-        "label": "Local data fabric\npulp_axi (pending)",
+        "label": "Local data fabric\nfloonoc (pending)",
         "parent": "compute0"
       },
       {
         "category": "config",
         "id": "compute0.local_config",
-        "label": "Local config fabric\npulp_axi (pending)",
+        "label": "Local config fabric\nfloonoc (pending)",
         "parent": "compute0"
       },
       {
@@ -151,13 +151,13 @@
       {
         "category": "fabric",
         "id": "compute1.local_data",
-        "label": "Local data fabric\npulp_axi (pending)",
+        "label": "Local data fabric\nfloonoc (pending)",
         "parent": "compute1"
       },
       {
         "category": "config",
         "id": "compute1.local_config",
-        "label": "Local config fabric\npulp_axi (pending)",
+        "label": "Local config fabric\nfloonoc (pending)",
         "parent": "compute1"
       },
       {
@@ -175,7 +175,7 @@
       {
         "category": "config",
         "id": "memory0.local_config",
-        "label": "Controller config reserved\npulp_axi (not integrated)",
+        "label": "Controller config reserved\nfloonoc (not integrated)",
         "parent": "memory0"
       },
       {
@@ -199,7 +199,7 @@
       {
         "category": "config",
         "id": "global_config",
-        "label": "Global config NoC\ntree / pulp_axi\nAXI4-Lite (pending)",
+        "label": "Global config NoC\nmesh / floonoc\nAXI4-Lite (pending)",
         "parent": ""
       }
     ]
