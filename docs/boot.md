@@ -50,9 +50,8 @@ drift.
 3. Only after that integrate local AXI/AXI-Lite fabrics and the real
    programmable PULP iDMA.
 
-The Xezim 0.11.3 compatibility shim and the independent simulator
-reproducer are documented in [boot-debug.md](boot-debug.md). The shim only
-rewrites two port slice connections in a derived copy of locked SERV RTL.
+Xezim 0.11.4 uses unmodified upstream SERV RTL. The prior compatibility
+workaround and the independent regression are documented in [boot-debug.md](boot-debug.md).
 
 ## Why there is no prefilled ASIC SRAM
 

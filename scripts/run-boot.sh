@@ -5,8 +5,14 @@ source "$ROOT/scripts/common.sh"
 cd "$ROOT"
 python3 tools/generate.py --check
 python3 tools/ip_fetch.py picorv32 serv
-serv_files="$(python3 tools/serv_compat.py)"
-mapfile -t serv_sources <<< "$serv_files"
+mapfile -t serv_sources < <(python3 - <<'PY'
+import yaml
+from pathlib import Path
+lock = yaml.safe_load(Path("config/ip.lock.yaml").read_text())
+for module in lock["third_party"]["serv"]["modules"]:
+    print(str(Path(".tools/serv") / module))
+PY
+)
 sources=("$ROOT/.tools/picorv32/picorv32.v" "${serv_sources[@]}")
 sources+=("$ROOT/rtl/adapters/picorv32_cpu_adapter.sv" "$ROOT/rtl/adapters/serv_cpu_adapter.sv"
           "$ROOT/rtl/boot/boot_memory_model.sv" "$ROOT/dv/boot/boot_tb.sv")

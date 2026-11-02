@@ -30,12 +30,10 @@ SRAM through real bus writes.
    `dv/simulator/port_slice_repro.sv` isolates the problem in 16 lines:
    Icarus 12.0 passes, while Xezim 0.11.3 fails the assertion.
 
-`tools/serv_compat.py` creates `.tools/compat/serv_top.v` from the **pinned,
-unmodified** upstream source and replaces just those two direct slices with
-explicit indexed intermediate wires. It fails closed if the upstream RTL
-changes. The Xezim workaround is standards-compliant and verified under
-both simulators. When a later Xezim passes `port_slice_repro.sv`, we can
-remove the compatibility shim and use the original source directly.
+Xezim 0.11.4 includes the upstream packed port part-select fix. Both the
+standalone `port_slice_repro.sv` check and the unmodified, pinned upstream
+SERV source must pass. Do not patch upstream SERV sources for this issue.
+The original 0.11.3 workaround is removed.
 
 ## Debug the real boot if it regresses
 
