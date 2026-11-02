@@ -91,8 +91,7 @@ jobs:
                     str(root/network["package"]), str(root/network["top"]))))
           PY
           count=0
-          while IFS=
-\t' read -r top pkg rtl; do
+          while read -r top pkg rtl; do
             echo "ELABORATE $top from $rtl"
             verilator --lint-only --timing --top-module "$top" \
               -Wno-fatal "${includes[@]}" \
