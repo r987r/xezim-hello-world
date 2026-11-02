@@ -83,8 +83,9 @@ implementation must explicitly choose *source-based target selection*
 versus *memory-subsystem ingress aggregation*; do not claim both memory
 targets can be reached through both global NoC outputs until tested.
 The existing 64-bit bus contract also uses **64-bit addresses**, whereas
-the first FlooGen example uses **48-bit addresses** and must be reconciled
-before executable integration.
+the new FlooGen input uses **64-bit addresses** matching SoC YAML;
+validate the resulting AXI ID-width and upstream endpoint address-routing
+contracts before compiling the integrated network.
 
 Other outstanding areas (local PULP AXI, actual iDMA, global config
 network, and HBM/DDR controller models) remain unimplemented. Do not
