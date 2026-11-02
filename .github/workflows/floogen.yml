@@ -33,6 +33,10 @@ jobs:
           python3 -m pip install -r requirements.txt
           python3 tools/ip_fetch.py floonoc
           python3 -m pip install -e .tools/floonoc
+      - name: Validate subsystem and global interface budgets and link widths
+        run: |
+          python3 tools/interface_contracts.py --output .tools/interface-contracts.json
+          python3 -m unittest discover -s tests -p test_interface_contracts.py -v
       - name: Generate upstream FlooNoC topology and validate actual RTL outputs
         run: |
           set -euo pipefail
