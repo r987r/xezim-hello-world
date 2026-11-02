@@ -6,6 +6,8 @@ on:
       - 'config/**'
       - 'gen/**'
       - 'README.md'
+      - 'AGENTS.md'
+      - 'docs/**'
       - 'tools/**'
       - 'tests/**'
       - 'dv/**'
@@ -67,6 +69,10 @@ jobs:
           echo "XEZIM_BIN=$GITHUB_WORKSPACE/.tools/bin/$XEZIM_ASSET_NAME" >> "$GITHUB_ENV"
       - name: Exercise both memory destinations through AXI4 fabric
         run: bash -o pipefail -c 'make dv-memory | tee memory-dv.log'
+      - name: Simulate configured fully connected AXI crossbar profile
+        run: AXI_CONFIG=config/examples/memory-fabric-connectivity.yaml make dv-memory
+      - name: Simulate sparse AXI crossbar (allowed transfers and forbidden DECERR)
+        run: AXI_CONFIG=config/examples/memory-fabric-sparse.yaml make dv-memory
       - name: Prove scoreboard detects incorrect memory data
         run: bash -o pipefail -c 'make dv-memory-negative | tee memory-negative.log'
       - name: Guard fixed indexed part-select port semantics
