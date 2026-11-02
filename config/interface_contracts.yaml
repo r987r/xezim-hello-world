@@ -1,0 +1,64 @@
+# Architectural interface-sizing contract, *not* an RTL implementation.
+# config/soc.yaml is authoritative for subsystems, buses, fabrics and addresses.
+# This file defines reusable throughput/queue-depth targets and per-instance
+# overrides, independently validated against real FlooGen and memory RTL.
+schema_version: 1
+
+# Independent read and write budgets. These are acceptance targets until the
+# corresponding IP is actually emitted; a YAML value alone does not enforce it.
+defaults:
+  axi4:
+    max_pending_reads: 4
+    max_pending_writes: 4
+    max_burst_beats: 16
+  axi4_lite:
+    max_pending_reads: 1
+    max_pending_writes: 1
+    max_burst_beats: 1
+
+# Native parameter names from pinned upstream PULP AXI/FlooNoC/Verilog-AXI.
+# Important: PULP MaxMstTrans/MaxSlvTrans and Floo MaxTxns are SHARED
+# transaction resources, not independent AR/AW hardware limits.
+# Until upstream emitters exist, these are validated planned values.
+fabric_parameters:
+  local_data:
+    MaxMstTrans: 8
+    MaxSlvTrans: 8
+    FallThrough: false
+    LatencyMode: CUT_ALL_AX
+  local_config:
+    MaxMstTrans: 2
+    MaxSlvTrans: 2
+    FallThrough: false
+    LatencyMode: CUT_ALL_AX
+  memory_data:
+    S_THREADS: 2
+    S_ACCEPT: 16
+    M_ISSUE: 4
+  global_data:
+    MaxTxns: 8
+    MaxUniqueIds: 4
+    RRoBType: NormalRoB
+    BRoBType: NormalRoB
+    RRoBSize: 8
+    BRoBSize: 8
+  global_config:
+    MaxMstTrans: 2
+    MaxSlvTrans: 2
+    FallThrough: false
+    LatencyMode: CUT_ALL_AX
+
+# Resolved after type defaults, before per-port overrides. Unknown instances
+# and names are errors, not silently ignored.
+instance_overrides:
+  compute1:
+    local_data:
+      max_pending_reads: 2
+      max_pending_writes: 2
+
+# Per-module/port overrides. Only declared schema ports are legal.
+# The CPU-native Wishbone / AXI-Lite interfaces are NOT being presented as
+# AXI4: cpu_in refers to the *output of a future verified protocol adapter*.
+port_overrides:
+  compute0.local_data.cpu_in: {max_pending_reads: 1, max_pending_writes: 1}
+  compute1.local_data.cpu_in: {max_pending_reads: 1, max_pending_writes: 1}
