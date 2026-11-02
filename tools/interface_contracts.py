@@ -1,0 +1,368 @@
+#!/usr/bin/env python3
+"""Resolve *planned* per-subsystem NoC port sizing and validate link contracts.
+
+The SoC YAML owns bus widths, subsystem instances, addresses, and backend
+selection. config/interface_contracts.yaml supplies capability/budget targets.
+No custom RTL is emitted here; local PULP AXI and FlooNoC remain unverified.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+from copy import deepcopy
+from pathlib import Path
+
+import yaml
+
+ROOT = Path(__file__).resolve().parents[1]
+NUMERIC = {"max_pending_reads", "max_pending_writes", "max_burst_beats"}
+PORT_KNOBS = NUMERIC | {"addr_bits", "data_bits", "id_bits", "adapter"}
+NATIVE_KEYS = {
+    "local_data": {"MaxMstTrans", "MaxSlvTrans", "FallThrough", "LatencyMode"},
+    "local_config": {"MaxMstTrans", "MaxSlvTrans", "FallThrough", "LatencyMode"},
+    "memory_data": {"S_THREADS", "S_ACCEPT", "M_ISSUE"},
+    "global_data": {"MaxTxns", "MaxUniqueIds", "RRoBType",
+                    "BRoBType", "RRoBSize", "BRoBSize"},
+    "global_config": {"MaxMstTrans", "MaxSlvTrans", "FallThrough", "LatencyMode"},
+}
+
+
+class InterfaceError(ValueError):
+    pass
+
+
+def positive(value, label, limit=1024):
+    if type(value) is not int or not 1 <= value <= limit:
+        raise InterfaceError(f"{label}: expected integer 1..{limit}")
+    return value
+
+
+def exact_keys(value, keys, label):
+    if not isinstance(value, dict):
+        raise InterfaceError(f"{label}: expected map")
+    if set(value) != set(keys):
+        raise InterfaceError(f"{label}: expected keys {sorted(keys)}, got {sorted(value)}")
+
+
+def budgets(value, label, protocol="axi4"):
+    exact_keys(value, NUMERIC, label)
+    r = {k: positive(v, f"{label}.{k}", 256) for k, v in value.items()}
+    if protocol == "axi4_lite" and r["max_burst_beats"] != 1:
+        raise InterfaceError(f"{label}: AXI4-Lite supports only single-beat transfers")
+    return r
+
+
+def load():
+    return (yaml.safe_load((ROOT / "config/soc.yaml").read_text()),
+            yaml.safe_load((ROOT / "config/interface_contracts.yaml").read_text()),
+            yaml.safe_load((ROOT / "config/floogen/global_data.yml").read_text()))
+
+
+def build(soc, contract, floogen=None):
+    """Return a name-addressable graph, rejecting all unadapted link mismatches.
+
+    This is a *configuration acceptance* test, not a real AXI fabric simulation.
+    Per-port overrides may change pending/throughput. Any width/ID change
+    requires naming a real upstream adapter, and remains explicitly planned.
+    """
+    if contract.get("schema_version") != 1:
+        raise InterfaceError("interface contract schema_version must be 1")
+    exact_keys(contract, {"schema_version", "defaults", "fabric_parameters",
+                          "instance_overrides", "port_overrides"}, "interface contract")
+    exact_keys(contract["defaults"], {"axi4", "axi4_lite"}, "defaults")
+    defaults = {protocol: budgets(spec, f"defaults.{protocol}", protocol)
+                for protocol, spec in contract["defaults"].items()}
+    params = contract["fabric_parameters"]
+    exact_keys(params, NATIVE_KEYS, "fabric_parameters")
+    for kind, config in params.items():
+        exact_keys(config, NATIVE_KEYS[kind], f"fabric_parameters.{kind}")
+        for key, value in config.items():
+            if key in {"FallThrough"}:
+                if type(value) is not bool:
+                    raise InterfaceError(f"{kind}.{key} must be boolean")
+            elif key in {"LatencyMode"}:
+                if value not in {"NO_LATENCY", "CUT_ALL_AX", "CUT_SLV_AX",
+                                 "CUT_MST_AX", "CUT_ALL_PORTS"}:
+                    raise InterfaceError(f"{kind}.{key}: unsupported native latency selection")
+            elif key in {"BRoBType", "RRoBType"}:
+                if value not in {"NoRoB", "NormalRoB", "SimpleRoB"}:
+                    raise InterfaceError(f"{kind}.{key}: unknown upstream RoB type")
+            else:
+                positive(value, f"fabric_parameters.{kind}.{key}")
+    if any(type(x) is not bool for x in
+           [params["local_data"]["FallThrough"], params["global_config"]["FallThrough"]]):
+        raise InterfaceError("FallThrough must be boolean")
+
+    buses = soc["buses"]
+    data, config = buses["data"], buses["config"]
+    if data["protocol"] != "axi4" or config["protocol"] != "axi4_lite":
+        raise InterfaceError("expected AXI4 and AXI4-Lite bus contracts")
+    dw, aw, iw = (positive(data[k], "buses.data." + k, 256)
+                  for k in ("data_bits", "addr_bits", "id_bits"))
+    ca, cd = (positive(config[k], "buses.config." + k, 256)
+              for k in ("addr_bits", "data_bits"))
+    for width in (dw, cd):
+        if width % 8 or (width & (width - 1)):
+            raise InterfaceError("AXI data widths must be byte-multiple powers of two")
+    instances = soc["subsystems"]
+    names = [s["name"] for s in instances]
+    if len(names) != len(set(names)):
+        raise InterfaceError("duplicate subsystem instance")
+    computes = [s for s in instances if s["type"] == "compute"]
+    memories = [s for s in instances if s["type"] == "memory"]
+    if len(memories) != 1:
+        raise InterfaceError("current memory RTL contract requires exactly one memory subsystem")
+    memory = memories[0]["name"]
+    outs = soc["networks"]["global_data"]["outputs"]
+    ingress = soc["subsystem_types"]["memory"]["data_ingress_ports"]
+    if len(outs) != ingress:
+        raise InterfaceError("memory ingress count differs from global_data.outputs")
+    if len({x["name"] for x in outs}) != len(outs):
+        raise InterfaceError("duplicate global memory ingress name")
+    targets = soc["memory_targets"]
+    if any(t["name"].split(".")[0] != memory for t in targets):
+        raise InterfaceError("memory target outside active memory subsystem")
+    target_names = {t["name"] for t in targets}
+    if any(x["target"] not in target_names for x in outs):
+        raise InterfaceError("global memory output refers to unknown target")
+    allowed_instances = set(names)
+    overrides = contract["instance_overrides"]
+    if not isinstance(overrides, dict) or set(overrides) - allowed_instances:
+        raise InterfaceError("unknown instance_overrides subsystem name")
+    for name, sub_settings in overrides.items():
+        if not isinstance(sub_settings, dict) or not set(sub_settings) <= {"local_data", "local_config"}:
+            raise InterfaceError(f"{name}: invalid local fabric override")
+        if name not in [s["name"] for s in computes]:
+            raise InterfaceError(f"{name}: only compute fabric overrides supported")
+        for fabric, values in sub_settings.items():
+            if not isinstance(values, dict) or not values or not set(values) <= NUMERIC:
+                raise InterfaceError(f"{name}.{fabric}: unsupported instance sizing knob")
+            for k, v in values.items():
+                positive(v, name + "." + fabric + "." + k, 256)
+    port_overrides = contract["port_overrides"]
+    if not isinstance(port_overrides, dict):
+        raise InterfaceError("port_overrides must be a map")
+
+    if params["global_data"]["MaxUniqueIds"] > (1 << iw):
+        raise InterfaceError("FlooNoC MaxUniqueIds exceeds outgoing AXI ID capacity")
+    if params["global_data"]["MaxTxns"] < (defaults["axi4"]["max_pending_reads"] +
+                                           defaults["axi4"]["max_pending_writes"]):
+        raise InterfaceError("FlooNoC MaxTxns below planned combined read/write budget")
+    for response in ("R", "B"):
+        if params["global_data"][response + "RoBType"] != "NoRoB":
+            min_required = (defaults["axi4"]["max_pending_reads"]
+                            if response == "R" else defaults["axi4"]["max_pending_writes"])
+            if params["global_data"][response + "RoBSize"] < min_required:
+                raise InterfaceError(f"FlooNoC {response}RoBSize below pending budget")
+    for local, protocol in (("local_data", "axi4"), ("local_config", "axi4_lite"),
+                             ("global_config", "axi4_lite")):
+        required = sum(defaults[protocol][key]
+                       for key in ("max_pending_reads", "max_pending_writes"))
+        for parameter in ("MaxMstTrans", "MaxSlvTrans"):
+            if params[local][parameter] < required:
+                raise InterfaceError(f"{local}.{parameter} below planned combined budget")
+    if any(params["memory_data"][k] < defaults["axi4"][required]
+           for k, required in (("S_ACCEPT", "max_pending_reads"),
+                               ("S_ACCEPT", "max_pending_writes"))):
+        raise InterfaceError("Verilog AXI S_ACCEPT below planned ingress budget")
+
+    ports = {}
+    fabrics = {}
+    links = []
+
+    def port(name, proto, id_bits=None, *, subsystem=None, fabric=None):
+        if name in ports:
+            raise InterfaceError(f"duplicate port: {name}")
+        spec = deepcopy(defaults[proto])
+        if subsystem in overrides and fabric in overrides[subsystem]:
+            spec.update(overrides[subsystem][fabric])
+        if name in port_overrides:
+            changes = port_overrides[name]
+            if not isinstance(changes, dict) or not changes or set(changes) - PORT_KNOBS:
+                raise InterfaceError(f"{name}: unsupported per-port override")
+            spec.update(changes)
+        for field in NUMERIC:
+            positive(spec[field], name + "." + field, 256)
+        if proto == "axi4_lite" and spec["max_burst_beats"] != 1:
+            raise InterfaceError(f"{name}: AXI4-Lite must have max_burst_beats=1")
+        entry = {
+            "protocol": proto, "addr_bits": aw if proto == "axi4" else ca,
+            "data_bits": dw if proto == "axi4" else cd, "id_bits": id_bits,
+            "max_pending_reads": spec["max_pending_reads"],
+            "max_pending_writes": spec["max_pending_writes"],
+            "max_burst_beats": spec["max_burst_beats"],
+            "rtl_status": "planned",
+        }
+        for width in ("addr_bits", "data_bits", "id_bits"):
+            if width in spec:
+                if width == "id_bits" and proto == "axi4_lite":
+                    raise InterfaceError(f"{name}: AXI4-Lite has no transaction IDs")
+                positive(spec[width], name + "." + width, 256)
+                if spec[width] != entry[width] and not spec.get("adapter"):
+                    raise InterfaceError(f"{name}: changing {width} requires named upstream adapter")
+                entry[width] = spec[width]
+        if spec.get("adapter"):
+            if not isinstance(spec["adapter"], str) or not spec["adapter"].strip():
+                raise InterfaceError(f"{name}: empty adapter is invalid")
+            entry["planned_adapter"] = spec["adapter"]
+        if entry["data_bits"] % 8 or entry["data_bits"] & (entry["data_bits"] - 1):
+            raise InterfaceError(f"{name}: AXI data width must be power of two")
+        ports[name] = entry
+        return name
+
+    def link(src, dst, plane):
+        if src not in ports or dst not in ports:
+            raise InterfaceError(f"link uses unknown ports: {src} -> {dst}")
+        left, right = ports[src], ports[dst]
+        incompatible = [k for k in ("protocol", "addr_bits", "data_bits", "id_bits")
+                        if left[k] != right[k]]
+        if incompatible and not (left.get("planned_adapter") or right.get("planned_adapter")):
+            raise InterfaceError(f"{src} -> {dst}: incompatible {incompatible}; adapter required")
+        if left["max_burst_beats"] > right["max_burst_beats"]:
+            raise InterfaceError(f"{src} -> {dst}: burst length exceeds downstream support")
+        links.append({"from": src, "to": dst, "plane": plane,
+                      "status": "planned", "adapter_required": bool(incompatible)})
+
+    for comp in computes:
+        name = comp["name"]
+        native = comp["cpu"]["bus"]
+        in_id = iw
+        # PULP axi_xbar: output ID = input ID + ceil(log2(input port count)).
+        n_sources = 2  # CPU protocol adapter and PULP iDMA are both planned
+        out_id = in_id + (n_sources - 1).bit_length()
+        entry = {"backend": soc["fabrics"]["local_data"]["backend"], "rtl_status": "planned",
+                 "native_cpu_protocol": native, "n_sources": n_sources, "n_targets": 2,
+                 "input_id_bits": in_id, "output_id_bits": out_id,
+                 "parameters": deepcopy(params["local_data"])}
+        fabrics[name + ".local_data"] = entry
+        port(name + ".local_data.cpu_in", "axi4", in_id, subsystem=name, fabric="local_data")
+        port(name + ".local_data.dma_in", "axi4", in_id, subsystem=name, fabric="local_data")
+        port(name + ".local_data.sram_out", "axi4", out_id, subsystem=name, fabric="local_data")
+        port(name + ".local_data.global_out", "axi4", out_id, subsystem=name, fabric="local_data")
+        fabrics[name + ".local_config"] = {
+            "backend": soc["fabrics"]["local_config"]["backend"],
+            "module": "axi_lite_xbar", "rtl_status": "planned",
+            "native_cpu_protocol": native, "parameters": deepcopy(params["local_config"]),
+            "sources": ["cpu", "global_ingress"], "targets": ["dma_csr", "global_egress"] +
+                       (["reset_ctrl"] if name == soc["boot"]["primary"] else []),
+        }
+        for suffix in ("cpu_in", "global_in", "dma_csr_out", "global_out"):
+            port(name + ".local_config." + suffix, "axi4_lite",
+                 subsystem=name, fabric="local_config")
+        if name == soc["boot"]["primary"]:
+            port(name + ".local_config.reset_ctrl_out", "axi4_lite",
+                 subsystem=name, fabric="local_config")
+        port("global_data." + name + "_in", "axi4", out_id)
+        port("global_config." + name + "_in", "axi4_lite")
+        port("global_config." + name + "_out", "axi4_lite")
+        link(name + ".local_data.global_out", "global_data." + name + "_in", "data")
+        link(name + ".local_config.global_out", "global_config." + name + "_in", "config")
+        link("global_config." + name + "_out", name + ".local_config.global_in", "config")
+
+    m_id = iw + (ingress - 1).bit_length()
+    fabrics[memory + ".memory_data"] = {
+        "backend": soc["fabrics"]["memory_data"]["backend"],
+        "rtl_status": "executable_in_scoped_memory_tb",
+        "n_sources": ingress, "n_targets": len(targets),
+        "input_id_bits": iw, "output_id_bits": m_id,
+        "parameters": deepcopy(params["memory_data"]),
+        "note": "Native knobs here are intended budgets; default testbench uses upstream defaults",
+    }
+    for output in outs:
+        n = output["name"]
+        port("global_data." + n + "_out", "axi4", iw)
+        port(memory + ".memory_data." + n + "_in", "axi4", iw)
+        link("global_data." + n + "_out", memory + ".memory_data." + n + "_in", "data")
+    for t in targets:
+        port(memory + ".memory_data." + t["name"].split(".")[-1] + "_out", "axi4", m_id)
+    fabrics[memory + ".local_config"] = {
+        "backend": soc["fabrics"]["local_config"]["backend"],
+        "module": "axi_lite_xbar", "rtl_status": "planned",
+        "parameters": deepcopy(params["local_config"]),
+        "note": "No memory-controller CSR registers implemented yet",
+    }
+    port(memory + ".local_config.global_in", "axi4_lite",
+         subsystem=memory, fabric="local_config")
+    port("global_config." + memory + "_out", "axi4_lite")
+    link("global_config." + memory + "_out", memory + ".local_config.global_in", "config")
+    fabrics["global_data"] = {
+        "backend": soc["fabrics"]["global_data"]["backend"],
+        "topology": soc["fabrics"]["global_data"]["topology"],
+        "rtl_status": "floogen_generates_rtl_not_simulated",
+        "n_sources": len(computes), "n_targets": len(outs),
+        "input_id_bits": iw + 1, "output_id_bits": iw,
+        "parameters": deepcopy(params["global_data"]),
+    }
+    if any(fabrics[name + ".local_data"]["output_id_bits"] != iw + 1 for name in
+           [s["name"] for s in computes]):
+        raise InterfaceError("heterogeneous global ingress IDs require explicit remapper")
+    fabrics["global_config"] = {
+        "backend": soc["fabrics"]["global_config"]["backend"],
+        "module": "axi_lite_xbar", "rtl_status": "planned",
+        "n_sources": len(computes),
+        "n_targets": len(soc["networks"]["global_config"]["reachable_subsystems"]),
+        "parameters": deepcopy(params["global_config"]),
+    }
+    if set(soc["networks"]["global_config"]["reachable_subsystems"]) != set(names):
+        raise InterfaceError("global config NoC does not reach every subsystem")
+    unknown = set(port_overrides) - set(ports)
+    if unknown:
+        raise InterfaceError(f"unknown port_overrides names: {sorted(unknown)}")
+
+    # The FlooGen generator is a separate upstream tool. Validate its *real*
+    # declared port widths/names/windows against the SoC contract.
+    if floogen is not None:
+        if floogen["network_type"] != "axi" or floogen["routing"]["route_algo"] != "XY":
+            raise InterfaceError("FlooGen must be the selected single-AXI XY data mesh")
+        protocol = {p["name"]: p for p in floogen["protocols"]}
+        if set(protocol) != {"axi_in", "axi_out"}:
+            raise InterfaceError("FlooGen needs axi_in and axi_out protocols")
+        for role, id_bits in (("axi_in", iw + 1), ("axi_out", iw)):
+            actual = protocol[role]
+            expected = {"data_width": dw, "addr_width": aw, "id_width": id_bits}
+            if any(actual.get(k) != v for k, v in expected.items()):
+                raise InterfaceError(f"FlooGen {role} must match {expected}")
+        f_endpoints = {ep["name"]: ep for ep in floogen["endpoints"]}
+        expected_ep = set(s["name"] for s in computes) | set(o["name"] for o in outs)
+        if set(f_endpoints) != expected_ep:
+            raise InterfaceError(f"FlooGen endpoints mismatch: need {sorted(expected_ep)}")
+        for comp in computes:
+            ep = f_endpoints[comp["name"]]
+            if ep.get("mgr_port_protocol") != ["axi_in"]:
+                raise InterfaceError(f"FlooGen {comp['name']} missing AXI4 manager interface")
+        region = {r["name"]: r for r in soc["address_map"]["data"]}
+        for out in outs:
+            ep = f_endpoints[out["name"]]
+            expected_range = region[out["target"]]
+            arange = ep.get("addr_range", {})
+            if ep.get("sbr_port_protocol") != ["axi_out"]:
+                raise InterfaceError(f"FlooGen {out['name']} missing subordinate port")
+            if (arange.get("base") != int(expected_range["base"], 0) or
+                    arange.get("size") != int(expected_range["size"], 0)):
+                raise InterfaceError(f"FlooGen {out['name']} address range does not match SoC")
+
+    return {"schema_version": 1, "status": "interface_contract_not_all_RTL",
+            "ports": ports, "links": links, "fabrics": fabrics,
+            "note": "Pending budgets are design targets until mapped to real upstream RTL"}
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output", default=None,
+                        help="Optional JSON output path (writes outside gen/)")
+    args = parser.parse_args()
+    soc, contract, floogen = load()
+    graph = build(soc, contract, floogen)
+    payload = json.dumps(graph, indent=2, sort_keys=True) + "\n"
+    if args.output:
+        out = Path(args.output)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(payload)
+    else:
+        print(payload)
+    print(f"PASS: {len(graph['fabrics'])} fabric instances, "
+          f"{len(graph['ports'])} named interfaces, {len(graph['links'])} checked links")
+
+
+if __name__ == "__main__":
+    main()
