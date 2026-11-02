@@ -1,0 +1,53 @@
+# FlooGen input for Xezim's global AXI data NoC bring-up.
+# Upstream pinned FlooNoC / FlooGen v0.9 schema.
+# Three SoC subsystem endpoints on a 2x2 mesh:
+# compute0 & compute1 inject AXI masters; memory0 exposes two AXI outputs
+# representing the memory subsystem's two independent ingress ports.
+# The fourth router position is unused, but still routes multi-hop traffic.
+name: xezim_global_data
+description: "Xezim: two compute AXI initiators to two memory ingress ports"
+network_type: "axi"
+routing:
+  route_algo: "XY"
+  use_id_table: true
+protocols:
+  - name: axi_in
+    type: narrow
+    protocol: AXI4
+    data_width: 64
+    addr_width: 48
+    id_width: 4
+    user_width: 1
+    type_prefix:
+  - name: axi_out
+    type: narrow
+    protocol: AXI4
+    data_width: 64
+    addr_width: 48
+    id_width: 4
+    user_width: 1
+    type_prefix:
+endpoints:
+  - name: compute0
+    mgr_port_protocol: [axi_in]
+  - name: compute1
+    mgr_port_protocol: [axi_in]
+  - name: memory_ingress0
+    addr_range:
+      base: 0x0001_0000_0000
+      size: 0x0000_4000_0000
+    sbr_port_protocol: [axi_out]
+  - name: memory_ingress1
+    addr_range:
+      base: 0x0001_4000_0000
+      size: 0x0000_4000_0000
+    sbr_port_protocol: [axi_out]
+routers:
+  - name: router
+    array: [2, 2]
+    degree: 5
+connections:
+  - {src: compute0, dst: router, dst_idx: [0, 0], dst_dir: Eject}
+  - {src: compute1, dst: router, dst_idx: [0, 1], dst_dir: Eject}
+  - {src: memory_ingress0, dst: router, dst_idx: [1, 0], dst_dir: Eject}
+  - {src: memory_ingress1, dst: router, dst_idx: [1, 1], dst_dir: Eject}
