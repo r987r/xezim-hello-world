@@ -5,6 +5,21 @@ The only new high-level RTL scopes should be **compute0**, **compute1**,
 Reuse upstream modules within each TB; no separate testbench for every
 bridge, FIFO, decoder, SRAM, router, or BFM.
 
+## Local and global AXI interface sizes
+
+`config/interface_contracts.yaml` plus
+`tools/interface_contracts.py` specifies planned per-interface data and
+address widths, transaction IDs, independent pending read/write targets,
+burst lengths and adapters; `tests/test_interface_contracts.py` validates
+link alignment and dynamically creates contracts for new compute instances.
+Native PULP `MaxMstTrans`/`MaxSlvTrans`, Floo `MaxTxns`/
+`MaxUniqueIds`/RoBs and Verilog-AXI `S_ACCEPT`/`M_ISSUE` are recorded.
+These are **targets pending RTL parameter binding**, not proof that
+the actual NoC accepts that many transactions. Each local data and
+local config NoC belongs to its *own* compute subsystem; memory0 has
+its own local data/config fabrics as well. Global data and global
+config are separate top-level networks.
+
 ## Priority: real FlooNoC, not mock NoC
 
 The baseline Xezim `global_data` network is named `floonoc` in

@@ -55,6 +55,20 @@ resolved in pinned Xezim 0.11.4 and the historical bug reproducer was removed fr
    check, not a substitute for regenerating files. Keep generated `gen/`
    and the marked README section committed with a config/generator change.
 
+## Linkable interface sizing gate
+
+Run `python3 tools/interface_contracts.py` and
+`python3 -m unittest tests.test_interface_contracts -v` when editing
+AXI ports, FlooGen routing, local PULP AXI crossbars, DMA requests, or
+outstanding transaction limits. `config/interface_contracts.yaml`
+tracks planned per-fabric and per-subsystem read/write budgets, native
+PULP/FlooNoC/Verilog AXI parameter targets, and per-port overrides.
+Validated settings are NOT yet RTL-bound except the existing memory TB.
+Check that compute local crossbar output ID width is input ID width
+plus ceil(log2(initiator count)), and that the FlooGen input IDs agree.
+Never mistake planned quotas for implemented capacity or FlooGen emission
+for simulated NoC traffic.
+
 ## Run locally (no Rust rebuild)
 
 Prerequisites: Python 3, git, GitHub CLI authenticated for this repo (or
