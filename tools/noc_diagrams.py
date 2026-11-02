@@ -1,0 +1,422 @@
+"""Document the real FlooGen router/endpoint topology across the whole SoC.
+
+Consumes generator-owned FlooGen YAML + manifest (NOT an independently
+maintained diagram topology). Emits Mermaid, standalone SVG and Diagram-gen
+compatible JSON metadata with physical-versus-planned connectivity labeled.
+No FlooNoC RTL code or custom AXI adapters are produced here.
+"""
+from __future__ import annotations
+
+import json
+import math
+from pathlib import Path
+import re
+from typing import Any
+
+import yaml
+
+
+def identifier(name: str) -> str:
+    return "n_" + re.sub(r"[^a-zA-Z0-9_]", "_", name)
+
+
+def read_generated_nocs(root: Path) -> dict[str, dict]:
+    if not (root / "manifest.json").is_file():
+        raise ValueError("checked-in FlooGen network manifest is missing")
+    manifest = json.loads((root / "manifest.json").read_text())
+    networks = {}
+    for name, entry in sorted(manifest["networks"].items()):
+        conf = yaml.safe_load((root / entry["config"]).read_text())
+        routers = conf["routers"]
+        if len(routers) != 1 or routers[0]["name"] != "router":
+            raise ValueError(f"{name}: expected a single regular FlooGen router array")
+        w, h = routers[0]["array"]
+        if type(w) is not int or type(h) is not int or not 1 <= w <= 32 or not 1 <= h <= 32:
+            raise ValueError(f"{name}: invalid router array size")
+        if w * h != entry["routers"]:
+            raise ValueError(f"{name}: router count differs from generated manifest")
+        endpoints = {e["name"]: e for e in conf["endpoints"]}
+        if len(endpoints) != entry["endpoint_count"]:
+            raise ValueError(f"{name}: endpoints differ from generated manifest")
+        positions = {}
+        for connection in conf["connections"]:
+            ep = connection["src"]
+            x, y = connection["dst_idx"]
+            if connection["dst"] != "router" or connection["dst_dir"] != "Eject":
+                raise ValueError(f"{name}: unsupported connection, expected FlooGen Eject")
+            if ep not in endpoints or ep in positions or not 0 <= x < w or not 0 <= y < h:
+                raise ValueError(f"{name}: invalid, duplicated or out-of-range endpoint {ep}")
+            positions[ep] = (x, y)
+        if set(positions) != set(endpoints):
+            raise ValueError(f"{name}: not all FlooGen endpoints attach to routers")
+        if conf["network_type"] != "axi" or conf["routing"]["route_algo"] != "XY":
+            raise ValueError(f"{name}: unexpected FlooGen protocol or routing")
+        networks[name] = {"config": conf, "entry": entry, "width": w,
+                          "height": h, "endpoints": endpoints, "positions": positions}
+    if len(networks) != manifest["networks"].__len__():
+        raise ValueError("network names must be unique")
+    return networks
+
+
+def _inst(network: str, what: str) -> str:
+    return f"{network}.{what}"
+
+
+def diagram_gen_metadata(cfg: dict, networks: dict) -> dict:
+    """Instances/connections/groups model also understood by Diagram-gen viewers.
+
+    Router-to-router and router-to-chimney are generated *structural* RTL.
+    NoC-to-NoC bridges and CPU/DMA/endpoints are *planned*, not wired SoC RTL.
+    """
+    modules = {
+        "floo_axi_router": {"description": "Real upstream FlooNoC router", "color": "#14845A", "ports": []},
+        "floo_axi_chimney": {"description": "Real upstream AXI network interface", "color": "#2877B5", "ports": []},
+        "soc_boundary": {"description": "Planned SoC component or protocol adapter", "color": "#64748B", "ports": []},
+        "axi_crossbar": {"description": "Existing standalone Verilog-AXI memory crossbar", "color": "#16A34A", "ports": []},
+    }
+    instances = []
+    connections = []
+    groups = []
+    next_id = 0
+
+    def edge(src, dst, name, status, width=None, ports=("out", "in")):
+        nonlocal next_id
+        next_id += 1
+        info = {"id": f"noc_link_{next_id:04d}", "name": name,
+                "from": {"instance": src, "port": ports[0]},
+                "to": {"instance": dst, "port": ports[1]},
+                "type": "noc_link" if status == "generated_structural" else "planned_interconnect",
+                "status": status,
+                "signals": [{"name": "floo_req_and_rsp", "width": None}]
+                           if status == "generated_structural" else
+                           [{"name": "AXI4", "width": width}] if width is not None else [],
+        }
+        connections.append(info)
+
+    for index, (name, net) in enumerate(networks.items()):
+        conf, entry = net["config"], net["entry"]
+        plane = entry["plane"]
+        color = "#16845D" if plane == "data" else "#8055B7"
+        group_members = []
+        nx, ny = net["width"], net["height"]
+        px, py = 16 * (index % 2), 16 * (index // 2)
+        protocol = {p["name"]: p for p in conf["protocols"]}
+        for y in range(ny):
+            for x in range(nx):
+                rname = _inst(name, f"router_{x}_{y}")
+                group_members.append(rname)
+                instances.append({
+                    "name": rname, "module": "floo_axi_router",
+                    "position": {"x": px + x * 4, "y": py + y * 4, "z": 0},
+                    "info": {"network": name, "plane": plane, "grid": [x, y],
+                             "status": "generated_structural",
+                             "source": entry["top"]},
+                })
+                if x:
+                    edge(_inst(name, f"router_{x-1}_{y}"), rname,
+                         "east/west FlooNoC request+response links", "generated_structural",
+                         ports=("E", "W"))
+                if y:
+                    edge(_inst(name, f"router_{x}_{y-1}"), rname,
+                         "north/south FlooNoC request+response links", "generated_structural",
+                         ports=("S", "N"))
+        for epname, ep in net["endpoints"].items():
+            x, y = net["positions"][epname]
+            ep_id = _inst(name, epname)
+            proto_name = (ep.get("mgr_port_protocol") or ep.get("sbr_port_protocol"))[0]
+            proto = protocol[proto_name]
+            group_members.append(ep_id)
+            instances.append({
+                "name": ep_id, "module": "floo_axi_chimney",
+                "position": {"x": px + x * 4, "y": py + y * 4 - 1.6, "z": 0},
+                "info": {
+                    "network": name, "plane": plane,
+                    "role": "initiator" if ep.get("mgr_port_protocol") else "target",
+                    "protocol": "AXI4", "data_bits": proto["data_width"],
+                    "address_bits": proto["addr_width"], "id_bits": proto["id_width"],
+                    "address_ranges": ep.get("addr_range"),
+                    "status": "generated_structural",
+                    "source": entry["top"],
+                },
+            })
+            edge(ep_id, _inst(name, f"router_{x}_{y}"),
+                 f"{epname} NI Eject", "generated_structural", ports=("NoC", "Eject"))
+        groups.append({"name": name, "instances": group_members,
+                       "color": color, "padding": 2.0,
+                       "info": {"plane": plane, "router_count": entry["routers"],
+                                "source": entry["top"], "status": "generated_structural"}})
+
+    # These are planned inter-fabric and subsystem endpoint links. Never
+    # present them as real continuous RTL until an actual SoC top is compiled.
+    for compute in (s["name"] for s in cfg["subsystems"] if s["type"] == "compute"):
+        ld = compute + "_local_data"
+        lc = compute + "_local_config"
+        edge(_inst(ld, "global_out"), _inst("global_data", compute),
+             "64b AXI4 uplink (planned)", "planned_integration", width=64)
+        edge(_inst("global_data", compute + "_sram"), _inst(ld, "global_in"),
+             "64b AXI4 remote SRAM return path (planned)", "planned_integration", width=64)
+        edge(_inst(lc, "global_out"), _inst("global_config", compute),
+             "32b AXI4 control transport (planned)", "planned_integration", width=32)
+        edge(_inst("global_config", compute + "_regs"), _inst(lc, "global_in"),
+             "32b AXI4 control ingress (planned)", "planned_integration", width=32)
+
+    memory = next(s["name"] for s in cfg["subsystems"] if s["type"] == "memory")
+    for output in cfg["networks"]["global_data"]["outputs"]:
+        name = output["name"]
+        edge(_inst("global_data", name), _inst(memory + "_local_data", name),
+             "64b AXI4 memory ingress (planned)", "planned_integration", width=64)
+    edge(_inst("global_config", memory + "_regs"),
+         _inst(memory + "_local_config", "global_in"),
+         "32b AXI4 memory control (planned)", "planned_integration", width=32)
+
+    xbar = memory + ".internal_target_crossbar"
+    instances.append({"name": xbar, "module": "axi_crossbar",
+                      "position": {"x": 8, "y": 80, "z": 0},
+                      "info": {"status": "verified_separate_memory_tb",
+                               "source": "gen/memory/memory_tb.sv"}})
+    edge(_inst(memory + "_local_data", "target_crossbar"), xbar,
+         "memory0 local-to-crossbar link (planned)", "planned_integration", width=64)
+    for target in cfg["memory_targets"]:
+        ep = target["name"]
+        instances.append({"name": ep, "module": "soc_boundary",
+                          "position": {"x": 8, "y": 85 + 3 * len(instances) % 9, "z": 0},
+                          "info": {"status": "verified_separate_memory_tb",
+                                   "kind": target["kind"], "model": "axi_ram"}})
+        edge(xbar, ep, "Memory0 testbench AXI RAM route", "verified_separate_memory_tb", width=64)
+
+    for sub in cfg["subsystems"]:
+        prefix = sub["name"] + "_"
+        group_members = [e["name"] for e in instances if
+                         e["name"].startswith(prefix) or e["name"] == sub["name"] + ".internal_target_crossbar"]
+        if group_members:
+            groups.append({"name": sub["name"] + "_subsystem", "instances": group_members,
+                           "color": "#62758C", "padding": 4.0})
+    assert all(x["from"]["instance"] in {i["name"] for i in instances} and
+               x["to"]["instance"] in {i["name"] for i in instances} for x in connections)
+    return {
+        "schema_version": 1,
+        "source_of_truth": ["config/soc.yaml", "config/interface_contracts.yaml",
+                            "gen/noc/floonoc/*/floogen.yaml"],
+        "status": "real_structural_networks_with_planned_inter_network_links",
+        "modules": modules, "instances": instances, "connections": connections, "groups": groups,
+        "networks": {name: {"plane": net["entry"]["plane"], "routers": net["entry"]["routers"],
+                            "endpoints": len(net["endpoints"]), "top": net["entry"]["top"],
+                            "config": net["entry"]["config"]}
+                     for name, net in networks.items()},
+    }
+
+
+def hierarchy_mermaid(cfg: dict, networks: dict) -> str:
+    lines = [
+        "flowchart TB",
+        "  classDef data fill:#e6f6ec,stroke:#188459,color:#143b2b;",
+        "  classDef config fill:#f3edfd,stroke:#7047b5,color:#342451;",
+        "  classDef model fill:#f5f6f7,stroke:#7b8794,color:#233047;",
+        "  classDef verified fill:#e4f8e8,stroke:#228450,color:#12432b;",
+        "  %% All FlooNoC internal router and NI RTL is generated.",
+        "  %% Every dashed subsystem-to-NoC connection remains unimplemented.",
+    ]
+    def node(id, label, kind):
+        lines.append('  ' + identifier(id) + '["' + label + '"]:::' + kind)
+
+    def planned(src, dst, label):
+        lines.append("  " + identifier(src) + ' -.->|' + label + '| ' + identifier(dst))
+
+    memory = next(x["name"] for x in cfg["subsystems"] if x["type"] == "memory")
+    computes = [x for x in cfg["subsystems"] if x["type"] == "compute"]
+    for c in computes:
+        name = c["name"]
+        ld, lc = name+"_local_data", name+"_local_config"
+        lines.append(f'  subgraph {identifier(name+"_box")}["{name} / compute subsystem"]')
+        node(name+".cpu", c["cpu"]["ip"] + " CPU", "model")
+        node(name+".dma", "PULP iDMA (planned)", "model")
+        node(name+".sram", "Local SRAM", "model")
+        node(ld, f"Local DATA FlooNoC / {networks[ld]['entry']['routers']} routers / AXI4", "data")
+        node(lc, f"Local CONFIG FlooNoC / {networks[lc]['entry']['routers']} routers / 32-bit AXI4 transport", "config")
+        lines.append("  end")
+        planned(name+".cpu", ld, "CPU adapter")
+        planned(name+".dma", ld, "DMA")
+        planned(ld, name+".sram", "local")
+        planned(name+".cpu", lc, "AXI-Lite bridge")
+        planned(ld, "global_data", "global data")
+        planned(lc, "global_config", "global control")
+    for name, color in (("global_data", "data"), ("global_config", "config")):
+        n = networks[name]
+        bits = "64b AXI4" if color == "data" else "32b AXI4 via AXI-Lite bridges"
+        node(name, f"{name} FlooNoC / {n['entry']['routers']} routers / {bits}", color)
+
+    lines.append(f'  subgraph {identifier(memory+"_box")}["{memory} / memory subsystem"]')
+    node(memory+"_local_data", "Local DATA FlooNoC / "
+         + str(networks[memory+"_local_data"]["entry"]["routers"])+" routers", "data")
+    node(memory+"_local_config", "Local CONFIG FlooNoC / "
+         + str(networks[memory+"_local_config"]["entry"]["routers"])+" routers", "config")
+    node("xbar", "Internal Verilog-AXI 2x2 crossbar (standalone RTL tested)", "verified")
+    for target in cfg["memory_targets"]:
+        node(target["name"], target["kind"].upper()+" AXI RAM model", "model")
+    lines.append("  end")
+    for c in computes:
+        planned("global_data", c["name"]+".sram", "remote SRAM")
+        planned("global_config", c["name"]+"_local_config", "CSR ingress")
+    for output in cfg["networks"]["global_data"]["outputs"]:
+        planned("global_data", memory+"_local_data", output["name"])
+    planned("global_config", memory+"_local_config", "control ingress")
+    planned(memory+"_local_data", "xbar", "AXI4")
+    for target in cfg["memory_targets"]:
+        lines.append("  " + identifier("xbar") + " -->|" + target["kind"].upper()
+                     + " tested separately| " + identifier(target["name"]))
+    lines.append("  %% Solid crossbar paths are only proven in a standalone memory TB.")
+    return "\n".join(lines)+"\n"
+
+
+def mesh_mermaid(name: str, net: dict) -> str:
+    conf = net["config"]
+    lines = ["flowchart TB",
+             "  classDef router fill:#e6f6ec,stroke:#16845D,color:#133A29;",
+             "  classDef endpoint fill:#e9f1fd,stroke:#255BAE,color:#1A3155;",
+             "  %% Real FlooGen top structural router and NI links only."]
+    def key(name): return identifier(name)
+    for y in range(net["height"]):
+        for x in range(net["width"]):
+            label=f"Router ({x},{y})"
+            lines.append(f'  {key(f"r{x}_{y}")}["{label}"]:::router')
+            if x: lines.append(f'  {key(f"r{x-1}_{y}")} <--> {key(f"r{x}_{y}")}')
+            if y: lines.append(f'  {key(f"r{x}_{y-1}")} <--> {key(f"r{x}_{y}")}')
+    for ep_name, ep in net["endpoints"].items():
+        x,y=net["positions"][ep_name]
+        role="Manager" if ep.get("mgr_port_protocol") else "Target"
+        lines.append(f'  {key(ep_name)}["{ep_name} / {role} NI"]:::endpoint')
+        lines.append(f'  {key(ep_name)} <--> {key(f"r{x}_{y}")}')
+    return "\n".join(lines)+"\n"
+
+
+def overview_svg(cfg: dict, networks: dict, dst: Path):
+    from diagram_svg import Art, BG, WHITE, INK, MUTED, FAINT, GREEN, PURPLE, BLUE, ORANGE
+    computes=[s for s in cfg["subsystems"] if s["type"]=="compute"]
+    mem=next(s["name"] for s in cfg["subsystems"] if s["type"]=="memory")
+    columns=2
+    rows=math.ceil(len(computes)/columns)
+    gy=172+rows*285+32
+    my=gy+181
+    h=my+360
+    a=Art(1600,h)
+    a.heading("Real upstream-generated NoC hierarchy","Full-chip FlooNoC network map",
+              "All eight meshes are generated RTL; dashed connections between them are NOT integrated")
+    for i, compute in enumerate(computes):
+        name=compute["name"];x=56+(i%2)*784;y=158+(i//2)*285
+        a.rect(x,y,744,267,WHITE,FAINT,r=17,width=2)
+        a.text(x+18,y+14,name+" / compute subsystem",22,INK)
+        a.box_label(x+18,y+50,220,76,compute["cpu"]["ip"]+" CPU",
+                    compute["cpu"]["bus"]+" adapter pending","cpu",title_size=19,detail_size=13)
+        a.box_label(x+255,y+50,213,76,"PULP iDMA","IP wiring pending","dma",title_size=19,detail_size=14)
+        a.box_label(x+486,y+50,235,76,"Local SRAM","global remote address", "memory",title_size=19,detail_size=13)
+        ld=name+"_local_data";lc=name+"_local_config"
+        a.box_label(x+18,y+155,351,81,"LOCAL DATA  /  FlooNoC",
+                    str(networks[ld]["entry"]["routers"])+" generated routers / 64b AXI4", "fabric",
+                    title_size=19,detail_size=15)
+        a.box_label(x+386,y+155,335,81,"LOCAL CONFIG  /  FlooNoC",
+                    str(networks[lc]["entry"]["routers"])+" generated routers / 32b AXI4", "config",
+                    title_size=19,detail_size=15)
+        a.line([(x+129,y+126),(x+129,y+155)],BLUE,2,True,True)
+        a.line([(x+360,y+126),(x+280,y+155)],BLUE,2,True,True)
+        a.line([(x+128,y+126),(x+553,y+155)],PURPLE,2,True,True)
+        a.line([(x+545,y+155),(x+603,y+126)],GREEN,2,True,True)
+    a.box_label(56,gy,744,113,"GLOBAL DATA / FlooNoC",
+                str(networks["global_data"]["entry"]["routers"])+" routers / XY mesh / 64-bit AXI4\ncompute0, compute1, remote SRAMs, both memory ingress ports",
+                "fabric",title_size=24,detail_size=15)
+    a.box_label(840,gy,704,113,"GLOBAL CONFIG / FlooNoC",
+                str(networks["global_config"]["entry"]["routers"])+" routers / XY mesh / 32-bit AXI4\nPULP upstream AXI4-Lite bridges required at CSR boundaries",
+                "config",title_size=24,detail_size=15)
+    for i,c in enumerate(computes):
+        x=56+(i%2)*784
+        y=158+(i//2)*285+267
+        a.line([(x+192,y),(x+192,y+9),(428,gy-10),(428,gy)],GREEN,2,True,True)
+        a.line([(x+555,y),(x+555,y+13),(1193,gy-10),(1193,gy)],PURPLE,2,True,True)
+    a.rect(56,my,1488,307,WHITE,FAINT,r=17,width=2)
+    a.text(82,my+18,mem+" / memory subsystem",24,INK)
+    a.box_label(83,my+64,500,71,"LOCAL DATA / FlooNoC",
+                str(networks[mem+"_local_data"]["entry"]["routers"])+" routers / two AXI ingress ports",
+                "fabric",title_size=20,detail_size=14)
+    a.box_label(622,my+64,485,71,"LOCAL CONFIG / FlooNoC",
+                str(networks[mem+"_local_config"]["entry"]["routers"])+" generated routers / CSR bridge pending",
+                "config",title_size=20,detail_size=14)
+    a.box_label(83,my+171,702,75,"Internal 2x2 Verilog-AXI crossbar",
+                "Real independently tested memory fabric RTL","rtl",title_size=22,detail_size=15)
+    targets=cfg["memory_targets"]
+    for j,t in enumerate(targets):
+        tx=810+j*363
+        a.box_label(tx,my+170,346,78,t["kind"].upper()+" AXI RAM",
+                    "Behavioral model; physical controller pending",
+                    "memory",title_size=20,detail_size=14)
+        a.line([(tx,my+208),(785,my+208)],GREEN,2,False,True)
+    a.line([(320,gy+113),(320,my+64)],GREEN,3,True,True)
+    a.line([(1193,gy+113),(1193,my+64)],PURPLE,3,True,True)
+    a.line([(320,my+135),(320,my+171)],GREEN,2,True,True)
+    a.text(83,my+274,
+           "Solid target links: standalone memory testbench ONLY. Full SoC NoC links and endpoint bridges: planned.",
+           17,MUTED)
+    a.text(65,h-29,
+           "See gen/diagrams/noc/* for physical router layouts derived from the actual FlooGen YAML files.",
+           15,MUTED)
+    a.save(dst)
+
+
+def mesh_svg(name: str, net: dict, dst: Path):
+    from diagram_svg import Art, BG, WHITE, INK, MUTED, FAINT, GREEN, PURPLE, BLUE
+    w,h=net["width"],net["height"]
+    width=max(990,155+w*255)
+    height=245+h*190+70
+    a=Art(width,height)
+    a.heading("FlooGen real structural router and chimney RTL", name.replace("_"," ").title(),
+              f'{w} x {h} XY mesh / {w*h} routers / {len(net["endpoints"])} AXI4 network interfaces')
+    pts={}
+    for y in range(h):
+        for x in range(w):
+            cx=125+x*250;cy=275+y*190
+            pts[x,y]=(cx,cy)
+            if x:
+                prev=pts[x-1,y]
+                a.line([(prev[0]+39,prev[1]),(cx-39,cy)],GREEN,3,False,False)
+            if y:
+                prev=pts[x,y-1]
+                a.line([(prev[0],prev[1]+30),(cx,cy-30)],GREEN,3,False,False)
+            a.box_label(cx-50,cy-30,100,60,f"R{x},{y}",
+                        "router","fabric",title_size=18,detail_size=13)
+    for ep, endpoint in net["endpoints"].items():
+        x,y=net["positions"][ep];cx,cy=pts[x,y]
+        kind="AXI in" if endpoint.get("mgr_port_protocol") else "AXI out"
+        a.line([(cx,cy-30),(cx,cy-68)],BLUE,2,False,False)
+        a.rect(cx-113,cy-118,226,46,WHITE,BLUE,r=8,width=1)
+        a.text(cx,cy-112,ep,14,INK,align="center")
+        a.text(cx,cy-93,kind,12,MUTED,align="center")
+    a.text(60,height-48,"Solid wires: upstream FlooGen-generated router/router and NI/router connections.",
+           16,MUTED)
+    a.save(dst)
+
+
+def render(cfg: dict, root: Path, destination: Path) -> tuple[dict, dict[str,str]]:
+    """Write Diagram-gen JSON and Mermaid/SVG from *actual emitted* FlooGen configs."""
+    networks = read_generated_nocs(root)
+    expected = 2 + 2 * len(cfg["subsystems"])
+    if len(networks) != expected:
+        raise ValueError(f"expected {expected} independent FlooNoC networks, got {len(networks)}")
+    mermaid = {"noc-hierarchy": hierarchy_mermaid(cfg, networks)}
+    for name, net in networks.items():
+        mermaid["noc/" + name] = mesh_mermaid(name, net)
+
+    for name, content in mermaid.items():
+        path=destination/(name+".mmd")
+        path.parent.mkdir(parents=True,exist_ok=True)
+        path.write_text(content)
+        (destination/(name+".md")).write_text(
+            "# "+name.replace("-", " ").replace("/", " / ").title()+"\n\n"
+            "Generated from the actual upstream FlooGen configuration and manifest. "
+            "**Inter-network wiring is planned; internal router links are generated RTL.**\n\n"
+            f"[![Generated FlooNoC network topology]({path.stem}.svg)]({path.stem}.svg)\n\n"
+            f"[Mermaid source]({path.stem}.mmd)\n"
+        )
+    overview_svg(cfg, networks, destination/"noc-hierarchy.svg")
+    for name, net in networks.items():
+        mesh_svg(name, net, destination/"noc"/(name+".svg"))
+    graph = diagram_gen_metadata(cfg, networks)
+    (destination/"noc-topology.json").write_text(json.dumps(graph, indent=2, sort_keys=True)+"\n")
+    return graph, mermaid
