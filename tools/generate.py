@@ -48,6 +48,14 @@ def generated_section(cfg: dict, meta: dict, diagrams: dict[str, str], nocs: dic
         "",
         "[![Generated SoC architecture — PicoRV32, SERV, two global fabrics, HBM and DDR](gen/diagrams/architecture.svg)](gen/diagrams/architecture.svg)",
         "", "[Full-size image](gen/diagrams/architecture.svg) · [Mermaid source](gen/diagrams/architecture.mmd) · [Detailed view](gen/diagrams/architecture.md)", "",
+        "### Entire SoC NoC hierarchy — all local and global FlooNoCs",
+        "",
+        "This overview comes from **the actual eight checked-in upstream FlooGen topology configurations**: routers, AXI network interfaces, endpoint placement and memory/compute links. Each mesh is real generated structural SystemVerilog; **dashed lines between different NoCs and CPU/DMA/CSR endpoints are not yet integrated RTL**. Green crossbar links are independently verified only in the standalone memory testbench.",
+        "",
+        "[![Generated whole-chip data and config FlooNoC hierarchy with compute and memory subsystems](gen/diagrams/noc-hierarchy.svg)](gen/diagrams/noc-hierarchy.svg)",
+        "", "[Full-size NoC hierarchy](gen/diagrams/noc-hierarchy.svg) · [Mermaid overview](gen/diagrams/noc-hierarchy.mmd) · [Diagram-gen-compatible physical router/link metadata](gen/diagrams/noc-topology.json) · [Network manifest](gen/noc/floonoc/manifest.json)", "",
+        "Each NoC also has an individual **physical XY router mesh diagram** derived directly from its own generated FlooGen YAML.",
+        "",
         "### Executable RTL connectivity — memory testbench",
         "",
         "This is the wiring generated in `gen/memory/memory_tb.sv`: two AXI4 master BFMs, the real open-source AXI crossbar, two AXI memory models, and a passive route monitor. It is **not** a full-chip elaboration.",
@@ -68,8 +76,8 @@ def generated_section(cfg: dict, meta: dict, diagrams: dict[str, str], nocs: dic
         "", "[Full-size image](gen/diagrams/verification.svg) · [Mermaid source](gen/diagrams/verification.mmd) · [Detailed view](gen/diagrams/verification.md)", "",
         "### Generated architecture reference", "",
         f'- **Subsystems:** {len(compute)} compute, {len(memory)} memory; **data:** AXI4 {meta["data_bits"]}-bit, {meta["address_bits"]}-bit addressing; **config:** AXI4-Lite {cfg["buses"]["config"]["data_bits"]}-bit.',
-        f'- **Global data NoC:** {cfg["fabrics"]["global_data"]["backend"]} / {cfg["fabrics"]["global_data"]["topology"]} (selected, emitter pending).',
-        f'- **Global config NoC:** {cfg["fabrics"]["global_config"]["backend"]} / {cfg["fabrics"]["global_config"]["topology"]} (selected, emitter pending).',
+        f'- **Global data NoC:** {cfg["fabrics"]["global_data"]["backend"]} / {cfg["fabrics"]["global_data"]["topology"]} (generated structural RTL; no routed traffic test).',
+        f'- **Global config NoC:** {cfg["fabrics"]["global_config"]["backend"]} / {cfg["fabrics"]["global_config"]["topology"]} (generated structural RTL; no routed CSR traffic test).',
         f'- **Local memory crossbar:** {cfg["fabrics"]["memory_data"]["backend"]}; {meta["ingress"]} ingress × {len(meta["targets"])} targets (executable RTL testbench).',
         "", "| Subsystem | CPU | CPU bus/adapter | DMA | Detailed 2D diagram |", "| --- | --- | --- | --- | --- |",
     ]
@@ -91,12 +99,13 @@ def generated_section(cfg: dict, meta: dict, diagrams: dict[str, str], nocs: dic
     results += ["", "### Checked-in upstream FlooNoC structural RTL", "",
                 "Every local and global data/config NoC below has an **actual generated SystemVerilog module and package** committed under `gen/noc/floonoc/`. These instantiate upstream FlooNoC routers/chimneys; RTL elaboration and end-to-end AXI traffic are **not yet verified**.",
                 "",
-                "| Generated NoC | Routers | Structural Verilog | Package | FlooGen inputs |",
-                "| --- | ---: | --- | --- | --- |"]
+                "| Generated NoC | Routers | Mesh diagram | Structural Verilog | Package | FlooGen inputs |",
+                "| --- | ---: | --- | --- | --- | --- |"]
     for name, entry in sorted(nocs["networks"].items()):
         base = "gen/noc/floonoc/"
         results.append(
             f'| `{name}` | {entry["routers"]} | '
+            f'[topology](gen/diagrams/noc/{name}.svg) | '
             f'[top]({base + entry["top"]}) | '
             f'[package]({base + entry["package"]}) | '
             f'[generated config]({base + entry["config"]}) |'
@@ -169,7 +178,7 @@ def build(cfg_path: Path, out: Path, readme: Path) -> str:
     # checked-in RTL alongside all diagrams and the generated NoC IR.
     knobs = yaml.safe_load((ROOT / "config/interface_contracts.yaml").read_text())
     nocs = floonoc_gen.generate_all(cfg, knobs, out / "noc" / "floonoc")
-    diagrams = diagram_gen.render(cfg, meta, out / "diagrams")
+    diagrams = diagram_gen.render(cfg, meta, out / "diagrams", out / "noc" / "floonoc")
     dump(out / "verification" / "plan.json", verification_plan(cfg, meta))
     dump(out / "verification" / "routes.json", route_matrix(meta))
     (out / "README.md").write_text(
