@@ -56,24 +56,29 @@ jobs:
           bender checkout
           bender script flist -t rtl -t cc_no_deprecated > "$GITHUB_WORKSPACE/.tools/floonoc-rtl.f"
           test -s "$GITHUB_WORKSPACE/.tools/floonoc-rtl.f"
+          echo "Upstream Bender include directories and packages:"
+          grep -E 'incdir|floo_pkg|axi_pkg' "$GITHUB_WORKSPACE/.tools/floonoc-rtl.f" | head -n 35 || true
+          # tech_cells_generic pad_functional contains legacy switch-level
+          # MOSFET primitives unsupported by Verilator and unrelated to the
+          # NoC. We exclude only that unreachable vendor-pad simulation cell.
+          grep -v '/src/deprecated/pad_functional.sv' "$GITHUB_WORKSPACE/.tools/floonoc-rtl.f" > "$GITHUB_WORKSPACE/.tools/floonoc-lint.f"
       - name: Install Verilator
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y verilator
           verilator --version
-      - name: Elaborate real generated global AXI data mesh
+      - name: Elaborate real generated global AXI data and config meshes
         run: |
           set -euo pipefail
-          verilator --lint-only --timing --top-module floo_xezim_global_data_noc \
-            -Wno-fatal \
-            -f .tools/floonoc-rtl.f \
-            gen/noc/floonoc/global_data/floo_xezim_global_data_noc_pkg.sv \
-            gen/noc/floonoc/global_data/floo_xezim_global_data_noc.sv
-      - name: Elaborate real generated global AXI config mesh
-        run: |
-          set -euo pipefail
-          verilator --lint-only --timing --top-module floo_xezim_global_config_noc \
-            -Wno-fatal \
-            -f .tools/floonoc-rtl.f \
-            gen/noc/floonoc/global_config/floo_xezim_global_config_noc_pkg.sv \
-            gen/noc/floonoc/global_config/floo_xezim_global_config_noc.sv
+          includes=()
+          for d in .tools/floonoc/.bender/git/checkouts/*/include; do
+            [ -d "$d" ] && includes+=("-I$d")
+          done
+          includes+=("-I.tools/floonoc/hw/include")
+          for noc in global_data global_config; do
+            verilator --lint-only --timing --top-module "floo_xezim_${noc}_noc" \
+              -Wno-fatal "${includes[@]}" \
+              -f .tools/floonoc-lint.f \
+              "gen/noc/floonoc/$noc/floo_xezim_${noc}_noc_pkg.sv" \
+              "gen/noc/floonoc/$noc/floo_xezim_${noc}_noc.sv"
+          done
