@@ -25,7 +25,7 @@ class InterfaceSizingTests(unittest.TestCase):
         self.assertEqual(set(graph["fabrics"]), {
             "compute0.local_data", "compute0.local_config",
             "compute1.local_data", "compute1.local_config",
-            "memory0.memory_data", "memory0.local_config",
+            "memory0.memory_data", "memory0.local_data", "memory0.local_config",
             "global_data", "global_config"})
         self.assertEqual(graph["ports"]["compute0.local_data.global_out"]["id_bits"], 5)
         self.assertEqual(graph["ports"]["global_data.compute0_in"]["id_bits"], 5)
@@ -34,6 +34,14 @@ class InterfaceSizingTests(unittest.TestCase):
         self.assertEqual(graph["ports"]["compute1.local_data.dma_in"]["max_pending_reads"], 2)
         self.assertEqual(graph["ports"]["compute1.local_data.cpu_in"]["max_pending_reads"], 1)
         self.assertTrue(all(x["status"] == "planned" for x in graph["links"]))
+
+    def test_every_noc_uses_floonoc(self):
+        graph = self.validate()
+        for key, fabric in graph["fabrics"].items():
+            if key == "memory0.memory_data":
+                self.assertEqual(fabric["backend"], "verilog_axi")
+            else:
+                self.assertEqual(fabric["backend"], "floonoc", key)
 
     def test_wrong_floogen_ids_fails(self):
         floo = copy.deepcopy(self.floo)
