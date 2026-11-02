@@ -49,24 +49,7 @@ boot:
 fabrics:
   local_data: {topology: crossbar, backend: pulp_axi}
   local_config: {topology: crossbar, backend: pulp_axi}
-  memory_data:
-    topology: crossbar
-    backend: verilog_axi
-    # Native upstream axi_crossbar parameters (not custom RTL).
-    # Scalar, ingress/target-ordered array, or name-keyed map.
-    parameters:
-      S_THREADS: 2
-      S_ACCEPT: 16
-      M_ISSUE: {memory0.hbm0: 4, memory0.ddr0: 4}
-    # Explicit per-ingress reachability. Both directions currently must
-    # match because the scoped DV checks write followed by readback.
-    connectivity:
-      read:
-        memory_ingress0: [memory0.hbm0, memory0.ddr0]
-        memory_ingress1: [memory0.hbm0, memory0.ddr0]
-      write:
-        memory_ingress0: [memory0.hbm0, memory0.ddr0]
-        memory_ingress1: [memory0.hbm0, memory0.ddr0]
+  memory_data: {topology: crossbar, backend: verilog_axi}
   global_data: {topology: mesh, backend: floonoc}
   global_config: {topology: tree, backend: pulp_axi}
 
