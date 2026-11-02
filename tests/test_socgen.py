@@ -211,6 +211,12 @@ class SocConfigTest(unittest.TestCase):
             doc["subsystems"].append({"name":"compute2", "type":"compute", "cpu":
                                       {"ip":"serv", "bus":"wishbone", "adapter":"serv_wishbone"}})
             doc["networks"]["global_config"]["reachable_subsystems"].append("compute2")
+            # Each new compute subsystem supplies its own mapped SRAM
+            # and CSR apertures; FlooGen derives the NoC wires automatically.
+            doc["address_map"]["data"].append({
+                "name": "compute2.sram", "base": "0x12000000", "size": "0x00100000"})
+            doc["address_map"]["config"].append({
+                "name": "compute2.dma", "base": "0x40040000", "size": "0x10000"})
             cfg_path.write_text(yaml.safe_dump(doc,sort_keys=False))
             self.assertEqual(generate.execute(cfg_path,out,readme),0)
             extra = out/"diagrams"/"subsystems"/"compute2.mmd"
