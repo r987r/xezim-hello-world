@@ -23,7 +23,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 FLOO_COMMIT = yaml.safe_load((ROOT / "config/ip.lock.yaml").read_text())["third_party"]["floonoc"]["commit"]
-NATIVE = {"MaxTxns", "MaxUniqueIds", "RRoBType", "BRoBType",
+NATIVE = {"MaxTxns", "MaxTxnsPerId", "MaxUniqueIds", "RRoBType", "BRoBType",
           "RRoBSize", "BRoBSize"}
 ROBS = {"NoRoB", "SimpleRoB", "NormalRoB"}
 
@@ -152,6 +152,17 @@ def profiles(soc, knobs):
                     raise NoCGenerationError(f"unsupported FlooNoC reorder type {v}")
             else:
                 integer(v, f"{family}.{k}")
+        # The pinned upstream floo_rob_status_table declares the usage
+        # counter as clog2(MaxTxnsPerId), while cc_fifo exports
+        # clog2(Depth+1). Power-of-two depths break its instance-array
+        # connection. Reject this upstream corner until explicitly fixed.
+        depth = params["MaxTxnsPerId"]
+        if (params["BRoBType"] != "NoRoB" or params["RRoBType"] != "NoRoB"):
+            if depth < params["MaxTxns"]:
+                raise NoCGenerationError(f"{name}: per-ID FIFO depth below MaxTxns")
+            if depth & (depth - 1) == 0:
+                raise NoCGenerationError(
+                    f"{name}: upstream RoB FIFO usage width mismatch at power-of-two MaxTxnsPerId")
         result[name] = {
             "path": path, "plane": plane, "family": family,
             "native_parameters": copy.deepcopy(params),
@@ -226,7 +237,7 @@ def native_bindings(top, params):
     fields = [
         f"    c.MaxTxns = {params['MaxTxns']};",
         f"    c.MaxUniqueIds = {params['MaxUniqueIds']};",
-        f"    c.MaxTxnsPerId = {params['MaxTxns']};",
+        f"    c.MaxTxnsPerId = {params['MaxTxnsPerId']};",
         f"    c.BRoBType = {params['BRoBType']};",
         f"    c.BRoBSize = {params['BRoBSize']};",
         f"    c.RRoBType = {params['RRoBType']};",
