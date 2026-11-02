@@ -1,0 +1,87 @@
+name: xezim_global_config
+description: 'Xezim global_config: independent config FlooNoC from SoC config'
+network_type: axi
+routing:
+  route_algo: XY
+  use_id_table: true
+protocols:
+- name: axi_in
+  type: narrow
+  protocol: AXI4
+  data_width: 32
+  addr_width: 32
+  id_width: 1
+  user_width: 1
+  type_prefix: null
+- name: axi_out
+  type: narrow
+  protocol: AXI4
+  data_width: 32
+  addr_width: 32
+  id_width: 1
+  user_width: 1
+  type_prefix: null
+endpoints:
+- name: compute0
+  mgr_port_protocol:
+  - axi_in
+- name: compute1
+  mgr_port_protocol:
+  - axi_in
+- name: compute0_regs
+  sbr_port_protocol:
+  - axi_out
+  addr_range:
+  - base: 1073741824
+    size: 65536
+  - base: 1073872896
+    size: 4096
+- name: compute1_regs
+  sbr_port_protocol:
+  - axi_out
+  addr_range:
+    base: 1073807360
+    size: 65536
+- name: memory0_regs
+  sbr_port_protocol:
+  - axi_out
+  addr_range:
+    base: 1073938432
+    size: 4096
+routers:
+- name: router
+  array:
+  - 3
+  - 2
+  degree: 5
+connections:
+- src: compute0
+  dst: router
+  dst_idx:
+  - 0
+  - 0
+  dst_dir: Eject
+- src: compute1
+  dst: router
+  dst_idx:
+  - 1
+  - 0
+  dst_dir: Eject
+- src: compute0_regs
+  dst: router
+  dst_idx:
+  - 2
+  - 0
+  dst_dir: Eject
+- src: compute1_regs
+  dst: router
+  dst_idx:
+  - 0
+  - 1
+  dst_dir: Eject
+- src: memory0_regs
+  dst: router
+  dst_idx:
+  - 1
+  - 1
+  dst_dir: Eject

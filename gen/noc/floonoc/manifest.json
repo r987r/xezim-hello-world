@@ -1,0 +1,168 @@
+{
+  "generator": "upstream FlooGen",
+  "generator_commit": "05368bdff914f91a48b47c4ceddfc6ff266c6b3a",
+  "networks": {
+    "compute0_local_config": {
+      "config": "compute0/local_config/floogen.yaml",
+      "endpoint_count": 5,
+      "native_parameters": {
+        "BRoBSize": 2,
+        "BRoBType": "NoRoB",
+        "MaxTxns": 2,
+        "MaxUniqueIds": 2,
+        "RRoBSize": 2,
+        "RRoBType": "NoRoB"
+      },
+      "network_interfaces_with_native_knobs": 5,
+      "package": "compute0/local_config/floo_xezim_compute0_local_config_noc_pkg.sv",
+      "plane": "config",
+      "routers": 6,
+      "status": "real_upstream_structural_RTL_not_elaborated",
+      "subdirectory": "compute0/local_config",
+      "top": "compute0/local_config/floo_xezim_compute0_local_config_noc.sv",
+      "top_module": "floo_xezim_compute0_local_config_noc"
+    },
+    "compute0_local_data": {
+      "config": "compute0/local_data/floogen.yaml",
+      "endpoint_count": 7,
+      "native_parameters": {
+        "BRoBSize": 8,
+        "BRoBType": "NormalRoB",
+        "MaxTxns": 8,
+        "MaxUniqueIds": 4,
+        "RRoBSize": 8,
+        "RRoBType": "NormalRoB"
+      },
+      "network_interfaces_with_native_knobs": 7,
+      "package": "compute0/local_data/floo_xezim_compute0_local_data_noc_pkg.sv",
+      "plane": "data",
+      "routers": 9,
+      "status": "real_upstream_structural_RTL_not_elaborated",
+      "subdirectory": "compute0/local_data",
+      "top": "compute0/local_data/floo_xezim_compute0_local_data_noc.sv",
+      "top_module": "floo_xezim_compute0_local_data_noc"
+    },
+    "compute1_local_config": {
+      "config": "compute1/local_config/floogen.yaml",
+      "endpoint_count": 4,
+      "native_parameters": {
+        "BRoBSize": 2,
+        "BRoBType": "NoRoB",
+        "MaxTxns": 2,
+        "MaxUniqueIds": 2,
+        "RRoBSize": 2,
+        "RRoBType": "NoRoB"
+      },
+      "network_interfaces_with_native_knobs": 4,
+      "package": "compute1/local_config/floo_xezim_compute1_local_config_noc_pkg.sv",
+      "plane": "config",
+      "routers": 4,
+      "status": "real_upstream_structural_RTL_not_elaborated",
+      "subdirectory": "compute1/local_config",
+      "top": "compute1/local_config/floo_xezim_compute1_local_config_noc.sv",
+      "top_module": "floo_xezim_compute1_local_config_noc"
+    },
+    "compute1_local_data": {
+      "config": "compute1/local_data/floogen.yaml",
+      "endpoint_count": 5,
+      "native_parameters": {
+        "BRoBSize": 8,
+        "BRoBType": "NormalRoB",
+        "MaxTxns": 8,
+        "MaxUniqueIds": 4,
+        "RRoBSize": 8,
+        "RRoBType": "NormalRoB"
+      },
+      "network_interfaces_with_native_knobs": 5,
+      "package": "compute1/local_data/floo_xezim_compute1_local_data_noc_pkg.sv",
+      "plane": "data",
+      "routers": 6,
+      "status": "real_upstream_structural_RTL_not_elaborated",
+      "subdirectory": "compute1/local_data",
+      "top": "compute1/local_data/floo_xezim_compute1_local_data_noc.sv",
+      "top_module": "floo_xezim_compute1_local_data_noc"
+    },
+    "global_config": {
+      "config": "global_config/floogen.yaml",
+      "endpoint_count": 5,
+      "native_parameters": {
+        "BRoBSize": 2,
+        "BRoBType": "NoRoB",
+        "MaxTxns": 2,
+        "MaxUniqueIds": 2,
+        "RRoBSize": 2,
+        "RRoBType": "NoRoB"
+      },
+      "network_interfaces_with_native_knobs": 5,
+      "package": "global_config/floo_xezim_global_config_noc_pkg.sv",
+      "plane": "config",
+      "routers": 6,
+      "status": "real_upstream_structural_RTL_not_elaborated",
+      "subdirectory": "global_config",
+      "top": "global_config/floo_xezim_global_config_noc.sv",
+      "top_module": "floo_xezim_global_config_noc"
+    },
+    "global_data": {
+      "config": "global_data/floogen.yaml",
+      "endpoint_count": 6,
+      "native_parameters": {
+        "BRoBSize": 8,
+        "BRoBType": "NormalRoB",
+        "MaxTxns": 8,
+        "MaxUniqueIds": 4,
+        "RRoBSize": 8,
+        "RRoBType": "NormalRoB"
+      },
+      "network_interfaces_with_native_knobs": 6,
+      "package": "global_data/floo_xezim_global_data_noc_pkg.sv",
+      "plane": "data",
+      "routers": 6,
+      "status": "real_upstream_structural_RTL_not_elaborated",
+      "subdirectory": "global_data",
+      "top": "global_data/floo_xezim_global_data_noc.sv",
+      "top_module": "floo_xezim_global_data_noc"
+    },
+    "memory0_local_config": {
+      "config": "memory0/local_config/floogen.yaml",
+      "endpoint_count": 2,
+      "native_parameters": {
+        "BRoBSize": 2,
+        "BRoBType": "NoRoB",
+        "MaxTxns": 2,
+        "MaxUniqueIds": 2,
+        "RRoBSize": 2,
+        "RRoBType": "NoRoB"
+      },
+      "network_interfaces_with_native_knobs": 2,
+      "package": "memory0/local_config/floo_xezim_memory0_local_config_noc_pkg.sv",
+      "plane": "config",
+      "routers": 2,
+      "status": "real_upstream_structural_RTL_not_elaborated",
+      "subdirectory": "memory0/local_config",
+      "top": "memory0/local_config/floo_xezim_memory0_local_config_noc.sv",
+      "top_module": "floo_xezim_memory0_local_config_noc"
+    },
+    "memory0_local_data": {
+      "config": "memory0/local_data/floogen.yaml",
+      "endpoint_count": 3,
+      "native_parameters": {
+        "BRoBSize": 8,
+        "BRoBType": "NormalRoB",
+        "MaxTxns": 8,
+        "MaxUniqueIds": 4,
+        "RRoBSize": 8,
+        "RRoBType": "NormalRoB"
+      },
+      "network_interfaces_with_native_knobs": 3,
+      "package": "memory0/local_data/floo_xezim_memory0_local_data_noc_pkg.sv",
+      "plane": "data",
+      "routers": 4,
+      "status": "real_upstream_structural_RTL_not_elaborated",
+      "subdirectory": "memory0/local_data",
+      "top": "memory0/local_data/floo_xezim_memory0_local_data_noc.sv",
+      "top_module": "floo_xezim_memory0_local_data_noc"
+    }
+  },
+  "real_axi_traffic_verified": false,
+  "real_rtl_elaborated": false
+}

@@ -149,6 +149,11 @@
       "name": "boot.reset_ctrl",
       "base": 1073872896,
       "size": 4096
+    },
+    {
+      "name": "memory0.ctrl",
+      "base": 1073938432,
+      "size": 4096
     }
   ],
   "target_count": 2
