@@ -6,7 +6,7 @@ on:
       - 'tools/noc_diagrams.py'
       - 'tools/diagram_gen.py'
       - 'tools/generate.py'
-      - 'tests/test_noc_diagrams.py'
+      - 'tests/**'
       - '.github/workflows/regen-noc-diagrams-feature.yml'
 permissions:
   contents: write
