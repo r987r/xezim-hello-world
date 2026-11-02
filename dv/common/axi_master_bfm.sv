@@ -66,6 +66,7 @@ module axi_master_bfm #(
     task automatic send_write(input [ADDR_BITS-1:0] addr, input integer target);
         integer beat;
         begin
+            $display("TRACE AXI master=%0d write target=%0d start t=%0t", MASTER_INDEX, target, $time);
             @(negedge clk);
             awid = TRANSACTION_ID;
             awaddr = addr;
@@ -128,6 +129,7 @@ module axi_master_bfm #(
     // forbidden routes from the stimulus would miss a broken M_CONNECT mask.
     task automatic check_denied_route(input [ADDR_BITS-1:0] address, input integer denied_target);
         begin
+            $display("TRACE AXI master=%0d denied target=%0d start t=%0t", MASTER_INDEX, denied_target, $time);
             @(negedge clk);
             awid = TRANSACTION_ID;
             awaddr = address;
