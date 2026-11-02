@@ -34,6 +34,17 @@ jobs:
             --pattern 'bender-x86_64-unknown-linux-gnu.tar.xz.sha256' --dir .tools/bin
           (cd .tools/bin && sha256sum -c bender-x86_64-unknown-linux-gnu.tar.xz.sha256)
           tar -xJf .tools/bin/bender-x86_64-unknown-linux-gnu.tar.xz -C .tools/bin
+          echo "Bender archive contents:"
+          tar -tf .tools/bin/bender-x86_64-unknown-linux-gnu.tar.xz
+          candidate="$(find .tools/bin -maxdepth 4 -type f -name 'bender*' ! -name '*.tar.xz*' -print -quit)"
+          if [ -z "$candidate" ]; then
+            echo "Bender executable not found in archive" >&2
+            exit 1
+          fi
+          if [ "$candidate" != ".tools/bin/bender" ]; then
+            cp "$candidate" .tools/bin/bender
+          fi
+          chmod +x .tools/bin/bender
           echo "$GITHUB_WORKSPACE/.tools/bin" >> "$GITHUB_PATH"
         env:
           GH_TOKEN: ${{ github.token }}
