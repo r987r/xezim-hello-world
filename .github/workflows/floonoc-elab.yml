@@ -101,3 +101,41 @@ jobs:
           test "$count" -eq 8
           echo "PASS: elaborated $count real upstream FlooNoC networks"
 
+      - name: Download the checksum-verified pinned Xezim release
+        env:
+          GH_TOKEN: \${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          source toolchains/xezim.env
+          gh release download "$XEZIM_RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "$XEZIM_ASSET_NAME" \
+            --pattern "$XEZIM_ASSET_NAME.sha256" --dir .tools/bin
+          (cd .tools/bin && sha256sum -c "$XEZIM_ASSET_NAME.sha256")
+          chmod +x ".tools/bin/$XEZIM_ASSET_NAME"
+          echo "XEZIM_BIN=$GITHUB_WORKSPACE/.tools/bin/$XEZIM_ASSET_NAME" >> "$GITHUB_ENV"
+      - name: Compare Xezim compile compatibility against Verilator for the exact global NoCs
+        continue-on-error: true
+        timeout-minutes: 5
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Verilator: all eight structural NoCs passed elaboration." >> "$GITHUB_STEP_SUMMARY"
+          echo "Xezim: attempting --compile against the same pinned Bender source list." >> "$GITHUB_STEP_SUMMARY"
+          if timeout 240s bash scripts/run-floonoc-xezim.sh global_data global_config > xezim-noc-compile.log 2>&1; then
+            echo "Xezim: global data+config compile PASS (no AXI traffic test)." >> "$GITHUB_STEP_SUMMARY"
+            cat xezim-noc-compile.log
+          else
+            status=$?
+            echo "Xezim: NoC compile probe FAILED/UNSUPPORTED (exit $status), see artifact; existing Xezim CPU/AXI tests are separate." >> "$GITHUB_STEP_SUMMARY"
+            tail -n 100 xezim-noc-compile.log || true
+            exit "$status"
+          fi
+      - name: Preserve Xezim diagnostics for simulator-diff investigations
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xezim-floonoc-compile-probe
+          path: xezim-noc-compile.log
+          if-no-files-found: ignore
