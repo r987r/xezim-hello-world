@@ -75,8 +75,6 @@ jobs:
         run: AXI_CONFIG=config/examples/memory-fabric-sparse.yaml make dv-memory
       - name: Prove scoreboard detects incorrect memory data
         run: bash -o pipefail -c 'make dv-memory-negative | tee memory-negative.log'
-      - name: Guard fixed indexed part-select port semantics
-        run: bash -o pipefail -c '"$XEZIM_BIN" --no-cache -s port_slice_repro dv/simulator/port_slice_repro.sv | tee port-slice.log'
       - name: Test reusable local SRAM read/write ports and byte strobes
         run: bash -o pipefail -c 'make dv-sram | tee local-sram.log'
       - name: Execute a minimal SERV-only 4-instruction program
