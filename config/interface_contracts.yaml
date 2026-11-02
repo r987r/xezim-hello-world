@@ -21,16 +21,20 @@ defaults:
 # transaction resources, not independent AR/AW hardware limits.
 # Until upstream emitters exist, these are validated planned values.
 fabric_parameters:
-  local_data:
-    MaxMstTrans: 8
-    MaxSlvTrans: 8
-    FallThrough: false
-    LatencyMode: CUT_ALL_AX
-  local_config:
-    MaxMstTrans: 2
-    MaxSlvTrans: 2
-    FallThrough: false
-    LatencyMode: CUT_ALL_AX
+  local_data: &local_data_floo
+    MaxTxns: 8
+    MaxUniqueIds: 4
+    RRoBType: NormalRoB
+    BRoBType: NormalRoB
+    RRoBSize: 8
+    BRoBSize: 8
+  local_config: &config_floo
+    MaxTxns: 2
+    MaxUniqueIds: 2
+    RRoBType: NoRoB
+    BRoBType: NoRoB
+    RRoBSize: 2
+    BRoBSize: 2
   memory_data:
     S_THREADS: 2
     S_ACCEPT: 16
@@ -42,11 +46,8 @@ fabric_parameters:
     BRoBType: NormalRoB
     RRoBSize: 8
     BRoBSize: 8
-  global_config:
-    MaxMstTrans: 2
-    MaxSlvTrans: 2
-    FallThrough: false
-    LatencyMode: CUT_ALL_AX
+  memory_local_data: *local_data_floo
+  global_config: *config_floo
 
 # Resolved after type defaults, before per-port overrides. Unknown instances
 # and names are errors, not silently ignored.
