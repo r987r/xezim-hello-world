@@ -187,17 +187,18 @@ module axi_master_bfm #(
         arlock = 0; arcache = 0; arprot = 0; arqos = 0; arvalid = 0; rready = 0;
         wait (!rst);
         repeat (3) @(negedge clk);
-        for (target = 0; target < N_TARGETS; target = target + 1) begin
-            // Unique locations avoid false passes from concurrent masters.
+        // Exercise permitted routes first across all masters, then denied ones.
+        // This avoids denied traffic obscuring debugging of allowed transfers.
+        for (target = 0; target < N_TARGETS; target = target + 1) if (ENABLED_TARGETS[target]) begin
             addr = TARGET_BASES[target*ADDR_BITS +: ADDR_BITS] + ADDR_BITS'(256 + MASTER_INDEX*256);
-            if (ENABLED_TARGETS[target]) begin
-                send_write(addr, target);
-                check_read(addr, target);
-                $display("COVER AXI master=%0d target=%0d burst_beats=%0d",
-                         MASTER_INDEX, target, BURST_BEATS);
-            end else begin
-                check_denied_route(addr, target);
-            end
+            send_write(addr, target);
+            check_read(addr, target);
+            $display("COVER AXI master=%0d target=%0d burst_beats=%0d",
+                     MASTER_INDEX, target, BURST_BEATS);
+        end
+        for (target = 0; target < N_TARGETS; target = target + 1) if (!ENABLED_TARGETS[target]) begin
+            addr = TARGET_BASES[target*ADDR_BITS +: ADDR_BITS] + ADDR_BITS'(256 + MASTER_INDEX*256);
+            check_denied_route(addr, target);
         end
         done = 1;
     end
