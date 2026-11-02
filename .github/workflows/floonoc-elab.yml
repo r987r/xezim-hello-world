@@ -73,7 +73,7 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y verilator
           verilator --version
-      - name: Elaborate real generated global AXI data and config meshes
+      - name: Elaborate all eight upstream-generated local/global NoC RTL modules
         run: |
           set -euo pipefail
           includes=()
@@ -81,10 +81,24 @@ jobs:
             [ -d "$d" ] && includes+=("-I$d")
           done
           includes+=("-I.tools/floonoc/hw/include")
-          for noc in global_data global_config; do
-            verilator --lint-only --timing --top-module "floo_xezim_${noc}_noc" \
+          python3 - <<'PY' > .tools/noc-toplist.tsv
+          import json
+          from pathlib import Path
+          root = Path("gen/noc/floonoc")
+          networks=json.loads((root/"manifest.json").read_text())["networks"]
+          for name, network in sorted(networks.items()):
+              print("\t".join((network["top_module"],
+                    str(root/network["package"]), str(root/network["top"]))))
+          PY
+          count=0
+          while IFS=
+\t' read -r top pkg rtl; do
+            echo "ELABORATE $top from $rtl"
+            verilator --lint-only --timing --top-module "$top" \
               -Wno-fatal "${includes[@]}" \
-              -f .tools/floonoc-lint.f \
-              "gen/noc/floonoc/$noc/floo_xezim_${noc}_noc_pkg.sv" \
-              "gen/noc/floonoc/$noc/floo_xezim_${noc}_noc.sv"
-          done
+              -f .tools/floonoc-lint.f "$pkg" "$rtl"
+            count=$((count+1))
+          done < .tools/noc-toplist.tsv
+          test "$count" -eq 8
+          echo "PASS: elaborated $count real upstream FlooNoC networks"
+
