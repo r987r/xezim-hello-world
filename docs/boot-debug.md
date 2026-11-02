@@ -27,12 +27,10 @@ SRAM through real bus writes.
    with non-zero lower bound. Passing `i_wb_rdt[31:2]` to a `[31:2]`
    decoder port changes the opcode from `01101` (LUI) into `01011`; the
    same issue affects `[31:7]` to SERV's immediate decoder.
-   `dv/simulator/port_slice_repro.sv` isolates the problem in 16 lines:
+   A historical isolated reproducer established the problem:
    Icarus 12.0 passes, while Xezim 0.11.3 fails the assertion.
 
-Xezim 0.11.4 includes the upstream packed port part-select fix. Both the
-standalone `port_slice_repro.sv` check and the unmodified, pinned upstream
-SERV source must pass. Do not patch upstream SERV sources for this issue.
+Xezim 0.11.4 includes the upstream packed port part-select fix. The historical port-slice reproducer is removed from the SoC regression; the pinned upstream SERV source and end-to-end cold-boot regression must still pass. Do not patch upstream SERV sources for this issue.
 The original 0.11.3 workaround is removed.
 
 ## Debug the real boot if it regresses
