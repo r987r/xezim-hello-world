@@ -40,7 +40,8 @@
     "noc/floonoc/memory0/local_data/floo_xezim_memory0_local_data_noc.sv": "38152ca15efd18f15042fe3072738cbd74681e3f5291d854cc2ad470a98ed25d",
     "noc/floonoc/memory0/local_data/floo_xezim_memory0_local_data_noc_pkg.sv": "2788d66c12e90772af6683f73b9c324ee71a62b0e3c66e4857a8a3461f63dc0a",
     "noc/floonoc/memory0/local_data/floogen.yaml": "2bcf9f6af2ae63ad27e0370b3946e7d7e00d467d44ea5059363ec5bf20cc8aea",
-    "supernoc/supernoc_tb.sv": "77fd4763a27b1df7f606a6b4ea91aff5cd3460561f3cbf7c6b75ffbc9b3e45e0",
+    "supernoc/manifest.json": "ad6ee2f32e069a1c41847e6360fc9b25337eb0a7adc02ec12dae53b8b4260629",
+    "supernoc/supernoc_tb.sv": "27ab3ad2c8e7757f132c2b33388539ce86c886e2ff553884d7701e75417fc33a",
     "verification/plan.json": "6b635caa6decd8d08314e6c45f10ea7e0896ca20c420ac09f77b0708f4088ac5",
     "verification/routes.json": "b3422dcb7d7550ab7db1614af7569b5abbbfd15c1f038060394eab8f9b697c71"
   },
