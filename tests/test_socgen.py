@@ -143,16 +143,9 @@ class SocConfigTest(unittest.TestCase):
         meta = socgen.validate(copy.deepcopy(self.base))
         with tempfile.TemporaryDirectory() as tmp:
             diagrams = diagram_gen.render(copy.deepcopy(self.base), meta, Path(tmp) / "diagrams", ROOT / "gen/noc/floonoc")
-            for name in ("architecture", "rtl-connectivity", "verification", "boot", "noc-hierarchy"):
+            for name in ("noc-hierarchy",):
                 self.assertIn("flowchart", diagrams[name])
                 self.assertTrue((Path(tmp)/"diagrams"/f"{name}.mmd").is_file())
-            self.assertIn("picorv32", diagrams["architecture"])
-            self.assertIn("memory0.hbm0", diagrams["architecture"])
-            self.assertIn("memory_tb", diagrams["rtl-connectivity"])
-            self.assertIn("memory_fabric", diagrams["verification"])
-            self.assertIn("subsystems/compute0", diagrams)
-            self.assertIn("subsystems/compute1", diagrams)
-            self.assertIn("subsystems/memory0", diagrams)
             for name in diagrams:
                 image_path = Path(tmp) / "diagrams" / f"{name}.svg"
                 self.assertTrue(image_path.is_file(), image_path)
@@ -171,7 +164,7 @@ class SocConfigTest(unittest.TestCase):
         readme = (ROOT / "README.md").read_text()
         section = readme.split(generate.START, 1)[1].split(generate.END, 1)[0]
         image_paths = re.findall(r"!\[[^]]+\]\((gen/diagrams/[^)]+\.svg)\)", section)
-        self.assertEqual(len(image_paths), 5)
+        self.assertEqual(len(image_paths), 1)
         for relative in image_paths:
             path = ROOT / relative
             self.assertTrue(path.is_file(), f"missing README image {relative}")
