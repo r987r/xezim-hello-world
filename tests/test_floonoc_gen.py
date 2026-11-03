@@ -128,14 +128,14 @@ class FlooNoCProfilesTest(unittest.TestCase):
         # Upstream floo_axi_chimney NoMgrPortRobType asserts at time zero
         # if a target-only chimney is given NormalRoB.
         mini = (
-            "module dual(input logic clk);\\n"
-            "floo_axi_chimney #(\\n"
-            " .ChimneyCfg(set_ports(ChimneyDefaultCfg, 1'b0, 1'b1))\\n"
-            ") source_ni();\\n"
-            "floo_axi_chimney #(\\n"
-            " .ChimneyCfg(set_ports(ChimneyDefaultCfg, 1'b1, 1'b0))\\n"
-            ") target_ni();\\n"
-            "endmodule\\n"
+            "module dual(input logic clk);\n"
+            "floo_axi_chimney #(\n"
+            " .ChimneyCfg(set_ports(ChimneyDefaultCfg, 1'b0, 1'b1))\n"
+            ") source_ni();\n"
+            "floo_axi_chimney #(\n"
+            " .ChimneyCfg(set_ports(ChimneyDefaultCfg, 1'b1, 1'b0))\n"
+            ") target_ni();\n"
+            "endmodule\n"
         )
         source, count = floonoc_gen.native_bindings(
             mini, self.knobs["fabric_parameters"]["memory_local_data"])
