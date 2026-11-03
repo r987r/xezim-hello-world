@@ -1,4 +1,4 @@
-# Xezim implementation status and diagram index
+# SoC and Xezim implementation status
 
 This is a **scope-aware** inventory, not a declaration that the complete
 SoC is integrated. The authoritative config is
@@ -19,8 +19,8 @@ for the exact SHA before reporting regression results.
 | Real SERV instruction test | `make dv-serv` | Small standalone core+RAM test |
 | Dual-CPU cold boot | `make dv-boot`: real PicoRV32 ROM fetch, flash reads, SRAM writes, SERV MMIO release, two signatures | Standalone bootstrap memory/bus model, not the generated full-chip NoC |
 | PULP iDMA | **No executable subsystem** | Source commit only; frontend, CSR and data connections pending |
-| Local FlooNoC | **Generated structural Verilog for all local data/config meshes** | CPU/DMA/CSR endpoint wiring, elaboration and traffic NOT yet integrated |
-| Global FlooNoC mesh | **Upstream-generated structural Verilog tracked in gen/noc/floonoc/global_data** | Router/chimney modules generated; dependency elaboration and AXI traffic NOT demonstrated |
+| Local FlooNoC | **Generated structural Verilog for all local data/config meshes** | Upstream RTL elaborates in Verilator and Xezim; CPU/DMA/CSR endpoint wiring and routed traffic remain pending |
+| Global FlooNoC mesh | **Upstream-generated structural Verilog tracked in gen/noc/floonoc/global_data** | Upstream dependencies and all eight meshes compile in Verilator and Xezim; AXI transactions remain pending |
 | Global config FlooNoC | **Generated structural AXI4 transport RTL** | Real PULP AXI-Lite boundary adapters and CSR transfers NOT yet connected |
 | LiteDRAM / HiSA HBM | **No executable physical controller/PHY path** | Verification models are generic AXI RAM, not DDR/HBM controllers |
 | End-to-end SOC `soc_top` | **No executable RTL** | CPU to DMA to NoC to memory not proven |
@@ -43,7 +43,7 @@ flowchart LR
     XB --> D[DDR-labeled AXI RAM]
   end
   BOOT -. "NOT CONNECTED IN FULL CHIP" .-> MEM
-  C0 -. "PLANNED local PULP AXI + iDMA" .-> F[Global FlooNoC: GENERATED, NOT SIMULATED]
+  C0 -. "PLANNED local PULP AXI + iDMA" .-> F[Global FlooNoC: GENERATED, ELABORATED; ROUTED TRAFFIC PENDING]
   F -. "PLANNED" .-> XB
 ```
 
@@ -66,11 +66,11 @@ and the verification plan, **not** additional architecture images.
 ## What would justify saying "FlooNoC works"?
 
 At minimum: pinned FlooNoC and FlooGen sources, real generated router/
-network-interface/link RTL compiled in the pinned Xezim simulator; connected
+network-interface/link RTL compiled in the pinned Xezim simulator (already achieved); connected
 AXI endpoints with address and ID translation; traffic across *multiple
 routers* to both memory targets; end-to-end data, ordering and reachability
 checks plus negative/error cases and backpressure; and committed
-`soc_top` source lists and matching *executable* topology diagrams.
+`soc_top` source lists and the single corresponding *executable* full-SoC topology diagram.
 None of this is established by just `backend: floonoc` or by the existing
 Verilog-AXI crossbar test.
 
