@@ -49,9 +49,9 @@ traffic through those routers, inter-NoC connection wiring, CPU/DMA/CSR
 endpoints, full-chip `soc_top`, and real HBM/DDR controllers/PHY. Do
 not confuse generated/elaborated RTL with a working interconnected SoC.
 
-For source-backed status, every architecture/RTL/boot/verification/subsystem
-diagram and implementation limits, see
-[Implementation status & seven-diagram index](docs/implementation-status.md).
+For source-backed maturity and outstanding work, see
+[implementation status](docs/implementation-status.md); the single diagram
+above is the only generated SoC architecture picture.
 Future coding agents **must** follow [AGENTS.md](AGENTS.md), including pinned
 Xezim binary installation, `make gen`, `make check-generated`, the full
 regression and the two AXI routing profile simulations. Never hand-edit
