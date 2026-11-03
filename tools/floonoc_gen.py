@@ -290,17 +290,17 @@ def native_bindings(top, params):
             "FlooGen NI port roles changed: expected sbr-only or mgr-only chimney")
     if target_count:
         role_body = (
-            "\\n  // EnMgrPort=0: upstream NoMgrPortRobType requires NoRoB.\\n"
-            "  function automatic chimney_cfg_t xezim_chimney_cfg_no_mgr();\\n"
-            "    chimney_cfg_t c;\\n"
-            "    c = xezim_chimney_cfg();\\n"
-            "    c.BRoBType = NoRoB;\\n"
-            "    c.RRoBType = NoRoB;\\n"
-            "    return c;\\n"
-            "  endfunction\\n"
+            "\n  // EnMgrPort=0: upstream NoMgrPortRobType requires NoRoB.\n"
+            "  function automatic chimney_cfg_t xezim_chimney_cfg_no_mgr();\n"
+            "    chimney_cfg_t c;\n"
+            "    c = xezim_chimney_cfg();\n"
+            "    c.BRoBType = NoRoB;\n"
+            "    c.RRoBType = NoRoB;\n"
+            "    return c;\n"
+            "  endfunction\n"
         )
         # Append the target-only cfg function after the shared function.
-        tail = "    return c;\\n  endfunction\\n"
+        tail = "    return c;\n  endfunction\n"
         if result.count(tail) != 1:
             raise NoCGenerationError("generated native config function anchor changed")
         result = result.replace(tail, tail + role_body, 1)
