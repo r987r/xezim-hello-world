@@ -13,20 +13,20 @@ CPU0 (PicoRV32) is the primary boot core. CPU1 (SERV) stays in reset until CPU0 
 - Compute 0 contains `picorv32` (AXI4-Lite CPU interface), `pulp_idma`, SRAM, local data/config fabric.
 - Compute 1 contains `serv` (Wishbone-style separate instruction/data interface), the same `pulp_idma`, SRAM, local data/config fabric.
 - Memory 0 contains independently generated local data and configuration FlooNoCs and one HBM + one DDR behavioral model. Its *internal* 2×2 Verilog-AXI crossbar remains separately tested: both inputs can reach either target.
-- Global data and global configuration FlooNoC meshes are independent. The config NoC uses AXI4 wire transport with AXI4-Lite protocol adapters at CSR boundaries. Both compute SRAM destinations are present in the global data address map for future CPU0-to-CPU1 SRAM cold boot.
+- Global data and global configuration FlooNoC meshes are independent. The config NoC uses AXI4 wire transport. Upstream AXI4-Lite adapters are selected for CSR boundaries but are not attached in the BFM test. Both compute SRAM destinations are present in the global data address map for future CPU0-to-CPU1 SRAM cold boot.
 
 ## Stable contract vs backend
 
-The generator first validates an abstract graph of **initiators, targets, boundaries, address windows, and NoC ports**. It produces `gen/noc/fabric_ir.json`. The pinned upstream FlooGen generator now emits real structural module/package pairs under `gen/noc/floonoc/` for every local/global network, while the fully integrated SoC emitter and RTL simulation are still missing.
+The generator first validates an abstract graph of **initiators, targets, boundaries, address windows, and NoC ports**. It produces `gen/noc/fabric_ir.json`. The pinned upstream FlooGen generator now emits real structural module/package pairs under `gen/noc/floonoc/` for every local/global network, while the fully integrated `soc_top` emitter and full-chip RTL simulation remain pending. The separate connected NoC BFM test does run real routed RTL traffic.
 
 | Network | Backend | Actual status |
 | --- | --- | --- |
 | Memory0 internal 2×2 AXI target crossbar | `verilog_axi` | Real executable, independently Xezim-verified |
-| Compute0 local data + config | `floonoc` | Generated, tracked upstream structural RTL; no assembled endpoints |
-| Compute1 local data + config | `floonoc` | Generated, tracked upstream structural RTL; no assembled endpoints |
-| Memory0 local data + config | `floonoc` | Generated, tracked upstream structural RTL; internal crossbar still separate |
-| Global data | `floonoc` | Generated six-router XY mesh with compute SRAM + memory destinations; not traffic-verified |
-| Global config | `floonoc` | Generated six-router XY mesh; upstream AXI-Lite adapters not yet connected |
+| Compute0 local data + config | `floonoc` | Routed BFM traffic passes; real CPU/DMA/SRAM/CSR endpoints pending |
+| Compute1 local data + config | `floonoc` | Routed BFM traffic passes; real CPU/DMA/SRAM/CSR endpoints pending |
+| Memory0 local data + config | `floonoc` | Routed BFM traffic passes; real target crossbar still separate |
+| Global data | `floonoc` | Six-router XY mesh; routed SRAM/memory-window traffic passes in the connected BFM scope |
+| Global config | `floonoc` | Routed single-beat AXI4 BFM traffic passes; AXI-Lite adapters pending |
 
 All eight structural tops/packages, generated upstream FlooGen YAML inputs,
 and native MaxTxns/MaxUniqueIds/read/write RoB bindings are tracked in
@@ -41,7 +41,7 @@ integration, or successful AXI transactions.**
 
 - `picorv32_cpu_adapter.sv` exposes a real PicoRV32 AXI4-Lite initiator. The global data fabric will require a protocol/width/address bridge at integration time.
 - `serv_cpu_adapter.sv` exposes SERV's separate Wishbone-style instruction and data ports. Wishbone-to-AXI conversion and instruction/data arbitration are deliberately not implemented in the smoke test.
-- Both CPU implementations are actual open-source RTL with immutable source pins. CPU firmware, interrupts, caches, and coherent memory are not yet part of the verification scope.
+- Both CPU implementations are actual open-source RTL with immutable source pins. Tiny boot/application firmware executes in the separate cold-boot regression. Interrupts, caches and coherent memory remain future work.
 
 ### DMA adapter
 
@@ -72,8 +72,8 @@ for all local/global data/config networks. The **single** visual is
 [Mermaid](../gen/diagrams/noc-hierarchy.mmd) and
 [Diagram-gen-style instance/connection metadata](../gen/diagrams/noc-topology.json)
 for detailed inspection. There are no per-mesh/per-subsystem/boot/verification
-SVG duplicates. Dashed cross-network links are **planned** unless actual
-multi-NoC AXI traffic has been exercised and verified. The independent
+SVG duplicates. Dashed links denote pending full-SoC endpoint integration. Cross-NoC
+AXI wiring and routed traffic are separately verified in `supernoc_tb`. The independent
 memory crossbar and two-CPU boot tests remain preserved.
 
 ## Generated 2D previews

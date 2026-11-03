@@ -20,7 +20,7 @@ management/security processor is an optional *replacement*, not a prerequisite.
 5. CPU0 writes `1` to the implemented **boot reset-control MMIO register** at
    `0x40020000`. Only then does SERV come out of reset, with its reset PC
    configured as `0x11000000`.
-6. CPU0 jumps to its SRAM program. Each real CPU executes a four-instruction
+6. CPU0 jumps to its SRAM program. Each real CPU starts its four-word
    program and writes a completion signature to its SRAM (`0x10000100=0x55`,
    `0x11000100=0x66`). The test rejects missing ROM fetches, flash reads,
    SRAM copy stores, premature CPU1 acknowledgment, missing signatures,
@@ -77,12 +77,13 @@ is also useful for bypass/accelerated tests, but such tests must be labeled
 | DMA0 CSR | `0x40000000` | AXI4-Lite | **planned**, no register bank yet |
 | DMA1 CSR | `0x40010000` | AXI4-Lite | **planned**, no register bank yet |
 | Reset control | `0x40020000` | R/W 32-bit | **implemented only in scoped boot TB** |
+| Memory controller CSR aperture | `0x40030000` | 32-bit config transport | **reserved**, BFM storage only in the NoC test; no controller register RTL |
 | HBM data | `0x1_00000000` | AXI4 64-bit | behavioral AXI RAM in separate memory DV |
 | DDR data | `0x1_40000000` | AXI4 64-bit | behavioral AXI RAM in separate memory DV |
 
-We removed invented HBM/DDR controller CSR windows. Those registers should be
-allocated only after choosing a real controller and specifying its actual
-management interface. CPU0 and CPU1 are 32-bit cores and **cannot directly
+`memory0.ctrl` reserves one subsystem aperture; it does not invent actual
+HBM/DDR controller registers. Per-controller register maps must come from
+the selected controller's real management interface. CPU0 and CPU1 are 32-bit cores and **cannot directly
 load/store addresses above 4 GiB**; later DMA engines will have 64-bit
 source/destination registers for transfers to HBM/DDR.
 
@@ -93,15 +94,17 @@ permissions. Secure boot is **not implemented**.
 
 ## Next hardware integration
 
-1. Replace direct boot-memory address mux with a local AXI interconnect and
-   byte-enabled SRAM macro/model; connect a Wishbone-to-AXI adapter for SERV.
+1. Replace the bootstrap-only bus responders with upstream AXI integration,
+   connect the existing byte-enabled SRAM through appropriate adapters,
+   and add Wishbone-to-AXI adaptation for SERV. Physical SRAM macros remain future work.
 2. Add a minimal SPI/QSPI reader or a debug/UART streaming boot interface;
    keep exactly the same image/load, reset and completion contracts. Test
    *traffic-driven* SRAM loading (no SRAM backdoor preload in cold boot).
 3. Integrate PULP iDMA frontend CSRs: CPU0 programs source, destination,
    length, status and interrupt. Accelerate future firmware staging/copies.
-4. Implement global data/config networks. CPU0 coordinates memory-controller
-   initialization and waits for DDR/HBM ready before issuing DMA there.
+4. Attach the real endpoints to the already generated and BFM-tested global
+   data/config networks. CPU0 must eventually initialize controllers and
+   wait for DDR/HBM ready before issuing DMA there.
 5. Release the secondary core through controlled, addressable reset with
    error handling. Add optional secure management processor only if isolation,
    always-on power domains, or recovery requirements justify it.

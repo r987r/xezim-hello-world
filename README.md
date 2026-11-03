@@ -17,7 +17,7 @@ The **single architecture diagram** below includes all local/global FlooNoCs, co
 
 [Full-size diagram](gen/diagrams/noc-hierarchy.svg) · [Editable Mermaid](gen/diagrams/noc-hierarchy.mmd) · [Machine-readable router/NI/link graph](gen/diagrams/noc-topology.json) · [Real generated FlooNoC RTL](gen/noc/floonoc/manifest.json)
 
-**Configured topology:** 2 compute subsystems, 8 independent FlooNoC instances, 43 total generated routers. Data: 64-bit AXI4; control: 32-bit AXI4 transport for AXI4-Lite transactions through upstream adapters.
+**Configured topology:** 2 compute subsystems, 8 independent FlooNoC instances, 43 total generated routers. Data: 64-bit AXI4; control: 32-bit AXI4 transport for planned AXI4-Lite endpoint bridges. Those upstream adapters are not attached in the NoC BFM test.
 
 **Verification truth:** Xezim exercises separate CPU cold-boot/SRAM and Verilog-AXI memory testbenches. Both Xezim and Verilator have compiled the eight structural FlooNoCs. The unified `make dv-supernoc` regression connects all meshes to upstream AXI agents and checks destinations, data, bursts, concurrent IDs, stalls and downstream SLVERR. Xezim NoC traffic is not verified. See [test scope and results](docs/supernoc-verification.md).
 
@@ -84,7 +84,8 @@ records these; compilation is not routed-traffic verification.
 
 All **local data/config** and **global data/config** NoCs use pinned upstream
 FlooNoC, with independent mesh instances. Inside memory0, the verified
-Verilog-AXI target crossbar remains downstream of its local FlooNoC.
+Verilog-AXI target crossbar is planned downstream of its local FlooNoC;
+it is still tested separately and is not attached to `supernoc_tb`.
 AXI4-Lite control endpoints need real upstream AXI-Lite/AXI4 adapters.
 All eight local/global FlooGen outputs are generated and reviewable in
 `gen/noc/floonoc/`. One [whole-chip picture](gen/diagrams/noc-hierarchy.svg)
@@ -95,8 +96,8 @@ The connected BFM regression is distinct from real endpoint integration.
 
 [AXI interface budgets](config/interface_contracts.yaml) and the
 [contract checker](tools/interface_contracts.py) now validate named local
-and global subsystem fabric ports, 64-bit AXI4 data/address, PULP-local
-ID growth (4 to 5 bits for two initiators), independent pending
+and global subsystem fabric ports, 64-bit AXI4 data/address, configured
+local AXI ID widths (4-bit input, 5-bit output), independent pending
 read/write targets, and native IP parameter names. This is a validated
 **design contract**, not a claim that the planned PULP or FlooNoC RTL
 accepts these limits yet. CI tests keep FlooGen AXI widths and memory
@@ -117,6 +118,8 @@ Everything under **[`gen/`](gen/)** is committed to Git for version-to-version d
 
 ```bash
 python3 -m pip install -r requirements.txt
+python3 tools/ip_fetch.py floonoc
+python3 -m pip install -e .tools/floonoc
 make gen                 # regenerate code, metadata, diagrams, README
 make check-generated     # non-mutating drift and stale-file check
 make check-config        # generator/config test suite
@@ -149,7 +152,7 @@ make gen
 XEZIM_BIN=/path/to/xezim make dv-memory
 XEZIM_BIN=/path/to/xezim make dv-memory-negative
 XEZIM_BIN=/path/to/xezim make dv-cpu     # optional fetch-only diagnostic (not CI)
-XEZIM_BIN=/path/to/xezim make dv-serv    # standalone SERV execution, four instructions
+XEZIM_BIN=/path/to/xezim make dv-serv    # four-word SERV image; checked signature store
 XEZIM_BIN=/path/to/xezim make dv-sram    # real RTL SRAM, no power-on preload
 XEZIM_BIN=/path/to/xezim make dv-boot    # real ROM->SRAM CPU execution
 XEZIM_BIN=/path/to/xezim make test

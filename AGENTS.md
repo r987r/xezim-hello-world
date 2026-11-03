@@ -101,10 +101,11 @@ AXI ports, FlooGen routing, local PULP AXI crossbars, DMA requests, or
 outstanding transaction limits. `config/interface_contracts.yaml`
 tracks planned per-fabric and per-subsystem read/write budgets, native
 PULP/FlooNoC/Verilog AXI parameter targets, and per-port overrides.
-FlooNoC chimney transaction caps are bound to generated RTL but still
-need routed-traffic verification; local port/IP hookups are not completed.
-Check that compute local crossbar output ID width is input ID width
-plus ceil(log2(initiator count)), and that the FlooGen input IDs agree.
+FlooNoC chimney transaction caps are bound to generated RTL. The connected
+BFM traffic baseline is verified; maximum configured capacities and every
+parameter combination are not. Real local CPU/DMA/CSR hookups remain pending.
+Check that configured compute local output ID width is input ID width
+plus ceil(log2(CPU/DMA initiator count)), and that global FlooGen input IDs agree.
 Never mistake planned quotas for implemented capacity or FlooGen emission
 for simulated NoC traffic.
 
@@ -146,7 +147,7 @@ pairs and denied read/write responses (AXI DECERR). A green unit-test
 suite by itself **does not** prove new RTL integration.
 
 `scripts/common.sh` resolves `XEZIM_BIN` or a cached binary.
-`scripts/ip_fetch.py` fetches pinned third-party RTL on demand to
+`tools/ip_fetch.py` fetches pinned third-party RTL on demand to
 ignored `.tools/`. No `cargo build` or recompilation of Xezim for
 normal RTL edits. Simulator releases are built separately in
 `.github/workflows/publish-xezim.yml`.
@@ -159,8 +160,9 @@ Xezim and executes the existing CPU boot, SRAM and AXI crossbar
 transaction regressions. The independent
 `.github/workflows/floonoc-elab.yml` downloads immutable FlooNoC
 and its upstream Bender.lock dependency tree, then **elaborates all
-eight FlooGen-generated local/global meshes with Verilator**.
-These are *different verification gates*; report them separately.
+eight FlooGen-generated local/global meshes with Verilator**, then runs
+the connected super-NoC traffic and corruption checks. These are different
+verification gates from Xezim CPU/memory simulation; report them separately.
 **All eight generated local and global FlooNoC meshes now also
 compile with pinned Xezim 0.11.4** using
 `scripts/run-floonoc-xezim.sh all` and the *same upstream Bender

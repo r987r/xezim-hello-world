@@ -64,7 +64,8 @@ def generated_section(cfg: dict, meta: dict, diagrams: dict[str, str], nocs: dic
         f"{sum(x['routers'] for x in networks.values())} total generated routers. "
         f"Data: {meta['data_bits']}-bit AXI4; control: "
         f"{cfg['buses']['config']['data_bits']}-bit AXI4 transport "
-        "for AXI4-Lite transactions through upstream adapters.",
+        "for planned AXI4-Lite endpoint bridges. Those upstream adapters "
+        "are not attached in the NoC BFM test.",
         "",
         "**Verification truth:** Xezim exercises separate CPU cold-boot/SRAM and "
         "Verilog-AXI memory testbenches. Both Xezim and Verilator have compiled "

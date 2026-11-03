@@ -27,7 +27,8 @@ The entire data/config NoC hierarchy is exercised through **one** integrated
   readback at the intended endpoint and all 28 source/window routes across
   the **connected** local/global data/config networks. The same test runs
   136 concurrent burst/partial/single-beat cases, all-five-channel stalls,
-  multiple outstanding data streams with reused IDs, byte-strobe guard
+  multiple outstanding data streams with reused IDs and distinct per-stream
+  payloads, byte-strobe guard
   checks, and 24 routed B/R SLVERR pairs. Four boot-window routes are reads
   against seeded BFMs; the real CPU cold-boot scope remains separate.
 
@@ -47,17 +48,19 @@ reinvent them. Their author claims need actual pinning and simulator tests.
 
 1. [KVIPS AXI4](https://github.com/kiranreddi/kvips): UVM AXI4 master/slave
    agents, sequences, protocol assertions, coverage, scoreboard and
-   documented Verilator back-to-back/DUT flows. Candidate for a future
-   UVM mode; first verify a full UVM 1.2/1800.2 sequence with Xezim
-   and all relevant outstanding read/write semantics.
+   documented Verilator back-to-back/DUT flows. Its README currently uses
+   Verilator 5.048 and says SVA assertions are skipped in that flow;
+   this is not validation on this repo's 5.020 baseline. Candidate for a
+   future UVM mode after pinning and testing its sequences and checkers.
 2. [AXI_UVM_verification](https://github.com/k1thhh/AXI_UVM_verification):
    reusable master/slave agents, constrained-random plus directed read,
    write, FIXED/INCR/WRAP burst sequences and scoreboard; openly states
    it is an AXI4 **subset** and its tested flow targets Vivado XSim.
 3. [axi-uvm](https://github.com/marcoz001/axi-uvm):
    established publicly available AXI3/AXI4 master and slave drivers,
-   coverage, scoreboard, and parallel pipelined transactions. It has
-   limitations, so do not assume full AXI4 compliance.
+   coverage and parallel pipelined transactions. Its README describes a
+   scoreboard that counts address/response packets, not a full memory-data
+   reference model. Do not assume full AXI4 compliance or payload checking.
 4. [Accellera UVM / Chips Alliance UVM-Verilator](https://github.com/chipsalliance/uvm-verilator)
    is the **UVM base class library**, not an AXI VIP or sequence package.
 
@@ -106,7 +109,8 @@ previously applied `NormalRoB` to both initiator and target NIs.
 The generator now derives `xezim_chimney_cfg_no_mgr()` directly from
 the configured native RoB capacities, changing only B/R types to
 `NoRoB` for the upstream-generated **destination-only** chimney
-instances. Initiator-facing NIs retain configured `NormalRoB`.
+instances. Initiator-facing NIs retain their configured types: `NormalRoB` on data
+and `NoRoB` on config.
 The generator checks role counts and tests the mixed-role case.
 There is no fork of FlooNoC and no simulator assertion suppression.
 CI regeneration produces checked-in SystemVerilog with these role-specific
@@ -185,7 +189,13 @@ one failure, while the positive XML reports zero. All 63 configuration
 checks, generated-file drift checking, Xezim default/full/sparse memory
 profiles, negative memory checker, SRAM, SERV and two-core cold boot also
 passed locally. Xezim independently compiled all eight meshes with the
-known data-network width warnings retained. These are local results;
-PR #8 still needs completed CI for its new head before merge.
+known data-network width warnings retained.
+
+Published baseline `bd572f0` also passed [the complete NoC CI job](https://github.com/r987r/xezim-hello-world/actions/runs/41659508505)
+and [Xezim CPU/memory CI](https://github.com/r987r/xezim-hello-world/actions/runs/41659508518).
+Final review strengthened the concurrent streams with distinct payloads;
+check the [NoC workflow](https://github.com/r987r/xezim-hello-world/actions/workflows/floonoc-elab.yml)
+for the exact current head before merging. Passing historical runs do not
+validate later RTL or test changes.
 
 Validated RTL wrapper SHA-256: `27ab3ad2c8e7757f132c2b33388539ce86c886e2ff553884d7701e75417fc33a`.

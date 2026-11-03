@@ -114,7 +114,10 @@ async def routed_data_and_config_all_local_global_nocs(dut):
             # Disjoint manager slots, including when destinations are shared.
             address = region["base"] + 0x400 + index * 0x100 + lane * 0x1000
             for ci, (offset, length) in enumerate(cases):
-                pattern = bytes((index * 31 + ri * 13 + ci + b) & 255 for b in range(length))
+                # Distinct lane payloads expose swapped same-ID responses;
+                # matching data in the two streams would hide that failure.
+                pattern = bytes((index * 31 + lane * 71 + ri * 13 + ci + b) & 255
+                                for b in range(length))
                 # Partial writes must preserve both surrounding sentinels.
                 start = address + offset - (address + offset) % word_bytes
                 span = ((address + offset + length - start + word_bytes - 1) // word_bytes) * word_bytes
