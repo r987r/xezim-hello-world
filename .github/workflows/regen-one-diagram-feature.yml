@@ -6,6 +6,7 @@ on:
       - 'tools/noc_diagrams.py'
       - 'tools/diagram_gen.py'
       - 'tools/generate.py'
+      - 'tools/supernoc_gen.py'
       - 'tests/**'
       - '.github/workflows/regen-one-diagram-feature.yml'
 permissions:
