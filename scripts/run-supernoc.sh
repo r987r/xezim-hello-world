@@ -39,6 +39,8 @@ verilator --lint-only --timing --assert -Wno-fatal --top-module supernoc_tb \
   "${includes[@]}" "${sources[@]}"
 echo "PASS: all eight FlooNoC instances and PULP AXI BFM interfaces linted"
 if [[ "${SUPER_NOC_LINT_ONLY:-0}" == "1" ]]; then exit 0; fi
+# Avoid stale generated C++ objects when the topology or BFM changes.
+rm -rf .tools/supernoc-obj
 verilator --binary --timing --assert -Wno-fatal -j 2 \
   --Mdir .tools/supernoc-obj --top-module supernoc_tb \
   "${includes[@]}" "${sources[@]}"
