@@ -6,6 +6,7 @@ on:
       - 'tools/diagram_gen.py'
       - 'tools/noc_diagrams.py'
       - 'tools/generate.py'
+      - 'tools/supernoc_tbgen.py'
       - 'tests/test_socgen.py'
       - 'tests/test_noc_diagrams.py'
       - '.github/workflows/regen-single-diagram-feature.yml'
