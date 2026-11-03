@@ -155,7 +155,7 @@ class SocConfigTest(unittest.TestCase):
                 self.assertTrue(image_path.is_file(), image_path)
                 self.assertEqual(ET.parse(image_path).getroot().tag,
                                  "{http://www.w3.org/2000/svg}svg")
-                self.assertIn(f"{Path(name).name}.svg", (Path(tmp)/"diagrams"/f"{name}.md").read_text())
+                self.assertFalse((Path(tmp)/"diagrams"/f"{name}.md").exists())
             graphs = json.loads((Path(tmp)/"diagrams"/"graphs.json").read_text())
             self.assertEqual(set(graphs), {"noc_hierarchy"})
             self.assertIn(generate.START, (ROOT/"README.md").read_text())
