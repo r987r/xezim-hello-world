@@ -78,6 +78,21 @@ jobs:
           grep -Ev '/(idma|fpnew|fpu_div_sqrt_mvp|register_interface|obi|axi_stream|apb|common_verification)-[^/]+/|/src/deprecated/pad_functional[.]sv' \
             "$GITHUB_WORKSPACE/.tools/floonoc-rtl.f" > "$GITHUB_WORKSPACE/.tools/floonoc-lint.f"
           echo "NoC dependency filelist lines: $(wc -l < "$GITHUB_WORKSPACE/.tools/floonoc-lint.f")"
+      - name: Assert all generated NIs disable unused AXI atomic-ID reservations
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path("gen/noc/floonoc")
+          nets=json.loads((root/"manifest.json").read_text())["networks"]
+          assert len(nets)==8
+          for name, cfg in nets.items():
+              top=(root/cfg["top"]).read_text()
+              count=cfg["network_interfaces_with_native_knobs"]
+              assert top.count(".AtopSupport(1'b0)") == count,name
+              assert top.count(".MaxAtomicTxns(0)") == count,name
+              print("PASS native no-ATOP ID reservation",name,count)
+          PY
       - name: Install Verilator
         run: |
           sudo apt-get update -qq
