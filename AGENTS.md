@@ -38,8 +38,7 @@ resolved in pinned Xezim 0.11.4 and the historical bug reproducer was removed fr
    `tools/noc_diagrams.py`, `tools/diagram_svg.py`,
    `tools/generate.py`: boot, neutral graphs and diagrams.
    `tools/noc_diagrams.py` reads **actual generated** FlooGen YAML and
-   manifest for every mesh; it produces one full-chip hierarchy preview,
-   eight physical mesh previews, Mermaid and Diagram-gen-style JSON
+   manifest for every mesh; it produces one complete SoC/FlooNoC SVG preview, one Mermaid source, and Diagram-gen-style JSON
    (`gen/diagrams/noc-topology.json`). The local router-router/NI
    edges are **generated structural RTL**; all cross-NoC and CPU/DMA/CSR
    links are **planned** until a real SoC top and traffic tests pass.
@@ -64,16 +63,14 @@ resolved in pinned Xezim 0.11.4 and the historical bug reproducer was removed fr
    `gen/` manually. `README.md` contains one generated section between
    `BEGIN GENERATED SOC` and `END GENERATED SOC` comments. Edit the
    generator for content in that section.
-7. Every change affecting architecture, mapping, generator, or diagram
-   content needs `make gen` and a review of ALL generated views:
-   `architecture`, `rtl-connectivity`, `boot`, `verification`,
-   `noc-hierarchy`, `noc/global_data`, `noc/global_config`,
-   all compute/memory local `noc/*` views, `noc-topology.json`,
-   `subsystems/compute0`, `subsystems/compute1`,
-   `subsystems/memory0`. Additional subsystem diagrams must appear
-   automatically; removed ones must disappear. SVG, Mermaid and graph JSON
-   must agree with the emitted RTL and whether each link is *planned* or
-   *actually exercised*.
+7. **Exactly one generated architectural SVG:** `gen/diagrams/noc-hierarchy.svg`.
+   Its Mermaid source and detailed router/endpoint JSON are retained for
+   machines; **do not generate** separate per-mesh, boot, verification, CPU,
+   memory or RTL-connectivity pictures. FlooGen's checked-in YAML/SV already
+   provides drill-down. When the YAML changes, run `make gen`, confirm
+   `gen/diagrams/` contains one SVG, and commit deletion of stale outputs.
+   Review internal mesh router links as structural RTL and cross-network
+   links as planned until a routed AXI simulation actually passes.
 8. `make check-generated` is a nonmutating exact file-name/content/drift
    check, not a substitute for regenerating files. Keep generated `gen/`
    and the marked README section committed with a config/generator change.
@@ -101,7 +98,8 @@ AXI ports, FlooGen routing, local PULP AXI crossbars, DMA requests, or
 outstanding transaction limits. `config/interface_contracts.yaml`
 tracks planned per-fabric and per-subsystem read/write budgets, native
 PULP/FlooNoC/Verilog AXI parameter targets, and per-port overrides.
-Validated settings are NOT yet RTL-bound except the existing memory TB.
+FlooNoC chimney transaction caps are bound to generated RTL but still
+need routed-traffic verification; local port/IP hookups are not completed.
 Check that compute local crossbar output ID width is input ID width
 plus ceil(log2(initiator count)), and that the FlooGen input IDs agree.
 Never mistake planned quotas for implemented capacity or FlooGen emission
@@ -176,6 +174,24 @@ Use both tool diagnostics to isolate simulator issues and run actual
 AXI transaction tests with each simulator as their support permits.
 Do not count elaboration or compilation as successful AXI traffic.
 Avoid adding a new micro-testbench for every bridge or router.
+
+## One unified super-NoC traffic test
+
+`tools/supernoc_gen.py` generates **one** `gen/supernoc/supernoc_tb.sv`
+from the eight real FlooGen profiles; it uses only packed AXI4
+struct-to-flat-port assignments and true upstream FlooNoC modules.
+`dv/supernoc/test_supernoc.py` uses mature third-party
+`cocotbext-axi` `AxiMaster` and `AxiRam` rather than custom AXI
+BFMs or new per-router testbenches. Run `bash scripts/run-supernoc.sh`
+after pinned Bender checkout (see `.github/workflows/floonoc-elab.yml`).
+**Do not claim the super-NoC is working from a compile-only result.**
+A successful result must include real AXI write/readback checks through
+local/global data/config routers with test logs. Xezim remains the
+independent structural compile and existing boot/memory simulation path.
+PULP `axi_test.sv` classes were explored but Verilator 5.020 cannot
+parse some upstream class/randomize constructs; do not fork them as a
+workaround. For future UVM verification, evaluate pinned upstream AXI
+VIP with real sequence/driver/monitor tests instead of reinventing one.
 
 ## CI and debugging
 
