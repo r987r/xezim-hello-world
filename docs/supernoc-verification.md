@@ -13,8 +13,8 @@ The entire data/config NoC hierarchy is exercised through **one** integrated
   `AxiMaster` and `AxiRam` sparse-memory AXI4 BFM. This supports
   multi-ID requests, bursts, mixed read/write, and configurable stalls.
 - **Simulator:** standard upstream Verilator via
-  [cocotb](https://github.com/cocotb/cocotb) 2.0.1, both dependencies
-  pinned in CI. Xezim 0.11.4 remains the separate structural compilation
+  [cocotb](https://github.com/cocotb/cocotb) 1.9.2, with `cocotbext-axi==0.1.24`, pinned in CI to match
+  the Ubuntu 24.04 Verilator 5.020 release. Xezim 0.11.4 remains the separate structural compilation
   and existing CPU boot/AXI memory regression path.
 - **Thin shims only:** `tools/supernoc_gen.py` flattens generated AXI4
   packed-port structs to ordinary per-channel signals for cocotb; it does
