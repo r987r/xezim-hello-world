@@ -115,7 +115,7 @@ jobs:
           (cd .tools/bin && sha256sum -c "$XEZIM_ASSET_NAME.sha256")
           chmod +x ".tools/bin/$XEZIM_ASSET_NAME"
           echo "XEZIM_BIN=$GITHUB_WORKSPACE/.tools/bin/$XEZIM_ASSET_NAME" >> "$GITHUB_ENV"
-      - name: Compare Xezim compile compatibility against Verilator for the exact global NoCs
+      - name: Compare Xezim and Verilator compile coverage for all eight generated FlooNoCs
         continue-on-error: true
         timeout-minutes: 5
         shell: bash
@@ -123,8 +123,8 @@ jobs:
           set -euo pipefail
           echo "Verilator: all eight structural NoCs passed elaboration." >> "$GITHUB_STEP_SUMMARY"
           echo "Xezim: attempting --compile against the same pinned Bender source list." >> "$GITHUB_STEP_SUMMARY"
-          if timeout 240s bash scripts/run-floonoc-xezim.sh global_data global_config > xezim-noc-compile.log 2>&1; then
-            echo "Xezim: global data+config compile PASS (no AXI traffic test)." >> "$GITHUB_STEP_SUMMARY"
+          if timeout 240s bash scripts/run-floonoc-xezim.sh all > xezim-noc-compile.log 2>&1; then
+            echo "Xezim: all generated local/global NoCs compile PASS (still no AXI traffic test)." >> "$GITHUB_STEP_SUMMARY"
             cat xezim-noc-compile.log
           else
             status=$?
