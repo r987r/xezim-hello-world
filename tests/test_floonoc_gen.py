@@ -123,6 +123,35 @@ class FlooNoCProfilesTest(unittest.TestCase):
         with self.assertRaisesRegex(floonoc_gen.NoCGenerationError, "anchor"):
             floonoc_gen.native_bindings("module empty; endmodule", params)
 
+    def test_target_only_ni_requires_no_rob_but_preserves_manager_rob(self):
+        # This models both roles actually emitted by pinned FlooGen.
+        # Upstream floo_axi_chimney NoMgrPortRobType asserts at time zero
+        # if a target-only chimney is given NormalRoB.
+        mini = (
+            "module dual(input logic clk);\\n"
+            "floo_axi_chimney #(\\n"
+            " .ChimneyCfg(set_ports(ChimneyDefaultCfg, 1'b0, 1'b1))\\n"
+            ") source_ni();\\n"
+            "floo_axi_chimney #(\\n"
+            " .ChimneyCfg(set_ports(ChimneyDefaultCfg, 1'b1, 1'b0))\\n"
+            ") target_ni();\\n"
+            "endmodule\\n"
+        )
+        source, count = floonoc_gen.native_bindings(
+            mini, self.knobs["fabric_parameters"]["memory_local_data"])
+        self.assertEqual(count, 2)
+        self.assertIn("c.BRoBType = NormalRoB;", source)
+        self.assertIn("c.RRoBType = NormalRoB;", source)
+        self.assertIn("c.BRoBType = NoRoB;", source)
+        self.assertIn("c.RRoBType = NoRoB;", source)
+        self.assertIn(
+            ".ChimneyCfg(set_ports(xezim_chimney_cfg_no_mgr(), 1'b1, 1'b0))",
+            source)
+        self.assertIn(
+            ".ChimneyCfg(set_ports(xezim_chimney_cfg(), 1'b0, 1'b1))",
+            source)
+        self.assertEqual(source.count(".AtopSupport(1'b0)"), 2)
+
     def test_reject_upstream_power_of_two_rob_usage_counter_mismatch(self):
         knobs = copy.deepcopy(self.knobs)
         knobs["fabric_parameters"]["global_data"]["MaxTxnsPerId"] = 8
