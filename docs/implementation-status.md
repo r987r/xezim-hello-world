@@ -50,28 +50,17 @@ flowchart LR
 Solid lines within the two testbench boxes are tested at their *respective
 scope* only; all dashed lines are plans. No HBM/DDR PHY behavior is implied.
 
-## Generated diagrams: open all seven views
+## Canonical complete-SoC diagram
 
-The `make gen` pipeline generates eight actual FlooGen network tops/packages, plus static SVG and Mermaid sources
-from the same validated configuration. CI runs `make check-generated`
-to require that all files, SVG images, graph metadata, and the generated
-README section agree with source. **Never edit an SVG or `gen/` directly.**
+The repository intentionally keeps **one SVG**: [the complete local/global
+data and config FlooNoC hierarchy](../gen/diagrams/noc-hierarchy.svg).
+Its [Mermaid](../gen/diagrams/noc-hierarchy.mmd) and
+[machine-readable topology](../gen/diagrams/noc-topology.json)
+are generated from the exact committed FlooGen YAML; per-mesh and
+per-subsystem pictures were removed to prevent duplication.
+The [eight-network traffic testbench](../gen/dv/supernoc_tb.sv)
+is separately gated in CI; compilation alone does not certify AXI traffic.
 
-| Diagram | GitHub-friendly rendered view | Editable source |
-| --- | --- | --- |
-| Logical SoC, planned versus actual | [Architecture SVG](../gen/diagrams/architecture.svg) | [Mermaid](../gen/diagrams/architecture.mmd) |
-| Exactly instantiated AXI memory testbench | [RTL connectivity SVG](../gen/diagrams/rtl-connectivity.svg) | [Mermaid](../gen/diagrams/rtl-connectivity.mmd) |
-| Boot flow | [Boot SVG](../gen/diagrams/boot.svg) | [Mermaid](../gen/diagrams/boot.mmd) |
-| Verification scopes and maturity | [Verification SVG](../gen/diagrams/verification.svg) | [Mermaid](../gen/diagrams/verification.mmd) |
-| Compute0 / PicoRV32 | [Compute0 SVG](../gen/diagrams/subsystems/compute0.svg) | [Mermaid](../gen/diagrams/subsystems/compute0.mmd) |
-| Compute1 / SERV | [Compute1 SVG](../gen/diagrams/subsystems/compute1.svg) | [Mermaid](../gen/diagrams/subsystems/compute1.mmd) |
-| Memory0 / two targets | [Memory0 SVG](../gen/diagrams/subsystems/memory0.svg) | [Mermaid](../gen/diagrams/subsystems/memory0.mmd) |
-
-Also inspect generated [graph JSON](../gen/diagrams/graphs.json)
-and [route matrix](../gen/verification/routes.json) to trace edges and
-check which tested route was allowed. Architecture diagrams are **logical
-intent** while the RTL-connectivity diagram is strictly the exercised
-memory testbench.
 
 ## What would justify saying "FlooNoC works"?
 
