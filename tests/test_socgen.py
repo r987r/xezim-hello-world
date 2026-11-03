@@ -170,7 +170,7 @@ class SocConfigTest(unittest.TestCase):
             self.assertTrue(path.is_file(), f"missing README image {relative}")
             self.assertEqual(ET.parse(path).getroot().tag,
                              "{http://www.w3.org/2000/svg}svg")
-        for name in ("architecture", "rtl-connectivity", "verification", "boot"):
+        for name in ("noc-hierarchy",):
             self.assertIn(f"gen/diagrams/{name}.svg", image_paths)
             self.assertTrue((ROOT / "gen" / "diagrams" / f"{name}.mmd").is_file())
 
@@ -212,15 +212,14 @@ class SocConfigTest(unittest.TestCase):
                 "name": "compute2.dma", "base": "0x40040000", "size": "0x10000"})
             cfg_path.write_text(yaml.safe_dump(doc,sort_keys=False))
             self.assertEqual(generate.execute(cfg_path,out,readme),0)
-            extra = out/"diagrams"/"subsystems"/"compute2.mmd"
-            self.assertTrue(extra.exists())
-            extra_svg = out / "diagrams" / "subsystems" / "compute2.svg"
-            self.assertTrue(extra_svg.exists())
-            cfg_path.write_text(yaml.safe_dump(self.base,sort_keys=False))
+            image = out / "diagrams" / "noc-hierarchy.svg"
+            self.assertTrue(image.exists())
+            self.assertIn("compute2", image.read_text())
+            cfg_path.write_text(yaml.safe_dump(self.base, sort_keys=False))
             self.assertEqual(generate.execute(cfg_path,out,readme,check=True),1)
             self.assertEqual(generate.execute(cfg_path,out,readme),0)
-            self.assertFalse(extra.exists())
-            self.assertFalse(extra_svg.exists())
+            self.assertTrue(image.exists())
+            self.assertNotIn("compute2", image.read_text())
             self.assertEqual(generate.execute(cfg_path,out,readme,check=True),0)
 
     def test_unmarked_gen_tree_is_protected(self):
