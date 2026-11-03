@@ -113,6 +113,21 @@ class RegressionTests(unittest.TestCase):
                 rtl.write_text('module dut; wire changed; endmodule\n')
                 self.assertNotEqual(initial, sim_cocotb.build_fingerprint(plan))
 
+    def test_new_cocotb_target_does_not_inherit_noc_wrapper(self):
+        # An existing engine can be reused with a new Bender source target.
+        # Only the NoC source provider is allowed to add NoC packages/wrapper.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            rtl = root/'other_tb.sv'
+            rtl.write_text('module other_tb; endmodule\n')
+            resolver = types.SimpleNamespace(sources=lambda test: ([str(rtl)], [], []))
+            options = types.SimpleNamespace(arg=[], memory_config=None, network=[], stage='files')
+            test = {'engine': 'cocotb-verilator', 'sources': 'other', 'top': 'other_tb'}
+            with patch.object(regress, 'ROOT', root):
+                self.assertTrue(regress.run_target('other', test, resolver, options))
+            plan = json.loads((root/'.tools/regression/other/plan.json').read_text())
+            self.assertEqual(plan['sources'], [str(rtl)])
+
 
 if __name__ == '__main__':
     unittest.main()

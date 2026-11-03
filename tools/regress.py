@@ -235,7 +235,7 @@ def run_target(name, test, resolver, options):
     for network, entry in sorted(networks.items()):
         (out/f'{network}.f').write_text(filelist_text(
             sources + [str(root/entry['package']), str(root/entry['top'])], includes, defines))
-    if test['engine'] == 'cocotb-verilator':
+    if networks and test['engine'] == 'cocotb-verilator':
         sources += [str(root/entry['package']) for _, entry in sorted(networks.items())]
         sources += [str(root/entry['top']) for _, entry in sorted(networks.items())]
         sources += [str(ROOT/'gen/supernoc/supernoc_tb.sv')]
