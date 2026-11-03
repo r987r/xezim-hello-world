@@ -28,7 +28,7 @@ module floo_xezim_global_config_noc
     chimney_cfg_t c;
     c = ChimneyDefaultCfg;
     c.MaxTxns = 2;
-    c.MaxUniqueIds = 2;
+    c.MaxUniqueIds = 1;
     c.MaxTxnsPerId = 3;
     c.BRoBType = NoRoB;
     c.BRoBSize = 2;
