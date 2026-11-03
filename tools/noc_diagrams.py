@@ -295,27 +295,6 @@ def hierarchy_mermaid(cfg: dict, networks: dict) -> str:
     return "\n".join(lines)+"\n"
 
 
-def mesh_mermaid(name: str, net: dict) -> str:
-    conf = net["config"]
-    lines = ["flowchart TB",
-             "  classDef router fill:#e6f6ec,stroke:#16845D,color:#133A29;",
-             "  classDef endpoint fill:#e9f1fd,stroke:#255BAE,color:#1A3155;",
-             "  %% Real FlooGen top structural router and NI links only."]
-    def key(name): return identifier(name)
-    for y in range(net["height"]):
-        for x in range(net["width"]):
-            label=f"Router ({x},{y})"
-            lines.append(f'  {key(f"r{x}_{y}")}["{label}"]:::router')
-            if x: lines.append(f'  {key(f"r{x-1}_{y}")} <--> {key(f"r{x}_{y}")}')
-            if y: lines.append(f'  {key(f"r{x}_{y-1}")} <--> {key(f"r{x}_{y}")}')
-    for ep_name, ep in net["endpoints"].items():
-        x,y=net["positions"][ep_name]
-        role="Manager" if ep.get("mgr_port_protocol") else "Target"
-        lines.append(f'  {key(ep_name)}["{ep_name} / {role} NI"]:::endpoint')
-        lines.append(f'  {key(ep_name)} <--> {key(f"r{x}_{y}")}')
-    return "\n".join(lines)+"\n"
-
-
 def overview_svg(cfg: dict, networks: dict, dst: Path):
     from diagram_svg import Art, BG, WHITE, INK, MUTED, FAINT, GREEN, PURPLE, BLUE, ORANGE
     computes=[s for s in cfg["subsystems"] if s["type"]=="compute"]
@@ -384,39 +363,6 @@ def overview_svg(cfg: dict, networks: dict, dst: Path):
     a.text(65,h-29,
            "See gen/diagrams/noc/* for physical router layouts derived from the actual FlooGen YAML files.",
            15,MUTED)
-    a.save(dst)
-
-
-def mesh_svg(name: str, net: dict, dst: Path):
-    from diagram_svg import Art, BG, WHITE, INK, MUTED, FAINT, GREEN, PURPLE, BLUE
-    w,h=net["width"],net["height"]
-    width=max(990,155+w*255)
-    height=245+h*190+70
-    a=Art(width,height)
-    a.heading("FlooGen real structural router and chimney RTL", name.replace("_"," ").title(),
-              f'{w} x {h} XY mesh / {w*h} routers / {len(net["endpoints"])} AXI4 network interfaces')
-    pts={}
-    for y in range(h):
-        for x in range(w):
-            cx=125+x*250;cy=275+y*190
-            pts[x,y]=(cx,cy)
-            if x:
-                prev=pts[x-1,y]
-                a.line([(prev[0]+39,prev[1]),(cx-39,cy)],GREEN,3,False,False)
-            if y:
-                prev=pts[x,y-1]
-                a.line([(prev[0],prev[1]+30),(cx,cy-30)],GREEN,3,False,False)
-            a.box_label(cx-50,cy-30,100,60,f"R{x},{y}",
-                        "router","fabric",title_size=18,detail_size=13)
-    for ep, endpoint in net["endpoints"].items():
-        x,y=net["positions"][ep];cx,cy=pts[x,y]
-        kind="AXI in" if endpoint.get("mgr_port_protocol") else "AXI out"
-        a.line([(cx,cy-30),(cx,cy-68)],BLUE,2,False,False)
-        a.rect(cx-113,cy-118,226,46,WHITE,BLUE,r=8,width=1)
-        a.text(cx,cy-112,ep,14,INK,align="center")
-        a.text(cx,cy-93,kind,12,MUTED,align="center")
-    a.text(60,height-48,"Solid wires: upstream FlooGen-generated router/router and NI/router connections.",
-           16,MUTED)
     a.save(dst)
 
 
