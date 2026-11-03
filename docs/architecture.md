@@ -1,8 +1,8 @@
 # Architecture and IP contracts
 
-This document specifies **logical connectivity separately from RTL implementation**. `config/soc.yaml` is authoritative; nothing under `gen/` is hand-edited. All generated outputs (including generated RTL, 2D architecture/connectivity/verification diagrams, and machine-readable graph metadata) are checked into `gen/`. `make gen` replaces the tree and deletes stale files; `make check-generated` verifies exact output bytes and names without changing the repository.
+This document specifies **logical connectivity separately from RTL implementation**. `config/soc.yaml` is authoritative; nothing under `gen/` is hand-edited. All generated outputs (including real upstream-generated FlooNoC RTL, one whole-chip SoC image, and machine-readable router/endpoint graph) are checked into `gen/`. `make gen` replaces the tree and deletes stale files; `make check-generated` verifies exact output bytes and names without changing the repository.
 
-The [README](../README.md) embeds the 2D architecture, actual memory RTL connectivity, and verification diagrams. The source-controlled Mermaid and graph JSON files are in [`gen/diagrams/`](../gen/diagrams/). For each subsystem, the generated `.md` diagram can be opened directly in GitHub. Connectivity metadata follows the explicit instances/connections model in the owner's `Diagram-gen` and `Sv-diagrams` repositories; verification scopes follow `Sv-test`. There is no 3D viewer dependency.
+The [README](../README.md) embeds **one canonical whole-chip diagram**. Detailed connections are retained in JSON and in FlooGen's checked-in generated RTL/YAML, not additional images. Connectivity metadata follows the explicit instances/connections model in the owner's `Diagram-gen` and `Sv-diagrams` repositories; verification scopes follow `Sv-test`. There is no 3D viewer dependency.
 
 ## Boot and SRAM loading
 
@@ -64,25 +64,18 @@ HiSA HBMController's public RTL uses AMD/Xilinx HBM IP for PHY and a documented 
 - No implicit coherence. Explicit synchronization is required for CPU/DMA shared buffers.
 - Any generated executable scope must reject an unavailable backend (never produce a pretend substitute).
 
-## Whole-chip FlooNoC network visualization
+## One source-derived whole-chip FlooNoC diagram
 
-FlooNoC's upstream FlooGen supplies the machine-readable mesh/router
-placement, endpoint-to-router connections and structural SystemVerilog.
-**FlooNoC does not directly run the separate `r987r/Diagram-gen`
-viewer**; we bridge the generated FlooGen configurations into the same
-instance/connection/group metadata model used by Diagram-gen. The
-generator creates [whole-chip topology](../gen/diagrams/noc-hierarchy.svg),
-[Mermaid](../gen/diagrams/noc-hierarchy.mmd),
-[Diagram-gen-style metadata](../gen/diagrams/noc-topology.json), and
-[each actual router mesh](../gen/diagrams/noc/global_data.svg)
-under `gen/diagrams/noc/`. The README embeds the entire NoC hierarchy.
-
-The diagrams distinguish **generated router/NI links** from **planned
-inter-subsystem links**. The existing memory crossbar's working
-standalone read/write test is not proof its interface is integrated
-with the generated memory-local or global NoCs. Never mark such edges
-as connected until integrated RTL and simulation verifies them.
+FlooGen generates the router/link modules and immutable profile YAML
+for all local/global data/config networks. The **single** visual is
+[full SoC connectivity](../gen/diagrams/noc-hierarchy.svg), with
+[Mermaid](../gen/diagrams/noc-hierarchy.mmd) and
+[Diagram-gen-style instance/connection metadata](../gen/diagrams/noc-topology.json)
+for detailed inspection. There are no per-mesh/per-subsystem/boot/verification
+SVG duplicates. Dashed cross-network links are **planned** unless actual
+multi-NoC AXI traffic has been exercised and verified. The independent
+memory crossbar and two-CPU boot tests remain preserved.
 
 ## Generated 2D previews
 
-The README embeds committed static SVG diagrams generated from the validated SoC metadata. Editable Mermaid source and `graphs.json` are retained in `gen/diagrams/`. `make check-generated` verifies the images and README links byte-for-byte, and obsolete generated images are removed by `make gen`. The vector renderer uses only the Python standard library; GitHub/mobile clients do not need Mermaid support.
+The README embeds one committed static SVG generated from upstream FlooGen mesh metadata. The corresponding Mermaid and JSON graphs live in `gen/diagrams/`. `make check-generated` verifies the exact image and README link; `make gen` deletes obsolete diagrams. The vector renderer uses only the Python standard library; GitHub/mobile clients do not need Mermaid support.
