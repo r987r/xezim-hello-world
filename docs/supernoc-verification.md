@@ -87,6 +87,28 @@ Do not silence source assertions or restrict all pending IDs to one
 merely to make the simulator start. A passing compile is not enough;
 the full AXI data/readback regression must pass independently.
 
+## Target-only FlooNoC reorder-buffer configuration
+
+A later full eight-mesh simulation reached a different upstream
+time-zero assertion:
+`floo_axi_chimney.sv:887 NoMgrPortRobType` at
+`memory0_local_data.target_crossbar_ni`.
+The pinned `floo_pkg::set_ports(cfg, en_sbr, en_mgr)` marks
+destination-only NIs with `EnMgrPort=0`, and the upstream
+`NoMgrPortRobType` assertion **requires both BRoBType and RRoBType to
+be NoRoB whenever EnMgrPort=0**. Our generic native chimney config
+previously applied `NormalRoB` to both initiator and target NIs.
+
+The generator now derives `xezim_chimney_cfg_no_mgr()` directly from
+the configured native RoB capacities, changing only B/R types to
+`NoRoB` for the upstream-generated **destination-only** chimney
+instances. Initiator-facing NIs retain configured `NormalRoB`.
+The generator checks role counts and tests the mixed-role case.
+There is no fork of FlooNoC and no simulator assertion suppression.
+CI regeneration produces checked-in SystemVerilog with these role-specific
+parameter bindings. Actual AXI traffic must still pass before reporting
+functional NoC verification.
+
 ## Current integration boundary
 
 The NoC wrapper terminates true external CPU/DMA/CSR/SRAM boundaries
