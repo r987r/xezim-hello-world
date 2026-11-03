@@ -23,7 +23,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 FLOO_COMMIT = yaml.safe_load((ROOT / "config/ip.lock.yaml").read_text())["third_party"]["floonoc"]["commit"]
-NATIVE = {"MaxTxns", "MaxTxnsPerId", "MaxUniqueIds", "RRoBType", "BRoBType",
+NATIVE = {"MaxTxns", "MaxTxnsPerId", "MaxUniqueIds", "AtopSupport", "MaxAtomicTxns", "RRoBType", "BRoBType",
           "RRoBSize", "BRoBSize"}
 ROBS = {"NoRoB", "SimpleRoB", "NormalRoB"}
 
@@ -150,20 +150,30 @@ def profiles(soc, knobs):
             if k.endswith("Type"):
                 if v not in ROBS:
                     raise NoCGenerationError(f"unsupported FlooNoC reorder type {v}")
+            elif k == "AtopSupport":
+                if type(v) is not bool:
+                    raise NoCGenerationError(f"{family}.AtopSupport must be bool")
+            elif k == "MaxAtomicTxns":
+                if type(v) is not int or not 0 <= v <= 256:
+                    raise NoCGenerationError(f"{family}.MaxAtomicTxns must be 0..256")
             else:
                 integer(v, f"{family}.{k}")
+        # The selected interfaces do not issue AXI ATOPs. The pinned
+        # upstream floo_meta_buffer requires MaxAtomicTxns=0 whenever
+        # AtopSupport is disabled (NoAtomicTxns assertion). Keep a full
+        # non-atomic ID namespace instead of silently reducing MaxUniqueIds.
+        if params["AtopSupport"] or params["MaxAtomicTxns"] != 0:
+            raise NoCGenerationError(
+                f"{name}: ATOPs unsupported; use AtopSupport=false, MaxAtomicTxns=0")
+        idwidth = 1 if plane == "config" else (
+            soc["buses"]["data"]["id_bits"] + int(name == "global_data"))
+        max_ids = 1 << (1 if plane == "config" else soc["buses"]["data"]["id_bits"])
+        if params["MaxUniqueIds"] > max_ids:
+            raise NoCGenerationError(f"{name}: MaxUniqueIds exceeds AXI destination ID width")
         # The pinned upstream floo_rob_status_table declares the usage
         # counter as clog2(MaxTxnsPerId), while cc_fifo exports
         # clog2(Depth+1). Power-of-two depths break its instance-array
         # connection. Reject this upstream corner until explicitly fixed.
-        # Upstream floo_meta_buffer TooFewIdBits2 asserts at time zero:
-        # a one-bit AXI4 config transport cannot reserve atomic IDs while
-        # allocating multiple non-atomic request ID queues. One unique ID
-        # with NoRoB is the correct AXI4-Lite-style CSR transport budget.
-        if plane == "config" and params["MaxUniqueIds"] != 1:
-            raise NoCGenerationError(
-                f"{name}: one-bit config transport requires MaxUniqueIds=1 "
-                "(upstream floo_meta_buffer TooFewIdBits2)")
         depth = params["MaxTxnsPerId"]
         if (params["BRoBType"] != "NoRoB" or params["RRoBType"] != "NoRoB"):
             if depth < params["MaxTxns"]:
@@ -260,8 +270,15 @@ def native_bindings(top, params):
     at = top.index(");") + 2
     # In FlooGen's structural top, this is the first module-port close.
     result = top[:at] + body + top[at:]
-    result = result.replace(search, ".ChimneyCfg(set_ports(xezim_chimney_cfg(),")
-    if result.count(".ChimneyCfg(set_ports(xezim_chimney_cfg(),") != count:
+    replacement = (
+        f".AtopSupport(1'b{1 if params['AtopSupport'] else 0}),\n"
+        f"    .MaxAtomicTxns({params['MaxAtomicTxns']}),\n"
+        "    .ChimneyCfg(set_ports(xezim_chimney_cfg(),"
+    )
+    result = result.replace(search, replacement)
+    if (result.count(".ChimneyCfg(set_ports(xezim_chimney_cfg(),") != count or
+            result.count(".AtopSupport(1'b0)") != count or
+            result.count(".MaxAtomicTxns(0)") != count):
         raise NoCGenerationError("not every chimney received native knobs")
     return result, count
 
