@@ -71,6 +71,7 @@ class FlooNoCProfilesTest(unittest.TestCase):
                 self.assertEqual({p["addr_width"] for p in cfg["protocols"]}, {32})
                 self.assertEqual({p["id_width"] for p in cfg["protocols"]}, {1})
                 self.assertEqual({p["protocol"] for p in cfg["protocols"]}, {"AXI4"})
+                self.assertEqual(entry["native_parameters"]["MaxUniqueIds"], 1)
             else:
                 self.assertEqual({p["data_width"] for p in cfg["protocols"]}, {64})
                 self.assertEqual({p["addr_width"] for p in cfg["protocols"]}, {64})
@@ -83,6 +84,13 @@ class FlooNoCProfilesTest(unittest.TestCase):
         self.assertIn("memory0_regs", targets)
         self.assertTrue(any(w["base"] == 0x40020000 for w in targets["compute0_regs"]["addr_range"]))
         self.assertEqual(targets["memory0_regs"]["addr_range"]["base"], 0x40030000)
+
+    def test_reject_multiple_unique_ids_on_one_bit_config_transport(self):
+        knobs = copy.deepcopy(self.knobs)
+        knobs["fabric_parameters"]["local_config"]["MaxUniqueIds"] = 2
+        with self.assertRaisesRegex(
+                floonoc_gen.NoCGenerationError, "TooFewIdBits2"):
+            floonoc_gen.profiles(self.soc, knobs)
 
     def test_native_upstream_chimney_knobs_are_applied(self):
         # Simulates the exact anchor emitted by pinned upstream FlooGen.
