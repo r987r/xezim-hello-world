@@ -6,11 +6,13 @@
       "config": "compute0/local_config/floogen.yaml",
       "endpoint_count": 5,
       "native_parameters": {
+        "AtopSupport": false,
         "BRoBSize": 2,
         "BRoBType": "NoRoB",
+        "MaxAtomicTxns": 0,
         "MaxTxns": 2,
         "MaxTxnsPerId": 3,
-        "MaxUniqueIds": 1,
+        "MaxUniqueIds": 2,
         "RRoBSize": 2,
         "RRoBType": "NoRoB"
       },
@@ -27,8 +29,10 @@
       "config": "compute0/local_data/floogen.yaml",
       "endpoint_count": 7,
       "native_parameters": {
+        "AtopSupport": false,
         "BRoBSize": 8,
         "BRoBType": "NormalRoB",
+        "MaxAtomicTxns": 0,
         "MaxTxns": 8,
         "MaxTxnsPerId": 9,
         "MaxUniqueIds": 4,
@@ -48,11 +52,13 @@
       "config": "compute1/local_config/floogen.yaml",
       "endpoint_count": 4,
       "native_parameters": {
+        "AtopSupport": false,
         "BRoBSize": 2,
         "BRoBType": "NoRoB",
+        "MaxAtomicTxns": 0,
         "MaxTxns": 2,
         "MaxTxnsPerId": 3,
-        "MaxUniqueIds": 1,
+        "MaxUniqueIds": 2,
         "RRoBSize": 2,
         "RRoBType": "NoRoB"
       },
@@ -69,8 +75,10 @@
       "config": "compute1/local_data/floogen.yaml",
       "endpoint_count": 5,
       "native_parameters": {
+        "AtopSupport": false,
         "BRoBSize": 8,
         "BRoBType": "NormalRoB",
+        "MaxAtomicTxns": 0,
         "MaxTxns": 8,
         "MaxTxnsPerId": 9,
         "MaxUniqueIds": 4,
@@ -90,11 +98,13 @@
       "config": "global_config/floogen.yaml",
       "endpoint_count": 5,
       "native_parameters": {
+        "AtopSupport": false,
         "BRoBSize": 2,
         "BRoBType": "NoRoB",
+        "MaxAtomicTxns": 0,
         "MaxTxns": 2,
         "MaxTxnsPerId": 3,
-        "MaxUniqueIds": 1,
+        "MaxUniqueIds": 2,
         "RRoBSize": 2,
         "RRoBType": "NoRoB"
       },
@@ -111,8 +121,10 @@
       "config": "global_data/floogen.yaml",
       "endpoint_count": 6,
       "native_parameters": {
+        "AtopSupport": false,
         "BRoBSize": 8,
         "BRoBType": "NormalRoB",
+        "MaxAtomicTxns": 0,
         "MaxTxns": 8,
         "MaxTxnsPerId": 9,
         "MaxUniqueIds": 4,
@@ -132,11 +144,13 @@
       "config": "memory0/local_config/floogen.yaml",
       "endpoint_count": 2,
       "native_parameters": {
+        "AtopSupport": false,
         "BRoBSize": 2,
         "BRoBType": "NoRoB",
+        "MaxAtomicTxns": 0,
         "MaxTxns": 2,
         "MaxTxnsPerId": 3,
-        "MaxUniqueIds": 1,
+        "MaxUniqueIds": 2,
         "RRoBSize": 2,
         "RRoBType": "NoRoB"
       },
@@ -153,8 +167,10 @@
       "config": "memory0/local_data/floogen.yaml",
       "endpoint_count": 3,
       "native_parameters": {
+        "AtopSupport": false,
         "BRoBSize": 8,
         "BRoBType": "NormalRoB",
+        "MaxAtomicTxns": 0,
         "MaxTxns": 8,
         "MaxTxnsPerId": 9,
         "MaxUniqueIds": 4,

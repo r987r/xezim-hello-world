@@ -28,7 +28,7 @@ module floo_xezim_global_config_noc
     chimney_cfg_t c;
     c = ChimneyDefaultCfg;
     c.MaxTxns = 2;
-    c.MaxUniqueIds = 1;
+    c.MaxUniqueIds = 2;
     c.MaxTxnsPerId = 3;
     c.BRoBType = NoRoB;
     c.BRoBSize = 2;
@@ -116,7 +116,9 @@ floo_rsp_t router_1_1_to_memory0_regs_ni_rsp;
 
 floo_axi_chimney  #(
   .AxiCfg(AxiCfg),
-  .ChimneyCfg(set_ports(xezim_chimney_cfg(), 1'b0, 1'b1)),
+  .AtopSupport(1'b0),
+    .MaxAtomicTxns(0),
+    .ChimneyCfg(set_ports(xezim_chimney_cfg(), 1'b0, 1'b1)),
   .RouteCfg(RouteCfg),
   .id_t(id_t),
   .rob_idx_t(rob_idx_t),
@@ -150,7 +152,9 @@ floo_axi_chimney  #(
 
 floo_axi_chimney  #(
   .AxiCfg(AxiCfg),
-  .ChimneyCfg(set_ports(xezim_chimney_cfg(), 1'b0, 1'b1)),
+  .AtopSupport(1'b0),
+    .MaxAtomicTxns(0),
+    .ChimneyCfg(set_ports(xezim_chimney_cfg(), 1'b0, 1'b1)),
   .RouteCfg(RouteCfg),
   .id_t(id_t),
   .rob_idx_t(rob_idx_t),
@@ -184,7 +188,9 @@ floo_axi_chimney  #(
 
 floo_axi_chimney  #(
   .AxiCfg(AxiCfg),
-  .ChimneyCfg(set_ports(xezim_chimney_cfg(), 1'b1, 1'b0)),
+  .AtopSupport(1'b0),
+    .MaxAtomicTxns(0),
+    .ChimneyCfg(set_ports(xezim_chimney_cfg(), 1'b1, 1'b0)),
   .RouteCfg(RouteCfg),
   .id_t(id_t),
   .rob_idx_t(rob_idx_t),
@@ -218,7 +224,9 @@ floo_axi_chimney  #(
 
 floo_axi_chimney  #(
   .AxiCfg(AxiCfg),
-  .ChimneyCfg(set_ports(xezim_chimney_cfg(), 1'b1, 1'b0)),
+  .AtopSupport(1'b0),
+    .MaxAtomicTxns(0),
+    .ChimneyCfg(set_ports(xezim_chimney_cfg(), 1'b1, 1'b0)),
   .RouteCfg(RouteCfg),
   .id_t(id_t),
   .rob_idx_t(rob_idx_t),
@@ -252,7 +260,9 @@ floo_axi_chimney  #(
 
 floo_axi_chimney  #(
   .AxiCfg(AxiCfg),
-  .ChimneyCfg(set_ports(xezim_chimney_cfg(), 1'b1, 1'b0)),
+  .AtopSupport(1'b0),
+    .MaxAtomicTxns(0),
+    .ChimneyCfg(set_ports(xezim_chimney_cfg(), 1'b1, 1'b0)),
   .RouteCfg(RouteCfg),
   .id_t(id_t),
   .rob_idx_t(rob_idx_t),
