@@ -29,6 +29,10 @@ fabric_parameters:
     # Depth=9 uses the correct 4-bit usage width without forking RTL.
     MaxTxnsPerId: 9
     MaxUniqueIds: 4
+    # No AXI atomics in this SoC: preserve existing unique non-atomic ID
+    # capacity without consuming a destination ID for atomic reservations.
+    AtopSupport: false
+    MaxAtomicTxns: 0
     RRoBType: NormalRoB
     BRoBType: NormalRoB
     RRoBSize: 8
@@ -36,9 +40,11 @@ fabric_parameters:
   local_config: &config_floo
     MaxTxns: 2
     MaxTxnsPerId: 3
-    # The one-bit control AXI4 wire IDs cannot reserve atomic ID ranges
-    # with a multi-ID chimney; AXI4-Lite-style CSR accesses use one ID.
-    MaxUniqueIds: 1
+    # One-bit control ID allows two unique non-atomic IDs when the unused
+    # atomic reservation is disabled explicitly in native FlooNoC params.
+    MaxUniqueIds: 2
+    AtopSupport: false
+    MaxAtomicTxns: 0
     RRoBType: NoRoB
     BRoBType: NoRoB
     RRoBSize: 2
@@ -55,6 +61,10 @@ fabric_parameters:
     # Depth=9 uses the correct 4-bit usage width without forking RTL.
     MaxTxnsPerId: 9
     MaxUniqueIds: 4
+    # No AXI atomics in this SoC: preserve existing unique non-atomic ID
+    # capacity without consuming a destination ID for atomic reservations.
+    AtopSupport: false
+    MaxAtomicTxns: 0
     RRoBType: NormalRoB
     BRoBType: NormalRoB
     RRoBSize: 8
