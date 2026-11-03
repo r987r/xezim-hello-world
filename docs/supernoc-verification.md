@@ -63,6 +63,30 @@ binding if/when an actual existing AXI UVM library passes on both
 relevant simulators. Preserve the separate CPU/boot/memory regression
 scopes for fault isolation.
 
+## Native FlooNoC non-atomic ID capacity
+
+The first integrated 8-mesh simulation hit upstream
+`floo_meta_buffer.sv:142` `TooFewIdBits2` at time zero, starting with
+`memory0_local_config.controller_regs_ni`. The original FlooGen
+instances used the upstream default **one reserved atomic transaction
+ID**, even though the SoC never issues AXI ATOPs. One-bit config
+destination IDs could not accommodate the reserved atomic space *and*
+multiple unique non-atomic IDs.
+
+**Fix in the generated wrapper (no upstream RTL fork):** bind native
+`floo_axi_chimney.AtopSupport=0` and `MaxAtomicTxns=0` on **every**
+upstream FlooGen-generated NI, from `config/interface_contracts.yaml`.
+This satisfies upstream `NoAtomicTxns`, `TooFewIdBits1`, and
+`TooFewIdBits2` capacity assertions without reducing the configured
+`MaxUniqueIds=2` on control or `MaxUniqueIds=4` on data. The generator
+fails closed on unintended atomic reservations. Any future ATOP-capable
+SoC must add correct output ID width and real atomic verification before
+enabling them.
+
+Do not silence source assertions or restrict all pending IDs to one
+merely to make the simulator start. A passing compile is not enough;
+the full AXI data/readback regression must pass independently.
+
 ## Current integration boundary
 
 The NoC wrapper terminates true external CPU/DMA/CSR/SRAM boundaries
