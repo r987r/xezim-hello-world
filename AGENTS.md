@@ -175,6 +175,19 @@ AXI transaction tests with each simulator as their support permits.
 Do not count elaboration or compilation as successful AXI traffic.
 Avoid adding a new micro-testbench for every bridge or router.
 
+## Native NoC atomic-ID reservation (critical)
+
+The selected data/control interfaces do not issue AXI atomic operations.
+`config/interface_contracts.yaml` pins `AtopSupport: false` and
+`MaxAtomicTxns: 0` for **every** FlooNoC chimney through generated
+native parameters, leaving MaxUniqueIds at 4 (data) and 2 (config).
+Without disabling default atomic-ID reservation, real Verilator RTL
+simulation fails `floo_meta_buffer.sv:142 TooFewIdBits2` at time zero.
+Do not mask the assertion or shrink the outstanding-ID budgets to evade it.
+Any change must maintain pinned upstream `NoAtomicTxns`,
+`TooFewIdBits1`, `TooFewIdBits2` and readback regressions.
+See [docs/supernoc-verification.md](docs/supernoc-verification.md).
+
 ## One unified super-NoC traffic test
 
 `tools/supernoc_gen.py` generates **one** `gen/supernoc/supernoc_tb.sv`
