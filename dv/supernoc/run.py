@@ -6,7 +6,7 @@ BFMs come from open-source cocotbext-axi; no home-grown AXI VIP.
 import os
 from pathlib import Path
 import json
-from cocotb_tools.runner import get_runner
+from cocotb.runner import get_runner
 
 ROOT=Path(__file__).resolve().parents[2]
 os.chdir(ROOT)
