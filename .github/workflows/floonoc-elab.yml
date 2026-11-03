@@ -91,7 +91,16 @@ jobs:
               count=cfg["network_interfaces_with_native_knobs"]
               assert top.count(".AtopSupport(1'b0)") == count,name
               assert top.count(".MaxAtomicTxns(0)") == count,name
-              print("PASS native no-ATOP ID reservation",name,count)
+              # Target-only NIs have EnMgrPort=0. Pinned FlooNoC
+              # asserts NoMgrPortRobType unless their R/B RoBs are NoRoB.
+              import yaml
+              profile=yaml.safe_load((root/cfg["config"]).read_text())
+              dest=sum(bool(e.get("sbr_port_protocol")) for e in profile["endpoints"])
+              src=sum(bool(e.get("mgr_port_protocol")) for e in profile["endpoints"])
+              assert src+dest == count,(name,src,dest,count)
+              assert top.count("set_ports(xezim_chimney_cfg_no_mgr(),") == dest,name
+              assert top.count("set_ports(xezim_chimney_cfg(),") == src,name
+              print("PASS FlooNoC chimney native role/atomic contracts",name,src,dest)
           PY
       - name: Install Verilator
         run: |
