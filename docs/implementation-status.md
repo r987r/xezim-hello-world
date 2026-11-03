@@ -25,30 +25,14 @@ for the exact SHA before reporting regression results.
 | LiteDRAM / HiSA HBM | **No executable physical controller/PHY path** | Verification models are generic AXI RAM, not DDR/HBM controllers |
 | End-to-end SOC `soc_top` | **No executable RTL** | CPU to DMA to NoC to memory not proven |
 
-### Two separate working simulation islands
+### Distinct executable regression scopes (no extra diagrams)
 
-```mermaid
-flowchart LR
-  subgraph BOOT["EXECUTABLE: dual-CPU cold boot test"]
-    ROM[ROM/flash model] --> C0[PicoRV32 CPU0]
-    C0 --> SB[Cold, initially blank SRAMs]
-    C0 --> RC[MMIO reset release]
-    RC --> C1[SERV CPU1]
-    C1 --> SB
-  end
-  subgraph MEM["EXECUTABLE: AXI memory fabric test"]
-    M0[AXI master BFM 0] --> XB[Real Verilog-AXI crossbar]
-    M1[AXI master BFM 1] --> XB
-    XB --> H[HBM-labeled AXI RAM]
-    XB --> D[DDR-labeled AXI RAM]
-  end
-  BOOT -. "NOT CONNECTED IN FULL CHIP" .-> MEM
-  C0 -. "PLANNED local PULP AXI + iDMA" .-> F[Global FlooNoC: GENERATED, ELABORATED; ROUTED TRAFFIC PENDING]
-  F -. "PLANNED" .-> XB
-```
-
-Solid lines within the two testbench boxes are tested at their *respective
-scope* only; all dashed lines are plans. No HBM/DDR PHY behavior is implied.
+The dual-CPU cold-boot test runs PicoRV32 ROM/flash fetch and bus
+stores into initially uninitialized SRAM, then MMIO-releases SERV.
+Separately, `memory_tb` drives the real Verilog-AXI 2×2 crossbar into
+behavioral AXI RAM targets. Neither scope pretends the CPU/DMA/
+global-NoC-to-memory path is integrated. The one canonical image below
+covers the entire configured hierarchy.
 
 ## One generated full-chip SoC/NoC diagram
 
