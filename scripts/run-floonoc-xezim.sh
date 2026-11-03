@@ -16,15 +16,35 @@ includes=()
 for dir in "$ROOT"/.tools/floonoc/.bender/git/checkouts/*/include "$ROOT/.tools/floonoc/hw/include"; do
   [[ -d "$dir" ]] && includes+=("-I$dir")
 done
-for network in "${@:-global_data}"; do
-  case "$network" in
-    global_data|global_config) ;;
-    *) echo "Supported NoC probe names: global_data, global_config" >&2; exit 2 ;;
-  esac
-  prefix="$ROOT/gen/noc/floonoc/$network/floo_xezim_${network}_noc"
-  top="floo_xezim_${network}_noc"
-  [[ -s "${prefix}_pkg.sv" && -s "${prefix}.sv" ]] || exit 2
-  echo "XEZIM compile probe: $top (same Bender-pinned network as Verilator)"
+# NoC top names, generated packages and paths are read from the actual
+# FlooGen manifest, so extra compute or memory subsystems need no script edits.
+mapfile -t profiles < <(python3 - "$@" <<'PY'
+import json
+from pathlib import Path
+import sys
+root = Path("gen/noc/floonoc")
+entries = json.loads((root / "manifest.json").read_text())["networks"]
+wanted = sys.argv[1:]
+if not wanted or wanted == ["all"]:
+    wanted = sorted(entries)
+for name in wanted:
+    if name not in entries:
+        raise SystemExit(f"Unknown FlooNoC network {name}; choices: {sorted(entries)}")
+    entry = entries[name]
+    print(" ".join([name, entry["top_module"],
+                    str(root / entry["package"]), str(root / entry["top"])]))
+PY
+)
+[[ ${#profiles[@]} -gt 0 ]] || { echo "No FlooNoC profiles" >&2; exit 2; }
+for profile in "${profiles[@]}"; do
+  read -r network top package rtl <<< "$profile"
+  [[ -s "$package" && -s "$rtl" ]] || {
+    echo "Missing generated NoC package or top: $profile" >&2
+    exit 2
+  }
+  echo "XEZIM compile probe: $top (same Bender-pinned source list as Verilator)"
   "$XEZIM_BIN" --compile --no-cache -s "$top" "${includes[@]}" \
-    "${sources[@]}" "${prefix}_pkg.sv" "${prefix}.sv"
+    "${sources[@]}" "$package" "$rtl"
+  echo "PASS Xezim compiled $network"
 done
+echo "PASS Xezim compiled ${#profiles[@]} source-controlled FlooNoC modules"
