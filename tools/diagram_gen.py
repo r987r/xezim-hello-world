@@ -306,28 +306,18 @@ def render(cfg: dict, meta: dict, destination: Path, noc_root: Path | None = Non
     rtl, rtl_meta = build_rtl_connectivity(cfg, meta)
     dv, dv_meta = build_verification(cfg, meta)
     boot, boot_meta = build_boot_flow(cfg, meta)
-    diagrams = {"architecture": arch, "rtl-connectivity": rtl, "verification": dv, "boot": boot}
-    for inst in meta["subsystems"]:
-        diagrams[f'subsystems/{inst["name"]}'] = build_subsystem(cfg, meta, inst)
-    for name, diagram in diagrams.items():
-        path = destination / f"{name}.mmd"
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(diagram)
-        title = name.replace("-", " ").replace("/", " / ").title()
-        (destination / f"{name}.md").write_text(
-            f"# {title}\n\nGenerated from `config/soc.yaml`. Do not edit.\n\n"
-            f"[![{title} 2D diagram]({path.name.removesuffix('.mmd')}.svg)]"
-            f"({path.name.removesuffix('.mmd')}.svg)\n\n"
-            f"[View editable Mermaid source]({path.name})\n"
-        )
-    graph_meta = {"architecture": arch_meta, "rtl_connectivity": rtl_meta, "verification": dv_meta, "boot": boot_meta}
-    if noc_root is not None:
-        import noc_diagrams
-        noc_graph, noc_mmd = noc_diagrams.render(cfg, noc_root, destination)
-        graph_meta["noc_hierarchy"] = {"source": "gen/noc/floonoc/manifest.json",
-                                       "status": noc_graph["status"],
-                                       "networks": noc_graph["networks"]}
-        diagrams.update(noc_mmd)
+    # One canonical diagram. Keep machine-readable graph metadata for tooling.
+    # All other visual representations duplicated the same architectural facts.
+    diagrams = {}
+    graph_meta = {"architecture": arch_meta, "rtl_connectivity": rtl_meta,
+                  "verification": dv_meta, "boot": boot_meta}
+    if noc_root is None:
+        raise ValueError("NoC generator output is required for the single full-SoC diagram")
+    import noc_diagrams
+    noc_graph, noc_mmd = noc_diagrams.render(cfg, noc_root, destination)
+    diagrams["noc-hierarchy"] = noc_mmd["noc-hierarchy"]
+    graph_meta["noc_hierarchy"] = {"source": "gen/noc/floonoc/manifest.json",
+                                   "status": noc_graph["status"],
+                                   "networks": noc_graph["networks"]}
     (destination / "graphs.json").write_text(json.dumps(graph_meta, indent=2, sort_keys=True) + "\n")
-    diagram_svg.render_images(cfg, meta, destination)
     return diagrams
