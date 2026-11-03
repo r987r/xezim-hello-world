@@ -426,24 +426,12 @@ def render(cfg: dict, root: Path, destination: Path) -> tuple[dict, dict[str,str
     expected = 2 + 2 * len(cfg["subsystems"])
     if len(networks) != expected:
         raise ValueError(f"expected {expected} independent FlooNoC networks, got {len(networks)}")
+    # One visual per SoC. Detailed topology remains machine-readable JSON
+    # sourced from FlooGen, without eight redundant mesh SVG/MD/MMD files.
     mermaid = {"noc-hierarchy": hierarchy_mermaid(cfg, networks)}
-    for name, net in networks.items():
-        mermaid["noc/" + name] = mesh_mermaid(name, net)
-
-    for name, content in mermaid.items():
-        path=destination/(name+".mmd")
-        path.parent.mkdir(parents=True,exist_ok=True)
-        path.write_text(content)
-        (destination/(name+".md")).write_text(
-            "# "+name.replace("-", " ").replace("/", " / ").title()+"\n\n"
-            "Generated from the actual upstream FlooGen configuration and manifest. "
-            "**Inter-network wiring is planned; internal router links are generated RTL.**\n\n"
-            f"[![Generated FlooNoC network topology]({path.stem}.svg)]({path.stem}.svg)\n\n"
-            f"[Mermaid source]({path.stem}.mmd)\n"
-        )
-    overview_svg(cfg, networks, destination/"noc-hierarchy.svg")
-    for name, net in networks.items():
-        mesh_svg(name, net, destination/"noc"/(name+".svg"))
+    destination.mkdir(parents=True, exist_ok=True)
+    (destination / "noc-hierarchy.mmd").write_text(mermaid["noc-hierarchy"])
+    overview_svg(cfg, networks, destination / "noc-hierarchy.svg")
     graph = diagram_gen_metadata(cfg, networks)
-    (destination/"noc-topology.json").write_text(json.dumps(graph, indent=2, sort_keys=True)+"\n")
+    (destination / "noc-topology.json").write_text(json.dumps(graph, indent=2, sort_keys=True) + "\n")
     return graph, mermaid
