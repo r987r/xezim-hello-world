@@ -80,11 +80,31 @@ def render(config, root: Path, out: Path):
         sink=c+"__"+d
         text.append(f"  assign {sink}_req = {source}_req;")
         text.append(f"  assign {source}_rsp = {sink}_rsp;")
+    # PULP AXI upstream class driver, not a home-built bus functional model.
+    # Two independent compute data managers and one CSR manager exercise
+    # both global fabrics and local fabrics, preserving AXI4/AXI4-Lite semantics.
+    bfm = []
+    for inst in config["subsystems"]:
+        if inst["type"] == "compute":
+            bfm.append((inst["name"]+"_local_data", "cpu", 64, 64, 4))
+    bfm.append((config["boot"]["primary"]+"_local_config", "cpu", 32, 32, 1))
+    for name,ep,aw,dw,iw in bfm:
+        key = name+"__"+ep
+        text.extend([
+            f"  AXI_BUS_DV #(.AXI_ADDR_WIDTH({aw}), .AXI_DATA_WIDTH({dw}), "
+            f".AXI_ID_WIDTH({iw}), .AXI_USER_WIDTH(1)) bus_{key}(clk);",
+            f"  `AXI_ASSIGN_TO_REQ({key}_req, bus_{key})",
+            f"  `AXI_ASSIGN_FROM_RESP(bus_{key}, {key}_rsp)",
+            f"  typedef axi_test::axi_driver #(.AW({aw}), .DW({dw}), .IW({iw}), "
+            f".UW(1), .TA(2ns), .TT(8ns)) driver_{key}_t;",
+            f"  driver_{key}_t driver_{key};"
+        ])
     # Other initiators will be supplied by PULP test drivers; unconnected
     # manager ports are explicitly idle, not simulated transactions.
     for name, net in networks.items():
         for ep, desc in net["eps"].items():
-            if desc.get("mgr_port_protocol") and (name, ep) not in linked_managers:
+            if (desc.get("mgr_port_protocol") and (name, ep) not in linked_managers
+                    and (name, ep) not in {(x,y) for x,y,_,_,_ in bfm}):
                 text.append(f"  assign {name}__{ep}_req = '0;")
     # Upstream PULP simulation-only memory models on all leaf targets.
     # They respond to all AXI4 channels and do not model actual DRAM timing.
@@ -116,9 +136,75 @@ def render(config, root: Path, out: Path):
                       f".{ep}_axi_{direction}_rsp_{'o' if direction=='in' else 'i'}({base}_rsp)"]
         text.append(f"  {net['entry']['top_module']} u_{name} (")
         text.append("    "+",\n    ".join(ports)+");")
-    text.extend(["  // Only structural connectivity established. Traffic will be",
-                 "  // enabled by upstream PULP AXI agents in this SAME TB.",
-                 "endmodule", ""])
+    # Directed sequences use PULP's upstream axi_driver send/receive tasks.
+    # All traffic passes through the real instantiated FlewNoC modules.
+    for name, ep, aw, dw, iw in bfm:
+        key=name+"__"+ep
+        text.extend([
+            f"  task automatic write_{key}(input logic [{aw-1}:0] addr, "
+            f"input logic [{dw-1}:0] payload);",
+            f"    driver_{key}_t::ax_beat_t awbeat = new;",
+            f"    driver_{key}_t::w_beat_t wbeat = new;",
+            f"    driver_{key}_t::b_beat_t bbeat;",
+            "    awbeat.ax_id = 1;",
+            "    awbeat.ax_addr = addr;",
+            "    awbeat.ax_len = 0;",
+            f"    awbeat.ax_size = $clog2({dw}/8);",
+            "    awbeat.ax_burst = axi_pkg::BURST_INCR;",
+            "    wbeat.w_data = payload;",
+            "    wbeat.w_strb = '1;",
+            "    wbeat.w_last = 1;",
+            f"    driver_{key}.send_aw(awbeat);",
+            f"    driver_{key}.send_w(wbeat);",
+            f"    driver_{key}.recv_b(bbeat);",
+            "    if (bbeat.b_resp !== axi_pkg::RESP_OKAY || bbeat.b_id !== 1)",
+            f'      $fatal(1, "FAIL {key} write addr=%h B id=%h resp=%h", addr, bbeat.b_id, bbeat.b_resp);',
+            "  endtask",
+            f"  task automatic read_{key}(input logic [{aw-1}:0] addr, "
+            f"input logic [{dw-1}:0] expected);",
+            f"    driver_{key}_t::ax_beat_t ar = new;",
+            f"    driver_{key}_t::r_beat_t rbeat;",
+            "    ar.ax_id = 1;",
+            "    ar.ax_addr = addr;",
+            "    ar.ax_len = 0;",
+            f"    ar.ax_size = $clog2({dw}/8);",
+            "    ar.ax_burst = axi_pkg::BURST_INCR;",
+            f"    driver_{key}.send_ar(ar);",
+            f"    driver_{key}.recv_r(rbeat);",
+            "    if (rbeat.r_data !== expected || rbeat.r_resp !== axi_pkg::RESP_OKAY ||",
+            "        rbeat.r_id !== 1 || rbeat.r_last !== 1)",
+            f'      $fatal(1, "FAIL {key} read addr=%h expected=%h got=%h", addr, expected, rbeat.r_data);',
+            "  endtask",
+        ])
+    text.append("  initial begin")
+    for name,ep,aw,dw,iw in bfm:
+        key=name+"__"+ep
+        text.append(f"    driver_{key} = new(bus_{key});")
+        text.append(f"    driver_{key}.reset_master();")
+    text.append("    wait(rst_n); repeat(3) @(posedge clk);")
+    # Deterministic smoke: own SRAM, remote CPU SRAM via two NoCs,
+    # global HBM/DDR via local memory NoC and configuration CSR plane.
+    tests = [
+        ("compute0_local_data", "cpu", 0x10000000, 0x1122334455667788),
+        ("compute0_local_data", "cpu", 0x11000000, 0x8877665544332211),
+        ("compute0_local_data", "cpu", 0x100000000, 0x4242424212345678),
+        ("compute0_local_data", "cpu", 0x140000000, 0xfeedfacefacefeed),
+        ("compute1_local_data", "cpu", 0x10000008, 0x9876543210abcdef),
+        ("compute0_local_config", "cpu", 0x40000000, 0x10203040),
+        ("compute0_local_config", "cpu", 0x40010000, 0x22334455),
+        ("compute0_local_config", "cpu", 0x40030000, 0xaabbccdd),
+    ]
+    for name, ep, addr, value in tests:
+        key=name+"__"+ep
+        text.append(f"    write_{key}('h{addr:x}, 'h{value:x});")
+        text.append(f"    read_{key}('h{addr:x}, 'h{value:x});")
+    text.extend([
+        "    repeat(8) @(posedge clk);",
+        '    $display("PASS: SuperNoC real FlooNoC read/write paths: 8 networks instantiated");',
+        "    $finish;",
+        "  end",
+        "endmodule", ""
+    ])
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text("\n".join(text))
     return {"networks": sorted(networks), "links": [list(x) for x in links],
