@@ -36,7 +36,9 @@ fabric_parameters:
   local_config: &config_floo
     MaxTxns: 2
     MaxTxnsPerId: 3
-    MaxUniqueIds: 2
+    # The one-bit control AXI4 wire IDs cannot reserve atomic ID ranges
+    # with a multi-ID chimney; AXI4-Lite-style CSR accesses use one ID.
+    MaxUniqueIds: 1
     RRoBType: NoRoB
     BRoBType: NoRoB
     RRoBSize: 2
