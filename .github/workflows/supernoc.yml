@@ -1,0 +1,121 @@
+name: Real SuperNoC connected fabric test
+
+on:
+  push:
+    paths:
+      - 'gen/noc/**'
+      - 'tools/supernoc_tbgen.py'
+      - 'tools/floonoc_gen.py'
+      - 'scripts/run-floonoc-xezim.sh'
+      - '.github/workflows/supernoc.yml'
+  pull_request:
+    paths:
+      - 'gen/noc/**'
+      - 'tools/supernoc_tbgen.py'
+      - 'tools/floonoc_gen.py'
+      - 'scripts/run-floonoc-xezim.sh'
+      - '.github/workflows/supernoc.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  elaborate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch locked FlooNoC source and upstream Bender dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install -r requirements.txt
+          python3 tools/ip_fetch.py floonoc
+          mkdir -p .tools/bin
+          gh release download v0.32.1 --repo pulp-platform/bender \
+            --pattern 'bender-x86_64-unknown-linux-gnu.tar.xz' \
+            --pattern 'bender-x86_64-unknown-linux-gnu.tar.xz.sha256' --dir .tools/bin
+          (cd .tools/bin && sha256sum -c bender-x86_64-unknown-linux-gnu.tar.xz.sha256)
+          tar -xJf .tools/bin/bender-x86_64-unknown-linux-gnu.tar.xz -C .tools/bin
+          echo "Bender archive contents:"
+          tar -tf .tools/bin/bender-x86_64-unknown-linux-gnu.tar.xz
+          candidate="$(find .tools/bin -maxdepth 4 -type f -name 'bender*' ! -name '*.tar.xz*' -print -quit)"
+          if [ -z "$candidate" ]; then
+            echo "Bender executable not found in archive" >&2
+            exit 1
+          fi
+          if [ "$candidate" != ".tools/bin/bender" ]; then
+            cp "$candidate" .tools/bin/bender
+          fi
+          chmod +x .tools/bin/bender
+          echo "$GITHUB_WORKSPACE/.tools/bin" >> "$GITHUB_PATH"
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Resolve pinned upstream FlooNoC compile filelist
+        run: |
+          set -euo pipefail
+          cd .tools/floonoc
+          bender --version
+          bender checkout
+          bender script flist -t rtl -t cc_no_deprecated > "$GITHUB_WORKSPACE/.tools/floonoc-rtl.f"
+          test -s "$GITHUB_WORKSPACE/.tools/floonoc-rtl.f"
+          echo "Upstream Bender include directories and packages:"
+          grep -E 'incdir|floo_pkg|axi_pkg' "$GITHUB_WORKSPACE/.tools/floonoc-rtl.f" | head -n 35 || true
+          # tech_cells_generic pad_functional contains legacy switch-level
+          # MOSFET primitives unsupported by Verilator and unrelated to the
+          # NoC. We exclude only that unreachable vendor-pad simulation cell.
+          # The upstream Bender.lock resolves the whole SoC dependency graph,
+          # including iDMA, APB, OBI and FPnew. Those are NOT part of a
+          # standalone router/chimney elaboration, so compile only the pinned
+          # FlooNoC/AXI/common_cells/tech_cells source subset.
+          grep -Ev '/(idma|fpnew|fpu_div_sqrt_mvp|register_interface|obi|axi_stream|apb|common_verification)-[^/]+/|/src/deprecated/pad_functional[.]sv' \
+            "$GITHUB_WORKSPACE/.tools/floonoc-rtl.f" > "$GITHUB_WORKSPACE/.tools/floonoc-lint.f"
+          echo "NoC dependency filelist lines: $(wc -l < "$GITHUB_WORKSPACE/.tools/floonoc-lint.f")"
+      - name: Download Xezim and install Verilator
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y verilator
+          source toolchains/xezim.env
+          gh release download "$XEZIM_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern "$XEZIM_ASSET_NAME" --pattern "$XEZIM_ASSET_NAME.sha256" --dir .tools/bin
+          (cd .tools/bin && sha256sum -c "$XEZIM_ASSET_NAME.sha256")
+          chmod +x ".tools/bin/$XEZIM_ASSET_NAME"
+          echo "XEZIM_BIN=$GITHUB_WORKSPACE/.tools/bin/$XEZIM_ASSET_NAME" >> "$GITHUB_ENV"
+      - name: Compile and run real eight-NoC traffic test (Xezim and Verilator)
+        shell: bash
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          includes=()
+          for d in .tools/floonoc/.bender/git/checkouts/*/include; do
+            [ -d "$d" ] && includes+=("-I$d")
+          done
+          includes+=("-I.tools/floonoc/hw/include")
+          mapfile -t pkg < <(find gen/noc/floonoc -name '*_pkg.sv' | sort)
+          mapfile -t tops < <(find gen/noc/floonoc -name '*_noc.sv' | sort)
+          test "${#pkg[@]}" -eq 8
+          test "${#tops[@]}" -eq 8
+          axi_sim="$(find .tools/floonoc/.bender/git/checkouts -path '*/src/axi_sim_mem.sv' -print -quit)"
+          axi_test="$(find .tools/floonoc/.bender/git/checkouts -path '*/src/axi_test.sv' -print -quit)"
+          test -s "$axi_sim"
+          test -s "$axi_test"
+          mapfile -t upstream < <(grep -E '\.(sv|v)$' .tools/floonoc-lint.f)
+          sources=("${upstream[@]}" "${pkg[@]}" "${tops[@]}" "$axi_sim" "$axi_test" gen/dv/supernoc_tb.sv)
+          verilator --lint-only --timing -Wno-fatal --top-module supernoc_tb \
+            "${includes[@]}" "${sources[@]}" > supernoc-verilator.log 2>&1
+          "$XEZIM_BIN" --compile --no-cache -s supernoc_tb \
+            "${includes[@]}" "${sources[@]}" > supernoc-xezim-compile.log 2>&1
+          timeout 300s "$XEZIM_BIN" --no-cache --max-time 100us -s supernoc_tb \
+            "${includes[@]}" "${sources[@]}" > supernoc-xezim-traffic.log 2>&1
+          grep -F 'PASS: SuperNoC real FlooNoC read/write paths:' supernoc-xezim-traffic.log
+      - name: Retain SuperNoC simulator logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: supernoc-simulator-logs
+          path: supernoc-*.log
+          if-no-files-found: ignore
