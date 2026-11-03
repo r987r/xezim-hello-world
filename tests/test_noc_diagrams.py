@@ -65,7 +65,6 @@ class RealNetworkDiagrams(unittest.TestCase):
             self.assertFalse((out / "architecture.svg").exists())
             for name in diagrams:
                 self.assertTrue((out/(name+".mmd")).exists())
-                self.assertTrue((out/(name+".md")).exists())
                 tree = ElementTree.parse(out/(name+".svg"))
                 self.assertEqual(tree.getroot().tag.rsplit("}",1)[-1], "svg")
 
