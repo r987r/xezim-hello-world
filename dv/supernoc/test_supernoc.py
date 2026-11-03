@@ -18,7 +18,7 @@ CONTRACT = json.loads((ROOT/"gen/supernoc/manifest.json").read_text())
 async def routed_data_and_config_all_local_global_nocs(dut):
     dut.rst_ni.value = 0
     dut.clk_i.value = 0
-    cocotb.start_soon(Clock(dut.clk_i, 10, unit="ns").start())
+    cocotb.start_soon(Clock(dut.clk_i, 10, units="ns").start())
     sinks = {}
     for entry in CONTRACT["slaves"]:
         name = entry["name"]
