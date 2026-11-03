@@ -151,23 +151,25 @@ with the canonical architecture graph.
 
 ## Running and retaining evidence
 
-Install the pinned FlooNoC/Bender dependency tree using the commands in
-`.github/workflows/floonoc-elab.yml`, then:
+Install [the regression prerequisites](regression.md), then:
 
 ```bash
-python3 -m pip install 'cocotb==1.9.2' 'cocotbext-axi==0.1.24'
-make dv-supernoc
-# Python-only rerun after an explicit successful local RTL build:
-SUPERNOC_TEST_ONLY=1 python3 dv/supernoc/run.py
-# This must fail with the named injected readback mismatch:
-SUPERNOC_TEST_ONLY=1 SUPERNOC_NEGATIVE=1 SUPERNOC_RESULTS_XML=negative-results.xml python3 dv/supernoc/run.py
+make test-noc
+# Python-only rerun of a fingerprint-verified successful RTL build:
+python3 tools/regress.py supernoc --stage run
+# Success means the expected named corruption failure was detected:
+python3 tools/regress.py supernoc-negative
 ```
 
-The runner checks the cocotb results XML and exits nonzero for a failed
-or empty test run. The shell also requires the final `PASS supernoc:`
-marker. CI retains positive/negative logs, XML and the route manifest on
-success and failure. CI always rebuilds RTL before the positive run;
-`SUPERNOC_TEST_ONLY` is for reuse of that exact binary, not RTL validation.
+The runner resolves the locked Bender graph and checks cocotb XML,
+rejecting failed, empty, errored or skipped results. A positive run also
+requires the final `PASS supernoc:` marker. Negative acceptance requires
+the exact injected mismatch and a failing simulation, excluding timeouts
+or compile errors. CI retains `.tools/regression/` positive/negative logs,
+XML, resolved sources, plans, results and the route manifest on success
+and failure. CI rebuilds RTL before the positive run. A run-only request
+must match the source/header/options/tool fingerprint and executable hash;
+a stale or missing binary is rejected.
 Generation metadata names verification commands instead of hardcoding
 historically false pass/fail flags. Current-source evidence belongs in
 actual run logs and the CI head SHA.

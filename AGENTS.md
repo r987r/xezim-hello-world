@@ -140,13 +140,16 @@ BOOT_WAVE=1 BOOT_TRACE=1 make dv-boot
 make test
 ```
 
-`make test` is the tracked default config suite. The two
-`AXI_CONFIG=...` variants are extra required runs for fabric changes:
-the first proves all ingress-target pairs; the second proves allowed
-pairs and denied read/write responses (AXI DECERR). A green unit-test
-suite by itself **does not** prove new RTL integration.
+`make test` runs all tests declared in `config/regression.yaml`, including
+full/sparse memory profiles, relocated cold boot, diagnostics and both
+simulator paths. It requires Bender 0.32.1, Verilator and pinned cocotb
+libraries as described in [docs/regression.md](docs/regression.md).
+`make test-xezim` and `make test-noc` select the blocking CI scopes. A green
+unit-test suite by itself **does not** prove new RTL integration.
 
-`scripts/common.sh` resolves `XEZIM_BIN` or a cached binary.
+`tools/regress.py` resolves `XEZIM_BIN` or a cached binary and standard
+Bender source sets. `Bender.yml` owns source ordering;
+`config/regression.yaml` owns tests/variants/suites and acceptance rules.
 `tools/ip_fetch.py` fetches pinned third-party RTL on demand to
 ignored `.tools/`. No `cargo build` or recompilation of Xezim for
 normal RTL edits. Simulator releases are built separately in
@@ -165,8 +168,8 @@ the connected super-NoC traffic and corruption checks. These are different
 verification gates from Xezim CPU/memory simulation; report them separately.
 **All eight generated local and global FlooNoC meshes now also
 compile with pinned Xezim 0.11.4** using
-`scripts/run-floonoc-xezim.sh all` and the *same upstream Bender
-filelist* as the Verilator elaboration gate. The script discovers its
+`python3 tools/regress.py compatibility` and the *same upstream Bender
+filelist* as the Verilator elaboration gate. The runner discovers its
 tops from `gen/noc/floonoc/manifest.json` so a new subsystem scales
 without editing hardcoded lists.
 **Xezim reports potentially significant RoB/FIFO port width warnings
@@ -200,12 +203,12 @@ from the eight real FlooGen profiles; it uses only packed AXI4
 struct-to-flat-port assignments and true upstream FlooNoC modules.
 `dv/supernoc/test_supernoc.py` uses mature third-party
 `cocotbext-axi` `AxiMaster` and `AxiSlave` with mapped upstream
-`AddressSpace`/`SparseMemoryRegion` storage rather than custom AXI BFMs or new per-router testbenches. Run `bash scripts/run-supernoc.sh`
-after pinned Bender checkout (see `.github/workflows/floonoc-elab.yml`).
+`AddressSpace`/`SparseMemoryRegion` storage rather than custom AXI BFMs or new per-router testbenches. Run `make dv-supernoc`; the shared runner performs the pinned Bender
+checkout (see `.github/workflows/floonoc-elab.yml`).
 **Do not claim the super-NoC is working from a compile-only result.**
 A successful result must include all mapped routes, intended destination
 storage, bursts/byte strobes, concurrent reused IDs, five-channel stalls,
-and routed SLVERR checks with test logs. The optional corruption run must
+and routed SLVERR checks with test logs. The required corruption run must
 fail with its exact named mismatch. Never accept a generic compile exit
 or an empty cocotb results file. Boot routing reads use seeded BFMs only;
 the independent CPU cold-boot SRAM must stay uninitialized. Xezim remains the

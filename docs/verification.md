@@ -13,6 +13,11 @@ wrapper's source windows, leaf destinations, network paths and AXI links.
 fabric scope drives actual interconnect RTL; the connected NoC scope
 uses upstream AXI agents.
 
+The executable build/test catalog is [regression YAML](../config/regression.yaml);
+[Bender source sets](../Bender.yml) replace per-test shell file arrays.
+See [build and regression commands](regression.md) for the full suite,
+filelist inspection, stage separation and retained results.
+
 ## Implemented scopes
 
 | Scope | RTL under test | Checks |
@@ -22,11 +27,11 @@ uses upstream AXI agents.
 | Negative memory check | Same crossbar with a corrupted expectation | Must fail with the intended `FAIL AXI read` diagnostic |
 | Local SRAM | Existing reusable dual-port SRAM test model | Uninitialized power-up, byte strobes and both ports |
 | SERV execution | Real SERV and standalone Wishbone RAM | Three instructions execute and store the checked signature from a four-word image |
-| CPU cold boot | PicoRV32/SERV, ROM, flash, blank SRAM and reset MMIO | CPU0 copies both programs through bus stores, releases CPU1 and both produce signatures |
+| CPU cold boot | PicoRV32/SERV, ROM, flash, blank SRAM and reset MMIO | CPU0 copies both programs through bus stores, releases CPU1 and both produce signatures; default and relocated address maps |
 | Connected NoC BFM | All eight real FlooGen data/config meshes | All 28 mapped source/window routes, intended storage, concurrent reused IDs with distinct stream payloads, bursts, byte guards, stalls, SLVERR and corruption detection |
 
-The legacy CPU fetch smoke is an optional diagnostic, outside the required
-CI suite. [Boot details](boot.md) distinguish real instruction execution
+The CPU fetch smoke is a request-only diagnostic included in `full` and
+CI diagnostics. [Boot details](boot.md) distinguish real instruction execution
 from request-only smoke checks. The connected NoC scope uses AXI BFMs at
 real endpoint boundaries; it does not attach CPUs, iDMA, AXI-Lite bridges
 or the separately tested memory crossbar. Behavioral targets do not prove
@@ -60,6 +65,8 @@ physical HBM/DDR controller or PHY behavior.
   retained diagnostics. Current-source CI must pass before merge.
 - Xezim executes boot/memory/SRAM/SERV and compiles all eight NoCs. Verilator
   runs the connected NoC traffic test. Xezim NoC traffic remains unverified.
+- Simulation gates do not cover synthesis. The known `SYNTHESIS` SRAM B-read
+  guard defect remains open; see [implementation status](implementation-status.md).
 - The simulator binary is pinned separately; HDL changes do not rebuild Xezim.
 
 See [implementation status](implementation-status.md) for integration limits

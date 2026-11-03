@@ -39,7 +39,18 @@ The tiny RV32I images are generated deterministically from `config/soc.yaml`.
 address for code review; `gen/boot/manifest.json` states the addresses,
 image sizes, reset policy, completion signatures and model limitations.
 `make gen` removes obsolete image files, and `make check-generated` catches
-drift.
+drift. `gen/boot/boot_config_pkg.sv` binds the same YAML addresses to SERV's
+reset PC, both memory-model decoders, SRAM sizes and the bench's fetch/copy
+checks. No executable address defaults are relied on by the boot bench.
+
+`python3 tools/regress.py boot-relocated` runs this same bench with SRAM0
+at `0x12000000`, SRAM1 at `0x13000000`, flash at `0x21000000`, and reset
+control at `0x41020000`. The runner validates and emits the variant's
+package and firmware under its result directory, then supplies only ROM/
+flash image paths via plusargs. SRAM remains uninitialized. Both default
+and relocated boots are required in the YAML `xezim` suite. ROM reset PC
+zero, four-word programs, 256-byte slots and 16-KiB model SRAM remain
+explicit supported limits; other values are rejected.
 
 ## Minimal bring-up ladder
 
@@ -141,9 +152,8 @@ supported boot mode, and actual physical SRAM macro selection is pending.
 
 Required CI scopes are configuration and deterministic generation, AXI crossbar
 memory/negative scoreboard, independent uninitialized dual-port SRAM, standalone
-SERV instruction execution, and ROM/flash-to-SRAM cold boot. The earlier
-`dv-cpu` request-only fetch smoke remains an optional manual diagnostic but
-is **not** a CI pass condition: full instruction execution is already proved.
+SERV instruction execution, and ROM/flash-to-SRAM cold boot. The `dv-cpu` request-only fetch smoke is retained as a diagnostic in the
+full/CI diagnostics suite; it does not prove instruction execution.
 We no longer pass `SERV_CLEAR_RAM`: the SERV architectural register file
 starts without a testbench initialization and the real program executes.
 Boot SRAM contains unspecified contents, never zero-preloaded firmware.

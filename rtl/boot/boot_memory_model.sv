@@ -65,8 +65,7 @@ module boot_memory_model #(
         .RESET_BASE(RESET_CTRL_BASE), .SRAM_BYTES(SRAM_BYTES)
     ) u_write_decode (.addr(pending_awaddr), .select_target(write_sel));
 
-    // SRAM intentionally starts with invalid RISC-V instruction (zero) and
-    // no firmware image. Only CPU0 stores may initialize the program words.
+    // SRAM power-up is unspecified. Only CPU0 stores initialize program words.
     reg [31:0] rom [0:1023];
     reg [31:0] flash [0:16383];
     // Distinct, reusable RTL SRAM banks. SRAM bits are NOT reset/preloaded;
@@ -107,11 +106,16 @@ module boot_memory_model #(
         .b_we(sram1_cpu1_we), .b_write_addr(c1_dbus_addr-SRAM1_BASE),
         .b_wdata(c1_dbus_data), .b_wstrb(c1_dbus_select)
     );
+    string rom_file, flash_file;
     initial begin
         for (integer n=0; n<1024; n=n+1) rom[n] = 32'h00000000;
         for (integer n=0; n<16384; n=n+1) flash[n] = 32'h00000000;
-        $readmemh(BOOTROM_FILE, rom);
-        $readmemh(FLASH_FILE, flash);
+        rom_file = BOOTROM_FILE;
+        flash_file = FLASH_FILE;
+        if ($value$plusargs("BOOTROM_FILE=%s", rom_file)) begin end
+        if ($value$plusargs("FLASH_FILE=%s", flash_file)) begin end
+        $readmemh(rom_file, rom);
+        $readmemh(flash_file, flash);
     end
 
     reg [31:0] cpu0_read_mux;

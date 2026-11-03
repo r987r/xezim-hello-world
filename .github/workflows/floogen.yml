@@ -5,12 +5,14 @@ on:
     paths:
       - 'config/**'
       - 'gen/noc/floonoc/**'
-      - 'tools/floonoc_gen.py'
+      - 'tools/**'
       - '.github/workflows/floogen.yml'
   pull_request:
     paths:
-      - 'config/floogen/**'
-      - 'toolchains/floogen.env'
+      - 'config/**'
+      - 'gen/noc/floonoc/**'
+      - 'tools/**'
+      - 'tests/**'
       - 'docs/subsystem-verification.md'
       - '.github/workflows/floogen.yml'
   workflow_dispatch:
@@ -41,21 +43,4 @@ jobs:
         run: |
           set -euo pipefail
           make check-generated
-          python3 - <<'PY'
-          import json
-          from pathlib import Path
-          root=Path("gen/noc/floonoc")
-          manifest=json.loads((root/"manifest.json").read_text())
-          if len(manifest["networks"]) != 8:
-              raise SystemExit("missing expected eight independent FlooNoCs")
-          for name, entry in manifest["networks"].items():
-              top=(root / entry["top"]).read_text()
-              pkg=(root / entry["package"]).read_text()
-              if "floo_axi_router" not in top or "floo_axi_chimney" not in top:
-                  raise SystemExit("missing real upstream router or chimney: "+name)
-              if "xezim_chimney_cfg()" not in top:
-                  raise SystemExit("native AXI pending limits not bound: "+name)
-              if not pkg.strip() or "package " not in pkg:
-                  raise SystemExit("missing generated FlooNoC package: "+name)
-          print("PASS: all eight checked-in upstream FlooNoC modules/packages and configs are reproducible")
-          PY
+          python3 tools/regress.py --check-noc

@@ -1,0 +1,64 @@
+package:
+  name: xezim_soc_verification
+
+# Standard Bender ordered source sets; revisions live in config/ip.lock.yaml.
+# tools/regress.py fetches the requested pins before resolving a target.
+# FlooNoC uses its own upstream Bender.yml + Bender.lock, without merging
+# its AXI dependency with the separate, planned SoC PULP AXI revision.
+sources:
+  - target: memory
+    files:
+      - .tools/verilog_axi/rtl/priority_encoder.v
+      - .tools/verilog_axi/rtl/arbiter.v
+      - .tools/verilog_axi/rtl/axi_crossbar_addr.v
+      - .tools/verilog_axi/rtl/axi_register_wr.v
+      - .tools/verilog_axi/rtl/axi_register_rd.v
+      - .tools/verilog_axi/rtl/axi_crossbar_wr.v
+      - .tools/verilog_axi/rtl/axi_crossbar_rd.v
+      - .tools/verilog_axi/rtl/axi_crossbar.v
+      - .tools/verilog_axi/rtl/axi_ram.v
+      - rtl/adapters/axi_memory_target_model.sv
+      - dv/common/axi_master_bfm.sv
+      - dv/common/axi_route_monitor.sv
+      - gen/memory/memory_tb.sv
+  - target: any(boot, cpu)
+    files:
+      - .tools/picorv32/picorv32.v
+      - rtl/adapters/picorv32_cpu_adapter.sv
+  - target: any(boot, cpu, serv)
+    files:
+      - .tools/serv/rtl/serv_bufreg.v
+      - .tools/serv/rtl/serv_bufreg2.v
+      - .tools/serv/rtl/serv_alu.v
+      - .tools/serv/rtl/serv_csr.v
+      - .tools/serv/rtl/serv_ctrl.v
+      - .tools/serv/rtl/serv_decode.v
+      - .tools/serv/rtl/serv_immdec.v
+      - .tools/serv/rtl/serv_mem_if.v
+      - .tools/serv/rtl/serv_rf_if.v
+      - .tools/serv/rtl/serv_rf_ram_if.v
+      - .tools/serv/rtl/serv_rf_ram.v
+      - .tools/serv/rtl/serv_state.v
+      - .tools/serv/rtl/serv_debug.v
+      - .tools/serv/rtl/serv_top.v
+      - .tools/serv/rtl/serv_rf_top.v
+      - .tools/serv/rtl/serv_aligner.v
+      - .tools/serv/rtl/serv_compdec.v
+      - rtl/adapters/serv_cpu_adapter.sv
+  - target: any(boot, sram)
+    files:
+      - rtl/memory/local_sram.sv
+  - target: boot
+    files:
+      - rtl/interconnect/boot_local_decode.sv
+      - rtl/boot/boot_memory_model.sv
+      - gen/boot/boot_config_pkg.sv
+      - dv/boot/boot_tb.sv
+  - target: serv
+    files: [dv/cpu/serv_minimal_tb.sv]
+  - target: sram
+    files: [dv/memory/local_sram_tb.sv]
+  - target: cpu
+    files: [dv/cpu/heterogeneous_cpu_tb.sv]
+  - target: smoke
+    files: [dv/smoke/hello_world_tb.sv]

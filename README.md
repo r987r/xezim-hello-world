@@ -56,7 +56,7 @@ For source-backed maturity and outstanding work, see
 above is the only generated SoC architecture picture.
 Future coding agents **must** follow [AGENTS.md](AGENTS.md), including pinned
 Xezim binary installation, `make gen`, `make check-generated`, the full
-regression and the two AXI routing profile simulations. Never hand-edit
+YAML-defined regression, including both AXI routing profiles. Never hand-edit
 `gen/` or silently replace a missing upstream backend.
 
 ## View real generated FlooNoC Verilog
@@ -111,6 +111,16 @@ global config, full SoC). [All eight generated FlooNoC topologies](gen/noc/floon
 are committed actual upstream-generated SystemVerilog, with the connected NoC BFM regression described in
 [super-NoC verification](docs/supernoc-verification.md).
 No bridge- or simulator-repro TB proliferation.
+
+## Build and regression
+
+[`Bender.yml`](Bender.yml) defines standard ordered source sets;
+[`config/regression.yaml`](config/regression.yaml) defines tests, variants
+and suites shared by Make and CI. `make test-list` lists the catalog;
+`make test` runs every declared simulation and compatibility probe using
+both toolchains. [Setup, filelists, build/run stages and results](docs/regression.md)
+replace the old per-test shell runners. Cold boot includes a relocated-map
+regression driven by the generated boot configuration package.
 
 ## Reproducible generation
 

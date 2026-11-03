@@ -44,8 +44,9 @@ python3 tools/debug/vcd_signal_activity.py boot-trace.vcd c1_dbus_cyc
 
 The VCD analysis utilities are adapted from
 [`Sv-test`](https://github.com/r987r/Sv-test/tree/main/scripts/vcd).
-The CI workflow uploads failed test logs and `boot-trace.vcd` as debug
-artifacts. Xezim also provides `XEZIM_VALUE_TRACE`, described in its
+The CI workflow retains target logs/plans/results on every run.
+Local debug commands above additionally produce `boot-trace.vcd`;
+see `.tools/regression/boot/boot.log` for the transaction trace. Xezim also provides `XEZIM_VALUE_TRACE`, described in its
 [debugging guide](https://github.com/aionhw/xezim/blob/main/docs/DEBUGGING.md).
 
 The Sv-test AXI4-Lite UVM scoreboard is intentionally not used here:

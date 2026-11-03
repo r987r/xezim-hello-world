@@ -22,15 +22,3 @@ def render(cfg: dict, meta: dict, destination: Path, noc_root: Path | None = Non
         }
     }, indent=2, sort_keys=True) + "\n")
     return diagrams
-
-
-def build_boot_flow(cfg: dict, meta: dict) -> tuple[str, dict]:
-    """Legacy boot policy contract used by a unit test; no extra diagram emitted."""
-    import bootgen
-    addresses = bootgen.build(cfg)["addresses"]
-    result = (
-        "flowchart LR\n"
-        f'  source["{cfg["boot"]["image_source"]}"] --> decode["boot_local_decode"]\n'
-        f'  decode --> sram["local_sram RTL @ 0x{addresses["sram0"]:x}"]\n'
-    )
-    return result, {"source":"bootgen","status":"standalone_test_only"}

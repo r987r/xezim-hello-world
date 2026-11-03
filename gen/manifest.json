@@ -3,6 +3,7 @@
   "files_sha256": {
     ".generated-root": "0db72ba0ceee7c322b275cc197d8ab0a147283c068aaa89cf374b42a9765e013",
     "README.md": "0aa74014e6e928d133b14b4a2e3a0f59375071736c46b180bc650e3f6361f8a6",
+    "boot/boot_config_pkg.sv": "ce5fdcc7f3af933a0938793bd094a9726a0861b14f8c593a299dd56bb5ee493e",
     "boot/bootrom.hex": "fc563cf367fd97a78ce9e16fab411d3e431842448e6d3420f5740c5376f28864",
     "boot/bootrom.lst": "e38676bfc4d2fce0814c639bd9788c5b3f1ec217914cf8a75eb2a2e1291ada33",
     "boot/flash.hex": "eb7e39468c0ee8c6733c221332b34a980378b2292c456c760ca31216f1d4459d",
@@ -33,7 +34,7 @@
     "noc/floonoc/global_data/floo_xezim_global_data_noc.sv": "76f6900e824ec892d997969b362ba6d4e621b12c0edb8dd4b278f99887700f50",
     "noc/floonoc/global_data/floo_xezim_global_data_noc_pkg.sv": "804f4008e06ccf9b17451919e4b8e5c1b3240a29a8bd1cbdf6ddb0ad3c8598d9",
     "noc/floonoc/global_data/floogen.yaml": "d88bbf480dad77798bee34b2ca0d1dcd67da5613a8e85ffbca967906633c5f3c",
-    "noc/floonoc/manifest.json": "de6f3cfff00a2efef8b6b35dafa295353c9c86309712d133e46e71457aa87dc6",
+    "noc/floonoc/manifest.json": "de483d055ce65ce62d1b6b95ff25f393903eee624f724a16936f179750ed1644",
     "noc/floonoc/memory0/local_config/floo_xezim_memory0_local_config_noc.sv": "e063df7ebdf72b57a4efefd831f992c0e34d8001a2a217a724720f60e37ff5fe",
     "noc/floonoc/memory0/local_config/floo_xezim_memory0_local_config_noc_pkg.sv": "027fd930f0ffaa0de659a1da67748aec3329dd2795fb15c357825059b4987a2a",
     "noc/floonoc/memory0/local_config/floogen.yaml": "2f0560b0a293fbb26f4a8d53d14f8d4012462930e1dc13ff8a0220c801b0a626",

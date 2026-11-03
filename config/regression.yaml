@@ -1,0 +1,107 @@
+schema_version: 1
+
+# Bender owns source ordering/includes/defines. This small project-specific
+# layer selects simulations and checks their results; it is not an IP resolver.
+defaults:
+  timeout_s: 180
+
+upstream_noc:
+  targets: [rtl, cc_no_deprecated]
+  # The locked graph also contains uninstantiated SoC blocks. Preserve the
+  # existing standalone NoC subset and exclude the unsupported vendor pad.
+  exclude_paths:
+    - '/(idma|fpnew|fpu_div_sqrt_mvp|register_interface|obi|axi_stream|apb|common_verification)-[^/]+/'
+    - '/src/deprecated/pad_functional[.]sv'
+
+tests:
+  memory: &memory
+    engine: xezim
+    sources: memory
+    ip: [verilog_axi]
+    top: memory_tb
+    args: [--max-time, 200us]
+    pass: 'PASS: memory_fabric_tb'
+  memory-full:
+    <<: *memory
+    memory_config: config/examples/memory-fabric-connectivity.yaml
+  memory-sparse:
+    <<: *memory
+    memory_config: config/examples/memory-fabric-sparse.yaml
+  memory-negative:
+    <<: *memory
+    args: [--max-time, 200us, '+INJECT_BAD_EXPECTED']
+    expect_failure: 'FAIL AXI read:'
+  sram:
+    engine: xezim
+    sources: sram
+    top: local_sram_tb
+    args: [--max-time, 10us]
+    pass: 'PASS: local_sram_tb'
+  serv:
+    engine: xezim
+    sources: serv
+    ip: [serv]
+    top: serv_minimal_tb
+    args: [--max-time, 40us]
+    pass: 'PASS: serv_minimal_tb'
+  boot: &boot
+    engine: xezim
+    sources: boot
+    ip: [picorv32, serv]
+    top: boot_tb
+    args: [--max-time, 1500us]
+    pass: 'PASS: cpu_cold_boot'
+  boot-relocated:
+    <<: *boot
+    # Same cold-boot bench, all movable windows changed together. The ROM
+    # reset PC remains zero; bootgen explicitly rejects unsupported policies.
+    boot_relocate:
+      compute0.sram: '0x12000000'
+      compute1.sram: '0x13000000'
+      boot.flash: '0x21000000'
+      boot.reset_ctrl: '0x41020000'
+  cpu-fetch:
+    engine: xezim
+    sources: cpu
+    ip: [picorv32, serv]
+    top: heterogeneous_cpu_tb
+    args: [--max-time, 50us]
+    pass: 'PASS: heterogeneous_cpu_tb'
+  smoke:
+    engine: xezim
+    sources: smoke
+    top: hello_world_tb
+    args: [--max-time, 1us]
+    pass: 'PASS: hello_world_tb'
+  noc-verilator:
+    engine: verilator-lint
+    sources: noc
+    timeout_s: 240
+  noc-xezim:
+    engine: xezim-compile
+    sources: noc
+    timeout_s: 240
+  supernoc: &supernoc
+    engine: cocotb-verilator
+    sources: noc
+    top: supernoc_tb
+    module: test_supernoc
+    seed: 1
+    test_dir: dv/supernoc
+    build: .tools/supernoc-obj
+    timeout_s: 1800
+    pass: 'PASS supernoc:'
+  supernoc-negative:
+    <<: *supernoc
+    reuse_build: true
+    env: {SUPERNOC_NEGATIVE: '1'}
+    expect_failure: 'FAIL supernoc injected data mismatch detected'
+
+suites:
+  xezim: [memory, memory-full, memory-sparse, memory-negative, sram, serv, boot, boot-relocated]
+  noc: [noc-verilator, supernoc, supernoc-negative]
+  compatibility: [noc-xezim]
+  diagnostics: [cpu-fetch, smoke]
+  # Every declared test is covered. Structural Xezim probes stay distinct
+  # from the Verilator traffic gate; make test requires both toolchains.
+  full: [xezim, noc, compatibility, diagnostics]

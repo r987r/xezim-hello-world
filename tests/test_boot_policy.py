@@ -6,7 +6,7 @@ import yaml
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'tools'))
 import bootgen
-from diagram_gen import build_boot_flow
+
 
 class BootPolicyTests(unittest.TestCase):
     def setUp(self):
@@ -14,10 +14,7 @@ class BootPolicyTests(unittest.TestCase):
 
     def test_supported_boot_policy(self):
         self.assertIn('bootrom',bootgen.build(self.cfg)['addresses'])
-        mmd,graph=build_boot_flow(self.cfg,{})
-        self.assertIn('local_sram RTL',mmd)
-        self.assertIn('boot_local_decode',mmd)
-        self.assertIn('mapped_flash',mmd)
+        self.assertEqual(bootgen.build(self.cfg)["addresses"]["sram1"], 0x11000000)
 
     def test_unimplemented_boot_policies_fail_closed(self):
         for key,bad in [('strategy','direct_sram'),('image_source','spi_nor'),

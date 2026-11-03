@@ -10,8 +10,9 @@ downloads **the pinned upstream FlooNoC commit and its Bender.lock**,
 compiles all eight generated local/global NoC structural tops via
 **Verilator 5.020**, and separately checks the **same eight tops
 and upstream file list** via the pinned **Xezim 0.11.4** binary.
-The Xezim matrix is manifest-driven (not a list of hardcoded names):
-[`run-floonoc-xezim.sh`](../scripts/run-floonoc-xezim.sh).
+Both simulator probes discover configured networks through the shared
+[YAML regression](regression.md): `python3 tools/regress.py compatibility`
+and `python3 tools/regress.py noc-verilator`.
 
 Both structural compile/elaboration stages pass for all eight NoCs.
 Those stages alone are not packet-transfer tests. The same workflow also

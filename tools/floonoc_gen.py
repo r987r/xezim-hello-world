@@ -166,8 +166,6 @@ def profiles(soc, knobs):
         if params["AtopSupport"] or params["MaxAtomicTxns"] != 0:
             raise NoCGenerationError(
                 f"{name}: ATOPs unsupported; use AtopSupport=false, MaxAtomicTxns=0")
-        idwidth = 1 if plane == "config" else (
-            soc["buses"]["data"]["id_bits"] + int(name == "global_data"))
         max_ids = 1 << (1 if plane == "config" else soc["buses"]["data"]["id_bits"])
         if params["MaxUniqueIds"] > max_ids:
             raise NoCGenerationError(f"{name}: MaxUniqueIds exceeds AXI destination ID width")
@@ -267,7 +265,6 @@ def native_bindings(top, params):
             "    chimney_cfg_t c;\n"
             "    c = ChimneyDefaultCfg;\n" + "\n".join(fields) +
             "\n    return c;\n  endfunction\n")
-    anchor = "\n"
     at = top.index(");") + 2
     # In FlooGen's structural top, this is the first module-port close.
     result = top[:at] + body + top[at:]
@@ -322,7 +319,7 @@ def generate_all(soc, knobs, out, floogen_bin="floogen"):
     index = {"generator": "upstream FlooGen", "generator_commit": FLOO_COMMIT,
              "verification": {"generation_is_not_verification": True,
                               "routed_axi_command": "make dv-supernoc",
-                              "xezim_compile_command": "bash scripts/run-floonoc-xezim.sh all"},
+                              "xezim_compile_command": "python3 tools/regress.py compatibility"},
              "networks": {}}
     for name, item in sorted(designs.items()):
         root = out / item["path"]

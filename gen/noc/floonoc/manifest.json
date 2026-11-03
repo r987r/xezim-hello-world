@@ -190,6 +190,6 @@
   "verification": {
     "generation_is_not_verification": true,
     "routed_axi_command": "make dv-supernoc",
-    "xezim_compile_command": "bash scripts/run-floonoc-xezim.sh all"
+    "xezim_compile_command": "python3 tools/regress.py compatibility"
   }
 }
