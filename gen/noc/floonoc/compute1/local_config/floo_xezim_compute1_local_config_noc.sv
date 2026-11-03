@@ -35,6 +35,15 @@ module floo_xezim_compute1_local_config_noc
     return c;
   endfunction
 
+  // EnMgrPort=0: upstream NoMgrPortRobType requires NoRoB.
+  function automatic chimney_cfg_t xezim_chimney_cfg_no_mgr();
+    chimney_cfg_t c;
+    c = xezim_chimney_cfg();
+    c.BRoBType = NoRoB;
+    c.RRoBType = NoRoB;
+    return c;
+  endfunction
+
 
 floo_req_t router_0_0_to_router_0_1_req;
 floo_rsp_t router_0_1_to_router_0_0_rsp;
@@ -90,7 +99,9 @@ floo_rsp_t router_1_1_to_global_out_ni_rsp;
 
 floo_axi_chimney  #(
   .AxiCfg(AxiCfg),
-  .ChimneyCfg(set_ports(xezim_chimney_cfg(), 1'b0, 1'b1)),
+  .AtopSupport(1'b0),
+    .MaxAtomicTxns(0),
+    .ChimneyCfg(set_ports(xezim_chimney_cfg(), 1'b0, 1'b1)),
   .RouteCfg(RouteCfg),
   .id_t(id_t),
   .rob_idx_t(rob_idx_t),
@@ -124,7 +135,9 @@ floo_axi_chimney  #(
 
 floo_axi_chimney  #(
   .AxiCfg(AxiCfg),
-  .ChimneyCfg(set_ports(xezim_chimney_cfg(), 1'b0, 1'b1)),
+  .AtopSupport(1'b0),
+    .MaxAtomicTxns(0),
+    .ChimneyCfg(set_ports(xezim_chimney_cfg(), 1'b0, 1'b1)),
   .RouteCfg(RouteCfg),
   .id_t(id_t),
   .rob_idx_t(rob_idx_t),
@@ -158,7 +171,9 @@ floo_axi_chimney  #(
 
 floo_axi_chimney  #(
   .AxiCfg(AxiCfg),
-  .ChimneyCfg(set_ports(xezim_chimney_cfg(), 1'b1, 1'b0)),
+  .AtopSupport(1'b0),
+    .MaxAtomicTxns(0),
+    .ChimneyCfg(set_ports(xezim_chimney_cfg_no_mgr(), 1'b1, 1'b0)),
   .RouteCfg(RouteCfg),
   .id_t(id_t),
   .rob_idx_t(rob_idx_t),
@@ -192,7 +207,9 @@ floo_axi_chimney  #(
 
 floo_axi_chimney  #(
   .AxiCfg(AxiCfg),
-  .ChimneyCfg(set_ports(xezim_chimney_cfg(), 1'b1, 1'b0)),
+  .AtopSupport(1'b0),
+    .MaxAtomicTxns(0),
+    .ChimneyCfg(set_ports(xezim_chimney_cfg_no_mgr(), 1'b1, 1'b0)),
   .RouteCfg(RouteCfg),
   .id_t(id_t),
   .rob_idx_t(rob_idx_t),

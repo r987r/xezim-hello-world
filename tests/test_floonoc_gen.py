@@ -71,6 +71,9 @@ class FlooNoCProfilesTest(unittest.TestCase):
                 self.assertEqual({p["addr_width"] for p in cfg["protocols"]}, {32})
                 self.assertEqual({p["id_width"] for p in cfg["protocols"]}, {1})
                 self.assertEqual({p["protocol"] for p in cfg["protocols"]}, {"AXI4"})
+                self.assertEqual(entry["native_parameters"]["MaxUniqueIds"], 2)
+                self.assertIs(entry["native_parameters"]["AtopSupport"], False)
+                self.assertEqual(entry["native_parameters"]["MaxAtomicTxns"], 0)
             else:
                 self.assertEqual({p["data_width"] for p in cfg["protocols"]}, {64})
                 self.assertEqual({p["addr_width"] for p in cfg["protocols"]}, {64})
@@ -84,6 +87,24 @@ class FlooNoCProfilesTest(unittest.TestCase):
         self.assertTrue(any(w["base"] == 0x40020000 for w in targets["compute0_regs"]["addr_range"]))
         self.assertEqual(targets["memory0_regs"]["addr_range"]["base"], 0x40030000)
 
+    def test_disable_atomic_reservation_without_reducing_id_capacity(self):
+        nocs = floonoc_gen.profiles(self.soc, self.knobs)
+        self.assertEqual(nocs["global_config"]["native_parameters"]["MaxUniqueIds"], 2)
+        self.assertEqual(nocs["global_data"]["native_parameters"]["MaxUniqueIds"], 4)
+        for name, design in nocs.items():
+            self.assertFalse(design["native_parameters"]["AtopSupport"], name)
+            self.assertEqual(design["native_parameters"]["MaxAtomicTxns"], 0, name)
+
+    def test_reject_atomic_reservations_in_non_atomic_soc(self):
+        knobs = copy.deepcopy(self.knobs)
+        knobs["fabric_parameters"]["local_config"]["MaxAtomicTxns"] = 1
+        with self.assertRaisesRegex(floonoc_gen.NoCGenerationError, "ATOPs unsupported"):
+            floonoc_gen.profiles(self.soc, knobs)
+        knobs = copy.deepcopy(self.knobs)
+        knobs["fabric_parameters"]["global_data"]["AtopSupport"] = True
+        with self.assertRaisesRegex(floonoc_gen.NoCGenerationError, "ATOPs unsupported"):
+            floonoc_gen.profiles(self.soc, knobs)
+
     def test_native_upstream_chimney_knobs_are_applied(self):
         # Simulates the exact anchor emitted by pinned upstream FlooGen.
         minimal = ("module floo_example(input logic clk);\n"
@@ -96,9 +117,40 @@ class FlooNoCProfilesTest(unittest.TestCase):
         self.assertIn("c.MaxTxns = 8;", modified)
         self.assertIn("c.MaxTxnsPerId = 9;", modified)
         self.assertIn("c.MaxUniqueIds = 4;", modified)
+        self.assertIn(".AtopSupport(1'b0)", modified)
+        self.assertIn(".MaxAtomicTxns(0)", modified)
         self.assertIn(".ChimneyCfg(set_ports(xezim_chimney_cfg(),", modified)
         with self.assertRaisesRegex(floonoc_gen.NoCGenerationError, "anchor"):
             floonoc_gen.native_bindings("module empty; endmodule", params)
+
+    def test_target_only_ni_requires_no_rob_but_preserves_manager_rob(self):
+        # This models both roles actually emitted by pinned FlooGen.
+        # Upstream floo_axi_chimney NoMgrPortRobType asserts at time zero
+        # if a target-only chimney is given NormalRoB.
+        mini = (
+            "module dual(input logic clk);\n"
+            "floo_axi_chimney #(\n"
+            " .ChimneyCfg(set_ports(ChimneyDefaultCfg, 1'b0, 1'b1))\n"
+            ") source_ni();\n"
+            "floo_axi_chimney #(\n"
+            " .ChimneyCfg(set_ports(ChimneyDefaultCfg, 1'b1, 1'b0))\n"
+            ") target_ni();\n"
+            "endmodule\n"
+        )
+        source, count = floonoc_gen.native_bindings(
+            mini, self.knobs["fabric_parameters"]["memory_local_data"])
+        self.assertEqual(count, 2)
+        self.assertIn("c.BRoBType = NormalRoB;", source)
+        self.assertIn("c.RRoBType = NormalRoB;", source)
+        self.assertIn("c.BRoBType = NoRoB;", source)
+        self.assertIn("c.RRoBType = NoRoB;", source)
+        self.assertIn(
+            ".ChimneyCfg(set_ports(xezim_chimney_cfg_no_mgr(), 1'b1, 1'b0))",
+            source)
+        self.assertIn(
+            ".ChimneyCfg(set_ports(xezim_chimney_cfg(), 1'b0, 1'b1))",
+            source)
+        self.assertEqual(source.count(".AtopSupport(1'b0)"), 2)
 
     def test_reject_upstream_power_of_two_rob_usage_counter_mismatch(self):
         knobs = copy.deepcopy(self.knobs)

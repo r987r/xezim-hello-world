@@ -1,4 +1,4 @@
-.PHONY: help gen check-generated check-config dv-memory dv-memory-negative dv-cpu dv-serv dv-sram dv-boot smoke test
+.PHONY: help gen check-generated check-config dv-memory dv-memory-negative dv-cpu dv-serv dv-sram dv-boot dv-supernoc smoke test
 
 help:
 	@echo 'make gen                Generate all tracked gen/ artifacts, FlooNoC RTL and README diagrams'
@@ -10,6 +10,7 @@ help:
 	@echo 'make dv-sram            Exercise standalone RTL SRAM ports and byte strobes'
 	@echo 'make dv-serv            Minimal standalone SERV execution (no bootloader)'
 	@echo 'make dv-boot            ROM -> flash -> SRAM -> CPU1 reset release -> real firmware'
+	@echo 'make dv-supernoc        Eight real connected FlooNoCs with upstream AXI agents (Bender prerequisite)'
 	@echo 'make test               Run checked-in generation and all RTL tests'
 
 gen:
@@ -43,6 +44,9 @@ dv-serv:
 
 dv-boot:
 	bash scripts/run-boot.sh
+
+dv-supernoc:
+	bash scripts/run-supernoc.sh
 
 smoke:
 	@$${XEZIM_BIN:-xezim} -s hello_world_tb dv/smoke/hello_world_tb.sv

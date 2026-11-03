@@ -22,6 +22,7 @@ import diagram_gen
 import bootgen
 import socgen
 import floonoc_gen
+import supernoc_gen
 
 ROOT = Path(__file__).resolve().parents[1]
 START = "<!-- BEGIN GENERATED SOC -->"
@@ -38,84 +39,63 @@ def sha(data: bytes) -> str:
 
 
 def generated_section(cfg: dict, meta: dict, diagrams: dict[str, str], nocs: dict) -> str:
+    """Only one general SoC NoC picture. RTL/port topology stays inspectable."""
     compute = [s for s in meta["subsystems"] if s["type"] == "compute"]
-    memory = [s for s in meta["subsystems"] if s["type"] == "memory"]
-    results = [
+    networks = nocs["networks"]
+    result = [
         "<!-- Do not edit this section: regenerate with `make gen`. -->",
-        "### Architecture overview — configured intent",
+        "### Whole-SoC data and configuration NoCs",
         "",
-        "The diagram below shows **logical** chip connectivity. Dashed links are **planned, not integrated RTL**; solid memory-model paths are exercised in the memory testbench.",
+        "The **single architecture diagram** below includes all local/global FlooNoCs, "
+        "compute CPU/DMA/SRAM blocks and memory target crossbar. It is generated "
+        "from the same SoC configuration and FlooGen endpoint topology as the real "
+        "structural RTL. **Dashed links show pending full-SoC endpoint integration.** "
+        "Cross-NoC links are connected separately in the generated NoC BFM testbench.",
         "",
-        "[![Generated SoC architecture — PicoRV32, SERV, two global fabrics, HBM and DDR](gen/diagrams/architecture.svg)](gen/diagrams/architecture.svg)",
-        "", "[Full-size image](gen/diagrams/architecture.svg) · [Mermaid source](gen/diagrams/architecture.mmd) · [Detailed view](gen/diagrams/architecture.md)", "",
-        "### Entire SoC NoC hierarchy — all local and global FlooNoCs",
+        "[![Complete hierarchical SoC and all data/config FlooNoCs](gen/diagrams/noc-hierarchy.svg)](gen/diagrams/noc-hierarchy.svg)",
         "",
-        "This overview comes from **the actual eight checked-in upstream FlooGen topology configurations**: routers, AXI network interfaces, endpoint placement and memory/compute links. Each mesh is real generated structural SystemVerilog; **dashed lines between different NoCs and CPU/DMA/CSR endpoints are not yet integrated RTL**. Green crossbar links are independently verified only in the standalone memory testbench.",
+        "[Full-size diagram](gen/diagrams/noc-hierarchy.svg) · "
+        "[Editable Mermaid](gen/diagrams/noc-hierarchy.mmd) · "
+        "[Machine-readable router/NI/link graph](gen/diagrams/noc-topology.json) · "
+        "[Real generated FlooNoC RTL](gen/noc/floonoc/manifest.json)",
         "",
-        "[![Generated whole-chip data and config FlooNoC hierarchy with compute and memory subsystems](gen/diagrams/noc-hierarchy.svg)](gen/diagrams/noc-hierarchy.svg)",
-        "", "[Full-size NoC hierarchy](gen/diagrams/noc-hierarchy.svg) · [Mermaid overview](gen/diagrams/noc-hierarchy.mmd) · [Diagram-gen-compatible physical router/link metadata](gen/diagrams/noc-topology.json) · [Network manifest](gen/noc/floonoc/manifest.json)", "",
-        "Each NoC also has an individual **physical XY router mesh diagram** derived directly from its own generated FlooGen YAML.",
+        f"**Configured topology:** {len(compute)} compute subsystems, "
+        f"{len(networks)} independent FlooNoC instances, "
+        f"{sum(x['routers'] for x in networks.values())} total generated routers. "
+        f"Data: {meta['data_bits']}-bit AXI4; control: "
+        f"{cfg['buses']['config']['data_bits']}-bit AXI4 transport "
+        "for planned AXI4-Lite endpoint bridges. Those upstream adapters "
+        "are not attached in the NoC BFM test.",
         "",
-        "### Executable RTL connectivity — memory testbench",
+        "**Verification truth:** Xezim exercises separate CPU cold-boot/SRAM and "
+        "Verilog-AXI memory testbenches. Both Xezim and Verilator have compiled "
+        "the eight structural FlooNoCs. The unified `make dv-supernoc` regression "
+        "connects all meshes to upstream AXI agents and checks destinations, data, "
+        "bursts, concurrent IDs, stalls and downstream SLVERR. Xezim NoC traffic "
+        "is not verified. See [test scope and results](docs/supernoc-verification.md).",
         "",
-        "This is the wiring generated in `gen/memory/memory_tb.sv`: two AXI4 master BFMs, the real open-source AXI crossbar, two AXI memory models, and a passive route monitor. It is **not** a full-chip elaboration.",
+        "### Generated NoC sources (no duplicate pictures)",
         "",
-        "[![Executable 2x2 AXI RTL connectivity diagram with BFMs and HBM/DDR models](gen/diagrams/rtl-connectivity.svg)](gen/diagrams/rtl-connectivity.svg)",
-        "", "[Full-size image](gen/diagrams/rtl-connectivity.svg) · [Mermaid source](gen/diagrams/rtl-connectivity.mmd) · [Detailed view](gen/diagrams/rtl-connectivity.md)", "",
-        "### Cold-boot flow — CPU0 programs SRAM and releases CPU1",
-        "",
-        "Unlike the fetch-only smoke test, this scope **executes real RISC-V code**: CPU0 fetches immutable ROM, reads a flash image, writes two initially blank SRAMs via AXI-Lite, releases SERV via an MMIO reset bit, then both cores write a completion signature. Flash is a memory-mapped simulation model, not SPI/QSPI controller RTL. This is a scoped boot test, **not full-chip NoC integration**.",
-        "",
-        "[![Generated cold-boot ROM to flash to SRAM flow](gen/diagrams/boot.svg)](gen/diagrams/boot.svg)",
-        "", "[Full-size image](gen/diagrams/boot.svg) · [Mermaid source](gen/diagrams/boot.mmd) · [Boot firmware disassembly](gen/boot/bootrom.lst)", "",
-        "### Hierarchical verification plan",
-        "",
-        "Green scope boxes are **implemented testbenches**, not a claim that the entire SoC was simulated. Grey scope boxes are planned; CI separately determines whether executable scopes pass.",
-        "",
-        "[![Generated SoC verification hierarchy, implemented versus planned scopes](gen/diagrams/verification.svg)](gen/diagrams/verification.svg)",
-        "", "[Full-size image](gen/diagrams/verification.svg) · [Mermaid source](gen/diagrams/verification.mmd) · [Detailed view](gen/diagrams/verification.md)", "",
-        "### Generated architecture reference", "",
-        f'- **Subsystems:** {len(compute)} compute, {len(memory)} memory; **data:** AXI4 {meta["data_bits"]}-bit, {meta["address_bits"]}-bit addressing; **config:** AXI4-Lite {cfg["buses"]["config"]["data_bits"]}-bit.',
-        f'- **Global data NoC:** {cfg["fabrics"]["global_data"]["backend"]} / {cfg["fabrics"]["global_data"]["topology"]} (generated structural RTL; no routed traffic test).',
-        f'- **Global config NoC:** {cfg["fabrics"]["global_config"]["backend"]} / {cfg["fabrics"]["global_config"]["topology"]} (generated structural RTL; no routed CSR traffic test).',
-        f'- **Local memory crossbar:** {cfg["fabrics"]["memory_data"]["backend"]}; {meta["ingress"]} ingress × {len(meta["targets"])} targets (executable RTL testbench).',
-        "", "| Subsystem | CPU | CPU bus/adapter | DMA | Detailed 2D diagram |", "| --- | --- | --- | --- | --- |",
+        "| Network | Routers | Generated top | Config |",
+        "| --- | ---: | --- | --- |",
     ]
-    for inst in compute:
-        cpu = inst["cpu"]
-        results.append(f'| `{inst["name"]}` | `{cpu["ip"]}` | `{cpu["bus"]}` / `{cpu["adapter"]}` | `{meta["common_dma"]}` (planned RTL integration) | [View](gen/diagrams/subsystems/{inst["name"]}.md) |')
-    results += ["", "| Memory target | Kind | Selected controller | Simulated implementation | Global address window |", "| --- | --- | --- | --- | --- |"]
-    for t in meta["targets"]:
-        results.append(f'| `{t["name"]}` | {t["kind"].upper()} | `{t["controller"]}` (not integrated) | `{t["sim_backend"]}` | `0x{t["base"]:x}` / `0x{t["size"]:x}` |')
-    results += ["", "| Configuration target | Base address | Size |", "| --- | --- | --- |"]
-    for r in meta["config_regions"]:
-        results.append(f'| `{r["name"]}` | `0x{r["base"]:x}` | `0x{r["size"]:x}` |')
-    results += ["", "| Global output | Configured target | Memory ingress |", "| --- | --- | --- |"]
-    for i, output in enumerate(meta["global_data_outputs"]):
-        results.append(f'| `{output["name"]}` | `{output["target"]}` | `{i}` |')
-    results += ["", "| Verification scope | Status | Entry point |", "| --- | --- | --- |"]
-    for scope in cfg["verification"]["scopes"]:
-        results.append(f'| `{scope["name"]}` | {scope["status"]} | `{scope.get("command", "not implemented")}` |')
-    results += ["", "### Checked-in upstream FlooNoC structural RTL", "",
-                "Every local and global data/config NoC below has an **actual generated SystemVerilog module and package** committed under `gen/noc/floonoc/`. These instantiate upstream FlooNoC routers/chimneys; RTL elaboration and end-to-end AXI traffic are **not yet verified**.",
-                "",
-                "| Generated NoC | Routers | Mesh diagram | Structural Verilog | Package | FlooGen inputs |",
-                "| --- | ---: | --- | --- | --- | --- |"]
-    for name, entry in sorted(nocs["networks"].items()):
+    for name, entry in sorted(networks.items()):
         base = "gen/noc/floonoc/"
-        results.append(
+        result.append(
             f'| `{name}` | {entry["routers"]} | '
-            f'[topology](gen/diagrams/noc/{name}.svg) | '
-            f'[top]({base + entry["top"]}) | '
-            f'[package]({base + entry["package"]}) | '
-            f'[generated config]({base + entry["config"]}) |'
+            f'[SystemVerilog]({base + entry["top"]}) | '
+            f'[FlooGen YAML]({base + entry["config"]}) |'
         )
-    results += [
-        "", "**Boot images:** [Boot ROM](gen/boot/bootrom.hex) · [flash image](gen/boot/flash.hex) · [boot register/memory manifest](gen/boot/manifest.json).",
-        "", "**Explore generated artifacts:** [NoC intermediate representation](gen/noc/fabric_ir.json) · [RTL connection metadata](gen/diagrams/graphs.json) · [verification plan](gen/verification/plan.json) · [route matrix](gen/verification/routes.json) · [memory testbench](gen/memory/memory_tb.sv) · [generated manifest](gen/manifest.json).",
-        "", "**Detailed subsystem diagrams:** " + " · ".join(f'[{s["name"]}](gen/diagrams/subsystems/{s["name"]}.md)' for s in meta["subsystems"]) + ".",
+    result += [
+        "",
+        "**Validation and generated metadata:** "
+        "[NoC interface budgets](config/interface_contracts.yaml) · "
+        "[routing IR](gen/noc/fabric_ir.json) · "
+        "[memory testbench](gen/memory/memory_tb.sv) · "
+        "[verification plan](gen/verification/plan.json) · "
+        "[generated tree manifest](gen/manifest.json).",
     ]
-    return "\n".join(results).rstrip() + "\n"
+    return "\n".join(result).rstrip() + "\n"
 
 
 def embed(readme: str, body: str) -> str:
@@ -178,6 +158,7 @@ def build(cfg_path: Path, out: Path, readme: Path) -> str:
     # checked-in RTL alongside all diagrams and the generated NoC IR.
     knobs = yaml.safe_load((ROOT / "config/interface_contracts.yaml").read_text())
     nocs = floonoc_gen.generate_all(cfg, knobs, out / "noc" / "floonoc")
+    supernoc_gen.emit(cfg, out / "noc" / "floonoc", out / "supernoc" / "supernoc_tb.sv")
     diagrams = diagram_gen.render(cfg, meta, out / "diagrams", out / "noc" / "floonoc")
     dump(out / "verification" / "plan.json", verification_plan(cfg, meta))
     dump(out / "verification" / "routes.json", route_matrix(meta))
@@ -186,8 +167,10 @@ def build(cfg_path: Path, out: Path, readme: Path) -> str:
         "from `config/soc.yaml`. All output files are version-controlled for diffs.\n\n"
         "The `memory/` SystemVerilog and `boot/` firmware images are executable "
         "in separate scoped testbenches. All configured local/global FlooNoC "
-        "networks have checked-in structural SystemVerilog in noc/floonoc; "
-        "compilation and end-to-end traffic remain unverified.\n"
+        "networks have checked-in structural SystemVerilog in noc/floonoc. "
+        "supernoc/supernoc_tb.sv connects them with upstream AXI BFMs; run "
+        "make dv-supernoc for current-source routed-traffic verification. "
+        "CPU, DMA, AXI-Lite bridges and physical controllers are separate integration work.\n"
     )
     (out / STAMP).write_text("socgen-v2\n")
     files = {p.relative_to(out).as_posix(): sha(p.read_bytes())

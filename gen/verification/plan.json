@@ -114,6 +114,22 @@
     },
     {
       "checks": [
+        "all_eight_meshes",
+        "intended_destinations",
+        "every_mapped_window",
+        "concurrent_ids",
+        "bursts",
+        "byte_strobes",
+        "channel_stalls",
+        "downstream_slverr"
+      ],
+      "command": "make dv-supernoc",
+      "dut": "supernoc_tb",
+      "name": "supernoc_bfm",
+      "status": "executable"
+    },
+    {
+      "checks": [
         "cpu_dma_hbm_ddr",
         "interrupts",
         "congestion"

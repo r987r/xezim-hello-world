@@ -143,27 +143,21 @@ class SocConfigTest(unittest.TestCase):
         meta = socgen.validate(copy.deepcopy(self.base))
         with tempfile.TemporaryDirectory() as tmp:
             diagrams = diagram_gen.render(copy.deepcopy(self.base), meta, Path(tmp) / "diagrams", ROOT / "gen/noc/floonoc")
-            for name in ("architecture", "rtl-connectivity", "verification", "boot", "noc-hierarchy"):
+            for name in ("noc-hierarchy",):
                 self.assertIn("flowchart", diagrams[name])
                 self.assertTrue((Path(tmp)/"diagrams"/f"{name}.mmd").is_file())
-            self.assertIn("picorv32", diagrams["architecture"])
-            self.assertIn("memory0.hbm0", diagrams["architecture"])
-            self.assertIn("memory_tb", diagrams["rtl-connectivity"])
-            self.assertIn("memory_fabric", diagrams["verification"])
-            self.assertIn("subsystems/compute0", diagrams)
-            self.assertIn("subsystems/compute1", diagrams)
-            self.assertIn("subsystems/memory0", diagrams)
+            self.assertIn("picorv32", diagrams["noc-hierarchy"])
+            self.assertIn("memory0_hbm0", diagrams["noc-hierarchy"])
+            self.assertIn("global_data", diagrams["noc-hierarchy"])
+            self.assertIn("global_config", diagrams["noc-hierarchy"])
             for name in diagrams:
                 image_path = Path(tmp) / "diagrams" / f"{name}.svg"
                 self.assertTrue(image_path.is_file(), image_path)
                 self.assertEqual(ET.parse(image_path).getroot().tag,
                                  "{http://www.w3.org/2000/svg}svg")
-                self.assertIn(f"{Path(name).name}.svg", (Path(tmp)/"diagrams"/f"{name}.md").read_text())
+                self.assertFalse((Path(tmp)/"diagrams"/f"{name}.md").exists())
             graphs = json.loads((Path(tmp)/"diagrams"/"graphs.json").read_text())
-            for section in ("architecture", "rtl_connectivity"):
-                nodes = {n["id"] for n in graphs[section]["nodes"]}
-                self.assertTrue(all(e["from"] in nodes and e["to"] in nodes
-                                    for e in graphs[section]["connections"]))
+            self.assertEqual(set(graphs), {"noc_hierarchy"})
             self.assertIn(generate.START, (ROOT/"README.md").read_text())
             self.assertIn(generate.END, (ROOT/"README.md").read_text())
 
@@ -171,13 +165,13 @@ class SocConfigTest(unittest.TestCase):
         readme = (ROOT / "README.md").read_text()
         section = readme.split(generate.START, 1)[1].split(generate.END, 1)[0]
         image_paths = re.findall(r"!\[[^]]+\]\((gen/diagrams/[^)]+\.svg)\)", section)
-        self.assertEqual(len(image_paths), 5)
+        self.assertEqual(len(image_paths), 1)
         for relative in image_paths:
             path = ROOT / relative
             self.assertTrue(path.is_file(), f"missing README image {relative}")
             self.assertEqual(ET.parse(path).getroot().tag,
                              "{http://www.w3.org/2000/svg}svg")
-        for name in ("architecture", "rtl-connectivity", "verification", "boot"):
+        for name in ("noc-hierarchy",):
             self.assertIn(f"gen/diagrams/{name}.svg", image_paths)
             self.assertTrue((ROOT / "gen" / "diagrams" / f"{name}.mmd").is_file())
 
@@ -219,15 +213,17 @@ class SocConfigTest(unittest.TestCase):
                 "name": "compute2.dma", "base": "0x40040000", "size": "0x10000"})
             cfg_path.write_text(yaml.safe_dump(doc,sort_keys=False))
             self.assertEqual(generate.execute(cfg_path,out,readme),0)
-            extra = out/"diagrams"/"subsystems"/"compute2.mmd"
+            extra = out/"noc"/"floonoc"/"compute2"/"local_data"/"floogen.yaml"
             self.assertTrue(extra.exists())
-            extra_svg = out / "diagrams" / "subsystems" / "compute2.svg"
+            extra_svg = out / "diagrams" / "noc-hierarchy.svg"
             self.assertTrue(extra_svg.exists())
+            self.assertIn("compute2", extra_svg.read_text())
             cfg_path.write_text(yaml.safe_dump(self.base,sort_keys=False))
             self.assertEqual(generate.execute(cfg_path,out,readme,check=True),1)
             self.assertEqual(generate.execute(cfg_path,out,readme),0)
             self.assertFalse(extra.exists())
-            self.assertFalse(extra_svg.exists())
+            self.assertTrue(extra_svg.exists())
+            self.assertNotIn("compute2", extra_svg.read_text())
             self.assertEqual(generate.execute(cfg_path,out,readme,check=True),0)
 
     def test_unmarked_gen_tree_is_protected(self):

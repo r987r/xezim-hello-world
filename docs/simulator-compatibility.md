@@ -13,10 +13,12 @@ and upstream file list** via the pinned **Xezim 0.11.4** binary.
 The Xezim matrix is manifest-driven (not a list of hardcoded names):
 [`run-floonoc-xezim.sh`](../scripts/run-floonoc-xezim.sh).
 
-Both compile/elaboration pipelines return success on the initial eight
-NoCs. These are **not** packet-transfer simulation tests. Neither a
-successful compile nor a green default CI job proves the NoC has
-preserved IDs, backpressure, read/write ordering, or correct destination.
+Both structural compile/elaboration stages pass for all eight NoCs.
+Those stages alone are not packet-transfer tests. The same workflow also
+runs the separate connected NoC traffic and corruption checks in Verilator. The separate [super-NoC test](supernoc-verification.md) now
+runs real routed traffic in Verilator, including concurrent IDs, stalls,
+bursts, destinations and downstream SLVERR. Xezim's NoC path remains
+compile-only; no equivalent Xezim routed-traffic pass is claimed.
 
 ## Warnings that must not be hidden
 
@@ -71,9 +73,9 @@ this guard or suppress the error silently.
 
 ## Follow-up verification within subsystem-level testbenches
 
-- Simulate the real global data and config FlooNoCs with upstream AXI
-  stimulus and real read/write data/response checks, using the same
-  pinned generated RTL in Verilator and Xezim when feasible.
+- Preserve the passing Verilator connected-NoC regression; establish an
+  equivalent Xezim routed-traffic path on the same pinned RTL before
+  claiming cross-simulator functional agreement.
 - Connect local FlooNoCs with actual upstream PULP AXI4-Lite converters,
   CPU, iDMA and SRAM endpoints. No custom AXI-lite NoC or new router
   implementation and **no per-bridge/per-router TB proliferation**.

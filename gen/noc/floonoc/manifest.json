@@ -6,8 +6,10 @@
       "config": "compute0/local_config/floogen.yaml",
       "endpoint_count": 5,
       "native_parameters": {
+        "AtopSupport": false,
         "BRoBSize": 2,
         "BRoBType": "NoRoB",
+        "MaxAtomicTxns": 0,
         "MaxTxns": 2,
         "MaxTxnsPerId": 3,
         "MaxUniqueIds": 2,
@@ -18,7 +20,7 @@
       "package": "compute0/local_config/floo_xezim_compute0_local_config_noc_pkg.sv",
       "plane": "config",
       "routers": 6,
-      "status": "real_upstream_structural_RTL_not_elaborated",
+      "status": "real_upstream_structural_RTL",
       "subdirectory": "compute0/local_config",
       "top": "compute0/local_config/floo_xezim_compute0_local_config_noc.sv",
       "top_module": "floo_xezim_compute0_local_config_noc"
@@ -27,8 +29,10 @@
       "config": "compute0/local_data/floogen.yaml",
       "endpoint_count": 7,
       "native_parameters": {
+        "AtopSupport": false,
         "BRoBSize": 8,
         "BRoBType": "NormalRoB",
+        "MaxAtomicTxns": 0,
         "MaxTxns": 8,
         "MaxTxnsPerId": 9,
         "MaxUniqueIds": 4,
@@ -39,7 +43,7 @@
       "package": "compute0/local_data/floo_xezim_compute0_local_data_noc_pkg.sv",
       "plane": "data",
       "routers": 9,
-      "status": "real_upstream_structural_RTL_not_elaborated",
+      "status": "real_upstream_structural_RTL",
       "subdirectory": "compute0/local_data",
       "top": "compute0/local_data/floo_xezim_compute0_local_data_noc.sv",
       "top_module": "floo_xezim_compute0_local_data_noc"
@@ -48,8 +52,10 @@
       "config": "compute1/local_config/floogen.yaml",
       "endpoint_count": 4,
       "native_parameters": {
+        "AtopSupport": false,
         "BRoBSize": 2,
         "BRoBType": "NoRoB",
+        "MaxAtomicTxns": 0,
         "MaxTxns": 2,
         "MaxTxnsPerId": 3,
         "MaxUniqueIds": 2,
@@ -60,7 +66,7 @@
       "package": "compute1/local_config/floo_xezim_compute1_local_config_noc_pkg.sv",
       "plane": "config",
       "routers": 4,
-      "status": "real_upstream_structural_RTL_not_elaborated",
+      "status": "real_upstream_structural_RTL",
       "subdirectory": "compute1/local_config",
       "top": "compute1/local_config/floo_xezim_compute1_local_config_noc.sv",
       "top_module": "floo_xezim_compute1_local_config_noc"
@@ -69,8 +75,10 @@
       "config": "compute1/local_data/floogen.yaml",
       "endpoint_count": 5,
       "native_parameters": {
+        "AtopSupport": false,
         "BRoBSize": 8,
         "BRoBType": "NormalRoB",
+        "MaxAtomicTxns": 0,
         "MaxTxns": 8,
         "MaxTxnsPerId": 9,
         "MaxUniqueIds": 4,
@@ -81,7 +89,7 @@
       "package": "compute1/local_data/floo_xezim_compute1_local_data_noc_pkg.sv",
       "plane": "data",
       "routers": 6,
-      "status": "real_upstream_structural_RTL_not_elaborated",
+      "status": "real_upstream_structural_RTL",
       "subdirectory": "compute1/local_data",
       "top": "compute1/local_data/floo_xezim_compute1_local_data_noc.sv",
       "top_module": "floo_xezim_compute1_local_data_noc"
@@ -90,8 +98,10 @@
       "config": "global_config/floogen.yaml",
       "endpoint_count": 5,
       "native_parameters": {
+        "AtopSupport": false,
         "BRoBSize": 2,
         "BRoBType": "NoRoB",
+        "MaxAtomicTxns": 0,
         "MaxTxns": 2,
         "MaxTxnsPerId": 3,
         "MaxUniqueIds": 2,
@@ -102,7 +112,7 @@
       "package": "global_config/floo_xezim_global_config_noc_pkg.sv",
       "plane": "config",
       "routers": 6,
-      "status": "real_upstream_structural_RTL_not_elaborated",
+      "status": "real_upstream_structural_RTL",
       "subdirectory": "global_config",
       "top": "global_config/floo_xezim_global_config_noc.sv",
       "top_module": "floo_xezim_global_config_noc"
@@ -111,8 +121,10 @@
       "config": "global_data/floogen.yaml",
       "endpoint_count": 6,
       "native_parameters": {
+        "AtopSupport": false,
         "BRoBSize": 8,
         "BRoBType": "NormalRoB",
+        "MaxAtomicTxns": 0,
         "MaxTxns": 8,
         "MaxTxnsPerId": 9,
         "MaxUniqueIds": 4,
@@ -123,7 +135,7 @@
       "package": "global_data/floo_xezim_global_data_noc_pkg.sv",
       "plane": "data",
       "routers": 6,
-      "status": "real_upstream_structural_RTL_not_elaborated",
+      "status": "real_upstream_structural_RTL",
       "subdirectory": "global_data",
       "top": "global_data/floo_xezim_global_data_noc.sv",
       "top_module": "floo_xezim_global_data_noc"
@@ -132,8 +144,10 @@
       "config": "memory0/local_config/floogen.yaml",
       "endpoint_count": 2,
       "native_parameters": {
+        "AtopSupport": false,
         "BRoBSize": 2,
         "BRoBType": "NoRoB",
+        "MaxAtomicTxns": 0,
         "MaxTxns": 2,
         "MaxTxnsPerId": 3,
         "MaxUniqueIds": 2,
@@ -144,7 +158,7 @@
       "package": "memory0/local_config/floo_xezim_memory0_local_config_noc_pkg.sv",
       "plane": "config",
       "routers": 2,
-      "status": "real_upstream_structural_RTL_not_elaborated",
+      "status": "real_upstream_structural_RTL",
       "subdirectory": "memory0/local_config",
       "top": "memory0/local_config/floo_xezim_memory0_local_config_noc.sv",
       "top_module": "floo_xezim_memory0_local_config_noc"
@@ -153,8 +167,10 @@
       "config": "memory0/local_data/floogen.yaml",
       "endpoint_count": 3,
       "native_parameters": {
+        "AtopSupport": false,
         "BRoBSize": 8,
         "BRoBType": "NormalRoB",
+        "MaxAtomicTxns": 0,
         "MaxTxns": 8,
         "MaxTxnsPerId": 9,
         "MaxUniqueIds": 4,
@@ -165,12 +181,15 @@
       "package": "memory0/local_data/floo_xezim_memory0_local_data_noc_pkg.sv",
       "plane": "data",
       "routers": 4,
-      "status": "real_upstream_structural_RTL_not_elaborated",
+      "status": "real_upstream_structural_RTL",
       "subdirectory": "memory0/local_data",
       "top": "memory0/local_data/floo_xezim_memory0_local_data_noc.sv",
       "top_module": "floo_xezim_memory0_local_data_noc"
     }
   },
-  "real_axi_traffic_verified": false,
-  "real_rtl_elaborated": false
+  "verification": {
+    "generation_is_not_verification": true,
+    "routed_axi_command": "make dv-supernoc",
+    "xezim_compile_command": "bash scripts/run-floonoc-xezim.sh all"
+  }
 }

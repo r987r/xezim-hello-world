@@ -23,7 +23,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 FLOO_COMMIT = yaml.safe_load((ROOT / "config/ip.lock.yaml").read_text())["third_party"]["floonoc"]["commit"]
-NATIVE = {"MaxTxns", "MaxTxnsPerId", "MaxUniqueIds", "RRoBType", "BRoBType",
+NATIVE = {"MaxTxns", "MaxTxnsPerId", "MaxUniqueIds", "AtopSupport", "MaxAtomicTxns", "RRoBType", "BRoBType",
           "RRoBSize", "BRoBSize"}
 ROBS = {"NoRoB", "SimpleRoB", "NormalRoB"}
 
@@ -59,7 +59,8 @@ def profile(name, plane, mgrs, targets, soc, knobs):
         out_id = bus["id_bits"]
         if name == "global_data":
             in_id += (2 - 1).bit_length()  # CPU and DMA behind local compute NoC
-        elif name.endswith("_local_data") and name != "memory0_local_data":
+        elif name.endswith("_local_data") and name not in {
+                s["name"] + "_local_data" for s in soc["subsystems"] if s["type"] == "memory"}:
             out_id += (2 - 1).bit_length()
     else:
         # AXI-Lite signals are converted at the boundary to AXI4, one beat.
@@ -130,7 +131,7 @@ def profiles(soc, knobs):
             raise NoCGenerationError(f"memory NoC output {m['name']} has unknown destination")
     cfg_owned = {c: [] for c in computes + memories}
     for name, addr in regions_config.items():
-        owner = "compute0" if name.startswith("boot.") else name.split(".")[0]
+        owner = soc["boot"]["primary"] if name.startswith("boot.") else name.split(".")[0]
         if owner not in cfg_owned:
             raise NoCGenerationError(f"config window {name} has no subsystem owner")
         cfg_owned[owner].append(addr)
@@ -150,8 +151,26 @@ def profiles(soc, knobs):
             if k.endswith("Type"):
                 if v not in ROBS:
                     raise NoCGenerationError(f"unsupported FlooNoC reorder type {v}")
+            elif k == "AtopSupport":
+                if type(v) is not bool:
+                    raise NoCGenerationError(f"{family}.AtopSupport must be bool")
+            elif k == "MaxAtomicTxns":
+                if type(v) is not int or not 0 <= v <= 256:
+                    raise NoCGenerationError(f"{family}.MaxAtomicTxns must be 0..256")
             else:
                 integer(v, f"{family}.{k}")
+        # The selected interfaces do not issue AXI ATOPs. The pinned
+        # upstream floo_meta_buffer requires MaxAtomicTxns=0 whenever
+        # AtopSupport is disabled (NoAtomicTxns assertion). Keep a full
+        # non-atomic ID namespace instead of silently reducing MaxUniqueIds.
+        if params["AtopSupport"] or params["MaxAtomicTxns"] != 0:
+            raise NoCGenerationError(
+                f"{name}: ATOPs unsupported; use AtopSupport=false, MaxAtomicTxns=0")
+        idwidth = 1 if plane == "config" else (
+            soc["buses"]["data"]["id_bits"] + int(name == "global_data"))
+        max_ids = 1 << (1 if plane == "config" else soc["buses"]["data"]["id_bits"])
+        if params["MaxUniqueIds"] > max_ids:
+            raise NoCGenerationError(f"{name}: MaxUniqueIds exceeds AXI destination ID width")
         # The pinned upstream floo_rob_status_table declares the usage
         # counter as clog2(MaxTxnsPerId), while cc_fifo exports
         # clog2(Depth+1). Power-of-two depths break its instance-array
@@ -252,16 +271,58 @@ def native_bindings(top, params):
     at = top.index(");") + 2
     # In FlooGen's structural top, this is the first module-port close.
     result = top[:at] + body + top[at:]
-    result = result.replace(search, ".ChimneyCfg(set_ports(xezim_chimney_cfg(),")
-    if result.count(".ChimneyCfg(set_ports(xezim_chimney_cfg(),") != count:
-        raise NoCGenerationError("not every chimney received native knobs")
+    replacement = (
+        f".AtopSupport(1'b{1 if params['AtopSupport'] else 0}),\n"
+        f"    .MaxAtomicTxns({params['MaxAtomicTxns']}),\n"
+        "    .ChimneyCfg(set_ports(xezim_chimney_cfg(),"
+    )
+    result = result.replace(search, replacement)
+    # Upstream floo_pkg::set_ports(cfg, en_sbr, en_mgr) declares
+    # manager_port=0 for target-only NIs. floo_axi_chimney asserts
+    # NoMgrPortRobType if either RoB is enabled on such a port.
+    # Keep the configured RoBs on initiator NIs, but use NoRoB on
+    # target-only NIs. No custom router, AXI BFM, or upstream patch.
+    role_target = ".ChimneyCfg(set_ports(xezim_chimney_cfg(), 1'b1, 1'b0))"
+    role_source = ".ChimneyCfg(set_ports(xezim_chimney_cfg(), 1'b0, 1'b1))"
+    target_count = result.count(role_target)
+    source_count = result.count(role_source)
+    if source_count + target_count != count:
+        raise NoCGenerationError(
+            "FlooGen NI port roles changed: expected sbr-only or mgr-only chimney")
+    if target_count:
+        role_body = (
+            "\n  // EnMgrPort=0: upstream NoMgrPortRobType requires NoRoB.\n"
+            "  function automatic chimney_cfg_t xezim_chimney_cfg_no_mgr();\n"
+            "    chimney_cfg_t c;\n"
+            "    c = xezim_chimney_cfg();\n"
+            "    c.BRoBType = NoRoB;\n"
+            "    c.RRoBType = NoRoB;\n"
+            "    return c;\n"
+            "  endfunction\n"
+        )
+        # Append the target-only cfg function after the shared function.
+        tail = "    return c;\n  endfunction\n"
+        if result.count(tail) != 1:
+            raise NoCGenerationError("generated native config function anchor changed")
+        result = result.replace(tail, tail + role_body, 1)
+        result = result.replace(
+            role_target,
+            ".ChimneyCfg(set_ports(xezim_chimney_cfg_no_mgr(), 1'b1, 1'b0))"
+        )
+    if (result.count(".ChimneyCfg(set_ports(xezim_chimney_cfg(),") != source_count or
+            result.count(".ChimneyCfg(set_ports(xezim_chimney_cfg_no_mgr(),") != target_count or
+            result.count(".AtopSupport(1'b0)") != count or
+            result.count(".MaxAtomicTxns(0)") != count):
+        raise NoCGenerationError("not every chimney received role-correct native knobs")
     return result, count
 
 
 def generate_all(soc, knobs, out, floogen_bin="floogen"):
     designs = profiles(soc, knobs)
     index = {"generator": "upstream FlooGen", "generator_commit": FLOO_COMMIT,
-             "real_rtl_elaborated": False, "real_axi_traffic_verified": False,
+             "verification": {"generation_is_not_verification": True,
+                              "routed_axi_command": "make dv-supernoc",
+                              "xezim_compile_command": "bash scripts/run-floonoc-xezim.sh all"},
              "networks": {}}
     for name, item in sorted(designs.items()):
         root = out / item["path"]
@@ -291,7 +352,7 @@ def generate_all(soc, knobs, out, floogen_bin="floogen"):
             "endpoint_count": len(item["config"]["endpoints"]),
             "network_interfaces_with_native_knobs": num_nis,
             "native_parameters": item["native_parameters"],
-            "status": "real_upstream_structural_RTL_not_elaborated",
+            "status": "real_upstream_structural_RTL",
         }
     (out / "manifest.json").write_text(json.dumps(index, indent=2, sort_keys=True) + "\n")
     return index

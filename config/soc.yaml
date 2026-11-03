@@ -99,7 +99,7 @@ verification:
     ingress_master_agents: 2
     model_address_bits: 16
     burst_beats: 4
-  # Scope names and statuses feed the generated test plan and 2D DV diagrams.
+  # Scope names and statuses feed the generated test plan.
   # "executable" means its standalone RTL check exists, not that full-chip
   # wiring or real memory controller/PHY is integrated.
   scopes:
@@ -141,6 +141,11 @@ verification:
       dut: global_data+global_config
       status: planned
       checks: [routes, ordering, separate_control_traffic]
+    - name: supernoc_bfm
+      dut: supernoc_tb
+      status: executable
+      command: make dv-supernoc
+      checks: [all_eight_meshes, intended_destinations, every_mapped_window, concurrent_ids, bursts, byte_strobes, channel_stalls, downstream_slverr]
     - name: full_chip
       dut: soc_top
       status: planned

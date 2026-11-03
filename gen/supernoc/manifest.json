@@ -1,0 +1,546 @@
+{
+  "connections": [
+    {
+      "from": "compute0_local_data.global_out",
+      "to": "global_data.compute0"
+    },
+    {
+      "from": "global_data.compute0_sram",
+      "to": "compute0_local_data.global_in"
+    },
+    {
+      "from": "compute0_local_config.global_out",
+      "to": "global_config.compute0"
+    },
+    {
+      "from": "global_config.compute0_regs",
+      "to": "compute0_local_config.global_in"
+    },
+    {
+      "from": "compute1_local_data.global_out",
+      "to": "global_data.compute1"
+    },
+    {
+      "from": "global_data.compute1_sram",
+      "to": "compute1_local_data.global_in"
+    },
+    {
+      "from": "compute1_local_config.global_out",
+      "to": "global_config.compute1"
+    },
+    {
+      "from": "global_config.compute1_regs",
+      "to": "compute1_local_config.global_in"
+    },
+    {
+      "from": "global_data.memory_ingress0",
+      "to": "memory0_local_data.memory_ingress0"
+    },
+    {
+      "from": "global_data.memory_ingress1",
+      "to": "memory0_local_data.memory_ingress1"
+    },
+    {
+      "from": "global_config.memory0_regs",
+      "to": "memory0_local_config.global_in"
+    }
+  ],
+  "links": 11,
+  "masters": [
+    {
+      "addr_width": 32,
+      "data_width": 32,
+      "endpoint": "cpu",
+      "id_width": 1,
+      "name": "m_compute0_local_config_cpu",
+      "network": "compute0_local_config",
+      "plane": "config",
+      "regions": [
+        {
+          "access": "read_write",
+          "base": 1073741824,
+          "destination": "s_compute0_local_config_dma_regs",
+          "networks": [
+            "compute0_local_config"
+          ],
+          "size": 65536
+        },
+        {
+          "access": "read_write",
+          "base": 1073807360,
+          "destination": "s_compute1_local_config_dma_regs",
+          "networks": [
+            "compute0_local_config",
+            "global_config",
+            "compute1_local_config"
+          ],
+          "size": 65536
+        },
+        {
+          "access": "read_write",
+          "base": 1073872896,
+          "destination": "s_compute0_local_config_reset_ctrl",
+          "networks": [
+            "compute0_local_config"
+          ],
+          "size": 4096
+        },
+        {
+          "access": "read_write",
+          "base": 1073938432,
+          "destination": "s_memory0_local_config_controller_regs",
+          "networks": [
+            "compute0_local_config",
+            "global_config",
+            "memory0_local_config"
+          ],
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "addr_width": 64,
+      "data_width": 64,
+      "endpoint": "cpu",
+      "id_width": 4,
+      "name": "m_compute0_local_data_cpu",
+      "network": "compute0_local_data",
+      "plane": "data",
+      "regions": [
+        {
+          "access": "read",
+          "base": 0,
+          "destination": "s_compute0_local_data_boot_rom",
+          "networks": [
+            "compute0_local_data"
+          ],
+          "size": 4096
+        },
+        {
+          "access": "read_write",
+          "base": 268435456,
+          "destination": "s_compute0_local_data_sram",
+          "networks": [
+            "compute0_local_data"
+          ],
+          "size": 1048576
+        },
+        {
+          "access": "read_write",
+          "base": 285212672,
+          "destination": "s_compute1_local_data_sram",
+          "networks": [
+            "compute0_local_data",
+            "global_data",
+            "compute1_local_data"
+          ],
+          "size": 1048576
+        },
+        {
+          "access": "read",
+          "base": 536870912,
+          "destination": "s_compute0_local_data_boot_flash",
+          "networks": [
+            "compute0_local_data"
+          ],
+          "size": 65536
+        },
+        {
+          "access": "read_write",
+          "base": 4294967296,
+          "destination": "s_memory0_local_data_target_crossbar",
+          "networks": [
+            "compute0_local_data",
+            "global_data",
+            "memory0_local_data"
+          ],
+          "size": 1073741824
+        },
+        {
+          "access": "read_write",
+          "base": 5368709120,
+          "destination": "s_memory0_local_data_target_crossbar",
+          "networks": [
+            "compute0_local_data",
+            "global_data",
+            "memory0_local_data"
+          ],
+          "size": 1073741824
+        }
+      ]
+    },
+    {
+      "addr_width": 64,
+      "data_width": 64,
+      "endpoint": "dma",
+      "id_width": 4,
+      "name": "m_compute0_local_data_dma",
+      "network": "compute0_local_data",
+      "plane": "data",
+      "regions": [
+        {
+          "access": "read",
+          "base": 0,
+          "destination": "s_compute0_local_data_boot_rom",
+          "networks": [
+            "compute0_local_data"
+          ],
+          "size": 4096
+        },
+        {
+          "access": "read_write",
+          "base": 268435456,
+          "destination": "s_compute0_local_data_sram",
+          "networks": [
+            "compute0_local_data"
+          ],
+          "size": 1048576
+        },
+        {
+          "access": "read_write",
+          "base": 285212672,
+          "destination": "s_compute1_local_data_sram",
+          "networks": [
+            "compute0_local_data",
+            "global_data",
+            "compute1_local_data"
+          ],
+          "size": 1048576
+        },
+        {
+          "access": "read",
+          "base": 536870912,
+          "destination": "s_compute0_local_data_boot_flash",
+          "networks": [
+            "compute0_local_data"
+          ],
+          "size": 65536
+        },
+        {
+          "access": "read_write",
+          "base": 4294967296,
+          "destination": "s_memory0_local_data_target_crossbar",
+          "networks": [
+            "compute0_local_data",
+            "global_data",
+            "memory0_local_data"
+          ],
+          "size": 1073741824
+        },
+        {
+          "access": "read_write",
+          "base": 5368709120,
+          "destination": "s_memory0_local_data_target_crossbar",
+          "networks": [
+            "compute0_local_data",
+            "global_data",
+            "memory0_local_data"
+          ],
+          "size": 1073741824
+        }
+      ]
+    },
+    {
+      "addr_width": 32,
+      "data_width": 32,
+      "endpoint": "cpu",
+      "id_width": 1,
+      "name": "m_compute1_local_config_cpu",
+      "network": "compute1_local_config",
+      "plane": "config",
+      "regions": [
+        {
+          "access": "read_write",
+          "base": 1073741824,
+          "destination": "s_compute0_local_config_dma_regs",
+          "networks": [
+            "compute1_local_config",
+            "global_config",
+            "compute0_local_config"
+          ],
+          "size": 65536
+        },
+        {
+          "access": "read_write",
+          "base": 1073807360,
+          "destination": "s_compute1_local_config_dma_regs",
+          "networks": [
+            "compute1_local_config"
+          ],
+          "size": 65536
+        },
+        {
+          "access": "read_write",
+          "base": 1073872896,
+          "destination": "s_compute0_local_config_reset_ctrl",
+          "networks": [
+            "compute1_local_config",
+            "global_config",
+            "compute0_local_config"
+          ],
+          "size": 4096
+        },
+        {
+          "access": "read_write",
+          "base": 1073938432,
+          "destination": "s_memory0_local_config_controller_regs",
+          "networks": [
+            "compute1_local_config",
+            "global_config",
+            "memory0_local_config"
+          ],
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "addr_width": 64,
+      "data_width": 64,
+      "endpoint": "cpu",
+      "id_width": 4,
+      "name": "m_compute1_local_data_cpu",
+      "network": "compute1_local_data",
+      "plane": "data",
+      "regions": [
+        {
+          "access": "read_write",
+          "base": 268435456,
+          "destination": "s_compute0_local_data_sram",
+          "networks": [
+            "compute1_local_data",
+            "global_data",
+            "compute0_local_data"
+          ],
+          "size": 1048576
+        },
+        {
+          "access": "read_write",
+          "base": 285212672,
+          "destination": "s_compute1_local_data_sram",
+          "networks": [
+            "compute1_local_data"
+          ],
+          "size": 1048576
+        },
+        {
+          "access": "read_write",
+          "base": 4294967296,
+          "destination": "s_memory0_local_data_target_crossbar",
+          "networks": [
+            "compute1_local_data",
+            "global_data",
+            "memory0_local_data"
+          ],
+          "size": 1073741824
+        },
+        {
+          "access": "read_write",
+          "base": 5368709120,
+          "destination": "s_memory0_local_data_target_crossbar",
+          "networks": [
+            "compute1_local_data",
+            "global_data",
+            "memory0_local_data"
+          ],
+          "size": 1073741824
+        }
+      ]
+    },
+    {
+      "addr_width": 64,
+      "data_width": 64,
+      "endpoint": "dma",
+      "id_width": 4,
+      "name": "m_compute1_local_data_dma",
+      "network": "compute1_local_data",
+      "plane": "data",
+      "regions": [
+        {
+          "access": "read_write",
+          "base": 268435456,
+          "destination": "s_compute0_local_data_sram",
+          "networks": [
+            "compute1_local_data",
+            "global_data",
+            "compute0_local_data"
+          ],
+          "size": 1048576
+        },
+        {
+          "access": "read_write",
+          "base": 285212672,
+          "destination": "s_compute1_local_data_sram",
+          "networks": [
+            "compute1_local_data"
+          ],
+          "size": 1048576
+        },
+        {
+          "access": "read_write",
+          "base": 4294967296,
+          "destination": "s_memory0_local_data_target_crossbar",
+          "networks": [
+            "compute1_local_data",
+            "global_data",
+            "memory0_local_data"
+          ],
+          "size": 1073741824
+        },
+        {
+          "access": "read_write",
+          "base": 5368709120,
+          "destination": "s_memory0_local_data_target_crossbar",
+          "networks": [
+            "compute1_local_data",
+            "global_data",
+            "memory0_local_data"
+          ],
+          "size": 1073741824
+        }
+      ]
+    }
+  ],
+  "meshes": 8,
+  "slaves": [
+    {
+      "addr_width": 32,
+      "data_width": 32,
+      "endpoint": "dma_regs",
+      "id_width": 1,
+      "name": "s_compute0_local_config_dma_regs",
+      "network": "compute0_local_config",
+      "plane": "config",
+      "regions": [
+        {
+          "base": 1073741824,
+          "size": 65536
+        }
+      ]
+    },
+    {
+      "addr_width": 32,
+      "data_width": 32,
+      "endpoint": "reset_ctrl",
+      "id_width": 1,
+      "name": "s_compute0_local_config_reset_ctrl",
+      "network": "compute0_local_config",
+      "plane": "config",
+      "regions": [
+        {
+          "base": 1073872896,
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "addr_width": 64,
+      "data_width": 64,
+      "endpoint": "boot_flash",
+      "id_width": 5,
+      "name": "s_compute0_local_data_boot_flash",
+      "network": "compute0_local_data",
+      "plane": "data",
+      "regions": [
+        {
+          "base": 536870912,
+          "size": 65536
+        }
+      ]
+    },
+    {
+      "addr_width": 64,
+      "data_width": 64,
+      "endpoint": "boot_rom",
+      "id_width": 5,
+      "name": "s_compute0_local_data_boot_rom",
+      "network": "compute0_local_data",
+      "plane": "data",
+      "regions": [
+        {
+          "base": 0,
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "addr_width": 64,
+      "data_width": 64,
+      "endpoint": "sram",
+      "id_width": 5,
+      "name": "s_compute0_local_data_sram",
+      "network": "compute0_local_data",
+      "plane": "data",
+      "regions": [
+        {
+          "base": 268435456,
+          "size": 1048576
+        }
+      ]
+    },
+    {
+      "addr_width": 32,
+      "data_width": 32,
+      "endpoint": "dma_regs",
+      "id_width": 1,
+      "name": "s_compute1_local_config_dma_regs",
+      "network": "compute1_local_config",
+      "plane": "config",
+      "regions": [
+        {
+          "base": 1073807360,
+          "size": 65536
+        }
+      ]
+    },
+    {
+      "addr_width": 64,
+      "data_width": 64,
+      "endpoint": "sram",
+      "id_width": 5,
+      "name": "s_compute1_local_data_sram",
+      "network": "compute1_local_data",
+      "plane": "data",
+      "regions": [
+        {
+          "base": 285212672,
+          "size": 1048576
+        }
+      ]
+    },
+    {
+      "addr_width": 32,
+      "data_width": 32,
+      "endpoint": "controller_regs",
+      "id_width": 1,
+      "name": "s_memory0_local_config_controller_regs",
+      "network": "memory0_local_config",
+      "plane": "config",
+      "regions": [
+        {
+          "base": 1073938432,
+          "size": 4096
+        }
+      ]
+    },
+    {
+      "addr_width": 64,
+      "data_width": 64,
+      "endpoint": "target_crossbar",
+      "id_width": 4,
+      "name": "s_memory0_local_data_target_crossbar",
+      "network": "memory0_local_data",
+      "plane": "data",
+      "regions": [
+        {
+          "base": 4294967296,
+          "size": 1073741824
+        },
+        {
+          "base": 5368709120,
+          "size": 1073741824
+        }
+      ]
+    }
+  ],
+  "top": "supernoc_tb"
+}

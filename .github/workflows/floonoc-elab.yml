@@ -5,12 +5,24 @@ on:
     paths:
       - 'gen/noc/floonoc/**'
       - 'tools/floonoc_gen.py'
+      - 'tools/supernoc_gen.py'
+      - 'gen/supernoc/**'
+      - 'scripts/run-supernoc.sh'
+      - 'dv/supernoc/**'
+      - 'tests/test_supernoc_gen.py'
+      - 'config/**'
       - 'scripts/run-floonoc-xezim.sh'
       - '.github/workflows/floonoc-elab.yml'
   pull_request:
     paths:
       - 'gen/noc/floonoc/**'
       - 'tools/floonoc_gen.py'
+      - 'tools/supernoc_gen.py'
+      - 'gen/supernoc/**'
+      - 'scripts/run-supernoc.sh'
+      - 'dv/supernoc/**'
+      - 'tests/test_supernoc_gen.py'
+      - 'config/**'
       - 'scripts/run-floonoc-xezim.sh'
       - '.github/workflows/floonoc-elab.yml'
   workflow_dispatch:
@@ -21,7 +33,7 @@ permissions:
 jobs:
   elaborate:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - name: Fetch locked FlooNoC source and upstream Bender dependencies
@@ -70,6 +82,30 @@ jobs:
           grep -Ev '/(idma|fpnew|fpu_div_sqrt_mvp|register_interface|obi|axi_stream|apb|common_verification)-[^/]+/|/src/deprecated/pad_functional[.]sv' \
             "$GITHUB_WORKSPACE/.tools/floonoc-rtl.f" > "$GITHUB_WORKSPACE/.tools/floonoc-lint.f"
           echo "NoC dependency filelist lines: $(wc -l < "$GITHUB_WORKSPACE/.tools/floonoc-lint.f")"
+      - name: Assert all generated NIs disable unused AXI atomic-ID reservations
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path("gen/noc/floonoc")
+          nets=json.loads((root/"manifest.json").read_text())["networks"]
+          assert len(nets)==8
+          for name, cfg in nets.items():
+              top=(root/cfg["top"]).read_text()
+              count=cfg["network_interfaces_with_native_knobs"]
+              assert top.count(".AtopSupport(1'b0)") == count,name
+              assert top.count(".MaxAtomicTxns(0)") == count,name
+              # Target-only NIs have EnMgrPort=0. Pinned FlooNoC
+              # asserts NoMgrPortRobType unless their R/B RoBs are NoRoB.
+              import yaml
+              profile=yaml.safe_load((root/cfg["config"]).read_text())
+              dest=sum(bool(e.get("sbr_port_protocol")) for e in profile["endpoints"])
+              src=sum(bool(e.get("mgr_port_protocol")) for e in profile["endpoints"])
+              assert src+dest == count,(name,src,dest,count)
+              assert top.count("set_ports(xezim_chimney_cfg_no_mgr(),") == dest,name
+              assert top.count("set_ports(xezim_chimney_cfg(),") == src,name
+              print("PASS FlooNoC chimney native role/atomic contracts",name,src,dest)
+          PY
       - name: Install Verilator
         run: |
           sudo apt-get update -qq
@@ -103,6 +139,37 @@ jobs:
           test "$count" -eq 8
           echo "PASS: elaborated $count real upstream FlooNoC networks"
 
+      - name: Install cocotb 1.9 libraries compatible with Ubuntu Verilator 5.020
+        run: python3 -m pip install 'cocotb==1.9.2' 'cocotbext-axi==0.1.24'
+      - name: Simulate all eight connected real FlooNoCs with cocotbext-axi readback BFMs
+        timeout-minutes: 30
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/run-supernoc.sh 2>&1 | tee supernoc-build-and-run.log
+      - name: Prove the routed readback scoreboard detects data corruption
+        shell: bash
+        run: |
+          set -euo pipefail
+          if SUPERNOC_TEST_ONLY=1 SUPERNOC_NEGATIVE=1 SUPERNOC_RESULTS_XML=negative-results.xml python3 dv/supernoc/run.py > supernoc-negative.log 2>&1; then
+            echo "ERROR: injected corruption unexpectedly passed" >&2
+            exit 1
+          fi
+          grep -q 'FAIL supernoc injected data mismatch detected' supernoc-negative.log
+          echo "PASS: routed data corruption detected"
+      - name: Save supernoc AXI traffic results and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: supernoc-real-axi-traffic
+          path: |
+            supernoc-build-and-run.log
+            supernoc-dv.log
+            supernoc-negative.log
+            dv/supernoc/*results.xml
+            gen/supernoc/manifest.json
+            gen/supernoc/supernoc_tb.sv
+          if-no-files-found: ignore
       - name: Download the checksum-verified pinned Xezim release
         env:
           GH_TOKEN: ${{ github.token }}

@@ -10,7 +10,7 @@ Prefer existing public AXI, SRAM, DMA, NoC, CPU, BFM and controller IP. Add
 only small, explicit, reviewed glue needed for a real protocol boundary.
 Never invent a custom bus fabric, SRAM or AXI VIP simply because it is easy.
 
-**Do not claim FlooNoC is running**: `fabrics.global_data.backend: floonoc`
+**Do not claim the full SoC is running from a scoped NoC BFM pass**: `fabrics.global_data.backend: floonoc`
 in `config/soc.yaml` denotes selected architecture only. The current
 `tools/noc_backends.py` has `floonoc.executable=False` and likewise
 `pulp_axi.executable=False`. There is **no full-chip soc_top**. The
@@ -38,11 +38,12 @@ resolved in pinned Xezim 0.11.4 and the historical bug reproducer was removed fr
    `tools/noc_diagrams.py`, `tools/diagram_svg.py`,
    `tools/generate.py`: boot, neutral graphs and diagrams.
    `tools/noc_diagrams.py` reads **actual generated** FlooGen YAML and
-   manifest for every mesh; it produces one full-chip hierarchy preview,
-   eight physical mesh previews, Mermaid and Diagram-gen-style JSON
+   manifest for every mesh; it produces one complete SoC/FlooNoC SVG preview, one Mermaid source, and Diagram-gen-style JSON
    (`gen/diagrams/noc-topology.json`). The local router-router/NI
    edges are **generated structural RTL**; all cross-NoC and CPU/DMA/CSR
-   links are **planned** until a real SoC top and traffic tests pass.
+   endpoint links remain **planned** in the full SoC. Cross-NoC wiring
+   exists in the separate generated `supernoc_tb`; its traffic gate is
+   `make dv-supernoc`. Never conflate that scope with real CPU/DMA/CSR wiring.
    FlooNoC does not directly render Diagram-gen; use our generated
    Diagram-gen-style instance/connection/group metadata, and avoid
    inventing router positions or claiming a 3D viewer integration test
@@ -64,16 +65,15 @@ resolved in pinned Xezim 0.11.4 and the historical bug reproducer was removed fr
    `gen/` manually. `README.md` contains one generated section between
    `BEGIN GENERATED SOC` and `END GENERATED SOC` comments. Edit the
    generator for content in that section.
-7. Every change affecting architecture, mapping, generator, or diagram
-   content needs `make gen` and a review of ALL generated views:
-   `architecture`, `rtl-connectivity`, `boot`, `verification`,
-   `noc-hierarchy`, `noc/global_data`, `noc/global_config`,
-   all compute/memory local `noc/*` views, `noc-topology.json`,
-   `subsystems/compute0`, `subsystems/compute1`,
-   `subsystems/memory0`. Additional subsystem diagrams must appear
-   automatically; removed ones must disappear. SVG, Mermaid and graph JSON
-   must agree with the emitted RTL and whether each link is *planned* or
-   *actually exercised*.
+7. **Exactly one generated architectural SVG:** `gen/diagrams/noc-hierarchy.svg`.
+   Its Mermaid source and detailed router/endpoint JSON are retained for
+   machines; **do not generate** separate per-mesh, boot, verification, CPU,
+   memory or RTL-connectivity pictures. FlooGen's checked-in YAML/SV already
+   provides drill-down. When the YAML changes, run `make gen`, confirm
+   `gen/diagrams/` contains one SVG, and commit deletion of stale outputs.
+   Review internal mesh router links as structural RTL. The single picture
+   describes full-SoC endpoint integration; the NoC BFM wrapper and its
+   route manifest provide separate executable cross-network wiring.
 8. `make check-generated` is a nonmutating exact file-name/content/drift
    check, not a substitute for regenerating files. Keep generated `gen/`
    and the marked README section committed with a config/generator change.
@@ -101,9 +101,11 @@ AXI ports, FlooGen routing, local PULP AXI crossbars, DMA requests, or
 outstanding transaction limits. `config/interface_contracts.yaml`
 tracks planned per-fabric and per-subsystem read/write budgets, native
 PULP/FlooNoC/Verilog AXI parameter targets, and per-port overrides.
-Validated settings are NOT yet RTL-bound except the existing memory TB.
-Check that compute local crossbar output ID width is input ID width
-plus ceil(log2(initiator count)), and that the FlooGen input IDs agree.
+FlooNoC chimney transaction caps are bound to generated RTL. The connected
+BFM traffic baseline is verified; maximum configured capacities and every
+parameter combination are not. Real local CPU/DMA/CSR hookups remain pending.
+Check that configured compute local output ID width is input ID width
+plus ceil(log2(CPU/DMA initiator count)), and that global FlooGen input IDs agree.
 Never mistake planned quotas for implemented capacity or FlooGen emission
 for simulated NoC traffic.
 
@@ -145,7 +147,7 @@ pairs and denied read/write responses (AXI DECERR). A green unit-test
 suite by itself **does not** prove new RTL integration.
 
 `scripts/common.sh` resolves `XEZIM_BIN` or a cached binary.
-`scripts/ip_fetch.py` fetches pinned third-party RTL on demand to
+`tools/ip_fetch.py` fetches pinned third-party RTL on demand to
 ignored `.tools/`. No `cargo build` or recompilation of Xezim for
 normal RTL edits. Simulator releases are built separately in
 `.github/workflows/publish-xezim.yml`.
@@ -158,8 +160,9 @@ Xezim and executes the existing CPU boot, SRAM and AXI crossbar
 transaction regressions. The independent
 `.github/workflows/floonoc-elab.yml` downloads immutable FlooNoC
 and its upstream Bender.lock dependency tree, then **elaborates all
-eight FlooGen-generated local/global meshes with Verilator**.
-These are *different verification gates*; report them separately.
+eight FlooGen-generated local/global meshes with Verilator**, then runs
+the connected super-NoC traffic and corruption checks. These are different
+verification gates from Xezim CPU/memory simulation; report them separately.
 **All eight generated local and global FlooNoC meshes now also
 compile with pinned Xezim 0.11.4** using
 `scripts/run-floonoc-xezim.sh all` and the *same upstream Bender
@@ -176,6 +179,41 @@ Use both tool diagnostics to isolate simulator issues and run actual
 AXI transaction tests with each simulator as their support permits.
 Do not count elaboration or compilation as successful AXI traffic.
 Avoid adding a new micro-testbench for every bridge or router.
+
+## Native NoC atomic-ID reservation (critical)
+
+The selected data/control interfaces do not issue AXI atomic operations.
+`config/interface_contracts.yaml` pins `AtopSupport: false` and
+`MaxAtomicTxns: 0` for **every** FlooNoC chimney through generated
+native parameters, leaving MaxUniqueIds at 4 (data) and 2 (config).
+Without disabling default atomic-ID reservation, real Verilator RTL
+simulation fails `floo_meta_buffer.sv:142 TooFewIdBits2` at time zero.
+Do not mask the assertion or shrink the outstanding-ID budgets to evade it.
+Any change must maintain pinned upstream `NoAtomicTxns`,
+`TooFewIdBits1`, `TooFewIdBits2` and readback regressions.
+See [docs/supernoc-verification.md](docs/supernoc-verification.md).
+
+## One unified super-NoC traffic test
+
+`tools/supernoc_gen.py` generates **one** `gen/supernoc/supernoc_tb.sv`
+from the eight real FlooGen profiles; it uses only packed AXI4
+struct-to-flat-port assignments and true upstream FlooNoC modules.
+`dv/supernoc/test_supernoc.py` uses mature third-party
+`cocotbext-axi` `AxiMaster` and `AxiSlave` with mapped upstream
+`AddressSpace`/`SparseMemoryRegion` storage rather than custom AXI BFMs or new per-router testbenches. Run `bash scripts/run-supernoc.sh`
+after pinned Bender checkout (see `.github/workflows/floonoc-elab.yml`).
+**Do not claim the super-NoC is working from a compile-only result.**
+A successful result must include all mapped routes, intended destination
+storage, bursts/byte strobes, concurrent reused IDs, five-channel stalls,
+and routed SLVERR checks with test logs. The optional corruption run must
+fail with its exact named mismatch. Never accept a generic compile exit
+or an empty cocotb results file. Boot routing reads use seeded BFMs only;
+the independent CPU cold-boot SRAM must stay uninitialized. Xezim remains the
+independent structural compile and existing boot/memory simulation path.
+PULP `axi_test.sv` classes were explored but Verilator 5.020 cannot
+parse some upstream class/randomize constructs; do not fork them as a
+workaround. For future UVM verification, evaluate pinned upstream AXI
+VIP with real sequence/driver/monitor tests instead of reinventing one.
 
 ## CI and debugging
 
