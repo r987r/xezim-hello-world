@@ -5,11 +5,13 @@ on:
     paths:
       - 'gen/noc/floonoc/**'
       - 'tools/floonoc_gen.py'
+      - 'scripts/run-floonoc-xezim.sh'
       - '.github/workflows/floonoc-elab.yml'
   pull_request:
     paths:
       - 'gen/noc/floonoc/**'
       - 'tools/floonoc_gen.py'
+      - 'scripts/run-floonoc-xezim.sh'
       - '.github/workflows/floonoc-elab.yml'
   workflow_dispatch:
 
@@ -124,7 +126,8 @@ jobs:
           echo "Verilator: all eight structural NoCs passed elaboration." >> "$GITHUB_STEP_SUMMARY"
           echo "Xezim: attempting --compile against the same pinned Bender source list." >> "$GITHUB_STEP_SUMMARY"
           if timeout 240s bash scripts/run-floonoc-xezim.sh all > xezim-noc-compile.log 2>&1; then
-            echo "Xezim: all generated local/global NoCs compile PASS (still no AXI traffic test)." >> "$GITHUB_STEP_SUMMARY"
+            reported="$(grep -cF '[xezim][warning]' xezim-noc-compile.log || true)"
+            echo "Xezim: all 8 generated local/global NoCs compile (reported warning lines: $reported, which may be capped by Xezim). **Not a warning-free or traffic-level pass.**" >> "$GITHUB_STEP_SUMMARY"
             cat xezim-noc-compile.log
           else
             status=$?
