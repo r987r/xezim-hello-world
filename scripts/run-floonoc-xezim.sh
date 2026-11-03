@@ -43,8 +43,10 @@ for profile in "${profiles[@]}"; do
     exit 2
   }
   echo "XEZIM compile probe: $top (same Bender-pinned source list as Verilator)"
+  transcript="$ROOT/.tools/xezim-${network}-compile.log"
   "$XEZIM_BIN" --compile --no-cache -s "$top" "${includes[@]}" \
-    "${sources[@]}" "$package" "$rtl"
-  echo "PASS Xezim compiled $network"
+    "${sources[@]}" "$package" "$rtl" 2>&1 | tee "$transcript"
+  warnings="$(grep -cF '[xezim][warning]' "$transcript" || true)"
+  echo "PASS Xezim compiled $network; emitted $warnings warning lines (diagnostic output is capped by Xezim)"
 done
 echo "PASS Xezim compiled ${#profiles[@]} source-controlled FlooNoC modules"
