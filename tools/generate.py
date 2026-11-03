@@ -22,6 +22,7 @@ import diagram_gen
 import bootgen
 import socgen
 import floonoc_gen
+import supernoc_gen
 
 ROOT = Path(__file__).resolve().parents[1]
 START = "<!-- BEGIN GENERATED SOC -->"
@@ -154,6 +155,7 @@ def build(cfg_path: Path, out: Path, readme: Path) -> str:
     # checked-in RTL alongside all diagrams and the generated NoC IR.
     knobs = yaml.safe_load((ROOT / "config/interface_contracts.yaml").read_text())
     nocs = floonoc_gen.generate_all(cfg, knobs, out / "noc" / "floonoc")
+    supernoc_gen.emit(cfg, out / "noc" / "floonoc", out / "supernoc" / "supernoc_tb.sv")
     diagrams = diagram_gen.render(cfg, meta, out / "diagrams", out / "noc" / "floonoc")
     dump(out / "verification" / "plan.json", verification_plan(cfg, meta))
     dump(out / "verification" / "routes.json", route_matrix(meta))
