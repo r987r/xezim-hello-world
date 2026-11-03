@@ -93,7 +93,8 @@ def emit(soc, noc_root, dest):
               "qos":4,"region":4,"resp":2,"last":1,"valid":1,"ready":1}
         channels={"aw":AW_FIELDS,"w":W_FIELDS,"b":B_FIELDS,"ar":AR_FIELDS,"r":R_FIELDS}
         for channel,fields in channels.items():
-            if channel=="aw":fields=dict(fields,atop="atop")
+            # AXI4 ATOP is an optional extension: drive zero for initiators,
+            # do not expose it to cocotbext-axi (which does not drive ATOP).
             for short,member in fields.items():
                 field=channel+short
                 width=6 if short=="atop" else dims[short]
@@ -121,9 +122,13 @@ def emit(soc, noc_root, dest):
         # Upstream transport includes AXI user metadata even when tests
         # do not expose it; zero sidebands are valid for simple AXI4.
         for channel in ("aw","w","ar"):
-            edges.append(f"  assign {sig((n,name),'req')}.{channel}.user = '0;")
+            if direction=="in":
+                edges.append(f"  assign {sig((n,name),'req')}.{channel}.user = '0;")
+        if direction=="in":
+            edges.append(f"  assign {sig((n,name),'req')}.aw.atop = '0;")
         for channel in ("b","r"):
-            edges.append(f"  assign {sig((n,name),'rsp')}.{channel}.user = '0;")
+            if direction=="out":
+                edges.append(f"  assign {sig((n,name),'rsp')}.{channel}.user = '0;")
     # Remove unsupported explicit ATOP from cocotb bus. It is valid AXI4
     # input tied to zero for every manager.
     for (n,name),p,direction in exposed:
