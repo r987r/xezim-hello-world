@@ -168,7 +168,7 @@ def emit(soc, noc_root, dest):
     lines.extend([
         "  initial begin",
         "    wait (&done);",
-        f'    $display("PASS supernoc: {len(drivers)} upstream PULP AXI masters, {len(responders)} mapped responders, {len(links)} cross-NoC links, {len(networks)} real meshes");',
+        f'    $display("PASS supernoc: {len(drivers)} upstream PULP AXI masters, {len(responders)} mapped responders, {len(links)} cross-NoC links, {len(configs)} real meshes");',
         "    $finish;",
         "  end",
         '  initial begin #1000000ns; $fatal(1,"supernoc transaction timeout"); end',
@@ -176,7 +176,7 @@ def emit(soc, noc_root, dest):
     ])
     dest.parent.mkdir(parents=True,exist_ok=True)
     dest.write_text("\n".join(lines)+"\n")
-    return {"top":"supernoc_tb","networks":len(networks),"links":len(links),
+    return {"top":"supernoc_tb","networks":len(configs),"links":len(links),
             "masters":len(drivers),"responders":len(responders)}
 
 if __name__=="__main__":
