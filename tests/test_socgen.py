@@ -147,7 +147,7 @@ class SocConfigTest(unittest.TestCase):
                 self.assertIn("flowchart", diagrams[name])
                 self.assertTrue((Path(tmp)/"diagrams"/f"{name}.mmd").is_file())
             self.assertIn("picorv32", diagrams["noc-hierarchy"])
-            self.assertIn("memory0.hbm0", diagrams["noc-hierarchy"])
+            self.assertIn("memory0_hbm0", diagrams["noc-hierarchy"])
             self.assertIn("global_data", diagrams["noc-hierarchy"])
             self.assertIn("global_config", diagrams["noc-hierarchy"])
             for name in diagrams:
