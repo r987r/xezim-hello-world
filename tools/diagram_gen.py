@@ -302,32 +302,16 @@ def render(cfg: dict, meta: dict, destination: Path, noc_root: Path | None = Non
     """Return exactly the generated files as a map for README embedding."""
     destination.mkdir(parents=True, exist_ok=True)
     import diagram_svg
-    arch, arch_meta = build_architecture(cfg, meta)
-    rtl, rtl_meta = build_rtl_connectivity(cfg, meta)
-    dv, dv_meta = build_verification(cfg, meta)
-    boot, boot_meta = build_boot_flow(cfg, meta)
-    diagrams = {"architecture": arch, "rtl-connectivity": rtl, "verification": dv, "boot": boot}
-    for inst in meta["subsystems"]:
-        diagrams[f'subsystems/{inst["name"]}'] = build_subsystem(cfg, meta, inst)
-    for name, diagram in diagrams.items():
-        path = destination / f"{name}.mmd"
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(diagram)
-        title = name.replace("-", " ").replace("/", " / ").title()
-        (destination / f"{name}.md").write_text(
-            f"# {title}\n\nGenerated from `config/soc.yaml`. Do not edit.\n\n"
-            f"[![{title} 2D diagram]({path.name.removesuffix('.mmd')}.svg)]"
-            f"({path.name.removesuffix('.mmd')}.svg)\n\n"
-            f"[View editable Mermaid source]({path.name})\n"
-        )
-    graph_meta = {"architecture": arch_meta, "rtl_connectivity": rtl_meta, "verification": dv_meta, "boot": boot_meta}
-    if noc_root is not None:
-        import noc_diagrams
-        noc_graph, noc_mmd = noc_diagrams.render(cfg, noc_root, destination)
-        graph_meta["noc_hierarchy"] = {"source": "gen/noc/floonoc/manifest.json",
-                                       "status": noc_graph["status"],
-                                       "networks": noc_graph["networks"]}
-        diagrams.update(noc_mmd)
-    (destination / "graphs.json").write_text(json.dumps(graph_meta, indent=2, sort_keys=True) + "\n")
-    diagram_svg.render_images(cfg, meta, destination)
+    # A single visual for the entire SoC; leave detailed router coordinates
+    # in the machine-readable topology and real generated FlooGen YAML.
+    # Do not multiply README/CI outputs by subsystem or router count.
+    if noc_root is None:
+        raise ValueError("FlooGen-generated topology is required for the SoC diagram")
+    import noc_diagrams
+    noc_graph, diagrams = noc_diagrams.render(cfg, noc_root, destination)
+    (destination / "graphs.json").write_text(json.dumps({
+        "noc_hierarchy": {"status": noc_graph["status"],
+                          "networks": noc_graph["networks"],
+                          "source": "gen/noc/floonoc/manifest.json"}
+    }, indent=2, sort_keys=True) + "\n")
     return diagrams
