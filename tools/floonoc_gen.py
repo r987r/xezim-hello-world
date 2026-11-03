@@ -276,10 +276,43 @@ def native_bindings(top, params):
         "    .ChimneyCfg(set_ports(xezim_chimney_cfg(),"
     )
     result = result.replace(search, replacement)
-    if (result.count(".ChimneyCfg(set_ports(xezim_chimney_cfg(),") != count or
+    # Upstream floo_pkg::set_ports(cfg, en_sbr, en_mgr) declares
+    # manager_port=0 for target-only NIs. floo_axi_chimney asserts
+    # NoMgrPortRobType if either RoB is enabled on such a port.
+    # Keep the configured RoBs on initiator NIs, but use NoRoB on
+    # target-only NIs. No custom router, AXI BFM, or upstream patch.
+    role_target = ".ChimneyCfg(set_ports(xezim_chimney_cfg(), 1'b1, 1'b0))"
+    role_source = ".ChimneyCfg(set_ports(xezim_chimney_cfg(), 1'b0, 1'b1))"
+    target_count = result.count(role_target)
+    source_count = result.count(role_source)
+    if source_count + target_count != count:
+        raise NoCGenerationError(
+            "FlooGen NI port roles changed: expected sbr-only or mgr-only chimney")
+    if target_count:
+        role_body = (
+            "\\n  // EnMgrPort=0: upstream NoMgrPortRobType requires NoRoB.\\n"
+            "  function automatic chimney_cfg_t xezim_chimney_cfg_no_mgr();\\n"
+            "    chimney_cfg_t c;\\n"
+            "    c = xezim_chimney_cfg();\\n"
+            "    c.BRoBType = NoRoB;\\n"
+            "    c.RRoBType = NoRoB;\\n"
+            "    return c;\\n"
+            "  endfunction\\n"
+        )
+        # Append the target-only cfg function after the shared function.
+        tail = "    return c;\\n  endfunction\\n"
+        if result.count(tail) != 1:
+            raise NoCGenerationError("generated native config function anchor changed")
+        result = result.replace(tail, tail + role_body, 1)
+        result = result.replace(
+            role_target,
+            ".ChimneyCfg(set_ports(xezim_chimney_cfg_no_mgr(), 1'b1, 1'b0))"
+        )
+    if (result.count(".ChimneyCfg(set_ports(xezim_chimney_cfg(),") != source_count or
+            result.count(".ChimneyCfg(set_ports(xezim_chimney_cfg_no_mgr(),") != target_count or
             result.count(".AtopSupport(1'b0)") != count or
             result.count(".MaxAtomicTxns(0)") != count):
-        raise NoCGenerationError("not every chimney received native knobs")
+        raise NoCGenerationError("not every chimney received role-correct native knobs")
     return result, count
 
 
