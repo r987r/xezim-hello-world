@@ -2,7 +2,7 @@
 
 [![SoC regression](https://github.com/r987r/xezim-hello-world/actions/workflows/dv-soc.yml/badge.svg)](https://github.com/r987r/xezim-hello-world/actions/workflows/dv-soc.yml)
 
-A reusable, **configuration-driven hierarchical SoC test vehicle** built from publicly available RTL. One `config/soc.yaml` selects the compute subsystems, CPU and DMA IP, memory targets, data/config NoCs, addresses, and verification scopes. The same configuration generates **SystemVerilog testbench code, NoC connectivity metadata, executable test plans, 2D diagrams, and this README's architecture section**.
+A reusable, **configuration-driven hierarchical SoC test vehicle** built from publicly available RTL. One `config/soc.yaml` selects the compute subsystems, CPU and DMA IP, memory targets, data/config NoCs, addresses, and verification scopes. The same configuration generates **SystemVerilog testbench code, NoC connectivity metadata, executable test plans, 2D one canonical diagram, and this README's architecture section**.
 
 ## Architecture, real RTL connectivity, and verification
 
@@ -34,7 +34,7 @@ not confuse generated/elaborated RTL with a working interconnected SoC.
 
 For source-backed status, every architecture/RTL/boot/verification/subsystem
 diagram and implementation limits, see
-[Implementation status & seven-diagram index](docs/implementation-status.md).
+[Implementation status & canonical diagram](docs/implementation-status.md).
 Future coding agents **must** follow [AGENTS.md](AGENTS.md), including pinned
 Xezim binary installation, `make gen`, `make check-generated`, the full
 regression and the two AXI routing profile simulations. Never hand-edit
@@ -69,7 +69,7 @@ Verilog-AXI target crossbar remains downstream of its local FlooNoC.
 AXI4-Lite control endpoints need real upstream AXI-Lite/AXI4 adapters.
 All eight local/global FlooGen outputs are generated and reviewable in
 `gen/noc/floonoc/`; each has a router-level mesh image in
-`gen/diagrams/noc/`. **None yet passes end-to-end routed AXI traffic.**
+`gen/diagrams/noc-hierarchy.svg`. **Full eight-NoC readback remains gated by supernoc.yml.**
 
 ## Explicit interface sizing
 
@@ -93,7 +93,7 @@ make check-generated     # non-mutating drift and stale-file check
 make check-config        # generator/config test suite
 ```
 
-`make gen` builds all outputs in a staging directory before replacing the complete `gen/` tree. **Obsolete generated files are removed** when a block, network, subsystem, or diagram disappears from YAML. No file outside `gen/` is deleted; only the explicitly marked README section is rewritten. `make check-generated` compares both file *names* and bytes, so CI catches missing, modified, and stale files without committing or modifying anything. Generation does not depend on a GPU, web service, 3D viewer, or Graphviz: the README embeds static **2D SVG diagrams**, with Mermaid source files alongside for editing and review.
+`make gen` builds all outputs in a staging directory before replacing the complete `gen/` tree. **Obsolete generated files are removed** when a block, network, subsystem, or diagram disappears from YAML. No file outside `gen/` is deleted; only the explicitly marked README section is rewritten. `make check-generated` compares both file *names* and bytes, so CI catches missing, modified, and stale files without committing or modifying anything. Generation does not depend on a GPU, web service, 3D viewer, or Graphviz: the README embeds one static **2D SVG diagram**, with Mermaid source alongside for editing and review.
 
 The generated artifacts include:
 
@@ -104,7 +104,7 @@ The generated artifacts include:
 | [`gen/noc/fabric_ir.json`](gen/noc/fabric_ir.json) | Vendor-neutral NoC/interconnect intermediate representation |
 | [`gen/verification/plan.json`](gen/verification/plan.json) | Verification scopes, executable vs planned boundaries, test commands |
 | [`gen/verification/routes.json`](gen/verification/routes.json) | Source/target AXI reachability expectations for the executable memory test |
-| [`gen/diagrams/`](gen/diagrams/) | Source-controlled 2D diagrams (`.mmd`) and structured graph metadata (`graphs.json`) |
+| [`gen/diagrams/`](gen/diagrams/) | Source-controlled canonical 2D NoC diagram (`.mmd`) and structured graph metadata (`graphs.json`) |
 | [`gen/manifest.json`](gen/manifest.json) | Deterministic SHA-256 index of every generated output |
 
 The static SVG previews display directly in GitHub README and mobile clients, even when Mermaid rendering is unavailable. Each has a full-resolution link; the `.mmd` sources and structured graph metadata remain committed for diffs.
@@ -136,7 +136,7 @@ The memory regression instantiates the publicly available Verilog-AXI crossbar a
 
 - The **architecture** is specified by [`config/soc.yaml`](config/soc.yaml), including per-subsystem CPU differences and separate data/config networks.
 - [`tools/socgen.py`](tools/socgen.py) emits the executable memory RTL and neutral NoC IR; [`tools/noc_backends.py`](tools/noc_backends.py) defines vendor-specific emitters. The **`verilog_axi` memory backend is executable**; PULP AXI and FlooNoC emitters are **not implemented yet** and are explicitly reported as such.
-- [`tools/diagram_gen.py`](tools/diagram_gen.py) uses the same validated topology and verification scopes to render all 2D views; [`tools/generate.py`](tools/generate.py) coordinates generation, stale cleanup, and drift verification.
+- [`tools/diagram_gen.py`](tools/diagram_gen.py) uses the same validated topology and verification scopes to render the single full-SoC view; [`tools/generate.py`](tools/generate.py) coordinates generation, stale cleanup, and drift verification.
 - [`config/ip.lock.yaml`](config/ip.lock.yaml) pins third-party IP commits. [`rtl/adapters/`](rtl/adapters/) isolates the CPU and behavioral memory interfaces.
 
 See [architecture contracts](docs/architecture.md) and the [hierarchical verification plan](docs/verification.md) for intended subsystem, NoC, and full-chip integration milestones.
