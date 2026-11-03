@@ -430,6 +430,11 @@ def render(cfg: dict, root: Path, destination: Path) -> tuple[dict, dict[str,str
     # Deliberately ONE image. Physical per-router wiring is preserved in
     # noc-topology.json and upstream FlooGen YAML, never duplicated as SVGs.
     overview_svg(cfg, networks, destination / "noc-hierarchy.svg")
+    (destination / "noc-hierarchy.mmd").write_text(mermaid["noc-hierarchy"])
+    (destination / "noc-hierarchy.md").write_text(
+        "# Complete SoC FlooNoC hierarchy\\n\\n"
+        "[![Whole SoC FlooNoC](noc-hierarchy.svg)](noc-hierarchy.svg)\\n\\n"
+        "[Mermaid source](noc-hierarchy.mmd)\\n")
     graph = diagram_gen_metadata(cfg, networks)
     (destination / "noc-topology.json").write_text(json.dumps(graph, indent=2, sort_keys=True) + "\n")
     return graph, mermaid
