@@ -64,16 +64,12 @@ resolved in pinned Xezim 0.11.4 and the historical bug reproducer was removed fr
    `gen/` manually. `README.md` contains one generated section between
    `BEGIN GENERATED SOC` and `END GENERATED SOC` comments. Edit the
    generator for content in that section.
-7. Every change affecting architecture, mapping, generator, or diagram
-   content needs `make gen` and a review of ALL generated views:
-   `architecture`, `rtl-connectivity`, `boot`, `verification`,
-   `noc-hierarchy`, `noc/global_data`, `noc/global_config`,
-   all compute/memory local `noc/*` views, `noc-topology.json`,
-   `subsystems/compute0`, `subsystems/compute1`,
-   `subsystems/memory0`. Additional subsystem diagrams must appear
-   automatically; removed ones must disappear. SVG, Mermaid and graph JSON
-   must agree with the emitted RTL and whether each link is *planned* or
-   *actually exercised*.
+7. Every architecture change must regenerate **only** the canonical
+   `gen/diagrams/noc-hierarchy.svg` and its Mermaid/JSON metadata.
+   Do not reintroduce per-mesh, boot, subsystem or verification diagrams.
+   The actual eight FlooGen meshes and all physical link metadata remain
+   under `gen/noc/floonoc/` and `gen/diagrams/noc-topology.json`.
+   Validate the hierarchy against the real generated network endpoints.
 8. `make check-generated` is a nonmutating exact file-name/content/drift
    check, not a substitute for regenerating files. Keep generated `gen/`
    and the marked README section committed with a config/generator change.
@@ -213,7 +209,7 @@ unnecessary custom verification RTL.
 
 Primary verification scopes: compute0, compute1, memory0, global_data
 NoC, global_config NoC, and soc_top. Avoid new per-bridge/SRAM/router
-testbench proliferation. See docs/subsystem-verification.md.
+testbench proliferation. See docs/subsystem-verification.md. The same `gen/dv/supernoc_tb.sv` is the only integrated NoC testbench; do not proliferate router, bridge or per-mesh testbenches.
 
 Next actual integration work: use the generated FlooNoC modules in
 subsystem-level testbenches, connect real upstream AXI-Lite adapters,
