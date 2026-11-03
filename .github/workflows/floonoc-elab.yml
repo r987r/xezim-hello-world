@@ -5,12 +5,18 @@ on:
     paths:
       - 'gen/noc/floonoc/**'
       - 'tools/floonoc_gen.py'
+      - 'tools/supernoc_gen.py'
+      - 'gen/supernoc/**'
+      - 'scripts/run-supernoc.sh'
       - 'scripts/run-floonoc-xezim.sh'
       - '.github/workflows/floonoc-elab.yml'
   pull_request:
     paths:
       - 'gen/noc/floonoc/**'
       - 'tools/floonoc_gen.py'
+      - 'tools/supernoc_gen.py'
+      - 'gen/supernoc/**'
+      - 'scripts/run-supernoc.sh'
       - 'scripts/run-floonoc-xezim.sh'
       - '.github/workflows/floonoc-elab.yml'
   workflow_dispatch:
@@ -103,6 +109,22 @@ jobs:
           test "$count" -eq 8
           echo "PASS: elaborated $count real upstream FlooNoC networks"
 
+      - name: Simulate all eight connected real FlooNoCs with upstream PULP AXI directed BFMs
+        timeout-minutes: 20
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/run-supernoc.sh 2>&1 | tee supernoc-build-and-run.log
+      - name: Save supernoc AXI traffic/build logs if failed
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: supernoc-real-axi-traffic-debug
+          path: |
+            supernoc-build-and-run.log
+            supernoc-dv.log
+            gen/supernoc/supernoc_tb.sv
+          if-no-files-found: ignore
       - name: Download the checksum-verified pinned Xezim release
         env:
           GH_TOKEN: ${{ github.token }}
