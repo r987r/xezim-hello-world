@@ -8,6 +8,7 @@ on:
       - 'tools/supernoc_gen.py'
       - 'gen/supernoc/**'
       - 'scripts/run-supernoc.sh'
+      - 'dv/supernoc/**'
       - 'scripts/run-floonoc-xezim.sh'
       - '.github/workflows/floonoc-elab.yml'
   pull_request:
@@ -17,6 +18,7 @@ on:
       - 'tools/supernoc_gen.py'
       - 'gen/supernoc/**'
       - 'scripts/run-supernoc.sh'
+      - 'dv/supernoc/**'
       - 'scripts/run-floonoc-xezim.sh'
       - '.github/workflows/floonoc-elab.yml'
   workflow_dispatch:
@@ -109,7 +111,9 @@ jobs:
           test "$count" -eq 8
           echo "PASS: elaborated $count real upstream FlooNoC networks"
 
-      - name: Simulate all eight connected real FlooNoCs with upstream PULP AXI directed BFMs
+      - name: Install pinned cocotb AXI verification libraries
+        run: python3 -m pip install 'cocotb==2.0.1' 'cocotbext-axi==0.1.26'
+      - name: Simulate all eight connected real FlooNoCs with cocotbext-axi readback BFMs
         timeout-minutes: 20
         shell: bash
         run: |
