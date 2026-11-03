@@ -156,6 +156,14 @@ def profiles(soc, knobs):
         # counter as clog2(MaxTxnsPerId), while cc_fifo exports
         # clog2(Depth+1). Power-of-two depths break its instance-array
         # connection. Reject this upstream corner until explicitly fixed.
+        # Upstream floo_meta_buffer TooFewIdBits2 asserts at time zero:
+        # a one-bit AXI4 config transport cannot reserve atomic IDs while
+        # allocating multiple non-atomic request ID queues. One unique ID
+        # with NoRoB is the correct AXI4-Lite-style CSR transport budget.
+        if plane == "config" and params["MaxUniqueIds"] != 1:
+            raise NoCGenerationError(
+                f"{name}: one-bit config transport requires MaxUniqueIds=1 "
+                "(upstream floo_meta_buffer TooFewIdBits2)")
         depth = params["MaxTxnsPerId"]
         if (params["BRoBType"] != "NoRoB" or params["RRoBType"] != "NoRoB"):
             if depth < params["MaxTxns"]:
