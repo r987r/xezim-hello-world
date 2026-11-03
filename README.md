@@ -149,7 +149,11 @@ The upstream FlooNoC/AXI/common_cells libraries are not copied into
 `gen/`; they are resolved from pinned sources. **Generated != elaborated
 or traffic-tested**. For AXI-Lite control networks, reuse the real PULP
 AXI adapters documented in
-[AXI-Lite-over-FlooNoC](docs/axi-lite-over-floonoc.md).
+[AXI-Lite-over-FlooNoC](docs/axi-lite-over-floonoc.md). Both
+pinned **Verilator and Xezim compile all eight generated NoCs**,
+but Xezim reports width warnings in the four data meshes. The
+[simulator compatibility audit](docs/simulator-compatibility.md)
+records these; compilation is not routed-traffic verification.
 
 ## FlooNoC fabric policy
 

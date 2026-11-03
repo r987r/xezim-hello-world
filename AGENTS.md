@@ -160,12 +160,18 @@ transaction regressions. The independent
 and its upstream Bender.lock dependency tree, then **elaborates all
 eight FlooGen-generated local/global meshes with Verilator**.
 These are *different verification gates*; report them separately.
-The **same generated global data and global config meshes now also
+**All eight generated local and global FlooNoC meshes now also
 compile with pinned Xezim 0.11.4** using
-`scripts/run-floonoc-xezim.sh global_data global_config` and the
-*same upstream Bender filelist* as the Verilator elaboration gate.
-The Xezim compile stage is a separately logged compatibility probe
-(`continue-on-error` until broader FlooNoC support is characterized).
+`scripts/run-floonoc-xezim.sh all` and the *same upstream Bender
+filelist* as the Verilator elaboration gate. The script discovers its
+tops from `gen/noc/floonoc/manifest.json` so a new subsystem scales
+without editing hardcoded lists.
+**Xezim reports potentially significant RoB/FIFO port width warnings
+in all four DATA networks**, even though the compilation exits zero;
+Verilator emits other upstream width warnings. Read and maintain
+[docs/simulator-compatibility.md](docs/simulator-compatibility.md)
+before making any simulator workaround. The Xezim compile stage is
+separately logged and can be nonblocking until real traffic is tested.
 Use both tool diagnostics to isolate simulator issues and run actual
 AXI transaction tests with each simulator as their support permits.
 Do not count elaboration or compilation as successful AXI traffic.

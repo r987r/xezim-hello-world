@@ -32,6 +32,15 @@ The only new high-level RTL scopes should be **compute0**, **compute1**,
 Reuse upstream modules within each TB; no separate testbench for every
 bridge, FIFO, decoder, SRAM, router, or BFM.
 
+## Cross-simulator checks
+
+Both Verilator and Xezim now compile all eight upstream-generated FlooNoCs
+using the same pinned Bender dependency source list. **Xezim emits width
+warnings for the four data meshes**; Verilator also has upstream warnings.
+These are not waveforms or read/write traffic proofs. Before changing
+FlooNoC parameters or introducing shims, check the exact issue inventory in
+[simulator compatibility](simulator-compatibility.md).
+
 ## Pinned upstream FlooNoC RoB depth caveat
 
 When `NormalRoB` is enabled, upstream
