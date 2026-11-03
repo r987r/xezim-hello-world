@@ -1,0 +1,43 @@
+name: Regenerate canonical SoC diagram (feature only)
+on:
+  push:
+    branches: [feat/supernoc-single-diagram-dv-20261102]
+    paths:
+      - 'tools/diagram_gen.py'
+      - 'tools/noc_diagrams.py'
+      - 'tools/generate.py'
+      - 'tests/test_socgen.py'
+      - 'tests/test_noc_diagrams.py'
+      - '.github/workflows/regen-single-diagram-feature.yml'
+permissions:
+  contents: write
+jobs:
+  regenerate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned FlooGen
+        run: |
+          python3 -m pip install -r requirements.txt
+          python3 tools/ip_fetch.py floonoc
+          python3 -m pip install -e .tools/floonoc
+      - name: Generate and test exact diagram outputs
+        run: |
+          make gen
+          make check-generated
+          make check-config
+      - name: Commit only generated artifacts
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add gen README.md
+          if ! git diff --cached --quiet; then
+            git commit -m 'Keep just one generated complete SoC NoC diagram'
+            git fetch origin "$GITHUB_REF_NAME"
+            git rebase "origin/$GITHUB_REF_NAME"
+            git push origin "HEAD:$GITHUB_REF_NAME"
+          fi
