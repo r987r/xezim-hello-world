@@ -40,9 +40,9 @@ flowchart TB
   n_memory0_hbm0["HBM AXI RAM model"]:::model
   n_memory0_ddr0["DDR AXI RAM model"]:::model
   end
-  n_global_data -.->|remote SRAM| n_compute0_sram
+  n_global_data -.->|remote SRAM ingress| n_compute0_local_data
   n_global_config -.->|CSR ingress| n_compute0_local_config
-  n_global_data -.->|remote SRAM| n_compute1_sram
+  n_global_data -.->|remote SRAM ingress| n_compute1_local_data
   n_global_config -.->|CSR ingress| n_compute1_local_config
   n_global_data -.->|memory_ingress0| n_memory0_local_data
   n_global_data -.->|memory_ingress1| n_memory0_local_data

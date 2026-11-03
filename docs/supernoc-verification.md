@@ -10,7 +10,8 @@ The entire data/config NoC hierarchy is exercised through **one** integrated
   checked against the source FlooGen YAML.
 - **Protocol agents:** mature open-source
   [cocotbext-axi](https://github.com/alexforencich/cocotbext-axi)
-  `AxiMaster` and `AxiRam` sparse-memory AXI4 BFM. This supports
+  `AxiMaster`, `AxiSlave`, `AddressSpace` and `SparseMemoryRegion`.
+  Each target exposes only its decoded windows, with no address wrapping. This supports
   multi-ID requests, bursts, mixed read/write, and configurable stalls.
 - **Simulator:** standard upstream Verilator via
   [cocotb](https://github.com/cocotb/cocotb) 1.9.2, with `cocotbext-axi==0.1.24`, pinned in CI to match
@@ -23,9 +24,12 @@ The entire data/config NoC hierarchy is exercised through **one** integrated
   both; config operations are single-beat 32-bit accesses. Actual CPU/CSR
   AXI4-Lite bridges are later upstream PULP integration work.
 - **Test acceptance:** reports must show actual B/R OKAY, correct data
-  readback and route coverage across the **connected** local/global
-  data/config networks, not merely compiler exit status. Additional
-  concurrency/burst/backpressure/error tests are future coverage stages.
+  readback at the intended endpoint and all 28 source/window routes across
+  the **connected** local/global data/config networks. The same test runs
+  136 concurrent burst/partial/single-beat cases, all-five-channel stalls,
+  multiple outstanding data streams with reused IDs, byte-strobe guard
+  checks, and 24 routed B/R SLVERR pairs. Four boot-window routes are reads
+  against seeded BFMs; the real CPU cold-boot scope remains separate.
 
 The original candidate, [PULP AXI `axi_test.sv`](https://github.com/pulp-platform/axi/blob/master/src/axi_test.sv),
 provides excellent AXI SV drivers, `axi_rand_master`, mapped
@@ -117,3 +121,71 @@ memory target crossbar are **not yet attached to this full-chip wrapper**;
 they are separately tested where available. Physical HBM/DDR controllers
 remain future work. A successful NoC BFM test does not imply the complete
 CPU+iDMA+memory system is functional.
+
+## RAM setup and destination validation
+
+The prior PR head failed before traffic: `AxiRam` defaults to `2**64`
+bytes, and its `Memory` constructor calls Python `len()` on that sparse
+memory, raising `OverflowError`. Merely reducing the size would still
+allow its modulo address mapping to hide wrong destinations.
+
+The test now uses the same upstream library's `AxiSlave` backed by an
+`AddressSpace` containing `SparseMemoryRegion` objects for the exact leaf
+windows. It also compares each bus write with the intended target's
+storage before routed readback. No RAM, responder or AXI handshake code
+has been copied or invented. Empty upstream `AddressSpace` objects inject
+mapped target faults; upstream `AxiSlave` produces SLVERR and the real
+NoCs must preserve it. This does not test unmapped NoC DECERR: the pinned
+FlooNoC address translator instead asserts `DecodeError` on unmapped traffic.
+
+`gen/supernoc/manifest.json` records each source window, expected leaf,
+network path and every cross-network connection. Generation traces both
+ends of each range and rejects missing decodes, loops and width mismatches.
+No numeric cutoff excludes relocated SRAM or CSR apertures.
+`tests/test_supernoc_gen.py` independently compares the wrapper's link set
+with the canonical architecture graph.
+
+## Running and retaining evidence
+
+Install the pinned FlooNoC/Bender dependency tree using the commands in
+`.github/workflows/floonoc-elab.yml`, then:
+
+```bash
+python3 -m pip install 'cocotb==1.9.2' 'cocotbext-axi==0.1.24'
+make dv-supernoc
+# Python-only rerun after an explicit successful local RTL build:
+SUPERNOC_TEST_ONLY=1 python3 dv/supernoc/run.py
+# This must fail with the named injected readback mismatch:
+SUPERNOC_TEST_ONLY=1 SUPERNOC_NEGATIVE=1 SUPERNOC_RESULTS_XML=negative-results.xml python3 dv/supernoc/run.py
+```
+
+The runner checks the cocotb results XML and exits nonzero for a failed
+or empty test run. The shell also requires the final `PASS supernoc:`
+marker. CI retains positive/negative logs, XML and the route manifest on
+success and failure. CI always rebuilds RTL before the positive run;
+`SUPERNOC_TEST_ONLY` is for reuse of that exact binary, not RTL validation.
+Generation metadata names verification commands instead of hardcoding
+historically false pass/fail flags. Current-source evidence belongs in
+actual run logs and the CI head SHA.
+
+## Local validation on 2026-11-03
+
+The local Verilator 5.020 / cocotb 1.9.2 run completed at 84,980 ns:
+
+```text
+PASS concurrent traffic: 6 managers, 136 burst/partial/single-beat cases with stalls
+PASS downstream errors: 24 routed B/R SLVERR pairs
+PASS supernoc: 8 real FlooNoC meshes, 11 local/global links, 28 AXI4 routes
+TESTS=1 PASS=1 FAIL=0 SKIP=0
+```
+
+The opt-in corruption run failed at the intended
+`FAIL supernoc injected data mismatch detected` assertion; its XML reports
+one failure, while the positive XML reports zero. All 63 configuration
+checks, generated-file drift checking, Xezim default/full/sparse memory
+profiles, negative memory checker, SRAM, SERV and two-core cold boot also
+passed locally. Xezim independently compiled all eight meshes with the
+known data-network width warnings retained. These are local results;
+PR #8 still needs completed CI for its new head before merge.
+
+Validated RTL wrapper SHA-256: `27ab3ad2c8e7757f132c2b33388539ce86c886e2ff553884d7701e75417fc33a`.

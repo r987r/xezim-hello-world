@@ -41,14 +41,17 @@ class Art:
                         f'stroke-width="{width}" stroke-linecap="round" '
                         f'stroke-linejoin="round"{dash}/>')
         if arrow and len(coords)>1:
-            x0,y0=coords[-2]; x1,y1=coords[-1]
-            angle=atan2(y1-y0,x1-x0)
-            size=10
-            pts=[(x1,y1),
-                 (x1-size*cos(angle-pi/6),y1-size*sin(angle-pi/6)),
-                 (x1-size*cos(angle+pi/6),y1-size*sin(angle+pi/6))]
-            pt=" ".join(f"{x:.1f},{y:.1f}" for x,y in pts)
-            self.ops.append(f'<polygon points="{pt}" fill="{color}"/>')
+            ends = [(coords[-2], coords[-1])]
+            if arrow == "both":
+                ends.append((coords[1], coords[0]))
+            for (x0,y0), (x1,y1) in ends:
+                angle=atan2(y1-y0,x1-x0)
+                size=10
+                pts=[(x1,y1),
+                     (x1-size*cos(angle-pi/6),y1-size*sin(angle-pi/6)),
+                     (x1-size*cos(angle+pi/6),y1-size*sin(angle+pi/6))]
+                pt=" ".join(f"{x:.1f},{y:.1f}" for x,y in pts)
+                self.ops.append(f'<polygon points="{pt}" fill="{color}"/>')
 
     def text(self,x,y,value,size=18,color=INK,align="left",spacing=1.35):
         value = (str(value).replace('•', ' | ').replace('×', 'x')

@@ -14,9 +14,11 @@ The Xezim matrix is manifest-driven (not a list of hardcoded names):
 [`run-floonoc-xezim.sh`](../scripts/run-floonoc-xezim.sh).
 
 Both compile/elaboration pipelines return success on the initial eight
-NoCs. These are **not** packet-transfer simulation tests. Neither a
-successful compile nor a green default CI job proves the NoC has
-preserved IDs, backpressure, read/write ordering, or correct destination.
+NoCs. These are **not** packet-transfer simulation tests. A successful compile or the default CI job alone does not prove routed
+behavior. The separate [super-NoC test](supernoc-verification.md) now
+runs real routed traffic in Verilator, including concurrent IDs, stalls,
+bursts, destinations and downstream SLVERR. Xezim's NoC path remains
+compile-only; no equivalent Xezim routed-traffic pass is claimed.
 
 ## Warnings that must not be hidden
 

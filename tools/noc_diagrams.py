@@ -225,6 +225,7 @@ def diagram_gen_metadata(cfg: dict, networks: dict) -> dict:
         "source_of_truth": ["config/soc.yaml", "config/interface_contracts.yaml",
                             "gen/noc/floonoc/*/floogen.yaml"],
         "status": "real_structural_networks_with_planned_inter_network_links",
+        "scope_note": "Cross-NoC wiring exists in gen/supernoc/supernoc_tb.sv; full SoC endpoint integration is planned",
         "modules": modules, "instances": instances, "connections": connections, "groups": groups,
         "networks": {name: {"plane": net["entry"]["plane"], "routers": net["entry"]["routers"],
                             "endpoints": len(net["endpoints"]), "top": net["entry"]["top"],
@@ -282,7 +283,7 @@ def hierarchy_mermaid(cfg: dict, networks: dict) -> str:
         node(target["name"], target["kind"].upper()+" AXI RAM model", "model")
     lines.append("  end")
     for c in computes:
-        planned("global_data", c["name"]+".sram", "remote SRAM")
+        planned("global_data", c["name"]+"_local_data", "remote SRAM ingress")
         planned("global_config", c["name"]+"_local_config", "CSR ingress")
     for output in cfg["networks"]["global_data"]["outputs"]:
         planned("global_data", memory+"_local_data", output["name"])
@@ -306,14 +307,14 @@ def overview_svg(cfg: dict, networks: dict, dst: Path):
     h=my+360
     a=Art(1600,h)
     a.heading("Real upstream-generated NoC hierarchy","Full-chip FlooNoC network map",
-              "All eight meshes are generated RTL; dashed connections between them are NOT integrated")
+              f"{len(networks)} generated meshes; dashed links show pending full-SoC integration (see the separate NoC BFM test)")
     for i, compute in enumerate(computes):
         name=compute["name"];x=56+(i%2)*784;y=158+(i//2)*285
         a.rect(x,y,744,267,WHITE,FAINT,r=17,width=2)
         a.text(x+18,y+14,name+" / compute subsystem",22,INK)
         a.box_label(x+18,y+50,220,76,compute["cpu"]["ip"]+" CPU",
                     compute["cpu"]["bus"]+" adapter pending","cpu",title_size=19,detail_size=13)
-        a.box_label(x+255,y+50,213,76,"PULP iDMA","IP wiring pending","dma",title_size=19,detail_size=14)
+        a.box_label(x+255,y+50,213,76,"PULP iDMA + CSR","IP wiring pending","dma",title_size=19,detail_size=14)
         a.box_label(x+486,y+50,235,76,"Local SRAM","global remote address", "memory",title_size=19,detail_size=13)
         ld=name+"_local_data";lc=name+"_local_config"
         a.box_label(x+18,y+155,351,81,"LOCAL DATA  /  FlooNoC",
@@ -325,18 +326,19 @@ def overview_svg(cfg: dict, networks: dict, dst: Path):
         a.line([(x+129,y+126),(x+129,y+155)],BLUE,2,True,True)
         a.line([(x+360,y+126),(x+280,y+155)],BLUE,2,True,True)
         a.line([(x+128,y+126),(x+553,y+155)],PURPLE,2,True,True)
-        a.line([(x+545,y+155),(x+603,y+126)],GREEN,2,True,True)
+        a.line([(x+320,y+155),(x+603,y+126)],GREEN,2,True,True)
+        a.line([(x+553,y+155),(x+400,y+126)],PURPLE,2,True,True)
     a.box_label(56,gy,744,113,"GLOBAL DATA / FlooNoC",
-                str(networks["global_data"]["entry"]["routers"])+" routers / XY mesh / 64-bit AXI4\ncompute0, compute1, remote SRAMs, both memory ingress ports",
+                str(networks["global_data"]["entry"]["routers"])+" routers / XY mesh / 64-bit AXI4\ncompute uplinks, remote SRAMs, configured memory ingress ports",
                 "fabric",title_size=24,detail_size=15)
     a.box_label(840,gy,704,113,"GLOBAL CONFIG / FlooNoC",
                 str(networks["global_config"]["entry"]["routers"])+" routers / XY mesh / 32-bit AXI4\nPULP upstream AXI4-Lite bridges required at CSR boundaries",
                 "config",title_size=24,detail_size=15)
     for i,c in enumerate(computes):
         x=56+(i%2)*784
-        y=158+(i//2)*285+267
-        a.line([(x+192,y),(x+192,y+9),(428,gy-10),(428,gy)],GREEN,2,True,True)
-        a.line([(x+555,y),(x+555,y+13),(1193,gy-10),(1193,gy)],PURPLE,2,True,True)
+        y=158+(i//2)*285+236
+        a.line([(x+192,y),(x+192,y+40),(428,gy-10),(428,gy)],GREEN,2,True,"both")
+        a.line([(x+555,y),(x+555,y+44),(1193,gy-10),(1193,gy)],PURPLE,2,True,"both")
     a.rect(56,my,1488,307,WHITE,FAINT,r=17,width=2)
     a.text(82,my+18,mem+" / memory subsystem",24,INK)
     a.box_label(83,my+64,500,71,"LOCAL DATA / FlooNoC",
@@ -345,6 +347,9 @@ def overview_svg(cfg: dict, networks: dict, dst: Path):
     a.box_label(622,my+64,485,71,"LOCAL CONFIG / FlooNoC",
                 str(networks[mem+"_local_config"]["entry"]["routers"])+" generated routers / CSR bridge pending",
                 "config",title_size=20,detail_size=14)
+    a.box_label(1142,my+64,375,71,"Controller CSRs",
+                "Upstream AXI-Lite bridge pending", "config",title_size=20,detail_size=14)
+    a.line([(1107,my+100),(1142,my+100)],PURPLE,2,True,True)
     a.box_label(83,my+171,702,75,"Internal 2x2 Verilog-AXI crossbar",
                 "Real independently tested memory fabric RTL","rtl",title_size=22,detail_size=15)
     targets=cfg["memory_targets"]
@@ -353,15 +358,23 @@ def overview_svg(cfg: dict, networks: dict, dst: Path):
         a.box_label(tx,my+170,346,78,t["kind"].upper()+" AXI RAM",
                     "Behavioral model; physical controller pending",
                     "memory",title_size=20,detail_size=14)
-        a.line([(tx,my+208),(785,my+208)],GREEN,2,False,True)
-    a.line([(320,gy+113),(320,my+64)],GREEN,3,True,True)
-    a.line([(1193,gy+113),(1193,my+64)],PURPLE,3,True,True)
+        if j == 0:
+            a.line([(785,my+208),(tx,my+208)],GREEN,2,False,True)
+        else:
+            a.line([(785,my+220),(795,my+220),(795,my+259),
+                    (tx+173,my+259),(tx+173,my+248)],GREEN,2,False,True)
+    outputs=cfg["networks"]["global_data"]["outputs"]
+    for i, output in enumerate(outputs):
+        x=320+(i-(len(outputs)-1)/2)*60
+        a.line([(x,gy+113),(x,my+64)],GREEN,3,True,True)
+    a.text(390,my+48,f"{len(outputs)} AXI4 ingress ports",12,MUTED)
+    a.line([(1193,gy+113),(1193,my+42),(864,my+42),(864,my+64)],PURPLE,3,True,True)
     a.line([(320,my+135),(320,my+171)],GREEN,2,True,True)
     a.text(83,my+274,
            "Solid target links: standalone memory testbench ONLY. Full SoC NoC links and endpoint bridges: planned.",
            17,MUTED)
     a.text(65,h-29,
-           "See gen/diagrams/noc/* for physical router layouts derived from the actual FlooGen YAML files.",
+           "Router coordinates and link details: gen/diagrams/noc-topology.json and gen/noc/floonoc/*/floogen.yaml.",
            15,MUTED)
     a.save(dst)
 

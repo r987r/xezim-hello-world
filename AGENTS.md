@@ -10,7 +10,7 @@ Prefer existing public AXI, SRAM, DMA, NoC, CPU, BFM and controller IP. Add
 only small, explicit, reviewed glue needed for a real protocol boundary.
 Never invent a custom bus fabric, SRAM or AXI VIP simply because it is easy.
 
-**Do not claim FlooNoC is running**: `fabrics.global_data.backend: floonoc`
+**Do not claim the full SoC is running from a scoped NoC BFM pass**: `fabrics.global_data.backend: floonoc`
 in `config/soc.yaml` denotes selected architecture only. The current
 `tools/noc_backends.py` has `floonoc.executable=False` and likewise
 `pulp_axi.executable=False`. There is **no full-chip soc_top**. The
@@ -41,7 +41,9 @@ resolved in pinned Xezim 0.11.4 and the historical bug reproducer was removed fr
    manifest for every mesh; it produces one complete SoC/FlooNoC SVG preview, one Mermaid source, and Diagram-gen-style JSON
    (`gen/diagrams/noc-topology.json`). The local router-router/NI
    edges are **generated structural RTL**; all cross-NoC and CPU/DMA/CSR
-   links are **planned** until a real SoC top and traffic tests pass.
+   endpoint links remain **planned** in the full SoC. Cross-NoC wiring
+   exists in the separate generated `supernoc_tb`; its traffic gate is
+   `make dv-supernoc`. Never conflate that scope with real CPU/DMA/CSR wiring.
    FlooNoC does not directly render Diagram-gen; use our generated
    Diagram-gen-style instance/connection/group metadata, and avoid
    inventing router positions or claiming a 3D viewer integration test
@@ -69,8 +71,9 @@ resolved in pinned Xezim 0.11.4 and the historical bug reproducer was removed fr
    memory or RTL-connectivity pictures. FlooGen's checked-in YAML/SV already
    provides drill-down. When the YAML changes, run `make gen`, confirm
    `gen/diagrams/` contains one SVG, and commit deletion of stale outputs.
-   Review internal mesh router links as structural RTL and cross-network
-   links as planned until a routed AXI simulation actually passes.
+   Review internal mesh router links as structural RTL. The single picture
+   describes full-SoC endpoint integration; the NoC BFM wrapper and its
+   route manifest provide separate executable cross-network wiring.
 8. `make check-generated` is a nonmutating exact file-name/content/drift
    check, not a substitute for regenerating files. Keep generated `gen/`
    and the marked README section committed with a config/generator change.
@@ -194,12 +197,16 @@ See [docs/supernoc-verification.md](docs/supernoc-verification.md).
 from the eight real FlooGen profiles; it uses only packed AXI4
 struct-to-flat-port assignments and true upstream FlooNoC modules.
 `dv/supernoc/test_supernoc.py` uses mature third-party
-`cocotbext-axi` `AxiMaster` and `AxiRam` rather than custom AXI
-BFMs or new per-router testbenches. Run `bash scripts/run-supernoc.sh`
+`cocotbext-axi` `AxiMaster` and `AxiSlave` with mapped upstream
+`AddressSpace`/`SparseMemoryRegion` storage rather than custom AXI BFMs or new per-router testbenches. Run `bash scripts/run-supernoc.sh`
 after pinned Bender checkout (see `.github/workflows/floonoc-elab.yml`).
 **Do not claim the super-NoC is working from a compile-only result.**
-A successful result must include real AXI write/readback checks through
-local/global data/config routers with test logs. Xezim remains the
+A successful result must include all mapped routes, intended destination
+storage, bursts/byte strobes, concurrent reused IDs, five-channel stalls,
+and routed SLVERR checks with test logs. The optional corruption run must
+fail with its exact named mismatch. Never accept a generic compile exit
+or an empty cocotb results file. Boot routing reads use seeded BFMs only;
+the independent CPU cold-boot SRAM must stay uninitialized. Xezim remains the
 independent structural compile and existing boot/memory simulation path.
 PULP `axi_test.sv` classes were explored but Verilator 5.020 cannot
 parse some upstream class/randomize constructs; do not fork them as a

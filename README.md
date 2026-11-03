@@ -11,7 +11,7 @@ A reusable, **configuration-driven hierarchical SoC test vehicle** built from pu
 <!-- Do not edit this section: regenerate with `make gen`. -->
 ### Whole-SoC data and configuration NoCs
 
-The **single architecture diagram** below includes all local/global FlooNoCs, compute CPU/DMA/SRAM blocks and memory target crossbar. It is generated from the same SoC configuration and FlooGen endpoint topology as the real structural RTL. **Dashed cross-network/endpoint links are planned, not connected or traffic-verified.**
+The **single architecture diagram** below includes all local/global FlooNoCs, compute CPU/DMA/SRAM blocks and memory target crossbar. It is generated from the same SoC configuration and FlooGen endpoint topology as the real structural RTL. **Dashed links show pending full-SoC endpoint integration.** Cross-NoC links are connected separately in the generated NoC BFM testbench.
 
 [![Complete hierarchical SoC and all data/config FlooNoCs](gen/diagrams/noc-hierarchy.svg)](gen/diagrams/noc-hierarchy.svg)
 
@@ -19,7 +19,7 @@ The **single architecture diagram** below includes all local/global FlooNoCs, co
 
 **Configured topology:** 2 compute subsystems, 8 independent FlooNoC instances, 43 total generated routers. Data: 64-bit AXI4; control: 32-bit AXI4 transport for AXI4-Lite transactions through upstream adapters.
 
-**Verification truth:** Xezim exercises separate CPU cold-boot/SRAM and Verilog-AXI memory testbenches. Both Xezim and Verilator have compiled the eight structural FlooNoCs; a unified multi-NoC AXI read/write testbench is still required. Compilation is not routed traffic proof.
+**Verification truth:** Xezim exercises separate CPU cold-boot/SRAM and Verilog-AXI memory testbenches. Both Xezim and Verilator have compiled the eight structural FlooNoCs. The unified `make dv-supernoc` regression connects all meshes to upstream AXI agents and checks destinations, data, bursts, concurrent IDs, stalls and downstream SLVERR. Xezim NoC traffic is not verified. See [test scope and results](docs/supernoc-verification.md).
 
 ### Generated NoC sources (no duplicate pictures)
 
@@ -44,10 +44,12 @@ The **single architecture diagram** below includes all local/global FlooNoCs, co
 open-source 2x2 Verilog-AXI memory crossbar (full and sparse routing).
 **All eight local/global FlooNoC structural RTL modules are generated
 and checked in**, and Verilator has independently elaborated all eight
-using pinned upstream Bender dependencies. **Not working yet:** AXI
-traffic through those routers, inter-NoC connection wiring, CPU/DMA/CSR
-endpoints, full-chip `soc_top`, and real HBM/DDR controllers/PHY. Do
-not confuse generated/elaborated RTL with a working interconnected SoC.
+using pinned upstream Bender dependencies. The generated `supernoc_tb`
+connects all eight through eleven AXI4 links with six upstream managers
+and nine mapped sparse BFM targets. `make dv-supernoc` checks routed
+traffic; see [coverage and results](docs/supernoc-verification.md).
+**Still pending:** real CPU/DMA/CSR endpoint integration, AXI-Lite
+bridges, full-chip `soc_top`, and HBM/DDR controllers/PHY.
 
 For source-backed maturity and outstanding work, see
 [implementation status](docs/implementation-status.md); the single diagram
@@ -85,8 +87,9 @@ FlooNoC, with independent mesh instances. Inside memory0, the verified
 Verilog-AXI target crossbar remains downstream of its local FlooNoC.
 AXI4-Lite control endpoints need real upstream AXI-Lite/AXI4 adapters.
 All eight local/global FlooGen outputs are generated and reviewable in
-`gen/noc/floonoc/`; each has a router-level mesh image in
-`gen/diagrams/noc/`. **None yet passes end-to-end routed AXI traffic.**
+`gen/noc/floonoc/`. One [whole-chip picture](gen/diagrams/noc-hierarchy.svg)
+and its router/NI JSON cover the hierarchy; there are no separate mesh images.
+The connected BFM regression is distinct from real endpoint integration.
 
 ## Explicit interface sizing
 
@@ -99,7 +102,16 @@ read/write targets, and native IP parameter names. This is a validated
 accepts these limits yet. CI tests keep FlooGen AXI widths and memory
 windows in sync.
 
-## Subsystem-level tests and FlooNoC bring-up\n\nUse [subsystem verification plan](docs/subsystem-verification.md) as the\nauthoritative scope definition (compute0, compute1, memory0, global data,\nglobal config, full SoC). [All eight generated FlooNoC topologies](gen/noc/floonoc/manifest.json)\nare committed actual upstream-generated SystemVerilog, not proof of\nrouter elaboration or AXI traffic; see FlooGen and elaboration CI.\nNo bridge- or simulator-repro TB proliferation.\n\n## Reproducible generation
+## Subsystem-level tests and FlooNoC bring-up
+
+Use [subsystem verification plan](docs/subsystem-verification.md) as the
+authoritative scope definition (compute0, compute1, memory0, global data,
+global config, full SoC). [All eight generated FlooNoC topologies](gen/noc/floonoc/manifest.json)
+are committed actual upstream-generated SystemVerilog, with the connected NoC BFM regression described in
+[super-NoC verification](docs/supernoc-verification.md).
+No bridge- or simulator-repro TB proliferation.
+
+## Reproducible generation
 
 Everything under **[`gen/`](gen/)** is committed to Git for version-to-version diffs. The directory is exclusively generator-owned and contains a marker protecting against accidental replacement of user-owned trees.
 
@@ -121,7 +133,7 @@ The generated artifacts include:
 | [`gen/noc/fabric_ir.json`](gen/noc/fabric_ir.json) | Vendor-neutral NoC/interconnect intermediate representation |
 | [`gen/verification/plan.json`](gen/verification/plan.json) | Verification scopes, executable vs planned boundaries, test commands |
 | [`gen/verification/routes.json`](gen/verification/routes.json) | Source/target AXI reachability expectations for the executable memory test |
-| [`gen/diagrams/`](gen/diagrams/) | Source-controlled 2D diagrams (`.mmd`) and structured graph metadata (`graphs.json`) |
+| [`gen/diagrams/`](gen/diagrams/) | One SVG, its Mermaid source and structured router/NI graph (`noc-topology.json`) |
 | [`gen/manifest.json`](gen/manifest.json) | Deterministic SHA-256 index of every generated output |
 
 The static SVG previews display directly in GitHub README and mobile clients, even when Mermaid rendering is unavailable. Each has a full-resolution link; the `.mmd` sources and structured graph metadata remain committed for diffs.
@@ -141,19 +153,20 @@ XEZIM_BIN=/path/to/xezim make dv-serv    # standalone SERV execution, four instr
 XEZIM_BIN=/path/to/xezim make dv-sram    # real RTL SRAM, no power-on preload
 XEZIM_BIN=/path/to/xezim make dv-boot    # real ROM->SRAM CPU execution
 XEZIM_BIN=/path/to/xezim make test
+make dv-supernoc                    # requires pinned FlooNoC Bender checkout + cocotb
 ```
 
 The memory regression instantiates the publicly available Verilog-AXI crossbar and behavioral AXI RAM. It issues four-beat reads and writes from two independent AXI masters to HBM0 and DDR0 address regions, then checks responses, IDs, data, and reachability. The negative test intentionally corrupts an expectation and confirms the checker rejects it. The CPU smoke merely observes fetch requests; **`dv-boot` executes instructions** from ROM and then from SRAM, proving actual CPU-controlled SRAM loading.
 
 **Boot status:** The standalone boot test instantiates both real CPUs. CPU0 must copy two flash-resident programs into initially blank SRAM, release SERV through MMIO and execute SRAM code. [Boot flow and memory map](docs/boot.md) details what is and is not integrated.
 
-**Not yet implemented:** real PULP iDMA integration, full-chip CPU/data/config NoC wiring, FlooNoC or PULP AXI backend emission, and the physical HBM/DDR controller/PHY integration. Selected controller projects are research/integration candidates; the simulated `axi_ram` targets are **not timing-accurate HBM or DDR controllers**. The HBM candidate currently relies on vendor HBM PHY IP.
+**Not yet implemented:** real PULP iDMA integration, full-chip CPU/data/config NoC endpoint wiring, generic PULP AXI backend emission, and physical HBM/DDR controller/PHY integration. Selected controller projects are research/integration candidates; the simulated `axi_ram` targets are **not timing-accurate HBM or DDR controllers**. The HBM candidate currently relies on vendor HBM PHY IP.
 
 ## IP replacement and implementation boundaries
 
 - The **architecture** is specified by [`config/soc.yaml`](config/soc.yaml), including per-subsystem CPU differences and separate data/config networks.
-- [`tools/socgen.py`](tools/socgen.py) emits the executable memory RTL and neutral NoC IR; [`tools/noc_backends.py`](tools/noc_backends.py) defines vendor-specific emitters. The **`verilog_axi` memory backend is executable**; PULP AXI and FlooNoC emitters are **not implemented yet** and are explicitly reported as such.
-- [`tools/diagram_gen.py`](tools/diagram_gen.py) uses the same validated topology and verification scopes to render all 2D views; [`tools/generate.py`](tools/generate.py) coordinates generation, stale cleanup, and drift verification.
+- [`tools/socgen.py`](tools/socgen.py) emits the executable memory RTL and neutral NoC IR; [`tools/noc_backends.py`](tools/noc_backends.py) defines vendor-specific emitters. The **`verilog_axi` memory backend is executable**; PULP AXI emission remains pending. [`tools/floonoc_gen.py`](tools/floonoc_gen.py) emits all eight real FlooGen networks, and [`tools/supernoc_gen.py`](tools/supernoc_gen.py) connects their AXI4 boundaries in one BFM testbench. The generic full-SoC FlooNoC backend remains non-executable until real endpoints are integrated.
+- [`tools/diagram_gen.py`](tools/diagram_gen.py) uses the same validated topology and verification scopes to render the single architecture view; [`tools/generate.py`](tools/generate.py) coordinates generation, stale cleanup, and drift verification.
 - [`config/ip.lock.yaml`](config/ip.lock.yaml) pins third-party IP commits. [`rtl/adapters/`](rtl/adapters/) isolates the CPU and behavioral memory interfaces.
 
 See [architecture contracts](docs/architecture.md) and the [hierarchical verification plan](docs/verification.md) for intended subsystem, NoC, and full-chip integration milestones.

@@ -1,65 +1,45 @@
-# SoC and Xezim implementation status
+# SoC implementation status
 
-This is a **scope-aware** inventory, not a declaration that the complete
-SoC is integrated. The authoritative config is
-[`config/soc.yaml`](../config/soc.yaml), the backend registry is
-[`noc_backends.py`](../tools/noc_backends.py), and the generated
-verification plan is [`plan.json`](../gen/verification/plan.json).
-Check the latest [GitHub Actions runs](https://github.com/r987r/xezim-hello-world/actions/workflows/dv-soc.yml)
-for the exact SHA before reporting regression results.
+The architecture comes from `config/soc.yaml`; its generated verification
+plan distinguishes independent executable scopes from the planned full SoC.
+A passing BFM test does not establish CPU/iDMA/controller integration.
 
-## What runs, versus what is only configured
-
-| Part | Actual executable RTL scope | Limit |
+| Part | Executable scope | Remaining boundary |
 | --- | --- | --- |
-| Real `verilog-axi` AXI4 crossbar | `make dv-memory` with two master BFMs, HBM/DDR **behavioral AXI RAM** targets | No CPU/DMA or global NoC in this scope |
-| Full/sparse native crossbar settings | `AXI_CONFIG=config/examples/memory-fabric-connectivity.yaml make dv-memory; AXI_CONFIG=config/examples/memory-fabric-sparse.yaml make dv-memory` | Examples are separate opt-in workloads, not the default full-chip topology |
-| Negative memory checker | `make dv-memory-negative` | Demonstrates data corruption is caught |
-| Local two-port SRAM model | `make dv-sram` | Custom test model, not a silicon SRAM macro |
-| Real SERV instruction test | `make dv-serv` | Small standalone core+RAM test |
-| Dual-CPU cold boot | `make dv-boot`: real PicoRV32 ROM fetch, flash reads, SRAM writes, SERV MMIO release, two signatures | Standalone bootstrap memory/bus model, not the generated full-chip NoC |
-| PULP iDMA | **No executable subsystem** | Source commit only; frontend, CSR and data connections pending |
-| Local FlooNoC | **Generated structural Verilog for all local data/config meshes** | Upstream RTL elaborates in Verilator and Xezim; CPU/DMA/CSR endpoint wiring and routed traffic remain pending |
-| Global FlooNoC mesh | **Upstream-generated structural Verilog tracked in gen/noc/floonoc/global_data** | Upstream dependencies and all eight meshes compile in Verilator and Xezim; AXI transactions remain pending |
-| Global config FlooNoC | **Generated structural AXI4 transport RTL** | Real PULP AXI-Lite boundary adapters and CSR transfers NOT yet connected |
-| LiteDRAM / HiSA HBM | **No executable physical controller/PHY path** | Verification models are generic AXI RAM, not DDR/HBM controllers |
-| End-to-end SOC `soc_top` | **No executable RTL** | CPU to DMA to NoC to memory not proven |
+| Verilog-AXI memory crossbar | `make dv-memory`, full/sparse routing profiles, negative corruption test | Separate 2x2 crossbar with behavioral HBM/DDR AXI RAM targets |
+| Local SRAM | `make dv-sram`, read/write ports and byte strobes | Existing custom test SRAM; no silicon macro integration |
+| SERV | `make dv-serv`, real instruction execution | Standalone core test |
+| Dual-CPU cold boot | `make dv-boot`, PicoRV32 ROM/flash reads, stores into uninitialized SRAM, MMIO release of SERV, both signatures | Separate boot memory/bus scope |
+| Eight local/global FlooNoCs | `make dv-supernoc`, all real meshes connected by 11 AXI4 links, six upstream managers and nine mapped sparse targets | AXI BFMs at CPU/DMA/CSR/SRAM/memory-crossbar boundaries |
+| Xezim FlooNoC compatibility | `scripts/run-floonoc-xezim.sh all`, all eight structural compilations | Data-mesh width warnings remain; no Xezim NoC traffic proof |
+| AXI-Lite endpoint adapters | Upstream PULP `axi_lite_to_axi` / `axi_to_axi_lite` selected | Not connected in the NoC BFM wrapper; config traffic is single-beat AXI4 |
+| PULP iDMA | No executable subsystem | Frontend, CSR, data and interrupt connections pending |
+| HBM/DDR controllers and PHYs | No executable physical path | All current targets are behavioral AXI models |
+| Full-chip `soc_top` | No executable RTL | Real CPU → DMA → NoC → memory integration pending |
 
-### Distinct executable regression scopes (no extra diagrams)
+See [super-NoC verification](supernoc-verification.md) for the exact traffic
+checks, local evidence, test commands and known limitations. See
+[simulator compatibility](simulator-compatibility.md) for diagnostics.
+The generic FlooNoC backend registry remains non-executable because it does
+not emit a complete SoC; scoped FlooGen and BFM-wrapper emission do exist.
 
-The dual-CPU cold-boot test runs PicoRV32 ROM/flash fetch and bus
-stores into initially uninitialized SRAM, then MMIO-releases SERV.
-Separately, `memory_tb` drives the real Verilog-AXI 2×2 crossbar into
-behavioral AXI RAM targets. Neither scope pretends the CPU/DMA/
-global-NoC-to-memory path is integrated. The one canonical image below
-covers the entire configured hierarchy.
+## Single architecture diagram
 
-## One generated full-chip SoC/NoC diagram
+[The one whole-chip diagram](../gen/diagrams/noc-hierarchy.svg) is embedded
+in README. Its Mermaid source and `noc-topology.json` preserve topology
+for inspection. Router positions come from actual FlooGen profiles. The
+cross-network link set is checked against `supernoc_tb`; dashed chip
+endpoint links still denote pending real endpoint integration. There are
+no separate per-router, boot or verification pictures.
 
-Exactly **one** architecture diagram is generated and embedded in
-[README](../README.md): [whole-SoC FlooNoC network hierarchy](../gen/diagrams/noc-hierarchy.svg).
-Its [Mermaid source](../gen/diagrams/noc-hierarchy.mmd) and
-[router/endpoint connectivity graph](../gen/diagrams/noc-topology.json)
-remain reviewable. The source of physical router/NI placement is each
-checked-in `gen/noc/floonoc/*/floogen.yaml`, not duplicate hand-maintained
-mesh drawings. `make gen` removes previous redundant images.
+All generated sources are checked in under `gen/`; `make gen` owns the
+tree and `make check-generated` checks exact file names and contents.
+Generator output is not a test result: use logs for the current source
+and the exact completed CI SHA before merging.
 
-CPU and memory test details belong in test logs, generated SystemVerilog,
-and the verification plan, **not** additional architecture images.
+## Preserved boot boundary
 
-## What would justify saying "FlooNoC works"?
-
-At minimum: pinned FlooNoC and FlooGen sources, real generated router/
-network-interface/link RTL compiled in the pinned Xezim simulator (already achieved); connected
-AXI endpoints with address and ID translation; traffic across *multiple
-routers* to both memory targets; end-to-end data, ordering and reachability
-checks plus negative/error cases and backpressure; and committed
-`soc_top` source lists and the single corresponding *executable* full-SoC topology diagram.
-None of this is established by just `backend: floonoc` or by the existing
-Verilog-AXI crossbar test.
-
-## No regressions hidden by the boot model
-
-The Xezim 0.11.3 part-select workaround is removed. Pinned Xezim 0.11.4,
-upstream SERV and the real CPU boot regression must continue\npassing. See [boot-debug](boot-debug.md) for timing and VCD details.
-\n## Generated structural NoC RTL\n\nAll eight structural NoC SystemVerilog modules and packages are in [`gen/noc/floonoc`](../gen/noc/floonoc/), indexed by [manifest](../gen/noc/floonoc/manifest.json). These are upstream FlooGen output, **not** vendor RTL copied into the repository. Config FlooNoCs use AXI4 as the wire transport with planned upstream PULP AXI-Lite adapters (see [protocol reuse guide](axi-lite-over-floonoc.md)). The system currently has no integrated NoC traffic test.\n
+The pinned Xezim 0.11.4 release replaces the historical 0.11.3 SERV shim.
+CPU0 must load firmware through its bus into uninitialized SRAM; no
+backdoor SRAM preload is allowed in the cold-boot regression. Seeded
+boot-window reads in the separate NoC BFM test establish routing only.

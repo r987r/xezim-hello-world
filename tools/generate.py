@@ -49,8 +49,8 @@ def generated_section(cfg: dict, meta: dict, diagrams: dict[str, str], nocs: dic
         "The **single architecture diagram** below includes all local/global FlooNoCs, "
         "compute CPU/DMA/SRAM blocks and memory target crossbar. It is generated "
         "from the same SoC configuration and FlooGen endpoint topology as the real "
-        "structural RTL. **Dashed cross-network/endpoint links are planned, not "
-        "connected or traffic-verified.**",
+        "structural RTL. **Dashed links show pending full-SoC endpoint integration.** "
+        "Cross-NoC links are connected separately in the generated NoC BFM testbench.",
         "",
         "[![Complete hierarchical SoC and all data/config FlooNoCs](gen/diagrams/noc-hierarchy.svg)](gen/diagrams/noc-hierarchy.svg)",
         "",
@@ -68,8 +68,10 @@ def generated_section(cfg: dict, meta: dict, diagrams: dict[str, str], nocs: dic
         "",
         "**Verification truth:** Xezim exercises separate CPU cold-boot/SRAM and "
         "Verilog-AXI memory testbenches. Both Xezim and Verilator have compiled "
-        "the eight structural FlooNoCs; a unified multi-NoC AXI read/write "
-        "testbench is still required. Compilation is not routed traffic proof.",
+        "the eight structural FlooNoCs. The unified `make dv-supernoc` regression "
+        "connects all meshes to upstream AXI agents and checks destinations, data, "
+        "bursts, concurrent IDs, stalls and downstream SLVERR. Xezim NoC traffic "
+        "is not verified. See [test scope and results](docs/supernoc-verification.md).",
         "",
         "### Generated NoC sources (no duplicate pictures)",
         "",
@@ -164,8 +166,10 @@ def build(cfg_path: Path, out: Path, readme: Path) -> str:
         "from `config/soc.yaml`. All output files are version-controlled for diffs.\n\n"
         "The `memory/` SystemVerilog and `boot/` firmware images are executable "
         "in separate scoped testbenches. All configured local/global FlooNoC "
-        "networks have checked-in structural SystemVerilog in noc/floonoc; "
-        "compilation and end-to-end traffic remain unverified.\n"
+        "networks have checked-in structural SystemVerilog in noc/floonoc. "
+        "supernoc/supernoc_tb.sv connects them with upstream AXI BFMs; run "
+        "make dv-supernoc for current-source routed-traffic verification. "
+        "CPU, DMA, AXI-Lite bridges and physical controllers are separate integration work.\n"
     )
     (out / STAMP).write_text("socgen-v2\n")
     files = {p.relative_to(out).as_posix(): sha(p.read_bytes())

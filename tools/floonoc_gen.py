@@ -59,7 +59,8 @@ def profile(name, plane, mgrs, targets, soc, knobs):
         out_id = bus["id_bits"]
         if name == "global_data":
             in_id += (2 - 1).bit_length()  # CPU and DMA behind local compute NoC
-        elif name.endswith("_local_data") and name != "memory0_local_data":
+        elif name.endswith("_local_data") and name not in {
+                s["name"] + "_local_data" for s in soc["subsystems"] if s["type"] == "memory"}:
             out_id += (2 - 1).bit_length()
     else:
         # AXI-Lite signals are converted at the boundary to AXI4, one beat.
@@ -130,7 +131,7 @@ def profiles(soc, knobs):
             raise NoCGenerationError(f"memory NoC output {m['name']} has unknown destination")
     cfg_owned = {c: [] for c in computes + memories}
     for name, addr in regions_config.items():
-        owner = "compute0" if name.startswith("boot.") else name.split(".")[0]
+        owner = soc["boot"]["primary"] if name.startswith("boot.") else name.split(".")[0]
         if owner not in cfg_owned:
             raise NoCGenerationError(f"config window {name} has no subsystem owner")
         cfg_owned[owner].append(addr)
@@ -319,7 +320,9 @@ def native_bindings(top, params):
 def generate_all(soc, knobs, out, floogen_bin="floogen"):
     designs = profiles(soc, knobs)
     index = {"generator": "upstream FlooGen", "generator_commit": FLOO_COMMIT,
-             "real_rtl_elaborated": False, "real_axi_traffic_verified": False,
+             "verification": {"generation_is_not_verification": True,
+                              "routed_axi_command": "make dv-supernoc",
+                              "xezim_compile_command": "bash scripts/run-floonoc-xezim.sh all"},
              "networks": {}}
     for name, item in sorted(designs.items()):
         root = out / item["path"]
@@ -349,7 +352,7 @@ def generate_all(soc, knobs, out, floogen_bin="floogen"):
             "endpoint_count": len(item["config"]["endpoints"]),
             "network_interfaces_with_native_knobs": num_nis,
             "native_parameters": item["native_parameters"],
-            "status": "real_upstream_structural_RTL_not_elaborated",
+            "status": "real_upstream_structural_RTL",
         }
     (out / "manifest.json").write_text(json.dumps(index, indent=2, sort_keys=True) + "\n")
     return index

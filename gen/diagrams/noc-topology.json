@@ -4472,6 +4472,7 @@
     }
   },
   "schema_version": 1,
+  "scope_note": "Cross-NoC wiring exists in gen/supernoc/supernoc_tb.sv; full SoC endpoint integration is planned",
   "source_of_truth": [
     "config/soc.yaml",
     "config/interface_contracts.yaml",
