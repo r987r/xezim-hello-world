@@ -191,6 +191,8 @@ XEZIM_BIN=/path/to/xezim make test
 make dv-supernoc                    # independent NoC BFM regression
 make dv-chip                        # real CPU boot + independent DMA NoC gate
 make dv-chip-dma                    # real SS0/SS1 DMA+CSR across data/config NoCs
+make dv-chip-cpu-dma                # compiled C on real CPU0; same boot checker + DMA
+# The new CPU C gate remains provisional until an exact-head CI run is green.
 ```
 
 The memory regression instantiates the publicly available Verilog-AXI crossbar and behavioral AXI RAM. It issues four-beat reads and writes from two independent AXI masters to HBM0 and DDR0 address regions, then checks responses, IDs, data, and reachability. The negative test intentionally corrupts an expectation and confirms the checker rejects it. The CPU smoke merely observes fetch requests; **`dv-boot` executes instructions** from ROM and then from SRAM, proving actual CPU-controlled SRAM loading.
