@@ -6,7 +6,7 @@ from unittest.mock import Mock
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'tools'))
-from publish_site import merged_main_pr_heads, verified_merged_pr, verified_pr_test_commit, dump, evidence_index
+from publish_site import merged_main_pr_heads, verified_merged_pr, verified_pr_test_commit, verified_pr_tree_equivalent, dump, evidence_index
 import tempfile
 import json
 
@@ -42,6 +42,36 @@ class MergedPrEvidenceTests(unittest.TestCase):
         self.assertTrue(verified_pr_test_commit(client,run,head))
         self.assertFalse(verified_pr_test_commit(client,run,'not-a-sha'))
 
+    def test_equivalent_source_requires_real_merged_pr_and_identical_git_trees(self):
+        head='a'*40; tested='b'*40; main='c'*40; tree='d'*40
+        run={'event':'pull_request','head_sha':head,'head_branch':'feature/example',
+             'verified_merged_pr':17}
+        client=Mock(repository='r987r/xezim-hello-world')
+        def request(path):
+            if path.endswith(tested):
+                return {'parents':[{'sha':'e'*40},{'sha':head}], 'tree':{'sha':tree}}
+            if path.endswith(main):
+                return {'parents':[{'sha':'f'*40},{'sha':tested}], 'tree':{'sha':tree}}
+            raise ValueError('unexpected mocked GitHub commit')
+        client.request.side_effect=request
+        self.assertTrue(verified_pr_tree_equivalent(client,run,tested,main))
+        self.assertFalse(verified_pr_tree_equivalent(client,{**run,'verified_merged_pr':None},tested,main))
+        self.assertFalse(verified_pr_tree_equivalent(client,run,tested,'invalid-sha'))
+        def mismatch(path):
+            data=request(path)
+            if path.endswith(main):
+                data={**data,'tree':{'sha':'f'*40}}
+            return data
+        client.request.side_effect=mismatch
+        self.assertFalse(verified_pr_tree_equivalent(client,run,tested,main))
+        def fake_parent(path):
+            data=request(path)
+            if path.endswith(tested):
+                data={**data,'parents':[{'sha':'e'*40},{'sha':'f'*40}]}
+            return data
+        client.request.side_effect=fake_parent
+        self.assertFalse(verified_pr_tree_equivalent(client,run,tested,main))
+
     def test_evidence_index_uses_verified_tested_merge_sha(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);folder=root/'123-1';folder.mkdir()
@@ -49,6 +79,7 @@ class MergedPrEvidenceTests(unittest.TestCase):
             dump(folder/'run.json',{'id':123,'name':'NoC', 'run_attempt':1,
                 'head_branch':'feature/example', 'head_sha':head,
                 'verified_tested_shas':[actual],'verified_merged_pr':9,
+                'verified_equivalent_site_shas':{actual:'e'*40},
                 'event':'pull_request','status':'completed','conclusion':'success',
                 'path':'.github/workflows/floonoc-elab.yml',
                 'created_at':'2026-11-04T10:00:00Z','updated_at':'2026-11-04T10:01:00Z',
@@ -65,6 +96,7 @@ class MergedPrEvidenceTests(unittest.TestCase):
             self.assertEqual(entries[0]['source_sha'],actual)
             self.assertEqual(entries[0]['pr_head_sha'],head)
             self.assertEqual(entries[0]['merged_pr'],9)
+            self.assertEqual(entries[0]['verified_site_source_sha'],'e'*40)
             self.assertEqual(runs[0]['tested_sha'],actual)
             # A different merge SHA is never inferred or accepted.
             data=json.loads((target/'axi-transactions.json').read_text())
