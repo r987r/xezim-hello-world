@@ -6,7 +6,8 @@
 <div class="grid" id="fabric-facts"></div>
 <div class="grid" style="align-items:end"><label>Fabric plane <select id="fabric-plane"><option value="data">Data (AXI4)</option><option value="config">Configuration (AXI4 transport)</option></select></label><label>Filter by endpoint, subsystem or target <input id="fabric-search" type="search" placeholder="e.g. compute0, sram, hbm0" autocomplete="off"></label></div>
 <h2>Route-by-route latency in reference clock cycles</h2>
-<p class="muted">One row per initiator → target. Each NoC column covers the measured AXI ingress-to-egress request <em>plus</em> response delay; target R and W service is measured at the last observed target-facing AXI port, including any downstream crossbar/model delay. Cells show <strong>min / avg / max</strong> over serial one-beat samples, followed by n. Clock normalization uses the measured testbench period (10 ns in current simulations), <em>not</em> an assumed physical implementation frequency. — means this block is not on the route or the operation is not permitted; “unmeasured” means the route exists but eligible source-identical evidence is missing. Independent stage minima/maxima need not sum to end-to-end extrema (averages sum for the same paired samples).</p>
+<p class="muted" id="fabric-reference-clock">Reference clock: awaiting measured simulation evidence.</p>
+<p class="muted">One row per initiator → target. Each NoC column covers the measured AXI ingress-to-egress request <em>plus</em> response delay; target R and W service is measured at the last observed target-facing AXI port, including any downstream crossbar/model delay. Cells show <strong>min / avg / max</strong> over serial one-beat samples, followed by n. Clock normalization uses the measured testbench period (10 ns in current simulations), <em>not</em> an assumed physical implementation frequency. — means this block is not on the route or the operation is not permitted; “unmeasured” means the route exists but eligible verified RTL-equivalent evidence is missing. Independent stage minima/maxima need not sum to end-to-end extrema (averages sum for the same paired samples).</p>
 <div class="scroll" role="region" aria-label="Wide source to target AXI latency table" tabindex="0"><table id="fabric-latency-table"><thead></thead><tbody></tbody></table></div>
 <h2>Selected route</h2><div class="card" id="fabric-route"><p class="muted">Select a routed source/destination row for detailed router and timing provenance.</p></div>
 <h2>Interface inventory</h2>
@@ -47,6 +48,10 @@ for(const [name,value] of Object.entries(report.summary)){
 function visible(s){return s.toLowerCase().includes(search.value.trim().toLowerCase())}
 const latency=report.latency_table||{mesh_columns:{data:[],config:[]},rows:[]};
 const fmt=x=>Number.isInteger(x)?String(x):Number(x).toFixed(2).replace(/0+$/,'').replace(/\.$/,'');
+const ref=latency.reference_clock;
+byId('fabric-reference-clock').textContent=(ref&&ref.measured_period_ps)?
+ 'Observed simulation reference: '+ref.signal+' ('+ref.domain+'), '+fmt(ref.measured_period_ps/1000)+' ns per cycle / '+fmt(ref.measured_frequency_hz/1000000)+' MHz. Hardware target frequency not characterized; original run periods are retained per cell.':
+ 'Current-source matched serial AXI clock evidence not yet available; hardware clock frequency is not configured.';
 function statLine(parent,prefix,s,applicable){
  const line=E('div',undefined,'metric-line');
  if(prefix)line.append(E('span',prefix,'metric-label'));
@@ -55,7 +60,7 @@ function statLine(parent,prefix,s,applicable){
  else {
    line.append(E('span',[s.min_cycles,s.avg_cycles,s.max_cycles].map(fmt).join(' / ')));
    line.append(' ');line.append(E('span','n='+s.n,'metric-n'));
-   line.title='Measured period: '+s.reference_clock_period_ps+' ps · tested run '+s.run_sha+' · '+(s.source_equivalence==='verified_same_tree'?'verified identical Git tree':'exact SHA');
+   line.title='Measured period: '+s.reference_clock_period_ps+' ps · tested run '+s.run_sha+' · '+(s.source_equivalence==='verified_same_tree'?'verified identical Git tree':s.source_equivalence==='verified_rtl_inputs'?'verified identical RTL and simulation inputs':'exact SHA');
  }
  parent.append(line);
 }
@@ -124,7 +129,7 @@ function renderRoute(){const box=byId('fabric-route');box.replaceChildren();cons
   }
  }
  if(r.one_beat_observations.length){box.append(E('h4','Measured end-to-end, one-beat observations'));
-  for(const o of r.one_beat_observations){const p=E('p',`${o.operation.toUpperCase()}: n=${o.count}, min ${o.min_ps} ps, median ${o.median_ps} ps, p95 ${o.p95_ps} ps · ${o.test_scope} · ${o.simulator} · ${o.source_sha.slice(0,12)}${o.source_equivalence==='verified_same_tree'?' (verified identical source tree)':o.matches_site_source?' (current source)':' (historical source)'}`);const a=E('a','Open original run report');a.href=o.run_report;p.append(' · ',a);box.append(p)}
+  for(const o of r.one_beat_observations){const p=E('p',`${o.operation.toUpperCase()}: n=${o.count}, min ${o.min_ps} ps, median ${o.median_ps} ps, p95 ${o.p95_ps} ps · ${o.test_scope} · ${o.simulator} · ${o.source_sha.slice(0,12)}${o.source_equivalence==='verified_same_tree'?' (verified identical source tree)':o.source_equivalence==='verified_rtl_inputs'?' (verified current RTL inputs)':o.matches_site_source?' (current source)':' (historical source)'}`);const a=E('a','Open original run report');a.href=o.run_report;p.append(' · ',a);box.append(p)}
  }else box.append(E('p','No eligible one-beat observations in the published CI evidence. Controlled per-mesh timing requires a successful capture for exactly this site source revision.','muted'));
 }
 function renderInventory(){const body=byId('fabric-interfaces').querySelector('tbody');body.replaceChildren();for(const i of report.interfaces.filter(i=>i.plane===plane.value&&(!search.value||visible(i.name)||visible(i.subsystem)||visible(i.actor)))){
