@@ -12,6 +12,7 @@ for an already enabled site using the deployment job's `pages: write` token.
 - Overview: implementation limits, latest workflow status and the same generated
   `gen/diagrams/noc-hierarchy.svg` used by the README. No second architecture
   diagram is maintained.
+- Fabric Explorer: address-accurate initiator-to-target connectivity matrix, AXI port inventory with planned outstanding budgets and physically generated XY router/link paths. One-beat end-to-end timings attach only to clean completed captured test runs, with original test SHA; hop and target service latencies remain unmeasured until independently characterized.
 - Topology: all generated local/global meshes, router/endpoint counts, upstream
   FlooGen YAML/SV and all distinct AXI observation boundaries.
 - Test runs: recorded acceptance result, engine, tested SHA, workflow ID/attempt,
@@ -50,7 +51,7 @@ retention/history limits deliberately if long-term evidence is needed.
 
 ```bash
 python3 -m pip install -r requirements.txt
-python3 -m unittest tests.test_publication tests.test_axi_report -v
+python3 -m unittest tests.test_publication tests.test_axi_report tests.test_fabric_report -v
 python3 tools/publish_site.py                       # docs + offline preview
 GH_TOKEN=... python3 tools/publish_site.py --collect # actual main CI evidence
 python3 -m http.server --directory .tools/pages-site 8000
