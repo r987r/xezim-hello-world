@@ -238,12 +238,18 @@ async def capture(dut):
         trace.close("pass")
 """
         check_generic_module(good)
+        bad = """
+import cocotb
+from cocotb.clock import Clock
+from dv.common.protocol_trace import open_from_plan
+@cocotb.test()
+async def capture(dut):
+    cocotb.start_soon(Clock(dut.clk, 10, units="ns").start())
+    trace = open_from_plan()
+    trace.close("pass")
+"""
         with self.assertRaisesRegex(AssertionError, "after DUT clock"):
-            check_generic_module(good.replace(
-                '    trace = open_from_plan()\\n', '').replace(
-                '        cocotb.start_soon(Clock(dut.clk, 10, units="ns").start())',
-                '        cocotb.start_soon(Clock(dut.clk, 10, units="ns").start())\\n'
-                '        trace = open_from_plan()'))
+            check_generic_module(bad)
         with self.assertRaisesRegex(AssertionError, "not finalized"):
             check_generic_module(good.replace('        trace.close("pass")','        pass'))
 
