@@ -200,7 +200,7 @@ def shell(title,body,relative,repository,sha):
     else:prefix+='/'
     template=(ROOT/'tools/templates/site.html').read_text()
     navigation=''.join(f'<a href="{prefix}{path}">{label}</a>' for path,label in
-                       [('index.html','Overview'),('topology.html','Topology'),('runs.html','Test runs'),('docs.html','Documentation'),('reference.html','Source data')])
+                       [('index.html','Overview'),('topology.html','Topology'),('fabric.html','Fabric Explorer'),('runs.html','Test runs'),('docs.html','Documentation'),('reference.html','Source data')])
     return (template.replace('__TITLE__',escape(title)).replace('__NAV__',navigation).replace('__HOME__',prefix+'index.html')
             .replace('__CONTENT__',body).replace('__SOURCE__',escape(sha[:12]))
             .replace('__REPO__',f'https://github.com/{repository}/tree/{sha}'))
@@ -256,18 +256,25 @@ def build(output,evidence,repository,sha,config):
     for name in ('Bender.yml','Bender.lock'):shutil.copyfile(ROOT/name,output/name)
     docs=markdown_pages(output,repository,sha)
     runs,entries,notes=evidence_index(evidence,output,repository)
+    import fabric_report
+    fabric = fabric_report.load(ROOT)
     catalog=yaml.safe_load((ROOT/'config/regression.yaml').read_text())
     noc=json.loads((ROOT/'gen/noc/floonoc/manifest.json').read_text())
     chip=json.loads((ROOT/'gen/chip/manifest.json').read_text())
     monitors=json.loads((ROOT/'gen/supernoc/axi_monitors.json').read_text())
+    fabric_report.attach_one_beat_observations(fabric, entries, output, sha)
+    dump(output/'data/fabric.json',fabric)
     dataset={'schema_version':1,'title':config['title'],'source_sha':sha,'repository':repository,
              'built_at':datetime.now(timezone.utc).isoformat(),'runs':runs,'entries':entries,
              'notes':notes,'documents':docs,'networks':noc['networks'],'chip':chip,
-             'monitors':monitors['monitors'],'tests':catalog['tests']}
+             'monitors':monitors['monitors'],'fabric':fabric['summary'],'tests':catalog['tests']}
     dump(output/'data/site.json',dataset)
     data=json.dumps(dataset,separators=(',',':')).replace('<','\\u003c')
-    for page in ('index','topology','runs','docs','reference'):
+    for page in ('index','topology','fabric','runs','docs','reference'):
         body=(ROOT/('tools/templates/site_'+page+'.html')).read_text().replace('__SITE_DATA__',data)
+        if page=='fabric':
+            fabric_data=json.dumps(fabric,separators=(',',':')).replace('<','\\u003c')
+            body=body.replace('__FABRIC_DATA__',fabric_data)
         (output/(page+'.html')).write_text(shell(config['title'],body,Path(page+'.html'),repository,sha))
     return dataset
 
