@@ -8,6 +8,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import bringup
+import sim_model
 
 
 class TestDDR4Contract(unittest.TestCase):
@@ -132,6 +133,46 @@ class TestDDR4GeneratedHeader(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "init_done"):
             bringup.emitted_port_widths(text)
 
+
+
+class TestDDR4SimGeometry(unittest.TestCase):
+    def setUp(self):
+        self.profile = bringup.read_yaml(bringup.PROFILE)
+        self.geometry = bringup.read_yaml(bringup.HERE / "sim_geometry.yml")
+
+    def test_scaled_geometry_bounded(self):
+        info = sim_model.budget(self.profile, self.geometry)
+        self.assertEqual(info["production_device_bytes"], 4 * 1024 ** 3)
+        self.assertEqual(info["isolated_simulation_bytes"], 32 * 1024 ** 2)
+        self.assertLessEqual(info["isolated_simulation_bytes"], info["max_model_bytes"])
+        self.assertTrue(info["simulation_only"])
+
+    def test_real_geometry_is_over_budget(self):
+        self.geometry["simulation"]["rows"] = 32768
+        self.geometry["simulation"]["cols"] = 1024
+        with self.assertRaisesRegex(ValueError, "exceeds budget"):
+            sim_model.budget(self.profile, self.geometry)
+
+    def test_row_geometry_preserves_command_bit(self):
+        self.geometry["simulation"]["rows"] = 1024
+        with self.assertRaisesRegex(ValueError, "A10"):
+            sim_model.budget(self.profile, self.geometry)
+
+    def test_wrong_upstream_module_rejected(self):
+        self.geometry["module"] = "NotAPinnedDevice"
+        with self.assertRaisesRegex(ValueError, "disagrees"):
+            sim_model.budget(self.profile, self.geometry)
+
+    def test_invalid_budget_fails(self):
+        self.geometry["max_model_bytes"] = 0
+        with self.assertRaisesRegex(ValueError, "positive"):
+            sim_model.budget(self.profile, self.geometry)
+
+    def test_generator_uses_isolated_entrypoint(self):
+        cmd = bringup.generator_argv(Path("/tmp/out"))
+        self.assertEqual(Path(cmd[1]).name, "sim_model.py")
+        self.assertIn("--sim", cmd)
+        self.assertEqual(cmd[-1], str(bringup.PROFILE))
 
 if __name__ == "__main__":
     unittest.main()
