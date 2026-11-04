@@ -26,10 +26,12 @@ shared boot-live/dma-only SRAM placement contract.
 
 Keeping an isolated RTL bench and a full-chip boot bench is deliberate
 verification *coverage*, not a second memory allocator or architecture.
-The existing compiled C run-hook file is **not wired into a runnable SoC
-regression** yet. No full-chip CPU-executed C DMA claim is made without a
-cross-compiler, linked image, loaded immutable flash, execution and
-observed DMA traffic. Do not merge based on hosted tests alone.
+The opt-in `make dv-chip-cpu-dma` regression is now wired into the
+shared real-CPU boot. `tools/cpu_dma_firmware.py` compiles a freestanding
+RV32I C app, places it in the modeled immutable flash and calls it from
+CPU0 RUN. The same passive monitors validate DDR/HBM roundtrip traffic.
+**This is implemented, not yet CI-verified**; do not merge based on
+hosted C allocator tests alone.
 
 ## Two coordinated contexts
 
@@ -85,16 +87,17 @@ bool ok = soc_mem_alloc(&hbm, 64, 64, &result);
 The address and modeled capacity must come from the configuration-generated
 platform contract, not a hardcoded value in reusable firmware. Real
 CPU-driven tests must use `boot_live` and retain the existing INIT/RUN/CHECK
-and passive NoC AXI monitoring. **Current tests cover the hosted C
-allocator and Python virtual plan; C execution by the RTL CPUs is still
-a separate required gate.**
+and passive NoC AXI monitoring. **Hosted allocator, Python plan and independent BFM tests are distinct
+from the opt-in real-CPU C DMA RTL gate; its completion must be verified
+from CI before claiming a pass.**
 
 ## Regression
 
 ```sh
 python3 -m unittest tests.test_dma_sw tests.test_memory_plan -v
 make check-config
-make dv-chip
+make dv-chip-cpu-dma    # real CPU C firmware, real DMA RTL, shared AXI monitors
+make dv-chip            # includes CPU DMA and all original chip gates
 ```
 
 The host C tests compile `memory_pool.c`, the SRAM compatibility API,
