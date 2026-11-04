@@ -40,3 +40,23 @@ The generator writes source_sram.hex in 64-bit readmemh word order, plus case.js
 6. Only after those pass: add a minimal CPU-side CSR/IRQ driver and a separate cold-boot-to-DMA integration test.
 
 **Do not preload writable SRAM in existing cold-boot tests.** They prove CPU0 copies code through its bus and must remain unmodified. DMA preload must be an explicit DMA-only verification mode. The stock desc64 frontend overwrites the first 8 bytes of completed descriptors with a completion marker; the arena cannot be reused before retirement and descriptors must be reinitialized. Linked descriptors are not automatically a data-dependency barrier. A release fence does not replace cache maintenance on cacheful CPUs.
+
+## Shared cold-boot and DMA SRAM ownership
+
+tools/sram_layout.py is now used by BOTH tools/chip_bootgen.py and
+dv/common/dma_vectors.py. The primary SRAM reserves actual firmware
+and coordinator mailbox ranges; secondary SRAM reserves its own live
+firmware. DMA descriptor and payload pools start at 0x1000 and 0x2000.
+Shared layout validation rejects overlaps and undersized windows.
+
+sw/common/sram_pool.h/.c implements a shared freestanding region allocator
+used by sw/dma/dma.c. Reclaiming boot-only scratch requires the explicit
+CHECK-complete and quiesced-consumers handoff. Executable firmware is never
+reclaimed while CPUs execute from it; live mailboxes remain reserved.
+The existing firmware is generated RV32I assembly rather than compiled C,
+so this change unifies its memory ownership policy, not its ISA bootstrap.
+A future C BSP can instantiate the same SRAM pool.
+
+Run make check-config for ownership/descriptor tests or make dv-dma-vectors
+to generate the host-only 100-descriptor fixture. This does not preload
+writable SRAM during the cold-boot regression.

@@ -16,7 +16,8 @@ class DmaSoftwareTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             output = Path(tmp)/"dma_allocator_test"
             subprocess.run([cc, "-std=c11", "-Wall", "-Wextra", "-Werror",
-                            "-pedantic", str(ROOT/"sw/dma/dma.c"),
+                            "-pedantic", str(ROOT/"sw/common/sram_pool.c"),
+                            str(ROOT/"sw/dma/dma.c"),
                             str(ROOT/"sw/dma/tests/test_dma.c"), "-o", str(output)],
                            check=True, capture_output=True, text=True)
             result = subprocess.run([str(output)], check=True,

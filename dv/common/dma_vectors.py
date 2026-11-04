@@ -10,15 +10,15 @@ import hashlib
 import json
 from pathlib import Path
 import struct
+from tools.sram_layout import (build_sram_layout, DESC_START, DESC_BYTES as DESC_POOL_BYTES, PAYLOAD_START)
 
 DESC = struct.Struct("<IIQQQ")  # length, flags, next, src, dst
 DESC_BYTES = DESC.size
 DESC_END = (1 << 64) - 1
 FLAGS_COPY = (1 << 1) | (1 << 3)
 FLAGS_IRQ = 1
-DESC_OFFSET = 0x1000
-PAYLOAD_OFFSET = 0x2000
-DESC_POOL_BYTES = 0x1000
+DESC_OFFSET = DESC_START
+PAYLOAD_OFFSET = PAYLOAD_START
 
 
 @dataclass(frozen=True)
@@ -58,14 +58,9 @@ def build_dma_vector(cfg, *, subsystem="compute0", destination="memory0.ddr0",
     computes = [s["name"] for s in cfg["subsystems"] if s["type"] == "compute"]
     if subsystem not in computes:
         raise ValueError("unknown compute subsystem")
-    sram_base, region_size = _region(cfg, f"{subsystem}.sram")
-    sram_bytes = cfg["boot"]["simulation_sram_bytes"]
-    if sram_bytes > region_size or sram_bytes < PAYLOAD_OFFSET + 8 or sram_bytes % 8:
-        raise ValueError("source SRAM too small or misaligned")
-    mailbox = int(cfg["verification"]["full_chip_boot"]["mailbox_offset"], 0)
-    if mailbox + 16*len(computes) + 64 > DESC_OFFSET:
-        raise ValueError("boot/mailbox overlaps descriptor area")
-    if count*length > sram_bytes - PAYLOAD_OFFSET:
+    layout = build_sram_layout(cfg, subsystem)
+    sram_base, sram_bytes = layout.sram_base, layout.sram_size
+    if count*length > layout.payload.size:
         raise ValueError("payload exceeds source SRAM")
     dst_base, window_size = _region(cfg, destination)
     if destination in [f"{name}.sram" for name in computes]:
@@ -79,8 +74,8 @@ def build_dma_vector(cfg, *, subsystem="compute0", destination="memory0.ddr0",
     if dst_offset + count*length > min(window_size, limit):
         raise ValueError("destination exceeds modeled capacity")
     image = bytearray(sram_bytes)
-    head = sram_base + DESC_OFFSET
-    source = sram_base + PAYLOAD_OFFSET
+    head = layout.descriptors.start
+    source = layout.payload.start
     copies = []
     for i in range(count):
         src = source + i*length
@@ -105,7 +100,8 @@ def build_dma_vector(cfg, *, subsystem="compute0", destination="memory0.ddr0",
         "descriptor_size": DESC_BYTES, "descriptor_pool_start": head,
         "descriptor_pool_bytes": DESC_POOL_BYTES,
         "source_pool_start": source,
-        "source_pool_bytes": sram_bytes-PAYLOAD_OFFSET,
+        "source_pool_bytes": layout.payload.size,
+        "sram_layout": layout.as_dict(),
         "destination_base": dst_base+dst_offset,
         "destination_modeled_bytes": limit,
         "irq_last": irq_last, "copies": copies,

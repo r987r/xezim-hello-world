@@ -8,48 +8,6 @@ _Static_assert(offsetof(soc_dma_desc_t, next) == 8, "iDMA next offset");
 _Static_assert(offsetof(soc_dma_desc_t, src_addr) == 16, "iDMA src offset");
 _Static_assert(offsetof(soc_dma_desc_t, dst_addr) == 24, "iDMA dst offset");
 
-static bool power_of_two(size_t value) {
-    return value && !(value & (value - 1));
-}
-
-bool soc_dma_arena_init(soc_dma_arena_t *arena, void *cpu_base,
-                        uint64_t phys_base, size_t capacity) {
-    if (!arena || !cpu_base || capacity == 0 ||
-        (uint64_t)capacity > UINT64_MAX - phys_base) return false;
-    arena->cpu_base = (uint8_t *)cpu_base;
-    arena->phys_base = phys_base;
-    arena->capacity = capacity;
-    arena->used = 0;
-    return true;
-}
-
-void soc_dma_arena_reset(soc_dma_arena_t *arena) {
-    if (arena) arena->used = 0;
-}
-
-bool soc_dma_arena_alloc(soc_dma_arena_t *arena, size_t bytes,
-                         size_t align, void **cpu_out, uint64_t *phys_out) {
-    if (!arena || !arena->cpu_base || !cpu_out || !phys_out ||
-        bytes == 0 || !power_of_two(align) || arena->used > arena->capacity)
-        return false;
-    /* Alignment applies to DMA physical addresses AND CPU pointers. */
-    if (((uintptr_t)arena->cpu_base & (align - 1)) !=
-        ((uintptr_t)arena->phys_base & (align - 1))) return false;
-    if ((uint64_t)arena->used > UINT64_MAX - arena->phys_base) return false;
-    uint64_t current = arena->phys_base + (uint64_t)arena->used;
-    uint64_t mask = (uint64_t)align - 1;
-    if (current > UINT64_MAX - mask) return false;
-    uint64_t aligned = (current + mask) & ~mask;
-    if (aligned < arena->phys_base) return false;
-    uint64_t offset = aligned - arena->phys_base;
-    if (offset > arena->capacity || bytes > arena->capacity - (size_t)offset)
-        return false;
-    *cpu_out = arena->cpu_base + (size_t)offset;
-    *phys_out = aligned;
-    arena->used = (size_t)offset + bytes;
-    return true;
-}
-
 bool soc_dma_chain_build(soc_dma_arena_t *arena, const soc_dma_copy_t *copies,
                          size_t count, bool irq_last, soc_dma_chain_t *out) {
     if (!arena || !copies || !out || !count ||

@@ -28,9 +28,20 @@ int main(void) {
     assert(!soc_dma_chain_build(&arena, big_ops, 129, true, &chain));
     assert(arena.used == 96);
     soc_dma_publish();
-    soc_dma_arena_reset(&arena);
+    assert(!soc_dma_arena_reset(&arena, false));
+    assert(soc_dma_arena_reset(&arena, true));
     assert(soc_dma_chain_build(&arena, ops, 3, false, &chain));
     assert(chain.cpu_descs[2].flags == 0xau);
+    soc_sram_pool_t scratch = {0};
+    assert(soc_sram_pool_init(&scratch, pool+512, 0x10001200, 512));
+    void *scratch_cpu = 0;
+    uint64_t scratch_phys = 0;
+    assert(soc_sram_pool_alloc(&scratch, 64, 32, &scratch_cpu, &scratch_phys));
+    assert(scratch_phys == 0x10001200);
+    assert(!soc_sram_pool_reclaim_boot_scratch(&scratch, false, true));
+    assert(!soc_sram_pool_reclaim_boot_scratch(&scratch, true, false));
+    assert(soc_sram_pool_reclaim_boot_scratch(&scratch, true, true));
+    assert(scratch.used == 0);
     puts("PASS dma C descriptor allocator and chain ABI");
     return 0;
 }
