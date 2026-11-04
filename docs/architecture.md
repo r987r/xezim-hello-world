@@ -48,9 +48,8 @@ integration, or successful AXI transactions.**
 Both compute templates select pinned `pulp_idma`. The reusable frontend/backend
 passed the independent Verilator+AXI regression, and the full-chip generator
 now attaches a real engine to each compute DMA port plus a CSR/doorbell
-bridge at each config endpoint. The new `chip-dma` test drives both engines
-through the real hierarchy but requires a green CI result to establish
-end-to-end proof. The standalone NoC BFM does not instantiate DMA. The final DMA must support source/destination addresses anywhere in the global data map and both HBM/DDR targets.
+bridge at each config endpoint. The `chip-dma` test drove both engines
+through the real NoC hierarchy and **passed** on [November 4 CI](https://github.com/r987r/xezim-hello-world/actions/runs/41885417960) with CPU0 AXI BFMs preparing the DMA-only SRAM and CSRs. The standalone NoC BFM does not instantiate DMA. The final DMA must support source/destination addresses anywhere in the global data map and both HBM/DDR targets.
 
 ### Memory adapters
 

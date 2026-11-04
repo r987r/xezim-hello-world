@@ -2,7 +2,7 @@
 
 [![SoC regression](https://github.com/r987r/xezim-hello-world/actions/workflows/dv-soc.yml/badge.svg)](https://github.com/r987r/xezim-hello-world/actions/workflows/dv-soc.yml)
 
-A reusable, **configuration-driven hierarchical SoC test vehicle** built from publicly available RTL. One `config/soc.yaml` selects compute subsystems, CPU IP, reserved DMA interfaces, memory targets, data/config NoCs, addresses, and verification scopes. The same configuration generates **SystemVerilog testbench code, NoC connectivity metadata, executable test plans, 2D diagrams, and this README's architecture section**. Both PULP iDMA engines and their CSR bridges are generated in the explicit `DmaEnable=1` mode; the default cold-boot mode keeps them disabled. The full-chip DMA path still requires a passing end-to-end regression.
+A reusable, **configuration-driven hierarchical SoC test vehicle** built from publicly available RTL. One `config/soc.yaml` selects compute subsystems, CPU IP, reserved DMA interfaces, memory targets, data/config NoCs, addresses, and verification scopes. The same configuration generates **SystemVerilog testbench code, NoC connectivity metadata, executable test plans, 2D diagrams, and this README's architecture section**. Both PULP iDMA engines and their CSR bridges are generated in the explicit `DmaEnable=1` mode; the default cold-boot mode keeps them disabled. The **full-chip DMA RTL path passed**: SS0/SS1 descriptor chains, 32-bit CSR doorbells, real data/config FlooNoCs, memory-model readback and completion checks in [CI run 41885417960](https://github.com/r987r/xezim-hello-world/actions/runs/41885417960). This is the CPU0-AXI-BFM-assisted DMA-only verification scope, **not** CPU-firmware-launched DMA or physical DDR/HBM.
 
 The [GitHub Pages verification hub](https://r987r.github.io/xezim-hello-world/)
 publishes this README, all documentation, the canonical topology and actual CI
@@ -59,8 +59,7 @@ with AXI slave stand-ins. `make dv-chip` checks CPU0-coordinated init/run/check.
 **New optional DMA mode:** `DmaEnable=1` generates PULP iDMA engines at
 each compute local data NoC and 32-bit CSR doorbells at each local
 configuration NoC. `make dv-chip-dma` is a separate hardware gate with
-CPUs held in reset; it must pass CI before the full NoC connection is
-considered verified. **Still pending:** CPU-initiated DMA and IRQ-handler
+CPUs held in reset; it passed the end-to-end NoC RTL regression at [commit d2868045](https://github.com/r987r/xezim-hello-world/commit/d2868045b7d8ba3b6a687f9639efea1d5c87af9a). **Still pending:** CPU-initiated DMA and IRQ-handler
 firmware, real HBM/DDR controllers/PHY.
 See [full-chip boot](docs/full-chip-boot.md) for the precise scope.
 
