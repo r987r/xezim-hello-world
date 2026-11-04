@@ -94,6 +94,47 @@ def check_module(text: str) -> None:
         raise AssertionError("no monitored cocotb setup was validated")
 
 
+def check_generic_module(text: str) -> None:
+    """Protocol-only monitors must start before clocks and close at teardown.
+
+    This static gate is intentionally conservative. A future test using a
+    different helper should make capture startup/finish explicit rather than
+    silently bypass reporting.
+    """
+    tree = ast.parse(text)
+    functions = {
+        n.name: n for n in tree.body
+        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+    tests = [n for n in functions.values() if _is_test(n)]
+    if not tests:
+        raise AssertionError("protocol-reported cocotb module has no test entrypoint")
+    for entry in tests:
+        helpers = [n for n in functions
+                   if n == entry.name or _calls(entry, n)]
+        started = False
+        closed = False
+        for name in helpers:
+            fn = functions[name]
+            first = [n.lineno for n in ast.walk(fn)
+                     if isinstance(n, ast.Call) and
+                     (getattr(n.func, 'id', None) == 'open_from_plan'
+                      or getattr(n.func, 'attr', None) == 'open_from_plan')]
+            clocks = [n.lineno for n in ast.walk(fn)
+                      if isinstance(n, ast.Call) and
+                      (getattr(n.func, 'id', None) == 'Clock'
+                       or getattr(n.func, 'attr', None) == 'Clock')]
+            if first and clocks:
+                if min(first) >= min(clocks):
+                    raise AssertionError(f"{name}: generic capture attaches after DUT clock")
+                started = True
+            closed |= _calls(fn, "close")
+        if not started:
+            raise AssertionError(f"{entry.name}: no generic capture before DUT clock")
+        if not closed:
+            raise AssertionError(f"{entry.name}: generic capture not finalized")
+
+
 def _source_path(profile: dict) -> Path:
     module = profile.get("module")
     test_dir = profile.get("test_dir")
@@ -122,10 +163,12 @@ class MonitorLifecyclePolicyTests(unittest.TestCase):
                     f"{name}: AXI cocotb simulation lacks a passive capture/report",
                 )
                 continue
-            self.assertIn("axi", report, f"{name}: report omitted AXI monitoring")
             path = _source_path(profile)
             with self.subTest(test=name, module=str(path.relative_to(ROOT))):
-                check_module(path.read_text())
+                if "axi" in report:
+                    check_module(path.read_text())
+                if "protocols" in report:
+                    check_generic_module(path.read_text())
             covered.add(name)
         self.assertTrue({"supernoc", "supernoc-negative", "chip-boot",
                          "chip-boot-negative"} <= covered)
@@ -179,6 +222,30 @@ async def smoke(dut):
     await run_data(dut)
 """
         check_module(good)
+
+    def test_generic_protocol_capture_starts_before_clock_and_closes(self):
+        good = """
+import cocotb
+from cocotb.clock import Clock
+from dv.common.protocol_trace import open_from_plan
+@cocotb.test()
+async def capture(dut):
+    trace = open_from_plan()
+    try:
+        cocotb.start_soon(Clock(dut.clk, 10, units="ns").start())
+        await stimulus(dut)
+    finally:
+        trace.close("pass")
+"""
+        check_generic_module(good)
+        with self.assertRaisesRegex(AssertionError, "after DUT clock"):
+            check_generic_module(good.replace(
+                '    trace = open_from_plan()\\n', '').replace(
+                '        cocotb.start_soon(Clock(dut.clk, 10, units="ns").start())',
+                '        cocotb.start_soon(Clock(dut.clk, 10, units="ns").start())\\n'
+                '        trace = open_from_plan()'))
+        with self.assertRaisesRegex(AssertionError, "not finalized"):
+            check_generic_module(good.replace('        trace.close("pass")','        pass'))
 
     def test_reported_cocotb_tests_receive_run_plan(self):
         runner = (ROOT / "tools/regress.py").read_text()
