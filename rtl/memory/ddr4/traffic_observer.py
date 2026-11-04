@@ -217,26 +217,38 @@ def read_pins(dut) -> dict:
         if sample[channel]["valid"] and sample[channel]["ready"]:
             for field in PAYLOAD[channel]:
                 sample[channel][field] = get(f"user_port_axi_0_{channel}{field}")
-    sample["wb"] = {
-        "cyc": get("wb_ctrl_cyc"), "stb": get("wb_ctrl_stb"),
-        "ack": get("wb_ctrl_ack"), "we": get("wb_ctrl_we"),
-    }
-    if sample["wb"]["cyc"] and sample["wb"]["stb"] and sample["wb"]["ack"]:
-        for field in ("adr", "dat_w", "dat_r", "err"):
-            sample["wb"][field] = get(f"wb_ctrl_{field}")
+    sample["wb"] = read_wishbone_pins(dut)
     sample.update({"init_done": get("init_done"), "init_error": get("init_error"),
                    "user_rst": get("user_rst")})
     return sample
 
 
+def read_wishbone_pins(dut) -> dict:
+    """Observe resolved WB ACK and payload, not an early delta-cycle value."""
+    def get(name):
+        return int(getattr(dut, f"wb_ctrl_{name}").value)
+    wb = {"cyc": get("cyc"), "stb": get("stb"),
+          "ack": get("ack"), "we": get("we")}
+    if wb["cyc"] and wb["stb"] and wb["ack"]:
+        for field in ("adr", "dat_w", "dat_r", "err"):
+            wb[field] = get(field)
+    return wb
+
+
 async def observe_forever(dut, observer: TrafficObserver):
-    from cocotb.triggers import RisingEdge
+    from cocotb.triggers import RisingEdge, ReadOnly
+    from cocotb.utils import get_sim_time
     while True:
-        # Same posedge sampling convention used by upstream cocotb AXI BFMs.
-        # No signal drives, no traffic filtering by initialization status.
+        # Capture AXI as the upstream BFM does, at the source-clock edge.
+        # Wishbone ACK may resolve later in this timestep, so sample its
+        # status at ReadOnly before any FallingEdge BFM deassertion.
+        # Remain read-only and active on EVERY cycle, from pre-init onward.
         await RisingEdge(dut.clk)
-        from cocotb.utils import get_sim_time
-        observer.sample(read_pins(dut), sim_time_ns=int(get_sim_time(units="ns")))
+        pins = read_pins(dut)
+        timestamp = int(get_sim_time(units="ns"))
+        await ReadOnly()
+        pins["wb"] = read_wishbone_pins(dut)
+        observer.sample(pins, sim_time_ns=timestamp)
 
 
 def clear_prior_capture(directory: Path):
