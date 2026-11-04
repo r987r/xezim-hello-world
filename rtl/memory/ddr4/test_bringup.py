@@ -277,7 +277,7 @@ class TestDDR4InitPlan(unittest.TestCase):
     def test_decode_upstream_mode_register_step(self):
         example = [("Load Mode Register 1", 0x301, 1,
                     "DFII_COMMAND_RAS|DFII_COMMAND_CAS|DFII_COMMAND_WE|DFII_COMMAND_CS", 0)]
-        result = init_plan.compile_steps(example, 150_000_000)
+        result = init_plan.compile_steps(example, 100_000_000)
         self.assertEqual(result["status"], "plan-only-not-executed")
         self.assertEqual(result["steps"][0]["mask"], 15)
         self.assertEqual(result["steps"][0]["kind"], "command")
@@ -285,7 +285,7 @@ class TestDDR4InitPlan(unittest.TestCase):
     def test_decode_upstream_control_step(self):
         result = init_plan.compile_steps(
             [("Release reset", 0, 0, "DFII_CONTROL_ODT|DFII_CONTROL_RESET_N", 50_000)],
-            150_000_000)
+            100_000_000)
         self.assertEqual(result["steps"][0]["mask"], 0xC)
         self.assertEqual(result["steps"][0]["kind"], "control")
         self.assertEqual(result["steps"][0]["upstream_delay_units"], 50_000)
@@ -300,7 +300,7 @@ class TestDDR4InitPlan(unittest.TestCase):
 
     def test_reject_bad_delay(self):
         with self.assertRaisesRegex(ValueError, "out of range"):
-            init_plan.compile_steps([("bad", 0, 0, "DFII_CONTROL_CKE", -1)], 150_000_000)
+            init_plan.compile_steps([("bad", 0, 0, "DFII_CONTROL_CKE", -1)], 100_000_000)
 
 
 class TestDDR4CompileRunner(unittest.TestCase):
