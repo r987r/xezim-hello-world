@@ -52,15 +52,15 @@ def verify_generated_signals(verilog: str) -> list[str]:
 
 def top_level_port_names(verilog: str) -> list[str]:
     """Explicit top-level VPI port list, never global internal/array access."""
-    match = re.search(r"\\bmodule\\s+soc_ddr4_sim\\s*\\((.*?)\\)\\s*;", verilog, re.S)
+    match = re.search(r"\bmodule\s+soc_ddr4_sim\s*\((.*?)\)\s*;", verilog, re.S)
     if not match:
         raise ValueError("missing DDR4 top-level port header")
     header = match.group(1)
     ports = re.findall(
-        r"\\b(?:input|output|inout)\\s+"
-        r"(?:(?:wire|reg|logic|signed)\\s+)*"
-        r"(?:\\[\\s*\\d+\\s*:\\s*\\d+\\s*\\]\\s+)?"
-        r"([A-Za-z_][A-Za-z0-9_]*)\\b",
+        r"\b(?:input|output|inout)\s+"
+        r"(?:(?:wire|reg|logic|signed)\s+)*"
+        r"(?:\[\s*\d+\s*:\s*\d+\s*\]\s+)?"
+        r"([A-Za-z_][A-Za-z0-9_]*)\b",
         header,
     )
     if not ports or len(ports) > 256 or len(ports) != len(set(ports)) or "clk" not in ports:
@@ -80,11 +80,11 @@ def write_control_file(source: Path, output: Path) -> Path:
         "// Simulation-only, read-only visibility into pinned LiteDRAM nets.\n"
         "// No public access to backing memory arrays or controller state.\n"
         + "".join(
-            f'public_flat_rd -module "soc_ddr4_sim" -var "{name}"\\n'
+            f'public_flat_rd -module "soc_ddr4_sim" -var "{name}"\n'
             for name in names
         )
         + "".join(
-            f'public_flat_rw -module "soc_ddr4_sim" -var "{name}"\\n'
+            f'public_flat_rw -module "soc_ddr4_sim" -var "{name}"\n'
             for name in ports
         )
     )
