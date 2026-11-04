@@ -17,28 +17,16 @@ import sys
 
 import yaml
 import sim_model
+from port_contract import CORE_NAME, AXI_SIGNALS, AXI_OUTPUT_SIGNALS, emitted_port_widths
 
 ROOT = Path(__file__).resolve().parents[3]
 HERE = Path(__file__).resolve().parent
 PROFILE = HERE / "litedram_sim.yml"
-CORE_NAME = "soc_ddr4_sim"
 DEFAULT_TARGET = "memory0.ddr0"
 DEFAULT_OUTPUT = ROOT / ".tools" / "ddr4" / "litedram_sim"
 
 # LiteDRAM standalone AXI has fewer signals than the SoC NoC AXI4 interface.
 # Verify actual generated signals before approving the memory-local adapter.
-AXI_SIGNALS = {
-    "awvalid": 1, "awready": 1, "awburst": 2, "awlen": 8,
-    "awsize": 3, "awid": 4,
-    "wvalid": 1, "wready": 1, "wlast": 1, "wstrb": 8, "wdata": 64,
-    "bvalid": 1, "bready": 1, "bresp": 2, "bid": 4,
-    "arvalid": 1, "arready": 1, "arburst": 2, "arlen": 8,
-    "arsize": 3, "arid": 4,
-    "rvalid": 1, "rready": 1, "rlast": 1, "rresp": 2,
-    "rdata": 64, "rid": 4,
-}
-
-
 def require(ok: bool, message: str) -> None:
     if not ok:
         raise ValueError(message)
@@ -133,39 +121,6 @@ def source_checkout(revision: str) -> Path:
     return source
 
 
-def emitted_port_widths(verilog: str, module: str = CORE_NAME) -> dict[str, int]:
-    start = re.search(r"\bmodule\s+" + re.escape(module) + r"\s*\(", verilog)
-    require(start is not None, f"missing generated top module: {module}")
-    end = verilog.find(");", start.end())
-    require(end >= 0, f"incomplete Verilog port header: {module}")
-    header = verilog[start.end():end]
-    found: dict[str, int] = {}
-    for short, expected_width in AXI_SIGNALS.items():
-        name = f"user_port_axi_0_{short}"
-        match = re.search(r"\b(?:input|output)\s+(?:(?:wire|reg|logic|signed)\s+)*"
-                          r"(?:\[\s*(\d+)\s*:\s*(\d+)\s*\]\s+)?" +
-                          re.escape(name) + r"\b", header)
-        require(match is not None, f"missing generated AXI pin {name}")
-        width = abs(int(match.group(1)) - int(match.group(2))) + 1 if match.group(1) else 1
-        require(width == expected_width,
-                f"{name}: expected {expected_width}-bit pin, generated {width}-bit pin")
-        found[name] = width
-    for short in ("awaddr", "araddr"):
-        name = f"user_port_axi_0_{short}"
-        match = re.search(r"\b(?:input|output)\s+(?:(?:wire|reg|logic|signed)\s+)*"
-                          r"\[\s*(\d+)\s*:\s*(\d+)\s*\]\s+" + re.escape(name) + r"\b", header)
-        require(match is not None, f"missing generated AXI address pin {name}")
-        width = abs(int(match.group(1)) - int(match.group(2))) + 1
-        require(1 <= width <= 64, f"generated {name} has invalid width {width}")
-        found[name] = width
-    require(found["user_port_axi_0_awaddr"] == found["user_port_axi_0_araddr"],
-            "read and write AXI addresses have different widths")
-    require(re.search(r"\b(?:input|output)\s+(?:(?:wire|reg|logic)\s+)*init_done\b", header) is not None,
-            "missing init_done status port")
-    require("wb_ctrl" in header, "missing WB controller initialization port")
-    return found
-
-
 def generator_argv(output: Path) -> list[str]:
     return [sys.executable, str(HERE / "sim_model.py"), "--sim", "--name", CORE_NAME,
             "--output-dir", str(output), str(PROFILE)]
@@ -189,7 +144,9 @@ def generate(contract: dict, output: Path) -> Path:
     subprocess.run(generator_argv(output), cwd=ROOT, env=env, check=True)
     core = output / "gateware" / f"{CORE_NAME}.v"
     require(core.is_file(), f"LiteDRAM generator did not produce {core}")
-    ports = emitted_port_widths(core.read_text())
+    # A mismatch in local AXI address bits risks silently aliasing DDR memory.
+    expected_bits = contract["model"]["isolated_simulation_bytes"].bit_length() - 1
+    ports = emitted_port_widths(core.read_text(), expected_address_bits=expected_bits)
     artifacts = {}
     for path in sorted(output.rglob("*")):
         if path.is_file() and path.name != "ddr4_manifest.json":
