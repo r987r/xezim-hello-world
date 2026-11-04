@@ -16,6 +16,8 @@ from bringup import CORE_NAME, DEFAULT_OUTPUT, checked_output_dir
 from check_rtl import generated_sources
 from traffic_observer import clear_prior_capture, verify_capture
 from latency_report import configured_clock_period_ps, report_from_capture
+from dfi_probe_contract import write_control_file
+from dfi_latency_report import report_from_dfi
 
 
 def preflight(path: Path):
@@ -50,6 +52,19 @@ def main() -> int:
             if latency_file.is_symlink() or not latency_file.is_file():
                 raise ValueError('invalid DDR4 latency artifact path')
             latency_file.unlink()
+        # Selective Verilator VPI exposure: only pinned DFI and bank activity
+        # nets, never the large memory arrays and never vendor RTL edits.
+        control_file = write_control_file(
+            output / "gateware" / f"{CORE_NAME}.v",
+            output / "ddr4_dfi_probes.vlt",
+        )
+        for name in ("ddr4_dfi_events.jsonl", "ddr4_dfi_summary.json",
+                     "ddr4_internal_latency.json"):
+            item = output / name
+            if item.is_symlink():
+                raise ValueError(f"invalid stale DFI artifact symlink: {name}")
+            if item.is_file():
+                item.unlink()
         from cocotb_test.simulator import run
         here = Path(__file__).resolve().parent
         # Cocotb drives exactly one clock. No duplicate Verilator --timing
@@ -62,18 +77,21 @@ def main() -> int:
             python_search=[str(here)],
             sim_build=str(output / "functional_sim_build"),
             extra_env={"DDR4_GENERATED_DIR": str(output)},
-            compile_args=["-Wno-fatal"],
+            compile_args=["-Wno-fatal", str(control_file)],
             waves=False,
         )
         # Independent post-run check: the protocol test is not enough to
         # claim a pass if passive capture was disabled, truncated or stopped.
         capture = verify_capture(output)
         latency = report_from_capture(output, configured_clock_period_ps())
+        internal = report_from_dfi(output, configured_clock_period_ps())
         (output / "ddr4_functional_result.json").write_text(
             json.dumps({"status": "pass", "top": CORE_NAME,
                         "scope": "isolated LiteDRAM generated RTL/DFI model",
-                        "latency": {"status": "measured_axi_only",
+                        "latency": {"status": "measured_axi_and_modeled_dfi",
                                     "file": "ddr4_latency.json",
+                                    "internal_file": "ddr4_internal_latency.json",
+                                    "internal_status": internal["status"],
                                     "reads": latency["measured"]["read"]["samples"],
                                     "writes": latency["measured"]["write"]["samples"]},
                         "monitor": {"status": capture["status"],
