@@ -315,6 +315,18 @@ def collect(client,config,destination):
                         notes.append(f'Run {run["id"]}, artifact {artifact["name"]}: excluded ({invalid})')
                         continue
                     run['verified_tested_shas']=sorted(verified)
+                # For clean CI captures, attest execution-input equivalence
+                # against the current published source using authenticated Git
+                # blob IDs. Never infer that a changed RTL still has old timing.
+                for trace_file in target.rglob('axi-transactions.json'):
+                    trace_run=json.loads(trace_file.read_text()).get('run',{})
+                    tested_sha=trace_run.get('commit')
+                    if (trace_run.get('dirty') is False
+                            and str(trace_run.get('workflow_run_id'))==str(run['id'])
+                            and str(trace_run.get('workflow_attempt'))==str(run.get('run_attempt',1))
+                            and verified_fabric_execution_equivalent(
+                                client,run,tested_sha,site_sha,fabric_cache)):
+                        run.setdefault('verified_equivalent_fabric_shas',{})[tested_sha]=site_sha
                 dump(folder/('artifact-'+str(artifact['id'])+'.json'),artifact)
             dump(folder/'run.json',run)
     dump(destination/'collection.json',{'notes':notes})
@@ -381,6 +393,12 @@ def evidence_index(evidence,output,repository):
                         matches.get(tested_sha) and
                         re.fullmatch(r'[a-f0-9]{40}',matches[tested_sha])):
                     entry['verified_site_source_sha']=matches[tested_sha]
+                # Only the trusted collector sets this attestation using
+                # the checked-in hardware/DV execution-input fingerprint.
+                fabric_matches=source.get('verified_equivalent_fabric_shas') or {}
+                if (fabric_matches.get(tested_sha)
+                        and re.fullmatch(r'[a-f0-9]{40}',fabric_matches[tested_sha])):
+                    entry['verified_fabric_source_sha']=fabric_matches[tested_sha]
                 render_report(trace,destination/'report.html')
                 html=(destination/'report.html').read_text()
                 up=os.path.relpath(output,destination).replace(os.sep,'/')
