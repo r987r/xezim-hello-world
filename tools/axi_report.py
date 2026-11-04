@@ -10,7 +10,7 @@ from pathlib import Path
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
-ORDER = {'reset':0, 'capture_start':1,'phase':1,'expect_response':1,
+ORDER = {'reset':0, 'capture_start':1,'phase':1,'clock_period':1,'expect_response':1,
          'aw':2, 'ar':3, 'w':4, 'r':5, 'b':6}
 
 
@@ -48,6 +48,7 @@ class Boundary:
                'plane':self.entry['plane'], 'network':self.entry['network'],
                'endpoints':self.entry['endpoints'], 'epoch':self.epoch,
                'operation':operation,'axi_id':f['id'],'address':f['addr'],
+               'phase':event.get('phase'),
                'region':', '.join(matches) or 'unmapped', 'request':dict(f),
                'start_ps':event['time_ps'],'end_ps':None,'latency_ps':None,
                'expected_beats':number(f['len'])+1,'beats':[],
@@ -122,13 +123,17 @@ class Boundary:
 def correlate(events, catalog):
     states = {m['id']:Boundary(m,catalog['regions']) for m in catalog['monitors']}
     controls = []
+    current_phase = None
     for event in sorted(events, key=lambda e:(e['time_ps'],ORDER.get(e['channel'],99))):
         ch = event['channel']
         if ch == 'reset':
             if event['active']:
                 for state in states.values():
                     state.reset()
-        elif ch in ('capture_start','capture_overflow','phase'):
+        elif ch in ('capture_start','capture_overflow','clock_period'):
+            controls.append(event)
+        elif ch == 'phase':
+            current_phase = event['label']
             controls.append(event)
         elif ch == 'expect_response':
             if event['monitor'] not in states or states[event['monitor']].entry['role']!='initiator':
@@ -137,6 +142,8 @@ def correlate(events, catalog):
         elif ch in ('aw','w','b','ar','r'):
             if event['monitor'] not in states:
                 raise ValueError('event for uncataloged AXI boundary: '+event['monitor'])
+            if ch in ('aw','ar'):
+                event = {**event, 'phase':current_phase}
             states[event['monitor']].consume(event)
         else:
             raise ValueError('unknown AXI event channel: '+ch)
@@ -184,6 +191,10 @@ def write_report(directory, plan, result):
     binding_complete = bool(starts) and set(starts[0]['monitors']) == {m['id'] for m in catalog['monitors']}
     if not binding_complete:
         issues.append({'message':'AXI capture did not bind every cataloged boundary; no complete capture is claimed'})
+    periods = [e.get('period_ps') for e in controls if e['channel']=='clock_period']
+    clock_period_ps = periods[0] if len(periods) == 1 and type(periods[0]) is int and periods[0] > 0 else None
+    if periods and clock_period_ps is None:
+        issues.append({'message':'AXI capture has invalid or duplicate measured clock period'})
     overflow = any(e['channel']=='capture_overflow' for e in controls)
     if overflow:
         issues.append({'message':'AXI capture overflowed its configured event limit'})
@@ -199,7 +210,8 @@ def write_report(directory, plan, result):
                 'workflow_run_id':os.environ.get('GITHUB_RUN_ID'),
                 'workflow_attempt':os.environ.get('GITHUB_RUN_ATTEMPT'),
                 'expected_failure':plan.get('expect_failure'),'capture_bound':binding_complete,
-                'event_count':len(events),'capture_overflow':overflow},
+                'event_count':len(events),'capture_overflow':overflow,
+                'clock_period_ps':clock_period_ps},
                'sections':{'axi':{'monitors':catalog['monitors'],'transactions':rows,
                                  'phases':[e for e in controls if e['channel']=='phase'],
                                  'issues':issues+correlation_issues}}}
