@@ -160,3 +160,22 @@ one fails. In CPU C mode the AXI probe BFM must *not* instantiate: its
 output pins mirror real iDMA response IDs, so the passive AXI monitor is
 the correct nonintrusive observer. Keep performance and memory-init/check
 benchmarks on the same strict/hybrid/fast scenario contract.
+
+### Active versus passive AXI agent ownership
+
+All cocotb testbench AXI drivers are reviewed by
+`tests/test_axi_agent_ownership.py`. In standalone DMA, RTL is the AXI
+master and the host sparse memory is the only active AXI slave. In SuperNoC
+standalone DV, BFMs drive exposed manager ports and host sparse memory
+responds on external targets. In full-chip DMA-only mode, CPUs are held in
+reset and the CPU0 data/config BFMs own their two ports. In real CPU C DMA
+mode, **no active probe BFM is instantiated**: the probe response pins are
+an iDMA response mirror, while the passive AXI monitors still record all
+handshakes. In isolated DDR4, the external AXI BFM drives the controller,
+not internal DFI banks. Each future active agent must be added to the
+explicit scope inventory and checked for mutually exclusive bus ownership.
+
+Never attach an active `AxiMaster` to a monitor-only mirror; its response
+handler sees unrelated real RTL AXI IDs and can reject/consume legitimate
+responses. Static inventory tests protect common ownership mistakes, but
+passing real RTL simulations remain necessary to prove there is no contention.
