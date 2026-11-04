@@ -153,7 +153,8 @@ class TrafficObserverTests(unittest.TestCase):
         self.observer.finish("fail")
         target = Path(self.temp.name) / "unrelated.rtl"
         target.write_text("do not change")
-        (Path(self.temp.name) / "ddr4_traffic_summary.json").symlink_to(target)
+        self.observer.summary_path.unlink()
+        self.observer.summary_path.symlink_to(target)
         with self.assertRaisesRegex(ValueError, "symlinked"):
             clear_prior_capture(Path(self.temp.name))
         self.assertEqual(target.read_text(), "do not change")
