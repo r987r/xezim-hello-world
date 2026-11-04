@@ -132,6 +132,26 @@ tests:
     report:
       context: 'True iDMA0/iDMA1 instances drive configured local/global FlooNoC data traffic. CPU0 AXI BFM (data) and CPU0 AXI BFM (config) temporarily drive their original CPU0 ports for descriptor/payload SRAM loading and DMA doorbells (simulation only, no PCIe); CPUs stay in reset, so this is NOT a cold-boot pass. Real descriptor fetch, writeback, SSRAM, HBM, DDR and config NoCs are exercised.'
       axi: {scope: dut.u_noc, clock: clk_i, reset: rst_ni, catalog: gen/supernoc/axi_monitors.json, actors: gen/chip/dma_actors.json, max_events: 500000}
+  chip-cpu-dma:
+    # Same generated soc_top and full_chip_tb checker, but real PicoRV32 runs
+    # compiled RV32I C DMA firmware during the existing INIT/RUN/CHECK phases.
+    # No AXI BFM assumes the CPU role and SRAM remains cold.
+    engine: cocotb-verilator
+    sources: noc
+    bender_targets: [chip_boot, dma]
+    ip: [picorv32, serv, wb2axip, verilog_axi, pulp_idma]
+    firmware_mode: cpu_dma
+    top: full_chip_tb
+    module: dv.full_chip.test_boot
+    seed: 1
+    test_dir: .
+    build: .tools/chip-cpu-dma-obj
+    env: {MAKEFLAGS: '-j2', SOC_CPU_DMA_MODE: '1'}
+    timeout_s: 1800
+    pass: 'PASS fullchip:'
+    report:
+      context: 'The real PicoRV32 CPU calls compiled C in the shared cold-boot INIT/RUN/CHECK test, allocates SRAM/DDR/HBM physical regions, and programs the true PULP iDMA through its configuration NoC. No CPU BFM or preloaded SRAM. Check CPU-produced result and read/write AXI handshakes.'
+      axi: {scope: dut.u_noc, clock: clk, reset: rst_n, catalog: gen/supernoc/axi_monitors.json, actors: .tools/regression/chip-cpu-dma/variant/manifest.json, max_events: 500000}
   chip-boot: &chip
     engine: cocotb-verilator
     sources: noc
@@ -170,7 +190,7 @@ suites:
   diagnostics: [cpu-fetch, smoke]
   dma: [dma-rtl]
   # Fail fast on the new generator-wired DMA hardware, then gate cold boot.
-  chip: [chip-dma, chip-boot, chip-boot-negative, chip-xezim-compile]
+  chip: [chip-dma, chip-boot, chip-cpu-dma, chip-boot-negative, chip-xezim-compile]
   # Every declared test is covered. Structural Xezim probes stay distinct
   # from the Verilator traffic gate; make test requires both toolchains.
   full: [xezim, noc, compatibility, diagnostics, dma, chip]
