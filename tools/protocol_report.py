@@ -211,7 +211,7 @@ def build(directory: Path, plan: dict, *, axi_payload=None):
             records += captured["records"]
         except ValueError as error:
             issues.append(str(error))
-    if not sources and configured is None:
+    if axi_payload is None and configured is None:
         return None
     if axi_payload is None:
         try:
