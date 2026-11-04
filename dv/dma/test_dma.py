@@ -39,6 +39,41 @@ async def submit(dut, phys_addr):
     dut.apb_write_i.value = 0
 
 
+async def read_dma_status(dut):
+    """Read the actual pinned desc64 status CSR over APB (offset 8)."""
+    await FallingEdge(dut.clk_i)
+    dut.apb_addr_i.value = 8
+    dut.apb_write_i.value = 0
+    dut.apb_data_i.value = 0
+    dut.apb_select_i.value = 1
+    dut.apb_enable_i.value = 0
+    await FallingEdge(dut.clk_i)
+    dut.apb_enable_i.value = 1
+    for _ in range(100):
+        await RisingEdge(dut.clk_i)
+        if int(dut.apb_ready_o.value):
+            assert not int(dut.apb_error_o.value)
+            status = int(dut.apb_rdata_o.value)
+            break
+    else:
+        raise AssertionError("DMA APB status read timed out")
+    await FallingEdge(dut.clk_i)
+    dut.apb_select_i.value = 0
+    dut.apb_enable_i.value = 0
+    return status
+
+
+async def await_idle(dut):
+    # Testbench wait only, not CPU busy-polling. Never reclaim the shared
+    # descriptor SRAM before the frontend has fully retired all requests.
+    for _ in range(3000):
+        status = await read_dma_status(dut)
+        assert (status & 2) == 0, "DMA FIFO full after chain completion"
+        if not (status & 1):
+            return
+    raise AssertionError("DMA did not become idle following final IRQ")
+
+
 @cocotb.test(timeout_time=500, timeout_unit="us")
 async def real_dma_one_and_one_hundred_descriptors(dut):
     cfg = __import__("yaml").safe_load((ROOT/"config/soc.yaml").read_text())
@@ -73,15 +108,17 @@ async def real_dma_one_and_one_hundred_descriptors(dut):
         await RisingEdge(dut.clk_i)
 
     irq_count = [0]
+    irq_times = []
 
     async def watch_irq():
         while True:
             await RisingEdge(dut.irq_o)
             irq_count[0] += 1
+            irq_times.append(str(cocotb.utils.get_sim_time(units='ns')))
 
     irq_task = cocotb.start_soon(watch_irq())
     # One immediate interrupt, followed by a long 100-descriptor chain.
-    for count, destination in ((1, "memory0.hbm0"), (100, "memory0.ddr0")):
+    for count, destination in ((100, "memory0.ddr0"), (1, "memory0.hbm0")):
         case = build_dma_vector(cfg, count=count, length=64,
                                 destination=destination, profile="dma_only")
         manifest = case.manifest
@@ -91,9 +128,11 @@ async def real_dma_one_and_one_hundred_descriptors(dut):
         expected_irq = irq_count[0] + 1
         await submit(dut, manifest["descriptor_head"])
         await with_timeout(RisingEdge(dut.irq_o), 200, "us")
+        await await_idle(dut)
         await Timer(100, units="ns")
         assert irq_count[0] == expected_irq, (
-            f"DMA IRQ count {irq_count[0]} != {expected_irq} for {count} descriptors")
+            f"DMA IRQ count {irq_count[0]} != {expected_irq} for {count} descriptors; "
+            f"IRQ times (ns)={irq_times}")
 
         # Verify real AXI data movement with independently prepared golden bytes.
         for copy in manifest["copies"]:
@@ -105,8 +144,8 @@ async def real_dma_one_and_one_hundred_descriptors(dut):
             header = await memory.read(copy["descriptor"], 8)
             assert bytes(header) == b"\xff"*8, (
                 f"DMA descriptor writeback missing at {copy['descriptor']:#x}")
-        dut._log.info("PASS DMA real AXI: %d descriptor(s), destination %s, IRQ=%d",
-                      count, destination, irq_count[0])
+        dut._log.info("PASS DMA real AXI: %d descriptor(s), destination %s, IRQ=%d times=%s",
+                      count, destination, irq_count[0], irq_times)
 
     assert irq_count[0] == 2
     irq_task.kill()
