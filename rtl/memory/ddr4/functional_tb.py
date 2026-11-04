@@ -14,6 +14,7 @@ from cocotb.clock import Clock
 from cocotb.triggers import RisingEdge, FallingEdge, Timer, with_timeout
 from cocotbext.axi import AxiBus, AxiMaster, AxiResp
 from init_plan import wishbone_script
+from traffic_observer import TrafficObserver, observe_forever
 
 OUTPUT = Path(os.environ["DDR4_GENERATED_DIR"])
 PLAN = json.loads((OUTPUT / "ddr4_init_plan.json").read_text())
@@ -110,32 +111,6 @@ def axi_snapshot(dut):
     return {name: int(getattr(dut, name).value) for name in names}
 
 
-async def observe_axi(dut, counts):
-    names = ("aw", "w", "b", "ar", "r")
-    while True:
-        await RisingEdge(dut.clk)
-        for channel in names:
-            val = int(getattr(dut, f"user_port_axi_0_{channel}valid").value)
-            ready = int(getattr(dut, f"user_port_axi_0_{channel}ready").value)
-            if val:
-                counts[f"{channel}_valid"] = counts.get(f"{channel}_valid", 0) + 1
-            if ready:
-                counts[f"{channel}_ready"] = counts.get(f"{channel}_ready", 0) + 1
-            if val and ready:
-                counts[f"{channel}_handshake"] = counts.get(f"{channel}_handshake", 0) + 1
-                if channel == "r":
-                    counts["r_last"] = counts.get("r_last", 0) + int(dut.user_port_axi_0_rlast.value)
-                    counts["r_id_last"] = int(dut.user_port_axi_0_rid.value)
-                    counts["r_resp_last"] = int(dut.user_port_axi_0_rresp.value)
-                    counts["r_data_last"] = hex(int(dut.user_port_axi_0_rdata.value))
-                if channel == "ar":
-                    counts["ar_id_last"] = int(dut.user_port_axi_0_arid.value)
-                    counts["ar_len_last"] = int(dut.user_port_axi_0_arlen.value)
-                if channel == "b":
-                    counts["b_id_last"] = int(dut.user_port_axi_0_bid.value)
-                    counts["b_resp_last"] = int(dut.user_port_axi_0_bresp.value)
-
-
 async def transfer(master, dut, address, data, ident):
     wr = await with_timeout(master.write(address, data, awid=ident), 80, "us")
     assert wr.resp == AxiResp.OKAY, f"AXI B error {address:#x}: {wr}"
@@ -148,6 +123,7 @@ async def transfer(master, dut, address, data, ident):
 
 @cocotb.test(timeout_time=3, timeout_unit="ms")
 async def ddr4_wishbone_init_axi_readwrite(dut):
+    """One always-active passive observer from before clock start to teardown."""
     dut.clk.value = 0
     dut.sim_trace.value = 0
     for name in ("wb_ctrl_adr", "wb_ctrl_dat_w", "wb_ctrl_sel",
@@ -157,51 +133,82 @@ async def ddr4_wishbone_init_axi_readwrite(dut):
                  "user_port_axi_0_arvalid", "user_port_axi_0_bready",
                  "user_port_axi_0_rready"):
         getattr(dut, name).value = 0
-    cocotb.start_soon(Clock(dut.clk, 10, units="ns").start())
-    await tick(dut, 10)
-    assert not int(dut.user_rst.value), "simulation reset did not release"
-    assert not int(dut.init_done.value), "DDR must be explicitly initialized"
-    assert not int(dut.init_error.value), "unexpected initial DDR error"
-    assert not int(dut.user_port_axi_0_awready.value), "AXI must be gated before init"
-    # Match other known-good cocotbext-axi testbenches: create the five
-    # channel source/sink tasks near reset, not after 1.2ms of DDR init.
-    master = AxiMaster(AxiBus.from_prefix(dut, "user_port_axi_0"),
-                       dut.user_clk, dut.user_rst, reset_active_level=True)
-    # Legitimate AXI read backpressure also avoids a single-cycle response
-    # disappearing at the Verilator/VPI read-monitor scheduling boundary.
-    # Keep the upstream AXI monitor and payload/response assertions enabled.
-    master.read_if.r_channel.set_pause_generator(itertools.cycle([1, 1, 1, 0, 0]))
-    await tick(dut, 16)
-    await initialize(dut)
-    await tick(dut, 16)
-    counts = {}
-    monitor = cocotb.start_soon(observe_axi(dut, counts))
+
+    # Unlike an ad hoc debug monitor, this begins BEFORE the first clock edge
+    # and must run throughout initialization and ALL AXI operations. It is
+    # independent of cocotbext-axi's protocol-aware BFM/response scoreboard.
+    observer = TrafficObserver(OUTPUT)
+    monitor = cocotb.start_soon(observe_forever(dut, observer))
+    succeeded = False
+    failure = None
     try:
-        # A read before a write separates DFI/scheduler readiness from the
-        # write-buffer path and the AW/W two-channel arbitration.
-        probe = await with_timeout(master.read(0x4000, 8, arid=0), 80, "us")
-        assert probe.resp == AxiResp.OKAY, f"DDR4 initial read response: {probe}"
-        dut._log.info("PASS DDR4 prewrite read: controller returned R channel data")
-    except Exception:
-        dut._log.error("DDR4 read-side failure: pins=%s counts=%s active_id=%s r_fifo=%s",
-                       axi_snapshot(dut), counts,
-                       getattr(master.read_if, "active_id", None),
-                       master.read_if.r_channel.count())
-        raise
-    try:
+        cocotb.start_soon(Clock(dut.clk, 10, units="ns").start())
+        await tick(dut, 10)
+        observer.assert_health(monitor, min_samples=9)
+        assert not int(dut.user_rst.value), "simulation reset did not release"
+        assert not int(dut.init_done.value), "DDR must be explicitly initialized"
+        assert not int(dut.init_error.value), "unexpected initial DDR error"
+        assert not int(dut.user_port_axi_0_awready.value), \
+            "AXI must be gated before init"
+
+        master = AxiMaster(AxiBus.from_prefix(dut, "user_port_axi_0"),
+                           dut.user_clk, dut.user_rst, reset_active_level=True)
+        # Legal AXI RREADY backpressure experiment, not a replacement
+        # protocol monitor or an artificial DRAM response.
+        master.read_if.r_channel.set_pause_generator(itertools.cycle([1, 1, 1, 0, 0]))
+
+        await tick(dut, 16)
+        observer.next_phase("initialization")
+        await initialize(dut)
+        observer.assert_health(monitor)
+        await tick(dut, 16)
+        observer.next_phase("traffic")
+
+        try:
+            # Read before write isolates DFI/scheduler availability from
+            # AW/W buffering. Uninitialized contents need not match a value.
+            probe = await with_timeout(master.read(0x4000, 8, arid=0), 80, "us")
+            assert probe.resp == AxiResp.OKAY, f"DDR4 initial read response: {probe}"
+            dut._log.info("PASS DDR4 prewrite read: controller returned R channel data")
+        except Exception:
+            dut._log.error("DDR4 initial read timeout: pins=%s captured=%s "
+                           "active_id=%s r_fifo=%s",
+                           axi_snapshot(dut), observer.last_by_channel,
+                           getattr(master.read_if, "active_id", None),
+                           master.read_if.r_channel.count())
+            raise
+        observer.assert_health(monitor)
+
         await transfer(master, dut, 0x4000, bytes((i*17+3)&255 for i in range(64)), 1)
-    except Exception:
-        dut._log.error("DDR4 write-side failure: pins=%s counts=%s", axi_snapshot(dut), counts)
+        await transfer(master, dut, 0x8000, bytes((i*37+7)&255 for i in range(32)), 2)
+        initial = bytes([0xA5])*24
+        await transfer(master, dut, 0x9000, initial, 3)
+        wr = await with_timeout(master.write(0x9005, b"\x01\x23\x45\x67\x89", awid=3), 80, "us")
+        assert wr.resp == AxiResp.OKAY
+        expected = initial[:5] + b"\x01\x23\x45\x67\x89" + initial[10:]
+        rd = await with_timeout(master.read(0x9000, len(initial), arid=3), 80, "us")
+        assert rd.resp == AxiResp.OKAY and rd.data == expected, \
+            f"DDR4 byte-strobe guard mismatch: {rd.data.hex()}"
+
+        observer.assert_health(monitor)
+        observer.next_phase("post_traffic")
+        await tick(dut, 5)
+        observer.assert_health(monitor)
+        observer.assert_complete()
+        succeeded = True
+        dut._log.info("PASS actual LiteDRAM DDR4 AXI integrity with continuous monitoring")
+    except Exception as exc:
+        failure = exc
+        dut._log.error("DDR4 functional failure; continuous monitor: "
+                       "phase=%s cycles=%d channels=%s wb=%s last=%s",
+                       observer.phase, observer.samples,
+                       dict(observer.channels), dict(observer.wishbone),
+                       observer.last_by_channel)
         raise
     finally:
-        monitor.kill()
-    await transfer(master, dut, 0x8000, bytes((i*37+7)&255 for i in range(32)), 2)
-    initial = bytes([0xA5])*24
-    await transfer(master, dut, 0x9000, initial, 3)
-    wr = await with_timeout(master.write(0x9005, b"\x01\x23\x45\x67\x89", awid=3), 80, "us")
-    assert wr.resp == AxiResp.OKAY
-    expected = initial[:5] + b"\x01\x23\x45\x67\x89" + initial[10:]
-    rd = await with_timeout(master.read(0x9000, len(initial), arid=3), 80, "us")
-    assert rd.resp == AxiResp.OKAY and rd.data == expected, \
-        f"DDR4 byte-strobe guard mismatch: {rd.data.hex()}"
-    dut._log.info("PASS actual LiteDRAM DDR4 init and AXI burst/ID/WSTRB integrity")
+        # Never end capture after just one transfer. Even failing tests write
+        # a partial trace/summary before the exception is reported to CI.
+        if not monitor.done():
+            monitor.kill()
+        observer.finish("pass" if succeeded else "fail",
+                        error=None if succeeded else repr(failure))
