@@ -21,6 +21,15 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertIn('closed',pages['on']['pull_request']['types'])
         self.assertNotIn('push',pages['on'])
         self.assertNotIn('workflow_run',pages['on'])
+        # Pull-request runs must only preview or dispatch; they cannot deploy
+        # directly because GitHub Pages restricts deployments by run ref.
+        dispatch=pages['jobs']['dispatch-after-merge']
+        self.assertIn("github.event.pull_request.merged == true",dispatch['if'])
+        self.assertEqual(dispatch['permissions']['actions'],'write')
+        deploy=pages['jobs']['deploy']
+        self.assertIn("github.event_name == 'workflow_dispatch'",deploy['if'])
+        self.assertIn("github.ref == 'refs/heads/main'",deploy['if'])
+        self.assertNotIn('pull_request',deploy['if'])
         # Site styling must not queue an expensive NoC traffic regression.
         noc=(ROOT/'.github/workflows/floonoc-elab.yml').read_text()
         self.assertNotIn("'tools/templates/**'",noc)

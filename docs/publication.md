@@ -35,10 +35,12 @@ result: a required-negative test passes only when its exact named failure occurs
 
 `config/publication.yaml` selects trusted producer workflows and artifact names,
 history depth and archive size limits. Every PR targeting `main` builds an
-offline preview. After a PR merges, the same workflow builds and publishes the
-trusted `main` checkout. Manual dispatch on `main` publishes as well; a manual
-feature-branch dispatch builds a preview without deployment. No automatic branch
-push or CI-completion triggers remain.
+offline preview. After a PR merges, a minimally privileged PR-close job dispatches
+one new Pages workflow on the actual `main` ref, so the GitHub Pages environment
+permits deployment; that main-ref run builds and publishes the trusted `main`
+checkout. Manual dispatch on `main` publishes as well; a manual feature-branch
+dispatch builds a preview without deployment. No automatic branch push or
+CI-completion triggers remain.
 
 The collector searches the latest 500 Actions runs and keeps up to four runs
 per configured producer. It accepts main-branch results and completed PR results
