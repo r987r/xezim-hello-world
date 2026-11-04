@@ -219,6 +219,15 @@ def write_report(directory, plan, result):
     # Escape '<' even inside JSON strings: transaction text must never close
     # the embedded script element. All table/details text uses textContent.
     render_report(payload,directory/'report.html')
+    # The existing AXI correlator remains the sole owner of AXI semantics.
+    # Export its completed observations through the protocol-neutral view.
+    import protocol_report
+    protocols = protocol_report.build(directory, plan, axi_payload=payload)
+    if protocols is not None:
+        path = directory/'report.html'
+        html = path.read_text()
+        link = '<p><a href="protocols.html">Unified protocol explorer (AXI + other VIP streams)</a></p>'
+        path.write_text(html.replace('<main>', '<main>'+link, 1))
     return {'transactions':len(rows),'events':len(events),'capture_bound':binding_complete,
             'overflow':overflow,'issues':len(issues)+len(correlation_issues)}
 
