@@ -90,7 +90,12 @@ class MergedPrEvidenceTests(unittest.TestCase):
                            'tools/templates/run_report.html':'1'*40})
         new_blobs={**base_blobs, 'docs/publication.md':'2'*40,
                    'README.md':'2'*40,'.github/workflows/pages.yml':'2'*40,
-                   'tools/templates/run_report.html':'2'*40}
+                   'tools/templates/run_report.html':'2'*40,
+                   # Unintegrated staged memory work must not erase the
+                   # current NoC latency measurements.
+                   'rtl/memory/ddr4/bringup.py':'2'*40,
+                   'rtl/memory/ddr4/sim_model.py':'3'*40,
+                   'rtl/memory/ddr4/toolchain.lock.yml':'4'*40}
         workflows={}
         blob_sources={}
         for name in FABRIC_EXECUTION_WORKFLOWS:
