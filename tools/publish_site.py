@@ -178,6 +178,7 @@ FABRIC_EXCLUDED_PREFIXES = (
 FABRIC_EXCLUDED_FILES = {
     'README.md', 'AGENTS.md', 'tools/publish_site.py',
     'tools/fabric_report.py', 'tools/templates/site.html',
+    'tools/templates/run_report.html',
 }
 # CI execution jobs (tool versions and invocation) must also be identical.
 # Trigger/scheduling-only edits do not alter simulated timing and are ignored.
