@@ -112,10 +112,21 @@ async def real_dma_one_and_one_hundred_descriptors(dut):
     irq_times = []
 
     async def watch_irq():
+        # IRQ in the pinned frontend is combinational BVALID/BREADY, not
+        # a registered interrupt. Sample one stable phase per clock to
+        # avoid counting intra-cycle combinational/VPI value changes.
+        last = False
         while True:
-            await RisingEdge(dut.irq_o)
-            irq_count[0] += 1
-            irq_times.append(str(get_sim_time(units='ns')))
+            await FallingEdge(dut.clk_i)
+            await Timer(1, units="ns")
+            active = bool(int(dut.irq_o.value))
+            if active and not last:
+                irq_count[0] += 1
+                timestamp = str(get_sim_time(units='ns'))
+                irq_times.append(timestamp)
+                dut._log.info("DMA IRQ sampled at %s ns, bvalid=%d bready=%d", timestamp,
+                              int(dut.dma_bvalid.value), int(dut.dma_bready.value))
+            last = active
 
     irq_task = cocotb.start_soon(watch_irq())
     # One immediate interrupt, followed by a long 100-descriptor chain.
@@ -128,7 +139,12 @@ async def real_dma_one_and_one_hundred_descriptors(dut):
         await memory.write(manifest["source_sram_base"], case.source_sram)
         expected_irq = irq_count[0] + 1
         await submit(dut, manifest["descriptor_head"])
-        await with_timeout(RisingEdge(dut.irq_o), 200, "us")
+        for _ in range(20000):
+            if irq_count[0] >= expected_irq:
+                break
+            await RisingEdge(dut.clk_i)
+        else:
+            raise AssertionError("DMA expected IRQ timeout")
         await await_idle(dut)
         await Timer(100, units="ns")
         assert irq_count[0] == expected_irq, (
