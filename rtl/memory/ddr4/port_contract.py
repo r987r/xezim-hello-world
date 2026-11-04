@@ -106,7 +106,7 @@ def emitted_port_widths(verilog: str, module: str = CORE_NAME,
     # LiteDRAM's --sim CRG is clock-only and does not consume the physical
     # pad "rst"; Migen therefore drops that input from the generated top.
     # Keep the exported user_rst and PHY init handshake mandatory above.
-    if re.search(r"\\b(?:input|output|inout)\\s+(?:(?:wire|reg|logic)\\s+)*rst\\b", header):
+    if re.search(r"\b(?:input|output|inout)\s+(?:(?:wire|reg|logic)\s+)*rst\b", header):
         actual_dir, actual_width = _generated_port(header, "rst")
         require((actual_dir, actual_width) == ("input", 1),
                 f"rst: unexpected simulation reset port {actual_dir}[{actual_width}]")
