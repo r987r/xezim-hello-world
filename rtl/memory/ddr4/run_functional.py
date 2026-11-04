@@ -94,6 +94,14 @@ def main() -> int:
         capture = verify_capture(output)
         latency = report_from_capture(output, configured_clock_period_ps())
         internal = report_from_dfi(output, configured_clock_period_ps())
+        stage_digest = {
+            name: {"status": detail["status"],
+                   "samples": detail.get("samples", 0),
+                   "avg_cycles": detail.get("avg_cycles")}
+            for name, detail in internal["internal_stages"].items()
+        }
+        print("DDR4 measured internal stages: " +
+              json.dumps(stage_digest, sort_keys=True), flush=True)
         (output / "ddr4_functional_result.json").write_text(
             json.dumps({"status": "pass", "top": CORE_NAME,
                         "scope": "isolated LiteDRAM generated RTL/DFI model",
