@@ -66,7 +66,7 @@ Generation uses local sim_model.py --sim, invoking pinned upstream litedram.gen 
 
 - [x] Stage 0: Dedicated branch and memory-only scaffold; existing top-level files untouched.
 - [x] Stage 0: Pin reference, DDR4 profile, static interface/address checks and negative unit tests added.
-- [x] Stage 0: 33 memory-only Python unit tests pass locally, including negative signal-direction/address-width cases and both simulator command shapes.
+- [x] Stage 0: 38 memory-only Python unit tests pass locally, including negative signal-direction/address-width cases and both simulator command shapes.
 - [ ] Stage 0 acceptance: run `bringup.py check` against the complete repo and capture local/CI DDR-only evidence on the final PR SHA; current shared SoC workflows do **not** run this memory-directory test suite.
 - [ ] Stage 1: Generate real DDR4 LiteDRAM + simulation-PHY Verilog from pinned source. Record generated port map, CSR map, build commands, hashes and all dependency revisions.
 - [ ] Stage 1: Isolated Verilator elaboration **and** independent Xezim compatibility check. Do not misreport structural compilation as traffic.
@@ -101,7 +101,7 @@ reject out-of-model accesses.
 Local check performed (Python 3.13 + PyYAML):
 
     python3 -m unittest discover -s rtl/memory/ddr4 -p 'test_*.py' -v
-    # Ran 33 tests, OK
+    # Ran 38 tests, OK
 
 This verifies Python contract/negative cases, signal direction, control-port requirements, safe compile-command planning and capacity calculations,
 **not real generated Verilog**. The execution container lacks internet
@@ -135,9 +135,10 @@ pass. The Xezim command matches this repo's existing
 `--compile --no-cache -s <top> -f <filelist>` convention.
 **Neither engine has actually compiled this DDR4 RTL yet.**
 
-If generation raises a Python traceback under Python 3.13, examine
-[upstream LiteX issue #2152](https://github.com/enjoy-digital/litex/issues/2152)
-before creating any local Migen/CSR monkeypatch. Use Python 3.11 as
+If generation raises a Python traceback under Python 3.13, examine the
+**historical, closed** [upstream LiteX issue #2152](https://github.com/enjoy-digital/litex/issues/2152)
+(issues around Migen/CSR name extraction were reported in 2024 and issue
+closed in February 2025) before creating any local Migen/CSR monkeypatch. Use Python 3.11 as
 a conservative isolated-generator baseline and record **actual**
 Migen/LiteX versions; pin those dependencies in the memory subsystem
 once a working combination is demonstrated. Do not claim Python 3.13
@@ -155,3 +156,26 @@ initialize over Wishbone `wb_ctrl` (CPU is null), wait for
 `init_done` and ensure `init_error` is low, then run cocotbext-axi
 transaction/scoreboard tests against **real generated controller +
 DFI simulation PHY**, not the existing AXI SRAM stand-in.
+
+## Controller startup plan (generated, not yet executed)
+
+With `cpu: null`, the standalone core exports `wb_ctrl` but has no
+on-chip firmware to perform DDR4 initialization. Rather than invent
+mode-register values, `sim_model.py` now uses the pinned upstream
+`litedram.init.get_sdram_phy_init_sequence()` with the exact DDR4
+PHY model settings and timing derived from the selected device.
+It emits `.tools/ddr4/litedram_sim/ddr4_init_plan.json` containing:
+
+- Reset release and CKE commands
+- DDR4 mode-register programming for MR3, MR6, MR5, MR4, MR2, MR1, MR0
+- ZQ calibration
+- Symbolic upstream command and control masks, bank/command address,
+  and source BIOS delay units
+
+The plan remains **plan-only-not-executed**. `bringup.py generate`
+requires a nonempty, clock-matched generated init plan, but nobody has
+yet driven the Wishbone bus, awaited `init_done`, completed DRAM
+initialization, or run AXI traffic. In a future cocotb test, derive CSR
+addresses from the generated CSR map, translate the upstream BIOS delay
+units into verified simulation waits, and use the upstream control
+register sequencing; do **not** simply force init_done high.
