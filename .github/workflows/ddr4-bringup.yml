@@ -88,6 +88,23 @@ jobs:
       - name: Lint actual generated DDR4 RTL
         run: python3 rtl/memory/ddr4/check_rtl.py --tool verilator --timeout 600
 
+      - name: Install upstream cocotb AXI simulation framework
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check 'cocotb==1.9.2' 'cocotbext-axi==0.1.24' 'cocotb-test==0.2.6'
+          python3 - <<'PY'
+          import cocotb
+          import cocotbext.axi
+          from cocotb_test.simulator import run
+          print("Upstream cocotb + cocotbext-axi + cocotb-test ready", cocotb.__version__)
+          PY
+
+      - name: Exercise real DDR4 controller init and AXI data in Verilator
+        timeout-minutes: 18
+        run: |
+          set -euo pipefail
+          python3 rtl/memory/ddr4/run_functional.py
+
       - name: Upload generated RTL, initialization plan and diagnostic logs
         if: always()
         uses: actions/upload-artifact@v4
