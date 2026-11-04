@@ -54,6 +54,10 @@ class PublicationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             output=Path(tmp)/'site';dataset=site.build(output,Path(tmp)/'empty','r987r/xezim-hello-world',SHA,CONFIG)
             self.assertEqual(len(dataset['tests']),18)
+            self.assertTrue((output/'fabric.html').is_file())
+            self.assertTrue((output/'data/fabric.json').is_file())
+            self.assertEqual(json.loads((output/'data/fabric.json').read_text())['summary']['meshes'],8)
+            self.assertNotIn('__FABRIC_DATA__',(output/'fabric.html').read_text())
             self.assertFalse(dataset['entries'])
             self.assertEqual(len(dataset['monitors']),26)
             for path in output.rglob('*.html'):
