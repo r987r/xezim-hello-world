@@ -91,28 +91,86 @@ def extract_archive(data,destination,config,digest=None):
         archive.extractall(destination)
 
 
+def merged_main_pr_heads(client):
+    """Map exact merged head SHA + source branch to PR number on main."""
+    heads={}
+    for page in range(1,6):
+        prs=client.request(f'/repos/{client.repository}/pulls?state=closed&base=main&per_page=100&page={page}')
+        for pr in prs:
+            if pr.get('merged_at') and (pr.get('base') or {}).get('ref')=='main':
+                head=pr.get('head') or {}
+                if head.get('sha') and head.get('ref'):
+                    heads[(head['sha'],head['ref'])]=pr['number']
+        if len(prs)<100:
+            break
+    return heads
+
+
+def verified_merged_pr(run,merged_heads):
+    """GitHub may clear workflow_run.pull_requests after a PR merges."""
+    if run.get('event')!='pull_request':
+        return None
+    return merged_heads.get((run.get('head_sha'),run.get('head_branch')))
+
+
+def verified_pr_test_commit(client,run,tested_sha,cache=None):
+    """Accept head SHA or GitHub's authentic temporary PR merge commit.
+
+    For pull_request checkout@v4, GitHub tests refs/pull/N/merge rather than
+    the PR head. The merge commit must have the exact tested PR head as its
+    second parent. A trace still must match its CI run ID, attempt and clean
+    source state; an arbitrary SHA in an artifact is never sufficient.
+    """
+    if tested_sha==run['head_sha']:
+        return True
+    if not run.get('verified_merged_pr') or not isinstance(tested_sha,str):
+        return False
+    if not re.fullmatch(r'[a-f0-9]{40}',tested_sha):
+        return False
+    cache={} if cache is None else cache
+    key=(tested_sha,run['head_sha'])
+    if key not in cache:
+        try:
+            commit=client.request(f'/repos/{client.repository}/git/commits/{tested_sha}')
+            parents=[item['sha'] for item in commit.get('parents',[])]
+            cache[key]=len(parents)==2 and parents[1]==run['head_sha']
+        except (urllib.error.HTTPError, KeyError, TypeError, ValueError):
+            cache[key]=False
+    return cache[key]
+
+
 def collect(client,config,destination):
     destination.mkdir(parents=True,exist_ok=True)
     selected={w['file']:[] for w in config['workflows']}
-    # Limit API history as well as output size. Only trusted main runs are
-    # ingested; PR artifacts and PR code are never deployed by workflow_run.
+    merged_heads=merged_main_pr_heads(client)
+    # Only trusted main and source-SHA-matched merged PR workflow runs are
+    # published. PR code and artifacts are not executed in this trusted job.
     for page in range(1,6):
-        response=client.request(f'/repos/{client.repository}/actions/runs?branch=main&per_page=100&page={page}')
+        response=client.request(f'/repos/{client.repository}/actions/runs?per_page=100&page={page}')
         batch=response['workflow_runs']
         for run in batch:
             file=run['path'].split('/')[-1]
-            if file in selected and run['head_branch']=='main' and len(selected[file])<config['history_per_workflow']:
-                selected[file].append(run)
+            if file not in selected or len(selected[file])>=config['history_per_workflow']:
+                continue
+            merged_pr=verified_merged_pr(run,merged_heads)
+            if run.get('head_branch')!='main' and merged_pr is None:
+                continue
+            run=dict(run)
+            if merged_pr is not None:
+                run['verified_merged_pr']=merged_pr
+            selected[file].append(run)
         if not batch or all(len(r)>=config['history_per_workflow'] for r in selected.values()):
             break
     notes=[]
+    verified_cache={}
     for workflow in config['workflows']:
         for run in selected[workflow['file']]:
             folder=destination/(str(run['id'])+'-'+str(run.get('run_attempt',1)))
             folder.mkdir(parents=True,exist_ok=True)
-            dump(folder/'run.json',run)
             dump(folder/'workflow.json',workflow)
-            if run['status']!='completed':continue
+            if run['status']!='completed':
+                dump(folder/'run.json',run)
+                continue
             artifacts=client.request(f'/repos/{client.repository}/actions/runs/{run["id"]}/artifacts?per_page=100')['artifacts']
             for artifact in artifacts:
                 if artifact['name'] not in workflow['artifacts']:continue
@@ -125,7 +183,24 @@ def collect(client,config,destination):
                     target.mkdir(exist_ok=True)
                     extract_archive(raw,target,config,artifact.get('digest'))
                     (target/'.complete').write_text('verified\n')
+                if run.get('verified_merged_pr') is not None:
+                    verified=set(run.get('verified_tested_shas',[]))
+                    invalid=None
+                    for trace_file in target.rglob('axi-transactions.json'):
+                        trace_run=json.loads(trace_file.read_text()).get('run',{})
+                        tested_sha=trace_run.get('commit')
+                        if not verified_pr_test_commit(client,run,tested_sha,verified_cache):
+                            invalid=f'PR merge commit not verifiable: {tested_sha}'
+                            break
+                        verified.add(tested_sha)
+                    if invalid:
+                        # Do not publish artifacts with unverified tested SHAs.
+                        shutil.rmtree(target)
+                        notes.append(f'Run {run["id"]}, artifact {artifact["name"]}: excluded ({invalid})')
+                        continue
+                    run['verified_tested_shas']=sorted(verified)
                 dump(folder/('artifact-'+str(artifact['id'])+'.json'),artifact)
+            dump(folder/'run.json',run)
     dump(destination/'collection.json',{'notes':notes})
 
 
@@ -137,8 +212,15 @@ def evidence_index(evidence,output,repository):
         workflow=json.loads((file.parent/'workflow.json').read_text())
         run={k:source.get(k) for k in ('id','name','status','conclusion','head_sha','head_branch','run_attempt','html_url','created_at','updated_at','path')}
         run['label']=workflow['label']
+        verified_shas=set(source.get('verified_tested_shas',[]))
+        # The PR head is not necessarily the commit the runner checked out.
+        run['tested_sha']=(next(iter(verified_shas)) if len(verified_shas)==1 else run['head_sha'])
+        if run['head_branch']!='main':
+            number=source.get('verified_merged_pr')
+            if source.get('event')!='pull_request' or type(number) is not int or number<=0:
+                raise ValueError('publication cache contains unverified non-main run')
+            run['merged_pr']=number
         runs.append(run)
-        if run['head_branch']!='main':raise ValueError('publication cache contains a non-main run')
         found=set()
         for result_path in sorted(file.parent.glob('artifact-*/**/result.json')):
             result=json.loads(result_path.read_text())
@@ -160,15 +242,21 @@ def evidence_index(evidence,output,repository):
             trace=json.loads(trace_path.read_text()) if trace_path.exists() else None
             entry={'target':target,'engine':plan.get('engine','unknown'),'passed':result.get('passed') is True,
                    'expected_failure':plan.get('expect_failure'),'stage':result.get('stage'),
-                   'run_id':run['id'],'attempt':run.get('run_attempt',1),'source_sha':run['head_sha'],
+                   'run_id':run['id'],'attempt':run.get('run_attempt',1),'source_sha':run['tested_sha'],
+                   'pr_head_sha':run['head_sha'],'merged_pr':run.get('merged_pr'),
                    'recorded_at':run['created_at'],'workflow':run['label'],'workflow_url':run['html_url'],
                    'path':str(relative/'report.html'),'assets':sorted(assets),
                    'axi':trace is not None,'result':result}
             if trace:
-                if (trace['run'].get('commit')!=run['head_sha'] or trace['run'].get('dirty') is not False
+                tested_sha=trace['run'].get('commit')
+                if (tested_sha not in (verified_shas | {run['head_sha']})
+                    or trace['run'].get('dirty') is not False
                     or str(trace['run'].get('workflow_run_id'))!=str(run['id'])
                     or str(trace['run'].get('workflow_attempt'))!=str(run.get('run_attempt',1))):
                     raise ValueError('AXI report provenance differs from its clean CI workflow run')
+                # Show the actual source tested by the PR merge build, not the
+                # branch head supplied by the GitHub Actions run metadata.
+                entry['source_sha']=tested_sha
                 render_report(trace,destination/'report.html')
                 html=(destination/'report.html').read_text()
                 up=os.path.relpath(output,destination).replace(os.sep,'/')
@@ -183,7 +271,7 @@ def evidence_index(evidence,output,repository):
                 entry['annotations']=trace['run'].get('annotations_available',False)
             else:
                 body='<p>This scope publishes its actual result, plan, filelist and logs. It has no AXI traffic observer.</p>'
-                body+=f'<p><strong>Regression {"PASS" if entry["passed"] else "FAIL"}</strong> · {escape(entry["engine"])} · tested SHA <code>{escape(run["head_sha"])}</code></p>'
+                body+=f'<p><strong>Regression {"PASS" if entry["passed"] else "FAIL"}</strong> · {escape(entry["engine"])} · tested SHA <code>{escape(entry["source_sha"])}</code></p>'
                 if entry['expected_failure']:body+='<p>Expected-failure case: '+escape(entry['expected_failure'])+'</p>'
                 body+='<pre>'+escape(json.dumps(result,indent=2))+'</pre>'
                 body+='<ul>'+''.join(f'<li><a href="{escape(name)}">{escape(name)}</a></li>' for name in assets)+'</ul>'

@@ -1,24 +1,32 @@
 name: Checked-in FlooGen local and global NoC RTL
 
 on:
-  push:
-    paths:
-      - 'config/**'
-      - 'gen/noc/floonoc/**'
-      - 'tools/**'
-      - '.github/workflows/floogen.yml'
   pull_request:
+    branches: [main]
     paths:
-      - 'config/**'
+      - 'config/soc.yaml'
+      - 'config/interface_contracts.yaml'
+      - 'config/ip.lock.yaml'
+      - 'config/examples/**'
       - 'gen/noc/floonoc/**'
-      - 'tools/**'
-      - 'tests/**'
-      - 'docs/subsystem-verification.md'
+      - 'tools/floonoc_gen.py'
+      - 'tools/supernoc_gen.py'
+      - 'tools/interface_contracts.py'
+      - 'tools/noc_backends.py'
+      - 'tools/ip_fetch.py'
+      - 'tools/regress.py'
+      - 'tests/test_floonoc_gen.py'
+      - 'tests/test_interface_contracts.py'
+      - 'tests/test_supernoc_gen.py'
       - '.github/workflows/floogen.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: floogen-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   floogen:

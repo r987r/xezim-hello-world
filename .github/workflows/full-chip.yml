@@ -1,17 +1,16 @@
 name: Full-chip coordinated CPU boot
 
 on:
-  push:
-    paths: ['config/**', 'gen/**', 'tools/**', 'rtl/**', 'dv/full_chip/**', 'dv/common/axi_trace.py', 'tests/**', 'Bender.yml', 'Bender.lock', 'Makefile', '.github/actions/setup-bender/**', '.github/workflows/full-chip.yml']
   pull_request:
-    paths: ['config/**', 'gen/**', 'tools/**', 'rtl/**', 'dv/full_chip/**', 'dv/common/axi_trace.py', 'tests/**', 'Bender.yml', 'Bender.lock', 'Makefile', '.github/actions/setup-bender/**', '.github/workflows/full-chip.yml']
+    branches: [main]
+    paths: ['config/soc.yaml', 'config/regression.yaml', 'config/interface_contracts.yaml', 'config/ip.lock.yaml', 'gen/**', 'tools/chip_bootgen.py', 'tools/full_chip_gen.py', 'tools/sim_cocotb.py', 'tools/regress.py', 'tools/axi_report.py', 'tools/fabric_config.py', 'tools/generate.py', 'tools/ip_fetch.py', 'rtl/**', '!rtl/memory/ddr4/**', 'dv/full_chip/**', 'dv/common/axi_trace.py', 'tests/test_full_chip_gen.py', 'tests/test_boot_policy.py', 'tests/test_regression.py', 'Bender.yml', 'Bender.lock', 'Makefile', '.github/actions/setup-bender/**', '.github/workflows/full-chip.yml']
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: full-chip-${{ github.head_ref || github.ref_name }}
+  group: full-chip-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
