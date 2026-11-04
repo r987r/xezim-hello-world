@@ -9,9 +9,9 @@
 - sw/dma/dma.h and dma.c provide a portable freestanding SRAM arena, 32-byte upstream descriptor construction, bounds checks and a release fence; no heap is required.
 - dv/common/dma_vectors.py generates host-side deterministic descriptor chains, SRAM contents and independent AXI expected-data checks. tools/dma_vectors.py provides CLI generation.
 
-## Local SRAM layout for DMA-only simulation
+## Boot-live-compatible SRAM allocation
 
-Each compute SRAM currently models only 16 KiB; the full architectural window is larger.
+For combined boot + DMA tests, each compute SRAM currently models only 16 KiB; the full architectural window is larger.
 
 | SRAM offset | Purpose | Capacity |
 | --- | --- | --- |
@@ -25,7 +25,7 @@ Each compute SRAM currently models only 16 KiB; the full architectural window is
 
     python3 -m unittest discover -s tests -p 'test_dma_*.py' -v
     python3 tools/dma_vectors.py --count 100 --length 64 --out .tools/dma-vectors
-    cc -std=c11 -Wall -Wextra -Werror -pedantic sw/dma/dma.c sw/dma/tests/test_dma.c -o /tmp/dma-sw-test
+    cc -std=c11 -Wall -Wextra -Werror -pedantic sw/common/sram_pool.c sw/dma/dma.c sw/dma/tests/test_dma.c -o /tmp/dma-sw-test
     /tmp/dma-sw-test
 
 The generator writes source_sram.hex in 64-bit readmemh word order, plus case.json with chain head and every independent expected payload. Successful generation alone is NOT a hardware DMA test.
@@ -84,3 +84,25 @@ CHECK completion and user quiescence. Executing SRAM firmware and observed
 mailboxes remain reserved. Reusing those requires a verified CPU handoff,
 relocation/parking outside reclaimed SRAM, and retired AXI accesses; that
 runtime handoff is future work.
+
+## Split-run SRAM reuse: explicit profiles
+
+The shared SRAM allocation policy supports two contexts:
+
+- `boot_live`: preserves executing firmware and coordination mailboxes.
+  Descriptor pool begins at SRAM + 0x1000; payload at +0x2000.
+  CPU0 still copies firmware through the real buses, never via preload.
+- `dma_only`: separate simulation, starting at reset with CPUs stopped.
+  Reuses the boot area: descriptors begin at SRAM + 0x0000 and the
+  12 KiB payload pool starts at +0x1000 (for the current 16 KiB SRAM).
+
+Use `python3 tools/dma_vectors.py --profile dma_only` for an isolated
+DMA run, or `--profile boot_live` for a future combined CPU + DMA run.
+The host CLI defaults to dma_only. The Python API defaults to boot_live
+to preserve existing integration-test address expectations. case.json
+records the profile and all physical regions.
+
+The original cold-boot regression must never use dma_only. For a running
+chip, only a distinct boot_scratch region is presently releasable after
+CHECK and quiescence; executing SRAM firmware and live mailboxes cannot be
+reclaimed until a verified relocation/parking and access-drain handoff.

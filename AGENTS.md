@@ -21,6 +21,17 @@ arbitrary-configuration SoC emitter. Legacy memory/boot benches remain
 independent executable scopes. Read [implementation-status](docs/implementation-status.md)
 before describing progress.
 
+Shared SRAM ownership: `tools/sram_layout.py` defines physical regions
+for both `tools/chip_bootgen.py` and `dv/common/dma_vectors.py`. Use
+`boot_live` for any regression that executes CPU firmware. `dma_only`
+reclaims the whole simulated boot allocation only when all CPUs are stopped
+in a distinct reset/test run. Reclaim a running chip's boot scratch only
+after CHECK and all accesses drain; never reuse executable code or
+live mailboxes. In C, use `sw/common/sram_pool.[ch]` instead of
+independent DMA/boot bump allocators. Do not claim C executes in today's
+minimal generated RV32I boot: this is an ownership-policy unification
+until the compiled boot BSP is integrated.
+
 Keep boot cold: CPU0 must really read ROM/flash, write **uninitialized**
 SRAM over its bus, release CPU1 via MMIO, and both CPUs must execute code
 from SRAM. Do not use $readmemh/backdoor SRAM preload in the cold-boot test.

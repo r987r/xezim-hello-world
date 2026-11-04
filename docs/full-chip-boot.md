@@ -12,6 +12,18 @@ DMA request ports are idle except for an explicitly enabled verification
 manager at the coordinator's DMA boundary. Unimplemented CSR targets return
 DECERR through upstream `axi_err_slv`, rather than pretending to be registers.
 
+## Shared SRAM ownership policy
+
+`tools/sram_layout.py` now supplies the same physical region contract to
+the cold-boot firmware generator and DMA test vector builder. Cold boot uses
+`boot_live`: executing SRAM firmware, CPU coordination mailboxes and DMA
+areas do not overlap. The minimal RV32I boot firmware is still generated
+and executed on the actual CPUs, **not** linked against the new C library.
+`sw/common/sram_pool.[ch]` provides a portable bounded region allocator for
+future compiled boot/runtime applications. The `dma_only` profile can reuse
+boot space only in a **separate** reset-and-preload regression with CPUs
+stopped; no cold SRAM in this scope may be backdoor-preloaded.
+
 ## Firmware and coordination
 
 CPU0 alone boots from immutable ROM and reads flash. Its real bus stores
