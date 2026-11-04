@@ -2,9 +2,9 @@ name: Full-chip coordinated CPU boot
 
 on:
   push:
-    paths: ['config/**', 'gen/**', 'tools/**', 'rtl/**', 'dv/full_chip/**', 'dv/common/axi_trace.py', 'tests/**', 'Bender.yml', 'Bender.lock', 'Makefile', '.github/actions/setup-bender/**', '.github/workflows/full-chip.yml']
+    paths: ['config/**', 'gen/**', 'tools/**', 'rtl/**', 'dv/full_chip/**', 'dv/common/axi_trace.py', 'docs/dma-bringup.md', 'tests/**', 'Bender.yml', 'Bender.lock', 'Makefile', '.github/actions/setup-bender/**', '.github/workflows/full-chip.yml']
   pull_request:
-    paths: ['config/**', 'gen/**', 'tools/**', 'rtl/**', 'dv/full_chip/**', 'dv/common/axi_trace.py', 'tests/**', 'Bender.yml', 'Bender.lock', 'Makefile', '.github/actions/setup-bender/**', '.github/workflows/full-chip.yml']
+    paths: ['config/**', 'gen/**', 'tools/**', 'rtl/**', 'dv/full_chip/**', 'dv/common/axi_trace.py', 'docs/dma-bringup.md', 'tests/**', 'Bender.yml', 'Bender.lock', 'Makefile', '.github/actions/setup-bender/**', '.github/workflows/full-chip.yml']
   workflow_dispatch:
 
 permissions:
