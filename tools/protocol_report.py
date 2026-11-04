@@ -12,6 +12,11 @@ import os
 import subprocess
 from pathlib import Path
 import re
+import sys
+# Script entrypoints under tools/ must resolve the shared DV schema from repo root.
+_ROOT = Path(__file__).resolve().parents[1]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
 from dv.common.protocol_trace import normalize_sources
 
 PROTOCOL = re.compile(r"^[a-z][a-z0-9_.-]{0,95}$")
