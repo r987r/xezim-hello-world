@@ -24,7 +24,8 @@ existing verified cold-boot and memory outputs are not invalidated.
 
 - These memory-fabric knobs apply to the independent 2×2 memory scope.
   The separate [chip boot configuration](full-chip-boot.md) already wires
-  real CPUs, NoCs, SRAM, reset and a 1×2 memory crossbar; real DMA is pending.
+  real CPUs, NoCs, SRAM, reset and a 1×2 memory crossbar; real DMA and CSRs are generated in optional `DmaEnable=1` mode
+   (full-NoC verification pending CI).
   The standalone 2×2 tuning/connectivity overrides are not automatically
   applied to that 1×2 chip crossbar.
 - Generic full-SoC PULP AXI/FlooNoC backend emission. Scoped FlooGen

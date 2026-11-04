@@ -176,12 +176,23 @@ class AxiReportTests(unittest.TestCase):
         self.assertEqual(summary['issues'],1)
         self.assertIn('declared expectation',data['sections']['axi']['issues'][0]['message'])
 
-    def test_chip_actors_distinguish_cpus_bfm_and_idle_reserved_dma(self):
+    def test_chip_actors_distinguish_boot_probe_and_optional_real_dmas(self):
         chip=json.loads((ROOT/'gen/chip/manifest.json').read_text())
-        self.assertEqual(chip['dma_engines_instantiated'],0)
+        dma=json.loads((ROOT/'gen/chip/dma_actors.json').read_text())['axi_actors']
+        computes=[key[:-len('_local_data.dma')] for key in dma
+                  if key.endswith('_local_data.dma')]
+        self.assertEqual(chip['dma_engines_instantiated'],len(computes))
+        # In default cold boot, DmaEnable=0: original probe behavior stays.
         self.assertEqual(chip['axi_actors']['compute0_local_data.cpu']['kind'],'rtl_cpu')
         self.assertEqual(chip['axi_actors']['compute0_local_data.dma']['kind'],'verification_bfm')
         self.assertEqual(chip['axi_actors']['compute1_local_data.dma']['kind'],'reserved_idle')
+        # The separate chip-dma scope has two actual DMA RTL engines and
+        # real CSR bridges, with only CPU0's data/config ports driven by host.
+        for compute in computes:
+            self.assertEqual(dma[compute+'_local_data.dma']['kind'],'rtl_dma')
+            self.assertEqual(dma[compute+'_local_config.dma_regs']['kind'],'rtl_registers')
+        self.assertEqual(dma['compute0_local_data.cpu']['kind'],'verification_bfm')
+        self.assertEqual(dma['compute0_local_config.cpu']['kind'],'verification_bfm')
 
 
 if __name__=='__main__':

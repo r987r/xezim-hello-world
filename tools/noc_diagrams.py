@@ -66,7 +66,7 @@ def diagram_gen_metadata(cfg: dict, networks: dict) -> dict:
     """Instances/connections/groups model also understood by Diagram-gen viewers.
 
     Router-to-router and router-to-chimney are generated *structural* RTL.
-    The boot configuration wires CPU/SRAM/reset/model endpoints; DMA and physical controllers remain planned.
+    The generator wires optional DMA/CSR and CPU/SRAM/reset endpoints; physical controllers remain planned.
     """
     modules = {
         "floo_axi_router": {"description": "Real upstream FlooNoC router", "color": "#14845A", "ports": []},
@@ -154,13 +154,13 @@ def diagram_gen_metadata(cfg: dict, networks: dict) -> dict:
                              ("sram", "local_sram"), ("dma_csr", "dma_registers")):
             instances.append({"name": f"{name}.{suffix}", "module": "soc_boundary",
                               "position": {"x": 20 + ci * 12, "y": 72 + 3 * len(instances) % 12, "z": 0},
-                              "info": {"ip": kind, "status": "wired_boot_configuration" if suffix in ("cpu", "sram") else "planned_noc_endpoint_integration"}})
+                              "info": {"ip": kind, "status": "wired_boot_configuration" if suffix in ("cpu", "sram") else "generated_optional_dma_integration"}})
         ld, lc = name+"_local_data", name+"_local_config"
         edge(name+".cpu", _inst(ld,"cpu"), "CPU adapter to local data", "wired_boot_configuration", width=64)
         edge(name+".cpu", _inst(lc,"cpu"), "upstream protocol-to-AXI4-Lite adapter", "wired_boot_configuration", width=32)
-        edge(name+".dma", _inst(ld,"dma"), "PULP iDMA AXI4 initiator", "planned_integration", width=64)
+        edge(name+".dma", _inst(ld,"dma"), "PULP iDMA AXI4 initiator (DmaEnable)", "wired_boot_configuration", width=64)
         edge(_inst(ld,"sram"), name+".sram", "local SRAM AXI destination", "wired_boot_configuration", width=64)
-        edge(_inst(lc,"dma_regs"), name+".dma_csr", "PULP iDMA CSR port", "planned_integration", width=32)
+        edge(_inst(lc,"dma_regs"), name+".dma_csr", "32-bit DMA head + APB doorbell (DmaEnable)", "wired_boot_configuration", width=32)
         if name == cfg["boot"]["primary"]:
             instances.append({"name": name+".reset_ctrl", "module": "soc_boundary",
                               "position": {"x": 20, "y": 89, "z": 0},
@@ -223,8 +223,8 @@ def diagram_gen_metadata(cfg: dict, networks: dict) -> dict:
         "schema_version": 1,
         "source_of_truth": ["config/soc.yaml", "config/interface_contracts.yaml",
                             "gen/noc/floonoc/*/floogen.yaml"],
-        "status": "structural_nocs_and_cpu_boot_configuration_with_pending_dma_controllers",
-        "scope_note": "Shared soc_noc core connects all meshes; gen/chip/soc_top.sv attaches CPUs/SRAM/reset and AXI memory models. iDMA and physical controllers remain pending.",
+        "status": "structural_nocs_cpu_boot_and_optional_real_dma_with_pending_controllers",
+        "scope_note": "Shared soc_noc core connects all meshes; gen/chip/soc_top.sv attaches CPUs/SRAM/reset and AXI memory models. Optional iDMA/CSR are generated for each compute; physical controllers remain pending.",
         "modules": modules, "instances": instances, "connections": connections, "groups": groups,
         "networks": {name: {"plane": net["entry"]["plane"], "routers": net["entry"]["routers"],
                             "endpoints": len(net["endpoints"]), "top": net["entry"]["top"],
@@ -241,7 +241,7 @@ def hierarchy_mermaid(cfg: dict, networks: dict) -> str:
         "  classDef model fill:#f5f6f7,stroke:#7b8794,color:#233047;",
         "  classDef verified fill:#e4f8e8,stroke:#228450,color:#12432b;",
         "  %% All FlooNoC internal router and NI RTL is generated.",
-        "  %% Solid links are wired in the boot configuration; DMA/controller links remain dashed.",
+        "  %% Solid: generated boot + optional iDMA wiring. Dashed: pending physical controllers.",
     ]
     def node(id, label, kind):
         lines.append('  ' + identifier(id) + '["' + label + '"]:::' + kind)
@@ -259,13 +259,13 @@ def hierarchy_mermaid(cfg: dict, networks: dict) -> str:
         ld, lc = name+"_local_data", name+"_local_config"
         lines.append(f'  subgraph {identifier(name+"_box")}["{name} / compute subsystem"]')
         node(name+".cpu", c["cpu"]["ip"] + " CPU", "model")
-        node(name+".dma", "Reserved DMA port (no engine)", "model")
+        node(name+".dma", "PULP iDMA + CSR (DmaEnable=1)", "model")
         node(name+".sram", "Local SRAM", "model")
         node(ld, f"Local DATA FlooNoC / {networks[ld]['entry']['routers']} routers / AXI4", "data")
         node(lc, f"Local CONFIG FlooNoC / {networks[lc]['entry']['routers']} routers / 32-bit AXI4 transport", "config")
         lines.append("  end")
         wired(name+".cpu", ld, "CPU adapter")
-        planned(name+".dma", ld, "DMA")
+        wired(name+".dma", ld, "DMA AXI4")
         wired(ld, name+".sram", "local")
         wired(name+".cpu", lc, "AXI-Lite bridge")
         wired(ld, "global_data", "global data")
@@ -294,7 +294,7 @@ def hierarchy_mermaid(cfg: dict, networks: dict) -> str:
     for target in cfg["memory_targets"]:
         lines.append("  " + identifier("xbar") + " -->|" + target["kind"].upper()
                      + " model| " + identifier(target["name"]))
-    lines.append("  %% Physical HBM/DDR controllers and iDMA engines remain unintegrated.")
+    lines.append("  %% Physical HBM/DDR controllers remain unintegrated; iDMA is generated/optional.")
     return "\n".join(lines)+"\n"
 
 
@@ -309,14 +309,14 @@ def overview_svg(cfg: dict, networks: dict, dst: Path):
     h=my+360
     a=Art(1600,h)
     a.heading("Real upstream-generated NoC hierarchy","Full-chip FlooNoC network map",
-              f"{len(networks)} meshes shared by CPU boot and NoC BFM tests; dashed links mark pending DMA/controller integration")
+              f"{len(networks)} meshes shared by CPU boot and NoC BFM tests; dashed links mark pending physical controllers")
     for i, compute in enumerate(computes):
         name=compute["name"];x=56+(i%2)*784;y=158+(i//2)*285
         a.rect(x,y,744,267,WHITE,FAINT,r=17,width=2)
         a.text(x+18,y+14,name+" / compute subsystem",22,INK)
         a.box_label(x+18,y+50,220,76,compute["cpu"]["ip"]+" CPU",
                     compute["cpu"]["bus"]+" to AXI","cpu",title_size=19,detail_size=13)
-        a.box_label(x+255,y+50,213,76,"Reserved DMA / CSR","No engine instantiated","dma",title_size=18,detail_size=13)
+        a.box_label(x+255,y+50,213,76,"PULP iDMA + CSR","Optional real RTL (DMA mode)","dma",title_size=18,detail_size=13)
         a.box_label(x+486,y+50,235,76,"Local SRAM","global remote address", "memory",title_size=19,detail_size=13)
         ld=name+"_local_data";lc=name+"_local_config"
         a.box_label(x+18,y+155,351,81,"LOCAL DATA  /  FlooNoC",
@@ -326,10 +326,10 @@ def overview_svg(cfg: dict, networks: dict, dst: Path):
                     str(networks[lc]["entry"]["routers"])+" generated routers / 32b AXI4", "config",
                     title_size=19,detail_size=15)
         a.line([(x+129,y+126),(x+129,y+155)],BLUE,2,False,True)
-        a.line([(x+360,y+126),(x+280,y+155)],BLUE,2,True,True)
+        a.line([(x+360,y+126),(x+280,y+155)],BLUE,2,False,True)
         a.line([(x+128,y+126),(x+553,y+155)],PURPLE,2,False,True)
         a.line([(x+320,y+155),(x+603,y+126)],GREEN,2,False,True)
-        a.line([(x+553,y+155),(x+400,y+126)],PURPLE,2,True,True)
+        a.line([(x+553,y+155),(x+400,y+126)],PURPLE,2,False,True)
     a.box_label(56,gy,744,113,"GLOBAL DATA / FlooNoC",
                 str(networks["global_data"]["entry"]["routers"])+" routers / XY mesh / 64-bit AXI4\ncompute uplinks, remote SRAMs, configured memory ingress ports",
                 "fabric",title_size=24,detail_size=15)
@@ -373,7 +373,7 @@ def overview_svg(cfg: dict, networks: dict, dst: Path):
     a.line([(1193,gy+113),(1193,my+42),(864,my+42),(864,my+64)],PURPLE,3,False,True)
     a.line([(320,my+135),(320,my+171)],GREEN,2,False,True)
     a.text(83,my+274,
-           "Solid: boot-configuration wiring and AXI memory models. Dashed: real iDMA/CSRs and physical controllers pending.",
+           "Solid: boot and optional real DMA/CSR wiring. Dashed: physical HBM/DDR controller integration pending.",
            17,MUTED)
     a.text(65,h-29,
            "Router coordinates and link details: gen/diagrams/noc-topology.json and gen/noc/floonoc/*/floogen.yaml.",

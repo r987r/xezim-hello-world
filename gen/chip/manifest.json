@@ -7,7 +7,7 @@
     },
     "compute0_local_config.dma_regs": {
       "kind": "reserved_error",
-      "label": "DECERR responder: controller/DMA registers not integrated"
+      "label": "DMA CSR error responder; DmaEnable=0 in cold boot"
     },
     "compute0_local_config.reset_ctrl": {
       "kind": "rtl_registers",
@@ -28,8 +28,8 @@
     },
     "compute0_local_data.dma": {
       "kind": "verification_bfm",
-      "label": "Verification AXI BFM at reserved DMA port",
-      "short_label": "compute0 test BFM (reserved DMA)"
+      "label": "Verification AXI BFM at inactive DMA port",
+      "short_label": "compute0 boot test BFM at reserved DMA port"
     },
     "compute0_local_data.sram": {
       "kind": "rtl_model",
@@ -42,7 +42,7 @@
     },
     "compute1_local_config.dma_regs": {
       "kind": "reserved_error",
-      "label": "DECERR responder: controller/DMA registers not integrated"
+      "label": "DMA CSR error responder; DmaEnable=0 in cold boot"
     },
     "compute1_local_data.cpu": {
       "kind": "rtl_cpu",
@@ -51,8 +51,8 @@
     },
     "compute1_local_data.dma": {
       "kind": "reserved_idle",
-      "label": "Reserved DMA port: idle, no engine",
-      "short_label": "compute1 DMA reserved / idle"
+      "label": "Inactive DMA port; DmaEnable=0",
+      "short_label": "compute1 DMA disabled"
     },
     "compute1_local_data.sram": {
       "kind": "rtl_model",
@@ -68,8 +68,22 @@
     }
   },
   "cores": 2,
-  "dma": "Reserved DMA boundaries; the coordinator port can host a verification AXI BFM. No iDMA engine is instantiated.",
-  "dma_engines_instantiated": 0,
+  "dma": "PULP iDMA engines generated for each compute, enabled by DmaEnable=1; data ports route via local FlooNoCs and 32-bit CSRs via local/global config FlooNoCs; old boot defaults to disabled.",
+  "dma_configuration": "DmaEnable=1; default cold-boot mode DmaEnable=0",
+  "dma_engines_instantiated": 2,
+  "dma_parameters_by_compute": {
+    "compute0": {
+      "buffer_depth": 3,
+      "descriptor_prefetch": 0,
+      "num_ax_in_flight": 2
+    },
+    "compute1": {
+      "buffer_depth": 3,
+      "descriptor_prefetch": 0,
+      "num_ax_in_flight": 2
+    }
+  },
+  "dma_testbench": "full_chip_dma_tb",
   "fabric_core": "gen/supernoc/soc_noc.sv",
   "firmware": "firmware.json",
   "memory_controllers": "AXI slave SRAM models only; no physical HBM/DDR RTL",
@@ -100,5 +114,5 @@
     "ZipCPU wbm2axilite",
     "verilog-axi crossbar"
   ],
-  "verification_probe": "CPU0 DMA boundary AXI BFM only; disabled in standalone CPU boot"
+  "verification_probe": "In DMA-only simulation, CPU0 AXI BFMs temporarily drive CPU0 data/config NoC ports with CPUs in reset; no PCIe/external host. Cold boot retains its separate legacy DMA-port probe."
 }

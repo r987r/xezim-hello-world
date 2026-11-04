@@ -3,7 +3,7 @@ name: Full-chip coordinated CPU boot
 on:
   pull_request:
     branches: [main]
-    paths: ['config/soc.yaml', 'config/regression.yaml', 'config/interface_contracts.yaml', 'config/ip.lock.yaml', 'gen/**', 'tools/chip_bootgen.py', 'tools/full_chip_gen.py', 'tools/sim_cocotb.py', 'tools/regress.py', 'tools/axi_report.py', 'tools/fabric_config.py', 'tools/generate.py', 'tools/ip_fetch.py', 'rtl/**', '!rtl/memory/ddr4/**', 'dv/full_chip/**', 'dv/common/axi_trace.py', 'tests/test_full_chip_gen.py', 'tests/test_boot_policy.py', 'tests/test_regression.py', 'Bender.yml', 'Bender.lock', 'Makefile', '.github/actions/setup-bender/**', '.github/workflows/full-chip.yml']
+    paths: ['config/soc.yaml', 'config/regression.yaml', 'config/interface_contracts.yaml', 'config/ip.lock.yaml', 'gen/**', 'tools/chip_bootgen.py', 'tools/full_chip_gen.py', 'tools/sim_cocotb.py', 'tools/regress.py', 'tools/axi_report.py', 'tools/fabric_config.py', 'tools/generate.py', 'tools/ip_fetch.py', 'rtl/**', '!rtl/memory/ddr4/**', 'dv/full_chip/**', 'dv/dma/**', 'dv/common/axi_trace.py', 'dv/common/dma_vectors.py', 'sw/common/**', 'sw/dma/**', 'tests/test_dma*', 'tests/test_full_chip_gen.py', 'tests/test_boot_policy.py', 'tests/test_regression.py', 'Bender.yml', 'Bender.lock', 'Makefile', '.github/actions/setup-bender/**', '.github/workflows/full-chip.yml']
   workflow_dispatch:
 
 permissions:
@@ -28,7 +28,8 @@ jobs:
       - name: Install pinned upstream generation and verification tools
         run: |
           python3 -m pip install -r requirements.txt
-          python3 tools/ip_fetch.py floonoc
+          python3 -m pip install 'mako==1.3.10' 'hjson==3.1.0' 'peakrdl>=1.5.0' 'peakrdl-rawheader>=0.2.8' 'peakrdl-cheader>=1.1.0'
+          python3 tools/ip_fetch.py floonoc pulp_idma
           python3 -m pip install -e .tools/floonoc
           python3 -m pip install 'cocotb==1.9.2' 'cocotbext-axi==0.1.24'
           sudo apt-get update -qq
@@ -45,7 +46,7 @@ jobs:
           (cd .tools/bin && sha256sum -c "$XEZIM_ASSET_NAME.sha256")
           chmod +x ".tools/bin/$XEZIM_ASSET_NAME"
           echo "XEZIM_BIN=$GITHUB_WORKSPACE/.tools/bin/$XEZIM_ASSET_NAME" >> "$GITHUB_ENV"
-      - name: Run YAML chip boot, missing-CPU negative and Xezim compile probe
+      - name: Run CPU boot, dual DMA chains, negatives and Xezim compile probe
         run: make dv-chip
       - name: Retain all chip build/phase/memory results
         if: always()
@@ -63,6 +64,8 @@ jobs:
         with:
           name: chip-axi-run-reports-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
+            .tools/regression/chip-dma/report.html
+            .tools/regression/chip-dma/axi-*.json*
             .tools/regression/chip-boot*/report.html
             .tools/regression/chip-boot*/axi-*.json*
           include-hidden-files: true

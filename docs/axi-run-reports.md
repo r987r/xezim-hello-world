@@ -181,7 +181,36 @@ NoC checks 24 write/read SLVERR pairs; chip memory capacity tests check four
 SLVERR transactions. Normal CPU boot expects successful responses.
 
 Run metadata and report `sections` are versioned separately from raw event
-capture. Later sections can add real DMA descriptors when integrated, interrupts,
+capture. Later sections can add descriptor-level DMA correlation and CPU-driven interrupts,
 latency distributions or throughput windows without changing AXI monitor
 behavior. Waveform/flit traces and cross-NoC global transaction correlation
 remain separate future work.
+
+## DMA completion and DDR-controller isolation
+
+A DMA transfer is **not** complete because the DDR-facing target asserted
+`BVALID`, because a read exposed `RLAST`, or because a cocotb wait saw an
+interrupt edge. For completed AXI writes, require an accepted
+`BVALID && BREADY` handshake at each relevant observable boundary. For
+completed reads, require accepted `RVALID && RREADY && RLAST`. An
+`RLAST` signal without acceptance does not retire the read.
+
+The integrated `chip-dma` regression uses **CPU0 AXI BFM (data)** and
+**CPU0 AXI BFM (config)**, both simulation-only initiators at CPU0's NoC
+manager ports while CPUs are in reset; neither is PCIe. The real iDMA
+engine fetches descriptors and transfers payloads. On a timeout the test
+reuses `tools/axi_report.py` to correlate accepted AR/R and AW/W/B
+requests by AXI ID at each boundary, then reports incomplete requests,
+IDs, addresses, read beats and missing responses. IDs may be remapped
+between local/global NoC boundaries, so do not equate their values globally.
+
+[Failed SS0 full-NoC run 41871175195](https://github.com/r987r/xezim-hello-world/actions/runs/41871175195)
+recorded seven accepted DDR-model write completions at the target, but
+only five DDR write responses had reached the DMA master boundary, with
+additional descriptor/payload reads outstanding. This is a real traffic
+stall, not a mere interrupt observation problem. The DDR4 controller
+under development in draft PR #13 is not part of this setup: the current
+target is a bounded behavioral `axi_ram` model. Keep DDR4 integration
+results separate until its PHY/init and AXI regression pass independently.
+
+The later [full-chip run 41885417960](https://github.com/r987r/xezim-hello-world/actions/runs/41885417960) passed all 105 descriptors with 1,902 observed AXI handshakes using the conservative two-outstanding/no-prefetch setting. This is a simulated AXI-memory-model verification, not physical DDR/HBM characterization.

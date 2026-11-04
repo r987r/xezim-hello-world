@@ -10,6 +10,12 @@ buses:
 subsystem_types:
   compute:
     dma: pulp_idma
+    # Conservative full-chip bring-up settings, not a performance target.
+    # Separate standalone RTL still checks 4 in-flight, 4-way prefetch.
+    # Full-chip trace: 7/100 DDR copies, then outstanding-response stall.
+    # Upstream iDMA read datapath requires NumAxInFlight >= 2:
+    # cc_stream_fifo_optimal_wrap rejects a depth-one FIFO at time zero.
+    dma_parameters: {num_ax_in_flight: 2, buffer_depth: 3, descriptor_prefetch: 0}
     sram_count: 1
     local_data_fabric: local_data
     local_config_fabric: local_config

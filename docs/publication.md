@@ -118,12 +118,12 @@ relative so project Pages URLs and nested report/document paths work.
 
 ## DMA names and expected errors
 
-There are **zero instantiated DMA engines** in the chip boot configuration.
-`dma` and `dma_regs` are reserved architecture endpoint names, not evidence of
-integration. The chip test temporarily drives compute0's reserved initiator
-with upstream `cocotbext-axi` verification BFM traffic after the real CPUs finish
-coordination. Compute1's DMA boundary remains idle. Generated actor metadata and
-new reports explicitly distinguish real CPUs, BFMs, idle ports and error responders.
+The default CPU cold-boot configuration disables real DMA RTL with
+`DmaEnable=0`; the separate `chip-dma` regression enables two real PULP
+iDMA engines and their generated 32-bit CSR bridges. During CPU boot the
+verification BFM occupies compute0's inactive DMA port after CPU coordination
+and compute1's port remains idle. Separate actor maps identify those BFMs
+versus active DMA RTL in the DMA-only simulation.
 
 Normal CPU boot expects OKAY. SLVERR checks are deliberate verification stimuli:
 24 write/read pairs at injected faulty NoC targets, and four out-of-capacity
@@ -135,3 +135,15 @@ response mismatch fails monitored capture validation. Downstream error observati
 remain observations because global IDs are remapped; they are not guessed to be
 new expected or unexpected initiator requests. Legacy unannotated captures are
 labeled as such and never retroactively classified as expected.
+
+## Generated dual-DMA full-chip test scope
+
+The `chip-dma` target uses the same generated NoC core and monitor catalog
+as CPU boot, but runs with CPUs held in reset and a real PULP iDMA instance
+at every compute DMA endpoint. **CPU0 AXI BFMs** use the CPU0 data/config AXI
+interfaces only for memory preparation and CSR submission (not PCIe). The event table,
+timing chart, result and source SHA are published from the full-chip CI
+artifact when that regression actually executes. This is NOT evidence of
+CPU-launched DMA firmware or physical DDR/HBM controller integration.
+
+Successful [isolated](https://github.com/r987r/xezim-hello-world/actions/runs/41860245485) and [full-chip](https://github.com/r987r/xezim-hello-world/actions/runs/41885417960) DMA CI evidence is associated with its tested Git SHA. The Pages collector must verify a merged PR/source before treating either as current main evidence; the prior runs do not alone validate a new merged tree.

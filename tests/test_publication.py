@@ -53,7 +53,10 @@ class PublicationTests(unittest.TestCase):
     def test_complete_offline_site_links_are_relative_and_exist(self):
         with tempfile.TemporaryDirectory() as tmp:
             output=Path(tmp)/'site';dataset=site.build(output,Path(tmp)/'empty','r987r/xezim-hello-world',SHA,CONFIG)
-            self.assertEqual(len(dataset['tests']),18)
+            self.assertEqual(set(dataset['tests']), set(
+                yaml.safe_load((ROOT/'config/regression.yaml').read_text())['tests']))
+            self.assertIn('dma-rtl',dataset['tests'])
+            self.assertIn('chip-dma',dataset['tests'])
             self.assertTrue((output/'fabric.html').is_file())
             self.assertTrue((output/'data/fabric.json').is_file())
             self.assertEqual(json.loads((output/'data/fabric.json').read_text())['summary']['meshes'],8)

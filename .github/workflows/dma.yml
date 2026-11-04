@@ -1,0 +1,68 @@
+name: PULP iDMA descriptor-chain RTL verification
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'Bender.yml'
+      - 'config/**'
+      - 'tools/idma_rtl.py'
+      - 'tools/regress.py'
+      - 'tools/sim_cocotb.py'
+      - 'dv/dma/**'
+      - 'dv/common/dma_vectors.py'
+      - 'sw/dma/**'
+      - 'sw/common/**'
+      - 'tests/test_dma*'
+      - 'tests/test_sram_layout.py'
+      - '.github/workflows/dma.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dma-rtl-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  dma:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: ./.github/actions/setup-bender
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Install pinned upstream integration toolchain
+        run: |
+          python3 -m pip install -r requirements.txt
+          # iDMA's own upstream generators (MARIO + PeakRDL), not copied RTL.
+          python3 -m pip install 'mako==1.3.10' 'hjson==3.1.0' 'peakrdl>=1.5.0' 'peakrdl-rawheader>=0.2.8' 'peakrdl-cheader>=1.1.0'
+          python3 tools/ip_fetch.py floonoc pulp_idma
+          python3 -m pip install -e .tools/floonoc
+          python3 -m pip install 'cocotb==1.9.2' 'cocotbext-axi==0.1.24'
+          sudo apt-get update -qq
+          sudo apt-get install -y verilator
+          verilator --version
+      - name: Verify SRAM allocation, descriptor ABI and deterministic vectors
+        run: |
+          make check-config check-generated
+          python3 tools/dma_vectors.py --profile dma_only --count 100 --length 64
+      - name: Generate pinned upstream iDMA backend and register RTL
+        run: python3 tools/idma_rtl.py
+      - name: Run real iDMA descriptor fetch/AXI payload/IRQ regression
+        run: python3 tools/regress.py dma
+      - name: Retain full source list, build, waveform metadata, logs and golden vectors
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dma-rtl-results
+          path: |
+            .tools/regression/dma-rtl/
+            .tools/dma-vectors/
+          include-hidden-files: true
+          if-no-files-found: warn

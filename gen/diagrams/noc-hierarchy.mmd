@@ -4,29 +4,29 @@ flowchart TB
   classDef model fill:#f5f6f7,stroke:#7b8794,color:#233047;
   classDef verified fill:#e4f8e8,stroke:#228450,color:#12432b;
   %% All FlooNoC internal router and NI RTL is generated.
-  %% Solid links are wired in the boot configuration; DMA/controller links remain dashed.
+  %% Solid: generated boot + optional iDMA wiring. Dashed: pending physical controllers.
   subgraph n_compute0_box["compute0 / compute subsystem"]
   n_compute0_cpu["picorv32 CPU"]:::model
-  n_compute0_dma["Reserved DMA port (no engine)"]:::model
+  n_compute0_dma["PULP iDMA + CSR (DmaEnable=1)"]:::model
   n_compute0_sram["Local SRAM"]:::model
   n_compute0_local_data["Local DATA FlooNoC / 9 routers / AXI4"]:::data
   n_compute0_local_config["Local CONFIG FlooNoC / 6 routers / 32-bit AXI4 transport"]:::config
   end
   n_compute0_cpu -->|CPU adapter| n_compute0_local_data
-  n_compute0_dma -.->|DMA| n_compute0_local_data
+  n_compute0_dma -->|DMA AXI4| n_compute0_local_data
   n_compute0_local_data -->|local| n_compute0_sram
   n_compute0_cpu -->|AXI-Lite bridge| n_compute0_local_config
   n_compute0_local_data -->|global data| n_global_data
   n_compute0_local_config -->|global control| n_global_config
   subgraph n_compute1_box["compute1 / compute subsystem"]
   n_compute1_cpu["serv CPU"]:::model
-  n_compute1_dma["Reserved DMA port (no engine)"]:::model
+  n_compute1_dma["PULP iDMA + CSR (DmaEnable=1)"]:::model
   n_compute1_sram["Local SRAM"]:::model
   n_compute1_local_data["Local DATA FlooNoC / 6 routers / AXI4"]:::data
   n_compute1_local_config["Local CONFIG FlooNoC / 4 routers / 32-bit AXI4 transport"]:::config
   end
   n_compute1_cpu -->|CPU adapter| n_compute1_local_data
-  n_compute1_dma -.->|DMA| n_compute1_local_data
+  n_compute1_dma -->|DMA AXI4| n_compute1_local_data
   n_compute1_local_data -->|local| n_compute1_sram
   n_compute1_cpu -->|AXI-Lite bridge| n_compute1_local_config
   n_compute1_local_data -->|global data| n_global_data
@@ -50,4 +50,4 @@ flowchart TB
   n_memory0_local_data -->|AXI4| n_xbar
   n_xbar -->|HBM model| n_memory0_hbm0
   n_xbar -->|DDR model| n_memory0_ddr0
-  %% Physical HBM/DDR controllers and iDMA engines remain unintegrated.
+  %% Physical HBM/DDR controllers remain unintegrated; iDMA is generated/optional.

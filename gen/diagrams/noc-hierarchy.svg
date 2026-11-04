@@ -2,7 +2,7 @@
 <rect width="1600" height="1030" fill="#F7F9FC"/>
 <text x="64.0" y="28.0" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#255BAE" text-anchor="start" dominant-baseline="hanging">REAL UPSTREAM-GENERATED NOC HIERARCHY</text>
 <text x="64.0" y="55.0" font-size="32" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">Full-chip FlooNoC network map</text>
-<text x="64.0" y="101.0" font-size="18" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">8 meshes shared by CPU boot and NoC BFM tests; dashed links mark pending DMA/controller integration</text>
+<text x="64.0" y="101.0" font-size="18" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">8 meshes shared by CPU boot and NoC BFM tests; dashed links mark pending physical controllers</text>
 <polyline points="64.0,137.0 1536.0,137.0" fill="none" stroke="#D8E1EB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 <rect x="56.0" y="158.0" width="744.0" height="267.0" rx="17.0" fill="#FFFFFF" stroke="#D8E1EB" stroke-width="2"/>
 <text x="74.0" y="172.0" font-size="22" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">compute0 / compute subsystem</text>
@@ -10,8 +10,8 @@
 <text x="90.0" y="220.0" font-size="19" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">picorv32 CPU</text>
 <text x="90.0" y="252.0" font-size="13" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">axi4_lite to AXI</text>
 <rect x="311.0" y="208.0" width="213.0" height="76.0" rx="12.0" fill="#E9F1FD" stroke="#255BAE" stroke-width="1"/>
-<text x="327.0" y="220.0" font-size="18" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">Reserved DMA / CSR</text>
-<text x="327.0" y="252.0" font-size="13" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">No engine instantiated</text>
+<text x="327.0" y="220.0" font-size="18" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">PULP iDMA + CSR</text>
+<text x="327.0" y="252.0" font-size="13" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">Optional real RTL (DMA mode)</text>
 <rect x="542.0" y="208.0" width="235.0" height="76.0" rx="12.0" fill="#FFF2E4" stroke="#B66B22" stroke-width="1"/>
 <text x="558.0" y="220.0" font-size="19" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">Local SRAM</text>
 <text x="558.0" y="252.0" font-size="13" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">global remote address</text>
@@ -23,13 +23,13 @@
 <text x="458.0" y="357.0" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">6 generated routers / 32b AXI4</text>
 <polyline points="185.0,284.0 185.0,313.0" fill="none" stroke="#255BAE" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 <polygon points="185.0,313.0 180.0,304.3 190.0,304.3" fill="#255BAE"/>
-<polyline points="416.0,284.0 336.0,313.0" fill="none" stroke="#255BAE" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="9 6"/>
+<polyline points="416.0,284.0 336.0,313.0" fill="none" stroke="#255BAE" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 <polygon points="336.0,313.0 342.4,305.3 345.8,314.7" fill="#255BAE"/>
 <polyline points="184.0,284.0 609.0,313.0" fill="none" stroke="#7047B5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 <polygon points="609.0,313.0 600.0,317.4 600.7,307.4" fill="#7047B5"/>
 <polyline points="376.0,313.0 659.0,284.0" fill="none" stroke="#19734B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 <polygon points="659.0,284.0 650.9,289.9 649.9,279.9" fill="#19734B"/>
-<polyline points="609.0,313.0 456.0,284.0" fill="none" stroke="#7047B5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="9 6"/>
+<polyline points="609.0,313.0 456.0,284.0" fill="none" stroke="#7047B5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 <polygon points="456.0,284.0 465.4,280.7 463.6,290.5" fill="#7047B5"/>
 <rect x="840.0" y="158.0" width="744.0" height="267.0" rx="17.0" fill="#FFFFFF" stroke="#D8E1EB" stroke-width="2"/>
 <text x="858.0" y="172.0" font-size="22" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">compute1 / compute subsystem</text>
@@ -37,8 +37,8 @@
 <text x="874.0" y="220.0" font-size="19" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">serv CPU</text>
 <text x="874.0" y="252.0" font-size="13" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">wishbone to AXI</text>
 <rect x="1095.0" y="208.0" width="213.0" height="76.0" rx="12.0" fill="#E9F1FD" stroke="#255BAE" stroke-width="1"/>
-<text x="1111.0" y="220.0" font-size="18" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">Reserved DMA / CSR</text>
-<text x="1111.0" y="252.0" font-size="13" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">No engine instantiated</text>
+<text x="1111.0" y="220.0" font-size="18" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">PULP iDMA + CSR</text>
+<text x="1111.0" y="252.0" font-size="13" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">Optional real RTL (DMA mode)</text>
 <rect x="1326.0" y="208.0" width="235.0" height="76.0" rx="12.0" fill="#FFF2E4" stroke="#B66B22" stroke-width="1"/>
 <text x="1342.0" y="220.0" font-size="19" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">Local SRAM</text>
 <text x="1342.0" y="252.0" font-size="13" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">global remote address</text>
@@ -50,13 +50,13 @@
 <text x="1242.0" y="357.0" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">4 generated routers / 32b AXI4</text>
 <polyline points="969.0,284.0 969.0,313.0" fill="none" stroke="#255BAE" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 <polygon points="969.0,313.0 964.0,304.3 974.0,304.3" fill="#255BAE"/>
-<polyline points="1200.0,284.0 1120.0,313.0" fill="none" stroke="#255BAE" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="9 6"/>
+<polyline points="1200.0,284.0 1120.0,313.0" fill="none" stroke="#255BAE" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 <polygon points="1120.0,313.0 1126.4,305.3 1129.8,314.7" fill="#255BAE"/>
 <polyline points="968.0,284.0 1393.0,313.0" fill="none" stroke="#7047B5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 <polygon points="1393.0,313.0 1384.0,317.4 1384.7,307.4" fill="#7047B5"/>
 <polyline points="1160.0,313.0 1443.0,284.0" fill="none" stroke="#19734B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 <polygon points="1443.0,284.0 1434.9,289.9 1433.9,279.9" fill="#19734B"/>
-<polyline points="1393.0,313.0 1240.0,284.0" fill="none" stroke="#7047B5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="9 6"/>
+<polyline points="1393.0,313.0 1240.0,284.0" fill="none" stroke="#7047B5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 <polygon points="1240.0,284.0 1249.4,280.7 1247.6,290.5" fill="#7047B5"/>
 <rect x="56.0" y="489.0" width="744.0" height="113.0" rx="12.0" fill="#E6F6EC" stroke="#19734B" stroke-width="1"/>
 <text x="72.0" y="501.0" font-size="24" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">GLOBAL DATA / FlooNoC</text>
@@ -113,6 +113,6 @@
 <polygon points="864.0,734.0 859.0,725.3 869.0,725.3" fill="#7047B5"/>
 <polyline points="320.0,805.0 320.0,841.0" fill="none" stroke="#19734B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 <polygon points="320.0,841.0 315.0,832.3 325.0,832.3" fill="#19734B"/>
-<text x="83.0" y="944.0" font-size="17" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">Solid: boot-configuration wiring and AXI memory models. Dashed: real iDMA/CSRs and physical controllers pending.</text>
+<text x="83.0" y="944.0" font-size="17" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">Solid: boot and optional real DMA/CSR wiring. Dashed: physical HBM/DDR controller integration pending.</text>
 <text x="65.0" y="1001.0" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">Router coordinates and link details: gen/diagrams/noc-topology.json and gen/noc/floonoc/*/floogen.yaml.</text>
 </svg>

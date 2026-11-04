@@ -13,6 +13,9 @@ workflows:
   - file: floonoc-elab.yml
     label: NoC traffic and compiler checks
     artifacts: [supernoc-real-axi-traffic, xezim-floonoc-compile-probe]
+  - file: dma.yml
+    label: Real iDMA AXI descriptor chains
+    artifacts: [dma-rtl-results]
   - file: floogen.yml
     label: Generated topology and contracts
     artifacts: []

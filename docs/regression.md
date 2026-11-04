@@ -131,3 +131,22 @@ NoC provider. `bender_targets` composes ordered root source sets after
 generated NoC packages/tops; it replaces hardcoded wrapper paths.
 `mode: compile` explicitly marks the Xezim chip structural target.
 See [chip boot](full-chip-boot.md).
+
+## Pinned PULP iDMA RTL bring-up
+
+The `dma` suite is a separate **real Verilator/cocotb RTL** scope, not
+software-only descriptor-vector validation and not a claim of full-chip DMA
+integration. `make dv-dma` invokes the upstream-generated desc64 frontend and
+`rw_axi` backend with PULP AXI join/mux against cocotbext-axi memory targets.
+One 100-descriptor DDR transfer and one single-descriptor HBM transfer check
+payload data, descriptor writeback, final interrupt and idle-before-reclaim.
+The test's completion IRQ is combinational to AXI B-channel handshake and is
+sampled once at a stable clock phase to avoid double-counting VPI edges.
+
+`tools/idma_rtl.py` fetches only the pinned iDMA commit and uses upstream
+MARIO + PeakRDL tools to generate the RTL into ignored `.tools/pulp_idma/target/rtl`.
+The root Bender `dma` target lists those upstream sources in dependency order;
+FlooNoC's pinned AXI/APB versions provide shared bus types. Existing `gen/`
+NoC and cold-boot artifacts remain unchanged. Run the dedicated
+`.github/workflows/dma.yml` action for complete compiler and simulation logs;
+[successful 2026-11-04 head](https://github.com/r987r/xezim-hello-world/actions/runs/41860245485).

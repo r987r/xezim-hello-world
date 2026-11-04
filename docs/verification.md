@@ -44,7 +44,8 @@ The [chip boot configuration](full-chip-boot.md) now attaches the CPUs,
 SRAM, upstream protocol/width adapters, reset registers and target crossbar.
 Keep the existing independent memory/boot/NoC scopes for fault isolation.
 
-1. Attach real PULP iDMA frontends/CSRs/data ports and verify CPU-programmed copies.
+1. Run the now-generator-wired SS0+SS1 DMA/CSR endpoints through full-chip NoCs,
+   then implement CPU-written descriptor submission and IRQ service.
 2. Add real controller register maps, ready/interrupt behavior and physical
    controller/PHY models in their proper scopes.
 3. Extend the chip scope with congestion/fairness, reset during traffic,

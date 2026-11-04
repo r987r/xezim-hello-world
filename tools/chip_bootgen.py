@@ -6,6 +6,7 @@ hardware-specific runtime. No CSRs, AMOs, OS, C library or SRAM preload.
 import json
 from pathlib import Path
 import bootgen as rv
+from sram_layout import build_sram_layout
 
 
 class Program:
@@ -79,10 +80,12 @@ def build(cfg):
         raise ValueError('full-chip bootstrap requires init/run/check phases')
     if options.get('memory_model') != 'axi_to_mem_tc_sram':
         raise ValueError('full-chip boot requires the declared upstream AXI/SRAM model provider')
-    offset = int(options['mailbox_offset'], 0)
-    if offset % 4 or offset < 256 or offset + 16*len(cores) + 64 > cfg['boot']['simulation_sram_bytes']:
-        raise ValueError('full-chip mailbox must be aligned and fit outside firmware in modeled SRAM')
-    mailbox = data[primary+'.sram'] + offset
+    # Shared physical SRAM claims: same layout as DMA host vectors.
+    # No writable-SRAM preload is introduced into cold boot.
+    layouts = {core['name']: build_sram_layout(cfg, core['name']) for core in cores}
+    primary_layout = layouts[primary]
+    mailbox = primary_layout.mailbox.start
+    offset = mailbox - primary_layout.sram_base
     done_offset = 16*len(cores) + 4
     stride = cfg['boot']['flash_slot_stride']
     images = {}
