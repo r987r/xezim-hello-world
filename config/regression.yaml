@@ -104,6 +104,18 @@ tests:
     reuse_build: true
     env: {SUPERNOC_NEGATIVE: '1'}
     expect_failure: 'FAIL supernoc injected data mismatch detected'
+  dma-rtl:
+    engine: cocotb-verilator
+    sources: noc
+    bender_targets: [dma]
+    ip: [pulp_idma]
+    top: dma_tb
+    module: dv.dma.test_dma
+    seed: 1
+    test_dir: .
+    build: .tools/dma-obj
+    timeout_s: 1800
+    pass: 'PASS dma-rtl:'
   chip-boot: &chip
     engine: cocotb-verilator
     sources: noc
@@ -140,7 +152,8 @@ suites:
   noc: [noc-verilator, supernoc, supernoc-negative]
   compatibility: [noc-xezim]
   diagnostics: [cpu-fetch, smoke]
+  dma: [dma-rtl]
   chip: [chip-boot, chip-boot-negative, chip-xezim-compile]
   # Every declared test is covered. Structural Xezim probes stay distinct
   # from the Verilator traffic gate; make test requires both toolchains.
-  full: [xezim, noc, compatibility, diagnostics, chip]
+  full: [xezim, noc, compatibility, diagnostics, dma, chip]

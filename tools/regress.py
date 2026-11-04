@@ -254,6 +254,14 @@ def run_target(name, test, resolver, options):
     if networks and test['engine'] not in {'xezim-compile', 'verilator-lint'}:
         sources += [str(root/entry['package']) for _, entry in sorted(networks.items())]
         sources += [str(root/entry['top']) for _, entry in sorted(networks.items())]
+    if 'dma' in test.get('bender_targets', []):
+        import idma_rtl
+        # Pinned source is already fetched; generate backend + PeakRDL RTL
+        # before Bender expands the dma source set. This shares the existing
+        # FlooNoC AXI dependency graph; no second AXI checkout is introduced.
+        idma_rtl.generate()
+        includes += [str(ROOT/'.tools/pulp_idma/src/include'),
+                     str(ROOT/'.tools/pulp_idma/target/rtl/include')]
     for target in test.get('bender_targets', []):
         extra, inc, defs = resolver.sources({'sources': target})
         sources += extra

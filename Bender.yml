@@ -77,3 +77,36 @@ sources:
       - rtl/adapters/axi_sram_target.sv
       - gen/chip/soc_top.sv
       - gen/chip/full_chip_tb.sv
+
+  # One substantive real DMA-only scope, preserving boot and NoC source sets.
+  # All implementation modules are sourced at config/ip.lock.yaml's PULP pin;
+  # the generated backend/register RTL is produced by tools/idma_rtl.py.
+  - target: dma
+    files:
+      - .tools/pulp_idma/src/idma_pkg.sv
+      - .tools/pulp_idma/src/idma_float_pkg.sv
+      - .tools/pulp_idma/src/backend/idma_axi_read.sv
+      - .tools/pulp_idma/src/backend/idma_axi_write.sv
+      - .tools/pulp_idma/src/backend/idma_channel_coupler.sv
+      - .tools/pulp_idma/src/backend/idma_dataflow_element.sv
+      - .tools/pulp_idma/src/backend/idma_error_handler.sv
+      - .tools/pulp_idma/src/backend/idma_legalizer_page_splitter.sv
+      - .tools/pulp_idma/src/backend/idma_legalizer_pow2_splitter.sv
+      - .tools/pulp_idma/src/backend/idma_otf_transpose.sv
+      - .tools/pulp_idma/src/backend/idma_otf_mxquant.sv
+      - .tools/pulp_idma/src/backend/idma_otf_mxdequant.sv
+      - .tools/pulp_idma/src/backend/idma_otf_compute.sv
+      - .tools/pulp_idma/target/rtl/idma_transport_layer_rw_axi.sv
+      - .tools/pulp_idma/target/rtl/idma_legalizer_rw_axi.sv
+      - .tools/pulp_idma/target/rtl/idma_backend_rw_axi.sv
+      - .tools/pulp_idma/target/rtl/idma_desc64_reg_pkg.sv
+      - .tools/pulp_idma/target/rtl/idma_desc64_addrmap_pkg.sv
+      - .tools/pulp_idma/target/rtl/idma_desc64_reg_top.sv
+      - .tools/pulp_idma/src/frontend/desc64/idma_desc64_ar_gen.sv
+      - .tools/pulp_idma/src/frontend/desc64/idma_desc64_ar_gen_prefetch.sv
+      - .tools/pulp_idma/src/frontend/desc64/idma_desc64_reader.sv
+      - .tools/pulp_idma/src/frontend/desc64/idma_desc64_reader_gater.sv
+      - .tools/pulp_idma/src/frontend/desc64/idma_desc64_reshaper.sv
+      - .tools/pulp_idma/src/frontend/desc64/idma_desc64_reg_wrapper.sv
+      - .tools/pulp_idma/src/frontend/desc64/idma_desc64_top.sv
+      - dv/dma/dma_tb.sv
