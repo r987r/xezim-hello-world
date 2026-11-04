@@ -55,6 +55,7 @@ def write_control_file(source: Path, output: Path) -> Path:
         raise ValueError("invalid DFI probe control output")
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(
+        "`verilator_config\n"
         "// Simulation-only, read-only visibility into pinned LiteDRAM nets.\n"
         "// No public access to backing memory arrays or controller state.\n"
         + "".join(
