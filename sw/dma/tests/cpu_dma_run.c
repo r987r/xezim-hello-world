@@ -105,6 +105,54 @@ int cpu_dma_run(void) {
         }
     }
     soc_dma_mmio_ack_irq(csr);
+    /* CPU cannot directly load data above 4 GiB. Do a second real DMA chain
+     * back to separately allocated CPU-visible SRAM and check its contents.
+     * This validates BOTH HBM and DDR model storage, not just AXI responses.
+     */
+    soc_mem_allocation_t from_ddr={0}, from_hbm={0};
+    if (!soc_mem_alloc(&peer, PAYLOAD_BYTES, 64, &from_ddr) ||
+        !soc_mem_alloc(&peer, PAYLOAD_BYTES, 64, &from_hbm)) {
+        *evidence=0xd0000009u; return 9;
+    }
+    volatile uint8_t *ddr_copy=(volatile uint8_t *)(uintptr_t)from_ddr.phys;
+    volatile uint8_t *hbm_copy=(volatile uint8_t *)(uintptr_t)from_hbm.phys;
+    for(unsigned i=0; i<PAYLOAD_BYTES; ++i) {
+        ddr_copy[i]=0; hbm_copy[i]=0;
+    }
+    soc_dma_copy_t reverse[2]={
+        {ddr_dst.phys,from_ddr.phys,PAYLOAD_BYTES},
+        {hbm_dst.phys,from_hbm.phys,PAYLOAD_BYTES}
+    };
+    if (!soc_dma_chain_build(&desc, reverse, 2, true, &chain)) {
+        *evidence=0xd000000au; return 10;
+    }
+    /* IRQ_ACK CSR may take several cycles to reach the real APB bridge. */
+    uint32_t clear=0;
+    unsigned attempts=0;
+    for(; attempts<10000u; ++attempts) {
+        clear=csr[SOC_DMA_REG_STATUS/4u];
+        if ((clear & (SOC_DMA_STATUS_IRQ | SOC_DMA_STATUS_APB_BUSY))==0) break;
+    }
+    if(attempts==10000u || !soc_dma_mmio_submit(csr,chain.head_phys)) {
+        *evidence=0xd000000bu; return 11;
+    }
+    if(!soc_dma_mmio_wait_irq(csr,200000u,&status)) {
+        *evidence=0xd000000cu; return 12;
+    }
+    for(unsigned i=0; i<2; ++i) {
+        volatile const uint64_t *done=
+            (volatile const uint64_t *)(const void *)&chain.cpu_descs[i];
+        if(*done!=UINT64_MAX) {
+            *evidence=0xd000000du; return 13;
+        }
+    }
+    for(unsigned i=0; i<PAYLOAD_BYTES; ++i) {
+        uint8_t value=(uint8_t)((i*7u+0x35u)&0xffu);
+        if(ddr_copy[i]!=value || hbm_copy[i]!=value) {
+            *evidence=0xd000000eu; return 14;
+        }
+    }
+    soc_dma_mmio_ack_irq(csr);
     /* Retain descriptors and all physical buffers to simulation end;
      * interrupt/writebacks alone do not prove backend globally idle.
      */
