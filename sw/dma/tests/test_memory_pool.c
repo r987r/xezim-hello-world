@@ -1,6 +1,6 @@
 #include "../../common/memory_pool.h"
 #include "../../common/sram_pool.h"
-#include "../dma/dma.h"
+#include "../dma.h"
 #include <assert.h>
 #include <stdio.h>
 #include <stdint.h>
