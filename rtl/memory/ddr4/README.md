@@ -59,7 +59,7 @@ Optional pinned upstream RTL-generation attempt, in a network-enabled environmen
     python3 -m pip install -e .tools/litedram
     python3 rtl/memory/ddr4/bringup.py generate
 
-Generation calls upstream Python litedram.gen --sim --name soc_ddr4_sim; it writes to ignored .tools/ddr4/litedram_sim/, not the generator-owned gen/ tree. Successful generation produces a SHA-256 manifest and **generated-not-simulated** status; it is not a simulation pass.
+Generation uses local sim_model.py --sim, invoking pinned upstream litedram.gen with simulation-only reduced geometry (rather than editing upstream RTL). It writes to ignored .tools/ddr4/litedram_sim/, not the generator-owned gen/ tree. Successful generation produces a SHA-256 manifest and **generated-not-simulated** status; it is not a simulation pass.
 
 ## PR milestone tracker
 
@@ -78,3 +78,33 @@ Generation calls upstream Python litedram.gen --sim --name soc_ddr4_sim; it writ
 - [ ] Stage 5: Open a separate HBM bring-up PR only after DDR milestones are accepted.
 
 **Evidence rule:** a static check, generated RTL, elaboration, initialized simulation and passing AXI transactions are separate claims. An AXI RAM/SRAM regression is *not* proof of DDR controller/PHY operation. Mark a stage complete only with logs from the matching PR head commit.
+
+## Simulation capacity and evidence (2026-11-04)
+
+The selected upstream MT40A512M8 configuration (8 x8 devices, 16 banks,
+32768 rows, 1024 columns) represents **4 GiB** of x64 device storage.
+The upstream DFI PHY model expands this into dense per-bank simulation
+memories: generating/elaborating the full-size model can be prohibitively
+expensive. The isolated sim_geometry.yml intentionally reduces rows to
+2048 and columns to 128, retaining 16 banks and the DDR4 command-address
+A10 requirement. This yields **32 MiB** of *non-JEDEC production geometry*.
+The budget checker caps it at 64 MiB and rejects unexpected source
+geometry. This override applies **only to --sim generation**, with no
+upstream LiteDRAM file modifications. Use the real geometry/timings and an
+approved physical PHY when targeting hardware. The 1 GiB architectural
+SoC address window remains unchanged and **must not alias** the isolated
+32 MiB modeled capacity: an approved memory-window adapter must explicitly
+reject out-of-model accesses.
+
+Local check performed (Python 3.13 + PyYAML):
+
+    python3 -m unittest discover -s rtl/memory/ddr4 -p 'test_*.py' -v
+    # Ran 20 tests, OK
+
+This verifies Python contract/negative cases and capacity calculations,
+**not real generated Verilog**. The execution container lacks internet
+resolution for github.com, Verilator, Xezim and LiteX/Migen; thus pinned
+upstream generation, HDL elaboration and DDR AXI traffic are not yet
+executable here. The regular SoC PR workflows passed at previous head
+b118adaf3e4724285a9b1596a91f1b8d35284084; new commits must get
+their own green results before merging.
