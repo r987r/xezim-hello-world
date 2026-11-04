@@ -1,0 +1,123 @@
+"""Fast DMA-only SRAM vectors and expected AXI readback, reusable by cocotb.
+
+Only DMA-specific simulation scopes may preload these vectors. Cold boot must
+continue to copy firmware from flash into uninitialized SRAM via real CPUs.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass
+import hashlib
+import json
+from pathlib import Path
+import struct
+
+DESC = struct.Struct("<IIQQQ")  # length, flags, next, src, dst
+DESC_BYTES = DESC.size
+DESC_END = (1 << 64) - 1
+FLAGS_COPY = (1 << 1) | (1 << 3)
+FLAGS_IRQ = 1
+DESC_OFFSET = 0x1000
+PAYLOAD_OFFSET = 0x2000
+DESC_POOL_BYTES = 0x1000
+
+
+@dataclass(frozen=True)
+class DmaVectorCase:
+    manifest: dict
+    source_sram: bytes
+
+    def write(self, output: Path) -> None:
+        output.mkdir(parents=True, exist_ok=True)
+        (output / "case.json").write_text(
+            json.dumps(self.manifest, indent=2, sort_keys=True) + "\n")
+        if len(self.source_sram) % 8:
+            raise ValueError("SRAM must contain complete 64-bit words")
+        (output / "source_sram.hex").write_text("".join(
+            f'{int.from_bytes(self.source_sram[i:i+8], "little"):016x}\n'
+            for i in range(0, len(self.source_sram), 8)))
+
+
+def _region(cfg, name):
+    matches = [r for r in cfg["address_map"]["data"] if r["name"] == name]
+    if len(matches) != 1:
+        raise ValueError(f"unknown/ambiguous data region: {name}")
+    return int(matches[0]["base"], 0), int(matches[0]["size"], 0)
+
+
+def _pattern(index, length):
+    return bytes((0x35 + 29*index + 7*i) & 255 for i in range(length))
+
+
+def build_dma_vector(cfg, *, subsystem="compute0", destination="memory0.ddr0",
+                     count=4, length=64, irq_last=True):
+    """Create a disjoint chain of DMA copies, SRAM preload and golden manifest."""
+    if type(count) is not int or type(length) is not int or count <= 0 or length <= 0:
+        raise ValueError("count and length must be positive integers")
+    if length > 0xffffffff or count > DESC_POOL_BYTES // DESC_BYTES:
+        raise ValueError("transfer length/count exceeds descriptor pool")
+    computes = [s["name"] for s in cfg["subsystems"] if s["type"] == "compute"]
+    if subsystem not in computes:
+        raise ValueError("unknown compute subsystem")
+    sram_base, region_size = _region(cfg, f"{subsystem}.sram")
+    sram_bytes = cfg["boot"]["simulation_sram_bytes"]
+    if sram_bytes > region_size or sram_bytes < PAYLOAD_OFFSET + 8 or sram_bytes % 8:
+        raise ValueError("source SRAM too small or misaligned")
+    mailbox = int(cfg["verification"]["full_chip_boot"]["mailbox_offset"], 0)
+    if mailbox + 16*len(computes) + 64 > DESC_OFFSET:
+        raise ValueError("boot/mailbox overlaps descriptor area")
+    if count*length > sram_bytes - PAYLOAD_OFFSET:
+        raise ValueError("payload exceeds source SRAM")
+    dst_base, window_size = _region(cfg, destination)
+    if destination in [f"{name}.sram" for name in computes]:
+        limit = sram_bytes
+        dst_offset = 0x3000 if destination == f"{subsystem}.sram" else PAYLOAD_OFFSET
+    elif destination in [t["name"] for t in cfg["memory_targets"]]:
+        limit = 1 << cfg["verification"]["memory"]["model_address_bits"]
+        dst_offset = 0x100
+    else:
+        raise ValueError("destination is not a modeled target")
+    if dst_offset + count*length > min(window_size, limit):
+        raise ValueError("destination exceeds modeled capacity")
+    image = bytearray(sram_bytes)
+    head = sram_base + DESC_OFFSET
+    source = sram_base + PAYLOAD_OFFSET
+    copies = []
+    for i in range(count):
+        src = source + i*length
+        dst = dst_base + dst_offset + i*length
+        nxt = head + (i+1)*DESC_BYTES if i < count-1 else DESC_END
+        flags = FLAGS_COPY | (FLAGS_IRQ if irq_last and i == count-1 else 0)
+        image[DESC_OFFSET+i*DESC_BYTES:DESC_OFFSET+(i+1)*DESC_BYTES] = DESC.pack(
+            length, flags, nxt, src, dst)
+        payload = _pattern(i, length)
+        image[PAYLOAD_OFFSET+i*length:PAYLOAD_OFFSET+(i+1)*length] = payload
+        copies.append({
+            "descriptor": head + i*DESC_BYTES, "src": src, "dst": dst,
+            "length": length, "flags": flags, "next": nxt,
+            "expected_hex": payload.hex(),
+            "expected_sha256": hashlib.sha256(payload).hexdigest()
+        })
+    return DmaVectorCase({
+        "schema_version": 1, "kind": "dma_only_not_cold_boot",
+        "subsystem": subsystem, "destination": destination,
+        "source_sram_base": sram_base, "source_sram_bytes": sram_bytes,
+        "descriptor_head": head, "descriptor_count": count,
+        "descriptor_size": DESC_BYTES, "descriptor_pool_start": head,
+        "descriptor_pool_bytes": DESC_POOL_BYTES,
+        "source_pool_start": source,
+        "source_pool_bytes": sram_bytes-PAYLOAD_OFFSET,
+        "destination_base": dst_base+dst_offset,
+        "destination_modeled_bytes": limit,
+        "irq_last": irq_last, "copies": copies,
+        "note": "Host-prepared vector; real DMA RTL integration not yet proven."
+    }, bytes(image))
+
+
+async def verify_dma_readback(master, manifest):
+    """Read actual destinations using upstream cocotbext-axi AxiMaster."""
+    for copy in manifest["copies"]:
+        result = await master.read(copy["dst"], copy["length"])
+        if result.resp != 0:
+            raise AssertionError(f'DMA AXI error {result.resp} at {copy["dst"]:#x}')
+        if bytes(result.data) != bytes.fromhex(copy["expected_hex"]):
+            raise AssertionError(f'DMA mismatch descriptor {copy["descriptor"]:#x}')
