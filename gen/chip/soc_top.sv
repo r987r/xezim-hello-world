@@ -838,9 +838,9 @@ module soc_top #(parameter bit ProbeEnable = 0, DmaEnable = 0, DmaTestMode = 0) 
   floo_xezim_compute0_local_config_noc_pkg::axi_in_req_t cpu_config_0_req;
   floo_xezim_compute0_local_config_noc_pkg::axi_in_rsp_t cpu_config_0_rsp;
   assign m_compute0_local_data_cpu_req = DmaTestMode ? probe_req : cpu_data_0_req;
-  assign cpu_data_0_rsp = m_compute0_local_data_cpu_rsp;
+  assign cpu_data_0_rsp = DmaTestMode ? '0 : m_compute0_local_data_cpu_rsp;
   assign m_compute0_local_config_cpu_req = DmaTestMode ? cfgprobe_req : cpu_config_0_req;
-  assign cpu_config_0_rsp = m_compute0_local_config_cpu_rsp;
+  assign cpu_config_0_rsp = DmaTestMode ? '0 : m_compute0_local_config_cpu_rsp;
   cpu_noc_adapter #(
     .data_req_t(floo_xezim_compute0_local_data_noc_pkg::axi_in_req_t),
     .data_rsp_t(floo_xezim_compute0_local_data_noc_pkg::axi_in_rsp_t),

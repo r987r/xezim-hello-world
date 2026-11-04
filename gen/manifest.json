@@ -21,7 +21,7 @@
     "chip/full_chip_dma_tb.sv": "4e754146a230aafd82e74ea2318c87f2f207bb22bb2c61f2ea8b4437f56b9c51",
     "chip/full_chip_tb.sv": "f9e463c20f9a4224bbc2fcfdffc2245b1d723e7db1effeb1603169ed1fcdc4ce",
     "chip/manifest.json": "d719b864340d6513db5af726b70eb888418f3a85036b49161489ed399c24aa18",
-    "chip/soc_top.sv": "055c45e7c96083d6d140ec73b7fabefe5a2fa5c764d4bb09789af38e8e9c5b3a",
+    "chip/soc_top.sv": "a6b174da627f0cab846438284326edb12b003a76cf1f8841e49e1d69ef8d5b85",
     "diagrams/graphs.json": "cc3c5806982a864c6cb1bd82b640475288481a2eb34d14424cf11c9c64bb1830",
     "diagrams/noc-hierarchy.mmd": "b7150620b00403727224c35653250f9c793dd443dfc4fb215709ab0d3159e7dc",
     "diagrams/noc-hierarchy.svg": "6d2b97341d870b1c4a2d8b81c183d238b6373907dc203f96455ba68ed2b9a27a",
