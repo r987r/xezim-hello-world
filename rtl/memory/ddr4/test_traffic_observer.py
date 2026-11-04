@@ -10,7 +10,7 @@ import tempfile
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from traffic_observer import CHANNELS, TrafficObserver, verify_capture
+from traffic_observer import CHANNELS, TrafficObserver, clear_prior_capture, verify_capture
 
 
 def sample(*, channel=None, addr=0x4000, wb=None, init_done=0, init_error=0):
@@ -132,6 +132,31 @@ class TrafficObserverTests(unittest.TestCase):
             out.write(json.dumps({"kind": "trace_cannot_end_here"}) + "\n")
         with self.assertRaisesRegex(ValueError, "end marker"):
             verify_capture(Path(self.temp.name))
+
+    def test_prior_success_is_removed_before_next_run(self):
+        obs = self.observer
+        obs.sample(sample())
+        obs.finish("pass")
+        other_path = Path(self.temp.name) / "unrelated.rtl"
+        other_path.write_text("leave generated files alone")
+        functional_result = Path(self.temp.name) / "ddr4_functional_result.json"
+        functional_result.write_text('{"status": "pass"}')
+        clear_prior_capture(Path(self.temp.name))
+        self.assertFalse(obs.summary_path.exists())
+        self.assertFalse(obs.events_path.exists())
+        self.assertFalse(functional_result.exists())
+        self.assertEqual(other_path.read_text(), "leave generated files alone")
+        with self.assertRaisesRegex(ValueError, "artifacts missing"):
+            verify_capture(Path(self.temp.name))
+
+    def test_stale_symlink_capture_is_refused(self):
+        self.observer.finish("fail")
+        target = Path(self.temp.name) / "unrelated.rtl"
+        target.write_text("do not change")
+        (Path(self.temp.name) / "ddr4_traffic_summary.json").symlink_to(target)
+        with self.assertRaisesRegex(ValueError, "symlinked"):
+            clear_prior_capture(Path(self.temp.name))
+        self.assertEqual(target.read_text(), "do not change")
 
     def test_missing_traffic_channel_fails_closed(self):
         obs = self.observer
