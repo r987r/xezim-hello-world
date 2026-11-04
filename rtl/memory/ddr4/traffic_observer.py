@@ -49,6 +49,7 @@ class TrafficObserver:
         self.closed = False
         self.overflows = 0
         self.last_state = None
+        self.last_time_ns = None
         self.last_by_channel = {}
         self._emit({"kind": "capture_start", "phase": self.phase,
                     "channels": list(CHANNELS),
@@ -76,10 +77,22 @@ class TrafficObserver:
         self.phase = phase
         self._emit({"kind": "phase_start"})
 
-    def sample(self, sample: dict):
-        """Ingest one full input pin snapshot taken at the simulated clock edge."""
+    def sample(self, sample: dict, sim_time_ns: int | None = None):
+        """Ingest one complete input pin snapshot from a DUT rising edge.
+
+        When simulation time is available, fail closed if ANY expected
+        10-ns clock edge is missed by the sampling coroutine.
+        """
         if self.closed:
             raise AssertionError("traffic sampling after capture end")
+        if sim_time_ns is not None:
+            if type(sim_time_ns) is not int or sim_time_ns < 0:
+                raise AssertionError("invalid observer simulation timestamp")
+            if self.last_time_ns is not None and sim_time_ns - self.last_time_ns != 10:
+                raise AssertionError(
+                    f"DDR4 passive monitoring gap: {self.last_time_ns} -> {sim_time_ns} ns"
+                )
+            self.last_time_ns = sim_time_ns
         self.samples += 1
         self.phase_cycles[self.phase] += 1
         state = (int(sample["init_done"]), int(sample["init_error"]),
@@ -204,4 +217,49 @@ async def observe_forever(dut, observer: TrafficObserver):
         # Same posedge sampling convention used by upstream cocotb AXI BFMs.
         # No signal drives, no traffic filtering by initialization status.
         await RisingEdge(dut.clk)
-        observer.sample(read_pins(dut))
+        from cocotb.utils import get_sim_time
+        observer.sample(read_pins(dut), sim_time_ns=int(get_sim_time(units="ns")))
+
+
+def verify_capture(directory: Path) -> dict:
+    """Independent post-run gate: pass is impossible with missing coverage."""
+    output = Path(directory)
+    summary_path = output / "ddr4_traffic_summary.json"
+    events_path = output / "ddr4_traffic_events.jsonl"
+    if not summary_path.is_file() or not events_path.is_file():
+        raise ValueError("DDR4 required continuous passive monitor artifacts missing")
+    summary = json.loads(summary_path.read_text())
+    if summary.get("status") != "pass":
+        raise ValueError("DDR4 passive observer did not finish successfully")
+    if summary.get("overflows") != 0:
+        raise ValueError("DDR4 passive observer capture overflow")
+    if summary.get("started_before_init") is not True or summary.get("continuous_capture") is not True:
+        raise ValueError("DDR4 passive monitor coverage was not continuous across phases")
+    phases = summary.get("phases", {})
+    if any(type(phases.get(p)) is not int or phases[p] < 1 for p in PHASES):
+        raise ValueError("DDR4 observer has missing or invalid phase coverage")
+    if summary.get("sampled_cycles") != sum(phases[p] for p in PHASES):
+        raise ValueError("DDR4 passive monitor cycle accounting mismatch")
+    channels = summary.get("channels", {})
+    if any(type(channels.get(c)) is not int or channels[c] < 1 for c in CHANNELS):
+        raise ValueError("DDR4 observer missing one or more AXI channel handshakes")
+    if channels["aw"] != channels["b"] or channels["ar"] != summary.get("rlast_count"):
+        raise ValueError("DDR4 observer detected incomplete AXI write/read traffic")
+    wb = summary.get("wishbone", {})
+    if wb.get("writes", 0) < 1 or wb.get("reads", 0) < 1:
+        raise ValueError("DDR4 observer missed Wishbone initialization traffic")
+    # Check provenance of the actual event stream, not only self-reported JSON.
+    with events_path.open(encoding="utf-8") as handle:
+        first_line = handle.readline()
+        if not first_line or json.loads(first_line).get("kind") != "capture_start":
+            raise ValueError("DDR4 observer did not capture a start marker")
+        last = None
+        lines = 1
+        for line in handle:
+            last = json.loads(line)
+            lines += 1
+    if not last or last.get("kind") != "capture_end" or last.get("status") != "pass":
+        raise ValueError("DDR4 observer missing successful end marker")
+    if lines != summary.get("event_count"):
+        raise ValueError("DDR4 observer event count/trace file mismatch")
+    return summary
