@@ -14,7 +14,7 @@ import sys
 
 from bringup import CORE_NAME, DEFAULT_OUTPUT, checked_output_dir
 from check_rtl import generated_sources
-from traffic_observer import verify_capture
+from traffic_observer import clear_prior_capture, verify_capture
 
 
 def preflight(path: Path):
@@ -41,6 +41,9 @@ def main() -> int:
     args = parser.parse_args()
     try:
         output, sources = preflight(args.output_dir)
+        # Stale summaries or traces from earlier local runs must never let a
+        # new run pass if the observer was omitted or failed to initialize.
+        clear_prior_capture(output)
         from cocotb_test.simulator import run
         here = Path(__file__).resolve().parent
         # Cocotb drives exactly one clock. No duplicate Verilator --timing
