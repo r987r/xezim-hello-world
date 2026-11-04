@@ -13,6 +13,7 @@ from cocotb.clock import Clock
 from cocotb.triggers import RisingEdge, FallingEdge, Timer, with_timeout
 from cocotbext.axi import AxiBus, AxiMaster
 from dv.common.dma_vectors import build_dma_vector
+from dv.common.axi_trace import attach_observers, trace_phase
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -68,6 +69,7 @@ async def two_compute_dmas_through_all_fabrics(dut):
     assert mem["dma_engines_instantiated"] == len(computes) == 2
     dut.rst_ni.value = 0
     dut.clk_i.value = 0
+    attach_observers(dut)
     cocotb.start_soon(Clock(dut.clk_i, 10, "ns").start())
     # The existing 64-bit AXI probe now occupies CPU0's data manager slot
     # exclusively in this generated DmaTestMode. Real DMA owns the DMA slot.
@@ -93,6 +95,7 @@ async def two_compute_dmas_through_all_fabrics(dut):
         case = build_dma_vector(cfg, subsystem=compute, destination=target,
                                 count=count, length=nbytes, profile="dma_only")
         head = case.manifest["descriptor_head"]
+        trace_phase(f'{compute}: host populates descriptor/source SRAM over actual NoCs')
         await prep_sram(data, case)
         csr = csr_by_name[compute+".dma"]
         # Two 32-bit writes to shared SRAM-staged 64-bit descriptor pointer.
@@ -101,6 +104,7 @@ async def two_compute_dmas_through_all_fabrics(dut):
         await write_word(control, csr+0, head & 0xffffffff)
         await write_word(control, csr+4, head >> 32)
         assert await read_word(control, csr+0) == (head & 0xffffffff)
+        trace_phase(f'{compute}: submit native iDMA head through 32-bit CSR NoC')
         await write_word(control, csr+8, 1)
         # Testbench observes sticky IRQ; CPUs do not spin/poll descriptors.
         for _ in range(60000):
@@ -112,6 +116,7 @@ async def two_compute_dmas_through_all_fabrics(dut):
         status = await read_word(control, csr+12)
         assert status & 2, f"DMA completion bit absent in {compute}: {status:#x}"
         assert not status & 4, f"DMA APB submission error in {compute}: {status:#x}"
+        trace_phase(f'{compute}: verify real DMA destination + completion writebacks')
         for entry in case.manifest["copies"]:
             # Every payload byte is read back over the same real NoC graph,
             # not an internal SRAM memory handle or a mock DMA scoreboard.
