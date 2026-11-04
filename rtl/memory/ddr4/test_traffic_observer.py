@@ -10,7 +10,7 @@ import tempfile
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from traffic_observer import CHANNELS, TrafficObserver
+from traffic_observer import CHANNELS, TrafficObserver, verify_capture
 
 
 def sample(*, channel=None, addr=0x4000, wb=None, init_done=0, init_error=0):
@@ -76,6 +76,60 @@ class TrafficObserverTests(unittest.TestCase):
         self.assertEqual(events[-1]["kind"], "capture_end")
         self.assertEqual(len([x for x in events if x["kind"] == "axi_handshake"]), 5)
         self.assertTrue(any(x["kind"] == "heartbeat" for x in events))
+
+    def test_verified_capture_reconciles_summary_and_actual_event_stream(self):
+        obs = self.observer
+        obs.sample(sample(), sim_time_ns=5)
+        obs.next_phase("initialization")
+        obs.sample(sample(wb="write"), sim_time_ns=15)
+        obs.sample(sample(wb="read", init_done=1), sim_time_ns=25)
+        obs.next_phase("traffic")
+        for offset, ch in enumerate(CHANNELS):
+            obs.sample(sample(channel=ch, init_done=1), sim_time_ns=35 + offset * 10)
+        obs.next_phase("post_traffic")
+        obs.sample(sample(init_done=1), sim_time_ns=85)
+        obs.assert_complete()
+        obs.finish("pass")
+        summary = verify_capture(Path(self.temp.name))
+        self.assertEqual(summary["sampled_cycles"], 9)
+
+    def test_detect_missing_clock_edge(self):
+        obs = self.observer
+        obs.sample(sample(), sim_time_ns=5)
+        with self.assertRaisesRegex(AssertionError, "monitoring gap"):
+            obs.sample(sample(), sim_time_ns=35)
+
+    def test_summary_without_trace_is_rejected(self):
+        self.observer.sample(sample())
+        self.observer.finish("fail", "invalid session")
+        self.observer.events_path.unlink()
+        with self.assertRaisesRegex(ValueError, "artifacts missing"):
+            verify_capture(Path(self.temp.name))
+
+    def test_forged_success_without_completed_phases_rejected(self):
+        self.observer.sample(sample())
+        self.observer.finish("pass")
+        with self.assertRaisesRegex(ValueError, "coverage was not continuous"):
+            verify_capture(Path(self.temp.name))
+
+    def test_final_event_mismatch_fails_closed(self):
+        self.observer.sample(sample())
+        self.observer.finish("pass")
+        summary = json.loads(self.observer.summary_path.read_text())
+        summary.update({
+            "continuous_capture": True,
+            "started_before_init": True,
+            "sampled_cycles": 4,
+            "phases": {p: 1 for p in
+                       ("pre_init", "initialization", "traffic", "post_traffic")},
+            "channels": {c: 1 for c in CHANNELS}, "rlast_count": 1,
+            "wishbone": {"writes": 1, "reads": 1},
+        })
+        self.observer.summary_path.write_text(json.dumps(summary))
+        with self.observer.events_path.open("a") as out:
+            out.write(json.dumps({"kind": "trace_cannot_end_here"}) + "\n")
+        with self.assertRaisesRegex(ValueError, "end marker"):
+            verify_capture(Path(self.temp.name))
 
     def test_missing_traffic_channel_fails_closed(self):
         obs = self.observer
