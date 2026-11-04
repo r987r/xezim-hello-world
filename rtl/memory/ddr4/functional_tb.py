@@ -162,9 +162,12 @@ async def ddr4_wishbone_init_axi_readwrite(dut):
     assert not int(dut.init_done.value), "DDR must be explicitly initialized"
     assert not int(dut.init_error.value), "unexpected initial DDR error"
     assert not int(dut.user_port_axi_0_awready.value), "AXI must be gated before init"
-    await initialize(dut)
+    # Match other known-good cocotbext-axi testbenches: create the five
+    # channel source/sink tasks near reset, not after 1.2ms of DDR init.
     master = AxiMaster(AxiBus.from_prefix(dut, "user_port_axi_0"),
                        dut.user_clk, dut.user_rst, reset_active_level=True)
+    await tick(dut, 16)
+    await initialize(dut)
     await tick(dut, 16)
     counts = {}
     monitor = cocotb.start_soon(observe_axi(dut, counts))
@@ -175,7 +178,10 @@ async def ddr4_wishbone_init_axi_readwrite(dut):
         assert probe.resp == AxiResp.OKAY, f"DDR4 initial read response: {probe}"
         dut._log.info("PASS DDR4 prewrite read: controller returned R channel data")
     except Exception:
-        dut._log.error("DDR4 read-side failure: pins=%s counts=%s", axi_snapshot(dut), counts)
+        dut._log.error("DDR4 read-side failure: pins=%s counts=%s active_id=%s r_fifo=%s",
+                       axi_snapshot(dut), counts,
+                       getattr(master.read_if, "active_id", None),
+                       master.read_if.r_channel.count())
         raise
     try:
         await transfer(master, dut, 0x4000, bytes((i*17+3)&255 for i in range(64)), 1)
