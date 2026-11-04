@@ -29,7 +29,8 @@ from axi_report import render_report
 
 ROOT=Path(__file__).resolve().parents[1]
 FILES={'result.json','plan.json','sources.f','simulation.log','build.log','results.xml',
-       'axi-transactions.json','axi-events.jsonl'}
+       'axi-transactions.json','axi-events.jsonl',
+       'protocol-transactions.json','protocol-events.jsonl','protocols.html'}
 
 
 def dump(path,data):
@@ -394,6 +395,8 @@ def evidence_index(evidence,output,repository):
                     shutil.copyfile(item,destination/item.name);assets.append(item.name)
             trace_path=source_dir/'axi-transactions.json'
             trace=json.loads(trace_path.read_text()) if trace_path.exists() else None
+            protocol_path=source_dir/'protocol-transactions.json'
+            protocol_data=json.loads(protocol_path.read_text()) if protocol_path.exists() else None
             entry={'target':target,'engine':plan.get('engine','unknown'),'passed':result.get('passed') is True,
                    'expected_failure':plan.get('expect_failure'),'stage':result.get('stage'),
                    'run_id':run['id'],'attempt':run.get('run_attempt',1),'source_sha':run['tested_sha'],
@@ -432,12 +435,18 @@ def evidence_index(evidence,output,repository):
                 nav+='<details><summary>Original evidence: raw events, transactions, logs, plan and filelists</summary><ul>'
                 nav+=''.join(f'<li><a href="{escape(name)}">{escape(name)}</a></li>' for name in sorted(assets))+'</ul></details>'
                 (destination/'report.html').write_text(html.replace('<main>','<main>'+nav,1))
+                if protocol_data and not (destination/'protocols.html').is_file():
+                    raise ValueError('generic protocol report JSON lacks its matching webpage')
                 transactions=trace['sections']['axi']['transactions']
                 entry['observations']=len(transactions)
                 entry['expected_errors']=sum(r.get('error_intent')=='expected' and r['role']=='initiator' for r in transactions)
                 entry['undeclared_errors']=sum(r.get('error_intent')=='undeclared' and r['role']=='initiator' for r in transactions)
                 entry['annotations']=trace['run'].get('annotations_available',False)
             else:
+                if protocol_data and (destination/'protocols.html').is_file():
+                    (destination/'report.html').write_text((destination/'protocols.html').read_text())
+                    entries.append(entry)
+                    continue
                 body='<p>This scope publishes its actual result, plan, filelist and logs. It has no AXI traffic observer.</p>'
                 body+=f'<p><strong>Regression {"PASS" if entry["passed"] else "FAIL"}</strong> · {escape(entry["engine"])} · tested SHA <code>{escape(entry["source_sha"])}</code></p>'
                 if entry['expected_failure']:body+='<p>Expected-failure case: '+escape(entry['expected_failure'])+'</p>'
