@@ -1,43 +1,51 @@
 name: Heterogeneous SoC AXI and CPU verification
 
 on:
-  push:
-    paths:
-      - 'config/**'
-      - 'gen/**'
-      - 'README.md'
-      - 'AGENTS.md'
-      - 'docs/**'
-      - 'tools/**'
-      - 'tests/**'
-      - 'dv/**'
-      - 'rtl/**'
-      - 'Makefile'
-      - 'Bender.yml'
-      - 'Bender.lock'
-      - '.github/actions/setup-bender/**'
-      - '.github/workflows/dv-soc.yml'
   pull_request:
+    branches: [main]
     paths:
-      - 'config/**'
+      - 'config/soc.yaml'
+      - 'config/regression.yaml'
+      - 'config/interface_contracts.yaml'
+      - 'config/ip.lock.yaml'
+      - 'config/examples/**'
       - 'gen/**'
-      - 'README.md'
-      - 'tools/**'
-      - 'tests/**'
+      - 'tools/bootgen.py'
+      - 'tools/chip_bootgen.py'
+      - 'tools/fabric_config.py'
+      - 'tools/floonoc_gen.py'
+      - 'tools/noc_backends.py'
+      - 'tools/socgen.py'
+      - 'tools/full_chip_gen.py'
+      - 'tools/generate.py'
+      - 'tools/interface_contracts.py'
+      - 'tools/regress.py'
+      - 'tools/sim_cocotb.py'
+      - 'tools/ip_fetch.py'
+      - 'tests/test_boot_policy.py'
+      - 'tests/test_socgen.py'
+      - 'tests/test_regression.py'
+      - 'tests/test_full_chip_gen.py'
+      - 'tests/test_interface_contracts.py'
+      - 'tests/test_fabric_config.py'
+      - 'tests/test_floonoc_gen.py'
+      - 'tests/test_supernoc_gen.py'
       - 'dv/**'
       - 'rtl/**'
+      - '!rtl/memory/ddr4/**'
       - 'Makefile'
       - 'Bender.yml'
       - 'Bender.lock'
       - '.github/actions/setup-bender/**'
       - '.github/workflows/dv-soc.yml'
   workflow_dispatch:
-  workflow_run:
-    workflows: [Publish pinned Xezim Linux executable]
-    types: [completed]
 
 permissions:
   contents: read
+
+concurrency:
+  group: dv-soc-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   simulate:

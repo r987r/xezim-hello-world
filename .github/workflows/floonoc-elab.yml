@@ -1,25 +1,8 @@
 name: FlooNoC structural RTL compile and elaborate
 
 on:
-  push:
-    paths:
-      - 'gen/noc/floonoc/**'
-      - 'tools/floonoc_gen.py'
-      - 'tools/supernoc_gen.py'
-      - 'gen/supernoc/**'
-      - 'Bender.yml'
-      - 'Bender.lock'
-      - '.github/actions/setup-bender/**'
-      - 'tools/regress.py'
-      - 'tools/sim_cocotb.py'
-      - 'tools/axi_report.py'
-      - 'tools/templates/**'
-      - 'dv/common/axi_trace.py'
-      - 'dv/supernoc/**'
-      - 'tests/test_supernoc_gen.py'
-      - 'config/**'
-      - '.github/workflows/floonoc-elab.yml'
   pull_request:
+    branches: [main]
     paths:
       - 'gen/noc/floonoc/**'
       - 'tools/floonoc_gen.py'
@@ -35,12 +18,20 @@ on:
       - 'dv/common/axi_trace.py'
       - 'dv/supernoc/**'
       - 'tests/test_supernoc_gen.py'
-      - 'config/**'
+      - 'config/soc.yaml'
+      - 'config/regression.yaml'
+      - 'config/interface_contracts.yaml'
+      - 'config/ip.lock.yaml'
+      - 'config/examples/**'
       - '.github/workflows/floonoc-elab.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: floonoc-elab-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   elaborate:
