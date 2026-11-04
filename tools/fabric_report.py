@@ -468,9 +468,24 @@ def latency_table(report):
             "end_to_end_cycles": total,
             "evidence": evidence,
         })
+    eligible_periods = {o["clock_period_ps"]
+                        for route in report["routes"]
+                        for o in route.get("one_beat_stage_observations", [])
+                        if o.get("matches_site_source")
+                        and type(o.get("clock_period_ps")) is int
+                        and o["clock_period_ps"] > 0}
+    common_period = next(iter(eligible_periods)) if len(eligible_periods) == 1 else None
     return {
         "schema_version": 1,
         "units": "simulation_reference_clock_cycles",
+        "reference_clock": {
+            "domain": "soc_single_clock", "signal": "clk_i",
+            "measured_period_ps": common_period,
+            "measured_frequency_hz": (10**12 / common_period
+                                      if common_period is not None else None),
+            "hardware_frequency_hz": None,
+            "is_common_in_eligible_evidence": bool(common_period),
+        },
         "stat_order": ["min", "avg", "max"],
         "mesh_columns": mesh_columns,
         "stage_scope": "AXI_ingress_to_egress_request_plus_response",
@@ -513,6 +528,7 @@ def attach_one_beat_observations(report, entries, output, source_sha):
         # that only when the trusted collector verified both trees.
         identity = ("exact_sha" if entry["source_sha"] == source_sha else
                     "verified_same_tree" if entry.get("verified_site_source_sha") == source_sha
+                    else "verified_rtl_inputs" if entry.get("verified_fabric_source_sha") == source_sha
                     else None)
         matched = defaultdict(list)
         source_samples = defaultdict(list)
@@ -545,9 +561,10 @@ def attach_one_beat_observations(report, entries, output, source_sha):
                 "scope": "initiator_end_to_end_B_or_RLAST_all_test_phases",
             })
 
-        # Never project stage timing from an older architecture version.
-        # The test source SHA must exactly match the architecture being
-        # published. The run must measure one positive clock period itself.
+        # Do not project stage timing from different RTL/DV execution inputs.
+        # Either the SHA matches exactly or trusted collection must attest
+        # identical Git trees / matching checked-in hardware and DV inputs.
+        # The run must measure its own positive clock period.
         clock_ps = run.get("clock_period_ps")
         if (identity is None or
                 type(clock_ps) is not int or clock_ps <= 0 or

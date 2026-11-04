@@ -257,6 +257,11 @@ class FabricExplorerTests(unittest.TestCase):
                    'target':'supernoc','engine':'cocotb-verilator',
                    'merged_pr':17, 'verified_site_source_sha':site_sha}
             fabric_report.attach_one_beat_observations(data,[entry],Path(tmp),site_sha)
+            rtl_data=copy.deepcopy(self.report)
+            rtl_entry={**entry, 'verified_site_source_sha':None,
+                       'verified_fabric_source_sha':site_sha}
+            fabric_report.attach_one_beat_observations(
+                rtl_data,[rtl_entry],Path(tmp),site_sha)
         obs=route['one_beat_stage_observations']
         self.assertEqual(len(obs),1)
         self.assertEqual(obs[0]['source_sha'],tested_sha)
@@ -269,6 +274,19 @@ class FabricExplorerTests(unittest.TestCase):
         self.assertEqual(row['end_to_end_cycles']['read']['run_sha'],tested_sha)
         self.assertEqual(row['end_to_end_cycles']['read']['source_equivalence'],
                          'verified_same_tree')
+        ref=data['latency_table']['reference_clock']
+        self.assertEqual(ref['measured_period_ps'],10000)
+        self.assertEqual(ref['measured_frequency_hz'],100000000)
+        self.assertIsNone(ref['hardware_frequency_hz'])
+        rtl_route=next(r for r in rtl_data['routes'] if r['id']==route['id'])
+        self.assertEqual(rtl_route['one_beat_stage_observations'][0]['source_equivalence'],
+                         'verified_rtl_inputs')
+        rtl_row=next(x for x in rtl_data['latency_table']['rows']
+                     if x['route_id']==route['id'])
+        self.assertEqual(rtl_row['end_to_end_cycles']['read']['avg_cycles'],9)
+        self.assertEqual(rtl_row['end_to_end_cycles']['read']['run_sha'],tested_sha)
+        self.assertEqual(rtl_row['end_to_end_cycles']['read']['source_equivalence'],
+                         'verified_rtl_inputs')
 
     def test_newest_verified_run_selected_irrespective_of_artifact_order(self):
         data=copy.deepcopy(self.report)

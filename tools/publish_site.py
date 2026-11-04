@@ -5,6 +5,8 @@ Evidence always retains its own workflow run, attempt and tested commit.
 The builder never treats an older green run as current-source validation.
 """
 import argparse
+import base64
+import binascii
 from datetime import datetime, timezone
 import hashlib
 from html import escape
@@ -165,12 +167,121 @@ def verified_pr_tree_equivalent(client, run, tested_sha, site_sha, cache=None):
     return bool(cache[tested_sha]) and cache[tested_sha] == cache[site_sha]
 
 
+
+# The equivalence fingerprint is a simulation *input* manifest, rather than
+# a whole-repository commit SHA. Documentation and report presentation do not
+# alter tested RTL, AXI traffic, clocks or the generated source files.
+# All unlisted files remain fingerprinted (safe default).
+FABRIC_EXCLUDED_PREFIXES = (
+    'docs/', 'tests/', '.github/workflows/', 'tools/templates/site_',
+    # Staged DDR4 generation/test *not* in the active Bender NoC or chip
+    # simulation source lists. Future integration changes the included
+    # Bender/config/generated RTL input hashes and invalidates old evidence.
+    'rtl/memory/ddr4/',
+)
+FABRIC_EXCLUDED_FILES = {
+    'README.md', 'AGENTS.md', 'tools/publish_site.py',
+    'tools/fabric_report.py', 'tools/templates/site.html',
+    'tools/templates/run_report.html',
+}
+# CI execution jobs (tool versions and invocation) must also be identical.
+# Trigger/scheduling-only edits do not alter simulated timing and are ignored.
+FABRIC_EXECUTION_WORKFLOWS = ('floonoc-elab.yml', 'full-chip.yml')
+FABRIC_REQUIRED_INPUTS = frozenset({
+    'config/soc.yaml', 'config/interface_contracts.yaml',
+    'config/regression.yaml', 'config/ip.lock.yaml',
+    'dv/supernoc/test_supernoc.py', 'dv/common/axi_trace.py',
+    'tools/supernoc_gen.py', 'tools/floonoc_gen.py',
+    'tools/axi_report.py', 'tools/regress.py', 'tools/sim_cocotb.py',
+    'gen/supernoc/soc_noc.sv', 'gen/supernoc/axi_monitors.json',
+    'gen/noc/floonoc/manifest.json', 'Bender.yml', 'Bender.lock',
+    'requirements.txt',
+})
+
+
+def fabric_execution_fingerprint(client, commit_sha, cache=None):
+    """SHA-256 of the Git-authenticated NoC simulation and RTL inputs.
+
+    A changed config, generated RTL, AXI monitor, model, test, clock, toolchain
+    pin or unexpected file invalidates reuse. Exclude only known
+    non-executable files. Reject incomplete or malformed Git tree listings.
+    """
+    if not isinstance(commit_sha, str) or not re.fullmatch(r'[a-f0-9]{40}', commit_sha):
+        return None
+    cache = {} if cache is None else cache
+    if commit_sha in cache:
+        return cache[commit_sha]
+    cache[commit_sha] = None
+    try:
+        commit = client.request(f'/repos/{client.repository}/git/commits/{commit_sha}')
+        tree_sha = (commit.get('tree') or {}).get('sha')
+        if not isinstance(tree_sha, str) or not re.fullmatch(r'[a-f0-9]{40}', tree_sha):
+            return None
+        tree = client.request(f'/repos/{client.repository}/git/trees/{tree_sha}?recursive=1')
+        if tree.get('truncated') or not isinstance(tree.get('tree'), list):
+            return None
+        files = {}
+        for item in tree['tree']:
+            if item.get('type') != 'blob':
+                continue
+            path, blob_sha = item.get('path'), item.get('sha')
+            if not isinstance(path, str) or not isinstance(blob_sha, str):
+                return None
+            if path in FABRIC_EXCLUDED_FILES or path.startswith(FABRIC_EXCLUDED_PREFIXES):
+                continue
+            if not re.fullmatch(r'[a-f0-9]{40}', blob_sha) or path in files:
+                return None
+            files[path] = blob_sha
+        if not FABRIC_REQUIRED_INPUTS.issubset(files):
+            return None
+        workflow_jobs = {}
+        for name in FABRIC_EXECUTION_WORKFLOWS:
+            wf_path = '.github/workflows/' + name
+            wf_sha = next((item['sha'] for item in tree['tree']
+                           if item.get('path') == wf_path and item.get('type') == 'blob'), None)
+            if not isinstance(wf_sha, str) or not re.fullmatch(r'[a-f0-9]{40}', wf_sha):
+                return None
+            blob = client.request(f'/repos/{client.repository}/git/blobs/{wf_sha}')
+            if blob.get('encoding') != 'base64':
+                return None
+            workflow = yaml.safe_load(base64.b64decode(blob['content']).decode('utf-8'))
+            if not isinstance(workflow, dict) or not isinstance(workflow.get('jobs'), dict):
+                return None
+            workflow_jobs[name] = workflow['jobs']
+        blob_manifest = json.dumps({'files': files, 'jobs': workflow_jobs},
+                                   sort_keys=True, separators=(',', ':')).encode()
+        result = {'policy': 'fabric-execution-inputs-v2',
+                  'digest': hashlib.sha256(blob_manifest).hexdigest(),
+                  'file_count': len(files)}
+        cache[commit_sha] = result
+        return result
+    except (urllib.error.HTTPError, KeyError, TypeError, ValueError, binascii.Error,
+            UnicodeDecodeError, yaml.YAMLError):
+        return None
+
+
+def verified_fabric_execution_equivalent(client, run, tested_sha, site_sha, cache=None):
+    """Accept equivalent RTL only from already trusted CI provenance."""
+    if not isinstance(tested_sha, str) or not isinstance(site_sha, str):
+        return False
+    if run.get('head_branch') == 'main':
+        if tested_sha != run.get('head_sha'):
+            return False
+    elif not verified_pr_test_commit(client, run, tested_sha):
+        return False
+    tested = fabric_execution_fingerprint(client, tested_sha, cache)
+    published = fabric_execution_fingerprint(client, site_sha, cache)
+    return bool(tested and published and tested == published)
+
+
+
 def collect(client,config,destination):
     destination.mkdir(parents=True,exist_ok=True)
     selected={w['file']:[] for w in config['workflows']}
     merged_heads=merged_main_pr_heads(client)
     site_sha=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip()
     tree_cache={}
+    fabric_cache={}
     # Only trusted main and source-SHA-matched merged PR workflow runs are
     # published. PR code and artifacts are not executed in this trusted job.
     for page in range(1,6):
@@ -230,6 +341,18 @@ def collect(client,config,destination):
                         notes.append(f'Run {run["id"]}, artifact {artifact["name"]}: excluded ({invalid})')
                         continue
                     run['verified_tested_shas']=sorted(verified)
+                # For clean CI captures, attest execution-input equivalence
+                # against the current published source using authenticated Git
+                # blob IDs. Never infer that a changed RTL still has old timing.
+                for trace_file in target.rglob('axi-transactions.json'):
+                    trace_run=json.loads(trace_file.read_text()).get('run',{})
+                    tested_sha=trace_run.get('commit')
+                    if (trace_run.get('dirty') is False
+                            and str(trace_run.get('workflow_run_id'))==str(run['id'])
+                            and str(trace_run.get('workflow_attempt'))==str(run.get('run_attempt',1))
+                            and verified_fabric_execution_equivalent(
+                                client,run,tested_sha,site_sha,fabric_cache)):
+                        run.setdefault('verified_equivalent_fabric_shas',{})[tested_sha]=site_sha
                 dump(folder/('artifact-'+str(artifact['id'])+'.json'),artifact)
             dump(folder/'run.json',run)
     dump(destination/'collection.json',{'notes':notes})
@@ -296,6 +419,12 @@ def evidence_index(evidence,output,repository):
                         matches.get(tested_sha) and
                         re.fullmatch(r'[a-f0-9]{40}',matches[tested_sha])):
                     entry['verified_site_source_sha']=matches[tested_sha]
+                # Only the trusted collector sets this attestation using
+                # the checked-in hardware/DV execution-input fingerprint.
+                fabric_matches=source.get('verified_equivalent_fabric_shas') or {}
+                if (fabric_matches.get(tested_sha)
+                        and re.fullmatch(r'[a-f0-9]{40}',fabric_matches[tested_sha])):
+                    entry['verified_fabric_source_sha']=fabric_matches[tested_sha]
                 render_report(trace,destination/'report.html')
                 html=(destination/'report.html').read_text()
                 up=os.path.relpath(output,destination).replace(os.sep,'/')

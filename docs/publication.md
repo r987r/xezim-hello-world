@@ -12,7 +12,7 @@ for an already enabled site using the deployment job's `pages: write` token.
 - Overview: implementation limits, latest workflow status and the same generated
   `gen/diagrams/noc-hierarchy.svg` used by the README. No second architecture
   diagram is maintained.
-- Fabric Explorer: address-accurate initiator-to-target route table, AXI port inventory with planned outstanding budgets and physically generated XY router/link paths. Controlled one-beat RTL timings attach only to clean, complete serial traces from the exact published source SHA or a verified identical Git source tree tested in a merged PR. They decompose observed AXI mesh boundaries into request/return deltas and combined terminal service; internal router cycles and isolated HBM/DDR controller latency remain unmeasured. Older or stressed observations retain their original SHA and end-to-end-only scope.
+- Fabric Explorer: address-accurate initiator-to-target route table, AXI port inventory with planned outstanding budgets and physically generated XY router/link paths. Controlled one-beat RTL timings attach only to clean, complete serial traces from the exact published SHA, an identical verified Git tree, or verified identical RTL/simulation execution inputs from trusted CI. They decompose observed AXI mesh boundaries into request/return deltas and combined terminal service; internal router cycles and isolated HBM/DDR controller latency remain unmeasured. Older or stressed observations retain their original SHA and end-to-end-only scope.
 - Wide latency comparison: one source/destination row per route, with dynamic
   per-plane NoC columns (compute0, compute1, global, memory0 when present),
   terminal AXI read/write service and end-to-end read/write columns.
@@ -53,6 +53,12 @@ run never means newer source passed. A failed workflow without target artifacts
 still appears in workflow history. Unavailable/expired evidence is reported as
 missing, never converted into a pass. Reports show the regression's acceptance
 result: a required-negative test passes only when its exact named failure occurs.
+
+## Current-RTL latency evidence and clock reference
+
+The verified RTL equivalence fingerprint is derived from Git-authenticated blob IDs of every checked-in execution input (SoC config, generated NoC/AXI RTL and manifests, RTL models, BFM/AXI capture and clock code, simulator orchestration, pinned tool/dependency files and job execution steps). Documentation, report rendering and scheduling-only workflow updates do not invalidate measured RTL timing. A changed execution input invalidates reuse immediately. Exact tested SHAs, CI run IDs, raw ps timestamps and measured 10 ns simulation periods are preserved; a reused capture is labeled **verified current RTL inputs**, not portrayed as a newly executed test. This is a current-RTL functional equivalence check for the existing scope, not a proof about fabricated hardware or CDC. Relevant fabric report changes trigger the real super-NoC verification gate on PRs to main.
+
+The shared single-clock simulation drives `clk_i`; the captured period is 10,000 ps (10 ns), corresponding to a **100 MHz simulation reference clock**. This value is measured in the AXI capture and displayed alongside min/average/max cycles, with original ps durations retained. No physical device clock frequency is asserted. When multiple clock domains are introduced, route timing must be normalized using the relevant observed period or common timebase before comparing path cycles.
 
 ## Collection, retention and reproducibility
 
