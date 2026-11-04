@@ -44,6 +44,9 @@ class TrafficObserver:
         self.channels = Counter({c: 0 for c in CHANNELS})
         self.wishbone = Counter()
         self.rlast_count = 0
+        self.wlast_count = 0
+        self.aw_expected_beats = 0
+        self.ar_expected_beats = 0
         self.samples = 0
         self.event_count = 0
         self.closed = False
@@ -107,6 +110,12 @@ class TrafficObserver:
                 self.channels[channel] += 1
                 if channel == "r" and int(port["last"]):
                     self.rlast_count += 1
+                if channel == "w" and int(port["last"]):
+                    self.wlast_count += 1
+                if channel == "aw":
+                    self.aw_expected_beats += int(port["len"]) + 1
+                if channel == "ar":
+                    self.ar_expected_beats += int(port["len"]) + 1
                 payload = {k: int(port[k]) for k in PAYLOAD[channel]}
                 self.last_by_channel[channel] = {"cycle": self.samples,
                                                  "phase": self.phase, **payload}
@@ -150,6 +159,12 @@ class TrafficObserver:
             raise AssertionError("AXI AW and B counts mismatch: incomplete write traffic")
         if self.channels["ar"] != self.rlast_count:
             raise AssertionError("AXI AR and RLAST counts mismatch: incomplete read traffic")
+        if self.channels["aw"] != self.wlast_count:
+            raise AssertionError("AXI AW and WLAST counts mismatch: incomplete write bursts")
+        if self.channels["w"] != self.aw_expected_beats:
+            raise AssertionError("AXI AWLEN and W beat counts mismatch")
+        if self.channels["r"] != self.ar_expected_beats:
+            raise AssertionError("AXI ARLEN and R beat counts mismatch")
         if self.overflows:
             raise AssertionError("DDR4 passive capture overflowed")
 
@@ -174,6 +189,9 @@ class TrafficObserver:
             "continuous_capture": all(self.phase_cycles[p] > 0 for p in PHASES),
             "sampled_cycles": self.samples, "phases": dict(self.phase_cycles),
             "channels": dict(self.channels), "rlast_count": self.rlast_count,
+            "wlast_count": self.wlast_count,
+            "expected_write_beats": self.aw_expected_beats,
+            "expected_read_beats": self.ar_expected_beats,
             "wishbone": dict(self.wishbone),
             "event_count": self.event_count, "overflows": self.overflows,
             "last_by_channel": self.last_by_channel,
@@ -245,6 +263,10 @@ def verify_capture(directory: Path) -> dict:
         raise ValueError("DDR4 observer missing one or more AXI channel handshakes")
     if channels["aw"] != channels["b"] or channels["ar"] != summary.get("rlast_count"):
         raise ValueError("DDR4 observer detected incomplete AXI write/read traffic")
+    if channels["aw"] != summary.get("wlast_count") or channels["w"] != summary.get("expected_write_beats"):
+        raise ValueError("DDR4 observer detected incomplete AXI write burst payloads")
+    if channels["r"] != summary.get("expected_read_beats"):
+        raise ValueError("DDR4 observer detected incomplete AXI read burst payloads")
     wb = summary.get("wishbone", {})
     if wb.get("writes", 0) < 1 or wb.get("reads", 0) < 1:
         raise ValueError("DDR4 observer missed Wishbone initialization traffic")
