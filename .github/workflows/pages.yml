@@ -49,7 +49,7 @@ jobs:
           python-version: '3.12'
       - run: python3 -m pip install -r requirements.txt
       - name: Verify publication, CI trigger and report semantics
-        run: python3 -m unittest tests.test_ci_workflows tests.test_publication tests.test_merged_pr_evidence tests.test_axi_report tests.test_fabric_report tests.test_protocol_report tests.test_design_explorer -v
+        run: python3 -m unittest tests.test_ci_workflows tests.test_publication tests.test_merged_pr_evidence tests.test_axi_report tests.test_fabric_report tests.test_protocol_report tests.test_design_explorer tests.test_design_netlist -v
       - name: Build offline PR or manual branch preview
         if: (github.event_name == 'pull_request' && github.event.action != 'closed') || (github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main')
         run: python3 tools/publish_site.py
