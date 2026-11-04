@@ -142,6 +142,15 @@ def generate(contract: dict, output: Path) -> Path:
     env = os.environ.copy()
     env["PYTHONPATH"] = str(source) + os.pathsep + env.get("PYTHONPATH", "")
     subprocess.run(generator_argv(output), cwd=ROOT, env=env, check=True)
+    init_file = output / "ddr4_init_plan.json"
+    require(init_file.is_file(),
+            f"missing upstream-derived DDR4 init plan: {init_file}")
+    init_info = json.loads(init_file.read_text())
+    require(init_info.get("status") == "plan-only-not-executed", "invalid DDR4 init plan status")
+    require(init_info.get("clock_hz") == int(float(read_yaml(PROFILE)["sys_clk_freq"])),
+            "DDR4 init plan does not match controller clock")
+    require(len(init_info.get("steps", [])) >= 10,
+            "upstream DDR4 init plan is missing required phases")
     core = output / "gateware" / f"{CORE_NAME}.v"
     require(core.is_file(), f"LiteDRAM generator did not produce {core}")
     # A mismatch in local AXI address bits risks silently aliasing DDR memory.
@@ -153,7 +162,7 @@ def generate(contract: dict, output: Path) -> Path:
             artifacts[str(path.relative_to(output))] = hashlib.sha256(path.read_bytes()).hexdigest()
     result = {"status": "generated-not-simulated", "source": contract,
               "generator": "sim_model.py --sim (pinned LiteDRAM, bounded simulation geometry)", "config": str(PROFILE.relative_to(ROOT)),
-              "top": CORE_NAME, "ports": ports, "files_sha256": artifacts,
+              "top": CORE_NAME, "ports": ports, "init_plan": "ddr4_init_plan.json", "files_sha256": artifacts,
               "warning": "No AXI transactions, DDR4 initialization, or timing have yet been verified"}
     manifest = output / "ddr4_manifest.json"
     manifest.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
