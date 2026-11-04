@@ -287,6 +287,10 @@ def run_target(name, test, resolver, options):
     if test.get('firmware_mode') == 'cpu_dma':
         # Compile real C firmware into an alternate immutable FLASH image;
         # change only this run's generated top/checker, not tracked gen/.
+        # Script invocation from tools/ otherwise omits the repository root
+        # from sys.path; the shared tools.memory_plan namespace needs it.
+        if str(ROOT) not in sys.path:
+            sys.path.insert(0, str(ROOT))
         from cpu_dma_firmware import prepare as prepare_cpu_dma
         cfg = yaml.safe_load((ROOT/'config/soc.yaml').read_text())
         noc_manifest = json.loads((ROOT/'gen/supernoc/manifest.json').read_text())
