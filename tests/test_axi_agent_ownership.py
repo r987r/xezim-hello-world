@@ -67,8 +67,10 @@ class AgentOwnershipTests(unittest.TestCase):
         boot = next(node for node in tree.body
                     if isinstance(node, ast.AsyncFunctionDef)
                     and node.name == "coordinated_cold_boot")
-        masters = [(node, name) for node, name in calls(src)
-                   if name == "AxiMaster"]
+        masters = [node for node in ast.walk(boot)
+                   if isinstance(node, ast.Call)
+                   and isinstance(node.func, ast.Name)
+                   and node.func.id == "AxiMaster"]
         self.assertEqual(len(masters), 1)
         guards = [node for node in ast.walk(boot)
                   if isinstance(node, ast.If)
@@ -77,7 +79,7 @@ class AgentOwnershipTests(unittest.TestCase):
                   and isinstance(node.test.operand, ast.Name)
                   and node.test.operand.id == "cpu_dma_mode"]
         self.assertEqual(len(guards), 1)
-        self.assertIn(masters[0][0], list(ast.walk(guards[0])))
+        self.assertIn(masters[0], list(ast.walk(guards[0])))
         self.assertIn("assert probe is None", src)
         gen = (ROOT/"tools/full_chip_gen.py").read_text()
         self.assertIn(".ProbeEnable(1'b0), .DmaEnable(1'b1)", gen)
