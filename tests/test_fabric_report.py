@@ -86,24 +86,98 @@ class FabricExplorerTests(unittest.TestCase):
             chip=json.loads((ROOT/'gen/chip/manifest.json').read_text())
             fabric_report.build(soc,knobs,manifest,networks,s,chip,ports)
 
+    def test_serial_baseline_measures_mesh_forward_return_and_terminal_boundary(self):
+        from collections import OrderedDict
+        data=copy.deepcopy(self.report)
+        route=next(r for r in data['routes']
+                   if r['source']=='compute0_local_data.cpu' and r['target']=='memory0.hbm0')
+        catalog=json.loads((ROOT/'gen/supernoc/axi_monitors.json').read_text())
+        mon_by_endpoint={endpoint:m for m in catalog['monitors']
+                         for endpoint in m['endpoints']}
+        endpoints=[route['source']]+[st['to'] for st in route['stages'] if st['kind']=='mesh']
+        monitors=OrderedDict((mon_by_endpoint[ep]['id'],mon_by_endpoint[ep]) for ep in endpoints)
+        self.assertEqual(len(monitors),4)
+        time_pairs=[(100000,500000),(140000,460000),
+                    (180000,420000),(220000,380000)]
+        phase='Fabric baseline: single-outstanding one-beat'
+        addr='0x100000080'
+        rows=[]
+        for (mid, m), (start,end) in zip(monitors.items(), time_pairs):
+            rows.append({'monitor':mid,'role':m['role'],'status':'complete',
+                         'expected_beats':1,'issues':[],'response':'0x0',
+                         'latency_ps':end-start,'start_ps':start,'end_ps':end,
+                         'address':addr,'operation':'read','plane':'data',
+                         'phase':phase})
+        self.assertEqual(rows[0]['monitor'],route['source'])
+        payload={'run':{'capture_bound':True,'capture_overflow':False,
+                        'dirty':False,'clock_period_ps':10000},
+                 'sections':{'axi':{'transactions':rows,
+                                    'monitors':catalog['monitors']}}}
+        sha='f'*40
+        with tempfile.TemporaryDirectory() as tmp:
+            folder=Path(tmp)/'runs/9-1/noc';folder.mkdir(parents=True)
+            (folder/'axi-transactions.json').write_text(json.dumps(payload))
+            entry={'axi':True,'passed':True,'assets':['axi-transactions.json'],
+                   'path':'runs/9-1/noc/report.html','source_sha':sha,
+                   'target':'supernoc','engine':'cocotb-verilator'}
+            fabric_report.attach_one_beat_observations(data,[entry],Path(tmp),sha)
+        obs=route['one_beat_stage_observations']
+        self.assertEqual(len(obs),1)
+        self.assertEqual(obs[0]['sample_count'],1)
+        self.assertEqual(obs[0]['end_to_end']['median_cycles'],40)
+        stages=obs[0]['stage_metrics']
+        self.assertEqual(len(stages),4)
+        self.assertEqual([s['sum_stats']['median_cycles'] for s in stages],
+                         [8,8,8,16])
+        self.assertEqual([s['request_stats']['median_cycles'] for s in stages[:3]],
+                         [4,4,4])
+        self.assertEqual([s['response_stats']['median_cycles'] for s in stages[:3]],
+                         [4,4,4])
+        self.assertEqual(stages[-1]['kind'],'terminal_axi_service')
+        self.assertIn('downstream',stages[-1]['note'])
+
+    def test_serial_baseline_does_not_project_historical_timings(self):
+        data=copy.deepcopy(self.report)
+        route=next(r for r in data['routes']
+                   if r['source']=='compute0_local_data.cpu' and r['target']=='compute0.sram')
+        catalog=json.loads((ROOT/'gen/supernoc/axi_monitors.json').read_text())
+        tx={'monitor':route['source'],'role':'initiator','status':'complete',
+            'expected_beats':1,'issues':[],'response':'0x0','latency_ps':30000,
+            'start_ps':100000,'end_ps':130000,'address':'0x10000000',
+            'operation':'read','plane':'data',
+            'phase':'Fabric baseline: single-outstanding one-beat'}
+        payload={'run':{'capture_bound':True,'capture_overflow':False,
+                        'dirty':False,'clock_period_ps':10000},
+                 'sections':{'axi':{'transactions':[tx],'monitors':catalog['monitors']}}}
+        with tempfile.TemporaryDirectory() as tmp:
+            folder=Path(tmp)/'runs/9-1/noc';folder.mkdir(parents=True)
+            (folder/'axi-transactions.json').write_text(json.dumps(payload))
+            entry={'axi':True,'passed':True,'assets':['axi-transactions.json'],
+                   'path':'runs/9-1/noc/report.html','source_sha':'f'*40,
+                   'target':'supernoc','engine':'cocotb-verilator'}
+            fabric_report.attach_one_beat_observations(data,[entry],Path(tmp),'a'*40)
+        self.assertEqual(len(route['one_beat_observations']),1)
+        self.assertEqual(route['one_beat_stage_observations'],[])
+
     def test_only_bound_single_beat_successful_current_evidence_is_measured(self):
         data=copy.deepcopy(self.report)
         source='compute0_local_data.cpu'
         fixture={
-            'run':{'capture_bound':True,'capture_overflow':False,'dirty':False},
+            'run':{'capture_bound':True,'capture_overflow':False,'dirty':False,
+                   'clock_period_ps':10000},
             'sections':{'axi':{'transactions':[
                 {'monitor':source,'role':'initiator','status':'complete','expected_beats':1,
                  'issues':[],'response':'0x0','latency_ps':140,'address':'0x10000000',
-                 'operation':'read','plane':'data'},
+                 'operation':'read','plane':'data','start_ps':100,'end_ps':240},
                 {'monitor':source,'role':'initiator','status':'complete','expected_beats':1,
                  'issues':[],'response':'0x0','latency_ps':180,'address':'0x10000000',
-                 'operation':'read','plane':'data'},
+                 'operation':'read','plane':'data','start_ps':500,'end_ps':680},
                 {'monitor':source,'role':'initiator','status':'complete','expected_beats':1,
                  'issues':[],'response':'0x2','latency_ps':200,'address':'0x10000000',
-                 'operation':'read','plane':'data'},
+                 'operation':'read','plane':'data','start_ps':800,'end_ps':1000},
                 {'monitor':source,'role':'initiator','status':'complete','expected_beats':2,
                  'issues':[],'response':'0x0','latency_ps':400,'address':'0x10000000',
-                 'operation':'read','plane':'data'}
+                 'operation':'read','plane':'data','start_ps':1100,'end_ps':1500}
             ]}}
         }
         with tempfile.TemporaryDirectory() as tmp:
