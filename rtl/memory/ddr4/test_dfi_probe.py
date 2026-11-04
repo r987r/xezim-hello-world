@@ -141,7 +141,47 @@ class InternalLatencyTests(unittest.TestCase):
         self.assertEqual(result["internal_stages"]["controller_ar_to_dfi_read"]["avg_cycles"], 2)
         self.assertEqual(result["internal_stages"]["dfi_read_to_bankmodel_access"]["avg_cycles"], 2)
         self.assertEqual(result["internal_stages"]["bankmodel_access_to_dfi_valid"]["avg_cycles"], 4)
-        self.assertEqual(result["internal_stages"]["controller_aw_to_dfi_write"]["avg_cycles"], 2)
+        self.assertEqual(result["internal_stages"]["controller_aw_to_dfi_write"]["status"], "unmeasured")
+
+    def test_deferred_dfi_write_does_not_get_false_axi_attribution(self):
+        # DFI WRITE from AW1 arrives after B1, during AW2's interval.
+        # A time-window algorithm would incorrectly assign it to AW2.
+        axi = {"transactions": [
+            {"operation":"write", "id":1, "address":0x4000,
+             "start_cycle":10, "end_cycle":20},
+            {"operation":"write", "id":2, "address":0x8000,
+             "start_cycle":22, "end_cycle":35},
+        ]}
+        events = [
+            mk_event("dfi_write", 25, bank=0),
+            mk_event("bankmodel_storage_write", 27, bank=0),
+            mk_event("dfi_write", 40, bank=1),
+            mk_event("bankmodel_storage_write", 42, bank=1),
+        ]
+        report = calculate_internal(axi, events, 10000)
+        self.assertEqual(report["internal_stages"]["controller_aw_to_dfi_write"]["status"],
+                         "unmeasured")
+        self.assertEqual(report["internal_stages"]["dfi_write_to_bankmodel_storage"]["samples"], 2)
+        self.assertEqual(report["internal_stages"]["dfi_write_to_bankmodel_storage"]["avg_cycles"], 2)
+        self.assertTrue(all(t["status"] == "unmeasured_axi_dfi_write_attribution"
+                            for t in report["transactions"]))
+        self.assertTrue(all("first_dfi_command_ps" not in t
+                            for t in report["transactions"]))
+
+    def test_ambiguous_same_bank_storage_refuses_fabricated_pairing(self):
+        axi = {"transactions": [
+            {"operation":"write","id":0,"address":0x0,"start_cycle":10,"end_cycle":20}
+        ]}
+        events = [
+            mk_event("dfi_write", 25, bank=2),
+            mk_event("bankmodel_storage_write", 27, bank=2),
+            mk_event("bankmodel_storage_write", 28, bank=2),
+        ]
+        report = calculate_internal(axi, events, 10000)
+        self.assertEqual(report["dfi_write_model_pairs"][0]["status"],
+                         "unmeasured_ambiguous_bank_storage")
+        self.assertEqual(report["internal_stages"]["dfi_write_to_bankmodel_storage"]["status"],
+                         "unmeasured")
 
     def test_overlap_is_explicitly_unmeasured(self):
         axi = {"transactions": [
