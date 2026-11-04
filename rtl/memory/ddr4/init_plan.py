@@ -84,6 +84,83 @@ def from_upstream(profile: dict, module_cls: type) -> dict:
     return plan
 
 
+def wishbone_script(plan: dict, csr_json: dict, delay_multiplier: int = 2) -> list[dict]:
+    """Make a standalone DFII start-up program from generated LiteDRAM data.
+
+    Follows LiteX liblitedram sdram_init() / software_control_on/off ordering.
+    The CSR map comes from the generated core, not hardcoded addresses.
+    BIOS cdelay units are loop counts, not clocks; the multiplier is a
+    conservative SIMULATION-ONLY approximation. Passing AXI data checks
+    is required before claiming the controller actually works.
+    """
+    if plan.get("status") != "plan-only-not-executed":
+        raise ValueError("expected unexecuted upstream DDR4 plan")
+    if not isinstance(delay_multiplier, int) or delay_multiplier < 2:
+        raise ValueError("DDR4 simulation delay multiplier must be at least 2")
+    steps = plan.get("steps")
+    if not isinstance(steps, list) or len(steps) < 10:
+        raise ValueError("incomplete upstream DDR4 JEDEC init sequence")
+    regs = csr_json.get("csr_registers", {})
+    required = (
+        "ddrctrl_init_done", "ddrctrl_init_error", "sdram_dfii_control",
+        "sdram_dfii_pi0_address", "sdram_dfii_pi0_baddress",
+        "sdram_dfii_pi0_command", "sdram_dfii_pi0_command_issue",
+    )
+    addresses: dict[str, int] = {}
+    for name in required:
+        reg = regs.get(name)
+        if not isinstance(reg, dict) or reg.get("type") != "rw" or reg.get("size") != 1:
+            raise ValueError(f"missing writable single-word generated CSR {name}")
+        address = reg.get("addr")
+        if type(address) is not int or address < 0 or address % 4:
+            raise ValueError(f"invalid generated CSR address for {name}")
+        addresses[name] = address
+    if len(set(addresses.values())) != len(addresses):
+        raise ValueError("generated DDR CSR addresses alias")
+
+    actions = []
+    def write(name: str, value: int):
+        actions.append({"op": "write", "csr": name, "byte_address": addresses[name],
+                        "value": value})
+    write("ddrctrl_init_done", 0)
+    write("ddrctrl_init_error", 0)
+    # Pinned LiteX sdram_software_control_on() writes CKE|ODT|RESET_N.
+    write("sdram_dfii_control", 0x0e)
+    mr_count = 0
+    for step in steps:
+        if not isinstance(step, dict):
+            raise ValueError("invalid DDR4 init plan step")
+        if type(step.get("address")) is not int or not 0 <= step["address"] < (1 << 15):
+            raise ValueError("DDR4 init address outside DFI command bus")
+        if type(step.get("bank")) is not int or not 0 <= step["bank"] < 8:
+            raise ValueError("DDR4 init bank outside allowed range")
+        if type(step.get("mask")) is not int or not 0 <= step["mask"] < 256:
+            raise ValueError("DDR4 init DFII mask invalid")
+        if type(step.get("upstream_delay_units")) is not int or step["upstream_delay_units"] < 0:
+            raise ValueError("DDR4 init delay invalid")
+        write("sdram_dfii_pi0_address", step["address"])
+        write("sdram_dfii_pi0_baddress", step["bank"])
+        if step["kind"] == "control":
+            write("sdram_dfii_control", step["mask"])
+        elif step["kind"] == "command":
+            write("sdram_dfii_pi0_command", step["mask"])
+            write("sdram_dfii_pi0_command_issue", 1)
+            if str(step.get("name", "")).startswith("Load Mode Register"):
+                mr_count += 1
+        else:
+            raise ValueError(f"unsupported DDR4 init kind: {step['kind']}")
+        if step["upstream_delay_units"]:
+            actions.append({"op": "wait", "cycles": step["upstream_delay_units"] * delay_multiplier,
+                            "source": step.get("name", "upstream step")})
+    if mr_count < 7:
+        raise ValueError("DDR4 mode-register sequence incomplete")
+    # Pinned LiteX sdram_software_control_off(): DFII_CONTROL_SEL alone.
+    write("sdram_dfii_control", 0x01)
+    # SW status gate, not a hardware proof of physical initialization.
+    write("ddrctrl_init_done", 1)
+    return actions
+
+
 def save(plan: dict, output_dir: Path) -> Path:
     path = output_dir / "ddr4_init_plan.json"
     path.write_text(json.dumps(plan, indent=2, sort_keys=True) + "\n")
