@@ -53,7 +53,7 @@ without substituting for real CPU execution.
 | `noc` | Verilator elaboration of every configured network, one connected-NoC traffic test, named routed corruption failure |
 | `compatibility` | Xezim compile-only probe of every configured network |
 | `diagnostics` | CPU fetch request activity and arithmetic simulator smoke |
-| `chip` | CPU-coordinated boot and AXI model readback, held-secondary negative, Xezim chip structural compilation |
+| `chip` | Dual real iDMA engines through all shared NoCs (CPUs held in reset; CPU0 AXI BFM preload/CSR submission), separate CPU cold boot, held-secondary negative, Xezim chip structural compilation |
 | `full` | All suites above; schema validation rejects an uncovered declared test |
 
 Every invocation checks generated-file drift before resolving RTL. The
@@ -135,8 +135,8 @@ See [chip boot](full-chip-boot.md).
 ## Pinned PULP iDMA RTL bring-up
 
 The `dma` suite is a separate **real Verilator/cocotb RTL** scope, not
-software-only descriptor-vector validation and not a claim of full-chip DMA
-integration. `make dv-dma` invokes the upstream-generated desc64 frontend and
+software-only descriptor-vector validation. Full-chip DMA has a distinct
+passing `chip-dma` gate (with CPU0 AXI BFMs, not executed CPU firmware). `make dv-dma` invokes the upstream-generated desc64 frontend and
 `rw_axi` backend with PULP AXI join/mux against cocotbext-axi memory targets.
 One 100-descriptor DDR transfer and one single-descriptor HBM transfer check
 payload data, descriptor writeback, final interrupt and idle-before-reclaim.
