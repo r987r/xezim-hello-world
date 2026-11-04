@@ -4,6 +4,7 @@ Drives generated Wishbone CSR interface and upstream DDR4 init commands.
 AXI data accesses must pass against actual controller/PHY, not AXI RAM.
 """
 from __future__ import annotations
+import itertools
 import json
 import os
 from pathlib import Path
@@ -166,6 +167,10 @@ async def ddr4_wishbone_init_axi_readwrite(dut):
     # channel source/sink tasks near reset, not after 1.2ms of DDR init.
     master = AxiMaster(AxiBus.from_prefix(dut, "user_port_axi_0"),
                        dut.user_clk, dut.user_rst, reset_active_level=True)
+    # Legitimate AXI read backpressure also avoids a single-cycle response
+    # disappearing at the Verilator/VPI read-monitor scheduling boundary.
+    # Keep the upstream AXI monitor and payload/response assertions enabled.
+    master.read_if.r_channel.set_pause_generator(itertools.cycle([1, 1, 1, 0, 0]))
     await tick(dut, 16)
     await initialize(dut)
     await tick(dut, 16)
