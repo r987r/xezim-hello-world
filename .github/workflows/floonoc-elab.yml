@@ -14,7 +14,7 @@ on:
       - 'tools/regress.py'
       - 'tools/sim_cocotb.py'
       - 'tools/axi_report.py'
-      - 'tools/templates/**'
+      - 'tools/templates/run_report.html'
       - 'dv/common/axi_trace.py'
       - 'dv/supernoc/**'
       - 'tests/test_supernoc_gen.py'
