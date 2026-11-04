@@ -1,6 +1,9 @@
 """Host phases observe real CPU0-coordinated firmware, never drive CPU results."""
 import json
+import os
 from pathlib import Path
+import yaml
+from tools.memory_plan import configured_regions
 
 import cocotb
 from cocotb.clock import Clock
@@ -13,7 +16,8 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 async def phase(dut, signal, name):
-    await with_timeout(RisingEdge(signal), 1000, 'us')
+    timeout = 5 if os.environ.get('SOC_CPU_DMA_MODE') == '1' else 1
+    await with_timeout(RisingEdge(signal), timeout, 'ms')
     dut._log.info('observed firmware phase %s complete', name)
     trace_phase('CPU '+name+' complete')
 
@@ -53,6 +57,39 @@ async def coordinated_cold_boot(dut):
     assert int(dut.hello_mask.value) == mask
     assert int(dut.check_mask.value) == mask
     assert int(dut.app_fetch.value) == mask
+    if os.environ.get('SOC_CPU_DMA_MODE') == '1':
+        # Same testbench and INIT/RUN/CHECK checker; no AXI BFM drives the
+        # CPU or memory. Real PicoRV32 has already called compiled C, which
+        # sends both engines' traffic through the configured NoCs.
+        assert int(dut.cpu_dma_success.value) == 1, (
+            "real CPU did not finish C DMA/checks")
+        assert int(dut.cpu_dma_evidence.value) == 0x600dc0de
+        plan = os.environ.get("SOC_RUN_PLAN")
+        assert plan, "missing shared AXI capture configuration"
+        events_file = Path(plan).parent / "axi-events.jsonl"
+        assert events_file.is_file(), "missing passive NoC AXI events"
+        regions = configured_regions(yaml.safe_load(
+            (ROOT/"config/soc.yaml").read_text()))
+        from tools.axi_report import read_events
+        events, issues = read_events(events_file)
+        assert not issues, f"bad AXI trace: {issues[:3]}"
+        actual = {target: {"ar": 0, "aw": 0}
+                  for target in ("memory0.ddr0","memory0.hbm0")}
+        for event in events:
+            if event.get("monitor") != "compute0_local_data.dma" or event.get("channel") not in ("ar","aw"):
+                continue
+            address = int(event["fields"]["addr"], 0)
+            for target in actual:
+                region = regions[target]
+                if region.base <= address < region.base + region.capacity:
+                    actual[target][event["channel"]] += 1
+        for target, counts in actual.items():
+            assert counts["aw"] > 0 and counts["ar"] > 0, (
+                f"real CPU DMA missing full-NoC DDR/HBM accepted writes+reads: {target}, {counts}")
+        trace_phase("CPU compiled C DMA complete: monitored DDR+HBM roundtrips")
+        dut._log.info("PASS fullchip: CPU-executed compiled C DMA, shared INIT/RUN/CHECK, "
+                      "DDR+HBM roundtrip, SRAM allocator and passive AXI monitors")
+        return
     # Only a verification manager occupies the not-yet-integrated DMA port.
     # It never drives SRAM/boot mailboxes. Distinct values detect model aliasing.
     expected = []
