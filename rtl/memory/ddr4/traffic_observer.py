@@ -239,6 +239,24 @@ async def observe_forever(dut, observer: TrafficObserver):
         observer.sample(read_pins(dut), sim_time_ns=int(get_sim_time(units="ns")))
 
 
+def clear_prior_capture(directory: Path):
+    """Prevent stale success artifacts from satisfying a new run's PASS gate.
+
+    Only remove explicitly named DDR4 runtime files in the selected isolated
+    output directory, never generated RTL or shared SoC artifacts.
+    """
+    output = Path(directory)
+    for name in ("ddr4_traffic_events.jsonl", "ddr4_traffic_summary.json",
+                 "ddr4_functional_result.json"):
+        target = output / name
+        if target.is_symlink():
+            raise ValueError(f"refusing symlinked DDR4 capture artifact: {name}")
+        if target.exists():
+            if not target.is_file():
+                raise ValueError(f"refusing non-file DDR4 capture artifact: {name}")
+            target.unlink()
+
+
 def verify_capture(directory: Path) -> dict:
     """Independent post-run gate: pass is impossible with missing coverage."""
     output = Path(directory)
