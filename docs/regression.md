@@ -53,7 +53,7 @@ without substituting for real CPU execution.
 | `noc` | Verilator elaboration of every configured network, one connected-NoC traffic test, named routed corruption failure |
 | `compatibility` | Xezim compile-only probe of every configured network |
 | `diagnostics` | CPU fetch request activity and arithmetic simulator smoke |
-| `chip` | Dual real iDMA engines through all shared NoCs (CPUs held in reset; CPU0 AXI BFM preload/CSR submission), separate CPU cold boot, held-secondary negative, Xezim chip structural compilation |
+| `chip` | Shared RTL plus (1) dual RTL iDMA CPU-BFM scope, (2) cold real-CPU INIT/RUN/CHECK, (3) opt-in compiled CPU0 C DMA during RUN with DDR/HBM roundtrip and passive AXI monitoring, (4) held-secondary negative, (5) Xezim structural compile |
 | `full` | All suites above; schema validation rejects an uncovered declared test |
 
 Every invocation checks generated-file drift before resolving RTL. The
