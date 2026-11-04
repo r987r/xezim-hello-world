@@ -184,3 +184,26 @@ Actual clock timestamps are in picoseconds, initially at one 100 MHz
 simulation clock. Full-chip DDR remains a separate opt-in integration PR.
 Tests and successful real-model CI evidence are required before asserting
 that these internal latency checkpoints are validated.
+
+### Existing DFI verification reuse (explicit audit)
+
+This PR does NOT implement a new DFI protocol VIP. It uses the existing
+pinned upstream LiteDRAM DFIPhaseModel, DFITimingsChecker (when enabled),
+SDRAMPHYModel and BankModel as the simulation/semantic owners. The small
+memory-local DFIProbe is only a read-only event/timestamp recorder; it
+must never be treated as DFI compliance verification.
+
+An open-source MIT-licensed cocotb DFIMonitor with packet queues and
+scoreboard exists in sean-galloway/RTLDesignSherpa-DV:
+https://github.com/sean-galloway/RTLDesignSherpa-DV/blob/main/src/CocoTBFramework/components/dfi/dfi_monitor.py
+
+However, it expects a single prefixed mc_dfi/phy_dfi bus with clock
+and DDR3-style RAS/CAS/WE decoding, whereas our pinned LiteDRAM generator
+exports four flattened DFI phases and DDR4 ACT_N. Reuse requires a
+validated four-phase adapter and correct DDR4 command handling, not
+blindly copying or inserting the monitor. Before adding protocol-checking
+features, prefer reusing this library or upstream LiteDRAM timing checks.
+
+The read-only timestamp tap is allowed to remain small and local, but
+no custom DFI driver, checker, DRAM state machine or PHY should be built.
+Internal latency results are provisional until actual CI proves them.
