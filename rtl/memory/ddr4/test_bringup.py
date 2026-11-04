@@ -168,6 +168,33 @@ class TestDDR4SimGeometry(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "positive"):
             sim_model.budget(self.profile, self.geometry)
 
+    def test_sim_model_preserves_full_dfi_address_width(self):
+        class Device:
+            nbanks = 16
+            nrows = 32768
+            ncols = 1024
+
+            def __init__(self):
+                from types import SimpleNamespace
+                self.geom_settings = SimpleNamespace(addressbits=self.nrows.bit_length()-1,
+                                                     rowbits=self.nrows.bit_length()-1)
+
+        scaled = sim_model.scaled_device_class(Device, self.geometry)
+        instance = scaled()
+        self.assertEqual(instance.geom_settings.rowbits, 11)
+        self.assertEqual(instance.geom_settings.addressbits, 15)
+        self.assertEqual(scaled.nrows, 2048)
+        self.assertEqual(Device.nrows, 32768)
+
+    def test_source_geometry_change_rejected(self):
+        class Device:
+            nbanks = 8
+            nrows = 32768
+            ncols = 1024
+
+        with self.assertRaisesRegex(ValueError, "banks changed"):
+            sim_model.scaled_device_class(Device, self.geometry)
+
     def test_generator_uses_isolated_entrypoint(self):
         cmd = bringup.generator_argv(Path("/tmp/out"))
         self.assertEqual(Path(cmd[1]).name, "sim_model.py")
