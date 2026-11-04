@@ -8,7 +8,7 @@ import sys
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from dfi_probe_contract import signal_names, verify_generated_signals, write_control_file
+from dfi_probe_contract import signal_names, verify_generated_signals, write_control_file, top_level_port_names
 from dfi_probe import DFIProbe
 from dfi_latency_report import calculate_internal
 
@@ -48,6 +48,16 @@ class GeneratedProbeContractTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "contract changed"):
             verify_generated_signals(text.replace("wire soc_ddrphy_dfi_p0_cs_n;", ""))
 
+    def test_only_declared_top_level_pins_get_rw_access(self):
+        text = ("module soc_ddr4_sim (input wire clk, input wire sim_trace, "
+                "output wire init_done);\n"
+                "wire hidden_storage;\nendmodule\n")
+        ports = top_level_port_names(text)
+        self.assertEqual(ports, ["clk", "sim_trace", "init_done"])
+        self.assertNotIn("hidden_storage", ports)
+        with self.assertRaisesRegex(ValueError, "unreviewed"):
+            top_level_port_names(text.replace("input wire clk, ", ""))
+
     def test_generated_verilator_control_has_no_global_public(self):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
@@ -59,7 +69,10 @@ class GeneratedProbeContractTests(unittest.TestCase):
             data = ctl.read_text()
             self.assertEqual(data.count("public_flat_rd"), 72)
             self.assertNotIn("--public-flat-rw", data)
-            self.assertNotIn("public_flat_rw", data)
+            # Explicit port RW visibility is safe; internal arrays stay private.
+            self.assertEqual(data.count("public_flat_rw -module"), 1)
+            self.assertIn('public_flat_rw -module "soc_ddr4_sim" -var "clk"', data)
+            self.assertNotIn('public_flat_rw -module "soc_ddr4_sim" -var "soc_ddrphy', data)
             self.assertTrue((root / "ddr4_probe_contract.json").is_file())
 
 
