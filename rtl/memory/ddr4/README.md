@@ -3,7 +3,7 @@
 This directory contains the independent LiteDRAM controller/DFI simulation
 configuration, contracts, and standalone functional verification. The
 **foundation merged to main in PR #21**; the real AXI read/write functional
-test is being validated on **PR #22**, without wiring DDR into the chip.
+test was merged through **PR #22**, without wiring DDR into the chip.
 The full-chip DDR address map still uses the original AXI SRAM stand-in.
 
 The implementation uses the upstream LiteDRAM source pinned in
@@ -28,7 +28,7 @@ simulation.
 - The generated RTL is checked with Verilator lint against its actual
   port map. This is **not** proof of JEDEC initialization or AXI data.
 - The standalone CI job runs these checks and uploads the RTL and
-  provenance artifacts. On PR #22, the same job also executes real DDR4
+  provenance artifacts. The same job also executes real DDR4
   controller initialization and AXI functional traffic; it never invokes
   the CPU/DMA or shared NoC test.
 
@@ -99,3 +99,58 @@ it exercises a direct cocotbext-axi target without a FlooNoC monitor
 catalog; the integrated `chip-dma` regression already enables the
 full passive fabric report. The isolated DDR functional harness uses
 its own all-simulation AXI/Wishbone monitoring on PR #22.
+
+
+## DDR4 timing evidence and modeling boundaries (new isolated PR)
+
+The isolated DDR4 model now **declares and drives the same 100 MHz
+simulation clock**: input_clk_freq=sys_clk_freq=100000000, source clock
+period 10 ns. It matches the currently measured 100 MHz full-chip fabric
+reference, but there is **no instantiated connection** between those
+two simulation scopes. It is *not* a statement of physical DDR4 speed.
+The unused, physical Xilinx IODELAY reference field in the isolated
+--sim profile remains 300 MHz; SDRAMPHYModel does not instantiate it.
+A future 150/159 MHz controller alongside the 100 MHz fabric requires
+an actual AXI CDC implementation, independent clocks, and per-domain
+timestamps; do not directly wire two asynchronous AXI clocks.
+
+After a successful cocotb DDR functional run, `latency_report.py`
+correlates traffic-phase accepted AXI AR-to-final-R and AW-to-B handshakes
+using the actual captured AXI ID and request order. It writes
+`ddr4_latency.json` with per-transaction samples, min/avg/max cycles,
+raw picosecond durations, clock period, model inventory, and explicit
+unmeasured stage labels. Generation or lint alone never produces valid
+timing. The code reuses the existing *continuous* DDR4 AXI/Wishbone
+monitor and verifies its start/end records, full phase coverage and
+handshake accounting before accepting latency results. Samples include
+the real RTL controller/AXI frontend, SDRAMPHYModel, BankModel, and
+response processing, but are **not** a component-level decomposition.
+
+Model inventory, accurately labeled:
+- **Real RTL:** pinned LiteDRAM AXI frontend/controller, bank machines,
+  scheduler, queues, arbitration and refresh; controller events beyond
+  the external AXI boundary are not yet exported as standalone probes.
+- **Modeled:** LiteDRAM DFI-level `SDRAMPHYModel` and its configured
+  command/data latency pipeline, DDR4 `BankModel` backed by dense
+  simulation storage with a bounded 32 MiB geometry.
+- **Not modeled:** an electrical/physical DDR4 PHY, IO pad timing,
+  training, DDR4 analog behavior, and a physical JEDEC DDR4 device.
+- **Not connected:** the shared SoC's full-chip DDR aperture still
+  ends at a bounded AXI SRAM stand-in. Fabric Explorer's verified
+  NoC stages and this standalone timing report are separately sourced;
+  **do not sum** them until real end-to-end DDR integration passes.
+
+Future distinct controller/DFI/bank stage timing requires exposing and
+validating stable generated-RTL signals, including DFI per-phase READ/
+WRITE commands, `rddata_en`, `rddata_valid`, write data, and
+BankModel access. Only measured boundaries may receive numeric values.
+Keep unavailable entries `unmeasured` rather than guessing a breakdown
+from PHY configuration. A high-outstanding/concurrent test additionally
+needs a verified mapping through bank-machine queues because DFI
+commands do not retain AXI IDs.
+
+The planned final integration PR reuses this report's schema, attaches
+a real 64-bit-to-local-AXI address adapter and CSR init path, and adds
+full-chip tests with the existing NoC monitors. No shared generator,
+clock domain, NoC, DMA, boot, or diagrams were changed for standalone
+timing instrumentation.
