@@ -9,7 +9,7 @@
 - sw/dma/dma.h and dma.c provide the shared SRAM allocator, 32-byte upstream descriptor construction, release fence and 32-bit firmware CSR submit/status/IRQ helpers. Hosted tests validate software behavior; real CPU execution of these functions is not yet integrated.
 - dv/common/dma_vectors.py generates host-side deterministic descriptor chains, SRAM contents and independent AXI expected-data checks. tools/dma_vectors.py provides CLI generation.
 
-See [unified SRAM/DDR/HBM memory allocation](memory-allocation.md) for\nthe shared virtual Python plan, physical C region allocator, model capacity\nlimits and quiescence rules.\n\n## Boot-live-compatible SRAM allocation
+For both BFM and CPU execution modes, reuse the same scenario and memory\nregion planner; never copy target address math into another test.\nSee [unified SRAM/DDR/HBM memory allocation](memory-allocation.md) for\nthe shared virtual Python plan, physical C region allocator, model capacity\nlimits and quiescence rules.\n\n## Boot-live-compatible SRAM allocation
 
 For combined boot + DMA tests, each compute SRAM currently models only 16 KiB; the full architectural window is larger.
 
