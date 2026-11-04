@@ -94,6 +94,49 @@ class FullChipTests(unittest.TestCase):
             self.assertNotIn('$readmemh',top)
             self.assertTrue((out/'dma_actors.json').exists())
 
+    def test_cpu_dma_variant_reuses_real_boot_generator_and_checker(self):
+        meta = json.loads((ROOT/'gen/supernoc/manifest.json').read_text())
+        cfg=copy.deepcopy(self.cfg)
+        flash=next(r for r in cfg['address_map']['data']
+                   if r['name']=='boot.flash')
+        hook=int(flash['base'],0)+0x1000
+        with tempfile.TemporaryDirectory() as tmp:
+            out=Path(tmp)
+            result=full_chip_gen.emit(
+                cfg,meta,ROOT/'gen/noc/floonoc',out,
+                cpu0_run_hook=hook,image_prefix='tmp/shared-cpu-dma',
+                cpu_dma_mode=True)
+            fw=json.loads((out/'firmware.json').read_text())
+            self.assertEqual(fw['cpu0_run_hook'],hook)
+            self.assertEqual(result['dma_engines_instantiated'],2)
+            self.assertIn('real CPUs execute C',result['dma_configuration'])
+            self.assertEqual(result['axi_actors']['compute0_local_data.dma']['kind'],'rtl_dma')
+            tb=(out/'full_chip_tb.sv').read_text()
+            top=(out/'soc_top.sv').read_text()
+            image=(out/'compute0.lst').read_text()
+            self.assertIn(".DmaEnable(1'b1)",tb)
+            self.assertIn('cpu_dma_success',tb)
+            self.assertIn('CPU C DMA evidence',tb)
+            self.assertIn('tmp/shared-cpu-dma/compute0.hex',tb)
+            self.assertIn('"tmp/shared-cpu-dma/flash.hex"',top)
+            self.assertIn('jalr ra, 0(a0)',image)
+            self.assertIn('bne a0, zero, dma_error',image)
+            self.assertNotIn('$readmemh',top)
+            self.assertLessEqual(len(fw['cores'][0]['words'])*4,
+                                 cfg['boot']['flash_slot_stride'])
+            with self.assertRaises(ValueError):
+                full_chip_gen.emit(cfg,meta,ROOT/'gen/noc/floonoc',out,
+                                   cpu_dma_mode=True)
+
+    def test_cpu_dma_hook_is_bounded_to_immutable_flash(self):
+        import chip_bootgen
+        cfg=copy.deepcopy(self.cfg)
+        flash=next(r for r in cfg['address_map']['data'] if r['name']=='boot.flash')
+        base=int(flash['base'],0)
+        for bad in (base,base+0x10,base+0x1001,base+int(flash['size'],0)):
+            with self.subTest(addr=bad),self.assertRaises(ValueError):
+                chip_bootgen.build(cfg,cpu0_run_hook=bad)
+
     def test_dma_parameters_are_per_compute_and_fail_closed(self):
         compute0=self.cfg['subsystems'][0]
         compute1=self.cfg['subsystems'][1]
