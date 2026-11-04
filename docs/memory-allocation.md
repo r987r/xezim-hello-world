@@ -104,3 +104,41 @@ The host C tests compile `memory_pool.c`, the SRAM compatibility API,
 and `dma.c` in one binary. Python tests cover mapped/modeled sizes,
 64-bit HBM/DDR addresses, relocation, overflow, alignment, reclaim,
 and disjoint boot/DMA memory regions.
+
+## Memory initialization/check backends and benchmarks (next increment)
+
+**Same scenario and allocation handles, no separate test frameworks.**
+Initialization/verification is a distinct operation from allocation. Record
+a compact pattern recipe instead of creating a full DDR/HBM binary image:
+
+- \`init(region, offset, bytes, pattern, seed, policy)\` and
+  \`check(region, offset, bytes, pattern, seed, policy)\` are scenario-level
+  operations; C/CPU and Python BFMs consume the same recipe bytes.
+- \`strict\`: CPU/DMA or AXI frontdoor initializes/checks actual hardware.
+  A mandatory small strict smoke catches missing routing/CPU behavior.
+- \`fast\`: validated direct host sparse-memory or simulator backdoor
+  initialize/check; **does not count as AXI traffic**.
+- \`hybrid\`: large payload via validated backdoor, CPU builds descriptors
+  and submits real DMA; sampled frontdoor reads plus independent full
+  backdoor compare. Prefer this for large routine regressions.
+- CPU mode may request acceleration through a simulation-service mailbox,
+  but must wait for a simulator acknowledgement before consuming the data.
+  In no-CPU mode Python calls the same provider directly.
+- Backdoor adapters are explicitly per backing type: cocotbext-axi
+  SparseMemoryRegion; PULP \`tc_sram\` RTL; DDR4 controller/DFI bank model;
+  and future HBM. Do not patch pinned IP or invent generic DPI paths.
+  Validate every provider against frontdoor writes/readback first.
+- Cold boot ROM/flash initialization remains intentional, and writable
+  SRAM never receives an implicit preload. An unwritten region has no
+  implicit expected-zero contents; checks must specify initialization.
+- Descriptors require explicit ABI serialization from allocated addresses;
+  payload may use small deterministic patterns or a reproducible seed.
+
+Keep benchmarks even after the fast path is default. For **identical
+scenario/seed/size/RTL and simulator**, report separate INIT and CHECK
+wall-clock seconds, cycles, transferred bytes, host peak RSS and speedup
+vs strict. Do not attribute faster backdoor writes to AXI bandwidth or
+latency. Report the access method and backing model in every run artifact.
+Minimum reference sweep: 64 B, 4 KiB, 64 KiB and the largest supported
+modeled size, with \`strict\`, \`hybrid\`, \`fast\`. Mark unsupported method/
+backing combinations explicitly instead of silently falling back.
