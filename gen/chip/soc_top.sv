@@ -1,6 +1,7 @@
-// Generated chip boot configuration: see gen/chip/manifest.json.
-module soc_top #(parameter bit ProbeEnable = 0) (input logic clk_i, rst_ni,
+// Generated chip boot + DMA configuration: see gen/chip/manifest.json.
+module soc_top #(parameter bit ProbeEnable = 0, DmaEnable = 0, DmaTestMode = 0) (input logic clk_i, rst_ni,
   input logic [1:0] hold_mask_i,
+  output logic [1:0] dma_irq_o, dma_irq_pending_o,
   output logic [1:0] released_o, fetch_valid_o,
   output logic [63:0] fetch_addr_o,
   output logic [1:0] sram_valid_o, sram_write_o,
@@ -45,7 +46,46 @@ module soc_top #(parameter bit ProbeEnable = 0) (input logic clk_i, rst_ni,
   output logic [1:0] probe_rresp,
   output logic probe_rlast,
   output logic probe_rvalid,
-  input logic probe_rready
+  input logic probe_rready,
+  input logic cfgprobe_awid,
+  input logic [31:0] cfgprobe_awaddr,
+  input logic [7:0] cfgprobe_awlen,
+  input logic [2:0] cfgprobe_awsize,
+  input logic [1:0] cfgprobe_awburst,
+  input logic cfgprobe_awlock,
+  input logic [3:0] cfgprobe_awcache,
+  input logic [2:0] cfgprobe_awprot,
+  input logic [3:0] cfgprobe_awqos,
+  input logic [3:0] cfgprobe_awregion,
+  input logic cfgprobe_awvalid,
+  output logic cfgprobe_awready,
+  input logic [31:0] cfgprobe_wdata,
+  input logic [3:0] cfgprobe_wstrb,
+  input logic cfgprobe_wlast,
+  input logic cfgprobe_wvalid,
+  output logic cfgprobe_wready,
+  output logic cfgprobe_bid,
+  output logic [1:0] cfgprobe_bresp,
+  output logic cfgprobe_bvalid,
+  input logic cfgprobe_bready,
+  input logic cfgprobe_arid,
+  input logic [31:0] cfgprobe_araddr,
+  input logic [7:0] cfgprobe_arlen,
+  input logic [2:0] cfgprobe_arsize,
+  input logic [1:0] cfgprobe_arburst,
+  input logic cfgprobe_arlock,
+  input logic [3:0] cfgprobe_arcache,
+  input logic [2:0] cfgprobe_arprot,
+  input logic [3:0] cfgprobe_arqos,
+  input logic [3:0] cfgprobe_arregion,
+  input logic cfgprobe_arvalid,
+  output logic cfgprobe_arready,
+  output logic cfgprobe_rid,
+  output logic [31:0] cfgprobe_rdata,
+  output logic [1:0] cfgprobe_rresp,
+  output logic cfgprobe_rlast,
+  output logic cfgprobe_rvalid,
+  input logic cfgprobe_rready
 );
   import chip_types_pkg::*;
   floo_xezim_compute0_local_config_noc_pkg::axi_in_req_t m_compute0_local_config_cpu_req;
@@ -715,11 +755,57 @@ module soc_top #(parameter bit ProbeEnable = 0) (input logic clk_i, rst_ni,
     .s_memory0_local_data_target_crossbar_rvalid(s_memory0_local_data_target_crossbar_rsp.r_valid),
     .s_memory0_local_data_target_crossbar_rready(s_memory0_local_data_target_crossbar_req.r_ready)
   );
+  initial if (DmaTestMode && (!DmaEnable || !ProbeEnable))
+    $fatal(1, "DMA host mode requires active DMA and host probe");
   logic [7:0][7:0] reset_regs;
   logic [1:0] cpu_reset_n;
+  floo_xezim_compute0_local_config_noc_pkg::axi_in_req_t cfgprobe_req;
+  assign cfgprobe_req.aw.id = cfgprobe_awid;
+  assign cfgprobe_req.aw.addr = cfgprobe_awaddr;
+  assign cfgprobe_req.aw.len = cfgprobe_awlen;
+  assign cfgprobe_req.aw.size = cfgprobe_awsize;
+  assign cfgprobe_req.aw.burst = cfgprobe_awburst;
+  assign cfgprobe_req.aw.lock = cfgprobe_awlock;
+  assign cfgprobe_req.aw.cache = cfgprobe_awcache;
+  assign cfgprobe_req.aw.prot = cfgprobe_awprot;
+  assign cfgprobe_req.aw.qos = cfgprobe_awqos;
+  assign cfgprobe_req.aw.region = cfgprobe_awregion;
+  assign cfgprobe_req.aw_valid = cfgprobe_awvalid;
+  assign cfgprobe_awready = m_compute0_local_config_cpu_rsp.aw_ready;
+  assign cfgprobe_req.w.data = cfgprobe_wdata;
+  assign cfgprobe_req.w.strb = cfgprobe_wstrb;
+  assign cfgprobe_req.w.last = cfgprobe_wlast;
+  assign cfgprobe_req.w_valid = cfgprobe_wvalid;
+  assign cfgprobe_wready = m_compute0_local_config_cpu_rsp.w_ready;
+  assign cfgprobe_bid = m_compute0_local_config_cpu_rsp.b.id;
+  assign cfgprobe_bresp = m_compute0_local_config_cpu_rsp.b.resp;
+  assign cfgprobe_bvalid = m_compute0_local_config_cpu_rsp.b_valid;
+  assign cfgprobe_req.b_ready = cfgprobe_bready;
+  assign cfgprobe_req.ar.id = cfgprobe_arid;
+  assign cfgprobe_req.ar.addr = cfgprobe_araddr;
+  assign cfgprobe_req.ar.len = cfgprobe_arlen;
+  assign cfgprobe_req.ar.size = cfgprobe_arsize;
+  assign cfgprobe_req.ar.burst = cfgprobe_arburst;
+  assign cfgprobe_req.ar.lock = cfgprobe_arlock;
+  assign cfgprobe_req.ar.cache = cfgprobe_arcache;
+  assign cfgprobe_req.ar.prot = cfgprobe_arprot;
+  assign cfgprobe_req.ar.qos = cfgprobe_arqos;
+  assign cfgprobe_req.ar.region = cfgprobe_arregion;
+  assign cfgprobe_req.ar_valid = cfgprobe_arvalid;
+  assign cfgprobe_arready = m_compute0_local_config_cpu_rsp.ar_ready;
+  assign cfgprobe_rid = m_compute0_local_config_cpu_rsp.r.id;
+  assign cfgprobe_rdata = m_compute0_local_config_cpu_rsp.r.data;
+  assign cfgprobe_rresp = m_compute0_local_config_cpu_rsp.r.resp;
+  assign cfgprobe_rlast = m_compute0_local_config_cpu_rsp.r.last;
+  assign cfgprobe_rvalid = m_compute0_local_config_cpu_rsp.r_valid;
+  assign cfgprobe_req.r_ready = cfgprobe_rready;
+  assign cfgprobe_req.aw.atop = '0;
+  assign cfgprobe_req.aw.user = '0;
+  assign cfgprobe_req.w.user = '0;
+  assign cfgprobe_req.ar.user = '0;
   lite_req_t cpu_0_req;
   lite_resp_t cpu_0_rsp;
-  assign cpu_reset_n[0] = rst_ni;
+  assign cpu_reset_n[0] = (rst_ni) && !DmaTestMode;
   assign released_o[0] = cpu_reset_n[0];
   logic cpu_0_trap;
   picorv32_cpu_adapter u_cpu_compute0 (
@@ -747,6 +833,14 @@ module soc_top #(parameter bit ProbeEnable = 0) (input logic clk_i, rst_ni,
   always @(posedge clk_i) if (cpu_reset_n[0] && cpu_0_trap) $fatal(1, "CPU0 trap");
   assign fetch_valid_o[0] = cpu_0_req.ar_valid && cpu_0_rsp.ar_ready && cpu_0_req.ar.prot[2];
   assign fetch_addr_o[0*32 +: 32] = cpu_0_req.ar.addr;
+  floo_xezim_compute0_local_data_noc_pkg::axi_in_req_t cpu_data_0_req;
+  floo_xezim_compute0_local_data_noc_pkg::axi_in_rsp_t cpu_data_0_rsp;
+  floo_xezim_compute0_local_config_noc_pkg::axi_in_req_t cpu_config_0_req;
+  floo_xezim_compute0_local_config_noc_pkg::axi_in_rsp_t cpu_config_0_rsp;
+  assign m_compute0_local_data_cpu_req = DmaTestMode ? probe_req : cpu_data_0_req;
+  assign cpu_data_0_rsp = m_compute0_local_data_cpu_rsp;
+  assign m_compute0_local_config_cpu_req = DmaTestMode ? cfgprobe_req : cpu_config_0_req;
+  assign cpu_config_0_rsp = m_compute0_local_config_cpu_rsp;
   cpu_noc_adapter #(
     .data_req_t(floo_xezim_compute0_local_data_noc_pkg::axi_in_req_t),
     .data_rsp_t(floo_xezim_compute0_local_data_noc_pkg::axi_in_rsp_t),
@@ -759,14 +853,17 @@ module soc_top #(parameter bit ProbeEnable = 0) (input logic clk_i, rst_ni,
     .rst_ni(rst_ni),
     .cpu_req_i(cpu_0_req),
     .cpu_rsp_o(cpu_0_rsp),
-    .data_req_o(m_compute0_local_data_cpu_req),
-    .data_rsp_i(m_compute0_local_data_cpu_rsp),
-    .cfg_req_o(m_compute0_local_config_cpu_req),
-    .cfg_rsp_i(m_compute0_local_config_cpu_rsp)
+    .data_req_o(cpu_data_0_req),
+    .data_rsp_i(cpu_data_0_rsp),
+    .cfg_req_o(cpu_config_0_req),
+    .cfg_rsp_i(cpu_config_0_rsp)
   );
   always @(posedge clk_i) if (cpu_reset_n[0] && ((cpu_0_rsp.r_valid && cpu_0_req.r_ready && cpu_0_rsp.r.resp != 0) || (cpu_0_rsp.b_valid && cpu_0_req.b_ready && cpu_0_rsp.b.resp != 0))) $fatal(1, "CPU bus error compute0");
+  logic [63:0] dma_0_apb_addr, dma_0_apb_data;
+  logic dma_0_apb_write, dma_0_apb_select, dma_0_apb_enable;
+  logic dma_0_apb_ready, dma_0_apb_error;
+  logic [63:0] dma_0_apb_rdata;
   floo_xezim_compute0_local_data_noc_pkg::axi_in_req_t probe_req;
-  assign m_compute0_local_data_dma_req = ProbeEnable ? probe_req : '0; // real iDMA remains unintegrated
   assign probe_req.aw.id = probe_awid;
   assign probe_req.aw.addr = probe_awaddr;
   assign probe_req.aw.len = probe_awlen;
@@ -778,15 +875,15 @@ module soc_top #(parameter bit ProbeEnable = 0) (input logic clk_i, rst_ni,
   assign probe_req.aw.qos = probe_awqos;
   assign probe_req.aw.region = probe_awregion;
   assign probe_req.aw_valid = probe_awvalid;
-  assign probe_awready = m_compute0_local_data_dma_rsp.aw_ready;
+  assign probe_awready = DmaTestMode ? m_compute0_local_data_cpu_rsp.aw_ready : m_compute0_local_data_dma_rsp.aw_ready;
   assign probe_req.w.data = probe_wdata;
   assign probe_req.w.strb = probe_wstrb;
   assign probe_req.w.last = probe_wlast;
   assign probe_req.w_valid = probe_wvalid;
-  assign probe_wready = m_compute0_local_data_dma_rsp.w_ready;
-  assign probe_bid = m_compute0_local_data_dma_rsp.b.id;
-  assign probe_bresp = m_compute0_local_data_dma_rsp.b.resp;
-  assign probe_bvalid = m_compute0_local_data_dma_rsp.b_valid;
+  assign probe_wready = DmaTestMode ? m_compute0_local_data_cpu_rsp.w_ready : m_compute0_local_data_dma_rsp.w_ready;
+  assign probe_bid = DmaTestMode ? m_compute0_local_data_cpu_rsp.b.id : m_compute0_local_data_dma_rsp.b.id;
+  assign probe_bresp = DmaTestMode ? m_compute0_local_data_cpu_rsp.b.resp : m_compute0_local_data_dma_rsp.b.resp;
+  assign probe_bvalid = DmaTestMode ? m_compute0_local_data_cpu_rsp.b_valid : m_compute0_local_data_dma_rsp.b_valid;
   assign probe_req.b_ready = probe_bready;
   assign probe_req.ar.id = probe_arid;
   assign probe_req.ar.addr = probe_araddr;
@@ -799,20 +896,81 @@ module soc_top #(parameter bit ProbeEnable = 0) (input logic clk_i, rst_ni,
   assign probe_req.ar.qos = probe_arqos;
   assign probe_req.ar.region = probe_arregion;
   assign probe_req.ar_valid = probe_arvalid;
-  assign probe_arready = m_compute0_local_data_dma_rsp.ar_ready;
-  assign probe_rid = m_compute0_local_data_dma_rsp.r.id;
-  assign probe_rdata = m_compute0_local_data_dma_rsp.r.data;
-  assign probe_rresp = m_compute0_local_data_dma_rsp.r.resp;
-  assign probe_rlast = m_compute0_local_data_dma_rsp.r.last;
-  assign probe_rvalid = m_compute0_local_data_dma_rsp.r_valid;
+  assign probe_arready = DmaTestMode ? m_compute0_local_data_cpu_rsp.ar_ready : m_compute0_local_data_dma_rsp.ar_ready;
+  assign probe_rid = DmaTestMode ? m_compute0_local_data_cpu_rsp.r.id : m_compute0_local_data_dma_rsp.r.id;
+  assign probe_rdata = DmaTestMode ? m_compute0_local_data_cpu_rsp.r.data : m_compute0_local_data_dma_rsp.r.data;
+  assign probe_rresp = DmaTestMode ? m_compute0_local_data_cpu_rsp.r.resp : m_compute0_local_data_dma_rsp.r.resp;
+  assign probe_rlast = DmaTestMode ? m_compute0_local_data_cpu_rsp.r.last : m_compute0_local_data_dma_rsp.r.last;
+  assign probe_rvalid = DmaTestMode ? m_compute0_local_data_cpu_rsp.r_valid : m_compute0_local_data_dma_rsp.r_valid;
   assign probe_req.r_ready = probe_rready;
   assign probe_req.aw.atop = '0;
   assign probe_req.aw.user = '0;
   assign probe_req.w.user = '0;
   assign probe_req.ar.user = '0;
+  if (DmaEnable) begin: gen_dma_compute0
+  soc_idma_engine u_dma_compute0 (
+    .clk_i(clk_i),
+    .rst_ni(rst_ni),
+    .apb_addr_i(dma_0_apb_addr),
+    .apb_data_i(dma_0_apb_data),
+    .apb_write_i(dma_0_apb_write),
+    .apb_select_i(dma_0_apb_select),
+    .apb_enable_i(dma_0_apb_enable),
+    .apb_ready_o(dma_0_apb_ready),
+    .apb_rdata_o(dma_0_apb_rdata),
+    .apb_error_o(dma_0_apb_error),
+    .irq_o(dma_irq_o[0]),
+    .dma_awid(m_compute0_local_data_dma_req.aw.id),
+    .dma_awaddr(m_compute0_local_data_dma_req.aw.addr),
+    .dma_awlen(m_compute0_local_data_dma_req.aw.len),
+    .dma_awsize(m_compute0_local_data_dma_req.aw.size),
+    .dma_awburst(m_compute0_local_data_dma_req.aw.burst),
+    .dma_awlock(m_compute0_local_data_dma_req.aw.lock),
+    .dma_awcache(m_compute0_local_data_dma_req.aw.cache),
+    .dma_awprot(m_compute0_local_data_dma_req.aw.prot),
+    .dma_awqos(m_compute0_local_data_dma_req.aw.qos),
+    .dma_awregion(m_compute0_local_data_dma_req.aw.region),
+    .dma_awvalid(m_compute0_local_data_dma_req.aw_valid),
+    .dma_awready(m_compute0_local_data_dma_rsp.aw_ready),
+    .dma_wdata(m_compute0_local_data_dma_req.w.data),
+    .dma_wstrb(m_compute0_local_data_dma_req.w.strb),
+    .dma_wlast(m_compute0_local_data_dma_req.w.last),
+    .dma_wvalid(m_compute0_local_data_dma_req.w_valid),
+    .dma_wready(m_compute0_local_data_dma_rsp.w_ready),
+    .dma_bid(m_compute0_local_data_dma_rsp.b.id),
+    .dma_bresp(m_compute0_local_data_dma_rsp.b.resp),
+    .dma_bvalid(m_compute0_local_data_dma_rsp.b_valid),
+    .dma_bready(m_compute0_local_data_dma_req.b_ready),
+    .dma_arid(m_compute0_local_data_dma_req.ar.id),
+    .dma_araddr(m_compute0_local_data_dma_req.ar.addr),
+    .dma_arlen(m_compute0_local_data_dma_req.ar.len),
+    .dma_arsize(m_compute0_local_data_dma_req.ar.size),
+    .dma_arburst(m_compute0_local_data_dma_req.ar.burst),
+    .dma_arlock(m_compute0_local_data_dma_req.ar.lock),
+    .dma_arcache(m_compute0_local_data_dma_req.ar.cache),
+    .dma_arprot(m_compute0_local_data_dma_req.ar.prot),
+    .dma_arqos(m_compute0_local_data_dma_req.ar.qos),
+    .dma_arregion(m_compute0_local_data_dma_req.ar.region),
+    .dma_arvalid(m_compute0_local_data_dma_req.ar_valid),
+    .dma_arready(m_compute0_local_data_dma_rsp.ar_ready),
+    .dma_rid(m_compute0_local_data_dma_rsp.r.id),
+    .dma_rdata(m_compute0_local_data_dma_rsp.r.data),
+    .dma_rresp(m_compute0_local_data_dma_rsp.r.resp),
+    .dma_rlast(m_compute0_local_data_dma_rsp.r.last),
+    .dma_rvalid(m_compute0_local_data_dma_rsp.r_valid),
+    .dma_rready(m_compute0_local_data_dma_req.r_ready)
+  );
+    assign m_compute0_local_data_dma_req.aw.atop = '0;
+    assign m_compute0_local_data_dma_req.aw.user = '0;
+    assign m_compute0_local_data_dma_req.w.user = '0;
+    assign m_compute0_local_data_dma_req.ar.user = '0;
+  end else begin: gen_dma_disabled_compute0
+    assign m_compute0_local_data_dma_req = ProbeEnable ? probe_req : '0;
+    assign dma_irq_o[0] = 1'b0;
+  end
   lite_req_t cpu_1_req;
   lite_resp_t cpu_1_rsp;
-  assign cpu_reset_n[1] = rst_ni && reset_regs[0][0] && !hold_mask_i[1];
+  assign cpu_reset_n[1] = (rst_ni && reset_regs[0][0] && !hold_mask_i[1]) && !DmaTestMode;
   assign released_o[1] = cpu_reset_n[1];
   logic [31:0] c1_ia, c1_da, c1_wd, c1_ir, c1_dr;
   logic [3:0] c1_sel;
@@ -900,7 +1058,94 @@ module soc_top #(parameter bit ProbeEnable = 0) (input logic clk_i, rst_ni,
     .cfg_rsp_i(m_compute1_local_config_cpu_rsp)
   );
   always @(posedge clk_i) if (cpu_reset_n[1] && ((cpu_1_rsp.r_valid && cpu_1_req.r_ready && cpu_1_rsp.r.resp != 0) || (cpu_1_rsp.b_valid && cpu_1_req.b_ready && cpu_1_rsp.b.resp != 0))) $fatal(1, "CPU bus error compute1");
-  assign m_compute1_local_data_dma_req = '0; // iDMA intentionally idle/unintegrated in this boot configuration
+  logic [63:0] dma_1_apb_addr, dma_1_apb_data;
+  logic dma_1_apb_write, dma_1_apb_select, dma_1_apb_enable;
+  logic dma_1_apb_ready, dma_1_apb_error;
+  logic [63:0] dma_1_apb_rdata;
+  if (DmaEnable) begin: gen_dma_compute1
+  soc_idma_engine u_dma_compute1 (
+    .clk_i(clk_i),
+    .rst_ni(rst_ni),
+    .apb_addr_i(dma_1_apb_addr),
+    .apb_data_i(dma_1_apb_data),
+    .apb_write_i(dma_1_apb_write),
+    .apb_select_i(dma_1_apb_select),
+    .apb_enable_i(dma_1_apb_enable),
+    .apb_ready_o(dma_1_apb_ready),
+    .apb_rdata_o(dma_1_apb_rdata),
+    .apb_error_o(dma_1_apb_error),
+    .irq_o(dma_irq_o[1]),
+    .dma_awid(m_compute1_local_data_dma_req.aw.id),
+    .dma_awaddr(m_compute1_local_data_dma_req.aw.addr),
+    .dma_awlen(m_compute1_local_data_dma_req.aw.len),
+    .dma_awsize(m_compute1_local_data_dma_req.aw.size),
+    .dma_awburst(m_compute1_local_data_dma_req.aw.burst),
+    .dma_awlock(m_compute1_local_data_dma_req.aw.lock),
+    .dma_awcache(m_compute1_local_data_dma_req.aw.cache),
+    .dma_awprot(m_compute1_local_data_dma_req.aw.prot),
+    .dma_awqos(m_compute1_local_data_dma_req.aw.qos),
+    .dma_awregion(m_compute1_local_data_dma_req.aw.region),
+    .dma_awvalid(m_compute1_local_data_dma_req.aw_valid),
+    .dma_awready(m_compute1_local_data_dma_rsp.aw_ready),
+    .dma_wdata(m_compute1_local_data_dma_req.w.data),
+    .dma_wstrb(m_compute1_local_data_dma_req.w.strb),
+    .dma_wlast(m_compute1_local_data_dma_req.w.last),
+    .dma_wvalid(m_compute1_local_data_dma_req.w_valid),
+    .dma_wready(m_compute1_local_data_dma_rsp.w_ready),
+    .dma_bid(m_compute1_local_data_dma_rsp.b.id),
+    .dma_bresp(m_compute1_local_data_dma_rsp.b.resp),
+    .dma_bvalid(m_compute1_local_data_dma_rsp.b_valid),
+    .dma_bready(m_compute1_local_data_dma_req.b_ready),
+    .dma_arid(m_compute1_local_data_dma_req.ar.id),
+    .dma_araddr(m_compute1_local_data_dma_req.ar.addr),
+    .dma_arlen(m_compute1_local_data_dma_req.ar.len),
+    .dma_arsize(m_compute1_local_data_dma_req.ar.size),
+    .dma_arburst(m_compute1_local_data_dma_req.ar.burst),
+    .dma_arlock(m_compute1_local_data_dma_req.ar.lock),
+    .dma_arcache(m_compute1_local_data_dma_req.ar.cache),
+    .dma_arprot(m_compute1_local_data_dma_req.ar.prot),
+    .dma_arqos(m_compute1_local_data_dma_req.ar.qos),
+    .dma_arregion(m_compute1_local_data_dma_req.ar.region),
+    .dma_arvalid(m_compute1_local_data_dma_req.ar_valid),
+    .dma_arready(m_compute1_local_data_dma_rsp.ar_ready),
+    .dma_rid(m_compute1_local_data_dma_rsp.r.id),
+    .dma_rdata(m_compute1_local_data_dma_rsp.r.data),
+    .dma_rresp(m_compute1_local_data_dma_rsp.r.resp),
+    .dma_rlast(m_compute1_local_data_dma_rsp.r.last),
+    .dma_rvalid(m_compute1_local_data_dma_rsp.r_valid),
+    .dma_rready(m_compute1_local_data_dma_req.r_ready)
+  );
+    assign m_compute1_local_data_dma_req.aw.atop = '0;
+    assign m_compute1_local_data_dma_req.aw.user = '0;
+    assign m_compute1_local_data_dma_req.w.user = '0;
+    assign m_compute1_local_data_dma_req.ar.user = '0;
+  end else begin: gen_dma_disabled_compute1
+    assign m_compute1_local_data_dma_req = '0;
+    assign dma_irq_o[1] = 1'b0;
+  end
+  if (DmaEnable) begin: gen_dma_csr_compute0
+  soc_dma_regs #(
+    .axi_req_t(floo_xezim_compute0_local_config_noc_pkg::axi_out_req_t),
+    .axi_rsp_t(floo_xezim_compute0_local_config_noc_pkg::axi_out_rsp_t),
+    .lite_req_t(lite_req_t),
+    .lite_rsp_t(lite_resp_t),
+    .AxiIdWidth(1)
+  ) u_dma_csr_compute0 (
+    .clk_i(clk_i),
+    .rst_ni(rst_ni),
+    .cfg_req_i(s_compute0_local_config_dma_regs_req),
+    .cfg_rsp_o(s_compute0_local_config_dma_regs_rsp),
+    .apb_addr_o(dma_0_apb_addr),
+    .apb_data_o(dma_0_apb_data),
+    .apb_write_o(dma_0_apb_write),
+    .apb_select_o(dma_0_apb_select),
+    .apb_enable_o(dma_0_apb_enable),
+    .apb_ready_i(dma_0_apb_ready),
+    .apb_error_i(dma_0_apb_error),
+    .irq_raw_i(dma_irq_o[0]),
+    .irq_pending_o(dma_irq_pending_o[0])
+  );
+  end else begin: gen_dma_csr_disabled_compute0
   axi_err_slv #(
     .AxiIdWidth(1),
     .axi_req_t(floo_xezim_compute0_local_config_noc_pkg::axi_out_req_t),
@@ -912,6 +1157,8 @@ module soc_top #(parameter bit ProbeEnable = 0) (input logic clk_i, rst_ni,
     .slv_req_i(s_compute0_local_config_dma_regs_req),
     .slv_resp_o(s_compute0_local_config_dma_regs_rsp)
   );
+    assign dma_irq_pending_o[0] = 1'b0;
+  end
   lite_req_t reset_req;
   lite_resp_t reset_rsp;
   axi_to_axi_lite #(
@@ -1013,6 +1260,29 @@ module soc_top #(parameter bit ProbeEnable = 0) (input logic clk_i, rst_ni,
     .mon_data_o(sram_data_o[0*64 +: 64]),
     .mon_strb_o(sram_strb_o[0*8 +: 8])
   );
+  if (DmaEnable) begin: gen_dma_csr_compute1
+  soc_dma_regs #(
+    .axi_req_t(floo_xezim_compute1_local_config_noc_pkg::axi_out_req_t),
+    .axi_rsp_t(floo_xezim_compute1_local_config_noc_pkg::axi_out_rsp_t),
+    .lite_req_t(lite_req_t),
+    .lite_rsp_t(lite_resp_t),
+    .AxiIdWidth(1)
+  ) u_dma_csr_compute1 (
+    .clk_i(clk_i),
+    .rst_ni(rst_ni),
+    .cfg_req_i(s_compute1_local_config_dma_regs_req),
+    .cfg_rsp_o(s_compute1_local_config_dma_regs_rsp),
+    .apb_addr_o(dma_1_apb_addr),
+    .apb_data_o(dma_1_apb_data),
+    .apb_write_o(dma_1_apb_write),
+    .apb_select_o(dma_1_apb_select),
+    .apb_enable_o(dma_1_apb_enable),
+    .apb_ready_i(dma_1_apb_ready),
+    .apb_error_i(dma_1_apb_error),
+    .irq_raw_i(dma_irq_o[1]),
+    .irq_pending_o(dma_irq_pending_o[1])
+  );
+  end else begin: gen_dma_csr_disabled_compute1
   axi_err_slv #(
     .AxiIdWidth(1),
     .axi_req_t(floo_xezim_compute1_local_config_noc_pkg::axi_out_req_t),
@@ -1024,6 +1294,8 @@ module soc_top #(parameter bit ProbeEnable = 0) (input logic clk_i, rst_ni,
     .slv_req_i(s_compute1_local_config_dma_regs_req),
     .slv_resp_o(s_compute1_local_config_dma_regs_rsp)
   );
+    assign dma_irq_pending_o[1] = 1'b0;
+  end
   axi_sram_target #(
     .req_t(floo_xezim_compute1_local_data_noc_pkg::axi_out_req_t),
     .rsp_t(floo_xezim_compute1_local_data_noc_pkg::axi_out_rsp_t),

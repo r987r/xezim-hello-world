@@ -16,7 +16,7 @@ See [publication and retention](docs/publication.md).
 <!-- Do not edit this section: regenerate with `make gen`. -->
 ### Whole-SoC data and configuration NoCs
 
-The **single architecture diagram** below includes all local/global FlooNoCs, compute CPU/DMA/SRAM blocks and memory target crossbar. It is generated from the same SoC configuration and FlooGen endpoint topology as the real structural RTL. **Dashed links show pending iDMA/controller integration.** The shared NoC core is instantiated by both the BFM regression and the CPU boot configuration.
+The **single architecture diagram** below includes all local/global FlooNoCs, compute CPU/DMA/SRAM blocks and memory target crossbar. It is generated from the same SoC configuration and FlooGen endpoint topology as the real structural RTL. **Solid links show generated optional iDMA/CSR wiring (enabled in DMA mode); dashed links show pending physical controllers.** The same NoC RTL is instantiated by BFM, CPU boot, and dual-DMA configurations.
 
 [![Complete hierarchical SoC and all data/config FlooNoCs](gen/diagrams/noc-hierarchy.svg)](gen/diagrams/noc-hierarchy.svg)
 
@@ -24,7 +24,7 @@ The **single architecture diagram** below includes all local/global FlooNoCs, co
 
 **Configured topology:** 2 compute subsystems, 8 independent FlooNoC instances, 43 total generated routers. Data: 64-bit AXI4; control: 32-bit AXI4 transport for AXI4-Lite endpoint bridges. CPU/reset adapters are attached in the boot configuration; the BFM scope uses AXI agents.
 
-**Verification truth:** Xezim exercises separate CPU cold-boot/SRAM and Verilog-AXI memory testbenches. Both Xezim and Verilator have compiled the eight structural FlooNoCs. The unified `make dv-supernoc` regression connects all meshes to upstream AXI agents and checks destinations, data, bursts, concurrent IDs, stalls and downstream SLVERR. Xezim NoC traffic is not verified. The `make dv-chip` boot configuration runs the real CPUs through the shared NoCs with CPU0-coordinated init/run/check and AXI memory stand-ins. See [chip boot scope](docs/full-chip-boot.md).
+**Verification truth:** Xezim exercises separate CPU cold-boot/SRAM and Verilog-AXI memory testbenches. Both Xezim and Verilator have compiled the eight structural FlooNoCs. The unified `make dv-supernoc` regression connects all meshes to upstream AXI agents and checks destinations, data, bursts, concurrent IDs, stalls and downstream SLVERR. Xezim NoC traffic is not verified. The `make dv-chip` boot configuration runs the real CPUs through the shared NoCs with CPU0-coordinated init/run/check and AXI memory stand-ins. See [chip boot scope](docs/full-chip-boot.md) and [DMA integration](docs/dma-bringup.md); `make dv-chip-dma` tests both real engines through data/config FlooNoCs with the CPUs held in reset and host-initialized DMA SRAM.
 
 ### Generated NoC sources (no duplicate pictures)
 

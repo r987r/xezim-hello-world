@@ -1766,19 +1766,19 @@
         "port": "out"
       },
       "id": "noc_link_0089",
-      "name": "PULP iDMA AXI4 initiator",
+      "name": "PULP iDMA AXI4 initiator (DmaEnable)",
       "signals": [
         {
           "name": "AXI4",
           "width": 64
         }
       ],
-      "status": "planned_integration",
+      "status": "wired_boot_configuration",
       "to": {
         "instance": "compute0_local_data.dma",
         "port": "in"
       },
-      "type": "planned_interconnect"
+      "type": "axi_interconnect"
     },
     {
       "from": {
@@ -1806,19 +1806,19 @@
         "port": "out"
       },
       "id": "noc_link_0091",
-      "name": "PULP iDMA CSR port",
+      "name": "32-bit DMA head + APB doorbell (DmaEnable)",
       "signals": [
         {
           "name": "AXI4",
           "width": 32
         }
       ],
-      "status": "planned_integration",
+      "status": "wired_boot_configuration",
       "to": {
         "instance": "compute0.dma_csr",
         "port": "in"
       },
-      "type": "planned_interconnect"
+      "type": "axi_interconnect"
     },
     {
       "from": {
@@ -1886,19 +1886,19 @@
         "port": "out"
       },
       "id": "noc_link_0095",
-      "name": "PULP iDMA AXI4 initiator",
+      "name": "PULP iDMA AXI4 initiator (DmaEnable)",
       "signals": [
         {
           "name": "AXI4",
           "width": 64
         }
       ],
-      "status": "planned_integration",
+      "status": "wired_boot_configuration",
       "to": {
         "instance": "compute1_local_data.dma",
         "port": "in"
       },
-      "type": "planned_interconnect"
+      "type": "axi_interconnect"
     },
     {
       "from": {
@@ -1926,19 +1926,19 @@
         "port": "out"
       },
       "id": "noc_link_0097",
-      "name": "PULP iDMA CSR port",
+      "name": "32-bit DMA head + APB doorbell (DmaEnable)",
       "signals": [
         {
           "name": "AXI4",
           "width": 32
         }
       ],
-      "status": "planned_integration",
+      "status": "wired_boot_configuration",
       "to": {
         "instance": "compute1.dma_csr",
         "port": "in"
       },
-      "type": "planned_interconnect"
+      "type": "axi_interconnect"
     },
     {
       "from": {
@@ -4237,7 +4237,7 @@
     {
       "info": {
         "ip": "pulp_idma",
-        "status": "planned_noc_endpoint_integration"
+        "status": "generated_optional_dma_integration"
       },
       "module": "soc_boundary",
       "name": "compute0.dma",
@@ -4263,7 +4263,7 @@
     {
       "info": {
         "ip": "dma_registers",
-        "status": "planned_noc_endpoint_integration"
+        "status": "generated_optional_dma_integration"
       },
       "module": "soc_boundary",
       "name": "compute0.dma_csr",
@@ -4301,7 +4301,7 @@
     {
       "info": {
         "ip": "pulp_idma",
-        "status": "planned_noc_endpoint_integration"
+        "status": "generated_optional_dma_integration"
       },
       "module": "soc_boundary",
       "name": "compute1.dma",
@@ -4327,7 +4327,7 @@
     {
       "info": {
         "ip": "dma_registers",
-        "status": "planned_noc_endpoint_integration"
+        "status": "generated_optional_dma_integration"
       },
       "module": "soc_boundary",
       "name": "compute1.dma_csr",
@@ -4473,11 +4473,11 @@
     }
   },
   "schema_version": 1,
-  "scope_note": "Shared soc_noc core connects all meshes; gen/chip/soc_top.sv attaches CPUs/SRAM/reset and AXI memory models. iDMA and physical controllers remain pending.",
+  "scope_note": "Shared soc_noc core connects all meshes; gen/chip/soc_top.sv attaches CPUs/SRAM/reset and AXI memory models. Optional iDMA/CSR are generated for each compute; physical controllers remain pending.",
   "source_of_truth": [
     "config/soc.yaml",
     "config/interface_contracts.yaml",
     "gen/noc/floonoc/*/floogen.yaml"
   ],
-  "status": "structural_nocs_and_cpu_boot_configuration_with_pending_dma_controllers"
+  "status": "structural_nocs_cpu_boot_and_optional_real_dma_with_pending_controllers"
 }

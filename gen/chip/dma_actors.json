@@ -1,0 +1,68 @@
+{
+  "axi_actors": {
+    "compute0_local_config.cpu": {
+      "kind": "verification_bfm",
+      "label": "Host AXI BFM at held CPU boundary in isolated full-chip DMA test"
+    },
+    "compute0_local_config.dma_regs": {
+      "kind": "rtl_registers_optional",
+      "label": "AXI4 32-bit DMA head staging/doorbell and IRQ status when DmaEnable=1; error responder otherwise"
+    },
+    "compute0_local_config.reset_ctrl": {
+      "kind": "rtl_registers",
+      "label": "Reset register bank (RTL)"
+    },
+    "compute0_local_data.boot_flash": {
+      "kind": "rtl_model",
+      "label": "Upstream AXI SRAM/ROM model"
+    },
+    "compute0_local_data.boot_rom": {
+      "kind": "rtl_model",
+      "label": "Upstream AXI SRAM/ROM model"
+    },
+    "compute0_local_data.cpu": {
+      "kind": "verification_bfm",
+      "label": "Host AXI BFM at held CPU boundary in isolated full-chip DMA test"
+    },
+    "compute0_local_data.dma": {
+      "kind": "rtl_dma_optional",
+      "label": "Generated real PULP iDMA frontend/backend when DmaEnable=1; optional BFM only with DmaEnable=0",
+      "short_label": "compute0 iDMA (DmaEnable)"
+    },
+    "compute0_local_data.sram": {
+      "kind": "rtl_model",
+      "label": "Upstream AXI SRAM/ROM model"
+    },
+    "compute1_local_config.cpu": {
+      "kind": "rtl_cpu",
+      "label": "serv compute1 (RTL CPU)",
+      "short_label": "compute1 serv (config)"
+    },
+    "compute1_local_config.dma_regs": {
+      "kind": "rtl_registers_optional",
+      "label": "AXI4 32-bit DMA head staging/doorbell and IRQ status when DmaEnable=1; error responder otherwise"
+    },
+    "compute1_local_data.cpu": {
+      "kind": "rtl_cpu",
+      "label": "serv compute1 (RTL CPU)",
+      "short_label": "compute1 serv (data)"
+    },
+    "compute1_local_data.dma": {
+      "kind": "rtl_dma_optional",
+      "label": "Generated real PULP iDMA frontend/backend when DmaEnable=1; optional BFM only with DmaEnable=0",
+      "short_label": "compute1 iDMA (DmaEnable)"
+    },
+    "compute1_local_data.sram": {
+      "kind": "rtl_model",
+      "label": "Upstream AXI SRAM/ROM model"
+    },
+    "memory0_local_config.controller_regs": {
+      "kind": "reserved_error",
+      "label": "DECERR responder: controller/DMA registers not integrated"
+    },
+    "memory0_local_data.target_crossbar": {
+      "kind": "rtl_model",
+      "label": "Memory crossbar and bounded AXI SRAM stand-ins"
+    }
+  }
+}
