@@ -105,6 +105,25 @@ class ProtocolReportTests(unittest.TestCase):
             protocol_report.parse_capture(self.root/"protocol-events.jsonl",
                                           {"mac.rx":"ethernet","registers":"apb"})
 
+    def test_incomplete_transaction_cannot_pass_with_closed_stream(self):
+        t = self.writer()
+        t.transaction("registers", "read", start_ps=100, end_ps=None)
+        t.close("pass")
+        with self.assertRaisesRegex(ValueError, "incomplete/aborted"):
+            protocol_report.parse_capture(
+                self.root / "protocol-events.jsonl",
+                {"mac.rx":"ethernet","registers":"apb"})
+
+    def test_reset_aborted_transaction_cannot_pass(self):
+        t = self.writer()
+        t.transaction("registers", "read", start_ps=100,
+                      status="reset_aborted")
+        t.close("pass")
+        with self.assertRaisesRegex(ValueError, "incomplete/aborted"):
+            protocol_report.parse_capture(
+                self.root / "protocol-events.jsonl",
+                {"mac.rx":"ethernet","registers":"apb"})
+
     def test_uncataloged_protocol_event_rejected(self):
         t=self.writer()
         with self.assertRaisesRegex(ValueError,"uncataloged"):
