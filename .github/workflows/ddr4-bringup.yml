@@ -1,0 +1,70 @@
+name: DDR4 isolated LiteDRAM generation
+
+on:
+  push:
+    paths:
+      - 'rtl/memory/ddr4/**'
+      - '.github/workflows/ddr4-bringup.yml'
+  pull_request:
+    paths:
+      - 'rtl/memory/ddr4/**'
+      - '.github/workflows/ddr4-bringup.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Check out exact PR revision
+        uses: actions/checkout@v4
+
+      - name: Setup Python for upstream LiteDRAM
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install configuration parser and run local DDR contract tests
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check 'PyYAML==6.0.3'
+          python3 -m unittest discover -s rtl/memory/ddr4 -p 'test_*.py' -v
+          python3 rtl/memory/ddr4/bringup.py check
+
+      - name: Fetch pinned LiteDRAM and install its dependencies
+        run: |
+          set -euo pipefail
+          python3 tools/ip_fetch.py litedram
+          python3 -m pip install --disable-pip-version-check -e .tools/litedram
+          python3 -m pip freeze > .tools/ddr4/dependency_versions.txt
+          git -C .tools/litedram rev-parse HEAD
+
+      - name: Generate DDR4 controller and DFI simulation model
+        run: |
+          set -euo pipefail
+          python3 rtl/memory/ddr4/bringup.py generate
+          test -s .tools/ddr4/litedram_sim/ddr4_manifest.json
+          test -s .tools/ddr4/litedram_sim/ddr4_init_plan.json
+          ls -lh .tools/ddr4/litedram_sim/gateware/
+
+      - name: Install Verilator for isolated RTL check
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y verilator
+
+      - name: Lint actual generated DDR4 RTL
+        run: python3 rtl/memory/ddr4/check_rtl.py --tool verilator --timeout 600
+
+      - name: Upload generated RTL, initialization plan and diagnostic logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ddr4-isolated-generation
+          if-no-files-found: warn
+          include-hidden-files: true
+          retention-days: 14
+          path: |
+            .tools/ddr4/
