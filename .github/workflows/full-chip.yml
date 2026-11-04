@@ -3,7 +3,7 @@ name: Full-chip coordinated CPU boot
 on:
   pull_request:
     branches: [main]
-    paths: ['config/soc.yaml', 'config/regression.yaml', 'config/interface_contracts.yaml', 'config/ip.lock.yaml', 'gen/**', 'tools/chip_bootgen.py', 'tools/full_chip_gen.py', 'tools/sim_cocotb.py', 'tools/regress.py', 'tools/axi_report.py', 'tools/fabric_config.py', 'tools/generate.py', 'tools/ip_fetch.py', 'rtl/**', '!rtl/memory/ddr4/**', 'dv/full_chip/**', 'dv/dma/**', 'dv/common/axi_trace.py', 'dv/common/dma_vectors.py', 'sw/common/**', 'sw/dma/**', 'tests/test_dma*', 'tests/test_memory_plan.py', 'tools/memory_plan.py', 'tests/test_full_chip_gen.py', 'tests/test_boot_policy.py', 'tests/test_regression.py', 'Bender.yml', 'Bender.lock', 'Makefile', '.github/actions/setup-bender/**', '.github/workflows/full-chip.yml']
+    paths: ['config/soc.yaml', 'config/regression.yaml', 'config/interface_contracts.yaml', 'config/ip.lock.yaml', 'gen/**', 'tools/chip_bootgen.py', 'tools/full_chip_gen.py', 'tools/sim_cocotb.py', 'tools/regress.py', 'tools/axi_report.py', 'tools/fabric_config.py', 'tools/generate.py', 'tools/ip_fetch.py', 'rtl/**', '!rtl/memory/ddr4/**', 'dv/full_chip/**', 'dv/dma/**', 'dv/common/axi_trace.py', 'dv/common/dma_vectors.py', 'sw/common/**', 'sw/dma/**', 'tests/test_dma*', 'tests/test_memory_plan.py', 'tools/memory_plan.py', 'tests/test_full_chip_gen.py', 'tests/test_boot_policy.py', 'tools/cpu_dma_firmware.py', 'tests/test_regression.py', 'Bender.yml', 'Bender.lock', 'Makefile', '.github/actions/setup-bender/**', '.github/workflows/full-chip.yml']
   workflow_dispatch:
 
 permissions:
@@ -33,7 +33,7 @@ jobs:
           python3 -m pip install -e .tools/floonoc
           python3 -m pip install 'cocotb==1.9.2' 'cocotbext-axi==0.1.24'
           sudo apt-get update -qq
-          sudo apt-get install -y verilator
+          sudo apt-get install -y verilator clang llvm
       - name: Verify configuration and generated chip/firmware
         run: make check-config check-generated
       - name: Fetch checksum-verified Xezim release
@@ -46,7 +46,7 @@ jobs:
           (cd .tools/bin && sha256sum -c "$XEZIM_ASSET_NAME.sha256")
           chmod +x ".tools/bin/$XEZIM_ASSET_NAME"
           echo "XEZIM_BIN=$GITHUB_WORKSPACE/.tools/bin/$XEZIM_ASSET_NAME" >> "$GITHUB_ENV"
-      - name: Run CPU boot, dual DMA chains, negatives and Xezim compile probe
+      - name: Run common SoC INIT/RUN/CHECK: real CPU C DMA, dual BFM DMA, negatives, Xezim compile
         run: make dv-chip
       - name: Retain all chip build/phase/memory results
         if: always()
