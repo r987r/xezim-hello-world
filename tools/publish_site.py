@@ -326,7 +326,7 @@ def collect(client,config,destination):
                 if run.get('verified_merged_pr') is not None:
                     verified=set(run.get('verified_tested_shas',[]))
                     invalid=None
-                    for trace_file in target.rglob('axi-transactions.json'):
+                    for trace_file in [*target.rglob('axi-transactions.json'), *target.rglob('protocol-transactions.json')]:
                         trace_run=json.loads(trace_file.read_text()).get('run',{})
                         tested_sha=trace_run.get('commit')
                         if not verified_pr_test_commit(client,run,tested_sha,verified_cache):
@@ -404,6 +404,17 @@ def evidence_index(evidence,output,repository):
                    'recorded_at':run['created_at'],'workflow':run['label'],'workflow_url':run['html_url'],
                    'path':str(relative/'report.html'),'assets':sorted(assets),
                    'axi':trace is not None,'result':result}
+            if protocol_data:
+                protocol_run=protocol_data.get('run',{})
+                protocol_sha=protocol_run.get('commit')
+                if (protocol_sha not in (verified_shas | {run['head_sha']})
+                    or protocol_run.get('dirty') is not False
+                    or str(protocol_run.get('workflow_run_id'))!=str(run['id'])
+                    or str(protocol_run.get('workflow_attempt'))!=str(run.get('run_attempt',1))):
+                    raise ValueError('protocol report provenance differs from clean CI run')
+                if protocol_data.get('schema_version')!=1:
+                    raise ValueError('unsupported protocol publication schema')
+                entry['source_sha']=protocol_sha
             if trace:
                 tested_sha=trace['run'].get('commit')
                 if (tested_sha not in (verified_shas | {run['head_sha']})
@@ -434,6 +445,8 @@ def evidence_index(evidence,output,repository):
                 nav=f'<p style="margin:0 0 12px"><a href="{up}/index.html">Verification hub</a> · <a href="{up}/runs.html">All runs</a> · <a href="{escape(run["html_url"])}">CI evidence</a></p>'
                 nav+='<details><summary>Original evidence: raw events, transactions, logs, plan and filelists</summary><ul>'
                 nav+=''.join(f'<li><a href="{escape(name)}">{escape(name)}</a></li>' for name in sorted(assets))+'</ul></details>'
+                if protocol_data:
+                    nav+='<p><a href="protocols.html">Unified protocol explorer</a></p>'
                 (destination/'report.html').write_text(html.replace('<main>','<main>'+nav,1))
                 if protocol_data and not (destination/'protocols.html').is_file():
                     raise ValueError('generic protocol report JSON lacks its matching webpage')
