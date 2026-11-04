@@ -86,9 +86,11 @@ class MergedPrEvidenceTests(unittest.TestCase):
         base_blobs={p:'a'*40 for p in FABRIC_REQUIRED_INPUTS}
         base_blobs.update({'rtl/new_module.sv':'b'*40,'README.md':'1'*40,
                            'docs/publication.md':'1'*40,
-                           '.github/workflows/pages.yml':'1'*40})
+                           '.github/workflows/pages.yml':'1'*40,
+                           'tools/templates/run_report.html':'1'*40})
         new_blobs={**base_blobs, 'docs/publication.md':'2'*40,
-                   'README.md':'2'*40,'.github/workflows/pages.yml':'2'*40}
+                   'README.md':'2'*40,'.github/workflows/pages.yml':'2'*40,
+                   'tools/templates/run_report.html':'2'*40}
         workflows={}
         blob_sources={}
         for name in FABRIC_EXECUTION_WORKFLOWS:
