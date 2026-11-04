@@ -83,6 +83,7 @@ def compile_firmware(cfg, directory: Path):
             str(ROOT / "sw/common/memory_pool.c"),
             str(ROOT / "sw/common/sram_pool.c"),
             str(ROOT / "sw/dma/dma.c"),
+            str(ROOT / "sw/common/rv32i_runtime.c"),
             "-o", str(elf)]
     subprocess.run(args, cwd=ROOT, check=True)
     subprocess.run([require_tool("llvm-objcopy"), "-O", "binary",
