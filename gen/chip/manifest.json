@@ -29,7 +29,7 @@
     "compute0_local_data.dma": {
       "kind": "verification_bfm",
       "label": "Verification AXI BFM at inactive DMA port",
-      "short_label": "compute0 host BFM (default boot)"
+      "short_label": "compute0 boot test BFM at reserved DMA port"
     },
     "compute0_local_data.sram": {
       "kind": "rtl_model",
@@ -71,6 +71,18 @@
   "dma": "PULP iDMA engines generated for each compute, enabled by DmaEnable=1; data ports route via local FlooNoCs and 32-bit CSRs via local/global config FlooNoCs; old boot defaults to disabled.",
   "dma_configuration": "DmaEnable=1; default cold-boot mode DmaEnable=0",
   "dma_engines_instantiated": 2,
+  "dma_parameters_by_compute": {
+    "compute0": {
+      "buffer_depth": 3,
+      "descriptor_prefetch": 0,
+      "num_ax_in_flight": 1
+    },
+    "compute1": {
+      "buffer_depth": 3,
+      "descriptor_prefetch": 0,
+      "num_ax_in_flight": 1
+    }
+  },
   "dma_testbench": "full_chip_dma_tb",
   "fabric_core": "gen/supernoc/soc_noc.sv",
   "firmware": "firmware.json",
@@ -102,5 +114,5 @@
     "ZipCPU wbm2axilite",
     "verilog-axi crossbar"
   ],
-  "verification_probe": "When DMA enabled, host BFM shares coordinator CPU data/config boundaries in DMA-only test mode. Cold boot retains former optional DMA probe."
+  "verification_probe": "In DMA-only simulation, CPU0 AXI BFMs temporarily drive CPU0 data/config NoC ports with CPUs in reset; no PCIe/external host. Cold boot retains its separate legacy DMA-port probe."
 }

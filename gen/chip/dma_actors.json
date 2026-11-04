@@ -2,7 +2,7 @@
   "axi_actors": {
     "compute0_local_config.cpu": {
       "kind": "verification_bfm",
-      "label": "Host AXI BFM at held CPU boundary in isolated full-chip DMA test"
+      "label": "CPU0 AXI BFM at held CPU0 boundary (simulation-only; no PCIe)"
     },
     "compute0_local_config.dma_regs": {
       "kind": "rtl_registers",
@@ -22,7 +22,7 @@
     },
     "compute0_local_data.cpu": {
       "kind": "verification_bfm",
-      "label": "Host AXI BFM at held CPU boundary in isolated full-chip DMA test"
+      "label": "CPU0 AXI BFM at held CPU0 boundary (simulation-only; no PCIe)"
     },
     "compute0_local_data.dma": {
       "kind": "rtl_dma",

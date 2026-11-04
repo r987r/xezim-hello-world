@@ -756,7 +756,7 @@ module soc_top #(parameter bit ProbeEnable = 0, DmaEnable = 0, DmaTestMode = 0) 
     .s_memory0_local_data_target_crossbar_rready(s_memory0_local_data_target_crossbar_req.r_ready)
   );
   initial if (DmaTestMode && (!DmaEnable || !ProbeEnable))
-    $fatal(1, "DMA host mode requires active DMA and host probe");
+    $fatal(1, "DMA CPU0 AXI BFM mode requires active DMA and probe");
   logic [7:0][7:0] reset_regs;
   logic [1:0] cpu_reset_n;
   floo_xezim_compute0_local_config_noc_pkg::axi_in_req_t cfgprobe_req;
@@ -908,7 +908,11 @@ module soc_top #(parameter bit ProbeEnable = 0, DmaEnable = 0, DmaTestMode = 0) 
   assign probe_req.w.user = '0;
   assign probe_req.ar.user = '0;
   if (DmaEnable) begin: gen_dma_compute0
-  soc_idma_engine u_dma_compute0 (
+  soc_idma_engine #(
+    .NumAxInFlight(1),
+    .BufferDepth(3),
+    .DescriptorPrefetch(0)
+  ) u_dma_compute0 (
     .clk_i(clk_i),
     .rst_ni(rst_ni),
     .apb_addr_i(dma_0_apb_addr),
@@ -1063,7 +1067,11 @@ module soc_top #(parameter bit ProbeEnable = 0, DmaEnable = 0, DmaTestMode = 0) 
   logic dma_1_apb_ready, dma_1_apb_error;
   logic [63:0] dma_1_apb_rdata;
   if (DmaEnable) begin: gen_dma_compute1
-  soc_idma_engine u_dma_compute1 (
+  soc_idma_engine #(
+    .NumAxInFlight(1),
+    .BufferDepth(3),
+    .DescriptorPrefetch(0)
+  ) u_dma_compute1 (
     .clk_i(clk_i),
     .rst_ni(rst_ni),
     .apb_addr_i(dma_1_apb_addr),
