@@ -26,11 +26,12 @@ from markdown_it import MarkdownIt
 import yaml
 
 from axi_report import render_report
+from protocol_report import render as render_protocol_report
 
 ROOT=Path(__file__).resolve().parents[1]
 FILES={'result.json','plan.json','sources.f','simulation.log','build.log','results.xml',
        'axi-transactions.json','axi-events.jsonl',
-       'protocol-transactions.json','protocol-events.jsonl','protocols.html'}
+       'protocol-transactions.json','protocol-events.jsonl'}
 
 
 def dump(path,data):
@@ -415,6 +416,9 @@ def evidence_index(evidence,output,repository):
                 if protocol_data.get('schema_version')!=1:
                     raise ValueError('unsupported protocol publication schema')
                 entry['source_sha']=protocol_sha
+                # Do not publish artifact-supplied HTML. Re-render the trusted
+                # JSON through the site source's audited escaping/textContent UI.
+                render_protocol_report(protocol_data, destination/'protocols.html')
             if trace:
                 tested_sha=trace['run'].get('commit')
                 if (tested_sha not in (verified_shas | {run['head_sha']})
@@ -448,8 +452,6 @@ def evidence_index(evidence,output,repository):
                 if protocol_data:
                     nav+='<p><a href="protocols.html">Unified protocol explorer</a></p>'
                 (destination/'report.html').write_text(html.replace('<main>','<main>'+nav,1))
-                if protocol_data and not (destination/'protocols.html').is_file():
-                    raise ValueError('generic protocol report JSON lacks its matching webpage')
                 transactions=trace['sections']['axi']['transactions']
                 entry['observations']=len(transactions)
                 entry['expected_errors']=sum(r.get('error_intent')=='expected' and r['role']=='initiator' for r in transactions)
