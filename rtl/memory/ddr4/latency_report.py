@@ -89,23 +89,33 @@ def calculate(events: list[dict], period_ps: int) -> dict:
     records = []
     w_seq = 0
     for event in events:
-        if event.get("kind") != "axi_handshake" or event.get("phase") != "traffic":
+        if event.get("kind") != "axi_handshake":
             continue
+        # A completion can legitimately be captured on the clock edge that
+        # the test transitions to post_traffic. Never discard an accepted
+        # terminal response merely because the phase label advanced.
+        phase = event.get("phase")
+        if phase not in ("pre_init", "initialization", "traffic", "post_traffic"):
+            raise ValueError(f"invalid AXI event phase: {phase}")
         channel = event["channel"]
         fields = event["fields"]
         cycle = event["cycle"]
         if type(cycle) is not int or cycle < 0:
             raise ValueError("invalid AXI clock cycle")
+        if channel in ("ar", "aw") and phase != "traffic":
+            raise ValueError(f"AXI request issued outside traffic phase: {channel} in {phase}")
         if channel == "ar":
             reads[fields["id"]].append({
                 "operation": "read", "id": fields["id"], "address": fields["addr"],
-                "start_cycle": cycle, "beats_expected": fields["len"] + 1,
+                "start_cycle": cycle, "phase": phase,
+                "beats_expected": fields["len"] + 1,
                 "beats_observed": 0,
             })
         elif channel == "aw":
             entry = {
                 "operation": "write", "id": fields["id"], "address": fields["addr"],
-                "start_cycle": cycle, "beats_expected": fields["len"] + 1,
+                "start_cycle": cycle, "phase": phase,
+                "beats_expected": fields["len"] + 1,
                 "beats_observed": 0, "data_done": False,
                 "first_w_cycle": None,
             }
