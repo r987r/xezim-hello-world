@@ -96,12 +96,23 @@ class TestDDR4GeneratedHeader(unittest.TestCase):
         port_lines = []
         for short, width in bringup.AXI_SIGNALS.items():
             decl = f"[{width - 1}:0] " if width > 1 else ""
-            port_lines.append(f"    input wire {decl}user_port_axi_0_{short}")
+            direction = "output" if short in bringup.AXI_OUTPUT_SIGNALS else "input"
+            port_lines.append(f"    {direction} wire {decl}user_port_axi_0_{short}")
         port_lines += [
             "    input wire [31:0] user_port_axi_0_awaddr",
             "    input wire [31:0] user_port_axi_0_araddr",
             "    output wire init_done",
+            "    output wire init_error",
+            "    input wire clk",
+            "    input wire rst",
             "    input wire wb_ctrl_cyc",
+            "    input wire wb_ctrl_stb",
+            "    input wire wb_ctrl_we",
+            "    output wire wb_ctrl_ack",
+            "    input wire [29:0] wb_ctrl_adr",
+            "    input wire [31:0] wb_ctrl_dat_w",
+            "    output wire [31:0] wb_ctrl_dat_r",
+            "    input wire [3:0] wb_ctrl_sel",
         ]
         return "module soc_ddr4_sim (\n" + ",\n".join(port_lines) + "\n);\nendmodule\n"
 
@@ -132,6 +143,33 @@ class TestDDR4GeneratedHeader(unittest.TestCase):
         text = self.fixture().replace("init_done", "init_not_done")
         with self.assertRaisesRegex(ValueError, "init_done"):
             bringup.emitted_port_widths(text)
+
+    def test_axi_response_direction_rejected(self):
+        text = self.fixture().replace("output wire user_port_axi_0_bvalid",
+                                      "input wire user_port_axi_0_bvalid")
+        with self.assertRaisesRegex(ValueError, "bvalid: expected output"):
+            bringup.emitted_port_widths(text)
+
+    def test_axi_request_direction_rejected(self):
+        text = self.fixture().replace("input wire user_port_axi_0_arvalid",
+                                      "output wire user_port_axi_0_arvalid")
+        with self.assertRaisesRegex(ValueError, "arvalid: expected input"):
+            bringup.emitted_port_widths(text)
+
+    def test_control_direction_rejected(self):
+        text = self.fixture().replace("output wire init_done", "input wire init_done")
+        with self.assertRaisesRegex(ValueError, "init_done: expected output"):
+            bringup.emitted_port_widths(text)
+
+    def test_required_wishbone_bus_width(self):
+        text = self.fixture().replace("[31:0] wb_ctrl_dat_w", "[15:0] wb_ctrl_dat_w")
+        with self.assertRaisesRegex(ValueError, "wb_ctrl_dat_w: expected 32-bit"):
+            bringup.emitted_port_widths(text)
+
+    def test_local_ddr_address_width_must_match_capacity(self):
+        bringup.emitted_port_widths(self.fixture(), expected_address_bits=32)
+        with self.assertRaisesRegex(ValueError, "local AXI address width"):
+            bringup.emitted_port_widths(self.fixture(), expected_address_bits=25)
 
 
 
