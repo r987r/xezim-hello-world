@@ -13,7 +13,7 @@ A passing BFM test does not establish CPU/iDMA/controller integration.
 | Eight local/global FlooNoCs | `make dv-supernoc`, all real meshes connected by 11 AXI4 links, six upstream managers and nine mapped sparse targets | AXI BFMs at CPU/DMA/CSR/SRAM/memory-crossbar boundaries |
 | Xezim FlooNoC compatibility | `python3 tools/regress.py compatibility`, all eight structural compilations | Data-mesh width warnings remain; no Xezim NoC traffic proof |
 | AXI-Lite endpoint adapters | Upstream converters/mux/demux and reset register bank attached in the chip boot scope | The independent NoC BFM wrapper still uses AXI agents |
-| PULP iDMA | `make dv-dma` isolated scope now instantiates pinned desc64 frontend + generated rw_axi backend and tests AXI descriptor fetch, payload copy and writeback through upstream AXI BFM. **Requires green CI before calling verified.** | Config NoC CSR, real local NoC integration, IRQ to CPUs and chip boot scope still pending |
+| PULP iDMA | `make dv-dma` isolated scope now instantiates pinned desc64 frontend + generated rw_axi backend and tests AXI descriptor fetch, payload copy and writeback through upstream AXI BFM. **Verified in the independent [DMA RTL CI run](https://github.com/r987r/xezim-hello-world/actions/runs/41860245485).** | Config NoC CSR, real local NoC integration, IRQ to CPUs and chip boot scope still pending |
 | HBM/DDR controllers and PHYs | No executable physical path | All current targets are behavioral AXI models |
 | Chip boot `soc_top` | `make dv-chip`: CPU0 loads SRAM, releases SERV and coordinates init/run/check through real NoCs; AXI memory model readback | Real iDMA/CSR/interrupts and physical controllers remain pending |
 

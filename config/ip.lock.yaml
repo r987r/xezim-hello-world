@@ -52,7 +52,7 @@ third_party:
     git: https://github.com/pulp-platform/iDMA.git
     commit: a6b1d6657c03998b6df0baf905d7babd006ba614
     license: Solderpad-0.51
-    integration: planned
+    integration: isolated_dma_rtl_test_verified_full_chip_pending
   pulp_axi:
     git: https://github.com/pulp-platform/axi.git
     commit: 70b8e54fd460e3308e58be596ceb3566a6e3576e

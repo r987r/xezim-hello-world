@@ -1,6 +1,6 @@
 # DMA bring-up foundation
 
-**Current status:** Reusable descriptor allocation and host-side test-vector generation are implemented. Real iDMA RTL integration and AXI/IRQ simulation have **not** been completed or claimed to pass.
+**Current status (2026-11-04):** The reusable descriptor allocator and host vectors are implemented. The **real pinned PULP iDMA frontend + generated rw_axi backend now compile and pass isolated Verilator/cocotb RTL traffic verification**: a 100-descriptor chain to the DDR model and a separate descriptor to the HBM model. The checker verifies actual payload memory, descriptor writeback, final IRQ and idle before SRAM reuse. [Successful DMA CI run](https://github.com/r987r/xezim-hello-world/actions/runs/41860245485), commit `a2c12133b2a57c49ae90b638384335fc6584f331`. The real DMA is **not attached** to the full-chip FlooNoC or CPU CSR/IRQ paths, and physical DDR/HBM controllers are not modeled.
 
 ## Existing libraries and software
 
@@ -28,16 +28,16 @@ For combined boot + DMA tests, each compute SRAM currently models only 16 KiB; t
     cc -std=c11 -Wall -Wextra -Werror -pedantic sw/common/sram_pool.c sw/dma/dma.c sw/dma/tests/test_dma.c -o /tmp/dma-sw-test
     /tmp/dma-sw-test
 
-The generator writes source_sram.hex in 64-bit readmemh word order, plus case.json with chain head and every independent expected payload. Successful generation alone is NOT a hardware DMA test.
+The generator writes source_sram.hex in 64-bit readmemh word order, plus case.json with chain head and every independent expected payload. Successful generation alone is NOT a hardware DMA test. For the actual independent RTL test run `make dv-dma`; it uses upstream Cocotb AXI RAM targets and checks real transactions and completion. The host preload is never enabled in the CPU cold-boot regression.
 
-## Real hardware bring-up sequence (pending)
+## Hardware bring-up gates: isolated simulation passed; full-chip pending
 
-1. Fetch pinned iDMA; generate upstream AXI backend and descriptor register RTL through its documented generation flow. Reuse the FlooNoC-compatible upstream AXI lock; do not mix divergent AXI dependency pins.
-2. Instantiate the real descriptor frontend and AXI read/write backend in each compute subsystem. Arbitrate frontend descriptor-read and backend read/write managers into the existing DMA NoC port with correctly budgeted unique AXI IDs.
-3. Connect the frontend's 64-bit APB submission/status registers to the 32-bit AXI-Lite CSR network via upstream bridges and narrow atomic staging/commit logic. Connect and verify IRQ.
-4. Add an isolated cocotb DMA-only test with explicit host memory preload *before* DMA reset release; require actual descriptor AXI reads, actual payload AXI transactions, final IRQ, and independent readback from both local and remote memory models.
-5. Extend the existing declarative regression for single, 100-descriptor, stalls, negative/SLVERR, timeout, interrupts, unaligned and repeated jobs; use existing AXI report timeline for all events.
-6. Only after those pass: add a minimal CPU-side CSR/IRQ driver and a separate cold-boot-to-DMA integration test.
+1. **PASS, isolated:** Fetch pinned iDMA; generate upstream AXI backend and descriptor register RTL with MARIO and PeakRDL. Use the PULP AXI/APB versions locked by FlooNoC; no local DMA datapath copies.
+2. **PASS, isolated:** Instantiate real desc64 frontend + backend, combine descriptor/payload AXI through upstream `axi_rw_join`/`axi_mux` with 3-bit internal / 4-bit shared external AXI IDs.
+3. **PASS, isolated:** Exercise a real upstream 64-bit APB head submission, hardware-prefetched linked descriptors, 100 copies to the DDR stand-in, another copy to the HBM stand-in, descriptor writebacks, and one sampled final IRQ per chain, with DMA idle before descriptor-pool reuse. `make dv-dma` executes this gate in Verilator.
+4. **PENDING, full chip:** Factor out/reuse the proven instance at each configured compute DMA port and arbitrate real descriptor/payload AXI through its local FlooNoC. Ensure source-ID/outstanding budgets stay within `config/interface_contracts.yaml`; do not confuse isolated `dma_tb` with the full-chip topology.
+5. **PENDING, CPU control:** Bridge real 64-bit APB submission/status to the 32-bit AXI-Lite configuration NoC with explicit atomic commit semantics, configure CSR addresses, connect completion/error reporting and CPU IRQ.
+6. **PENDING, stronger regressions:** Add local/remote NoC transfers, stalls/negative SLVERR, deliberate corruption, unaligned payloads, more queue behavior and AXI timeline/report annotations. Maintain cold boot's no-preload invariant and make a separate CPU-started DMA test.
 
 **Do not preload writable SRAM in existing cold-boot tests.** They prove CPU0 copies code through its bus and must remain unmodified. DMA preload must be an explicit DMA-only verification mode. The stock desc64 frontend overwrites the first 8 bytes of completed descriptors with a completion marker; the arena cannot be reused before retirement and descriptors must be reinitialized. Linked descriptors are not automatically a data-dependency barrier. A release fence does not replace cache maintenance on cacheful CPUs.
 

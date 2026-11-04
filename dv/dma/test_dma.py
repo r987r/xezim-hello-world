@@ -129,7 +129,8 @@ async def real_dma_one_and_one_hundred_descriptors(dut):
             last = active
 
     irq_task = cocotb.start_soon(watch_irq())
-    # One immediate interrupt, followed by a long 100-descriptor chain.
+    # Exercise long prefetch and final-IRQ semantics before pool reuse, then
+    # submit an independent one-descriptor chain to the other memory model.
     for count, destination in ((100, "memory0.ddr0"), (1, "memory0.hbm0")):
         case = build_dma_vector(cfg, count=count, length=64,
                                 destination=destination, profile="dma_only")
