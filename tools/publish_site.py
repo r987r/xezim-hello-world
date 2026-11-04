@@ -404,7 +404,10 @@ def evidence_index(evidence,output,repository):
                    'pr_head_sha':run['head_sha'],'merged_pr':run.get('merged_pr'),
                    'recorded_at':run['created_at'],'workflow':run['label'],'workflow_url':run['html_url'],
                    'path':str(relative/'report.html'),'assets':sorted(assets),
-                   'axi':trace is not None,'result':result}
+                   'axi':trace is not None,
+                   'protocols':sorted({r['protocol'] for r in protocol_data.get('records',[])}) if protocol_data else [],
+                   'protocol_observations':len(protocol_data['records']) if protocol_data else 0,
+                   'result':result}
             if protocol_data:
                 protocol_run=protocol_data.get('run',{})
                 protocol_sha=protocol_run.get('commit')
