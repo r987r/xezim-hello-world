@@ -56,7 +56,7 @@ class RegressionTests(unittest.TestCase):
             else: test['report']['axi']['unknown']=True
             with tempfile.TemporaryDirectory() as tmp:
                 path=Path(tmp)/'regression.yaml';path.write_text(yaml.safe_dump(cfg))
-                with self.assertRaisesRegex(ValueError,'invalid AXI report'):
+                with self.assertRaisesRegex(ValueError, 'invalid protocol report' if mutation == 'engine' else 'invalid AXI report'):
                     regress.load_config(path)
 
     def test_negative_requires_named_failure_and_failed_process(self):
