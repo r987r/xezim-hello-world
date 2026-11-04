@@ -5,19 +5,28 @@
 <div class="actions"><a href="topology.html">One architecture diagram</a><a href="data/fabric.json">Download fabric report JSON</a><a href="config/interface_contracts.yaml">Sizing contracts</a><a href="gen/supernoc/manifest.json">Wired route manifest</a></div>
 <div class="grid" id="fabric-facts"></div>
 <div class="grid" style="align-items:end"><label>Fabric plane <select id="fabric-plane"><option value="data">Data (AXI4)</option><option value="config">Configuration (AXI4 transport)</option></select></label><label>Filter by endpoint, subsystem or target <input id="fabric-search" type="search" placeholder="e.g. compute0, sram, hbm0" autocomplete="off"></label></div>
-<h2>Initiator → target connectivity</h2>
-<p class="muted">RW means structurally routed read/write; R means a read-only address policy; — means no route. Select a cell to expand its actual network/XY router path. Reachability does not imply that reserved hardware is implemented or functional.</p>
-<div class="scroll"><table id="fabric-matrix"><thead></thead><tbody></tbody></table></div>
-<h2>Selected route</h2><div class="card" id="fabric-route"><p class="muted">Select any reachable cell in the matrix.</p></div>
+<h2>Route-by-route latency in reference clock cycles</h2>
+<p class="muted">One row per initiator → target. Each NoC column covers the measured AXI ingress-to-egress request <em>plus</em> response delay; target R and W are measured independently at the last AXI target boundary. Cells show <strong>min / avg / max</strong> over serial one-beat samples, followed by n. Clock normalization uses the measured testbench period (10 ns in current simulations), <em>not</em> an assumed physical implementation frequency. — means this block is not on the route or the operation is not permitted; “unmeasured” means the route exists but its current-source evidence is missing.</p>
+<div class="scroll" role="region" aria-label="Wide source to target AXI latency table" tabindex="0"><table id="fabric-latency-table"><thead></thead><tbody></tbody></table></div>
+<h2>Selected route</h2><div class="card" id="fabric-route"><p class="muted">Select a routed source/destination row for detailed router and timing provenance.</p></div>
 <h2>Interface inventory</h2>
 <p class="muted">Data width, ID width and fabric limits come from emitted FlooGen profiles. Read/write outstanding entries are configured interface budgets, <em>not</em> independent capacities in FlooNoC's shared MaxTxns resource. Clock frequency is intentionally unspecified.</p>
 <div class="scroll"><table id="fabric-interfaces"><thead><tr><th>Interface</th><th>Subsystem</th><th>Role / integration</th><th>AXI data / ID</th><th>Pending R / W budget</th><th>Shared Txns / IDs</th><th>Clock</th></tr></thead><tbody></tbody></table></div>
 <h2>Address targets and service latency</h2><div class="scroll"><table id="fabric-targets"><thead><tr><th>Target</th><th>Address base</th><th>Size</th><th>1-beat read service</th><th>1-beat write service</th></tr></thead><tbody></tbody></table></div>
 <p class="muted">Source: checked-in SoC YAML, interface-sizing contracts, pinned FlooGen profiles, shared NoC route manifest, and chip actor manifest. All report data is generated at publication time from these inputs; this page does not duplicate the architectural diagram.</p>
 <style>
-#fabric-matrix button{font:inherit;cursor:pointer;background:transparent;color:var(--accent);border:1px solid var(--line);border-radius:5px;padding:2px 9px;min-width:48px}
-#fabric-matrix button:hover,#fabric-matrix button[aria-pressed="true"]{background:var(--panel);border-color:var(--accent)}
-#fabric-matrix td,#fabric-matrix th{white-space:nowrap}#fabric-matrix th:first-child,#fabric-matrix td:first-child{position:sticky;left:0;background:var(--bg);z-index:1}
+#fabric-latency-table{border-collapse:separate;border-spacing:0;font-variant-numeric:tabular-nums}
+#fabric-latency-table th,#fabric-latency-table td{white-space:nowrap;text-align:left;vertical-align:top;padding:.52rem .65rem}
+#fabric-latency-table th{font-size:.8rem}
+#fabric-latency-table td:first-child,#fabric-latency-table th:first-child{position:sticky;left:0;background:var(--bg);z-index:3}
+#fabric-latency-table td:nth-child(2),#fabric-latency-table th:nth-child(2){position:sticky;left:13rem;background:var(--bg);z-index:2}
+#fabric-latency-table td:first-child,#fabric-latency-table th:first-child{min-width:13rem;max-width:13rem}
+#fabric-latency-table button{font:inherit;text-align:left;cursor:pointer;color:var(--accent);background:transparent;border:0;padding:0}
+#fabric-latency-table button[aria-pressed="true"]{text-decoration:underline;font-weight:700}
+#fabric-latency-table .metric-line{display:block;line-height:1.5}
+#fabric-latency-table .metric-label{display:inline-block;min-width:1.2rem;color:var(--muted)}
+#fabric-latency-table .metric-n{font-size:.75rem;color:var(--muted)}
+#fabric-latency-table .missing{color:var(--muted)}
 #fabric-interfaces td:first-child,#fabric-targets td:first-child{white-space:nowrap}#fabric-route table{width:100%}
 #fabric-route code{overflow-wrap:anywhere}#fabric-route details{margin:.45rem 0}#fabric-plane,#fabric-search{display:block;width:100%;padding:.65rem;border-radius:7px;border:1px solid var(--line);background:var(--panel);color:var(--fg)}
 </style>
@@ -36,20 +45,53 @@ for(const [name,value] of Object.entries(report.summary)){
  const card=E('div',undefined,'card');card.append(E('div',value,'stat'),E('div',name.replaceAll('_',' '),'muted'));byId('fabric-facts').append(card);
 }
 function visible(s){return s.toLowerCase().includes(search.value.trim().toLowerCase())}
-function renderMatrix(){
- const header=byId('fabric-matrix').querySelector('thead'),body=byId('fabric-matrix').querySelector('tbody');header.replaceChildren();body.replaceChildren();
- const targets=report.targets.filter(t=>t.plane===plane.value&&(!search.value||visible(t.name)||report.initiators.some(i=>visible(i))));
- const sources=report.initiators.filter(s=>report.interfaces.some(i=>i.name===s&&i.plane===plane.value)&&(!search.value||visible(s)||targets.some(t=>visible(t.name))));
- const h=E('tr');addCell(h,'Initiator / target','th');for(const t of targets)addCell(h,t.name,'th');header.append(h);
- const look=new Map(report.matrix.filter(e=>e.plane===plane.value).map(e=>[e.source+'\u0000'+e.target,e]));
- for(const source of sources){const tr=E('tr');addCell(tr,source);for(const target of targets){
-   const td=E('td'),cell=look.get(source+'\u0000'+target.name);
-   if(cell&&cell.route_id){const b=E('button',cell.access);b.type='button';b.setAttribute('aria-label',source+' to '+target.name+': '+cell.access);b.setAttribute('aria-pressed',String(selected===cell.route_id));b.addEventListener('click',()=>{selected=cell.route_id;renderMatrix();renderRoute()});td.append(b)}else td.textContent='—';tr.append(td)
-  }body.append(tr)}
- if(!sources.length||!targets.length){const tr=E('tr');const td=addCell(tr,'No matches');td.colSpan=targets.length+1;body.append(tr)}
+const latency=report.latency_table||{mesh_columns:{data:[],config:[]},rows:[]};
+const fmt=x=>Number.isInteger(x)?String(x):Number(x).toFixed(2).replace(/0+$/,'').replace(/\.$/,'');
+function statLine(parent,prefix,s,applicable){
+ const line=E('div',undefined,'metric-line');
+ if(prefix)line.append(E('span',prefix,'metric-label'));
+ if(!applicable){line.append(E('span','—','missing'));}
+ else if(!s){line.append(E('span','unmeasured','missing'));}
+ else {
+   line.append(E('span',[s.min_cycles,s.avg_cycles,s.max_cycles].map(fmt).join(' / ')));
+   line.append(' ');line.append(E('span','n='+s.n,'metric-n'));
+   line.title='Measured clock period: '+s.reference_clock_period_ps+' ps · run '+s.run_sha;
+ }
+ parent.append(line);
+}
+function renderLatencyTable(){
+ const tbl=byId('fabric-latency-table'),hdr=tbl.querySelector('thead'),body=tbl.querySelector('tbody');
+ hdr.replaceChildren();body.replaceChildren();
+ const meshes=latency.mesh_columns[plane.value]||[];
+ const h=E('tr');
+ for(const name of ['Source','Destination','Access',...meshes.map(x=>x.replaceAll('_',' ')),'Target read','Target write','Total read','Total write'])addCell(h,name,'th');
+ hdr.append(h);
+ let shown=0;
+ for(const r of latency.rows.filter(r=>r.plane===plane.value&&(!search.value||visible(r.source)||visible(r.destination)||r.network_path.some(visible)))){
+  shown++;const tr=E('tr'),s=E('td'),b=E('button',r.source);
+  b.type='button';b.setAttribute('aria-pressed',String(selected===r.route_id));
+  b.disabled=!r.route_id;
+  b.addEventListener('click',()=>{selected=r.route_id;renderLatencyTable();renderRoute()});
+  s.append(b);tr.append(s);addCell(tr,r.destination);addCell(tr,r.access==='none'?'—':r.access);
+  for(const net of meshes){
+   const td=E('td');const active=r.network_path.includes(net);
+   if(!active)td.append(E('span','—','missing'));
+   else{
+     const stats=r.mesh_cycles[net]||{};
+     statLine(td,'R',stats.read,true);
+     statLine(td,'W',stats.write,r.access==='RW');
+   }
+   tr.append(td);
+  }
+  for(const [operation,stats] of [['read',r.target_cycles],['write',r.target_cycles],['read',r.end_to_end_cycles],['write',r.end_to_end_cycles]]){
+   const td=E('td');statLine(td,null,stats[operation],r.access!=='none'&&(operation==='read'||r.access==='RW'));tr.append(td);
+  }
+  body.append(tr);
+ }
+ if(!shown){const tr=E('tr'),td=addCell(tr,'No matching paths');td.colSpan=meshes.length+7;body.append(tr)}
 }
 function renderRoute(){const box=byId('fabric-route');box.replaceChildren();const r=routeById.get(selected);
- if(!r){box.append(E('p','Select any reachable cell in the matrix.','muted'));return}
+ if(!r){box.append(E('p','Select a routed source/destination row above.','muted'));return}
  box.append(E('h3',r.source+' → '+r.target));box.append(E('p',r.access+' · '+r.network_count+' NoC mesh(es) · '+r.router_links+' router-to-router links · '+r.inter_mesh_links+' inter-mesh AXI link(s)'));
  box.append(E('p','Initiator: '+r.source_integration+' · Target boundary: '+r.target_integration,'muted'));
  const table=E('table'),head=E('thead'),tr=E('tr');for(const t of ['Stage','Endpoint / network','Router links','Latency (cycles)'])addCell(tr,t,'th');head.append(tr);table.append(head);
@@ -90,7 +132,7 @@ function renderInventory(){const body=byId('fabric-interfaces').querySelector('t
 function renderTargets(){const body=byId('fabric-targets').querySelector('tbody');body.replaceChildren();for(const t of report.targets.filter(t=>t.plane===plane.value&&(!search.value||visible(t.name)))){
  const tr=E('tr');for(const value of [t.name,t.address_base,t.address_size,dash(t.target_read_latency_cycles),dash(t.target_write_latency_cycles)])addCell(tr,value);body.append(tr)}
 }
-function render(){renderMatrix();renderRoute();renderInventory();renderTargets()}
+function render(){renderLatencyTable();renderRoute();renderInventory();renderTargets()}
 plane.addEventListener('change',()=>{selected=null;render()});search.addEventListener('input',render);render();
 })();
 </script>
