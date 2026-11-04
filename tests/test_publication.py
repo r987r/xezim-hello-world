@@ -53,7 +53,9 @@ class PublicationTests(unittest.TestCase):
     def test_complete_offline_site_links_are_relative_and_exist(self):
         with tempfile.TemporaryDirectory() as tmp:
             output=Path(tmp)/'site';dataset=site.build(output,Path(tmp)/'empty','r987r/xezim-hello-world',SHA,CONFIG)
-            self.assertEqual(len(dataset['tests']),18)
+            self.assertEqual(set(dataset['tests']), set(
+                yaml.safe_load((ROOT/'config/regression.yaml').read_text())['tests']))
+            self.assertIn('dma-rtl', dataset['tests'])
             self.assertFalse(dataset['entries'])
             self.assertEqual(len(dataset['monitors']),26)
             for path in output.rglob('*.html'):

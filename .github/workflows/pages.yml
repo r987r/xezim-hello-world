@@ -11,6 +11,7 @@ on:
       - Full-chip coordinated CPU boot
       - FlooNoC structural RTL compile and elaborate
       - Checked-in FlooGen local and global NoC RTL
+      - PULP iDMA descriptor-chain RTL verification
     branches: [main]
     types: [completed]
 
