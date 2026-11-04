@@ -171,13 +171,18 @@ def generator_argv(output: Path) -> list[str]:
             "--output-dir", str(output), str(PROFILE)]
 
 
+def checked_output_dir(output: Path) -> Path:
+    """Keep isolated generation inside ignored .tools/ddr4 only."""
+    directory = output.resolve()
+    sandbox = (ROOT / ".tools" / "ddr4").resolve()
+    require(sandbox in directory.parents,
+            "DDR4 outputs must stay under ignored .tools/ddr4/ (not shared files)")
+    return directory
+
+
 def generate(contract: dict, output: Path) -> Path:
     source = source_checkout(contract["commit"])
-    output = output.resolve()
-    require(output != ROOT and ROOT / "gen" not in output.parents and output != ROOT / "gen",
-            "do not write into protected gen/; generator ownership requires a separate review")
-    require(output != source and source not in output.parents,
-            "do not generate over pinned LiteDRAM sources")
+    output = checked_output_dir(output)
     output.mkdir(parents=True, exist_ok=True)
     env = os.environ.copy()
     env["PYTHONPATH"] = str(source) + os.pathsep + env.get("PYTHONPATH", "")
