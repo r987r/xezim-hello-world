@@ -35,6 +35,18 @@ class DmaVectorTests(unittest.TestCase):
             self.assertEqual(case.source_sram[offset:offset+entry["length"]],
                              bytes.fromhex(entry["expected_hex"]))
 
+    def test_dma_only_profile_reuses_boot_space(self):
+        case = build_dma_vector(self.cfg, profile="dma_only", count=100)
+        meta = case.manifest
+        self.assertEqual(meta["descriptor_head"], 0x10000000)
+        self.assertEqual(meta["source_pool_start"], 0x10001000)
+        self.assertEqual(meta["source_pool_bytes"], 12288)
+        self.assertEqual(meta["allocation_profile"], "dma_only")
+        self.assertIsNone(meta["sram_layout"]["regions"]["firmware"])
+        self.assertEqual(DESC.unpack_from(case.source_sram, 0)[0], 64)
+        self.assertEqual(meta["copies"][-1]["next"], DESC_END)
+        self.assertEqual(meta["copies"][-1]["flags"], FLAGS_COPY | FLAGS_IRQ)
+
     def test_supported_local_and_remote_targets(self):
         for destination in ("compute0.sram", "compute1.sram", "memory0.hbm0",
                             "memory0.ddr0"):

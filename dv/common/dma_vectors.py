@@ -49,7 +49,7 @@ def _pattern(index, length):
 
 
 def build_dma_vector(cfg, *, subsystem="compute0", destination="memory0.ddr0",
-                     count=4, length=64, irq_last=True):
+                     count=4, length=64, irq_last=True, profile='boot_live'):
     """Create a disjoint chain of DMA copies, SRAM preload and golden manifest."""
     if type(count) is not int or type(length) is not int or count <= 0 or length <= 0:
         raise ValueError("count and length must be positive integers")
@@ -58,7 +58,7 @@ def build_dma_vector(cfg, *, subsystem="compute0", destination="memory0.ddr0",
     computes = [s["name"] for s in cfg["subsystems"] if s["type"] == "compute"]
     if subsystem not in computes:
         raise ValueError("unknown compute subsystem")
-    layout = build_sram_layout(cfg, subsystem)
+    layout = build_sram_layout(cfg, subsystem, profile=profile)
     sram_base, sram_bytes = layout.sram_base, layout.sram_size
     if count*length > layout.payload.size:
         raise ValueError("payload exceeds source SRAM")
@@ -76,16 +76,18 @@ def build_dma_vector(cfg, *, subsystem="compute0", destination="memory0.ddr0",
     image = bytearray(sram_bytes)
     head = layout.descriptors.start
     source = layout.payload.start
+    desc_offset = head - sram_base
+    payload_offset = source - sram_base
     copies = []
     for i in range(count):
         src = source + i*length
         dst = dst_base + dst_offset + i*length
         nxt = head + (i+1)*DESC_BYTES if i < count-1 else DESC_END
         flags = FLAGS_COPY | (FLAGS_IRQ if irq_last and i == count-1 else 0)
-        image[DESC_OFFSET+i*DESC_BYTES:DESC_OFFSET+(i+1)*DESC_BYTES] = DESC.pack(
+        image[desc_offset+i*DESC_BYTES:desc_offset+(i+1)*DESC_BYTES] = DESC.pack(
             length, flags, nxt, src, dst)
         payload = _pattern(i, length)
-        image[PAYLOAD_OFFSET+i*length:PAYLOAD_OFFSET+(i+1)*length] = payload
+        image[payload_offset+i*length:payload_offset+(i+1)*length] = payload
         copies.append({
             "descriptor": head + i*DESC_BYTES, "src": src, "dst": dst,
             "length": length, "flags": flags, "next": nxt,
@@ -102,6 +104,7 @@ def build_dma_vector(cfg, *, subsystem="compute0", destination="memory0.ddr0",
         "source_pool_start": source,
         "source_pool_bytes": layout.payload.size,
         "sram_layout": layout.as_dict(),
+        "allocation_profile": profile,
         "destination_base": dst_base+dst_offset,
         "destination_modeled_bytes": limit,
         "irq_last": irq_last, "copies": copies,

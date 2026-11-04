@@ -30,6 +30,18 @@ class SramLayoutTests(unittest.TestCase):
         self.assertTrue(s0.descriptors.contains(0x10001000, 3200))
         self.assertFalse(s0.descriptors.contains(0x10001000, 4200))
 
+    def test_dma_only_reuses_boot_storage_in_separate_test_run(self):
+        layout = build_sram_layout(self.cfg, "compute0", profile="dma_only")
+        self.assertIsNone(layout.firmware)
+        self.assertIsNone(layout.mailbox)
+        self.assertIsNone(layout.boot_scratch)
+        self.assertEqual(layout.descriptors.start, 0x10000000)
+        self.assertEqual(layout.payload.start, 0x10001000)
+        self.assertEqual(layout.payload.size, 12288)
+        self.assertEqual(layout.profile, "dma_only")
+        with self.assertRaises(ValueError):
+            build_sram_layout(self.cfg, "compute0", profile="invalid")
+
     def test_mailbox_overlap_fails_before_dma_or_boot_generation(self):
         cfg = copy.deepcopy(self.cfg)
         cfg["verification"]["full_chip_boot"]["mailbox_offset"] = "0x0fe0"

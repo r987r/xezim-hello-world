@@ -60,3 +60,27 @@ A future C BSP can instantiate the same SRAM pool.
 Run make check-config for ownership/descriptor tests or make dv-dma-vectors
 to generate the host-only 100-descriptor fixture. This does not preload
 writable SRAM during the cold-boot regression.
+
+## Split-run SRAM reuse: explicit profiles
+
+The same allocator policy now supports two contexts, chosen explicitly:
+
+- `boot_live`: preserve live firmware, mailbox and descriptor separation.
+  CPU cold boot uses this layout and continues to execute real ROM/flash
+  copies. Descriptor pool begins at SRAM + 0x1000; payload at +0x2000.
+- `dma_only`: in a separate reset/verification run, no CPUs are executing.
+  The first 4 KiB can be reused for 128 descriptors from SRAM + 0x0000,
+  and 12 KiB of payload starts at SRAM + 0x1000. The host vector tool
+  defaults to this profile; the Python API retains `boot_live` by default.
+
+Use `python3 tools/dma_vectors.py --profile dma_only` for the isolated
+test or `--profile boot_live` for a future combined CPU + DMA test.
+The selected profile and all named physical regions are in case.json.
+Never use `dma_only` with a live/booting CPU; do not backdoor-preload the
+cold-boot target.
+
+Within a running chip, only boot_scratch can currently be reclaimed after
+CHECK completion and user quiescence. Executing SRAM firmware and observed
+mailboxes remain reserved. Reusing those requires a verified CPU handoff,
+relocation/parking outside reclaimed SRAM, and retired AXI accesses; that
+runtime handoff is future work.

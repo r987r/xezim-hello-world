@@ -1,8 +1,8 @@
-"""Single SRAM ownership/lifetime policy for generated cold boot and DMA DV.
+"""Physical SRAM ownership policy shared by the real cold-boot generator and DMA DV.
 
-No simulator, runtime, or RTL may infer that an architectural 1 MiB window
-means the backing simulation SRAM has 1 MiB. All offsets are relative to
-config/soc.yaml's per-compute physical SRAM bases.
+All offsets below are relative to each compute subsystem's physical SRAM base.
+The architectural SRAM window is often larger than the simulated backing SRAM.
+This module never deposits data or changes cold-boot behavior.
 """
 from __future__ import annotations
 from dataclasses import dataclass
@@ -16,9 +16,9 @@ DESC_ALIGN = 32
 @dataclass(frozen=True)
 class Region:
     name: str
-    start: int  # physical address
+    start: int
     size: int
-    lifetime: str  # 'live', 'until_check', 'after_quiescence', 'dma'
+    lifetime: str
 
     @property
     def end(self) -> int:
@@ -33,15 +33,17 @@ class Layout:
     subsystem: str
     sram_base: int
     sram_size: int
-    firmware: Region
+    firmware: Region | None
     mailbox: Region | None
-    boot_scratch: Region
+    boot_scratch: Region | None
+    profile: str
     descriptors: Region
     payload: Region
 
     def as_dict(self) -> dict:
         return {
             'subsystem': self.subsystem,
+            'profile': self.profile,
             'sram_base': self.sram_base,
             'sram_size': self.sram_size,
             'regions': {
@@ -64,7 +66,9 @@ def _align(n, alignment):
     return (n + alignment - 1) & -alignment
 
 
-def build_sram_layout(cfg: dict, subsystem: str) -> Layout:
+def build_sram_layout(cfg: dict, subsystem: str, *, profile: str = 'boot_live') -> Layout:
+    if profile not in ('boot_live', 'dma_only'):
+        raise ValueError(f'unknown SRAM profile: {profile}')
     computes = [s['name'] for s in cfg['subsystems'] if s['type'] == 'compute']
     if subsystem not in computes:
         raise ValueError(f'{subsystem}: not a configured compute subsystem')
@@ -83,26 +87,31 @@ def build_sram_layout(cfg: dict, subsystem: str) -> Layout:
         raise ValueError('SRAM boot image overlaps mailbox/descriptor allocation')
     if mailbox_offset < 256 or mailbox_offset % 4:
         raise ValueError('SRAM mailbox offset must be word aligned and beyond boot code')
-    # Cold boot uses 16 bytes/core and a coordinator DONE word; preserve
-    # additional 64-byte headroom accepted by the boot generator.
     mailbox_capacity = 16*ncores + 64
     mailbox_end = mailbox_offset + mailbox_capacity
     if mailbox_end > DESC_START:
         raise ValueError('SRAM mailbox overlaps descriptor pool')
-    fw = Region('firmware', base, stride, 'live')
-    # Only the coordinator SRAM hosts the shared CPU mailboxes.
-    mb = Region('mailbox', base+mailbox_offset, mailbox_capacity, 'until_check') if subsystem == primary else None
-    # The transient region is not part of executable code or mailboxes.
-    scratch_start = _align(max(stride, mailbox_end if mb else stride), DESC_ALIGN)
-    scratch = Region('boot_scratch', base+scratch_start,
-                     DESC_START-scratch_start, 'after_quiescence')
-    descriptors = Region('descriptors', base+DESC_START, DESC_BYTES, 'dma')
-    payload = Region('payload', base+PAYLOAD_START, capacity-PAYLOAD_START, 'dma')
-    spans = [fw, scratch, descriptors, payload] + ([mb] if mb else [])
+    if profile == 'boot_live':
+        fw = Region('firmware', base, stride, 'live')
+        mb = Region('mailbox', base+mailbox_offset, mailbox_capacity,
+                    'until_check') if subsystem == primary else None
+        scratch_start = _align(max(stride, mailbox_end if mb else stride), DESC_ALIGN)
+        scratch = Region('boot_scratch', base+scratch_start,
+                         DESC_START-scratch_start, 'after_quiescence')
+        descriptor_offset, payload_offset = DESC_START, PAYLOAD_START
+    else:
+        # An isolated DMA-only regression starts from reset with no running CPUs,
+        # so it can reuse the entire SRAM including former boot space.
+        # Cold boot never uses this profile.
+        fw = mb = scratch = None
+        descriptor_offset, payload_offset = 0, DESC_BYTES
+    descriptors = Region('descriptors', base+descriptor_offset, DESC_BYTES, 'dma')
+    payload = Region('payload', base+payload_offset, capacity-payload_offset, 'dma')
+    spans = [x for x in (fw, mb, scratch, descriptors, payload) if x is not None]
     for i, first in enumerate(spans):
         if first.size < 0 or first.start < base or first.end > base+capacity:
             raise ValueError(f'{first.name}: region outside SRAM')
         for second in spans[i+1:]:
             if first.size and second.size and max(first.start, second.start) < min(first.end, second.end):
                 raise ValueError(f'SRAM overlap: {first.name} and {second.name}')
-    return Layout(subsystem, base, capacity, fw, mb, scratch, descriptors, payload)
+    return Layout(subsystem, base, capacity, fw, mb, scratch, profile, descriptors, payload)
