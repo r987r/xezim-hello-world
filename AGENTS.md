@@ -281,10 +281,9 @@ the BFM scope. See [docs/full-chip-boot.md](docs/full-chip-boot.md) for the
 CPU0 init/run/check mailbox contract, upstream WB/AXI bridges, AXI memory
 stand-ins, negative missing-CPU check and simulator limits. Firmware must
 execute on the real CPUs; the host never drives CPU result mailboxes.
-Next actual integration work: make both real-DMA full-NoC traffic and
-   32-bit CSR regressions green, then add CPU-started DMA and interrupt
-   servicing, a
-portable C runtime/BSP when required, and Xezim chip-level functional traffic. Preserve the existing bus-driven cold-boot proof. HBM/DDR
+Next integration work: retain the already-green real-DMA full-NoC and
+32-bit CSR regressions, then add CPU-started DMA and interrupt servicing,
+a verified CPU firmware image/BSP, and Xezim chip-level functional traffic. Preserve the existing bus-driven cold-boot proof. HBM/DDR
 controller/PHY integration is a separate stage.
 
 ## Passive AXI run reporting
