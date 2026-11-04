@@ -322,13 +322,15 @@ def emit(cfg, noc_manifest, noc_root, out):
         for plane in ('data','config'):
             actors[f'{name}_local_{plane}.cpu']={'kind':'rtl_cpu','label':f'{core["cpu"]["ip"]} {name} (RTL CPU)',
                                                'short_label':f'{name} {core["cpu"]["ip"]} ({plane})'}
+        # Default chip-boot actor map describes the ACTUALLY ACTIVE scope.
+        # Engines exist in optional generate blocks but DmaEnable is off.
         actors[f'{name}_local_data.dma'] = {
-            'kind':'rtl_dma_optional',
-            'short_label':f'{name} iDMA (DmaEnable)',
-            'label':'Generated real PULP iDMA frontend/backend when DmaEnable=1; optional BFM only with DmaEnable=0'}
+            'kind':'verification_bfm' if i == 0 else 'reserved_idle',
+            'short_label':f'{name} host BFM (default boot)' if i == 0 else f'{name} DMA disabled',
+            'label':'Verification AXI BFM at inactive DMA port' if i == 0 else 'Inactive DMA port; DmaEnable=0'}
         actors[f'{name}_local_config.dma_regs'] = {
-            'kind':'rtl_registers_optional',
-            'label':'AXI4 32-bit DMA head staging/doorbell and IRQ status when DmaEnable=1; error responder otherwise'}
+            'kind':'reserved_error',
+            'label':'DMA CSR error responder; DmaEnable=0 in cold boot'}
     for port in noc_manifest['slaves']:
         endpoint=port['endpoint']
         actor={'kind':'rtl_model','label':'Upstream AXI SRAM/ROM model'} if endpoint in ('sram','boot_rom','boot_flash') else (
@@ -341,6 +343,14 @@ def emit(cfg, noc_manifest, noc_root, out):
     manifest['axi_actors']=actors
     (out/'manifest.json').write_text(json.dumps(manifest, indent=2, sort_keys=True)+'\n')
     dma_actors = json.loads(json.dumps({'axi_actors': actors}))
+    for core in cores:
+        name = core['name']
+        dma_actors['axi_actors'][name+'_local_data.dma'] = {
+            'kind':'rtl_dma', 'short_label':name+' real PULP iDMA',
+            'label':'Real generated PULP descriptor frontend + AXI backend (DmaEnable=1)'}
+        dma_actors['axi_actors'][name+'_local_config.dma_regs'] = {
+            'kind':'rtl_registers',
+            'label':'Real 32-bit DMA CSR staging/doorbell and sticky IRQ bridge'}
     for plane in ('data', 'config'):
         dma_actors['axi_actors'][cores[0]['name']+'_local_'+plane+'.cpu'] = {
             'kind':'verification_bfm',
