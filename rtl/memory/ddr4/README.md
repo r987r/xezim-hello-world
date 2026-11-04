@@ -154,3 +154,107 @@ a real 64-bit-to-local-AXI address adapter and CSR init path, and adds
 full-chip tests with the existing NoC monitors. No shared generator,
 clock domain, NoC, DMA, boot, or diagrams were changed for standalone
 timing instrumentation.
+
+## Experimental internal DFI and BankModel probes (follow-up PR)
+
+The merged 100 MHz latency report measures accepted AXI AR to last R
+and AW to B against real LiteDRAM RTL and behavioral SDRAMPHYModel/BankModel.
+This stage observes actual flattened DFI command and modeled-bank events
+in the generated Verilog, without changing the pinned vendor RTL.
+
+dfi_probe_contract.py validates 72 pinned generator signals and creates
+a narrowly scoped Verilator public_flat_rd control file. It does NOT
+expose the 32 MiB backing memory or enable global --public-flat-rw.
+Four DFI phases are monitored (command, rddata_en, rddata_valid, wrdata_en),
+plus all sixteen behavioral bank models (read, storage write-enable).
+
+Evidence files: ddr4_dfi_events.jsonl, ddr4_dfi_summary.json,
+ddr4_probe_contract.json, and ddr4_internal_latency.json. The merged
+ddr4_latency.json remains the independent AXI boundary baseline.
+
+Controller command scheduling and DFI outputs come from real LiteDRAM RTL.
+DFI return delay and model storage are behavioral SDRAMPHYModel/BankModel.
+Neither an ASIC physical PHY nor a physical DDR4 chip is present.
+DFI commands do not carry AXI IDs; overlapping requests are explicitly
+not attributed to particular transactions. Write B and modeled DRAM
+storage commit are separate events.
+
+Only observed stage intervals are numeric; unmatched steps are unmeasured.
+Actual clock timestamps are in picoseconds, initially at one 100 MHz
+simulation clock. Full-chip DDR remains a separate opt-in integration PR.
+Tests and successful real-model CI evidence are required before asserting
+that these internal latency checkpoints are validated.
+
+### Existing DFI verification reuse (explicit audit)
+
+This PR does NOT implement a new DFI protocol VIP. It uses the existing
+pinned upstream LiteDRAM DFIPhaseModel, DFITimingsChecker (when enabled),
+SDRAMPHYModel and BankModel as the simulation/semantic owners. The small
+memory-local DFIProbe is only a read-only event/timestamp recorder; it
+must never be treated as DFI compliance verification.
+
+An open-source MIT-licensed cocotb DFIMonitor with packet queues and
+scoreboard exists in sean-galloway/RTLDesignSherpa-DV:
+https://github.com/sean-galloway/RTLDesignSherpa-DV/blob/main/src/CocoTBFramework/components/dfi/dfi_monitor.py
+
+However, it expects a single prefixed mc_dfi/phy_dfi bus with clock
+and DDR3-style RAS/CAS/WE decoding, whereas our pinned LiteDRAM generator
+exports four flattened DFI phases and DDR4 ACT_N. Reuse requires a
+validated four-phase adapter and correct DDR4 command handling, not
+blindly copying or inserting the monitor. Before adding protocol-checking
+features, prefer reusing this library or upstream LiteDRAM timing checks.
+
+The read-only timestamp tap is allowed to remain small and local, but
+no custom DFI driver, checker, DRAM state machine or PHY should be built.
+Internal latency results are provisional until actual CI proves them.
+
+## CI diagnostic policy (follow-up to warning audit)
+
+The pinned `cocotb-test==0.2.6` Verilator wrapper unconditionally requested
+global `--public-flat-rw`. Our DDR4-only `selective_verilator.py` adapter
+checks the **actual** compiler command and removes that flag, while retaining
+`--vpi` and an explicit control file. The file whitelists top-level DUT ports
+as read/write for Cocotb (including `clk`) and **only** the 72 DFI/model
+internal signals as read-only. No memory array is exposed. Any upstream
+compiler-command change fails closed.
+
+Verilator compiler stderr is saved **verbatim** to
+`ddr4_simulation_compiler.log`, rather than displaying thousands of
+`ERROR cocotb` lines for warning explanations. Real compiler errors are
+still printed; `ddr4_warning_audit.json` counts actual diagnostic messages.
+The pinned generated-model warning inventory from merged #24 is
+1,709 WIDTHEXPAND, 254 WIDTHTRUNC and 84 CASEINCOMPLETE. This is an exact
+review-required baseline, **not a blanket warning suppression**. A changed,
+missing or additional warning or any %Error causes CI failure even if
+Verilator exits 0 with `-Wno-fatal`.
+
+The current simulation changes 32768 physical rows / 1024 columns into
+2048 rows / 128 columns to bound modeled storage at 32 MiB. DFI command
+address remains 15 bits, while modeled row/column storage is narrower.
+Review of width truncation and alias boundaries remains required before
+treating the model as any form of physical DDR proof. Both raw compiler
+logs and the post-run diagnostic inventory are retained in the CI artifact.
+
+The functional regression additionally writes distinct 64-byte patterns to
+the low, middle and final 64-byte locations of the 32 MiB modeled aperture,
+**then rereads all three after the writes**. Any byte alias caused by reduced
+row/column geometry fails the DDR4 CI; this is an explicit simulation-model
+boundary check, not a claim about physical DDR4.
+
+### DDR4 write-completion attribution correction
+
+The full CI evidence showed all seven DFI WRITE and BankModel storage-write
+events, but six physical writes happened **after their AXI B handshake**.
+The old AW-to-B timestamp filter therefore missed six writes and falsely
+attributed one earlier DFI WRITE to a later AXI AW. This was not real
+per-AXI write scheduling evidence and is deliberately removed.
+
+`controller_aw_to_dfi_write` now stays **unmeasured** until a verified
+controller queue/physical bank correlation exists. `AXI AW->B` remains
+independently measured and does NOT mean DRAM storage completed.
+`dfi_write_to_bankmodel_storage` is instead paired independently by
+actual DFI command and matching BankModel bank-write-enable, rejecting
+multiple or absent candidate commits. The positive smoke test fails unless
+all DFI WRITE events have unique modeled storage evidence and relevant
+read-model stages are measured. These remain behavioral model delays, not
+silicon DDR timing.
