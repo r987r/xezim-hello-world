@@ -2,6 +2,7 @@ name: PULP iDMA descriptor-chain RTL verification
 
 on:
   push:
+    branches: [main]
     paths:
       - 'Bender.yml'
       - 'config/**'
