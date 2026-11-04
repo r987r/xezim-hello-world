@@ -9,6 +9,7 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import bringup
 import sim_model
+import check_rtl
 
 
 class TestDDR4Contract(unittest.TestCase):
@@ -247,6 +248,28 @@ class TestDDR4SimGeometry(unittest.TestCase):
         self.assertEqual(Path(cmd[1]).name, "sim_model.py")
         self.assertIn("--sim", cmd)
         self.assertEqual(cmd[-1], str(bringup.PROFILE))
+
+
+class TestDDR4CompileRunner(unittest.TestCase):
+    def test_verilator_lint_cmd(self):
+        args = check_rtl.compile_command("verilator", "/opt/bin/verilator", Path("/tmp/ddr.f"))
+        self.assertEqual(args[1:4], ["--lint-only", "--timing", "-Wno-fatal"])
+        self.assertIn("soc_ddr4_sim", args)
+        self.assertEqual(args[-1], "/tmp/ddr.f")
+
+    def test_xezim_compile_cmd(self):
+        args = check_rtl.compile_command("xezim", "/opt/bin/xezim", Path("/tmp/ddr.f"))
+        self.assertEqual(args[1:5], ["--compile", "--no-cache", "-s", "soc_ddr4_sim"])
+        self.assertEqual(args[-1], "/tmp/ddr.f")
+
+    def test_invalid_engine_fails_closed(self):
+        with self.assertRaisesRegex(ValueError, "unknown DDR4 RTL engine"):
+            check_rtl.compile_command("fake", "/bin/false", Path("/tmp/ddr.f"))
+
+    def test_missing_generated_source_fails_closed(self):
+        with self.assertRaisesRegex(ValueError, "generate the pinned DDR4 controller first"):
+            check_rtl.generated_sources(bringup.ROOT / ".tools/ddr4/not-generated")
+
 
 if __name__ == "__main__":
     unittest.main()
