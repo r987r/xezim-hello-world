@@ -14,6 +14,7 @@ import sys
 
 from bringup import CORE_NAME, DEFAULT_OUTPUT, checked_output_dir
 from check_rtl import generated_sources
+from traffic_observer import verify_capture
 
 
 def preflight(path: Path):
@@ -55,9 +56,16 @@ def main() -> int:
             compile_args=["-Wno-fatal"],
             waves=False,
         )
+        # Independent post-run check: the protocol test is not enough to
+        # claim a pass if passive capture was disabled, truncated or stopped.
+        capture = verify_capture(output)
         (output / "ddr4_functional_result.json").write_text(
             json.dumps({"status": "pass", "top": CORE_NAME,
                         "scope": "isolated LiteDRAM generated RTL/DFI model",
+                        "monitor": {"status": capture["status"],
+                                    "sampled_cycles": capture["sampled_cycles"],
+                                    "phases": capture["phases"],
+                                    "channels": capture["channels"]},
                         "warning": "Does not prove full-chip DDR or silicon DDR PHY"}, indent=2) + "\n"
         )
         print("PASS actual DDR4 standalone Wishbone initialization and AXI integrity")
