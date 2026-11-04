@@ -59,7 +59,7 @@ Optional pinned upstream RTL-generation attempt, in a network-enabled environmen
     python3 -m pip install -e .tools/litedram
     python3 rtl/memory/ddr4/bringup.py generate
 
-Generation uses local sim_model.py --sim, invoking pinned upstream litedram.gen with simulation-only reduced geometry (rather than editing upstream RTL). It writes to ignored .tools/ddr4/litedram_sim/, not the generator-owned gen/ tree. Successful generation produces a SHA-256 manifest and **generated-not-simulated** status; it is not a simulation pass.
+Generation uses local sim_model.py --sim, invoking pinned upstream litedram.gen with simulation-only reduced geometry (rather than editing upstream RTL). It writes only beneath ignored .tools/ddr4/ (enforced by a negative path guard), not the generator-owned gen/ tree. Successful generation produces a SHA-256 manifest and **generated-not-simulated** status; it is not a simulation pass.
 
 ## PR milestone tracker
 
@@ -99,7 +99,7 @@ reject out-of-model accesses.
 Local check performed (Python 3.13 + PyYAML):
 
     python3 -m unittest discover -s rtl/memory/ddr4 -p 'test_*.py' -v
-    # Ran 22 tests, OK
+    # Ran 23 tests, OK
 
 This verifies Python contract/negative cases and capacity calculations,
 **not real generated Verilog**. The execution container lacks internet
