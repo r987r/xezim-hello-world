@@ -1,5 +1,5 @@
 {
-  "config_sha256": "d52980d2da53a567d550eed7a6356f5e62072e4836de4411669bc59eb211a7cd",
+  "config_sha256": "bc5b3f67fdb0b468c74c8ce36aa7bce40294c1548f254ed262a34aac3cab68ce",
   "files_sha256": {
     ".generated-root": "0db72ba0ceee7c322b275cc197d8ab0a147283c068aaa89cf374b42a9765e013",
     "README.md": "ce96ed414c86c69f3cce3908b85048e47c0c430985d20be8f1659a723c7cf549",
@@ -20,8 +20,8 @@
     "chip/flash.hex": "b4cbf443369a57c56e4a8241d0dd4cab073fb93d5b1788af67794182d56a72da",
     "chip/full_chip_dma_tb.sv": "d73978039a86f6bd17e5f4ca91b59d2525441607fc91bcd18898f549de116d79",
     "chip/full_chip_tb.sv": "f9e463c20f9a4224bbc2fcfdffc2245b1d723e7db1effeb1603169ed1fcdc4ce",
-    "chip/manifest.json": "3c9958f18fd76469bb4de4f1a5b495f6121eb83436e5db15de81b3a551ffeff7",
-    "chip/soc_top.sv": "c17f1e87e9f6625749f74870bfe3b45e6ddddb97d73fee827e1b0ed7a1456933",
+    "chip/manifest.json": "a5c040a77a2a33a5ae47caa9628039b33645d5734ce2b1b2bedf5afa9c3aaa84",
+    "chip/soc_top.sv": "6dfd9ba1232fdc3b460656fe564cad8683a121dae654293328635bd8cd00fd11",
     "diagrams/graphs.json": "cc3c5806982a864c6cb1bd82b640475288481a2eb34d14424cf11c9c64bb1830",
     "diagrams/noc-hierarchy.mmd": "b7150620b00403727224c35653250f9c793dd443dfc4fb215709ab0d3159e7dc",
     "diagrams/noc-hierarchy.svg": "6d2b97341d870b1c4a2d8b81c183d238b6373907dc203f96455ba68ed2b9a27a",

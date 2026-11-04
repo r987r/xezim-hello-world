@@ -909,7 +909,7 @@ module soc_top #(parameter bit ProbeEnable = 0, DmaEnable = 0, DmaTestMode = 0) 
   assign probe_req.ar.user = '0;
   if (DmaEnable) begin: gen_dma_compute0
   soc_idma_engine #(
-    .NumAxInFlight(1),
+    .NumAxInFlight(2),
     .BufferDepth(3),
     .DescriptorPrefetch(0)
   ) u_dma_compute0 (
@@ -1068,7 +1068,7 @@ module soc_top #(parameter bit ProbeEnable = 0, DmaEnable = 0, DmaTestMode = 0) 
   logic [63:0] dma_1_apb_rdata;
   if (DmaEnable) begin: gen_dma_compute1
   soc_idma_engine #(
-    .NumAxInFlight(1),
+    .NumAxInFlight(2),
     .BufferDepth(3),
     .DescriptorPrefetch(0)
   ) u_dma_compute1 (

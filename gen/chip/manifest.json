@@ -75,12 +75,12 @@
     "compute0": {
       "buffer_depth": 3,
       "descriptor_prefetch": 0,
-      "num_ax_in_flight": 1
+      "num_ax_in_flight": 2
     },
     "compute1": {
       "buffer_depth": 3,
       "descriptor_prefetch": 0,
-      "num_ax_in_flight": 1
+      "num_ax_in_flight": 2
     }
   },
   "dma_testbench": "full_chip_dma_tb",
