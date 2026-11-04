@@ -308,49 +308,188 @@ def build(soc, knobs, noc_manifest, networks, super_manifest, chip_manifest, por
 
 
 
-def attach_one_beat_observations(report, entries, output, source_sha):
-    """Attach genuine B/RLAST endpoint timing; never infer router-hop timing.
 
-    Only clean, complete, successful, bound captures are eligible. Old-source
-    runs are kept distinguishable and carry their own commit + test scope.
+def _observed_transfers(rows, phase):
+    """Index only unambiguous, accepted, successful single-beat transfers."""
+    observed = defaultdict(list)
+    for tx in rows:
+        if (tx.get("phase") != phase or tx.get("status") != "complete"
+                or tx.get("expected_beats") != 1 or tx.get("issues")
+                or number(tx.get("response") or 0) != 0
+                or tx.get("start_ps") is None or tx.get("end_ps") is None
+                or tx["end_ps"] < tx["start_ps"]):
+            continue
+        observed[(tx["monitor"], tx["plane"], tx["operation"],
+                  number(tx["address"]))].append(tx)
+    return observed
+
+
+def _observed_stages(route, source_tx, transfer_index, boundary):
+    """Pair a serial transaction across tapped AXI boundaries.
+
+    The baseline has at most one outstanding transaction *across the design*
+    and uses unique addresses. Consequently a matching address/operation at
+    a *known on-route* AXI boundary is unambiguous without depending on AXI
+    ID remapping. Reject any missing, duplicate or nonmonotonic observation.
+    Router-internal flits and post-crossbar target AXI ports are NOT tapped.
+    """
+    key = (route["plane"], source_tx["operation"], number(source_tx["address"]))
+    stages = []
+    for stage in route["stages"]:
+        if stage["kind"] != "mesh":
+            continue
+        ingress, egress = boundary.get(stage["from"]), boundary.get(stage["to"])
+        if ingress is None or egress is None:
+            return None
+        candidates_in = transfer_index.get((ingress, *key), [])
+        candidates_out = transfer_index.get((egress, *key), [])
+        if len(candidates_in) != 1 or len(candidates_out) != 1:
+            return None
+        incoming, outgoing = candidates_in[0], candidates_out[0]
+        forward = outgoing["start_ps"] - incoming["start_ps"]
+        backward = incoming["end_ps"] - outgoing["end_ps"]
+        if forward < 0 or backward < 0:
+            return None
+        stages.append({"kind": "mesh", "network": stage["network"],
+                       "from_monitor": ingress, "to_monitor": egress,
+                       "request_ps": forward, "response_ps": backward,
+                       "sum_ps": forward + backward,
+                       "router_links": stage["router_links"]})
+    if not stages:
+        return None
+    terminal = boundary.get(next(s for s in reversed(route["stages"])
+                                 if s["kind"] == "mesh")["to"])
+    matches = transfer_index.get((terminal, *key), [])
+    if len(matches) != 1:
+        return None
+    service = matches[0]["end_ps"] - matches[0]["start_ps"]
+    if service < 0:
+        return None
+    total = source_tx["end_ps"] - source_tx["start_ps"]
+    if sum(stage["sum_ps"] for stage in stages) + service != total:
+        return None
+    stages.append({"kind": "terminal_axi_service", "monitor": terminal,
+                   "sum_ps": service,
+                   "note": "Includes target-facing AXI model and any downstream "
+                           "crossbar/service delay; not isolated device latency"})
+    return stages
+
+
+def _quantiles(samples):
+    samples = sorted(samples)
+    return {"min_ps": samples[0], "median_ps": median(samples),
+            "p95_ps": samples[ceil(0.95 * len(samples)) - 1]}
+
+
+def attach_one_beat_observations(report, entries, output, source_sha):
+    """Attach source-completion timing and rigorous serial per-mesh deltas.
+
+    Router link counts are never interpreted as cycles. Per-mesh deltas use
+    tapped AXI ingress/egress. The final AXI service includes any unobserved
+    downstream target crossbar; individual router/device cycles are unknown.
     """
     routes = {r["id"]: r for r in report["routes"]}
     by_source = defaultdict(list)
     target_info = {t["name"]: t for t in report["targets"]}
     for route in report["routes"]:
+        route.setdefault("one_beat_stage_observations", [])
         by_source[route["source"]].append(route)
+
+    baseline_phase = "Fabric baseline: single-outstanding one-beat"
     for entry in entries:
-        if not entry.get("axi") or not entry.get("passed") or "axi-transactions.json" not in entry.get("assets", []):
+        if (not entry.get("axi") or not entry.get("passed")
+                or "axi-transactions.json" not in entry.get("assets", [])):
             continue
         path = output / Path(entry["path"]).parent / "axi-transactions.json"
         trace = json.loads(path.read_text())
         run = trace["run"]
-        if not run.get("capture_bound") or run.get("capture_overflow") or run.get("dirty") is not False:
+        if (not run.get("capture_bound") or run.get("capture_overflow")
+                or run.get("dirty") is not False):
             continue
+        rows = trace["sections"]["axi"]["transactions"]
         matched = defaultdict(list)
-        for item in trace["sections"]["axi"]["transactions"]:
+        source_samples = defaultdict(list)
+        for item in rows:
             if (item.get("role") != "initiator" or item.get("status") != "complete"
                     or item.get("expected_beats") != 1 or item.get("issues")
-                    or number(item.get("response") or 0) != 0 or item.get("latency_ps") is None):
+                    or number(item.get("response") or 0) != 0
+                    or item.get("latency_ps") is None
+                    or item.get("start_ps") is None or item.get("end_ps") is None
+                    or item["latency_ps"] != item["end_ps"] - item["start_ps"]):
                 continue
             for route in by_source[item["monitor"]]:
                 target = target_info[route["target"]]
                 address = number(item["address"])
                 if (route["plane"] == item["plane"] and
-                    number(target["address_base"]) <= address <
+                        number(target["address_base"]) <= address <
                         number(target["address_base"]) + number(target["address_size"])):
                     matched[(route["id"], item["operation"])].append(number(item["latency_ps"]))
+                    if item.get("phase") == baseline_phase:
+                        source_samples[route["id"]].append(item)
+
         for (route_id, operation), samples in matched.items():
-            samples.sort()
             routes[route_id]["one_beat_observations"].append({
                 "operation": operation, "count": len(samples),
-                "min_ps": samples[0], "median_ps": median(samples),
-                "p95_ps": samples[ceil(0.95 * len(samples)) - 1],
-                "source_sha": entry["source_sha"],
+                **_quantiles(samples), "source_sha": entry["source_sha"],
                 "matches_site_source": entry["source_sha"] == source_sha,
                 "test_scope": entry["target"], "simulator": entry["engine"],
                 "run_report": entry["path"],
-                "scope": "initiator_end_to_end_B_or_RLAST_not_router_hops",
+                "scope": "initiator_end_to_end_B_or_RLAST_all_test_phases",
+            })
+
+        # Never project stage timing from an older architecture version.
+        # The test source SHA must exactly match the architecture being
+        # published. The run must measure one positive clock period itself.
+        clock_ps = run.get("clock_period_ps")
+        if (entry["source_sha"] != source_sha or
+                type(clock_ps) is not int or clock_ps <= 0 or
+                not source_samples):
+            continue
+        monitors = trace["sections"]["axi"]["monitors"]
+        boundary = {}
+        for monitor in monitors:
+            for endpoint in monitor["endpoints"]:
+                if endpoint in boundary and boundary[endpoint] != monitor["id"]:
+                    raise FabricReportError(f"ambiguous AXI monitor endpoint {endpoint}")
+                boundary[endpoint] = monitor["id"]
+        indexed = _observed_transfers(rows, baseline_phase)
+        for route_id, samples in source_samples.items():
+            route = routes[route_id]
+            # Require all baseline source samples to be unique under the
+            # observable key, otherwise pairing could select wrong traffic.
+            paired = []
+            for source_tx in samples:
+                source_key = (source_tx["monitor"], source_tx["plane"],
+                              source_tx["operation"], number(source_tx["address"]))
+                if len(indexed[source_key]) != 1:
+                    continue
+                components = _observed_stages(route, source_tx, indexed, boundary)
+                if components is not None:
+                    paired.append((source_tx, components))
+            if not paired:
+                continue
+            stage_stats = []
+            for index, component in enumerate(paired[0][1]):
+                metrics = ("request_ps", "response_ps", "sum_ps") if component["kind"] == "mesh" else ("sum_ps",)
+                current = {k:v for k,v in component.items() if k not in metrics}
+                for metric in metrics:
+                    values = [row[index][metric] for _,row in paired]
+                    current[metric.replace("_ps", "_stats")] = {
+                        **_quantiles(values),
+                        "median_cycles": median(values) / clock_ps,
+                    }
+                stage_stats.append(current)
+            elapsed = [tx["latency_ps"] for tx,_ in paired]
+            route["one_beat_stage_observations"].append({
+                "operation": paired[0][0]["operation"],
+                "sample_count": len(paired), "clock_period_ps": clock_ps,
+                "end_to_end": {**_quantiles(elapsed),
+                               "median_cycles": median(elapsed) / clock_ps},
+                "stage_metrics": stage_stats,
+                "source_sha": entry["source_sha"], "matches_site_source": True,
+                "test_scope": entry["target"], "simulator": entry["engine"],
+                "run_report": entry["path"],
+                "scope": "serial_single_outstanding_AXI_tap_boundary_deltas",
             })
     return report
 
