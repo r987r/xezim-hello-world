@@ -12,7 +12,7 @@ for an already enabled site using the deployment job's `pages: write` token.
 - Overview: implementation limits, latest workflow status and the same generated
   `gen/diagrams/noc-hierarchy.svg` used by the README. No second architecture
   diagram is maintained.
-- Fabric Explorer: address-accurate initiator-to-target connectivity matrix, AXI port inventory with planned outstanding budgets and physically generated XY router/link paths. One-beat end-to-end timings attach only to clean completed captured test runs, with original test SHA; hop and target service latencies remain unmeasured until independently characterized.
+- Fabric Explorer: address-accurate initiator-to-target connectivity matrix, AXI port inventory with planned outstanding budgets and physically generated XY router/link paths. Controlled one-beat RTL timings attach only to clean, complete, same-architecture-SHA serial test traces. They decompose observed AXI mesh boundaries into request/return deltas and combined terminal service; internal router cycles and isolated HBM/DDR controller latency remain unmeasured. Older or stressed observations retain their original SHA and end-to-end-only scope.
 - Topology: all generated local/global meshes, router/endpoint counts, upstream
   FlooGen YAML/SV and all distinct AXI observation boundaries.
 - Test runs: recorded acceptance result, engine, tested SHA, workflow ID/attempt,
