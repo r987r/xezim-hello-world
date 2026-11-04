@@ -171,7 +171,7 @@ def parse_capture(path: Path, configured_sources: dict):
         counts[source] += 1
         fields = _payload(event.get("fields", {}))
         records.append({
-            "kind": kind, "source": source, "protocol": sources[source],
+            "kind": kind, "source": source, "protocol": sources[source]["protocol"],
             "operation": operation, "id": _payload(event.get("id")),
             "start_ps": event.get("start_ps", time_ps),
             "end_ps": event.get("end_ps", time_ps) if kind == "event" else event.get("end_ps"),
