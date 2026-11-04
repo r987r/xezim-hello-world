@@ -20,14 +20,19 @@ existing verified cold-boot and memory outputs are not invalidated.
 - Unknown knobs, port names, asymmetric routing, and unavailable emitters
   fail during configuration validation rather than being silently ignored.
 
-## What is deliberately NOT implemented
+## Boundaries of this standalone memory configuration
 
-- Full-chip top with generated CPU/DMA/NoC wiring.
+- These memory-fabric knobs apply to the independent 2×2 memory scope.
+  The separate [chip boot configuration](full-chip-boot.md) already wires
+  real CPUs, NoCs, SRAM, reset and a 1×2 memory crossbar; real DMA is pending.
+  The standalone 2×2 tuning/connectivity overrides are not automatically
+  applied to that 1×2 chip crossbar.
 - Generic full-SoC PULP AXI/FlooNoC backend emission. Scoped FlooGen
   network emission and the connected `supernoc_tb` do exist; see
   [super-NoC verification](supernoc-verification.md).
-- Replacing custom BFM, SRAM or boot-model modules. These require a
-  separate compatibility evaluation to protect the cold-boot test.
+- The original custom memory BFM and boot/SRAM models remain in their
+  independent scopes. The NoC scope uses upstream cocotbext-axi, and the
+  chip uses upstream bridges/SRAM; cold-boot compatibility remains required.
 - Independent read-only and write-only permissions in the BFM.
 - Per-CPU/DMAs, SRAM latency or data width overrides with real RTL bindings.
 
@@ -44,13 +49,14 @@ The existing Sv-test `cfg/rtl_connections`, `cfg/uvc_connections`,
 `cfg/<tb>/tb.yml` and providers/knobs patterns are the recommended design
 inspiration, not an instruction to duplicate its custom RTL/UVC modules.
 
-Open-source alternatives for follow-on P1:
+Reuse choices and remaining alternatives:
 - AXI BFMs: the NoC scope already uses pinned cocotbext-axi under Verilator.
   PULP `axi_test` and UVM VIP remain candidates for other supported flows;
   Xezim NoC traffic compatibility has not been established.
-- SRAM: PULP `tech_cells_generic/tc_sram` (parameterized dual-port
-  SRAM with `SimInit=none`), but its registered read semantics must be
-  reconciled with the existing boot test's asynchronous Port A read.
+- SRAM: the chip boot scope already uses upstream
+  `tech_cells_generic/tc_sram` with `SimInit=none` and registered reads.
+  Replacing the legacy boot SRAM separately still requires matching its
+  asynchronous Port A read contract.
 - Fabric: upstream Verilog-AXI `axi_crossbar` already used; PULP AXI
   `axi_xbar` remains optional; FlooGen already emits all eight local/global networks.
 - Bridge shims: only minimal protocol/width/reset adapters needed at the

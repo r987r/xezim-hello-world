@@ -94,8 +94,9 @@ upstream PULP AXI bridge tests. For every NoC, review checked-in
 `floo_xezim_*_noc.sv` and `*_pkg.sv` rather than a CI-only archive.
 Commit generated outputs alongside their input config. A checked-in
 NoC is **structural RTL** until actual upstream dependency compilation,
-elaboration and request/response traffic pass; the backend must remain
-non-executable until then.
+elaboration and request/response traffic pass; the evidence must remain scope-specific. The generic backend stays
+non-executable until a general complete SoC emitter exists; the scoped
+NoC and chip boot tests already execute real traffic.
 
 ## Linkable interface sizing gate
 
@@ -140,6 +141,7 @@ AXI_CONFIG=config/examples/memory-fabric-sparse.yaml make dv-memory
 make dv-memory-negative
 make dv-sram
 make dv-serv
+make dv-chip
 BOOT_WAVE=1 BOOT_TRACE=1 make dv-boot
 make test
 ```
@@ -202,8 +204,9 @@ See [docs/supernoc-verification.md](docs/supernoc-verification.md).
 
 ## One unified super-NoC traffic test
 
-`tools/supernoc_gen.py` generates **one** `gen/supernoc/supernoc_tb.sv`
-from the eight real FlooGen profiles; it uses only packed AXI4
+`tools/supernoc_gen.py` generates shared `gen/supernoc/soc_noc.sv`
+and one thin `supernoc_tb.sv` BFM wrapper from the real FlooGen profiles.
+Both the BFM wrapper and chip boot top instantiate the shared core; it uses only packed AXI4
 struct-to-flat-port assignments and true upstream FlooNoC modules.
 `dv/supernoc/test_supernoc.py` uses mature third-party
 `cocotbext-axi` `AxiMaster` and `AxiSlave` with mapped upstream

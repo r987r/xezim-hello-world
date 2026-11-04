@@ -78,7 +78,7 @@ The upstream FlooNoC/AXI/common_cells libraries are not copied into
 or traffic-tested**. For AXI-Lite control networks, reuse the real PULP
 AXI adapters documented in
 [AXI-Lite-over-FlooNoC](docs/axi-lite-over-floonoc.md). Both
-pinned **Verilator and Xezim compile all eight generated NoCs**,
+**Verilator 5.020 and pinned Xezim compile all eight generated NoCs**,
 but Xezim reports width warnings in the four data meshes. The
 [simulator compatibility audit](docs/simulator-compatibility.md)
 records these; compilation is not routed-traffic verification.
@@ -103,9 +103,9 @@ The connected BFM regression is distinct from real endpoint integration.
 and global subsystem fabric ports, 64-bit AXI4 data/address, configured
 local AXI ID widths (4-bit input, 5-bit output), independent pending
 read/write targets, and native IP parameter names. This is a validated
-**design contract**, not a claim that the planned PULP or FlooNoC RTL
-accepts these limits yet. CI tests keep FlooGen AXI widths and memory
-windows in sync.
+**design contract**. Native chimney parameters are bound in generated RTL,
+and directed traffic passes; maximum capacity and every parameter combination
+remain unverified. CI keeps FlooGen AXI widths and memory windows in sync.
 
 ## Subsystem-level tests and FlooNoC bring-up
 
@@ -139,7 +139,7 @@ make check-generated     # non-mutating drift and stale-file check
 make check-config        # generator/config test suite
 ```
 
-`make gen` builds all outputs in a staging directory before replacing the complete `gen/` tree. **Obsolete generated files are removed** when a block, network, subsystem, or diagram disappears from YAML. No file outside `gen/` is deleted; only the explicitly marked README section is rewritten. `make check-generated` compares both file *names* and bytes, so CI catches missing, modified, and stale files without committing or modifying anything. Generation does not depend on a GPU, web service, 3D viewer, or Graphviz: the README embeds static **2D SVG diagrams**, with Mermaid source files alongside for editing and review.
+`make gen` builds all outputs in a staging directory before replacing the complete `gen/` tree. **Obsolete generated files are removed** when a block, network, subsystem, or diagram disappears from YAML. No file outside `gen/` is deleted; only the explicitly marked README section is rewritten. `make check-generated` compares both file *names* and bytes, so CI catches missing, modified, and stale files without committing or modifying anything. Generation does not depend on a GPU, web service, 3D viewer, or Graphviz: the README embeds static **2D architecture SVG**, with Mermaid source alongside for editing and review.
 
 The generated artifacts include:
 
@@ -184,7 +184,7 @@ The memory regression instantiates the publicly available Verilog-AXI crossbar a
 
 - The **architecture** is specified by [`config/soc.yaml`](config/soc.yaml), including per-subsystem CPU differences and separate data/config networks.
 - [`tools/socgen.py`](tools/socgen.py) emits the executable memory RTL and neutral NoC IR; [`tools/noc_backends.py`](tools/noc_backends.py) defines vendor-specific emitters. The **`verilog_axi` memory backend is executable**; PULP AXI emission remains pending. [`tools/floonoc_gen.py`](tools/floonoc_gen.py) emits all eight real FlooGen networks, and [`tools/supernoc_gen.py`](tools/supernoc_gen.py) connects their AXI4 boundaries in one BFM testbench. `tools/full_chip_gen.py` emits the CPU boot configuration using the shared core. The generic full-SoC backend remains non-executable while general iDMA/controller integration is pending.
-- [`tools/diagram_gen.py`](tools/diagram_gen.py) uses the same validated topology and verification scopes to render the single architecture view; [`tools/generate.py`](tools/generate.py) coordinates generation, stale cleanup, and drift verification.
+- [`tools/noc_diagrams.py`](tools/noc_diagrams.py) builds and renders the single architecture view from the actual FlooGen profiles; [`tools/generate.py`](tools/generate.py) coordinates generation, stale cleanup, and drift verification.
 - [`config/ip.lock.yaml`](config/ip.lock.yaml) pins third-party IP commits. [`rtl/adapters/`](rtl/adapters/) isolates the CPU and behavioral memory interfaces.
 
 See [architecture contracts](docs/architecture.md) and the [hierarchical verification plan](docs/verification.md) for intended subsystem, NoC, and full-chip integration milestones.

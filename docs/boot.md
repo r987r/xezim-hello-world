@@ -58,8 +58,9 @@ explicit supported limits; other values are rejected.
    RAM, and a four-word RV32I test with a checked data store.
 2. Run `make dv-boot`: CPU0 executes Boot ROM, reads flash, writes both blank
    SRAMs, releases CPU1 via reset MMIO, and requires **both** CPU signatures.
-3. Only after that integrate local AXI/AXI-Lite fabrics and the real
-   programmable PULP iDMA.
+3. Run `make dv-chip` for the implemented local/global NoCs, upstream
+   AXI/AXI-Lite bridges and CPU0-coordinated phases. Real programmable
+   PULP iDMA is the next hardware integration step.
 
 Xezim 0.11.4 uses unmodified upstream SERV RTL. The prior compatibility
 workaround and the independent regression are documented in [boot-debug.md](boot-debug.md).
@@ -87,10 +88,10 @@ is also useful for bypass/accelerated tests, but such tests must be labeled
 | Boot flash | `0x20000000` | read-only 32-bit | immutable model backing flash slots |
 | DMA0 CSR | `0x40000000` | AXI4-Lite | **planned**, no register bank yet |
 | DMA1 CSR | `0x40010000` | AXI4-Lite | **planned**, no register bank yet |
-| Reset control | `0x40020000` | R/W 32-bit | **implemented only in scoped boot TB** |
+| Reset control | `0x40020000` | R/W 32-bit | legacy boot responder and chip PULP AXI-Lite register bank |
 | Memory controller CSR aperture | `0x40030000` | 32-bit config transport | **reserved**, BFM storage only in the NoC test; no controller register RTL |
-| HBM data | `0x1_00000000` | AXI4 64-bit | behavioral AXI RAM in separate memory DV |
-| DDR data | `0x1_40000000` | AXI4 64-bit | behavioral AXI RAM in separate memory DV |
+| HBM data | `0x1_00000000` | AXI4 64-bit | AXI RAM in memory DV; bounded AXI SRAM stand-in in chip boot |
+| DDR data | `0x1_40000000` | AXI4 64-bit | AXI RAM in memory DV; bounded AXI SRAM stand-in in chip boot |
 
 `memory0.ctrl` reserves one subsystem aperture; it does not invent actual
 HBM/DDR controller registers. Per-controller register maps must come from
@@ -98,7 +99,8 @@ the selected controller's real management interface. CPU0 and CPU1 are 32-bit co
 load/store addresses above 4 GiB**; later DMA engines will have 64-bit
 source/destination registers for transfers to HBM/DDR.
 
-The bootstrap model supports aligned, full-word transfers only. Future boot
+The legacy bootstrap responder supports aligned, full-word transfers only.
+The separate chip AXI memory path checks bursts and partial writes. Future boot
 ROM implementation should check a firmware container header, lengths,
 checksums/authentication, failures, timeouts, image placement, and reset
 permissions. Secure boot is **not implemented**.

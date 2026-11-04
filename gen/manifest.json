@@ -1,5 +1,5 @@
 {
-  "config_sha256": "65362bcbeaf1b73dd518fda21ec66fc65f2a1fdcfc7d3a16d45822057ecb673e",
+  "config_sha256": "fb3679658a87787163491917fd9e077d4ec6d0767f6fc0f61fbaecd335da412b",
   "files_sha256": {
     ".generated-root": "0db72ba0ceee7c322b275cc197d8ab0a147283c068aaa89cf374b42a9765e013",
     "README.md": "ce96ed414c86c69f3cce3908b85048e47c0c430985d20be8f1659a723c7cf549",
@@ -55,7 +55,7 @@
     "supernoc/manifest.json": "7b88e10e1d3929b7dbea8ab6fb0e04806457f1dce62a6588d4acf1429ecf2178",
     "supernoc/soc_noc.sv": "1b8a7a19690bb0909d75534e63efed983bf464c545182957d4bb9d9a417f2b8f",
     "supernoc/supernoc_tb.sv": "536b875c65a60960d0a2a17343b98694f9b8c697e1e24fbbee03f49c9b831626",
-    "verification/plan.json": "d156a14ead6c271b37be4223cfebd0007c2ea031db3fd82ffe2548adbae1f9b3",
+    "verification/plan.json": "1a6491efc7e4224e4dd848caa1503d9b663677e88801e5f34357a92c7a3c9b4d",
     "verification/routes.json": "b3422dcb7d7550ab7db1614af7569b5abbbfd15c1f038060394eab8f9b697c71"
   },
   "note": "No timestamp; regenerated files should be byte-for-byte stable.",

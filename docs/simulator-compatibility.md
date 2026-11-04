@@ -77,9 +77,9 @@ this guard or suppress the error silently.
 - Preserve the passing Verilator connected-NoC regression; establish an
   equivalent Xezim routed-traffic path on the same pinned RTL before
   claiming cross-simulator functional agreement.
-- Connect local FlooNoCs with actual upstream PULP AXI4-Lite converters,
-  CPU, iDMA and SRAM endpoints. No custom AXI-lite NoC or new router
-  implementation and **no per-bridge/per-router TB proliferation**.
+- Preserve the chip's implemented CPU/SRAM/reset and upstream AXI-Lite
+  adapters; integrate real iDMA/CSRs next. No custom AXI-Lite NoC or new
+  router implementation and **no per-bridge/per-router TB proliferation**.
 - Compare observed data, IDs and backpressure; if Xezim differs from
   Verilator, record the precise hierarchy, source line, configuration,
   waveform and result in this doc and an upstream issue.

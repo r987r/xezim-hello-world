@@ -58,7 +58,9 @@ not a new separate testbench for each adapter.
 **Status:** all config meshes are generated under `gen/noc/floonoc/`,
 compile in Verilator and Xezim, and pass routed single-beat AXI4 BFM
 read/write, byte-strobe, stall and SLVERR checks in Verilator. Actual
-AXI4-Lite bridge instances and real CSR behavior remain TODO.
+CPU AXI4-Lite bridge instances and the reset register bank also execute
+in the chip boot scope; secondary CPUs acknowledge initialization through
+the remote configuration path. DMA/controller registers remain pending.
 The 0x40030000 memory controller register aperture is reserved
 only. It is not yet a working controller.
 

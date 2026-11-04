@@ -49,7 +49,7 @@ without substituting for real CPU execution.
 
 | Suite | Declared work |
 | --- | --- |
-| `xezim` | Memory default/full/sparse, named memory corruption failure, SRAM, SERV execution, cold boot default/relocated |
+| `xezim` | Memory default/full/sparse, named memory corruption failure, SRAM with/without `SYNTHESIS`, SERV execution, cold boot default/relocated |
 | `noc` | Verilator elaboration of every configured network, one connected-NoC traffic test, named routed corruption failure |
 | `compatibility` | Xezim compile-only probe of every configured network |
 | `diagnostics` | CPU fetch request activity and arithmetic simulator smoke |
@@ -104,7 +104,9 @@ timeout; the process group is killed on expiry.
 The local `full` suite requires both simulators and fails on a compatibility
 probe failure. CI keeps the Xezim NoC compile probe separately nonblocking
 while its width warnings/functional compatibility remain under review;
-the Verilator connected traffic and Xezim CPU/memory gates are blocking.
+the Verilator connected traffic, Xezim CPU/memory and full-chip workflow
+are blocking. The full-chip workflow's Xezim chip compile target is required;
+its status is distinct from the optional per-mesh NoC compatibility step.
 Simulation success does not establish synthesis or full-SoC integration.
 The SRAM registered-read guard fix is checked by `sram-synthesis`, which
 runs the existing bench with `-D SYNTHESIS`; no technology synthesis is claimed.

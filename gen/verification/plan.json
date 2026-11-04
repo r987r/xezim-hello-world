@@ -108,9 +108,10 @@
         "ordering",
         "separate_control_traffic"
       ],
+      "command": "make dv-supernoc",
       "dut": "global_data+global_config",
       "name": "global_nocs",
-      "status": "planned"
+      "status": "executable"
     },
     {
       "checks": [

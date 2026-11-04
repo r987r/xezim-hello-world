@@ -106,8 +106,8 @@ verification:
     model_address_bits: 16
     burst_beats: 4
   # Scope names and statuses feed the generated test plan.
-  # "executable" means its standalone RTL check exists, not that full-chip
-  # wiring or real memory controller/PHY is integrated.
+  # "executable" means this scope has a runnable RTL check. It does not
+  # imply integration of every planned DMA/controller/PHY feature.
   scopes:
     - name: configuration
       dut: soc_definition
@@ -145,7 +145,8 @@ verification:
       checks: [local_fabric, dma_csr, dma_copy]
     - name: global_nocs
       dut: global_data+global_config
-      status: planned
+      status: executable
+      command: make dv-supernoc
       checks: [routes, ordering, separate_control_traffic]
     - name: supernoc_bfm
       dut: supernoc_tb

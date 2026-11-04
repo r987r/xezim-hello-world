@@ -1,7 +1,7 @@
 # Smallest SERV bring-up and simulator debugging
 
-The full two-CPU boot test is only run **after** a small standalone SERV
-execution test has passed. `make dv-serv` uses one real SERV core and a
+For bring-up, run the small standalone SERV execution test before the
+two-CPU boot test. Individual Make targets do not enforce that ordering. `make dv-serv` uses one real SERV core and a
 registered-read Wishbone RAM with four preloaded RISC-V instructions:
 
 ```text

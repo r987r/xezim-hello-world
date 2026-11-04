@@ -1,6 +1,6 @@
 schema_version: 1
 # Public source revisions are locked. Controllers are integration candidates;
-# simulation currently uses the AXI RAM backend, not physical DRAM RTL.
+# simulation uses behavioral AXI slaves, not physical DRAM RTL.
 third_party:
   wb2axip:
     git: https://github.com/ZipCPU/wb2axip.git
@@ -62,7 +62,7 @@ third_party:
     git: https://github.com/pulp-platform/FlooNoC.git
     commit: 05368bdff914f91a48b47c4ceddfc6ff266c6b3a
     license: Solderpad-0.51
-    integration: planned
+    integration: scoped_noc_bfm_and_chip_boot
   litedram:
     git: https://github.com/enjoy-digital/litedram.git
     commit: 3506dc02e2b790011c1c147e2aad4541a6ddf836

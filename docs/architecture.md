@@ -10,8 +10,8 @@ CPU0 (PicoRV32) is the primary boot core. CPU1 (SERV) stays in reset until CPU0 
 
 ## Structure
 
-- Compute 0 contains `picorv32` (AXI4-Lite CPU interface), `pulp_idma`, SRAM, local data/config fabric.
-- Compute 1 contains `serv` (Wishbone-style separate instruction/data interface), the same `pulp_idma`, SRAM, local data/config fabric.
+- Compute 0 instantiates `picorv32` (AXI4-Lite CPU interface), SRAM and local data/config NoCs in the boot configuration. Its selected `pulp_idma` is not instantiated yet.
+- Compute 1 instantiates `serv` (Wishbone-style instruction/data interfaces), SRAM and local data/config NoCs. Its selected `pulp_idma` is also pending.
 - Memory 0 contains independently generated local data and configuration FlooNoCs and one HBM + one DDR behavioral model. The chip attaches a 1×2 Verilog-AXI crossbar at the single local-NoC target endpoint. The older independent 2×2 crossbar test still checks both inputs against both targets.
 - Global data and global configuration FlooNoC meshes are independent. The config NoC uses AXI4 wire transport. Upstream AXI4-Lite adapters are selected for CSR boundaries but are not attached in the BFM test. Both compute SRAM destinations are used by chip-level CPU0-to-CPU1 cold boot.
 
@@ -21,7 +21,7 @@ The generator first validates an abstract graph of **initiators, targets, bounda
 
 | Network | Backend | Actual status |
 | --- | --- | --- |
-| Memory0 internal 2×2 AXI target crossbar | `verilog_axi` | Real executable, independently Xezim-verified |
+| Memory target crossbar | `verilog_axi` | Chip boot: 1×2 under Verilator; independent memory stress scope: 2×2 under Xezim |
 | Compute0 local data + config | `floonoc` | BFM scope plus CPU/SRAM/reset boot-configuration wiring; iDMA/CSRs pending |
 | Compute1 local data + config | `floonoc` | BFM scope plus CPU/SRAM/reset boot-configuration wiring; iDMA/CSRs pending |
 | Memory0 local data + config | `floonoc` | BFM scope plus attached chip target crossbar/AXI memory stand-ins |
@@ -49,7 +49,7 @@ Both compute templates select `pulp_idma` (locked source). Real DMA backend/fron
 
 ### Memory adapters
 
-The simulation implementation `axi_memory_target_model.sv` uses public Verilog-AXI `axi_ram` as a functional memory endpoint. HBM and DDR differ in model configuration (pipeline_output), target name/address and selected controller. This **does not** establish HBM/DDR timing accuracy or real physical controller support.
+The independent memory scope uses `axi_memory_target_model.sv` and public Verilog-AXI `axi_ram`; its HBM/DDR profiles differ in pipeline configuration, names and addresses. The chip boot scope uses `axi_sram_target.sv`, upstream PULP `axi_to_detailed_mem` and `tc_sram`, with a bounded 64-KiB model per target. Neither establishes HBM/DDR timing accuracy or physical controller support.
 
 For a full DDR path, generate a LiteDRAM standalone Verilog controller with AXI access and the supported DFI SDRAM simulation PHY/model, then create an AXI adapter matching our 64-bit global interface. Keep that controller test scoped separately from the fabric regression.
 

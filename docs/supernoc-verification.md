@@ -22,7 +22,8 @@ The entire data/config NoC hierarchy is exercised through **one** integrated
   not implement a router, bus fabric, DMA, SRAM, or AXI protocol BFM.
 - **Data/config protocol:** FlooGen carries AXI4 physical transport for
   both; config operations are single-beat 32-bit accesses. Actual CPU/CSR
-  AXI4-Lite bridges are later upstream PULP integration work.
+  AXI4-Lite CPU/reset bridges execute in the separate chip boot scope.
+  DMA/controller CSR bridges remain future integration work.
 - **Test acceptance:** reports must show actual B/R OKAY, correct data
   readback at the intended endpoint and all 28 source/window routes across
   the **connected** local/global data/config networks. The same test runs
@@ -46,23 +47,20 @@ The cocotb library is the selected supported alternative.
 **Yes, open-source AXI UVM sequence libraries exist.** Evaluate, don't
 reinvent them. Their author claims need actual pinning and simulator tests.
 
-1. [KVIPS AXI4](https://github.com/kiranreddi/kvips): UVM AXI4 master/slave
-   agents, sequences, protocol assertions, coverage, scoreboard and
-   documented Verilator back-to-back/DUT flows. Its README currently uses
-   Verilator 5.048 and says SVA assertions are skipped in that flow;
-   this is not validation on this repo's 5.020 baseline. Candidate for a
-   future UVM mode after pinning and testing its sequences and checkers.
+1. [KVIPS AXI4](https://github.com/kiranreddi/kvips): candidate AXI4 UVM agents,
+   sequences and checkers. Its supported tool/version and assertion coverage
+   must be verified when selecting an immutable revision.
 2. [AXI_UVM_verification](https://github.com/k1thhh/AXI_UVM_verification):
-   reusable master/slave agents, constrained-random plus directed read,
-   write, FIXED/INCR/WRAP burst sequences and scoreboard; openly states
-   it is an AXI4 **subset** and its tested flow targets Vivado XSim.
-3. [axi-uvm](https://github.com/marcoz001/axi-uvm):
-   established publicly available AXI3/AXI4 master and slave drivers,
-   coverage and parallel pipelined transactions. Its README describes a
-   scoreboard that counts address/response packets, not a full memory-data
-   reference model. Do not assume full AXI4 compliance or payload checking.
-4. [Accellera UVM / Chips Alliance UVM-Verilator](https://github.com/chipsalliance/uvm-verilator)
-   is the **UVM base class library**, not an AXI VIP or sequence package.
+   candidate directed and constrained-random AXI sequences. Do not assume
+   complete protocol or simulator support from the project name.
+3. [axi-uvm](https://github.com/marcoz001/axi-uvm): candidate AXI master/slave
+   agents. Payload checking, ordering and coverage require evaluation on
+   the exact pinned revision before replacing the current scoreboard.
+4. [Chips Alliance UVM-Verilator](https://github.com/chipsalliance/uvm-verilator)
+   supplies a UVM base class library, not an AXI VIP or sequence package.
+
+These are unintegrated research references, not part of the validated
+Bender source graph or a claim about their latest releases.
 
 Do not add a second complete super-NoC testbench merely to switch a
 driver. Reuse one integrated DUT and adapt the verification driver
@@ -176,30 +174,20 @@ Generation metadata names verification commands instead of hardcoding
 historically false pass/fail flags. Current-source evidence belongs in
 actual run logs and the CI head SHA.
 
-## Local validation on 2026-11-03
+## Validated baseline and current evidence
 
-The local Verilator 5.020 / cocotb 1.9.2 run completed at 84,980 ns:
+Commit `c4cc1d6` passed all four PR workflows, including
+[NoC traffic/negative and both compiler probes](https://github.com/r987r/xezim-hello-world/actions/runs/41750543030),
+[CPU/memory regression](https://github.com/r987r/xezim-hello-world/actions/runs/41750542916),
+and [chip boot/negative/Xezim compilation](https://github.com/r987r/xezim-hello-world/actions/runs/41750542957).
+The NoC gate requires all 28 routes, 136 concurrent cases and 24 routed
+B/R SLVERR pairs. The baseline also passed 78 unit tests and exact
+57-file generated-tree/README drift checks. The chip's functional path is
+Verilator; Xezim chip verification remains compile-only with one retained
+width warning. Per-mesh Xezim data-network warnings remain documented.
 
-```text
-PASS concurrent traffic: 6 managers, 136 burst/partial/single-beat cases with stalls
-PASS downstream errors: 24 routed B/R SLVERR pairs
-PASS supernoc: 8 real FlooNoC meshes, 11 local/global links, 28 AXI4 routes
-TESTS=1 PASS=1 FAIL=0 SKIP=0
-```
-
-The opt-in corruption run failed at the intended
-`FAIL supernoc injected data mismatch detected` assertion; its XML reports
-one failure, while the positive XML reports zero. All 63 configuration
-checks, generated-file drift checking, Xezim default/full/sparse memory
-profiles, negative memory checker, SRAM, SERV and two-core cold boot also
-passed locally. Xezim independently compiled all eight meshes with the
-known data-network width warnings retained.
-
-Published baseline `bd572f0` also passed [the complete NoC CI job](https://github.com/r987r/xezim-hello-world/actions/runs/41659508505)
-and [Xezim CPU/memory CI](https://github.com/r987r/xezim-hello-world/actions/runs/41659508518).
-Final review strengthened the concurrent streams with distinct payloads;
-check the [NoC workflow](https://github.com/r987r/xezim-hello-world/actions/workflows/floonoc-elab.yml)
-for the exact current head before merging. Passing historical runs do not
-validate later RTL or test changes.
-
-Validated RTL wrapper SHA-256: `27ab3ad2c8e7757f132c2b33388539ce86c886e2ff553884d7701e75417fc33a`.
+A historical wrapper checksum or older green run does not validate later
+code. Use the resolved filelists, build fingerprint, current commit SHA,
+nonempty XML and retained logs from the run being reviewed. The required
+negative run must fail at `FAIL supernoc injected data mismatch detected`;
+a generic compile failure or timeout does not count.
