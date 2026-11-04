@@ -48,11 +48,42 @@ def _time(value, kind):
     return value
 
 
+def normalize_sources(sources):
+    """Validate a shared, protocol-neutral source catalog.
+
+    Legacy shorthand: {"mac.rx": "ethernet"}.
+    Preferred form: {"mac.rx": {"protocol": "ethernet",
+                     "clock_domain": "mac_rx",
+                     "role": "target", "implementation": "ethernet_vip",
+                     "modeling": "behavioral_vip"}}.
+    """
+    if not isinstance(sources, dict) or not sources:
+        raise ValueError("nonempty protocol monitor catalog required")
+    normalized = {}
+    for name, entry in sources.items():
+        _slug(name, "source")
+        if isinstance(entry, str):
+            entry = {"protocol": entry}
+        if not isinstance(entry, dict) or not set(entry) <= {
+            "protocol", "clock_domain", "role", "implementation", "modeling"
+        } or "protocol" not in entry:
+            raise ValueError(f"invalid protocol source metadata: {name}")
+        item = {
+            "id": name,
+            "protocol": _slug(entry["protocol"], "protocol"),
+            "clock_domain": _slug(entry.get("clock_domain", "unknown"), "clock domain"),
+            "role": _slug(entry.get("role", "unspecified"), "role"),
+            "implementation": _slug(entry.get("implementation", "external_vip"), "implementation"),
+            "modeling": _slug(entry.get("modeling", "observed"), "modeling"),
+        }
+        normalized[name] = item
+    return normalized
+
+
 class ProtocolTrace:
     """Line-flushed, fail-closed capture lifecycle; never a bus driver."""
     def __init__(self, output: Path, sources: dict[str, str], max_events=100000):
-        if not isinstance(sources, dict) or not sources:
-            raise ValueError("nonempty protocol monitor catalog required")
+        catalog = normalize_sources(sources)
         if type(max_events) is not int or max_events < 1:
             raise ValueError("invalid max protocol events")
         self.output = Path(output)
@@ -60,14 +91,15 @@ class ProtocolTrace:
         if self.output.is_symlink():
             raise ValueError("refusing symlinked protocol capture")
         self.stream = self.output.open("w", encoding="utf-8", buffering=1)
-        self.sources = {_slug(k, "source"): _slug(v, "protocol") for k, v in sources.items()}
+        self.sources = catalog
         self.limit = max_events
         self.counts = {k: 0 for k in self.sources}
         self.times = {k: 0 for k in self.sources}
         self.closed = False
-        for name, protocol in self.sources.items():
+        for name, metadata in self.sources.items():
             self._write({"version": 1, "type": "start", "source": name,
-                         "protocol": protocol, "time_ps": 0})
+                         **{k: v for k, v in metadata.items() if k != "id"},
+                         "time_ps": 0})
 
     def _write(self, record):
         if self.closed:
