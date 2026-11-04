@@ -154,3 +154,33 @@ a real 64-bit-to-local-AXI address adapter and CSR init path, and adds
 full-chip tests with the existing NoC monitors. No shared generator,
 clock domain, NoC, DMA, boot, or diagrams were changed for standalone
 timing instrumentation.
+
+## Experimental internal DFI and BankModel probes (follow-up PR)
+
+The merged 100 MHz latency report measures accepted AXI AR to last R
+and AW to B against real LiteDRAM RTL and behavioral SDRAMPHYModel/BankModel.
+This stage observes actual flattened DFI command and modeled-bank events
+in the generated Verilog, without changing the pinned vendor RTL.
+
+dfi_probe_contract.py validates 72 pinned generator signals and creates
+a narrowly scoped Verilator public_flat_rd control file. It does NOT
+expose the 32 MiB backing memory or enable global --public-flat-rw.
+Four DFI phases are monitored (command, rddata_en, rddata_valid, wrdata_en),
+plus all sixteen behavioral bank models (read, storage write-enable).
+
+Evidence files: ddr4_dfi_events.jsonl, ddr4_dfi_summary.json,
+ddr4_probe_contract.json, and ddr4_internal_latency.json. The merged
+ddr4_latency.json remains the independent AXI boundary baseline.
+
+Controller command scheduling and DFI outputs come from real LiteDRAM RTL.
+DFI return delay and model storage are behavioral SDRAMPHYModel/BankModel.
+Neither an ASIC physical PHY nor a physical DDR4 chip is present.
+DFI commands do not carry AXI IDs; overlapping requests are explicitly
+not attributed to particular transactions. Write B and modeled DRAM
+storage commit are separate events.
+
+Only observed stage intervals are numeric; unmatched steps are unmeasured.
+Actual clock timestamps are in picoseconds, initially at one 100 MHz
+simulation clock. Full-chip DDR remains a separate opt-in integration PR.
+Tests and successful real-model CI evidence are required before asserting
+that these internal latency checkpoints are validated.
