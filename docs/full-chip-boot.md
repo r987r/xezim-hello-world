@@ -6,11 +6,17 @@ adapters, reset registers, SRAM and memory target crossbar. The shared
 `gen/supernoc/soc_noc.sv` is also instantiated by the existing BFM test;
 there is one source of NoC wiring and one architecture picture.
 
-This is the **boot configuration** of the chip. Real iDMA engines, DMA
-CSRs, interrupts and physical HBM/DDR controllers/PHYs remain unintegrated.
-DMA request ports are idle except for an explicitly enabled verification
-manager at the coordinator's DMA boundary. Unimplemented CSR targets return
-DECERR through upstream `axi_err_slv`, rather than pretending to be registers.
+The same configuration-driven `soc_top` now has two modes. Default
+`DmaEnable=0` retains CPU cold boot without writable SRAM preload;
+`DmaEnable=1` instantiates one real PULP iDMA frontend/backend per
+configured compute, and replaces each `dma_regs` error target with upstream
+AXI-to-Lite/register blocks and a 64-bit APB head/doorbell adapter. DMA data
+traverses the local/global FlooNoCs, and control writes traverse the
+configuration NoCs. The separate `full_chip_dma_tb` holds CPUs in reset
+and uses AXI host managers to initialize only DMA SRAM and start transfers
+via 32-bit CSRs; that is NOT a CPU firmware or cold-boot test. Hardware IRQ
+pending/status are exposed to the verification framework, but CPU IRQ
+service software and physical memory controllers/PHYs remain pending.
 
 ## Shared SRAM ownership policy
 
@@ -102,7 +108,9 @@ writes distinct burst data into both HBM/DDR windows, applies a partial write,
 then reads both back. Distinct data checks that the targets are independent.
 Read and write responses must be OKAY; accesses just beyond each model's
 capacity must return SLVERR rather than alias valid storage.
-This is a BFM at an idle DMA boundary, not a claim that PULP iDMA is integrated.
+The default cold-boot test still uses a BFM at the inactive DMA boundary.
+The separate `make dv-chip-dma` test instead uses both real PULP iDMA
+engines over the same NoCs with CPUs held in reset. These are distinct scopes.
 The CPUs remain 32-bit and cannot directly address the windows above 4 GiB.
 
 ## Commands and acceptance
@@ -110,6 +118,7 @@ The CPUs remain 32-bit and cannot directly address the windows above 4 GiB.
 ```bash
 make gen
 make dv-chip
+make dv-chip-dma
 python3 tools/regress.py chip-boot --stage files
 python3 tools/regress.py chip-boot --stage run  # requires matching built RTL
 python3 tools/regress.py chip-boot-negative

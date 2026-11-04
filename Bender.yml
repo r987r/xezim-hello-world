@@ -109,4 +109,8 @@ sources:
       - .tools/pulp_idma/src/frontend/desc64/idma_desc64_reshaper.sv
       - .tools/pulp_idma/src/frontend/desc64/idma_desc64_reg_wrapper.sv
       - .tools/pulp_idma/src/frontend/desc64/idma_desc64_top.sv
+      - rtl/adapters/soc_dma_regs.sv
+      - rtl/adapters/soc_idma_engine.sv
       - dv/dma/dma_tb.sv
+  - target: chip_dma
+    files: [gen/chip/full_chip_dma_tb.sv]

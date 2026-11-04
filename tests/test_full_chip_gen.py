@@ -62,6 +62,26 @@ class FullChipTests(unittest.TestCase):
             self.assertEqual(len(chip['memory_models']),2)
             self.assertNotIn('$readmemh',top)  # SRAM initialization cannot be hidden in top wiring
 
+    def test_dma_wiring_is_generated_for_every_compute_and_real_config_target(self):
+        meta = json.loads((ROOT/'gen/supernoc/manifest.json').read_text())
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            chip = full_chip_gen.emit(self.cfg, meta, ROOT/'gen/noc/floonoc', out)
+            top = (out/'soc_top.sv').read_text()
+            tb = (out/'full_chip_dma_tb.sv').read_text()
+            self.assertEqual(chip['dma_engines_instantiated'], 2)
+            self.assertEqual(top.count('soc_idma_engine u_dma_'), 2)
+            self.assertEqual(top.count('soc_dma_regs #('), 2)
+            for name in ('compute0','compute1'):
+                self.assertIn('u_dma_'+name,top)
+                self.assertIn('u_dma_csr_'+name,top)
+                self.assertIn('m_'+name+'_local_data_dma_req',top)
+                self.assertIn('s_'+name+'_local_config_dma_regs_req',top)
+            self.assertIn('DmaEnable',top)
+            self.assertIn('DmaTestMode',tb)
+            self.assertNotIn('$readmemh',top)
+            self.assertTrue((out/'dma_actors.json').exists())
+
     def test_unimplemented_runtime_and_memory_provider_fail_closed(self):
         for field,value in [('phases',['init','run']),('memory_model','pretend_ddr')]:
             cfg=copy.deepcopy(self.cfg)

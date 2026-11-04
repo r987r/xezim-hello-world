@@ -50,8 +50,8 @@ def generated_section(cfg: dict, meta: dict, diagrams: dict[str, str], nocs: dic
         "The **single architecture diagram** below includes all local/global FlooNoCs, "
         "compute CPU/DMA/SRAM blocks and memory target crossbar. It is generated "
         "from the same SoC configuration and FlooGen endpoint topology as the real "
-        "structural RTL. **Dashed links show pending iDMA/controller integration.** "
-        "The shared NoC core is instantiated by both the BFM regression and the CPU boot configuration.",
+        "structural RTL. **Solid links show generated optional iDMA/CSR wiring (enabled in DMA mode); dashed links show pending physical controllers.** "
+        "The same NoC RTL is instantiated by BFM, CPU boot, and dual-DMA configurations.",
         "",
         "[![Complete hierarchical SoC and all data/config FlooNoCs](gen/diagrams/noc-hierarchy.svg)](gen/diagrams/noc-hierarchy.svg)",
         "",
@@ -74,7 +74,7 @@ def generated_section(cfg: dict, meta: dict, diagrams: dict[str, str], nocs: dic
         "bursts, concurrent IDs, stalls and downstream SLVERR. Xezim NoC traffic "
         "is not verified. The `make dv-chip` boot configuration runs the real CPUs through "
         "the shared NoCs with CPU0-coordinated init/run/check and AXI memory stand-ins. "
-        "See [chip boot scope](docs/full-chip-boot.md).",
+        "See [chip boot scope](docs/full-chip-boot.md) and [DMA integration](docs/dma-bringup.md); `make dv-chip-dma` tests both real engines through data/config FlooNoCs with the CPUs held in reset and host-initialized DMA SRAM.",
         "",
         "### Generated NoC sources (no duplicate pictures)",
         "",

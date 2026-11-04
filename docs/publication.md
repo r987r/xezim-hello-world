@@ -79,3 +79,13 @@ response mismatch fails monitored capture validation. Downstream error observati
 remain observations because global IDs are remapped; they are not guessed to be
 new expected or unexpected initiator requests. Legacy unannotated captures are
 labeled as such and never retroactively classified as expected.
+
+## Generated dual-DMA full-chip test scope
+
+The `chip-dma` target uses the same generated NoC core and monitor catalog
+as CPU boot, but runs with CPUs held in reset and a real PULP iDMA instance
+at every compute DMA endpoint. Host BFMs use the CPU0 data/config AXI
+interfaces only for memory preparation and CSR submission. The event table,
+timing chart, result and source SHA are published from the full-chip CI
+artifact when that regression actually executes. This is NOT evidence of
+CPU-launched DMA firmware or physical DDR/HBM controller integration.

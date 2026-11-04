@@ -106,3 +106,39 @@ The original cold-boot regression must never use dma_only. For a running
 chip, only a distinct boot_scratch region is presently releasable after
 CHECK and quiescence; executing SRAM firmware and live mailboxes cannot be
 reclaimed until a verified relocation/parking and access-drain handoff.
+
+## Automated SS0/SS1 DMA and NoC integration
+
+The reusable synthesizable `rtl/adapters/soc_idma_engine.sv` is the exact
+pinned upstream implementation used by the previously green isolated
+`dv/dma/dma_tb.sv`. No second DMA engine implementation was created.
+`tools/full_chip_gen.py` iterates configured compute subsystems and the
+generated NoC endpoint manifest, attaches the engine to each
+`m_<compute>_local_data_dma` and the CSR shim to
+`s_<compute>_local_config_dma_regs`. No individual interface hookup is
+required for each new compute instance.
+
+`soc_dma_regs.sv` uses PULP `axi_to_axi_lite` and `axi_lite_regs`.
+Only the 32-to-64-bit pointer staging, APB submission sequencer and
+sticky interrupt status are locally implemented:
+
+| Offset | Access | Meaning |
+| --- | --- | --- |
+| `0x00` | RW32 | Descriptor head bits [31:0] |
+| `0x04` | RW32 | Descriptor head bits [63:32] |
+| `0x08` | RW32 | COMMAND bit0: atomic submit; bit1: acknowledge IRQ |
+| `0x0c` | RO32 | STATUS bit0: APB submission busy; bit1: IRQ pending; bit2: APB error; bit3: raw IRQ |
+
+The `busy` status only tracks submission to upstream APB, **not full
+descriptor-chain retirement**. Consumers must still wait for completion,
+descriptor writeback and DMA idle before reclaiming shared SRAM.
+
+`DmaEnable=0` is the default boot mode; `DmaEnable=1` instantiates real
+DMA engines and CSRs. `DmaTestMode=1` is an explicit host-BFM-only test mode
+with CPUs held in reset. `make dv-chip-dma` writes DMA descriptor/payload
+memory through CPU0's real AXI data NoC port, then programs each engine's
+registers over the local/global configuration NoCs and verifies payload
+through all local/global data NoCs and memory models. The CPU cold-boot
+regression remains unpreloaded. **The new integrated regression should be
+treated as unverified until its CI gate passes**, regardless of whether
+`make gen` produces structurally connected RTL.

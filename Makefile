@@ -1,4 +1,4 @@
-.PHONY: help gen check-generated check-config dv-memory dv-memory-negative dv-cpu dv-serv dv-sram dv-boot dv-supernoc dv-chip dv-dma dv-dma-vectors smoke test test-xezim test-noc test-list
+.PHONY: help gen check-generated check-config dv-memory dv-memory-negative dv-cpu dv-serv dv-sram dv-boot dv-supernoc dv-chip dv-chip-dma dv-dma dv-dma-vectors smoke test test-xezim test-noc test-list
 
 help:
 	@echo 'make gen             Generate tracked RTL, firmware and documentation'
@@ -9,7 +9,8 @@ help:
 	@echo 'make test-xezim      CPU, SRAM and default/full/sparse memory traffic'
 	@echo 'make test-noc        Verilator NoC elaboration, traffic and negative check'
 	@echo 'make dv-boot         Real cold boot (BOOT_WAVE=1 BOOT_TRACE=1 for debug)'
-	@echo 'make dv-chip         Chip boot: CPU0 coordinates init/run/check; AXI memory stand-ins'
+	@echo 'make dv-chip         Chip boot + integrated DMA regression through real FlooNoCs'
+	@echo 'make dv-chip-dma     SS0 and SS1 DMA via data/config NoCs; host preloads only DMA-only SRAM'
 	@echo 'make dv-dma-vectors  Generate 100-descriptor DMA SRAM and expected-data manifest (host only)'
 	@echo 'make dv-dma          Run real pinned PULP DMA frontend/backend AXI transfer test'
 	@echo 'python3 tools/regress.py --help    Filelist/build/run stages and target selection'
@@ -49,6 +50,9 @@ dv-supernoc:
 
 dv-chip:
 	python3 tools/regress.py chip
+
+dv-chip-dma:
+	python3 tools/regress.py chip-dma
 
 dv-dma:
 	python3 tools/regress.py dma

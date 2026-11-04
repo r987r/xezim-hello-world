@@ -2,7 +2,8 @@
 
 Only instances/type/port wiring and CPU/reset hookup. Protocol conversion,
 arbitration, crossbar, SRAM and AXI responders are immutable upstream IP.
-DMA engines and physical DDR/HBM controllers are explicit pending boundaries.
+Real pinned PULP iDMA engines are optionally instantiated for each compute
+subsystem from the same endpoint graph; physical DRAM controllers remain pending.
 """
 import json
 from pathlib import Path
@@ -12,15 +13,15 @@ from supernoc_gen import AW_FIELDS, W_FIELDS, B_FIELDS, AR_FIELDS, R_FIELDS
 CHANNELS = {'aw': AW_FIELDS, 'w': W_FIELDS, 'b': B_FIELDS, 'ar': AR_FIELDS, 'r': R_FIELDS}
 
 
-def probe_ports():
-    """Standard AXI test-manager boundary; future real iDMA uses this port."""
-    widths = {'id':4, 'addr':64, 'data':64, 'strb':8, 'len':8, 'size':3,
+def probe_ports(prefix='probe', *, addr_bits=64, data_bits=64, id_bits=4):
+    """Flat upstream AXI BFM boundary; used only in explicit verification modes."""
+    widths = {'id':id_bits, 'addr':addr_bits, 'data':data_bits, 'strb':data_bits//8, 'len':8, 'size':3,
               'burst':2, 'lock':1, 'cache':4, 'prot':3, 'qos':4, 'region':4,
               'resp':2, 'last':1, 'valid':1, 'ready':1}
     result = []
     for ch, members in CHANNELS.items():
         for member in [*members.values(), 'valid', 'ready']:
-            name = 'probe_'+ch+member
+            name = prefix+'_'+ch+member
             width = widths[member]
             dim = f' [{width-1}:0]' if width > 1 else ''
             direction = 'input' if request_field(ch,member) else 'output'
@@ -51,18 +52,23 @@ def emit(cfg, noc_manifest, noc_root, out):
     def req(p): return p['name']+'_req'
     def rsp(p): return p['name']+'_rsp'
     def module(name, instance, params, connections):
-        return f'  {name} #(\n    '+',\n    '.join('.'+k+'('+str(v)+')' for k,v in params.items())+f'\n  ) {instance} (\n    '+',\n    '.join('.'+k+'('+str(v)+')' for k,v in connections.items())+'\n  );'
+        args = (f' #(\n    '+',\n    '.join('.'+k+'('+str(v)+')' for k,v in params.items())+'\n  )') if params else ''
+        return f'  {name}'+args+f' {instance} (\n    '+',\n    '.join('.'+k+'('+str(v)+')' for k,v in connections.items())+'\n  );'
     def monitor(i):
         return {f'mon_{name}_o':f'sram_{name}_o[{i}*{bits} +: {bits}]' for name,bits in [('valid',1),('write',1),('addr',64),('data',64),('strb',8)]}
+    if cfg['subsystem_types']['compute']['dma'] != 'pulp_idma':
+        raise ValueError('generated chip DMA requires pinned PULP iDMA')
     probe = probe_ports()
-    lines = ['// Generated chip boot configuration: see gen/chip/manifest.json.',
-             'module soc_top #(parameter bit ProbeEnable = 0) (input logic clk_i, rst_ni,', f'  input logic [{count-1}:0] hold_mask_i,',
+    cfgprobe = probe_ports('cfgprobe', addr_bits=32, data_bits=32, id_bits=1)
+    lines = ['// Generated chip boot + DMA configuration: see gen/chip/manifest.json.',
+             'module soc_top #(parameter bit ProbeEnable = 0, DmaEnable = 0, DmaTestMode = 0) (input logic clk_i, rst_ni,', f'  input logic [{count-1}:0] hold_mask_i,',
+             f'  output logic [{count-1}:0] dma_irq_o, dma_irq_pending_o,',
              f'  output logic [{count-1}:0] released_o, fetch_valid_o,', f'  output logic [{32*count-1}:0] fetch_addr_o,',
              f'  output logic [{count-1}:0] sram_valid_o, sram_write_o,',
              f'  output logic [{64*count-1}:0] sram_addr_o, sram_data_o,',
              f'  output logic [{8*count-1}:0] sram_strb_o,',
              '  output logic [31:0] rom_reads_o, flash_reads_o,',
-             *[p[1] for p in probe]]
+             *[p[1] for p in probe], *[p[1] for p in cfgprobe]]
     lines[-1] = lines[-1].rstrip(',')
     lines += [');', '  import chip_types_pkg::*;']
     connections = ['.clk_i(clk_i)', '.rst_ni(rst_ni)']
@@ -80,6 +86,8 @@ def emit(cfg, noc_manifest, noc_root, out):
             for ch in ('b','r'):
                 lines += [f"  assign {rsp(p)}.{ch}.user = '0;"]
     lines += ['  soc_noc u_noc (\n    '+',\n    '.join(connections)+'\n  );']
+    lines += ['  initial if (DmaTestMode && (!DmaEnable || !ProbeEnable))',
+              '    $fatal(1, "DMA host mode requires active DMA and host probe");']
     ctrl = {x['name']:int(x['base'],0) for x in cfg['address_map']['config']}
     cfg_base = min(ctrl.values())
     cfg_end = max(int(x['base'],0)+int(x['size'],0) for x in cfg['address_map']['config'])
@@ -89,13 +97,25 @@ def emit(cfg, noc_manifest, noc_root, out):
             raise ValueError('CPU config address classification overlaps a data aperture')
     reg_bytes = 1 << max(2, (4*count-1).bit_length())
     lines += [f'  logic [{reg_bytes-1}:0][7:0] reset_regs;', f'  logic [{count-1}:0] cpu_reset_n;']
+    first = cores[0]['name']
+    cfg_port = all_ports[f'm_{first}_local_config_cpu']
+    lines += [f'  {dtype(cfg_port,"req")} cfgprobe_req;']
+    for pin, _, ch, member in cfgprobe:
+        if request_field(ch,member):
+            lines += [f'  assign {field("cfgprobe_req",ch,member)} = {pin};']
+        else:
+            lines += [f'  assign {pin} = {field(rsp(cfg_port),ch,member)};']
+    lines += ["  assign cfgprobe_req.aw.atop = '0;",
+              "  assign cfgprobe_req.aw.user = '0;",
+              "  assign cfgprobe_req.w.user = '0;",
+              "  assign cfgprobe_req.ar.user = '0;"]
     for i, core in enumerate(cores):
         name = core['name']
         d = all_ports[f'm_{name}_local_data_cpu']
         c = all_ports[f'm_{name}_local_config_cpu']
         lines += [f'  lite_req_t cpu_{i}_req;', f'  lite_resp_t cpu_{i}_rsp;']
         release = 'rst_ni' if i == 0 else f'rst_ni && reset_regs[{(i-1)//8}][{(i-1)%8}] && !hold_mask_i[{i}]'
-        lines += [f'  assign cpu_reset_n[{i}] = {release};', f'  assign released_o[{i}] = cpu_reset_n[{i}];']
+        lines += [f'  assign cpu_reset_n[{i}] = ({release}) && !DmaTestMode;', f'  assign released_o[{i}] = cpu_reset_n[{i}];']
         if i == 0:
             con = {'clk':'clk_i','rst':f'!cpu_reset_n[{i}]','trap':f'cpu_{i}_trap'}
             lines += [f'  logic cpu_{i}_trap;']
@@ -131,26 +151,63 @@ def emit(cfg, noc_manifest, noc_root, out):
                 'NoSlvPorts':2,'MaxTrans':1}, {'clk_i':'clk_i','rst_ni':'rst_ni','slv_reqs_i':f'c{i}_req',
                 'slv_resps_o':f'c{i}_rsp','mst_req_o':f'cpu_{i}_req','mst_resp_i':f'cpu_{i}_rsp'}),
                 f'  assign fetch_valid_o[{i}] = c{i}_ic && c{i}_iack;', f'  assign fetch_addr_o[{i}*32 +: 32] = c{i}_ia;']
+        if i == 0:
+            lines += [f'  {dtype(d,"req")} cpu_data_{i}_req;',
+                      f'  {dtype(d,"rsp")} cpu_data_{i}_rsp;',
+                      f'  {dtype(c,"req")} cpu_config_{i}_req;',
+                      f'  {dtype(c,"rsp")} cpu_config_{i}_rsp;',
+                      f'  assign {req(d)} = DmaTestMode ? probe_req : cpu_data_{i}_req;',
+                      f'  assign cpu_data_{i}_rsp = {rsp(d)};',
+                      f'  assign {req(c)} = DmaTestMode ? cfgprobe_req : cpu_config_{i}_req;',
+                      f'  assign cpu_config_{i}_rsp = {rsp(c)};']
         lines += [module('cpu_noc_adapter', 'u_edge_'+name, {
             'data_req_t':dtype(d,'req'),'data_rsp_t':dtype(d,'rsp'),'cfg_req_t':dtype(c,'req'),'cfg_rsp_t':dtype(c,'rsp'),
             'ConfigBase':f"32'h{cfg_base:08x}",'ConfigEnd':f"32'h{cfg_end:08x}"}, {
             'clk_i':'clk_i','rst_ni':'rst_ni','cpu_req_i':f'cpu_{i}_req','cpu_rsp_o':f'cpu_{i}_rsp',
-            'data_req_o':req(d),'data_rsp_i':rsp(d),'cfg_req_o':req(c),'cfg_rsp_i':rsp(c)}),
+            'data_req_o':f'cpu_data_{i}_req' if i == 0 else req(d),
+            'data_rsp_i':f'cpu_data_{i}_rsp' if i == 0 else rsp(d),
+            'cfg_req_o':f'cpu_config_{i}_req' if i == 0 else req(c),
+            'cfg_rsp_i':f'cpu_config_{i}_rsp' if i == 0 else rsp(c)}),
             f'  always @(posedge clk_i) if (cpu_reset_n[{i}] && ((cpu_{i}_rsp.r_valid && cpu_{i}_req.r_ready && cpu_{i}_rsp.r.resp != 0) || (cpu_{i}_rsp.b_valid && cpu_{i}_req.b_ready && cpu_{i}_rsp.b.resp != 0))) $fatal(1, "CPU bus error {name}");']
         dma = all_ports[f'm_{name}_local_data_dma']
+        lines += [f'  logic [63:0] dma_{i}_apb_addr, dma_{i}_apb_data;',
+                  f'  logic dma_{i}_apb_write, dma_{i}_apb_select, dma_{i}_apb_enable;',
+                  f'  logic dma_{i}_apb_ready, dma_{i}_apb_error;',
+                  f'  logic [63:0] dma_{i}_apb_rdata;']
         if i == 0:
-            lines += [f'  {dtype(dma,"req")} probe_req;',
-                      f"  assign {req(dma)} = ProbeEnable ? probe_req : '0; // real iDMA remains unintegrated"]
-            for name, _, ch, member in probe:
+            lines += [f'  {dtype(dma,"req")} probe_req;']
+            for pin, _, ch, member in probe:
                 if request_field(ch,member):
-                    lines += [f'  assign {field("probe_req",ch,member)} = {name};']
+                    lines += [f'  assign {field("probe_req",ch,member)} = {pin};']
                 else:
-                    lines += [f'  assign {name} = {field(rsp(dma),ch,member)};']
+                    lines += [f'  assign {pin} = DmaTestMode ? {field(rsp(d),ch,member)} : {field(rsp(dma),ch,member)};']
             lines += ["  assign probe_req.aw.atop = '0;"]
             for ch in ('aw','w','ar'):
                 lines += [f"  assign probe_req.{ch}.user = '0;"]
+        engine_con = {'clk_i':'clk_i', 'rst_ni':'rst_ni',
+                      'apb_addr_i':f'dma_{i}_apb_addr',
+                      'apb_data_i':f'dma_{i}_apb_data',
+                      'apb_write_i':f'dma_{i}_apb_write',
+                      'apb_select_i':f'dma_{i}_apb_select',
+                      'apb_enable_i':f'dma_{i}_apb_enable',
+                      'apb_ready_o':f'dma_{i}_apb_ready',
+                      'apb_rdata_o':f'dma_{i}_apb_rdata',
+                      'apb_error_o':f'dma_{i}_apb_error',
+                      'irq_o':f'dma_irq_o[{i}]'}
+        for ch, members in CHANNELS.items():
+            for member in [*members.values(), 'valid', 'ready']:
+                is_req = request_field(ch, member)
+                engine_con['dma_'+ch+member] = field(req(dma) if is_req else rsp(dma), ch, member)
+        lines += [f'  if (DmaEnable) begin: gen_dma_{name}',
+                  module('soc_idma_engine', 'u_dma_'+name, {}, engine_con),
+                  f'    assign {req(dma)}.aw.atop = \'0;',
+                  *[f"    assign {req(dma)}.{ch}.user = '0;" for ch in ('aw','w','ar')],
+                  '  end else begin: gen_dma_disabled_'+name]
+        if i == 0:
+            lines += [f"    assign {req(dma)} = ProbeEnable ? probe_req : '0;"]
         else:
-            lines += [f"  assign {req(dma)} = '0; // iDMA intentionally idle/unintegrated in this boot configuration"]
+            lines += [f"    assign {req(dma)} = '0;"]
+        lines += [f"    assign dma_irq_o[{i}] = 1'b0;", '  end']
     # Leaf attachments: SRAM/ROM/flash use only upstream memory/IP modules.
     for p in noc_manifest['slaves']:
         ep = p['endpoint']
@@ -171,6 +228,29 @@ def emit(cfg, noc_manifest, noc_root, out):
                 'IdWidth':p['id_width'],'Base':f"64'h{region['base']:016x}",'Bytes':size,
                 'ReadOnly':int(is_rom),'InitFile':f'"gen/chip/{image}"' if image else '""'},
                 {'clk_i':'clk_i','rst_ni':'rst_ni','req_i':req(p),'rsp_o':rsp(p),**mon})]
+        elif ep == 'dma_regs':
+            core = next((i for i,c in enumerate(cores) if p['network'] == c['name']+'_local_config'), None)
+            if core is None:
+                raise ValueError('DMA CSR endpoint not owned by configured compute subsystem')
+            lines += [f'  if (DmaEnable) begin: gen_dma_csr_{cores[core]["name"]}',
+                module('soc_dma_regs','u_dma_csr_'+cores[core]['name'],{
+                    'axi_req_t':dtype(p,'req'), 'axi_rsp_t':dtype(p,'rsp'),
+                    'lite_req_t':'lite_req_t','lite_rsp_t':'lite_resp_t',
+                    'AxiIdWidth':p['id_width']}, {
+                    'clk_i':'clk_i','rst_ni':'rst_ni','cfg_req_i':req(p),'cfg_rsp_o':rsp(p),
+                    'apb_addr_o':f'dma_{core}_apb_addr','apb_data_o':f'dma_{core}_apb_data',
+                    'apb_write_o':f'dma_{core}_apb_write','apb_select_o':f'dma_{core}_apb_select',
+                    'apb_enable_o':f'dma_{core}_apb_enable','apb_ready_i':f'dma_{core}_apb_ready',
+                    'apb_error_i':f'dma_{core}_apb_error',
+                    'irq_raw_i':f'dma_irq_o[{core}]',
+                    'irq_pending_o':f'dma_irq_pending_o[{core}]'}),
+                '  end else begin: gen_dma_csr_disabled_'+cores[core]['name'],
+                module('axi_err_slv','u_unused_'+p['name'],{
+                    'AxiIdWidth':p['id_width'],'axi_req_t':dtype(p,'req'),
+                    'axi_resp_t':dtype(p,'rsp'),'ATOPs':0},
+                    {'clk_i':'clk_i','rst_ni':'rst_ni','slv_req_i':req(p),'slv_resp_o':rsp(p)}),
+                f"    assign dma_irq_pending_o[{core}] = 1'b0;",
+                '  end']
         elif ep == 'reset_ctrl':
             lines += ['  lite_req_t reset_req;', '  lite_resp_t reset_rsp;']
             lines += [module('axi_to_axi_lite','u_reset_convert',{
@@ -221,16 +301,20 @@ def emit(cfg, noc_manifest, noc_root, out):
               '    end', 'endmodule']
     (out/'soc_top.sv').write_text('\n'.join(lines)+'\n')
     emit_tb(cfg, fw, out)
-    manifest = {'top':'soc_top','testbench':'full_chip_tb','cores':count,'networks':len(nets),
-                'fabric_core':'gen/supernoc/soc_noc.sv','dma_engines_instantiated':0,'memory_crossbar_inputs':1,
+    emit_dma_tb(cfg, fw, out)
+    manifest = {'top':'soc_top','testbench':'full_chip_tb','dma_testbench':'full_chip_dma_tb',
+                'cores':count,'networks':len(nets),
+                'fabric_core':'gen/supernoc/soc_noc.sv','dma_engines_instantiated':count,
+                'dma_configuration':'DmaEnable=1; default cold-boot mode DmaEnable=0',
+                'memory_crossbar_inputs':1,
                 'memory_crossbar_outputs':len(cfg['memory_targets']),
                 'memory_controllers':'AXI slave SRAM models only; no physical HBM/DDR RTL',
-                'dma':'Reserved DMA boundaries; the coordinator port can host a verification AXI BFM. No iDMA engine is instantiated.',
+                'dma':'PULP iDMA engines generated for each compute, enabled by DmaEnable=1; data ports route via local FlooNoCs and 32-bit CSRs via local/global config FlooNoCs; old boot defaults to disabled.',
                 'firmware':'firmware.json','reset_register_bytes':reg_bytes,
                 'memory_models':[{'name':t['name'], 'base':int(next(r['base'] for r in cfg['address_map']['data'] if r['name']==t['name']),0),
                                   'modeled_bytes':1 << cfg['verification']['memory']['model_address_bits']}
                                  for t in cfg['memory_targets']],
-                'verification_probe':'CPU0 DMA boundary AXI BFM only; disabled in standalone CPU boot',
+                'verification_probe':'When DMA enabled, host BFM shares coordinator CPU data/config boundaries in DMA-only test mode. Cold boot retains former optional DMA probe.',
                 'upstream':['PicoRV32','SERV','FlooNoC','PULP AXI','tech_cells_generic tc_sram','ZipCPU wbm2axilite','verilog-axi crossbar']}
     actors = {}
     for i, core in enumerate(cores):
@@ -239,19 +323,52 @@ def emit(cfg, noc_manifest, noc_root, out):
             actors[f'{name}_local_{plane}.cpu']={'kind':'rtl_cpu','label':f'{core["cpu"]["ip"]} {name} (RTL CPU)',
                                                'short_label':f'{name} {core["cpu"]["ip"]} ({plane})'}
         actors[f'{name}_local_data.dma'] = {
-            'kind':'verification_bfm' if i==0 else 'reserved_idle',
-            'short_label':f'{name} test BFM (reserved DMA)' if i==0 else f'{name} DMA reserved / idle',
-            'label':'Verification AXI BFM at reserved DMA port' if i==0 else 'Reserved DMA port: idle, no engine'}
+            'kind':'rtl_dma_optional',
+            'short_label':f'{name} iDMA (DmaEnable)',
+            'label':'Generated real PULP iDMA frontend/backend when DmaEnable=1; optional BFM only with DmaEnable=0'}
+        actors[f'{name}_local_config.dma_regs'] = {
+            'kind':'rtl_registers_optional',
+            'label':'AXI4 32-bit DMA head staging/doorbell and IRQ status when DmaEnable=1; error responder otherwise'}
     for port in noc_manifest['slaves']:
         endpoint=port['endpoint']
         actor={'kind':'rtl_model','label':'Upstream AXI SRAM/ROM model'} if endpoint in ('sram','boot_rom','boot_flash') else (
             {'kind':'rtl_registers','label':'Reset register bank (RTL)'} if endpoint=='reset_ctrl' else (
             {'kind':'rtl_model','label':'Memory crossbar and bounded AXI SRAM stand-ins'} if endpoint=='target_crossbar' else
             {'kind':'reserved_error','label':'DECERR responder: controller/DMA registers not integrated'}))
+        if endpoint == 'dma_regs':
+            continue
         actors[port['network']+'.'+endpoint]=actor
     manifest['axi_actors']=actors
     (out/'manifest.json').write_text(json.dumps(manifest, indent=2, sort_keys=True)+'\n')
+    dma_actors = json.loads(json.dumps({'axi_actors': actors}))
+    for plane in ('data', 'config'):
+        dma_actors['axi_actors'][cores[0]['name']+'_local_'+plane+'.cpu'] = {
+            'kind':'verification_bfm',
+            'label':'Host AXI BFM at held CPU boundary in isolated full-chip DMA test'}
+    (out/'dma_actors.json').write_text(json.dumps(dma_actors, indent=2, sort_keys=True)+'\n')
     return manifest
+
+
+def emit_dma_tb(cfg, fw, out):
+    """Dedicated reset-isolated DMA-through-NoC test (no firmware preload)."""
+    probe = probe_ports()
+    cfgprobe = probe_ports('cfgprobe', addr_bits=32, data_bits=32, id_bits=1)
+    lines = ['// Host BFMs replace CPUs only in this explicit DMA-only simulation mode.',
+             'module full_chip_dma_tb (',
+             '  input logic clk_i, rst_ni,',
+             f'  output logic [{len(fw["cores"])-1}:0] dma_irq_o, dma_irq_pending_o,',
+             *[p[1] for p in probe], *[p[1] for p in cfgprobe]]
+    lines[-1] = lines[-1].rstrip(',')
+    lines += [');',
+             "  soc_top #(.ProbeEnable(1'b1), .DmaEnable(1'b1), .DmaTestMode(1'b1)) dut (",
+             '    .clk_i(clk_i), .rst_ni(rst_ni), .hold_mask_i(\'0),',
+             '    .released_o(), .fetch_valid_o(), .fetch_addr_o(),',
+             '    .sram_valid_o(), .sram_write_o(), .sram_addr_o(),',
+             '    .sram_data_o(), .sram_strb_o(), .rom_reads_o(), .flash_reads_o(),',
+             '    .dma_irq_o(dma_irq_o), .dma_irq_pending_o(dma_irq_pending_o),',
+             '    '+',\n    '.join(f'.{p[0]}({p[0]})' for p in [*probe,*cfgprobe])+');',
+             'endmodule']
+    (out/'full_chip_dma_tb.sv').write_text('\n'.join(lines)+'\n')
 
 
 def emit_tb(cfg, fw, out):
@@ -262,6 +379,7 @@ def emit_tb(cfg, fw, out):
     counts = '{'+', '.join(f"32'd{v}" for v in reversed(words))+'}'
     opts = cfg['verification']['full_chip_boot']
     probe = probe_ports()
+    cfgprobe = probe_ports('cfgprobe', addr_bits=32, data_bits=32, id_bits=1)
     lines = ['`timescale 1ns/1ps', '// One boot/coordination checker shared by both simulators.',
         'module full_chip_tb (', *[p[1] for p in probe]]
     lines[-1] = lines[-1].rstrip(',')
@@ -280,7 +398,10 @@ def emit_tb(cfg, fw, out):
         '    .released_o(released), .fetch_valid_o(fetch_valid), .fetch_addr_o(fetch_addr),',
         '    .sram_valid_o(sram_valid), .sram_write_o(sram_write), .sram_addr_o(sram_addr),',
         '    .sram_data_o(sram_data), .sram_strb_o(sram_strb), .rom_reads_o(rom_reads), .flash_reads_o(flash_reads),',
-        '    '+',\n    '.join(f'.{p[0]}({p[0]})' for p in probe)+');',
+        '    .dma_irq_o(), .dma_irq_pending_o(),',
+        '    '+',\n    '.join([*(f'.{p[0]}({p[0]})' for p in probe),
+                           *(f'.{p[0]}(\'0)' if request_field(p[2],p[3]) else f'.{p[0]}()'
+                             for p in cfgprobe)])+');',
         '  reg [31:0] expected [0:N*MAX_WORDS-1];', '  reg [MAX_WORDS-1:0] copied [0:N-1];',
         '  reg [N-1:0] init_mask = 0, hello_mask = 0, check_mask = 0, app_fetch = 0;',
         '  reg init_complete = 0, run_complete = 0, check_complete = 0, pass_flag = 0;',
