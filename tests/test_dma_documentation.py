@@ -29,6 +29,8 @@ class DmaDocumentContract(unittest.TestCase):
                          cfg['subsystem_types']['compute']['dma_parameters'])
         self.assertIn('CPU0 AXI BFM',
                       actors['compute0_local_data.cpu']['label'])
+        self.assertIn('no PCIe',
+                      actors['compute0_local_config.cpu']['label'])
 
     def test_docs_show_optional_real_dma_but_not_cpu_firmware_or_phy(self):
         files = ['README.md', 'AGENTS.md', 'docs/architecture.md',
@@ -40,6 +42,10 @@ class DmaDocumentContract(unittest.TestCase):
             self.assertIn('dv-chip-dma', contents[f], f)
         for f in ('README.md','docs/implementation-status.md','docs/dma-bringup.md'):
             self.assertTrue('pending' in contents[f].lower(), f)
+        report_doc=(ROOT/'docs/axi-run-reports.md').read_text()
+        for required in ('BVALID && BREADY', 'RVALID && RREADY && RLAST',
+                         'CPU0 AXI BFM', 'DDR4 controller'):
+            self.assertIn(required,report_doc)
         stale = ('real PULP iDMA integration, DMA CSRs and interrupts',
                  'There are **zero instantiated DMA engines**',
                  'Real DMA backend/frontend integration and CSR mapping are pending',
