@@ -44,9 +44,14 @@ The collector searches the latest 500 Actions runs and keeps up to four runs
 per configured producer. It accepts main-branch results and completed PR results
 only when GitHub's merged-PR metadata matches **the exact tested source head SHA
 and source branch**. GitHub may clear a workflow run's PR association after merge,
-so the source SHA is checked against the merged PR directly. Unmerged branch
-artifacts are never published. The source SHA of the site and tested SHA for
-each result remain distinct, and deployed code always comes from `main`.
+so the source SHA is checked against the merged PR directly. PR builds run on
+GitHub's temporary merge commit, which differs from the PR head; for AXI
+artifacts the publisher verifies the captured merge commit through GitHub's
+commit API, requiring the exact PR head as its second parent, and retains the
+actual tested merge SHA separately from the PR-head SHA. Unverifiable captures
+are excluded with explicit notes, never silently accepted or promoted to PASS.
+Unmerged branch artifacts are never published. Deployed code always comes from
+`main`.
 
 Artifacts retain their original workflow and attempt. Available SHA-256 archive
 digests are checked; unsafe ZIP paths and symlinks are rejected. AXI report

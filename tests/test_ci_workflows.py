@@ -21,6 +21,10 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertIn('closed',pages['on']['pull_request']['types'])
         self.assertNotIn('push',pages['on'])
         self.assertNotIn('workflow_run',pages['on'])
+        # Site styling must not queue an expensive NoC traffic regression.
+        noc=(ROOT/'.github/workflows/floonoc-elab.yml').read_text()
+        self.assertNotIn("'tools/templates/**'",noc)
+        self.assertIn("'tools/templates/run_report.html'",noc)
 
 if __name__=='__main__':
     unittest.main()
