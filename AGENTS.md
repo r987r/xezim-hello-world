@@ -23,7 +23,7 @@ arbitrary-configuration SoC emitter. Legacy memory/boot benches remain
 independent executable scopes. Read [implementation-status](docs/implementation-status.md)
 before describing progress.
 
-Shared SRAM ownership: `tools/sram_layout.py` defines physical regions
+Unified region allocation: `sw/common/memory_pool.[ch]` owns the\nphysical SRAM, DDR and HBM allocator and `tools/memory_plan.py` independently\nplans configured model-bounded virtual allocations. `soc_sram_pool_*`\nis a compatibility wrapper using the same allocator implementation, not\na separate heap. The 32-bit CPUs cannot dereference HBM/DDR above 4 GiB.\nNever treat Python planning or a C hosted test as CPU RTL execution; prove\nCPU addresses and DMA retirement from passive AXI monitors. See\n[docs/memory-allocation.md](docs/memory-allocation.md).\n\nShared SRAM ownership: `tools/sram_layout.py` defines physical regions
 for both `tools/chip_bootgen.py` and `dv/common/dma_vectors.py`. Use
 `boot_live` for any regression that executes CPU firmware. `dma_only`
 reclaims the whole simulated boot allocation only when all CPUs are stopped
