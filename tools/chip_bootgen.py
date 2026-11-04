@@ -67,6 +67,15 @@ class Program:
 
 def build(cfg, *, cpu0_run_hook=None):
     addresses = rv.build(cfg)['addresses']  # preserve explicit boot-policy validation
+    if cpu0_run_hook is not None:
+        flash = next((r for r in cfg['address_map']['data']
+                      if r['name'] == 'boot.flash'), None)
+        if flash is None or type(cpu0_run_hook) is not int:
+            raise ValueError('CPU C run hook must be a configured flash address')
+        flash_base = int(flash['base'], 0)
+        flash_size = int(flash['size'], 0)
+        if cpu0_run_hook % 4 or not flash_base + 0x1000 <= cpu0_run_hook < flash_base + flash_size or cpu0_run_hook > 0xffffffff:
+            raise ValueError('CPU C run hook outside reserved aligned flash C region')
     primary = cfg['boot']['primary']
     cores = sorted((s for s in cfg['subsystems'] if s['type'] == 'compute'),
                    key=lambda s: (s['name'] != primary, s['name']))
@@ -118,6 +127,7 @@ def build(cfg, *, cpu0_run_hook=None):
                 p.li(2, stack)   # RV32I ABI stack pointer x2
                 p.li(10, cpu0_run_hook)  # a0 = C function address
                 p.add(rv._jalr(1, 10), 'jalr ra, 0(a0)  # call C DMA run hook')
+                p.code.append(((10, 0, 'dma_error'), 'bne a0, zero, dma_error'))
                 p.li(5, mailbox)  # C may clobber caller-saved registers
             p.store(3, 0)
         else:
@@ -131,6 +141,9 @@ def build(cfg, *, cpu0_run_hook=None):
             p.wait_all(12, 1, len(cores), 'wait_checked')
             p.store(0x600d, done_offset)
         p.add(rv._jal_zero(), 'jal zero, 0  # park')
+        if index == 0 and cpu0_run_hook is not None:
+            p.label('dma_error')
+            p.add(rv._jal_zero(), 'jal zero, 0  # failed C hook: no CHECK')
         image = p.finish()
         if len(image)*4 > min(stride, offset):
             raise ValueError(f'{core["name"]}: phased firmware exceeds configured flash slot/mailbox offset')
