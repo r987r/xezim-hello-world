@@ -411,6 +411,7 @@ def _display_cycles(stats, observation):
         "n": observation["sample_count"],
         "reference_clock_period_ps": observation["clock_period_ps"],
         "run_sha": observation["source_sha"],
+        "source_equivalence": observation.get("source_equivalence", "exact_sha"),
         "run_report": observation["run_report"],
     }
 
@@ -504,6 +505,12 @@ def attach_one_beat_observations(report, entries, output, source_sha):
                 or run.get("dirty") is not False):
             continue
         rows = trace["sections"]["axi"]["transactions"]
+        # GitHub's tested temporary PR merge commit and the final main merge
+        # commit can be different SHAs for the same exact Git tree. Accept
+        # that only when the trusted collector verified both trees.
+        identity = ("exact_sha" if entry["source_sha"] == source_sha else
+                    "verified_same_tree" if entry.get("verified_site_source_sha") == source_sha
+                    else None)
         matched = defaultdict(list)
         source_samples = defaultdict(list)
         for item in rows:
@@ -528,7 +535,8 @@ def attach_one_beat_observations(report, entries, output, source_sha):
             routes[route_id]["one_beat_observations"].append({
                 "operation": operation, "count": len(samples),
                 **_quantiles(samples), "source_sha": entry["source_sha"],
-                "matches_site_source": entry["source_sha"] == source_sha,
+                "matches_site_source": identity is not None,
+                "source_equivalence": identity or "historical",
                 "test_scope": entry["target"], "simulator": entry["engine"],
                 "run_report": entry["path"],
                 "scope": "initiator_end_to_end_B_or_RLAST_all_test_phases",
@@ -538,7 +546,7 @@ def attach_one_beat_observations(report, entries, output, source_sha):
         # The test source SHA must exactly match the architecture being
         # published. The run must measure one positive clock period itself.
         clock_ps = run.get("clock_period_ps")
-        if (entry["source_sha"] != source_sha or
+        if (identity is None or
                 type(clock_ps) is not int or clock_ps <= 0 or
                 not source_samples):
             continue
@@ -580,6 +588,7 @@ def attach_one_beat_observations(report, entries, output, source_sha):
                 "end_to_end": _cycle_stats(elapsed, clock_ps),
                 "stage_metrics": stage_stats,
                 "source_sha": entry["source_sha"], "matches_site_source": True,
+                "source_equivalence": identity,
                 "test_scope": entry["target"], "simulator": entry["engine"],
                 "run_report": entry["path"],
                 "scope": "serial_single_outstanding_AXI_tap_boundary_deltas",
