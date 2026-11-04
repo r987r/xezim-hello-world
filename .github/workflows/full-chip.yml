@@ -66,6 +66,8 @@ jobs:
           path: |
             .tools/regression/chip-dma/report.html
             .tools/regression/chip-dma/axi-*.json*
+            .tools/regression/chip-cpu-dma/report.html
+            .tools/regression/chip-cpu-dma/axi-*.json*
             .tools/regression/chip-boot*/report.html
             .tools/regression/chip-boot*/axi-*.json*
           include-hidden-files: true
