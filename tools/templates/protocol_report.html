@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Protocol Run Explorer</title>
+<style>
+:root{font:14px/1.5 system-ui,sans-serif;color:#192d42;background:#f3f6fa;color-scheme:light}
+*{box-sizing:border-box}body{margin:0}main{max-width:1450px;margin:auto;padding:24px 18px 50px}
+h1{font-size:26px;margin:4px 0}.eyebrow{color:#375e9f;text-transform:uppercase;font-weight:700;letter-spacing:1px;font-size:12px}
+p,small{color:#54687f}.card{background:white;border:1px solid #d9e4ed;border-radius:12px;padding:16px;margin-top:14px}
+.tools{display:flex;gap:12px;flex-wrap:wrap}.tools label{display:flex;flex-direction:column;gap:4px;flex:1;min-width:160px;font-size:12px}
+input,select,button{border:1px solid #c9d6e2;background:white;color:#162a3f;border-radius:6px;padding:8px;font:inherit}
+button{cursor:pointer}table{border-collapse:collapse;width:100%;font-size:12px}th,td{border-bottom:1px solid #e5ebf2;padding:10px;text-align:left}th{background:#edf3f8;position:sticky;top:0}
+.tablewrap{overflow:auto;max-height:650px}.mono{font-family:ui-monospace,monospace}.warning{background:#fff1d5;padding:12px;border-radius:8px}
+canvas{width:100%;display:block}pre{font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere;max-height:400px;overflow:auto}
+@media(max-width:650px){main{padding:12px 8px}h1{font-size:23px}th,td{padding:7px}.card{padding:10px}}
+</style>
+<main>
+<div class="eyebrow">Simulation evidence · unified monitor observations</div>
+<h1>Protocol Run Explorer</h1>
+<p id="run"></p><div id="warning"></div>
+<div class="card"><div class="tools">
+<label>Search source, operation, payload<input type="search" id="search" placeholder="DMA, address, frame, payload"></label>
+<label>Protocol<select id="protocol"><option value="">All protocols</option></select></label>
+<label>Monitor<select id="source"><option value="">All monitors</option></select></label>
+<label>Kind<select id="kind"><option value="">Events and transactions</option><option>event</option><option>transaction</option></select></label>
+<label>Status<select id="status"><option value="">All states</option><option>complete</option><option>incomplete</option><option>reset_aborted</option><option>error</option><option>observed</option></select></label>
+</div><p id="count"></p></div>
+<div class="card"><h2>Observed event/transaction completion timeline</h2>
+<p>One point per observed event or completed transaction. No inferred cross-protocol correlation.</p>
+<div style="overflow:auto"><canvas id="timeline" height="280" aria-label="Protocol events by monitor and simulation time" role="img"></canvas></div></div>
+<div class="card"><h2>All observations</h2><div class="tools"><button id="csv">Export filtered CSV</button><button id="json">Export filtered JSON</button></div>
+<div class="tablewrap"><table><thead><tr><th>Time ns</th><th>Protocol</th><th>Monitor</th><th>Type</th><th>Operation/event</th><th>ID</th><th>Duration ns</th><th>Status</th><th>Details</th></tr></thead><tbody id="body"></tbody></table></div>
+<p id="page-label"></p><button id="prev">Previous</button> <button id="next">Next</button><pre id="detail">Select an observation to inspect its payload and timestamps.</pre></div>
+<div class="card"><h2>Capture coverage</h2><p id="sources"></p><pre id="issues"></pre><small>These are records from existing protocol VIPs/testbenches. Unmeasured intervals, CDC, physical PHY/DRAM delays and bus-protocol compliance cannot be inferred from this report.</small></div>
+</main>
+<script type="application/json" id="protocol-data">__PROTOCOL_DATA__</script>
+<script>
+'use strict';
+const D=JSON.parse(document.getElementById('protocol-data').textContent);
+const $=id=>document.getElementById(id), N=x=>x==null?'—':(x/1000).toLocaleString(undefined,{maximumFractionDigits:3});
+const safe=(text)=>String(text??''),S=D.sources||[],R=D.records||[];
+$('run').textContent=(D.run.target||'unknown')+' · '+(D.run.engine||'unknown')+' · source '+(D.run.commit||'unrecorded');
+if(!D.capture_complete||D.issues.length){const v=document.createElement('p');v.className='warning';v.textContent='Incomplete protocol evidence: '+(D.issues||[]).join('; ');$('warning').append(v)}
+for(const [id,values,key] of [['protocol',[...new Set(S.map(s=>s.protocol))],'protocol'],['source',S.map(s=>s.id),'id']]){
+const control=$(id);for(const name of values.sort()){const opt=document.createElement('option');opt.value=name;opt.textContent=name;control.append(opt)}}
+$('sources').textContent=S.map(s=>s.id+' ('+s.protocol+' · '+s.role+' · '+s.clock_domain+')').join(' · ')||'No cataloged protocol sources';
+$('issues').textContent=D.issues?.length?JSON.stringify(D.issues,null,2):'No protocol capture diagnostics.';
+let filtered=R,page=0;const size=100;
+function select(o){$('detail').textContent=JSON.stringify(o,null,2)}
+function apply(){const q=$('search').value.toLowerCase(),p=$('protocol').value,s=$('source').value,k=$('kind').value,st=$('status').value;
+filtered=R.filter(r=>(!p||r.protocol===p)&&(!s||r.source===s)&&(!k||r.kind===k)&&(!st||r.status===st)&&(!q||[r.source,r.protocol,r.operation,r.id,JSON.stringify(r.fields)].join(' ').toLowerCase().includes(q)));
+page=0;render()}
+function render(){const body=$('body');body.replaceChildren();for(const r of filtered.slice(page*size,(page+1)*size)){
+const tr=document.createElement('tr');const duration=r.start_ps!=null&&r.end_ps!=null?N(r.end_ps-r.start_ps):'—';
+const items=[N(r.end_ps??r.start_ps),r.protocol,r.source,r.kind,r.operation,r.id??'—',duration,r.status,JSON.stringify(r.fields??{})];
+items.forEach((v,i)=>{const td=document.createElement('td');td.textContent=safe(v);if(i===5||i===8)td.className='mono';tr.append(td)});
+tr.onclick=()=>select(r);tr.tabIndex=0;tr.onkeydown=e=>{if(e.key==='Enter')select(r)};body.append(tr)}
+$('page-label').textContent=(filtered.length?(page*size+1)+'–'+Math.min((page+1)*size,filtered.length):'0')+' / '+filtered.length+' observations';
+$('prev').disabled=page===0;$('next').disabled=(page+1)*size>=filtered.length;
+$('count').textContent=filtered.length+' / '+R.length+' observations · '+S.length+' cataloged monitors';draw()}
+function draw(){const canvas=$('timeline'),ctx=canvas.getContext('2d'),dpr=window.devicePixelRatio||1;
+const width=Math.max(360,canvas.parentElement.clientWidth),names=[...new Set(filtered.map(r=>r.source))],height=Math.max(200,90+36*names.length);
+canvas.width=width*dpr;canvas.height=height*dpr;canvas.style.height=height+'px';ctx.scale(dpr,dpr);ctx.font='11px system-ui';ctx.clearRect(0,0,width,height);
+const items=filtered.filter(r=>r.end_ps!=null),times=items.map(r=>r.end_ps);let lo=Math.min(...times),hi=Math.max(...times);if(!Number.isFinite(lo)){lo=0;hi=1000}if(hi<=lo)hi=lo+1000;
+const left=Math.min(240,Math.max(125,width*.26)),plot=Math.max(100,width-left-20);
+ctx.textAlign='right';names.forEach((name,i)=>{const y=40+36*i;ctx.fillStyle='#445f75';ctx.fillText(name.slice(0,35),left-12,y+4);ctx.strokeStyle='#e7edf4';ctx.beginPath();ctx.moveTo(left,y);ctx.lineTo(width-15,y);ctx.stroke()});
+for(const r of items){const y=40+36*names.indexOf(r.source),x=left+(r.end_ps-lo)/(hi-lo)*plot;ctx.fillStyle=r.kind==='event'?'#8b64bb':r.protocol==='axi4'?'#2471bd':'#2c8b7d';ctx.beginPath();ctx.arc(x,y,3.5,0,Math.PI*2);ctx.fill()}
+ctx.fillStyle='#5f7386';ctx.textAlign='center';ctx.fillText('Time ns: '+N(lo)+' → '+N(hi),left+plot/2,height-14)}
+function download(name,content,type){const url=URL.createObjectURL(new Blob([content],{type}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
+$('json').onclick=()=>download('protocol-observations.json',JSON.stringify({...D,records:filtered},null,2),'application/json');
+$('csv').onclick=()=>{const cols=['protocol','source','kind','operation','id','start_ps','end_ps','status','fields'];const quote=x=>'"'+safe(x).replaceAll('"','""')+'"';const rows=filtered.map(r=>cols.map(k=>quote(k==='fields'?JSON.stringify(r.fields):r[k])).join(','));download('protocol-observations.csv',[cols.join(','),...rows].join('\r\n'),'text/csv')};
+for(const k of ['search','protocol','source','kind','status'])$(k).addEventListener('input',apply);
+$('prev').onclick=()=>{if(page){page--;render()}};$('next').onclick=()=>{if((page+1)*size<filtered.length){page++;render()}};render();
+</script>
+</html>
