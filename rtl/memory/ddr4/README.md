@@ -240,3 +240,21 @@ the low, middle and final 64-byte locations of the 32 MiB modeled aperture,
 **then rereads all three after the writes**. Any byte alias caused by reduced
 row/column geometry fails the DDR4 CI; this is an explicit simulation-model
 boundary check, not a claim about physical DDR4.
+
+### DDR4 write-completion attribution correction
+
+The full CI evidence showed all seven DFI WRITE and BankModel storage-write
+events, but six physical writes happened **after their AXI B handshake**.
+The old AW-to-B timestamp filter therefore missed six writes and falsely
+attributed one earlier DFI WRITE to a later AXI AW. This was not real
+per-AXI write scheduling evidence and is deliberately removed.
+
+`controller_aw_to_dfi_write` now stays **unmeasured** until a verified
+controller queue/physical bank correlation exists. `AXI AW->B` remains
+independently measured and does NOT mean DRAM storage completed.
+`dfi_write_to_bankmodel_storage` is instead paired independently by
+actual DFI command and matching BankModel bank-write-enable, rejecting
+multiple or absent candidate commits. The positive smoke test fails unless
+all DFI WRITE events have unique modeled storage evidence and relevant
+read-model stages are measured. These remain behavioral model delays, not
+silicon DDR timing.
