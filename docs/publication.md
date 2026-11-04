@@ -12,7 +12,30 @@ for an already enabled site using the deployment job's `pages: write` token.
 - Overview: implementation limits, latest workflow status and the same generated
   `gen/diagrams/noc-hierarchy.svg` used by the README. No second architecture
   diagram is maintained.
-- Fabric Explorer: address-accurate initiator-to-target connectivity matrix, AXI port inventory with planned outstanding budgets and physically generated XY router/link paths. Controlled one-beat RTL timings attach only to clean, complete, same-architecture-SHA serial test traces. They decompose observed AXI mesh boundaries into request/return deltas and combined terminal service; internal router cycles and isolated HBM/DDR controller latency remain unmeasured. Older or stressed observations retain their original SHA and end-to-end-only scope.
+- Fabric Explorer: address-accurate initiator-to-target route table, AXI port inventory with planned outstanding budgets and physically generated XY router/link paths. Controlled one-beat RTL timings attach only to clean, complete serial traces from the exact published source SHA or a verified identical Git source tree tested in a merged PR. They decompose observed AXI mesh boundaries into request/return deltas and combined terminal service; internal router cycles and isolated HBM/DDR controller latency remain unmeasured. Older or stressed observations retain their original SHA and end-to-end-only scope.
+- Wide latency comparison: one source/destination row per route, with dynamic
+  per-plane NoC columns (compute0, compute1, global, memory0 when present),
+  terminal AXI read/write service and end-to-end read/write columns.
+  Measured cells show **min / arithmetic average / max** in cycles of the
+  **measured simulation reference clock period**, with sample count and
+  exact CI-run SHA. Read and write remain separate even if they share a mesh
+  cell. A dash means absent/not permitted; "unmeasured" means the route is
+  present but lacks clean same-source or cryptographically verified identical-tree serial-baseline evidence. The 10 ns
+  testbench clock is common across the current scopes, but the RTL hardware
+  frequency is not configured or claimed. Underlying AXI captures retain each sample's raw picosecond
+  timestamps for future clock-domain normalization.
+  Even with one outstanding transaction, observed per-stage latencies can
+  vary with response-ready phase, endpoint pipeline behavior and traffic
+  conditions; min/avg/max describe measured samples, never a guarantee.
+  The terminal service includes downstream memory crossbar/model delay,
+  not standalone controller or physical memory timing.
+  Stage minima and maxima are calculated independently and generally **do not
+  sum** to end-to-end minima or maxima; paired-sample arithmetic means are
+  additive. Each displayed n and tested SHA can be inspected in the original
+  AXI trace. A temporary PR merge SHA can differ from the real main merge SHA;
+  the publisher compares their exact Git tree objects and validates that the
+  PR's tested commit was a genuine merged-PR head before treating measurements
+  as equivalent. It never reattributes the original tested SHA.
 - Topology: all generated local/global meshes, router/endpoint counts, upstream
   FlooGen YAML/SV and all distinct AXI observation boundaries.
 - Test runs: recorded acceptance result, engine, tested SHA, workflow ID/attempt,

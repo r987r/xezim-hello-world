@@ -34,6 +34,90 @@ class FabricExplorerTests(unittest.TestCase):
         self.assertTrue(all(i['fabric_shared_max_txns'] is not None
                             for i in data['interfaces'] if i['fabric']!='memory0.memory_data'))
 
+    def test_reference_clock_min_average_max_and_table_coverage(self):
+        stats=fabric_report._cycle_stats([100000,120000,140000],10000)
+        self.assertEqual((stats['min_cycles'],stats['avg_cycles'],
+                          stats['max_cycles']), (10,12,14))
+        self.assertEqual(stats['median_cycles'],12)
+        with self.assertRaises(fabric_report.FabricReportError):
+            fabric_report._cycle_stats([100],0)
+        report=fabric_report.latency_table(copy.deepcopy(self.report))
+        self.assertEqual(report['stat_order'],['min','avg','max'])
+        self.assertEqual(len(report['rows']),len(self.report['matrix']))
+        self.assertEqual(set(report['mesh_columns']),{'data','config'})
+        self.assertEqual(report['mesh_columns']['data'],[
+            'compute0_local_data','compute1_local_data','global_data',
+            'memory0_local_data'])
+        denied=next(r for r in report['rows']
+                    if r['source']=='compute1_local_data.cpu'
+                    and r['destination']=='boot.rom')
+        self.assertEqual(denied['access'],'none')
+        self.assertIsNone(denied['route_id'])
+        self.assertEqual(denied['mesh_cycles'],{})
+        self.assertIsNone(denied['target_cycles']['read'])
+        allowed=next(r for r in report['rows']
+                     if r['source']=='compute0_local_data.cpu'
+                     and r['destination']=='memory0.hbm0')
+        self.assertEqual(allowed['network_path'],[
+            'compute0_local_data','global_data','memory0_local_data'])
+        self.assertEqual(allowed['mesh_cycles'],{})
+        self.assertEqual(allowed['end_to_end_cycles'],{'read':None,'write':None})
+
+    def test_stage_table_keeps_read_write_separate_and_source_provenance(self):
+        report=copy.deepcopy(self.report)
+        route=next(r for r in report['routes']
+                   if r['source']=='compute0_local_data.cpu'
+                   and r['target']=='memory0.hbm0')
+        base={'sample_count':3,'clock_period_ps':10000,
+              'source_sha':'c'*40,'matches_site_source':True,
+              'run_report':'runs/123-1/supernoc/report.html'}
+        def metric(samples):
+            return fabric_report._cycle_stats(samples,10000)
+        route['one_beat_stage_observations']=[
+            {**base,'operation':'read',
+             'end_to_end':metric([400000,420000,440000]),
+             'stage_metrics':[
+                 {'kind':'mesh','network':'compute0_local_data',
+                  'sum_stats':metric([80000,90000,100000])},
+                 {'kind':'mesh','network':'global_data',
+                  'sum_stats':metric([80000,80000,80000])},
+                 {'kind':'mesh','network':'memory0_local_data',
+                  'sum_stats':metric([80000,90000,100000])},
+                 {'kind':'terminal_axi_service',
+                  'sum_stats':metric([160000,160000,160000])}]},
+            {**base,'operation':'write',
+             'end_to_end':metric([450000,480000,510000]),
+             'stage_metrics':[
+                 {'kind':'mesh','network':'compute0_local_data',
+                  'sum_stats':metric([100000,110000,120000])},
+                 {'kind':'mesh','network':'global_data',
+                  'sum_stats':metric([90000,100000,110000])},
+                 {'kind':'mesh','network':'memory0_local_data',
+                  'sum_stats':metric([100000,110000,120000])},
+                 {'kind':'terminal_axi_service',
+                  'sum_stats':metric([160000,160000,160000])}]},
+        ]
+        table=fabric_report.latency_table(report)
+        row=next(x for x in table['rows'] if x['route_id']==route['id'])
+        rd=row['mesh_cycles']['compute0_local_data']['read']
+        wr=row['mesh_cycles']['compute0_local_data']['write']
+        self.assertEqual((rd['min_cycles'],rd['avg_cycles'],
+                          rd['max_cycles']),(8,9,10))
+        self.assertEqual((wr['min_cycles'],wr['avg_cycles'],
+                          wr['max_cycles']),(10,11,12))
+        self.assertEqual((row['end_to_end_cycles']['read']['min_cycles'],
+                          row['end_to_end_cycles']['read']['avg_cycles'],
+                          row['end_to_end_cycles']['read']['max_cycles']),(40,42,44))
+        self.assertEqual(row['target_cycles']['write']['avg_cycles'],16)
+        self.assertEqual(rd['n'],3)
+        self.assertEqual(rd['reference_clock_period_ps'],10000)
+        self.assertEqual(rd['run_sha'],'c'*40)
+        route['one_beat_stage_observations'][0]['matches_site_source']=False
+        table=fabric_report.latency_table(report)
+        row=next(x for x in table['rows'] if x['route_id']==route['id'])
+        self.assertIsNone(row['end_to_end_cycles']['read'])
+        self.assertIsNotNone(row['end_to_end_cycles']['write'])
+
     def test_local_and_remote_sram_xy_hops(self):
         local=next(r for r in self.report['routes']
                    if r['source']=='compute0_local_data.cpu' and r['target']=='compute0.sram')
@@ -135,6 +219,98 @@ class FabricExplorerTests(unittest.TestCase):
                          [4,4,4])
         self.assertEqual(stages[-1]['kind'],'terminal_axi_service')
         self.assertIn('downstream',stages[-1]['note'])
+        table=data['latency_table']
+        row=next(x for x in table['rows'] if x['route_id']==route['id'])
+        self.assertEqual(row['end_to_end_cycles']['read']['avg_cycles'],40)
+        self.assertEqual(row['target_cycles']['read']['avg_cycles'],16)
+        self.assertEqual(row['mesh_cycles']['global_data']['read']['avg_cycles'],8)
+        self.assertIsNone(row['end_to_end_cycles']['write'])
+
+    def test_same_tree_merge_evidence_is_measured_without_rewriting_tested_sha(self):
+        data=copy.deepcopy(self.report)
+        route=next(r for r in data['routes']
+                   if r['source']=='compute0_local_data.cpu'
+                   and r['target']=='compute0.sram')
+        catalog=json.loads((ROOT/'gen/supernoc/axi_monitors.json').read_text())
+        by_ep={ep:m['id'] for m in catalog['monitors'] for ep in m['endpoints']}
+        src=by_ep[route['source']]
+        dst=by_ep[route['stages'][0]['to']]
+        phase='Fabric baseline: single-outstanding one-beat'
+        rows=[]
+        for monitor,role,start,end in ((src,'initiator',10000,100000),
+                                       (dst,'target',40000,70000)):
+            rows.append({'monitor':monitor,'role':role,
+                         'status':'complete','expected_beats':1,'issues':[],
+                         'response':'0x0','latency_ps':end-start,
+                         'start_ps':start,'end_ps':end,'address':'0x10000000',
+                         'operation':'read','plane':'data','phase':phase})
+        trace={'run':{'capture_bound':True,'capture_overflow':False,
+                      'dirty':False,'clock_period_ps':10000},
+               'sections':{'axi':{'transactions':rows,
+                                  'monitors':catalog['monitors']}}}
+        tested_sha='b'*40; site_sha='c'*40
+        with tempfile.TemporaryDirectory() as tmp:
+            folder=Path(tmp)/'runs/1-1/supernoc';folder.mkdir(parents=True)
+            (folder/'axi-transactions.json').write_text(json.dumps(trace))
+            entry={'axi':True,'passed':True,'assets':['axi-transactions.json'],
+                   'path':'runs/1-1/supernoc/report.html','source_sha':tested_sha,
+                   'target':'supernoc','engine':'cocotb-verilator',
+                   'merged_pr':17, 'verified_site_source_sha':site_sha}
+            fabric_report.attach_one_beat_observations(data,[entry],Path(tmp),site_sha)
+        obs=route['one_beat_stage_observations']
+        self.assertEqual(len(obs),1)
+        self.assertEqual(obs[0]['source_sha'],tested_sha)
+        self.assertEqual(obs[0]['source_equivalence'],'verified_same_tree')
+        self.assertTrue(obs[0]['matches_site_source'])
+        row=next(x for x in data['latency_table']['rows'] if x['route_id']==route['id'])
+        self.assertEqual(row['mesh_cycles']['compute0_local_data']['read']['avg_cycles'],6)
+        self.assertEqual(row['target_cycles']['read']['avg_cycles'],3)
+        self.assertEqual(row['end_to_end_cycles']['read']['avg_cycles'],9)
+        self.assertEqual(row['end_to_end_cycles']['read']['run_sha'],tested_sha)
+        self.assertEqual(row['end_to_end_cycles']['read']['source_equivalence'],
+                         'verified_same_tree')
+
+    def test_newest_verified_run_selected_irrespective_of_artifact_order(self):
+        data=copy.deepcopy(self.report)
+        route=next(r for r in data['routes']
+                   if r['source']=='compute0_local_data.cpu'
+                   and r['target']=='compute0.sram')
+        catalog=json.loads((ROOT/'gen/supernoc/axi_monitors.json').read_text())
+        by_ep={ep:m['id'] for m in catalog['monitors'] for ep in m['endpoints']}
+        phase='Fabric baseline: single-outstanding one-beat'
+        def capture(latency):
+            rows=[]
+            for monitor,role,lo,hi in (
+                    (by_ep[route['source']],'initiator',10000,10000+latency),
+                    (by_ep[route['stages'][0]['to']],'target',40000,latency-20000)):
+                rows.append({'monitor':monitor,'role':role,'status':'complete',
+                             'expected_beats':1,'issues':[],'response':'0x0',
+                             'latency_ps':hi-lo,'start_ps':lo,'end_ps':hi,
+                             'address':'0x10000000','operation':'read','plane':'data',
+                             'phase':phase})
+            return {'run':{'capture_bound':True,'capture_overflow':False,
+                           'dirty':False,'clock_period_ps':10000},
+                    'sections':{'axi':{'transactions':rows,
+                                       'monitors':catalog['monitors']}}}
+        with tempfile.TemporaryDirectory() as tmp:
+            entries=[]
+            for run_id,recorded_at,total in (
+                    (1,'2026-01-01T00:00:00Z',90000),
+                    (2,'2026-02-01T00:00:00Z',100000)):
+                folder=Path(tmp)/f'runs/{run_id}-1/supernoc'
+                folder.mkdir(parents=True)
+                (folder/'axi-transactions.json').write_text(json.dumps(capture(total)))
+                entries.append({'axi':True,'passed':True,
+                                'assets':['axi-transactions.json'],
+                                'path':f'runs/{run_id}-1/supernoc/report.html',
+                                'source_sha':'c'*40,'target':'supernoc',
+                                'engine':'cocotb-verilator',
+                                'run_id':run_id,'recorded_at':recorded_at})
+            fabric_report.attach_one_beat_observations(data,entries,Path(tmp),'c'*40)
+        row=next(x for x in data['latency_table']['rows'] if x['route_id']==route['id'])
+        self.assertEqual(row['end_to_end_cycles']['read']['avg_cycles'],10)
+        self.assertIn('runs/2-1/',row['end_to_end_cycles']['read']['run_report'])
+        self.assertEqual(len(route['one_beat_stage_observations']),2)
 
     def test_serial_baseline_does_not_project_historical_timings(self):
         data=copy.deepcopy(self.report)
@@ -158,6 +334,9 @@ class FabricExplorerTests(unittest.TestCase):
             fabric_report.attach_one_beat_observations(data,[entry],Path(tmp),'a'*40)
         self.assertEqual(len(route['one_beat_observations']),1)
         self.assertEqual(route['one_beat_stage_observations'],[])
+        row=next(x for x in data['latency_table']['rows'] if x['route_id']==route['id'])
+        self.assertIsNone(row['end_to_end_cycles']['read'])
+        self.assertEqual(row['mesh_cycles'],{})
 
     def test_only_bound_single_beat_successful_current_evidence_is_measured(self):
         data=copy.deepcopy(self.report)

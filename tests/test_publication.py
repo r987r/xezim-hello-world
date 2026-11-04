@@ -58,6 +58,18 @@ class PublicationTests(unittest.TestCase):
             self.assertTrue((output/'data/fabric.json').is_file())
             self.assertEqual(json.loads((output/'data/fabric.json').read_text())['summary']['meshes'],8)
             self.assertNotIn('__FABRIC_DATA__',(output/'fabric.html').read_text())
+            fabric=json.loads((output/'data/fabric.json').read_text())
+            self.assertEqual(fabric['latency_table']['units'],
+                             'simulation_reference_clock_cycles')
+            self.assertEqual(fabric['latency_table']['stat_order'],['min','avg','max'])
+            self.assertEqual(len(fabric['latency_table']['rows']),len(fabric['matrix']))
+            html=(output/'fabric.html').read_text()
+            self.assertIn('id="fabric-latency-table"',html)
+            self.assertIn('function renderLatencyTable()',html)
+            self.assertIn('Target read',html)
+            self.assertIn('Target write',html)
+            self.assertNotIn('id="fabric-matrix"',html)
+            self.assertNotIn('renderMatrix()',html)
             self.assertFalse(dataset['entries'])
             self.assertEqual(len(dataset['monitors']),26)
             for path in output.rglob('*.html'):

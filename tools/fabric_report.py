@@ -11,7 +11,7 @@ import argparse
 import json
 from collections import defaultdict
 from math import ceil
-from statistics import median
+from statistics import mean, median
 from pathlib import Path
 
 import yaml
@@ -298,8 +298,9 @@ def build(soc, knobs, noc_manifest, networks, super_manifest, chip_manifest, por
                                 "gen/noc/floonoc/manifest.json", "gen/noc/floonoc/**/floogen.yaml",
                                 "gen/supernoc/manifest.json", "gen/chip/manifest.json"],
             "scope": "chip_boot_configuration_topology",
-            "timing_note": "All latencies are unmeasured. Router/link counts are topology-only. "
-                           "No clock frequency, idle one-beat RTL timing or physical memory latency is asserted.",
+            "timing_note": "Router counts are structural. Per-mesh AXI timings require clean "
+                           "source-SHA-matched serial baseline evidence. Hardware clock frequency, "
+                           "individual router cycles and physical device latency remain unknown.",
             "summary": {"interfaces": len(inventory), "initiators": len(masters),
                         "targets": len(targets), "reachable_routes": len(routes),
                         "meshes": len(networks), "cross_mesh_links": len(links)},
@@ -377,8 +378,105 @@ def _observed_stages(route, source_tx, transfer_index, boundary):
 
 def _quantiles(samples):
     samples = sorted(samples)
-    return {"min_ps": samples[0], "median_ps": median(samples),
+    return {"min_ps": samples[0], "avg_ps": mean(samples),
+            "max_ps": samples[-1], "median_ps": median(samples),
             "p95_ps": samples[ceil(0.95 * len(samples)) - 1]}
+
+
+
+def _cycle_stats(samples, reference_period_ps):
+    """Normalize simulated ps durations to the *measured* reference clock.
+
+    The original picosecond data is preserved for future multi-clock paths.
+    This is not a hardware frequency or a per-router latency claim.
+    """
+    if type(reference_period_ps) is not int or reference_period_ps <= 0:
+        raise FabricReportError("positive measured reference period required")
+    stats = _quantiles(samples)
+    return {**stats,
+            "min_cycles": stats["min_ps"] / reference_period_ps,
+            "avg_cycles": stats["avg_ps"] / reference_period_ps,
+            "max_cycles": stats["max_ps"] / reference_period_ps,
+            "median_cycles": stats["median_ps"] / reference_period_ps}
+
+
+def _display_cycles(stats, observation):
+    """Keep each cell's sample count, source run, and reference period."""
+    if not stats:
+        return None
+    return {
+        "min_cycles": stats["min_cycles"],
+        "avg_cycles": stats["avg_cycles"],
+        "max_cycles": stats["max_cycles"],
+        "n": observation["sample_count"],
+        "reference_clock_period_ps": observation["clock_period_ps"],
+        "run_sha": observation["source_sha"],
+        "source_equivalence": observation.get("source_equivalence", "exact_sha"),
+        "run_report": observation["run_report"],
+    }
+
+
+def latency_table(report):
+    """Source/destination rows with independent read and write stage stats.
+
+    The newest matching-source baseline run is selected per operation. Stalled
+    or historical results cannot be silently substituted for unmeasured stages.
+    """
+    mesh_columns = {}
+    for plane in ("data", "config"):
+        fabrics = {p["fabric"] for p in report["interfaces"]
+                   if p["plane"] == plane and p["router"] is not None}
+        def order(name):
+            return (0 if name.startswith("compute") else
+                    1 if name.startswith("global") else
+                    2 if name.startswith("memory") else 3, name)
+        mesh_columns[plane] = sorted(fabrics, key=order)
+    by_route = {route["id"]: route for route in report["routes"]}
+    rows = []
+    for cell in report["matrix"]:
+        route = by_route.get(cell["route_id"])
+        mesh = {}
+        target = {"read": None, "write": None}
+        total = {"read": None, "write": None}
+        evidence = {}
+        if route:
+            for o in route.get("one_beat_stage_observations", []):
+                op = o["operation"]
+                if (op not in ("read", "write") or
+                        not o.get("matches_site_source") or op in evidence):
+                    continue
+                evidence[op] = {"n": o["sample_count"],
+                                "clock_period_ps": o["clock_period_ps"],
+                                "sha": o["source_sha"],
+                                "run_report": o["run_report"]}
+                total[op] = _display_cycles(o["end_to_end"], o)
+                for stage in o["stage_metrics"]:
+                    value = _display_cycles(stage["sum_stats"], o)
+                    if stage["kind"] == "mesh":
+                        mesh.setdefault(stage["network"], {})[op] = value
+                    elif stage["kind"] == "terminal_axi_service":
+                        target[op] = value
+            if set(mesh).difference(route["network_path"]):
+                raise FabricReportError("measured mesh absent from structural route")
+        rows.append({
+            "source": cell["source"], "destination": cell["target"],
+            "plane": cell["plane"], "access": cell["access"],
+            "route_id": cell["route_id"],
+            "network_path": route["network_path"] if route else [],
+            "mesh_cycles": mesh,
+            "target_cycles": target,
+            "end_to_end_cycles": total,
+            "evidence": evidence,
+        })
+    return {
+        "schema_version": 1,
+        "units": "simulation_reference_clock_cycles",
+        "stat_order": ["min", "avg", "max"],
+        "mesh_columns": mesh_columns,
+        "stage_scope": "AXI_ingress_to_egress_request_plus_response",
+        "target_scope": "last_target_facing_AXI_port_includes_downstream_crossbar_and_model",
+        "rows": rows,
+    }
 
 
 def attach_one_beat_observations(report, entries, output, source_sha):
@@ -396,7 +494,10 @@ def attach_one_beat_observations(report, entries, output, source_sha):
         by_source[route["source"]].append(route)
 
     baseline_phase = "Fabric baseline: single-outstanding one-beat"
-    for entry in entries:
+    # Publisher index order is file-path order, not necessarily recency.
+    # Newest verified run wins for each route and operation in the wide table.
+    for entry in sorted(entries, key=lambda item: (item.get("recorded_at") or "",
+                                                   item.get("run_id") or 0), reverse=True):
         if (not entry.get("axi") or not entry.get("passed")
                 or "axi-transactions.json" not in entry.get("assets", [])):
             continue
@@ -407,6 +508,12 @@ def attach_one_beat_observations(report, entries, output, source_sha):
                 or run.get("dirty") is not False):
             continue
         rows = trace["sections"]["axi"]["transactions"]
+        # GitHub's tested temporary PR merge commit and the final main merge
+        # commit can be different SHAs for the same exact Git tree. Accept
+        # that only when the trusted collector verified both trees.
+        identity = ("exact_sha" if entry["source_sha"] == source_sha else
+                    "verified_same_tree" if entry.get("verified_site_source_sha") == source_sha
+                    else None)
         matched = defaultdict(list)
         source_samples = defaultdict(list)
         for item in rows:
@@ -431,7 +538,8 @@ def attach_one_beat_observations(report, entries, output, source_sha):
             routes[route_id]["one_beat_observations"].append({
                 "operation": operation, "count": len(samples),
                 **_quantiles(samples), "source_sha": entry["source_sha"],
-                "matches_site_source": entry["source_sha"] == source_sha,
+                "matches_site_source": identity is not None,
+                "source_equivalence": identity or "historical",
                 "test_scope": entry["target"], "simulator": entry["engine"],
                 "run_report": entry["path"],
                 "scope": "initiator_end_to_end_B_or_RLAST_all_test_phases",
@@ -441,7 +549,7 @@ def attach_one_beat_observations(report, entries, output, source_sha):
         # The test source SHA must exactly match the architecture being
         # published. The run must measure one positive clock period itself.
         clock_ps = run.get("clock_period_ps")
-        if (entry["source_sha"] != source_sha or
+        if (identity is None or
                 type(clock_ps) is not int or clock_ps <= 0 or
                 not source_samples):
             continue
@@ -474,23 +582,21 @@ def attach_one_beat_observations(report, entries, output, source_sha):
                 current = {k:v for k,v in component.items() if k not in metrics}
                 for metric in metrics:
                     values = [row[index][metric] for _,row in paired]
-                    current[metric.replace("_ps", "_stats")] = {
-                        **_quantiles(values),
-                        "median_cycles": median(values) / clock_ps,
-                    }
+                    current[metric.replace("_ps", "_stats")] = _cycle_stats(values, clock_ps)
                 stage_stats.append(current)
             elapsed = [tx["latency_ps"] for tx,_ in paired]
             route["one_beat_stage_observations"].append({
                 "operation": operation,
                 "sample_count": len(paired), "clock_period_ps": clock_ps,
-                "end_to_end": {**_quantiles(elapsed),
-                               "median_cycles": median(elapsed) / clock_ps},
+                "end_to_end": _cycle_stats(elapsed, clock_ps),
                 "stage_metrics": stage_stats,
                 "source_sha": entry["source_sha"], "matches_site_source": True,
+                "source_equivalence": identity,
                 "test_scope": entry["target"], "simulator": entry["engine"],
                 "run_report": entry["path"],
                 "scope": "serial_single_outstanding_AXI_tap_boundary_deltas",
             })
+    report["latency_table"] = latency_table(report)
     return report
 
 
