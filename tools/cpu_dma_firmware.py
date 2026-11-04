@@ -9,6 +9,9 @@ All generated variants live in ignored .tools/regression, never tracked gen/.
 """
 from __future__ import annotations
 import json
+import hashlib
+import struct
+import sys
 from pathlib import Path
 import shutil
 import subprocess
@@ -16,6 +19,8 @@ import yaml
 from tools import memory_plan
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 HOOK_OFFSET = 0x1000
 
 
@@ -59,7 +64,7 @@ def compile_firmware(cfg, directory: Path):
     linker.write_text(
         "ENTRY(cpu_dma_run)\nSECTIONS {\n"
         f"  . = 0x{hook:x};\n"
-        "  .text : { *(.text*) *(.rodata*) }\n"
+        "  .text : { KEEP(*(.text.cpu_dma_run)) *(.text*) *(.rodata*) }\n"
         "  . = ALIGN(16);\n"
         "  .data : { *(.sdata*) *(.data*) }\n"
         "  .bss (NOLOAD) : { *(.sbss*) *(.bss*) *(COMMON) }\n"
@@ -69,7 +74,7 @@ def compile_firmware(cfg, directory: Path):
     raw = directory / "cpu_dma.bin"
     args = [require_tool("clang"),
             "--target=riscv32-unknown-elf", "-march=rv32i", "-mabi=ilp32",
-            "-Oz", "-ffreestanding", "-fno-builtin",
+            "-Oz", "-ffunction-sections", "-ffreestanding", "-fno-builtin",
             "-fno-stack-protector", "-fno-pic", "-fno-pie",
             "-nostdlib", "-fuse-ld=lld", "-Wl,--no-relax",
             "-Wl,--build-id=none", f"-Wl,-T,{linker}",
@@ -82,12 +87,19 @@ def compile_firmware(cfg, directory: Path):
     subprocess.run(args, cwd=ROOT, check=True)
     subprocess.run([require_tool("llvm-objcopy"), "-O", "binary",
                     str(elf), str(raw)], cwd=ROOT, check=True)
+    elf_bytes = elf.read_bytes()
+    if elf_bytes[:6] != b"\x7fELF\x01\x01":
+        raise ValueError("CPU DMA compiler did not emit little-endian ELF32")
+    actual_entry = struct.unpack_from("<I", elf_bytes, 24)[0]
+    if actual_entry != hook:
+        raise ValueError(
+            f"CPU DMA entry {actual_entry:#x} disagrees with ROM run hook {hook:#x}")
     blob = raw.read_bytes()
     if not blob or len(blob) > flash_size - HOOK_OFFSET:
         raise ValueError(f"C DMA application too large for flash: {len(blob)} bytes")
     if len(blob) & 3:
         raise ValueError("RV32I firmware image not word-aligned")
-    return dict(hook=hook, data=blob, compiler="clang/LLVM RV32I",
+    return dict(hook=hook, data=blob, sha256=hashlib.sha256(blob).hexdigest(), compiler="clang/LLVM RV32I",
                 defines=macros, flash_limit=flash_size)
 
 
@@ -109,7 +121,7 @@ def prepare(cfg, noc_manifest, noc_root, output: Path):
     # Hardware-visible C evidence will be checked against the golden
     # plan and actual accepted AXI events, not a preload.
     manifest["cpu_dma_firmware"] = {
-        "entry": fw["hook"], "bytes": len(blob), "file": image_prefix + "/flash.hex",
+        "entry": fw["hook"], "bytes": len(blob), "sha256": fw["sha256"], "file": image_prefix + "/flash.hex",
         "allocation_plan": {name: r.as_dict() for name, r in
                             memory_plan.configured_regions(cfg, profile="boot_live").items()},
     }
