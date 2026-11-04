@@ -9,6 +9,12 @@ on:
       - '.github/workflows/ddr4-bringup.yml'
   workflow_dispatch:
 
+concurrency:
+  # Only one DDR4 validation for a PR head. Old queued/in-progress revisions
+  # must not consume runner time or obscure the latest capture evidence.
+  group: ddr4-bringup-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -102,6 +108,20 @@ jobs:
         run: |
           set -euo pipefail
           python3 rtl/memory/ddr4/run_functional.py
+
+      - name: Independently require full-time AXI/Wishbone monitoring
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import pathlib, sys
+          sys.path.insert(0, "rtl/memory/ddr4")
+          from traffic_observer import verify_capture
+          result = verify_capture(pathlib.Path(".tools/ddr4/litedram_sim"))
+          print("PASS continuous DDR4 monitoring:",
+                result["sampled_cycles"], "clock cycles,",
+                result["channels"], "AXI handshakes,",
+                result["wishbone"], "Wishbone handshakes")
+          PY
 
       - name: Upload generated RTL, initialization plan and diagnostic logs
         if: always()
