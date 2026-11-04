@@ -69,6 +69,33 @@ def budget(profile: dict, geometry: dict) -> dict:
             "max_model_bytes": max_bytes, "simulation_only": True}
 
 
+def scaled_device_class(original: type, geometry: dict) -> type:
+    """Keep full DDR4 DFI command/address width while bounding stored rows.
+
+    The isolated controller sees the reduced row/column geometry; DFI still
+    exposes the original device's A[14:0] command address to encode mode
+    registers. The dense model storage is calculated from reduced rowbits.
+    """
+    expected = geometry["expected_upstream"]
+    for name, attr in (("banks", "nbanks"), ("rows", "nrows"), ("cols", "ncols")):
+        if getattr(original, attr) != expected[name]:
+            raise ValueError(f"pinned LiteDRAM {name} changed: revalidate geometry")
+    sim = geometry["simulation"]
+    original_addressbits = expected["rows"].bit_length() - 1
+
+    class SimDevice(original):
+        nrows = sim["rows"]
+        ncols = sim["cols"]
+
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.geom_settings.addressbits = max(
+                self.geom_settings.addressbits, original_addressbits)
+
+    SimDevice.__name__ = original.__name__
+    return SimDevice
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--sim", action="store_true")
@@ -84,13 +111,7 @@ def main() -> None:
     # This is not an RTL fork or a module outside the memory subsystem.
     from litedram import modules
     original = getattr(modules, info["device"])
-    expected = geometry["expected_upstream"]
-    for name, attr in (("banks", "nbanks"), ("rows", "nrows"), ("cols", "ncols")):
-        if getattr(original, attr) != expected[name]:
-            raise ValueError(f"pinned LiteDRAM {name} changed: revalidate geometry")
-    sim = geometry["simulation"]
-    setattr(modules, info["device"], type(info["device"], (original,), {
-        "nrows": sim["rows"], "ncols": sim["cols"]}))
+    setattr(modules, info["device"], scaled_device_class(original, geometry))
     print(f"DDR4 isolated simulation geometry: {info['isolated_simulation_bytes']} bytes "
           f"(real device {info['production_device_bytes']} bytes)", flush=True)
     from litedram.gen import main as upstream_main
