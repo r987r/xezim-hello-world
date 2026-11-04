@@ -65,7 +65,7 @@ class Program:
         return result
 
 
-def build(cfg):
+def build(cfg, *, cpu0_run_hook=None):
     addresses = rv.build(cfg)['addresses']  # preserve explicit boot-policy validation
     primary = cfg['boot']['primary']
     cores = sorted((s for s in cfg['subsystems'] if s['type'] == 'compute'),
@@ -107,6 +107,18 @@ def build(cfg):
         p.store(0x550+index, 8 + 16*index)
         if index == 0:
             p.wait_all(8, 0x550, len(cores), 'wait_hello', increment=True)
+            if cpu0_run_hook is not None:
+                # CPU0 jumps to real compiled RV32I firmware in the mapped
+                # read-only flash, then resumes the existing phase protocol.
+                # Stack occupies boot_scratch below the descriptor pool,
+                # without touching executing code, mailboxes or DMA data.
+                stack = primary_layout.descriptors.start - 16
+                if stack & 15:
+                    raise ValueError('CPU0 C stack must be 16-byte aligned')
+                p.li(2, stack)   # RV32I ABI stack pointer x2
+                p.li(10, cpu0_run_hook)  # a0 = C function address
+                p.add(rv._jalr(1, 10), 'jalr ra, 0(a0)  # call C DMA run hook')
+                p.li(5, mailbox)  # C may clobber caller-saved registers
             p.store(3, 0)
         else:
             p.wait(0, 3, 'wait_check')
@@ -148,8 +160,8 @@ def build(cfg):
             'sram_bases': [data[c['name']+'.sram'] for c in cores]}
 
 
-def emit(cfg, out: Path):
-    fw = build(cfg)
+def emit(cfg, out: Path, *, cpu0_run_hook=None):
+    fw = build(cfg, cpu0_run_hook=cpu0_run_hook)
     out.mkdir(parents=True, exist_ok=True)
     def words64(words):
         words = list(words)
@@ -176,5 +188,5 @@ def emit(cfg, out: Path):
                     for i, c in enumerate(fw['cores'])],
                 'sram_initialization': 'none: ROM firmware copies images and clears mailboxes through CPU stores',
                 'runtime': 'minimal RV32I mailbox bootstrap; not an unmodified Snitch/PULP runtime port'}
-    (out/'firmware.json').write_text(json.dumps(manifest, indent=2, sort_keys=True)+'\n')
+    if cpu0_run_hook is not None:\n        manifest['cpu0_run_hook'] = cpu0_run_hook\n    (out/'firmware.json').write_text(json.dumps(manifest, indent=2, sort_keys=True)+'\n')
     return fw, manifest
