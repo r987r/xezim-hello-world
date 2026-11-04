@@ -122,6 +122,17 @@ async def observe_axi(dut, counts):
                 counts[f"{channel}_ready"] = counts.get(f"{channel}_ready", 0) + 1
             if val and ready:
                 counts[f"{channel}_handshake"] = counts.get(f"{channel}_handshake", 0) + 1
+                if channel == "r":
+                    counts["r_last"] = counts.get("r_last", 0) + int(dut.user_port_axi_0_rlast.value)
+                    counts["r_id_last"] = int(dut.user_port_axi_0_rid.value)
+                    counts["r_resp_last"] = int(dut.user_port_axi_0_rresp.value)
+                    counts["r_data_last"] = hex(int(dut.user_port_axi_0_rdata.value))
+                if channel == "ar":
+                    counts["ar_id_last"] = int(dut.user_port_axi_0_arid.value)
+                    counts["ar_len_last"] = int(dut.user_port_axi_0_arlen.value)
+                if channel == "b":
+                    counts["b_id_last"] = int(dut.user_port_axi_0_bid.value)
+                    counts["b_resp_last"] = int(dut.user_port_axi_0_bresp.value)
 
 
 async def transfer(master, dut, address, data, ident):
