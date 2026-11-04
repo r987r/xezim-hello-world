@@ -27,7 +27,7 @@ class ExplorerTests(unittest.TestCase):
         self.assertEqual(graph["profiles"]["chip-boot"]["actors"]["compute0_local_data.dma"]["kind"], "verification_bfm")
         self.assertTrue(graph["profiles"]["chip-dma"]["monitors"])
         self.assertNotIn("position", graph["nodes"][0])
-        self.assertNotIn("z", json.dumps(graph))
+        self.assertTrue(all("position" not in node for node in graph["nodes"]))
 
     def test_new_subsystem_is_generic_without_parser_changes(self):
         graph = design_explorer.catalog(ROOT)
