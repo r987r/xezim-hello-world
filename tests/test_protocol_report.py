@@ -57,6 +57,29 @@ class ProtocolReportTests(unittest.TestCase):
         self.assertIn("apb",page)
         self.assertEqual(json.loads((self.root/"protocol-transactions.json").read_text())["schema_version"],1)
 
+    def test_multiple_clock_domains_and_model_evidence(self):
+        sources = {
+            "mac.rx": {"protocol":"ethernet", "clock_domain":"mac_rx",
+                       "role":"target", "implementation":"ethernet_vip",
+                       "modeling":"rtl_mac_with_external_packet_vip"},
+            "ddr.dfi": {"protocol":"dfi", "clock_domain":"ddr_ui",
+                        "role":"link", "implementation":"litedram",
+                        "modeling":"behavioral_phy"},
+        }
+        sink = ProtocolTrace(self.root/"protocol-events.jsonl", sources)
+        sink.event("mac.rx", "frame_rx", 20000, {"length_bytes":64})
+        sink.event("ddr.dfi", "read", 25000, {"bank":3})
+        sink.close()
+        result=protocol_report.parse_capture(self.root/"protocol-events.jsonl",sources)
+        self.assertEqual([x["clock_domain"] for x in result["sources"]],
+                         ["mac_rx", "ddr_ui"])
+        self.assertEqual([x["modeling"] for x in result["sources"]],
+                         ["rtl_mac_with_external_packet_vip","behavioral_phy"])
+        self.assertEqual([x["protocol"] for x in result["records"]],
+                         ["ethernet","dfi"])
+        raw=(self.root/"protocol-events.jsonl").read_text()
+        self.assertIn('"clock_domain":"ddr_ui"',raw)
+
     def test_large_integer_and_html_are_lossless_safe(self):
         fields = json_fields({"address":2**64,"unsafe":"</script><script>alert(1)</script>"})
         self.assertEqual(fields["address"],hex(2**64))
