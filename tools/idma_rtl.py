@@ -25,8 +25,10 @@ def generate():
         GEN/'include/idma/compute.svh',
     ]
     command = ['make', '-f', str(VENDOR/'idma.mk'),
-               f'IDMA_ROOT={VENDOR}', f'PYTHON={sys.executable}',
+               f'IDMA_ROOT={VENDOR}', f'PYTHON={sys.executable}', 'PEAKRDL=peakrdl',
                *map(str,targets)]
+    # Upstream's default PEAKRDL invokes `uv run --locked`; our CI pins
+    # and installs the same PeakRDL tools directly in the host Python env.
     subprocess.run(command, cwd=ROOT, check=True)
     for target in targets:
         if not target.is_file() or target.stat().st_size == 0:
