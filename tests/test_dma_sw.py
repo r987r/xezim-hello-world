@@ -9,6 +9,23 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class DmaSoftwareTests(unittest.TestCase):
+
+    def test_unified_physical_region_allocator(self):
+        cc = shutil.which("cc")
+        if not cc:
+            self.skipTest("C compiler unavailable")
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp)/"memory_pool_test"
+            subprocess.run([cc, "-std=c11", "-Wall", "-Wextra", "-Werror",
+                            "-pedantic", str(ROOT/"sw/common/memory_pool.c"),
+                            str(ROOT/"sw/common/sram_pool.c"),
+                            str(ROOT/"sw/dma/dma.c"),
+                            str(ROOT/"sw/dma/tests/test_memory_pool.c"), "-o", str(output)],
+                           check=True, capture_output=True, text=True)
+            result = subprocess.run([str(output)], check=True,
+                                    capture_output=True, text=True)
+            self.assertIn("PASS unified SRAM DDR HBM physical allocation and lifetime", result.stdout)
+
     def test_freestanding_allocator(self):
         cc = shutil.which("cc")
         if not cc:
@@ -16,7 +33,8 @@ class DmaSoftwareTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             output = Path(tmp)/"dma_allocator_test"
             subprocess.run([cc, "-std=c11", "-Wall", "-Wextra", "-Werror",
-                            "-pedantic", str(ROOT/"sw/common/sram_pool.c"),
+                            "-pedantic", str(ROOT/"sw/common/memory_pool.c"),
+                            str(ROOT/"sw/common/sram_pool.c"),
                             str(ROOT/"sw/dma/dma.c"),
                             str(ROOT/"sw/dma/tests/test_dma.c"), "-o", str(output)],
                            check=True, capture_output=True, text=True)
