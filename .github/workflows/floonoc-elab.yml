@@ -14,6 +14,8 @@ on:
       - 'tools/regress.py'
       - 'tools/sim_cocotb.py'
       - 'tools/axi_report.py'
+      # Refresh RTL traffic evidence when its fabric reporting contract changes.
+      - 'tools/fabric_report.py'
       - 'tools/templates/run_report.html'
       - 'dv/common/axi_trace.py'
       - 'dv/supernoc/**'
