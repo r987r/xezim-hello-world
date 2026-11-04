@@ -139,10 +139,38 @@ def verified_pr_test_commit(client,run,tested_sha,cache=None):
     return cache[key]
 
 
+
+def verified_pr_tree_equivalent(client, run, tested_sha, site_sha, cache=None):
+    """Only a validated merged-PR test commit with the exact site Git tree.
+
+    A GitHub temporary PR merge commit has a different SHA from the real
+    main merge commit even when they contain *identical files*. Validate
+    both authentic Git commit trees; never infer equivalence from PR number,
+    filename, address map or the appearance of a passing run.
+    """
+    if (not run.get("verified_merged_pr")
+            or not isinstance(tested_sha, str) or not isinstance(site_sha, str)
+            or not re.fullmatch(r'[a-f0-9]{40}', site_sha)
+            or not verified_pr_test_commit(client, run, tested_sha)):
+        return False
+    cache = {} if cache is None else cache
+    for sha in (tested_sha, site_sha):
+        if sha not in cache:
+            try:
+                obj = client.request(f'/repos/{client.repository}/git/commits/{sha}')
+                tree = (obj.get('tree') or {}).get('sha')
+                cache[sha] = tree if isinstance(tree, str) and re.fullmatch(r'[a-f0-9]{40}', tree) else None
+            except (urllib.error.HTTPError, KeyError, TypeError, ValueError):
+                cache[sha] = None
+    return bool(cache[tested_sha]) and cache[tested_sha] == cache[site_sha]
+
+
 def collect(client,config,destination):
     destination.mkdir(parents=True,exist_ok=True)
     selected={w['file']:[] for w in config['workflows']}
     merged_heads=merged_main_pr_heads(client)
+    site_sha=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip()
+    tree_cache={}
     # Only trusted main and source-SHA-matched merged PR workflow runs are
     # published. PR code and artifacts are not executed in this trusted job.
     for page in range(1,6):
@@ -193,6 +221,9 @@ def collect(client,config,destination):
                             invalid=f'PR merge commit not verifiable: {tested_sha}'
                             break
                         verified.add(tested_sha)
+                        if verified_pr_tree_equivalent(client,run,tested_sha,site_sha,tree_cache):
+                            matches=run.setdefault('verified_equivalent_site_shas',{})
+                            matches[tested_sha]=site_sha
                     if invalid:
                         # Do not publish artifacts with unverified tested SHAs.
                         shutil.rmtree(target)
@@ -257,6 +288,14 @@ def evidence_index(evidence,output,repository):
                 # Show the actual source tested by the PR merge build, not the
                 # branch head supplied by the GitHub Actions run metadata.
                 entry['source_sha']=tested_sha
+                # The collector validated both authentic Git trees before
+                # recording this equality; the publisher never trusts a
+                # shared PR branch name as evidence of source equivalence.
+                matches=source.get('verified_equivalent_site_shas') or {}
+                if (run.get('merged_pr') and
+                        matches.get(tested_sha) and
+                        re.fullmatch(r'[a-f0-9]{40}',matches[tested_sha])):
+                    entry['verified_site_source_sha']=matches[tested_sha]
                 render_report(trace,destination/'report.html')
                 html=(destination/'report.html').read_text()
                 up=os.path.relpath(output,destination).replace(os.sep,'/')
