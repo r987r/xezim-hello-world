@@ -13,6 +13,7 @@ from cocotb.clock import Clock
 from cocotb.triggers import RisingEdge, FallingEdge, Timer, with_timeout
 from cocotbext.axi import AxiBus, AxiMaster, AxiResp
 from init_plan import wishbone_script
+from latency_report import configured_clock_period_ps
 from traffic_observer import TrafficObserver, observe_forever
 
 OUTPUT = Path(os.environ["DDR4_GENERATED_DIR"])
@@ -141,7 +142,9 @@ async def ddr4_wishbone_init_axi_readwrite(dut):
     succeeded = False
     failure = None
     try:
-        cocotb.start_soon(Clock(dut.clk, 10, units="ns").start())
+        period_ps = configured_clock_period_ps()
+        assert period_ps == 10000, "source clock and DDR4 100 MHz sim profile disagree"
+        cocotb.start_soon(Clock(dut.clk, period_ps, units="ps").start())
         await tick(dut, 10)
         observer.assert_health(monitor, min_samples=9)
         assert not int(dut.user_rst.value), "simulation reset did not release"
