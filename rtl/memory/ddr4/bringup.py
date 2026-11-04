@@ -16,6 +16,7 @@ import subprocess
 import sys
 
 import yaml
+import sim_model
 
 ROOT = Path(__file__).resolve().parents[3]
 HERE = Path(__file__).resolve().parent
@@ -94,6 +95,8 @@ def validate(soc: dict, lock: dict, profile: dict,
     require(axi.get("block_until_ready") is True,
             "DDR requests must be blocked until controller init completes")
 
+    geometry = sim_model.budget(profile, read_yaml(HERE / "sim_geometry.yml"))
+
     pin = lock["third_party"]["litedram"]
     revision = pin.get("commit", "")
     require(re.fullmatch(r"[0-9a-f]{40}", revision) is not None,
@@ -108,7 +111,7 @@ def validate(soc: dict, lock: dict, profile: dict,
     return {"target": target, "base": base, "size": size,
             "upstream": pin["git"], "commit": revision,
             "license": pin["license"], "axi_data_bits": bus["data_bits"],
-            "axi_id_bits": bus["id_bits"]}
+            "axi_id_bits": bus["id_bits"], "model": geometry}
 
 
 def preflight(target: str = DEFAULT_TARGET) -> dict:
@@ -164,7 +167,7 @@ def emitted_port_widths(verilog: str, module: str = CORE_NAME) -> dict[str, int]
 
 
 def generator_argv(output: Path) -> list[str]:
-    return [sys.executable, "-m", "litedram.gen", "--sim", "--name", CORE_NAME,
+    return [sys.executable, str(HERE / "sim_model.py"), "--sim", "--name", CORE_NAME,
             "--output-dir", str(output), str(PROFILE)]
 
 
@@ -187,7 +190,7 @@ def generate(contract: dict, output: Path) -> Path:
         if path.is_file() and path.name != "ddr4_manifest.json":
             artifacts[str(path.relative_to(output))] = hashlib.sha256(path.read_bytes()).hexdigest()
     result = {"status": "generated-not-simulated", "source": contract,
-              "generator": "python -m litedram.gen --sim", "config": str(PROFILE.relative_to(ROOT)),
+              "generator": "sim_model.py --sim (pinned LiteDRAM, bounded simulation geometry)", "config": str(PROFILE.relative_to(ROOT)),
               "top": CORE_NAME, "ports": ports, "files_sha256": artifacts,
               "warning": "No AXI transactions, DDR4 initialization, or timing have yet been verified"}
     manifest = output / "ddr4_manifest.json"
