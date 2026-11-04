@@ -8,6 +8,8 @@ here, and unknown protocols are not represented as AXI transactions.
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 from pathlib import Path
 import re
 
@@ -108,6 +110,7 @@ def parse_capture(path: Path, configured_sources: dict):
     if not lines:
         raise ValueError("empty protocol capture")
     starts, ends, counts = set(), set(), {name: 0 for name in sources}
+    failed_sources = set()
     last_times = {name: 0 for name in sources}
     records = []
     for line_no,line in enumerate(lines, 1):
@@ -134,6 +137,8 @@ def parse_capture(path: Path, configured_sources: dict):
             if event.get("count") != counts[source] or event.get("status") not in ("pass","fail"):
                 raise ValueError("incomplete or invalid capture_end")
             ends.add(source)
+            if event['status'] != 'pass':
+                failed_sources.add(source)
             continue
         time_ps = _integer(event.get("time_ps"), "time_ps")
         if kind == "transaction":
@@ -167,6 +172,8 @@ def parse_capture(path: Path, configured_sources: dict):
         })
     if starts != set(sources) or ends != set(sources):
         raise ValueError("protocol capture missing one or more required start/end markers")
+    if failed_sources:
+        raise ValueError('protocol capture ended with failure: ' + ', '.join(sorted(failed_sources)))
     return {"sources": [{"id": name, "protocol": protocol,
                           "role": "unspecified", "clock_domain": "unknown",
                           "implementation": "external_vip_or_testbench"}
@@ -194,9 +201,22 @@ def build(directory: Path, plan: dict, *, axi_payload=None):
             issues.append(str(error))
     if not sources and configured is None:
         return None
+    if axi_payload is None:
+        try:
+            sha = subprocess.check_output(['git','rev-parse','HEAD'],
+                                          cwd=Path(__file__).resolve().parents[1], text=True).strip()
+            dirty = bool(subprocess.check_output(['git','status','--porcelain'],
+                         cwd=Path(__file__).resolve().parents[1],text=True))
+        except (OSError,subprocess.CalledProcessError):
+            sha, dirty = 'unknown', True
+        run = {"target": plan["target"], "engine": plan["engine"],
+               "commit": sha, "dirty": dirty,
+               "workflow_run_id": os.environ.get('GITHUB_RUN_ID'),
+               "workflow_attempt": os.environ.get('GITHUB_RUN_ATTEMPT')}
+    else:
+        run = dict(axi_payload['run'])
     result = {"schema_version": 1,
-              "run": dict(axi_payload["run"]) if axi_payload is not None else
-                     {"target": plan["target"], "engine": plan["engine"]},
+              "run": run,
               "sources": sources, "records": records,
               "capture_complete": not issues,
               "issues": issues,
