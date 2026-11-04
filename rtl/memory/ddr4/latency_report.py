@@ -160,8 +160,14 @@ def calculate(events: list[dict], period_ps: int) -> dict:
             records.append(entry)
         else:
             raise ValueError(f"unknown AXI channel {channel}")
-    if pending_writes or any(reads.values()) or any(writes.values()):
-        raise ValueError("incomplete AXI request or missing completion")
+    pending_reads = {str(k): [dict(r) for r in v] for k, v in reads.items() if v}
+    pending_responses = {str(k): [dict(r) for r in v] for k, v in writes.items() if v}
+    if pending_writes or pending_reads or pending_responses:
+        raise ValueError(
+            "incomplete AXI request or missing completion: "
+            f"AR={pending_reads} AW={pending_responses} WQ={list(pending_writes)} "
+            f"completed={[(r['operation'], r['id'], r['address']) for r in records]}"
+        )
     for op in ("read", "write"):
         if not any(x["operation"] == op for x in records):
             raise ValueError(f"no completed {op} traffic for timing")
