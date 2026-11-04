@@ -234,3 +234,9 @@ address remains 15 bits, while modeled row/column storage is narrower.
 Review of width truncation and alias boundaries remains required before
 treating the model as any form of physical DDR proof. Both raw compiler
 logs and the post-run diagnostic inventory are retained in the CI artifact.
+
+The functional regression additionally writes distinct 64-byte patterns to
+the low, middle and final 64-byte locations of the 32 MiB modeled aperture,
+**then rereads all three after the writes**. Any byte alias caused by reduced
+row/column geometry fails the DDR4 CI; this is an explicit simulation-model
+boundary check, not a claim about physical DDR4.
