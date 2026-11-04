@@ -13,6 +13,7 @@ import argparse
 from pathlib import Path
 
 import yaml
+import init_plan
 
 HERE = Path(__file__).resolve().parent
 
@@ -99,6 +100,7 @@ def scaled_device_class(original: type, geometry: dict) -> type:
 def main() -> None:
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--sim", action="store_true")
+    parser.add_argument("--output-dir", type=Path, default=Path("build"))
     opts, _ = parser.parse_known_args()
     if not opts.sim:
         raise ValueError("refusing to scale physical DDR geometry without --sim")
@@ -111,11 +113,17 @@ def main() -> None:
     # This is not an RTL fork or a module outside the memory subsystem.
     from litedram import modules
     original = getattr(modules, info["device"])
-    setattr(modules, info["device"], scaled_device_class(original, geometry))
+    model_class = scaled_device_class(original, geometry)
+    setattr(modules, info["device"], model_class)
+    initialization = init_plan.from_upstream(profile, model_class)
     print(f"DDR4 isolated simulation geometry: {info['isolated_simulation_bytes']} bytes "
           f"(real device {info['production_device_bytes']} bytes)", flush=True)
     from litedram.gen import main as upstream_main
     upstream_main()
+    output = opts.output_dir.resolve()
+    if not output.is_dir():
+        raise ValueError(f"upstream generator output missing: {output}")
+    print(f"DDR4 init plan (NOT executed): {init_plan.save(initialization, output)}")
 
 
 if __name__ == "__main__":
