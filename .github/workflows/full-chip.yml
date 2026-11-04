@@ -46,7 +46,7 @@ jobs:
           (cd .tools/bin && sha256sum -c "$XEZIM_ASSET_NAME.sha256")
           chmod +x ".tools/bin/$XEZIM_ASSET_NAME"
           echo "XEZIM_BIN=$GITHUB_WORKSPACE/.tools/bin/$XEZIM_ASSET_NAME" >> "$GITHUB_ENV"
-      - name: Run common SoC INIT/RUN/CHECK: real CPU C DMA, dual BFM DMA, negatives, Xezim compile
+      - name: 'Run common SoC INIT/RUN/CHECK: real CPU C DMA, dual BFM DMA, negatives, Xezim compile'
         run: make dv-chip
       - name: Retain all chip build/phase/memory results
         if: always()
