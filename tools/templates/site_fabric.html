@@ -1,7 +1,7 @@
 <div class="eyebrow">Architecture-derived endpoint contracts · address decode · test evidence</div>
 <h1>Fabric Explorer</h1>
 <p class="lede">Inspect every NoC boundary, initiator-to-target reachability and the exact upstream-generated XY router path. The two planes and their source/target permissions stay separate.</p>
-<div class="notice"><strong>Timing semantics:</strong> router counts are structural, not clock-cycle delays. No per-hop or target-cycle latency has been characterized. Any one-beat timing shown below is actual initiator-to-B/RLAST latency from a specific captured CI run, not a per-router measurement. DMA engines and physical DDR/HBM controllers are not integrated.</div>
+<div class="notice"><strong>Timing semantics:</strong> router counts are structural, not clock-cycle delays. Where a clean controlled one-beat trace matches this site's source SHA, the measured AXI boundary deltas break down request/response time per mesh and terminal AXI service. Router-internal hop cycles and isolated DDR/HBM device latency are not measured. DMA engines and physical DDR/HBM controllers are not integrated.</div>
 <div class="actions"><a href="topology.html">One architecture diagram</a><a href="data/fabric.json">Download fabric report JSON</a><a href="config/interface_contracts.yaml">Sizing contracts</a><a href="gen/supernoc/manifest.json">Wired route manifest</a></div>
 <div class="grid" id="fabric-facts"></div>
 <div class="grid" style="align-items:end"><label>Fabric plane <select id="fabric-plane"><option value="data">Data (AXI4)</option><option value="config">Configuration (AXI4 transport)</option></select></label><label>Filter by endpoint, subsystem or target <input id="fabric-search" type="search" placeholder="e.g. compute0, sram, hbm0" autocomplete="off"></label></div>
@@ -58,9 +58,31 @@ function renderRoute(){const box=byId('fabric-route');box.replaceChildren();cons
  const detail=E('details'),summary=E('summary','Show exact generated XY router sequence');detail.append(summary);
  for(const stage of r.stages.filter(s=>s.kind==='mesh')){detail.append(E('strong',stage.network));detail.append(E('p',stage.routers.join(' → ')))}box.append(detail);
  const note=E('p','One-beat request, target-service and response latencies: unmeasured. Source/target NI and crossbar delays are not assumed to equal one clock cycle.','muted');box.append(note);
+ if(r.one_beat_stage_observations&&r.one_beat_stage_observations.length){
+  box.append(E('h4','Measured one-beat AXI boundary breakdown (serial, source-matched runs)'));
+  for(const o of r.one_beat_stage_observations){
+    const p=E('p',o.operation.toUpperCase()+' · '+o.sample_count+' isolated sample(s) · measured clock '+o.clock_period_ps+' ps · end-to-end median '+o.end_to_end.median_cycles+' cycles');
+    box.append(p);
+    const st=E('table'),thead=E('thead'),hr=E('tr');
+    for(const h of ['Observed stage','Request median','Response median','Combined median'])addCell(hr,h,'th');
+    thead.append(hr);st.append(thead);
+    const tb=E('tbody');
+    for(const metric of o.stage_metrics){
+      const tr=E('tr');
+      addCell(tr,metric.kind==='mesh'?metric.network:'Terminal target-facing AXI service*');
+      addCell(tr,metric.request_stats?metric.request_stats.median_cycles+' cycles':'—');
+      addCell(tr,metric.response_stats?metric.response_stats.median_cycles+' cycles':'—');
+      addCell(tr,metric.sum_stats.median_cycles+' cycles');
+      tb.append(tr);
+    }
+    st.append(tb);const scroll=E('div',undefined,'scroll');scroll.append(st);box.append(scroll);
+    box.append(E('p','*Terminal AXI timing includes the downstream memory crossbar and model where present; it does not isolate physical device service. Individual router/link cycles remain unknown.','muted'));
+    const link=E('a','View measured CI run '+o.source_sha.slice(0,12));link.href=o.run_report;box.append(link);
+  }
+ }
  if(r.one_beat_observations.length){box.append(E('h4','Measured end-to-end, one-beat observations'));
   for(const o of r.one_beat_observations){const p=E('p',`${o.operation.toUpperCase()}: n=${o.count}, min ${o.min_ps} ps, median ${o.median_ps} ps, p95 ${o.p95_ps} ps · ${o.test_scope} · ${o.simulator} · ${o.source_sha.slice(0,12)}${o.matches_site_source?' (current source)':' (historical source)'}`);const a=E('a','Open original run report');a.href=o.run_report;p.append(' · ',a);box.append(p)}
- }else box.append(E('p','No eligible one-beat observations in the published CI evidence.','muted'));
+ }else box.append(E('p','No eligible one-beat observations in the published CI evidence. Controlled per-mesh timing requires a successful capture for exactly this site source revision.','muted'));
 }
 function renderInventory(){const body=byId('fabric-interfaces').querySelector('tbody');body.replaceChildren();for(const i of report.interfaces.filter(i=>i.plane===plane.value&&(!search.value||visible(i.name)||visible(i.subsystem)||visible(i.actor)))){
  const tr=E('tr');addCell(tr,i.name);addCell(tr,i.subsystem);addCell(tr,i.role+' / '+i.integration);addCell(tr,i.data_bits+'b / '+i.id_bits+'b');addCell(tr,i.max_pending_reads_budget+' / '+i.max_pending_writes_budget);addCell(tr,dash(i.fabric_shared_max_txns)+' / '+dash(i.fabric_max_unique_ids));addCell(tr,i.clock_signal+' (freq uncharacterized)');body.append(tr)}
