@@ -4,7 +4,6 @@ Drives generated Wishbone CSR interface and upstream DDR4 init commands.
 AXI data accesses must pass against actual controller/PHY, not AXI RAM.
 """
 from __future__ import annotations
-import itertools
 import json
 import os
 from pathlib import Path
@@ -151,11 +150,14 @@ async def ddr4_wishbone_init_axi_readwrite(dut):
         assert not int(dut.user_port_axi_0_awready.value), \
             "AXI must be gated before init"
 
+        # LiteDRAM's SimPlatform CRG directly aliases user_clk to clk.
+        # Use the source pin as the cocotb BFM sampling clock to eliminate
+        # combinational clock-alias delta-cycle scheduling ambiguity while
+        # continuing to drive real generated AXI/DFI RTL.
         master = AxiMaster(AxiBus.from_prefix(dut, "user_port_axi_0"),
-                           dut.user_clk, dut.user_rst, reset_active_level=True)
-        # Legal AXI RREADY backpressure experiment, not a replacement
-        # protocol monitor or an artificial DRAM response.
-        master.read_if.r_channel.set_pause_generator(itertools.cycle([1, 1, 1, 0, 0]))
+                           dut.clk, dut.user_rst, reset_active_level=True)
+        # Baseline must not depend on an optional RREADY pause experiment.
+        # No passive observer or active bus checker is disabled.
 
         await tick(dut, 16)
         observer.next_phase("initialization")
