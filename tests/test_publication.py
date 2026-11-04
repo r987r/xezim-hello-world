@@ -132,6 +132,68 @@ class PublicationTests(unittest.TestCase):
             self.assertEqual((report.parent/'axi-transactions.json').read_bytes(),before)
             self.assertIn('All runs',report.read_text())
 
+    def test_protocol_report_is_provenance_verified_and_html_re_rendered(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);target=fixture(root/'evidence',axi=True)
+            report={
+                'schema_version':1,
+                'run':{'commit':SHA,'dirty':False,
+                       'workflow_run_id':'123','workflow_attempt':'1',
+                       'target':'chip-boot'},
+                'sources':[{'id':'cpu','protocol':'axi4','role':'initiator',
+                            'clock_domain':'soc_single_clock'}],
+                'records':[{'kind':'event','source':'cpu','protocol':'axi4',
+                            'operation':'read','id':'0x0',
+                            'start_ps':100,'end_ps':200,'status':'observed',
+                            'fields':{'note':'<img src=x onerror=alert(1)>'}}],
+                'capture_complete':True,'issues':[]
+            }
+            site.dump(target/'protocol-transactions.json',report)
+            (target/'protocols.html').write_text('<script>alert("injected")</script>')
+            output=root/'site';output.mkdir()
+            _,entries,_=site.evidence_index(root/'evidence',output,'r987r/xezim-hello-world')
+            self.assertEqual(entries[0]['protocols'],['axi4'])
+            self.assertEqual(entries[0]['protocol_observations'],1)
+            page=output/entries[0]['path']
+            self.assertIn('Unified protocol explorer',page.read_text())
+            generated=(page.parent/'protocols.html').read_text()
+            self.assertIn('Protocol Run Explorer',generated)
+            self.assertNotIn('<img src=x onerror=alert(1)>',generated)
+            self.assertNotIn('<script>alert("injected")</script>',generated)
+            self.assertIn('\\u003cimg',generated)
+
+    def test_generic_only_report_keeps_provenance_and_page(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);target=fixture(root/'evidence')
+            site.dump(target/'protocol-transactions.json',{
+                'schema_version':1,
+                'run':{'commit':SHA,'dirty':False,
+                       'workflow_run_id':'123','workflow_attempt':'1'},
+                'sources':[{'id':'mac.rx','protocol':'ethernet',
+                            'clock_domain':'mac_rx','role':'target'}],
+                'records':[{'kind':'event','source':'mac.rx',
+                            'protocol':'ethernet','operation':'frame_rx',
+                            'start_ps':1000,'end_ps':1000,
+                            'status':'observed','fields':{'length':64}}],
+                'capture_complete':True,'issues':[]})
+            output=root/'site';output.mkdir()
+            _,entries,_=site.evidence_index(root/'evidence',output,'r987r/xezim-hello-world')
+            self.assertFalse(entries[0]['axi'])
+            self.assertEqual(entries[0]['protocols'],['ethernet'])
+            self.assertIn('Protocol Run Explorer',(output/entries[0]['path']).read_text())
+            self.assertTrue((output/'runs/123-1/chip-boot/protocol-transactions.json').is_file())
+
+    def test_generic_report_wrong_ci_commit_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);target=fixture(root/'evidence')
+            site.dump(target/'protocol-transactions.json',{
+                'schema_version':1,
+                'run':{'commit':'b'*40,'dirty':False,'workflow_run_id':'123',
+                       'workflow_attempt':'1'},
+                'sources':[],'records':[],'capture_complete':True,'issues':[]})
+            with self.assertRaisesRegex(ValueError,'protocol report provenance'):
+                site.evidence_index(root/'evidence',root/'out','r987r/xezim-hello-world')
+
     def test_mismatched_axi_commit_or_workflow_is_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);target=fixture(root/'evidence',axi=True)
