@@ -154,6 +154,16 @@ class ProtocolReportTests(unittest.TestCase):
         self.assertEqual(data["records"][0]["fields"]["address"],"0x1000")
         self.assertTrue(data["capture_complete"])
 
+    def test_incomplete_axi_is_not_upgraded_to_generic_pass(self):
+        axi={"run":{"target":"axi","capture_bound":False,
+                    "capture_overflow":False},
+             "sections":{"axi":{"monitors":[],"transactions":[],"issues":[]}}}
+        plan={"target":"axi","engine":"cocotb-verilator","report":{"axi":{}}}
+        generic=protocol_report.build(self.root,plan,axi_payload=axi)
+        self.assertFalse(generic["capture_complete"])
+        self.assertIn("AXI capture incomplete",generic["issues"][0])
+        self.assertTrue((self.root/"protocols.html").is_file())
+
     def test_regression_validates_protocol_catalog_without_axi(self):
         config=regress.load_config(ROOT/"config/regression.yaml")
         import copy, yaml
