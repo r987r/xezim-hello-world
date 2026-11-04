@@ -18,6 +18,8 @@ from traffic_observer import clear_prior_capture, verify_capture
 from latency_report import configured_clock_period_ps, report_from_capture
 from dfi_probe_contract import write_control_file
 from dfi_latency_report import report_from_dfi
+from selective_verilator import run_selective
+from warning_audit import audit_file
 
 
 def preflight(path: Path):
@@ -65,12 +67,11 @@ def main() -> int:
                 raise ValueError(f"invalid stale DFI artifact symlink: {name}")
             if item.is_file():
                 item.unlink()
-        from cocotb_test.simulator import run
         here = Path(__file__).resolve().parent
         # Cocotb drives exactly one clock. No duplicate Verilator --timing
         # clock or independent SV clock generator is instantiated.
-        run(
-            simulator="verilator",
+        run_selective(
+            control_file,
             verilog_sources=[str(s) for s in sources],
             toplevel=CORE_NAME,
             module="functional_tb",
@@ -80,6 +81,14 @@ def main() -> int:
             compile_args=["-Wno-fatal", str(control_file)],
             waves=False,
         )
+        # -Wno-fatal permits pinned upstream warnings but never hides them.
+        diagnostics = audit_file(
+            output / "ddr4_simulation_compiler.log",
+            output / "ddr4_warning_audit.json")
+        print("DDR4 Verilator diagnostics: " +
+              json.dumps({"warnings": diagnostics["observed"],
+                          "errors": diagnostics["verilator_errors"],
+                          "status": diagnostics["status"]}), flush=True)
         # Independent post-run check: the protocol test is not enough to
         # claim a pass if passive capture was disabled, truncated or stopped.
         capture = verify_capture(output)
@@ -94,6 +103,9 @@ def main() -> int:
                                     "internal_status": internal["status"],
                                     "reads": latency["measured"]["read"]["samples"],
                                     "writes": latency["measured"]["write"]["samples"]},
+                        "compiler_diagnostics": {"status": diagnostics["status"],
+                                                 "file": "ddr4_warning_audit.json",
+                                                 "warnings": diagnostics["total_warnings"]},
                         "monitor": {"status": capture["status"],
                                     "sampled_cycles": capture["sampled_cycles"],
                                     "phases": capture["phases"],
