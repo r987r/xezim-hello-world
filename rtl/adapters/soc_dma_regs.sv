@@ -53,8 +53,11 @@ module soc_dma_regs #(
     regs_d[12][1] = irq_pending_q;
     regs_d[12][2] = submission_error_q;
     regs_d[12][3] = irq_raw_i;
-    if (state_q == CLEAR) begin
-      regs_load[11:8] = 4'hf; // ACK/DOORBELL are consumed once
+    if (state_q != READY) begin
+      // Clear the accepted one-shot command and hold this register while
+      // native APB is busy. A colliding AXI-Lite COMMAND write then waits
+      // for READY instead of overwriting/dropping a pending chain head.
+      regs_load[11:8] = 4'hf;
     end
   end
 

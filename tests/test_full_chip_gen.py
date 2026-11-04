@@ -79,6 +79,10 @@ class FullChipTests(unittest.TestCase):
                 self.assertIn('s_'+name+'_local_config_dma_regs_req',top)
             self.assertIn('DmaEnable',top)
             self.assertIn('DmaTestMode',tb)
+            # Host-driven NoC traffic must not leak B/R replies back into the
+            # held CPU adapter; its width-converter arbiter asserts otherwise.
+            self.assertIn("assign cpu_data_0_rsp = DmaTestMode ? '0 :", top)
+            self.assertIn("assign cpu_config_0_rsp = DmaTestMode ? '0 :", top)
             self.assertNotIn('$readmemh',top)
             self.assertTrue((out/'dma_actors.json').exists())
 

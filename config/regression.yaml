@@ -127,7 +127,7 @@ tests:
     test_dir: .
     build: .tools/chip-dma-obj
     env: {MAKEFLAGS: '-j2'}
-    timeout_s: 1800
+    timeout_s: 900
     pass: 'PASS chipdma: both compute DMA engines'
     report:
       context: 'True iDMA0/iDMA1 instances drive configured local/global FlooNoC data traffic. CPU0 AXI data and configuration managers are temporarily driven by a cocotb host for SRAM descriptor loading and 32-bit DMA doorbells; CPUs stay in reset, so this is NOT a cold-boot pass. Real descriptor fetch, writeback, SSRAM, HBM, DDR and config NoCs are exercised.'
@@ -169,7 +169,8 @@ suites:
   compatibility: [noc-xezim]
   diagnostics: [cpu-fetch, smoke]
   dma: [dma-rtl]
-  chip: [chip-boot, chip-boot-negative, chip-xezim-compile, chip-dma]
+  # Fail fast on the new generator-wired DMA hardware, then gate cold boot.
+  chip: [chip-dma, chip-boot, chip-boot-negative, chip-xezim-compile]
   # Every declared test is covered. Structural Xezim probes stay distinct
   # from the Verilator traffic gate; make test requires both toolchains.
   full: [xezim, noc, compatibility, diagnostics, dma, chip]
