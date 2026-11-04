@@ -77,7 +77,7 @@ class FabricExplorerTests(unittest.TestCase):
         networks=fabric_report.prepare_networks(manifest,ROOT/'gen/noc/floonoc')
         s=json.loads((ROOT/'gen/supernoc/manifest.json').read_text())
         s['connections'][0]['to']=s['connections'][1]['to']
-        with self.assertRaisesRegex(fabric_report.FabricReportError,'duplicate/unknown'):
+        with self.assertRaisesRegex(fabric_report.FabricReportError,'incompatible inter-mesh AXI widths|duplicate/unknown'):
             import yaml
             soc=yaml.safe_load((ROOT/'config/soc.yaml').read_text())
             knobs=yaml.safe_load((ROOT/'config/interface_contracts.yaml').read_text())
