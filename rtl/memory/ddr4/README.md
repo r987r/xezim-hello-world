@@ -213,9 +213,10 @@ Internal latency results are provisional until actual CI proves them.
 The pinned `cocotb-test==0.2.6` Verilator wrapper unconditionally requested
 global `--public-flat-rw`. Our DDR4-only `selective_verilator.py` adapter
 checks the **actual** compiler command and removes that flag, while retaining
-`--vpi` and the generated `public_flat_rd` control file for 72 DDR4
-DFI/BankModel probes. Any upstream compiler-command change fails closed.
-The normal DDR4 top-level control/AXI pins remain normal Cocotb ports.
+`--vpi` and an explicit control file. The file whitelists top-level DUT ports
+as read/write for Cocotb (including `clk`) and **only** the 72 DFI/model
+internal signals as read-only. No memory array is exposed. Any upstream
+compiler-command change fails closed.
 
 Verilator compiler stderr is saved **verbatim** to
 `ddr4_simulation_compiler.log`, rather than displaying thousands of
