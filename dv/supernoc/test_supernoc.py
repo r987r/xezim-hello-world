@@ -95,6 +95,26 @@ async def routed_data_and_config_all_local_global_nocs(dut):
     reached = {expected_sink(d, r["base"], 1) for d in CONTRACT["masters"] for r in d["regions"]}
     assert reached == set(sinks), f"unvisited leaf endpoints: {set(sinks) - reached}"
 
+    # One-at-a-time AXI4 single-beat transfers, BEFORE the pause generators
+    # and concurrent stress start. Unique per-source/target/sample addresses
+    # allow passive source/link/target traces to be paired without presuming
+    # IDs survive NoC remapping. Each response is awaited before the next.
+    trace_phase('Fabric baseline: single-outstanding one-beat')
+    baseline_cases = 0
+    for index, desc in enumerate(CONTRACT["masters"]):
+        word_bytes = desc["data_width"] // 8
+        for wi, region in enumerate(desc["regions"]):
+            for sample in range(3):
+                address = region["base"] + 0x200 + index * 0x100 + sample * 0x10
+                payload = bytes((index * 23 + wi * 41 + sample * 13 + b) & 255
+                                for b in range(word_bytes))
+                await transfer(masters[desc["name"]], desc, memory, address,
+                               payload, txn_id=sample & 1,
+                               readonly=region["access"] == "read")
+                baseline_cases += 1
+    dut._log.info("PASS controlled one-beat baseline: %d serial route samples, no injected channel pauses",
+                  baseline_cases)
+
     trace_phase('Burst, byte-strobe and channel-stall stress')
     # All five channels stall through upstream pause generators.
     for sink in sinks.values():
