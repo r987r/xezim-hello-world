@@ -1,7 +1,7 @@
 # GitHub Pages verification hub
 
 The repository publishes its current README, documentation, canonical topology,
-generated RTL/configuration, regression catalog and actual main-branch CI results
+generated RTL/configuration, regression catalog and verified CI results
 through `.github/workflows/pages.yml`. The deployed URL is recorded by the
 `github-pages` environment in that workflow. GitHub Pages uses the **GitHub
 Actions** publishing source; `tools/publish_site.py --ensure-pages` selects it
@@ -34,12 +34,19 @@ result: a required-negative test passes only when its exact named failure occurs
 ## Collection, retention and reproducibility
 
 `config/publication.yaml` selects trusted producer workflows and artifact names,
-history depth and archive size limits. Publication runs on main pushes, manual
-dispatch and completion of the configured main workflows, including failures.
-It collects up to four recent runs per workflow from the newest 500 repository
-runs. Only artifacts from main are ingested. No pull-request source or artifact
-is executed or deployed by a `workflow_run` event. PRs build an offline preview
-and validate the publisher/report semantics without deployment privileges.
+history depth and archive size limits. Every PR targeting `main` builds an
+offline preview. After a PR merges, the same workflow builds and publishes the
+trusted `main` checkout. Manual dispatch on `main` publishes as well; a manual
+feature-branch dispatch builds a preview without deployment. No automatic branch
+push or CI-completion triggers remain.
+
+The collector searches the latest 500 Actions runs and keeps up to four runs
+per configured producer. It accepts main-branch results and completed PR results
+only when GitHub's merged-PR metadata matches **the exact tested source head SHA
+and source branch**. GitHub may clear a workflow run's PR association after merge,
+so the source SHA is checked against the merged PR directly. Unmerged branch
+artifacts are never published. The source SHA of the site and tested SHA for
+each result remain distinct, and deployed code always comes from `main`.
 
 Artifacts retain their original workflow and attempt. Available SHA-256 archive
 digests are checked; unsafe ZIP paths and symlinks are rejected. AXI report

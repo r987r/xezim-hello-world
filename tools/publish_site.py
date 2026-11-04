@@ -91,18 +91,48 @@ def extract_archive(data,destination,config,digest=None):
         archive.extractall(destination)
 
 
+def merged_main_pr_heads(client):
+    """Map exact merged head SHA + source branch to PR number on main."""
+    heads={}
+    for page in range(1,6):
+        prs=client.request(f'/repos/{client.repository}/pulls?state=closed&base=main&per_page=100&page={page}')
+        for pr in prs:
+            if pr.get('merged_at') and (pr.get('base') or {}).get('ref')=='main':
+                head=pr.get('head') or {}
+                if head.get('sha') and head.get('ref'):
+                    heads[(head['sha'],head['ref'])]=pr['number']
+        if len(prs)<100:
+            break
+    return heads
+
+
+def verified_merged_pr(run,merged_heads):
+    """GitHub may clear workflow_run.pull_requests after a PR merges."""
+    if run.get('event')!='pull_request':
+        return None
+    return merged_heads.get((run.get('head_sha'),run.get('head_branch')))
+
+
 def collect(client,config,destination):
     destination.mkdir(parents=True,exist_ok=True)
     selected={w['file']:[] for w in config['workflows']}
-    # Limit API history as well as output size. Only trusted main runs are
-    # ingested; PR artifacts and PR code are never deployed by workflow_run.
+    merged_heads=merged_main_pr_heads(client)
+    # Only trusted main and source-SHA-matched merged PR workflow runs are
+    # published. PR code and artifacts are not executed in this trusted job.
     for page in range(1,6):
-        response=client.request(f'/repos/{client.repository}/actions/runs?branch=main&per_page=100&page={page}')
+        response=client.request(f'/repos/{client.repository}/actions/runs?per_page=100&page={page}')
         batch=response['workflow_runs']
         for run in batch:
             file=run['path'].split('/')[-1]
-            if file in selected and run['head_branch']=='main' and len(selected[file])<config['history_per_workflow']:
-                selected[file].append(run)
+            if file not in selected or len(selected[file])>=config['history_per_workflow']:
+                continue
+            merged_pr=verified_merged_pr(run,merged_heads)
+            if run.get('head_branch')!='main' and merged_pr is None:
+                continue
+            run=dict(run)
+            if merged_pr is not None:
+                run['verified_merged_pr']=merged_pr
+            selected[file].append(run)
         if not batch or all(len(r)>=config['history_per_workflow'] for r in selected.values()):
             break
     notes=[]
@@ -137,8 +167,12 @@ def evidence_index(evidence,output,repository):
         workflow=json.loads((file.parent/'workflow.json').read_text())
         run={k:source.get(k) for k in ('id','name','status','conclusion','head_sha','head_branch','run_attempt','html_url','created_at','updated_at','path')}
         run['label']=workflow['label']
+        if run['head_branch']!='main':
+            number=source.get('verified_merged_pr')
+            if source.get('event')!='pull_request' or type(number) is not int or number<=0:
+                raise ValueError('publication cache contains unverified non-main run')
+            run['merged_pr']=number
         runs.append(run)
-        if run['head_branch']!='main':raise ValueError('publication cache contains a non-main run')
         found=set()
         for result_path in sorted(file.parent.glob('artifact-*/**/result.json')):
             result=json.loads(result_path.read_text())
@@ -161,6 +195,7 @@ def evidence_index(evidence,output,repository):
             entry={'target':target,'engine':plan.get('engine','unknown'),'passed':result.get('passed') is True,
                    'expected_failure':plan.get('expect_failure'),'stage':result.get('stage'),
                    'run_id':run['id'],'attempt':run.get('run_attempt',1),'source_sha':run['head_sha'],
+                   'merged_pr':run.get('merged_pr'),
                    'recorded_at':run['created_at'],'workflow':run['label'],'workflow_url':run['html_url'],
                    'path':str(relative/'report.html'),'assets':sorted(assets),
                    'axi':trace is not None,'result':result}
