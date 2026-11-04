@@ -151,8 +151,19 @@ standalone target service are still unknown. Stalled, unmatched and
 historical captures remain end-to-end observations with explicit provenance,
 not fabricated per-mesh timing.
 
-After merging, a same-SHA passing main-branch NoC run must be published
-before the public Fabric Explorer can show a current-source decomposition.
+GitHub may execute a PR against a temporary merge commit whose SHA differs
+from the eventual main merge SHA, even when the two Git source trees are
+identical. The published evidence collector first verifies that the PR really
+merged into main, validates the CI tested merge commit against the exact PR
+head, and compares the tested Git tree to the published main Git tree.
+Only exact-SHA or verified identical-tree serial one-beat captures can populate
+per-mesh timing. The original tested SHA remains on every measurement; when
+source trees differ, the observations stay historical rather than silently
+being presented as current. The wide table shows min, arithmetic average and
+max cycles on read and write separately, with sample count and the measured
+clock period. Stage minima/maxima are independent quantiles and need not
+sum to end-to-end extrema; for the same paired samples, stage averages sum.
+
 ## Extension points
 
 New captures record CPU/test phase markers and explicit one-request expected
