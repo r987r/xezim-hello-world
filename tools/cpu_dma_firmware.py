@@ -97,8 +97,9 @@ def compile_firmware(cfg, directory: Path):
     blob = raw.read_bytes()
     if not blob or len(blob) > flash_size - HOOK_OFFSET:
         raise ValueError(f"C DMA application too large for flash: {len(blob)} bytes")
-    if len(blob) & 3:
-        raise ValueError("RV32I firmware image not word-aligned")
+    # ELF text instructions are aligned, but trailing byte-sized .rodata
+    # need not make the binary length word-aligned. Flash emission below
+    # pads the final 64-bit readmemh word without changing ELF contents.
     return dict(hook=hook, data=blob, sha256=hashlib.sha256(blob).hexdigest(), compiler="clang/LLVM RV32I",
                 defines=macros, flash_limit=flash_size)
 
