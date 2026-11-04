@@ -23,16 +23,26 @@ arbitrary-configuration SoC emitter. Legacy memory/boot benches remain
 independent executable scopes. Read [implementation-status](docs/implementation-status.md)
 before describing progress.
 
-Unified region allocation: `sw/common/memory_pool.[ch]` owns the\nphysical SRAM, DDR and HBM allocator and `tools/memory_plan.py` independently\nplans configured model-bounded virtual allocations. `soc_sram_pool_*`\nis a compatibility wrapper using the same allocator implementation, not\na separate heap. The 32-bit CPUs cannot dereference HBM/DDR above 4 GiB.\nNever treat Python planning or a C hosted test as CPU RTL execution; prove\nCPU addresses and DMA retirement from passive AXI monitors. See\n[docs/memory-allocation.md](docs/memory-allocation.md).\n\nShared SRAM ownership: `tools/sram_layout.py` defines physical regions
+Unified region allocation: `sw/common/memory_pool.[ch]` owns the
+physical SRAM, DDR and HBM allocator and `tools/memory_plan.py` independently
+plans configured model-bounded virtual allocations. `soc_sram_pool_*`
+is a compatibility wrapper using the same allocator implementation, not
+a separate heap. The 32-bit CPUs cannot dereference HBM/DDR above 4 GiB.
+Never treat Python planning or a C hosted test as CPU RTL execution; prove
+CPU addresses and DMA retirement from passive AXI monitors. See
+[docs/memory-allocation.md](docs/memory-allocation.md).
+
+Shared SRAM ownership: `tools/sram_layout.py` defines physical regions
 for both `tools/chip_bootgen.py` and `dv/common/dma_vectors.py`. Use
 `boot_live` for any regression that executes CPU firmware. `dma_only`
 reclaims the whole simulated boot allocation only when all CPUs are stopped
 in a distinct reset/test run. Reclaim a running chip's boot scratch only
 after CHECK and all accesses drain; never reuse executable code or
 live mailboxes. In C, use `sw/common/sram_pool.[ch]` instead of
-independent DMA/boot bump allocators. Do not claim C executes in today's
-minimal generated RV32I boot: this is an ownership-policy unification
-until the compiled boot BSP is integrated.
+independent DMA/boot bump allocators. The default minimal RV32I boot remains independent of C. The opt-in
+`chip-cpu-dma` variant compiles the shared allocator and DMA driver into
+RV32I flash and calls it on the real CPU0 during RUN. Do not claim this
+CPU-executed integration passed until its exact CI commit is green.
 
 Keep boot cold: CPU0 must really read ROM/flash, write **uninitialized**
 SRAM over its bus, release CPU1 via MMIO, and both CPUs must execute code
@@ -281,9 +291,10 @@ the BFM scope. See [docs/full-chip-boot.md](docs/full-chip-boot.md) for the
 CPU0 init/run/check mailbox contract, upstream WB/AXI bridges, AXI memory
 stand-ins, negative missing-CPU check and simulator limits. Firmware must
 execute on the real CPUs; the host never drives CPU result mailboxes.
-Next integration work: retain the already-green real-DMA full-NoC and
-32-bit CSR regressions, then add CPU-started DMA and interrupt servicing,
-a verified CPU firmware image/BSP, and Xezim chip-level functional traffic. Preserve the existing bus-driven cold-boot proof. HBM/DDR
+Next integration work: get the opt-in CPU-started C DMA through the
+full-chip INIT/RUN/CHECK RTL gate with passive AXI evidence and reviewed
+results. Extend it to CPU IRQ handling after polling validation; Xezim
+chip-level functional traffic remains distinct. Preserve the existing bus-driven cold-boot proof. HBM/DDR
 controller/PHY integration is a separate stage.
 
 ## Passive AXI run reporting
