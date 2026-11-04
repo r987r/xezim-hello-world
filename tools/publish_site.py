@@ -5,6 +5,8 @@ Evidence always retains its own workflow run, attempt and tested commit.
 The builder never treats an older green run as current-source validation.
 """
 import argparse
+import base64
+import binascii
 from datetime import datetime, timezone
 import hashlib
 from html import escape
@@ -177,6 +179,9 @@ FABRIC_EXCLUDED_FILES = {
     'README.md', 'AGENTS.md', 'tools/publish_site.py',
     'tools/fabric_report.py', 'tools/templates/site.html',
 }
+# CI execution jobs (tool versions and invocation) must also be identical.
+# Trigger/scheduling-only edits do not alter simulated timing and are ignored.
+FABRIC_EXECUTION_WORKFLOWS = ('floonoc-elab.yml', 'full-chip.yml')
 FABRIC_REQUIRED_INPUTS = frozenset({
     'config/soc.yaml', 'config/interface_contracts.yaml',
     'config/regression.yaml', 'config/ip.lock.yaml',
@@ -224,13 +229,29 @@ def fabric_execution_fingerprint(client, commit_sha, cache=None):
             files[path] = blob_sha
         if not FABRIC_REQUIRED_INPUTS.issubset(files):
             return None
-        blob_manifest = json.dumps(files, sort_keys=True, separators=(',', ':')).encode()
-        result = {'policy': 'fabric-execution-inputs-v1',
+        workflow_jobs = {}
+        for name in FABRIC_EXECUTION_WORKFLOWS:
+            wf_path = '.github/workflows/' + name
+            wf_sha = next((item['sha'] for item in tree['tree']
+                           if item.get('path') == wf_path and item.get('type') == 'blob'), None)
+            if not isinstance(wf_sha, str) or not re.fullmatch(r'[a-f0-9]{40}', wf_sha):
+                return None
+            blob = client.request(f'/repos/{client.repository}/git/blobs/{wf_sha}')
+            if blob.get('encoding') != 'base64':
+                return None
+            workflow = yaml.safe_load(base64.b64decode(blob['content']).decode('utf-8'))
+            if not isinstance(workflow, dict) or not isinstance(workflow.get('jobs'), dict):
+                return None
+            workflow_jobs[name] = workflow['jobs']
+        blob_manifest = json.dumps({'files': files, 'jobs': workflow_jobs},
+                                   sort_keys=True, separators=(',', ':')).encode()
+        result = {'policy': 'fabric-execution-inputs-v2',
                   'digest': hashlib.sha256(blob_manifest).hexdigest(),
                   'file_count': len(files)}
         cache[commit_sha] = result
         return result
-    except (urllib.error.HTTPError, KeyError, TypeError, ValueError):
+    except (urllib.error.HTTPError, KeyError, TypeError, ValueError, binascii.Error,
+            UnicodeDecodeError, yaml.YAMLError):
         return None
 
 
