@@ -6,10 +6,11 @@ from pathlib import Path
 
 import cocotb
 from cocotb.clock import Clock
-from cocotb.triggers import RisingEdge, with_timeout
+from cocotb.triggers import RisingEdge, Timer, with_timeout
 from cocotbext.axi import (
     AddressSpace, AxiBus, AxiMaster, AxiResp, AxiSlave, SparseMemoryRegion,
 )
+from dv.common.axi_trace import attach_observers
 
 ROOT = Path(__file__).resolve().parents[2]
 CONTRACT = json.loads((ROOT / "gen/supernoc/manifest.json").read_text())
@@ -33,6 +34,7 @@ async def bounded(operation, context):
 async def setup(dut):
     dut.rst_ni.value = 0
     dut.clk_i.value = 0
+    attach_observers(dut)
     cocotb.start_soon(Clock(dut.clk_i, 10, units="ns").start())
     sinks, memory, masters = {}, {}, {}
     for entry in CONTRACT["slaves"]:
@@ -168,7 +170,9 @@ async def routed_data_and_config_all_local_global_nocs(dut):
         await transfer(masters[desc["name"]], desc, memory, address, b"GOOD")
         await memory[target].write(address, b"FAIL")
         rd = await bounded(masters[desc["name"]].read(address, 4), "injected mismatch")
+        await Timer(1, units='ns')  # drain passive same-edge channel callbacks
         assert rd.data == b"GOOD", "FAIL supernoc injected data mismatch detected"
 
+    await Timer(1, units='ns')
     dut._log.info("PASS supernoc: %d real FlooNoC meshes, %d local/global links, %d AXI4 routes",
                   CONTRACT["meshes"], CONTRACT["links"], len(visits))

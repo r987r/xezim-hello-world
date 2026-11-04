@@ -12,6 +12,9 @@ on:
       - '.github/actions/setup-bender/**'
       - 'tools/regress.py'
       - 'tools/sim_cocotb.py'
+      - 'tools/axi_report.py'
+      - 'tools/templates/**'
+      - 'dv/common/axi_trace.py'
       - 'dv/supernoc/**'
       - 'tests/test_supernoc_gen.py'
       - 'config/**'
@@ -27,6 +30,9 @@ on:
       - '.github/actions/setup-bender/**'
       - 'tools/regress.py'
       - 'tools/sim_cocotb.py'
+      - 'tools/axi_report.py'
+      - 'tools/templates/**'
+      - 'dv/common/axi_trace.py'
       - 'dv/supernoc/**'
       - 'tests/test_supernoc_gen.py'
       - 'config/**'
@@ -70,6 +76,16 @@ jobs:
             gen/supernoc/manifest.json
           include-hidden-files: true
           if-no-files-found: error
+      - name: Publish AXI run explorer pages and transaction data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: supernoc-axi-run-reports-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            .tools/regression/supernoc*/report.html
+            .tools/regression/supernoc*/axi-*.json*
+          include-hidden-files: true
+          if-no-files-found: warn
       - name: Download the checksum-verified pinned Xezim release
         env:
           GH_TOKEN: ${{ github.token }}

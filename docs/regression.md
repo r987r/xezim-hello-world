@@ -94,6 +94,12 @@ firmware where relevant. Each attempt replaces
 that target's previous outputs. CI retains these artifacts on success
 and failure; preparation failures are failures even if no result is written.
 
+The NoC/chip cocotb targets also enable passive AXI capture through their
+YAML `report.axi` settings. Each produces a self-contained HTML explorer,
+raw JSONL events and versioned transaction JSON, including negative runs.
+See [AXI run reports](axi-run-reports.md) for completion timing, ID scope,
+filters, capture coverage and downloadable CI artifacts.
+
 Positive simulations require zero exit and an explicit final PASS marker.
 Negative tests require a positive nonzero exit, the exact expected mismatch,
 and no positive PASS marker. Compile errors, signals and wall-clock timeouts

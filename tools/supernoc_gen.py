@@ -153,9 +153,36 @@ def emit(soc, noc_root, dest):
         for channel in ("b","r"):
             if direction=="out":
                 edges.append(f"  assign {sig((n,name),'rsp')}.{channel}.user = '0;")
+    # A read-only view of each distinct AXI connection. An inter-mesh link
+    # is observed once at its source; its two endpoint aliases are cataloged.
+    # Upstream cocotbext-axi channel monitors own handshake sampling.
+    observations = [(k, None, 'initiator' if d == 'in' else 'target')
+                    for k, _, d in exposed] + [(a, b, 'link') for a,b in links]
+    taps, catalog = [], []
+    for k, peer, kind in observations:
+        protocol = spec(k)
+        prefix = 'tap_' + k[0] + '__' + k[1]
+        dimensions = {'id':protocol['id_width'], 'addr':protocol['addr_width'],
+                      'data':protocol['data_width'], 'strb':protocol['data_width']//8,
+                      'len':8,'size':3,'burst':2,'lock':1,'cache':4,'prot':3,
+                      'qos':4,'region':4,'resp':2,'last':1,'user':protocol['user_width']}
+        for channel, fields in {'aw':AW_FIELDS,'w':W_FIELDS,'b':B_FIELDS,
+                                'ar':AR_FIELDS,'r':R_FIELDS}.items():
+            for member in [*fields.values(), 'user', 'valid', 'ready']:
+                request = ((channel in ('aw','w','ar')) == (member != 'ready')) if member in ('valid','ready') else channel in ('aw','w','ar')
+                record = sig(k, 'req' if request else 'rsp')
+                path = f'{record}.{channel}_{member}' if member in ('valid','ready') else f'{record}.{channel}.{member}'
+                width = 1 if member in ('valid','ready') else dimensions[member]
+                dim = f' [{width-1}:0]' if width > 1 else ''
+                taps += [f'  wire{dim} {prefix}_{channel}{member} = {path};']
+        catalog.append({'id':'.'.join(k), 'prefix':prefix, 'role':kind,
+                        'endpoints':['.'.join(k)] + (['.'.join(peer)] if peer else []),
+                        'network':k[0], 'plane':manifest[k[0]]['plane'],
+                        'addr_width':protocol['addr_width'],'data_width':protocol['data_width'],
+                        'id_width':protocol['id_width']})
     sources+=flat
     sources[-1]=sources[-1].rstrip(",")
-    sources+= [");"]+duts+edges+["endmodule"]
+    sources+= [");"]+duts+edges+['`ifdef COCOTB_SIM']+taps+['`endif',"endmodule"]
     dest.parent.mkdir(parents=True,exist_ok=True)
     (dest.parent/"soc_noc.sv").write_text("\n".join(sources)+"\n")
     # One shared fabric assembly; the BFM regression and CPU boot top both
@@ -203,6 +230,12 @@ def emit(soc, noc_root, dest):
             t["regions"]=[{"base":int(x["base"]),"size":int(x["size"])} for x in regions]
             meta["slaves"].append(t)
     (dest.parent/"manifest.json").write_text(json.dumps(meta,indent=2,sort_keys=True)+"\n")
+    regions = [{'name':r['name'],'plane':plane,'base':r['base'],'size':r['size']}
+               for plane in ('data','config') for r in soc['address_map'][plane]]
+    (dest.parent/'axi_monitors.json').write_text(json.dumps({
+        'schema_version':1, 'scope':'soc_noc', 'monitors':catalog, 'regions':regions,
+        'semantics':'One passive observation per distinct AXI connection; IDs are local to each observation.'
+    },indent=2,sort_keys=True)+'\n')
     return meta
 
 

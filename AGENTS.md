@@ -271,3 +271,19 @@ execute on the real CPUs; the host never drives CPU result mailboxes.
 Next actual integration work: real PULP iDMA/CSR/interrupt hookups, a
 portable C runtime/BSP when required, and Xezim chip-level functional traffic. Preserve the existing bus-driven cold-boot proof. HBM/DDR
 controller/PHY integration is a separate stage.
+
+## Passive AXI run reporting
+
+The shared NoC generator owns `gen/supernoc/axi_monitors.json` and the
+`COCOTB_SIM`-guarded read-only tap aliases. Cover every distinct AXI
+connection once, including each inter-mesh link; catalog both ends of
+the link instead of double-counting it. Reuse upstream cocotbext-axi
+channel monitors. Never drive DUT signals from the report collector.
+See [AXI run reports](docs/axi-run-reports.md).
+
+Correlate AW/W/B and AR/R by interface, ID and reset epoch. Preserve
+W-before-AW, bursts, cross-ID reordering and interleaved read IDs. Completion
+means accepted B or accepted RLAST. Do not infer global transaction identity
+across NoC ID remapping or count link observations as extra initiator traffic.
+Publish self-contained per-target pages and raw JSON/JSONL for failed runs
+as well as passes; report incompleteness and preserve existing scoreboards.

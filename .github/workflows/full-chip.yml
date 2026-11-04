@@ -2,9 +2,9 @@ name: Full-chip coordinated CPU boot
 
 on:
   push:
-    paths: ['config/**', 'gen/**', 'tools/**', 'rtl/**', 'dv/full_chip/**', 'tests/**', 'Bender.yml', 'Bender.lock', 'Makefile', '.github/actions/setup-bender/**', '.github/workflows/full-chip.yml']
+    paths: ['config/**', 'gen/**', 'tools/**', 'rtl/**', 'dv/full_chip/**', 'dv/common/axi_trace.py', 'tests/**', 'Bender.yml', 'Bender.lock', 'Makefile', '.github/actions/setup-bender/**', '.github/workflows/full-chip.yml']
   pull_request:
-    paths: ['config/**', 'gen/**', 'tools/**', 'rtl/**', 'dv/full_chip/**', 'tests/**', 'Bender.yml', 'Bender.lock', 'Makefile', '.github/actions/setup-bender/**', '.github/workflows/full-chip.yml']
+    paths: ['config/**', 'gen/**', 'tools/**', 'rtl/**', 'dv/full_chip/**', 'dv/common/axi_trace.py', 'tests/**', 'Bender.yml', 'Bender.lock', 'Makefile', '.github/actions/setup-bender/**', '.github/workflows/full-chip.yml']
   workflow_dispatch:
 
 permissions:
@@ -58,3 +58,13 @@ jobs:
             gen/chip/
           include-hidden-files: true
           if-no-files-found: error
+      - name: Publish AXI run explorer pages and transaction data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chip-axi-run-reports-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            .tools/regression/chip-boot*/report.html
+            .tools/regression/chip-boot*/axi-*.json*
+          include-hidden-files: true
+          if-no-files-found: warn

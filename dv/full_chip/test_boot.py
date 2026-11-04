@@ -7,6 +7,7 @@ from cocotb.clock import Clock
 from cocotb.triggers import FallingEdge, RisingEdge, Timer, with_timeout
 from cocotb.result import SimTimeoutError
 from cocotbext.axi import AxiBus, AxiMaster
+from dv.common.axi_trace import attach_observers
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -36,6 +37,7 @@ async def coordinated_cold_boot(dut):
     memory = json.loads((ROOT/'gen/chip/manifest.json').read_text())['memory_models']
     probe = AxiMaster(AxiBus.from_prefix(dut, 'probe'), dut.clk, dut.rst_n, reset_active_level=False)
     dut.rst_n.value = 0
+    attach_observers(dut)
     cocotb.start_soon(Clock(dut.clk, 10, 'ns').start())
     for _ in range(10):
         await FallingEdge(dut.clk)
@@ -73,4 +75,5 @@ async def coordinated_cold_boot(dut):
         assert result.resp == 2, f'fullchip {target["name"]} out-of-range write must return SLVERR'
         result = await memory_transaction(dut, probe.read(address, 8))
         assert result.resp == 2, f'fullchip {target["name"]} out-of-range read must return SLVERR'
+    await Timer(1, 'ns')  # drain passive same-edge channel callbacks
     dut._log.info('PASS fullchip: CPU phases and independent bounded AXI memory models')
