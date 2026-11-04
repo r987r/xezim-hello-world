@@ -494,7 +494,10 @@ def attach_one_beat_observations(report, entries, output, source_sha):
         by_source[route["source"]].append(route)
 
     baseline_phase = "Fabric baseline: single-outstanding one-beat"
-    for entry in entries:
+    # Publisher index order is file-path order, not necessarily recency.
+    # Newest verified run wins for each route and operation in the wide table.
+    for entry in sorted(entries, key=lambda item: (item.get("recorded_at") or "",
+                                                   item.get("run_id") or 0), reverse=True):
         if (not entry.get("axi") or not entry.get("passed")
                 or "axi-transactions.json" not in entry.get("assets", [])):
             continue
