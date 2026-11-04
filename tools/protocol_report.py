@@ -182,6 +182,13 @@ def parse_capture(path: Path, configured_sources: dict):
         raise ValueError("protocol capture missing one or more required start/end markers")
     if failed_sources:
         raise ValueError('protocol capture ended with failure: ' + ', '.join(sorted(failed_sources)))
+    # A closed JSONL stream is not the same as a completed transaction.
+    # Preserve incomplete rows for debugging, but never declare a positive
+    # test's protocol evidence complete when a VIP did not observe completion.
+    incomplete = [row for row in records if row["kind"] == "transaction"
+                  and row["status"] in ("incomplete", "reset_aborted")]
+    if incomplete:
+        raise ValueError("protocol capture has incomplete/aborted transactions")
     return {"sources": list(sources.values()),
             "records": records, "events": counts}
 
