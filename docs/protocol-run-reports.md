@@ -33,9 +33,9 @@ report:
   protocols:
     max_events: 100000
     sources:
-      mac.rx: ethernet
-      mac.stream: axi-stream
-      eth.regs: apb
+      mac.rx: {protocol: ethernet, clock_domain: mac_rx, role: target, implementation: ethernet_vip, modeling: behavioral_vip}
+      mac.stream: {protocol: axi-stream, clock_domain: stream_clk, role: link, implementation: axis_vip}
+      eth.regs: {protocol: apb, clock_domain: csr_clk, role: target, implementation: apb_vip}
 ```
 
 An existing VIP's transaction callback, or a testbench consuming an upstream
@@ -74,7 +74,7 @@ time/monitor chart and filterable table.
 ## Contract and evidence
 
 - All timestamps use integer picoseconds; display normalizes to nanoseconds.
-  Clock domains are not inferred from timestamps.
+  Clock domains and implementation/model provenance are declared per source; they are never inferred from timestamps.
 - Protocol/source/operation names and event inventory are explicitly
   configured and validated. Unknown sources and malformed captures fail.
 - Large integer payload values are hex strings, avoiding JavaScript
