@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import bringup
 import sim_model
 import check_rtl
+import init_plan
 
 
 class TestDDR4Contract(unittest.TestCase):
@@ -258,6 +259,36 @@ class TestDDR4SimGeometry(unittest.TestCase):
         self.assertEqual(Path(cmd[1]).name, "sim_model.py")
         self.assertIn("--sim", cmd)
         self.assertEqual(cmd[-1], str(bringup.PROFILE))
+
+
+class TestDDR4InitPlan(unittest.TestCase):
+    def test_decode_upstream_mode_register_step(self):
+        example = [("Load Mode Register 1", 0x301, 1,
+                    "DFII_COMMAND_RAS|DFII_COMMAND_CAS|DFII_COMMAND_WE|DFII_COMMAND_CS", 0)]
+        result = init_plan.compile_steps(example, 150_000_000)
+        self.assertEqual(result["status"], "plan-only-not-executed")
+        self.assertEqual(result["steps"][0]["mask"], 15)
+        self.assertEqual(result["steps"][0]["kind"], "command")
+
+    def test_decode_upstream_control_step(self):
+        result = init_plan.compile_steps(
+            [("Release reset", 0, 0, "DFII_CONTROL_ODT|DFII_CONTROL_RESET_N", 50_000)],
+            150_000_000)
+        self.assertEqual(result["steps"][0]["mask"], 0xC)
+        self.assertEqual(result["steps"][0]["kind"], "control")
+        self.assertEqual(result["steps"][0]["upstream_delay_units"], 50_000)
+
+    def test_reject_unknown_command(self):
+        with self.assertRaisesRegex(ValueError, "unknown/duplicated"):
+            init_plan.encode_operation("DFII_COMMAND_CS|INVENTED")
+
+    def test_reject_mixed_command_and_control(self):
+        with self.assertRaisesRegex(ValueError, "mix"):
+            init_plan.encode_operation("DFII_COMMAND_CS|DFII_CONTROL_SEL")
+
+    def test_reject_bad_delay(self):
+        with self.assertRaisesRegex(ValueError, "out of range"):
+            init_plan.compile_steps([("bad", 0, 0, "DFII_CONTROL_CKE", -1)], 150_000_000)
 
 
 class TestDDR4CompileRunner(unittest.TestCase):
