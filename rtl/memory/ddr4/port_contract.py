@@ -41,6 +41,11 @@ CONTROL_SIGNALS = {
     "wb_ctrl_dat_w": ("input", 32),
     "wb_ctrl_dat_r": ("output", 32),
     "wb_ctrl_sel": ("input", 4),
+    "wb_ctrl_cti": ("input", 3),
+    "wb_ctrl_bte": ("input", 2),
+    "wb_ctrl_err": ("output", 1),
+    "user_clk": ("output", 1),
+    "user_rst": ("output", 1),
 }
 
 
