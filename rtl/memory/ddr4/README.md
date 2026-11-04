@@ -207,3 +207,29 @@ features, prefer reusing this library or upstream LiteDRAM timing checks.
 The read-only timestamp tap is allowed to remain small and local, but
 no custom DFI driver, checker, DRAM state machine or PHY should be built.
 Internal latency results are provisional until actual CI proves them.
+
+## CI diagnostic policy (follow-up to warning audit)
+
+The pinned `cocotb-test==0.2.6` Verilator wrapper unconditionally requested
+global `--public-flat-rw`. Our DDR4-only `selective_verilator.py` adapter
+checks the **actual** compiler command and removes that flag, while retaining
+`--vpi` and the generated `public_flat_rd` control file for 72 DDR4
+DFI/BankModel probes. Any upstream compiler-command change fails closed.
+The normal DDR4 top-level control/AXI pins remain normal Cocotb ports.
+
+Verilator compiler stderr is saved **verbatim** to
+`ddr4_simulation_compiler.log`, rather than displaying thousands of
+`ERROR cocotb` lines for warning explanations. Real compiler errors are
+still printed; `ddr4_warning_audit.json` counts actual diagnostic messages.
+The pinned generated-model warning inventory from merged #24 is
+1,709 WIDTHEXPAND, 254 WIDTHTRUNC and 84 CASEINCOMPLETE. This is an exact
+review-required baseline, **not a blanket warning suppression**. A changed,
+missing or additional warning or any %Error causes CI failure even if
+Verilator exits 0 with `-Wno-fatal`.
+
+The current simulation changes 32768 physical rows / 1024 columns into
+2048 rows / 128 columns to bound modeled storage at 32 MiB. DFI command
+address remains 15 bits, while modeled row/column storage is narrower.
+Review of width truncation and alias boundaries remains required before
+treating the model as any form of physical DDR proof. Both raw compiler
+logs and the post-run diagnostic inventory are retained in the CI artifact.
