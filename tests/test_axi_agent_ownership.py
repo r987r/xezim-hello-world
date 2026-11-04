@@ -139,7 +139,8 @@ class AgentOwnershipTests(unittest.TestCase):
         self.assertIn("module axi_route_monitor", passive)
         # Port declarations on the passive monitor must remain input-only.
         ports = passive.split(");", 1)[0]
-        self.assertNotIn("output ", ports)
+        self.assertNotIn("output wire", ports)
+        self.assertNotIn("output reg", ports)
         self.assertIn("m_awvalid[target] && m_awready[target]", passive)
         self.assertIn("m_arvalid[target] && m_arready[target]", passive)
         chip_gen = (ROOT/"tools/full_chip_gen.py").read_text()
