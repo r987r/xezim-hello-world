@@ -12,7 +12,17 @@ The same configuration-driven `soc_top` now has two modes. Default
 configured compute, and replaces each `dma_regs` error target with upstream
 AXI-to-Lite/register blocks and a 64-bit APB head/doorbell adapter. DMA data
 traverses the local/global FlooNoCs, and control writes traverse the
-configuration NoCs. The separate `full_chip_dma_tb` holds CPUs in reset
+configuration NoCs. The **opt-in CPU C DMA variant**, `make dv-chip-cpu-dma`, runs the
+real PicoRV32 using the existing ROM-to-SRAM cold-boot INIT/RUN/CHECK
+checker, with two real DMA engines enabled. C is compiled by LLVM into
+the modeled read-only flash and uses the common SRAM/DDR/HBM allocator
+and desc64 MMIO driver. It checks remote DDR/HBM contents by DMA-copying
+them back into local SRAM. The same AXI monitors/reporting are used.
+This scenario is **not verified until the current PR's CI passes**,
+and uses status polling rather than CPU interrupt-service firmware.
+No independent CPU testbench or backdoor SRAM initialization is added.
+
+The separate `full_chip_dma_tb` holds CPUs in reset
 and uses **CPU0 AXI BFMs** (data/config, cocotb simulation-only) to initialize DMA SRAM and start transfers
 via 32-bit CSRs; that is NOT a CPU firmware or cold-boot test. Hardware IRQ
 pending/status are exposed to the verification framework, but CPU IRQ
