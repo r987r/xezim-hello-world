@@ -57,6 +57,9 @@ jobs:
           PY
           python3 -m pip install --disable-pip-version-check -e .tools/litex
           python3 -m pip install --disable-pip-version-check --no-deps -e .tools/litedram
+          # LiteX's SimPlatform Verilog exporter unconditionally resolves TAPCFG data.
+          # The PyPI release is immutable; do not patch LiteX to bypass imports.
+          python3 -m pip install --disable-pip-version-check 'pythondata-misc-tapcfg==0.0.post517'
           python3 - <<'PY'
           from litex.soc.integration.soc import SoCCore
           from litex.soc.integration.builder import Builder
