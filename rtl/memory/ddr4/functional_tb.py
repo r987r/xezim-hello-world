@@ -14,6 +14,7 @@ from cocotb.triggers import RisingEdge, FallingEdge, Timer, with_timeout
 from cocotbext.axi import AxiBus, AxiMaster, AxiResp
 from init_plan import wishbone_script
 from latency_report import configured_clock_period_ps
+from dfi_probe import DFIProbe, observe_dfi
 from traffic_observer import TrafficObserver, observe_forever
 
 OUTPUT = Path(os.environ["DDR4_GENERATED_DIR"])
@@ -139,6 +140,10 @@ async def ddr4_wishbone_init_axi_readwrite(dut):
     # independent of cocotbext-axi's protocol-aware BFM/response scoreboard.
     observer = TrafficObserver(OUTPUT)
     monitor = cocotb.start_soon(observe_forever(dut, observer))
+    internal = DFIProbe(OUTPUT)
+    internal_task = cocotb.start_soon(
+        observe_dfi(dut, internal, observer, configured_clock_period_ps())
+    )
     succeeded = False
     failure = None
     try:
@@ -147,6 +152,7 @@ async def ddr4_wishbone_init_axi_readwrite(dut):
         cocotb.start_soon(Clock(dut.clk, period_ps, units="ps").start())
         await tick(dut, 10)
         observer.assert_health(monitor, min_samples=9)
+        internal.assert_alive(internal_task)
         assert not int(dut.user_rst.value), "simulation reset did not release"
         assert not int(dut.init_done.value), "DDR must be explicitly initialized"
         assert not int(dut.init_error.value), "unexpected initial DDR error"
@@ -200,6 +206,7 @@ async def ddr4_wishbone_init_axi_readwrite(dut):
         await tick(dut, 5)
         observer.assert_health(monitor)
         observer.assert_complete()
+        internal.assert_alive(internal_task)
         succeeded = True
         dut._log.info("PASS actual LiteDRAM DDR4 AXI integrity with continuous monitoring")
     except Exception as exc:
@@ -215,5 +222,9 @@ async def ddr4_wishbone_init_axi_readwrite(dut):
         # a partial trace/summary before the exception is reported to CI.
         if not monitor.done():
             monitor.kill()
+        if not internal_task.done():
+            internal_task.kill()
         observer.finish("pass" if succeeded else "fail",
+                        error=None if succeeded else repr(failure))
+        internal.finish("pass" if succeeded else "fail",
                         error=None if succeeded else repr(failure))
