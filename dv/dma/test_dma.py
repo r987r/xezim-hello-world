@@ -8,6 +8,7 @@ from pathlib import Path
 
 import cocotb
 from cocotb.clock import Clock
+from cocotb.utils import get_sim_time
 from cocotb.triggers import FallingEdge, RisingEdge, Timer, with_timeout
 from cocotbext.axi import AddressSpace, AxiBus, AxiSlave, SparseMemoryRegion
 
@@ -114,7 +115,7 @@ async def real_dma_one_and_one_hundred_descriptors(dut):
         while True:
             await RisingEdge(dut.irq_o)
             irq_count[0] += 1
-            irq_times.append(str(cocotb.utils.get_sim_time(units='ns')))
+            irq_times.append(str(get_sim_time(units='ns')))
 
     irq_task = cocotb.start_soon(watch_irq())
     # One immediate interrupt, followed by a long 100-descriptor chain.
