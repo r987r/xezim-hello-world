@@ -115,6 +115,51 @@ class AxiReportTests(unittest.TestCase):
             self.assertGreater(summary['issues'],0)
             self.assertTrue((directory/'report.html').is_file())
 
+    def intent_report(self, events, annotated=True):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory=Path(tmp);catalog=directory/'catalog.json'
+            catalog.write_text(json.dumps(CATALOG))
+            start={'channel':'capture_start','time_ps':0,'monitors':['cpu']}
+            if annotated:start['annotations_version']=1
+            (directory/'axi-events.jsonl').write_text(''.join(json.dumps(e)+'\n' for e in [start,*events]))
+            summary=axi_report.write_report(directory,{'target':'scope','engine':'cocotb-verilator',
+                'report':{'axi':{'catalog':str(catalog)}}},{'passed':True})
+            return json.loads((directory/'axi-transactions.json').read_text()),summary
+
+    def test_expectation_consumed_once_and_only_at_exact_address_and_operation(self):
+        expected={'channel':'expect_response','time_ps':1,'monitor':'cpu','operation':'read',
+                  'address':'0x1000','response':'0x2','reason':'Deliberate capacity check'}
+        data,summary=self.intent_report([expected,
+            event('ar',2,id=0,addr=0x1010,len=0,size=2),event('r',3,id=0,data=0,last=1,resp=0),
+            event('ar',4,id=0,addr=0x1000,len=0,size=2),event('r',5,id=0,data=0,last=1,resp=2),
+            event('ar',6,id=0,addr=0x1000,len=0,size=2),event('r',7,id=0,data=0,last=1,resp=2)])
+        rows=data['sections']['axi']['transactions']
+        self.assertEqual([r['error_intent'] for r in rows],['none','expected','undeclared'])
+        self.assertEqual(rows[1]['expected_reason'],'Deliberate capacity check')
+        self.assertEqual(summary['issues'],1)
+
+    def test_legacy_error_is_not_retroactively_declared_expected(self):
+        data,summary=self.intent_report([event('ar',1,id=0,addr=0x1000,len=0,size=2),
+                                       event('r',2,id=0,data=0,last=1,resp=2)],annotated=False)
+        self.assertFalse(data['run']['annotations_available'])
+        self.assertEqual(data['sections']['axi']['transactions'][0]['error_intent'],'observed')
+        self.assertEqual(summary['issues'],0)
+
+    def test_expected_response_mismatch_is_a_capture_failure(self):
+        data,summary=self.intent_report([
+            {'channel':'expect_response','time_ps':1,'monitor':'cpu','operation':'read',
+             'address':'0x1000','response':'0x2','reason':'Injected fault'},
+            event('ar',2,id=0,addr=0x1000,len=0,size=2),event('r',3,id=0,data=0,last=1,resp=0)])
+        self.assertEqual(summary['issues'],1)
+        self.assertIn('declared expectation',data['sections']['axi']['issues'][0]['message'])
+
+    def test_chip_actors_distinguish_cpus_bfm_and_idle_reserved_dma(self):
+        chip=json.loads((ROOT/'gen/chip/manifest.json').read_text())
+        self.assertEqual(chip['dma_engines_instantiated'],0)
+        self.assertEqual(chip['axi_actors']['compute0_local_data.cpu']['kind'],'rtl_cpu')
+        self.assertEqual(chip['axi_actors']['compute0_local_data.dma']['kind'],'verification_bfm')
+        self.assertEqual(chip['axi_actors']['compute1_local_data.dma']['kind'],'reserved_idle')
+
 
 if __name__=='__main__':
     unittest.main()

@@ -8,7 +8,7 @@
 *{box-sizing:border-box}body{margin:0}main{max-width:1640px;margin:auto;padding:30px 28px 60px}
 header{display:flex;justify-content:space-between;align-items:center;gap:18px}h1{font-size:30px;letter-spacing:-.8px;margin:2px 0}h2{font-size:18px;margin:0}p{margin:6px 0;color:#5c6e82}.eyebrow{font-size:12px;font-weight:700;color:#3865b3;letter-spacing:1.5px;text-transform:uppercase}.badge{border-radius:30px;padding:8px 16px;background:#e0f5eb;color:#176742;font-weight:700}.badge.fail{background:#ffebe9;color:#a3302c}
 .meta{font-family:ui-monospace,monospace;font-size:12px;word-break:break-all}.card{background:white;border:1px solid #dbe3ec;border-radius:12px;padding:20px;margin-top:18px;box-shadow:0 3px 9px #17395805}.metrics{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-top:24px}.metric{background:white;border:1px solid #dbe3ec;border-radius:10px;padding:16px}.metric span{font-size:12px;color:#61748b}.metric strong{display:block;font-size:24px;letter-spacing:-.7px;margin-top:4px}
-.controls{display:grid;grid-template-columns:2fr repeat(3,1fr);gap:12px}.controls label{min-width:0}.controls select{width:100%}.range-controls{display:flex;gap:12px;flex-wrap:wrap;margin-top:12px}label{display:flex;flex-direction:column;gap:5px;font-size:12px;color:#5b6d82}input,select,button{font:inherit;border:1px solid #cbd7e5;border-radius:6px;background:white;padding:8px 10px;color:#172b43;min-height:36px}input:focus,select:focus,button:focus{outline:2px solid #9ebcff;outline-offset:1px}input{min-width:0}.range-controls input{width:170px}button{cursor:pointer;font-weight:600;background:#f5f8fd}button:hover{background:#e8f0fc}.toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}.actions{display:flex;gap:8px;align-items:center}.check{flex-direction:row;align-items:center;gap:7px}.check input{min-height:0}small{color:#64768b}.legend{display:flex;gap:18px;color:#61748b;font-size:12px;margin:12px 0}.legend i{display:inline-block;width:8px;height:8px;border-radius:100%;margin-right:5px}.chart-wrap{position:relative;overflow:auto}canvas{display:block;width:100%}.tip{display:none;position:fixed;z-index:5;background:#162c45;color:white;border-radius:8px;padding:12px;font-size:12px;pointer-events:none;white-space:pre-line;box-shadow:0 8px 20px #0003;max-width:380px}
+.controls{display:grid;grid-template-columns:2fr repeat(3,1fr);gap:12px}.controls label{min-width:0}.controls select{width:100%}.range-controls{display:flex;gap:12px;flex-wrap:wrap;margin-top:12px}label{display:flex;flex-direction:column;gap:5px;font-size:12px;color:#5b6d82}input,select,button{font:inherit;border:1px solid #cbd7e5;border-radius:6px;background:white;padding:8px 10px;color:#172b43;min-height:36px}input:focus,select:focus,button:focus{outline:2px solid #9ebcff;outline-offset:1px}input{min-width:0}.range-controls input{width:170px}button{cursor:pointer;font-weight:600;background:#f5f8fd}button:hover{background:#e8f0fc}.toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}.actions{display:flex;gap:8px;align-items:center}.check{flex-direction:row;align-items:center;gap:7px}.check input{min-height:0}small{color:#64768b}.legend{display:flex;flex-wrap:wrap;gap:18px;color:#61748b;font-size:12px;margin:12px 0}.legend i{display:inline-block;width:8px;height:8px;border-radius:100%;margin-right:5px}.chart-wrap{position:relative;overflow:auto}canvas{display:block;width:100%}.tip{display:none;position:fixed;z-index:5;background:#162c45;color:white;border-radius:8px;padding:12px;font-size:12px;pointer-events:none;white-space:pre-line;box-shadow:0 8px 20px #0003;max-width:380px}
 .table-wrap{overflow:auto;max-height:560px;margin-top:14px}table{border-collapse:collapse;width:100%;font-size:12px;white-space:nowrap}th{position:sticky;top:0;background:#edf3fa;text-align:left;color:#52677f;font-weight:600;z-index:1}th,td{padding:10px 11px;border-bottom:1px solid #e9eef5}tr{cursor:pointer}tr:hover td{background:#f1f6fd}tr.selected td{background:#e3eeff}.mono{font-family:ui-monospace,monospace}.op{font-weight:700;color:#285dba}.op.write{color:#a4621c}.error{color:#af3430}.muted{color:#7a899c}.bottom{display:flex;justify-content:space-between;align-items:center;margin-top:12px;gap:12px}.details{margin-top:16px;background:#f5f8fc;border:1px solid #e0e7ef;border-radius:8px;padding:14px}pre{font-size:12px;line-height:1.6;max-height:350px;overflow:auto;margin:10px 0 0;white-space:pre-wrap;word-break:break-all}.warning{background:#fff5dc;border:1px solid #ead69b;border-radius:8px;padding:12px;margin-top:14px;color:#795c1f}.hidden{display:none}.coverage{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.coverage span{font:11px ui-monospace,monospace;padding:4px 7px;background:#f0f4fa;border-radius:4px}.coverage .idle{color:#8793a2}.filter-error{color:#a3302c;min-height:18px;font-size:12px;margin-top:6px}
 @media(max-width:900px){main{padding:18px 12px}header{align-items:flex-start;flex-direction:column}.metrics{grid-template-columns:repeat(2,1fr)}.controls{grid-template-columns:1fr 1fr}h1{font-size:25px}.card{padding:14px}}
 </style>
@@ -16,6 +16,7 @@ header{display:flex;justify-content:space-between;align-items:center;gap:18px}h1
 <header><div><div class="eyebrow">Simulation evidence / AXI</div><h1>AXI Run Explorer</h1><p id="run-title"></p><div class="meta" id="run-meta"></div></div><div class="badge" id="result-badge"></div></header>
 <div id="run-warning"></div>
 <p id="run-context"></p>
+<p id="error-summary"></p>
 <div class="metrics" id="metrics"></div>
 <section class="card" aria-label="Traffic filters">
  <div class="controls">
@@ -34,25 +35,27 @@ header{display:flex;justify-content:space-between;align-items:center;gap:18px}h1
   <label>State<select id="state"><option value="">All states</option><option>complete</option><option>incomplete</option><option>reset_aborted</option></select></label>
   <label>Observation role<select id="role"><option value="">All roles</option><option value="initiator">Initiator</option><option value="link">Inter-mesh link</option><option value="target">Target</option></select></label>
   <label>Address region<select id="region"><option value="">All regions</option></select></label>
+  <label>Error intent<select id="intent"><option value="">All intents</option><option value="expected">Declared expected errors</option><option value="undeclared">Undeclared initiator errors</option><option value="observed">Downstream / legacy observations</option><option value="none">No error response</option></select></label>
  </div>
  <div class="filter-error" id="filter-error" role="status"></div>
  <button id="clear">Clear filters</button>
 </section>
 <section class="card">
  <div class="toolbar"><div><h2>Transaction completions</h2><p>One point at each accepted B response or accepted RLAST beat. Hover or select a point for its transaction.</p></div><label class="check"><input type="checkbox" id="initiator-only" checked>Initiator rows only</label></div>
- <div class="legend"><span><i style="background:#3675d9"></i>Read completion</span><span><i style="background:#c98332"></i>Write completion</span><span><i style="background:#c64242"></i>Error response</span></div>
+ <div class="legend"><span><i style="background:#3675d9"></i>Read completion</span><span><i style="background:#c98332"></i>Write completion</span><span><i style="background:#8654b8"></i>Expected error</span><span><i style="background:#c64242"></i>Undeclared error</span><span><i style="background:#7a899c"></i>Downstream / legacy error</span></div>
+ <div id="phases" class="actions" style="flex-wrap:wrap;margin-bottom:10px"></div>
  <div class="chart-wrap"><canvas id="timeline" aria-label="AXI completion time by initiator" role="img"></canvas></div>
  <small>Time is simulation time in ns. Initiator rows measure request acceptance to response completion at that interface. In-flight observations have no completion point.</small>
 </section>
 <section class="card">
  <div class="toolbar"><div><h2>All AXI transaction observations</h2><p id="count"></p></div><div class="actions"><button id="csv">Export filtered CSV</button><button id="json">Export filtered JSON</button></div></div>
  <small>A transfer appears at each monitored boundary it crosses. IDs are local to that boundary and reset epoch. Address regions are decoded labels; the report does not infer a global source ID across remapping.</small>
- <div class="table-wrap"><table><thead><tr><th>Completion ns</th><th>Rd / Wr</th><th>Observed boundary</th><th>Role</th><th>Address region</th><th>Local ID</th><th>Address</th><th>Data beats</th><th>B / R response</th><th>Latency ns</th><th>State</th></tr></thead><tbody id="transactions"></tbody></table></div>
+ <div class="table-wrap"><table><thead><tr><th>Completion ns</th><th>Rd / Wr</th><th>Observed boundary</th><th>Actor / implementation</th><th>Role</th><th>Address region</th><th>Local ID</th><th>Address</th><th>Data beats</th><th>B / R response / intent</th><th>Latency ns</th><th>State</th></tr></thead><tbody id="transactions"></tbody></table></div>
  <div class="bottom"><small id="page-label"></small><div class="actions"><button id="previous">Previous</button><button id="next">Next</button></div></div>
  <div class="details"><strong id="detail-title">Select a transaction to inspect every beat, strobe, sideband and timestamp.</strong><pre id="detail"></pre></div>
 </section>
 <section class="card"><h2>Capture coverage and diagnostics</h2><p id="coverage-summary"></p><div class="coverage" id="coverage"></div><pre id="diagnostics"></pre></section>
-<p style="margin-top:20px">Self-contained run artifact · schema 1 · passive cocotbext-axi channel capture · no external assets or server required</p>
+<p style="margin-top:20px">Self-contained run report · passive cocotbext-axi channel capture · no external assets or server required</p>
 </main>
 <div class="tip" id="tooltip"></div>
 <script type="application/json" id="run-data">__RUN_DATA__</script>
@@ -63,6 +66,8 @@ const $=id=>document.getElementById(id), rows=axi.transactions, size=100;
 let filtered=rows, page=0, selected=null, points=[], plotRows=[];
 const ns=v=>v==null?'—':(v/1000).toLocaleString(undefined,{maximumFractionDigits:3});
 const response=v=>v==null?'Pending':({0:'OKAY',1:'EXOKAY',2:'SLVERR',3:'DECERR'}[Number(BigInt(v))]||v);
+const intent=r=>r.error_intent||(r.response!==null&&Number(BigInt(r.response))>=2?'observed':'none');
+const responseText=r=>response(r.response)+(intent(r)==='expected'?' · expected':intent(r)==='undeclared'?' · undeclared':intent(r)==='observed'?' · observation':'');
 const text=(id,value)=>$(id).textContent=value;
 text('run-title',run.target+' · '+run.engine+' · seed '+run.seed);
 text('run-context',run.context||'');
@@ -73,7 +78,11 @@ function warning(message){const d=document.createElement('div');d.className='war
 if(run.expected_failure)warning('Expected-failure regression: '+run.expected_failure+'. The regression result reflects recognition of that failure; the DUT run intentionally fails.');
 if(!run.capture_bound||run.capture_overflow)warning('Capture is incomplete. Inspect binding/overflow diagnostics before using performance results.');
 if(axi.issues.length)warning(axi.issues.length+' capture/correlation diagnostics require review before using these performance results.');
-for(const m of axi.monitors){const o=document.createElement('option');o.value=m.id;o.textContent='['+m.role+'] '+m.id;$('boundary').append(o);}
+if(!run.annotations_available)warning('Historical capture: explicit response-intent annotations were not recorded. SLVERR observations are not automatically classified as expected.');
+const canonicalErrors=rows.filter(r=>r.role==='initiator'&&r.response!==null&&Number(BigInt(r.response))>=2);
+text('error-summary',canonicalErrors.filter(r=>intent(r)==='expected').length+' declared expected initiator errors · '+canonicalErrors.filter(r=>intent(r)==='undeclared').length+' undeclared initiator errors · downstream observations repeat transfers at other boundaries.');
+for(const m of axi.monitors){const o=document.createElement('option');o.value=m.id;o.textContent='['+m.role+'] '+(m.actor?.short_label||m.id);o.title=m.id;$('boundary').append(o);}
+for(const [i,p] of (axi.phases||[]).entries()){const b=document.createElement('button');b.textContent='P'+(i+1)+' · '+p.label+' @ '+ns(p.time_ps)+' ns';b.onclick=()=>{$('time-from').value=p.time_ps/1000;$('time-to').value=axi.phases[i+1]?axi.phases[i+1].time_ps/1000:'';apply();};$('phases').append(b);}
 for(const region of [...new Set(rows.map(r=>r.region))].sort()){const o=document.createElement('option');o.value=o.textContent=region;$('region').append(o);}
 const active=new Set(rows.map(r=>r.monitor));
 text('coverage-summary',(run.capture_bound?axi.monitors.length:0)+' / '+axi.monitors.length+' distinct AXI connections bound · '+active.size+' with addressed traffic · '+axi.monitors.length+' cataloged boundaries (inter-mesh links counted once).');
@@ -86,11 +95,12 @@ function apply(){
  if(tf&&tt&&Number(tf)>Number(tt)){text('filter-error','Completion time bounds are reversed.');return;}
  filtered=rows.filter(r=>{
   if($('boundary').value&&r.monitor!==$('boundary').value||$('plane').value&&r.plane!==$('plane').value||$('operation').value&&r.operation!==$('operation').value||$('state').value&&r.status!==$('state').value||$('role').value&&r.role!==$('role').value||$('region').value&&r.region!==$('region').value)return false;
+  if($('intent').value&&intent(r)!==$('intent').value)return false;
   if(id!=null&&BigInt(r.axi_id)!==id||amin!=null&&BigInt(r.address)<amin||amax!=null&&BigInt(r.address)>amax)return false;
   const resp=$('response').value;if(resp==='pending'?r.response!=null:resp&&r.response!==null&&Number(BigInt(r.response))!==Number(resp))return false;
   if(resp&&resp!=='pending'&&r.response===null)return false;
   if((tf||tt)&&r.end_ps===null||tf&&r.end_ps/1000<Number(tf)||tt&&r.end_ps/1000>Number(tt))return false;
-  return !query||[r.monitor,r.region,r.axi_id,r.address,...r.beats.map(b=>b.data)].join(' ').toLowerCase().includes(query);
+  return !query||[r.monitor,r.actor?.label,r.region,r.axi_id,r.address,r.expected_reason,...r.beats.map(b=>b.data)].join(' ').toLowerCase().includes(query);
  });page=0;render();
 }
 function metrics(){
@@ -110,8 +120,9 @@ function draw(){
  const ticks=Math.max(2,Math.min(5,Math.floor(plotWidth/130)));
  for(let i=0;i<=ticks;i++){const x=left+plotWidth*i/ticks;ctx.strokeStyle='#e3eaf3';ctx.beginPath();ctx.moveTo(x,top);ctx.lineTo(x,height-bottom);ctx.stroke();ctx.fillStyle='#6c7c8f';ctx.textAlign='center';ctx.fillText(ns(lo+(hi-lo)*i/ticks),x,height-19);}
  const labelChars=Math.max(10,Math.floor((left-20)/6));
- ctx.textAlign='right';plotRows.forEach((name,i)=>{const y=top+19+i*38;ctx.fillStyle='#4e627b';ctx.fillText(name.length>labelChars?name.slice(0,labelChars-1)+'…':name,left-14,y+4);ctx.strokeStyle='#edf1f7';ctx.beginPath();ctx.moveTo(left,y);ctx.lineTo(width-right,y);ctx.stroke();});
- points=[];for(const r of data){const x=left+(r.end_ps-lo)/(hi-lo)*plotWidth,y=top+19+plotRows.indexOf(r.monitor)*38;ctx.fillStyle=Number(BigInt(r.response||0))>=2?'#c64242':r.operation==='read'?'#3675d9':'#c98332';ctx.globalAlpha=.78;ctx.beginPath();ctx.arc(x,y,selected===r.uid?5:3.3,0,Math.PI*2);ctx.fill();points.push({x,y,row:r});}ctx.globalAlpha=1;
+ ctx.textAlign='right';plotRows.forEach((name,i)=>{const label=axi.monitors.find(m=>m.id===name)?.actor?.short_label||name,y=top+19+i*38;ctx.fillStyle='#4e627b';ctx.fillText(label.length>labelChars?label.slice(0,labelChars-1)+'…':label,left-14,y+4);ctx.strokeStyle='#edf1f7';ctx.beginPath();ctx.moveTo(left,y);ctx.lineTo(width-right,y);ctx.stroke();});
+ ctx.setLineDash([3,4]);for(const [i,p] of (axi.phases||[]).entries()){if(p.time_ps<lo||p.time_ps>hi)continue;const x=left+(p.time_ps-lo)/(hi-lo)*plotWidth;ctx.strokeStyle='#b5a6cc';ctx.beginPath();ctx.moveTo(x,top);ctx.lineTo(x,height-bottom);ctx.stroke();ctx.fillStyle='#7d679a';ctx.textAlign='center';ctx.fillText('P'+(i+1),x,11);}ctx.setLineDash([]);
+ points=[];for(const r of data){const x=left+(r.end_ps-lo)/(hi-lo)*plotWidth,y=top+19+plotRows.indexOf(r.monitor)*38,k=intent(r);ctx.fillStyle=k==='expected'?'#8654b8':k==='undeclared'?'#c64242':k==='observed'?'#7a899c':r.operation==='read'?'#3675d9':'#c98332';ctx.globalAlpha=.78;ctx.beginPath();ctx.arc(x,y,selected===r.uid?5:3.3,0,Math.PI*2);ctx.fill();points.push({x,y,row:r});}ctx.globalAlpha=1;
  ctx.fillStyle='#64768b';ctx.textAlign='center';ctx.fillText('Completion time / ns',left+plotWidth/2,height-1);
  if(!data.length){ctx.fillStyle='#65768a';ctx.fillText('No completions in this selection.',left+plotWidth/2,height-bottom-8);}
 }
@@ -120,8 +131,8 @@ function renderTable(){
  $('transactions').replaceChildren();for(const r of filtered.slice(page*size,(page+1)*size)){
   const tr=document.createElement('tr');tr.className=r.uid===selected?'selected':'';tr.tabIndex=0;
   const data=r.beats.map(b=>b.data).filter(Boolean),preview=data.slice(0,2).join(' · ')+(data.length>2?' … ('+data.length+' beats)':'');
-  const values=[ns(r.end_ps),r.operation.toUpperCase(),r.monitor,r.role,r.region,r.axi_id,r.address,preview||'—',response(r.response),ns(r.latency_ps),r.status];
-  values.forEach((v,i)=>{const td=document.createElement('td');td.textContent=v;if([5,6,7].includes(i))td.className='mono';if(i===1)td.className='op '+r.operation;if(i===8&&r.response!==null&&Number(BigInt(r.response))>=2)td.className='error';tr.append(td);});
+  const values=[ns(r.end_ps),r.operation.toUpperCase(),r.monitor,r.actor?.label||'Actor not recorded',r.role,r.region,r.axi_id,r.address,preview||'—',responseText(r),ns(r.latency_ps),r.status];
+  values.forEach((v,i)=>{const td=document.createElement('td');td.textContent=v;if([6,7,8].includes(i))td.className='mono';if(i===1)td.className='op '+r.operation;if(i===9&&intent(r)==='undeclared')td.className='error';if(i===9&&intent(r)==='expected')td.style.color='#7950a2';tr.append(td);});
   tr.onclick=()=>select(r);tr.onkeydown=e=>{if(e.key==='Enter')select(r);};$('transactions').append(tr);
  }
  text('count',filtered.length.toLocaleString()+' / '+rows.length.toLocaleString()+' observations match these filters.');text('page-label',filtered.length?'Rows '+(page*size+1)+'–'+Math.min((page+1)*size,filtered.length)+' of '+filtered.length:'No matching transactions');$('previous').disabled=page===0;$('next').disabled=(page+1)*size>=filtered.length;
@@ -130,12 +141,12 @@ function render(){metrics();renderTable();draw();}
 function nearest(event){const rect=$('timeline').getBoundingClientRect(),x=event.clientX-rect.left,y=event.clientY-rect.top;let best=null,distance=90;for(const p of points){const d=(p.x-x)**2+(p.y-y)**2;if(d<distance){distance=d;best=p;}}return best;}
 $('timeline').onmousemove=e=>{const p=nearest(e),tip=$('tooltip');tip.style.display=p?'block':'none';if(p){const r=p.row;tip.textContent=r.monitor+'\n'+r.operation.toUpperCase()+' '+r.address+' · ID '+r.axi_id+'\nCompleted '+ns(r.end_ps)+' ns · latency '+ns(r.latency_ps)+' ns\n'+response(r.response)+' · '+r.beats.length+' beats';tip.style.left=Math.min(e.clientX+14,window.innerWidth-380)+'px';tip.style.top=(e.clientY+14)+'px';}};
 $('timeline').onmouseleave=()=>$('tooltip').style.display='none';$('timeline').onclick=e=>{const p=nearest(e);if(p)select(p.row);};
-for(const id of ['search','boundary','plane','operation','axi-id','address-from','address-to','time-from','time-to','response','state','role','region'])$(id).addEventListener('input',apply);
-$('initiator-only').onchange=draw;$('clear').onclick=()=>{for(const id of ['search','boundary','plane','operation','axi-id','address-from','address-to','time-from','time-to','response','state','role','region'])$(id).value='';apply();};
+for(const id of ['search','boundary','plane','operation','axi-id','address-from','address-to','time-from','time-to','response','state','role','region','intent'])$(id).addEventListener('input',apply);
+$('initiator-only').onchange=draw;$('clear').onclick=()=>{for(const id of ['search','boundary','plane','operation','axi-id','address-from','address-to','time-from','time-to','response','state','role','region','intent'])$(id).value='';apply();};
 $('previous').onclick=()=>{if(page>0){page--;renderTable();}};$('next').onclick=()=>{if((page+1)*size<filtered.length){page++;renderTable();}};
 function download(name,data,type){const url=URL.createObjectURL(new Blob([data],{type})),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 $('json').onclick=()=>download(run.target+'-axi-filtered.json',JSON.stringify({...report,sections:{axi:{...axi,transactions:filtered}}},null,2),'application/json');
-$('csv').onclick=()=>{const columns=['monitor','role','plane','operation','region','epoch','axi_id','address','start_ps','end_ps','latency_ps','response','status','data','strobes'];const quote=v=>'"'+String(v??'').replaceAll('"','""')+'"';const lines=[columns.join(','),...filtered.map(r=>{const v={...r,data:r.beats.map(b=>b.data).join(' '),strobes:r.beats.map(b=>b.strb||'').join(' ')};return columns.map(c=>quote(v[c])).join(',');})];download(run.target+'-axi-filtered.csv',lines.join('\r\n'),'text/csv');};
+$('csv').onclick=()=>{const columns=['monitor','actor','role','plane','operation','region','epoch','axi_id','address','start_ps','end_ps','latency_ps','response','error_intent','expected_reason','status','data','strobes'];const quote=v=>'"'+String(v??'').replaceAll('"','""')+'"';const lines=[columns.join(','),...filtered.map(r=>{const v={...r,actor:r.actor?.label||'',error_intent:intent(r),data:r.beats.map(b=>b.data).join(' '),strobes:r.beats.map(b=>b.strb||'').join(' ')};return columns.map(c=>quote(v[c])).join(',');})];download(run.target+'-axi-filtered.csv',lines.join('\r\n'),'text/csv');};
 window.addEventListener('resize',draw);render();
 </script>
 </html>

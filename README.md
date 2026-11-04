@@ -2,7 +2,12 @@
 
 [![SoC regression](https://github.com/r987r/xezim-hello-world/actions/workflows/dv-soc.yml/badge.svg)](https://github.com/r987r/xezim-hello-world/actions/workflows/dv-soc.yml)
 
-A reusable, **configuration-driven hierarchical SoC test vehicle** built from publicly available RTL. One `config/soc.yaml` selects the compute subsystems, CPU and DMA IP, memory targets, data/config NoCs, addresses, and verification scopes. The same configuration generates **SystemVerilog testbench code, NoC connectivity metadata, executable test plans, 2D diagrams, and this README's architecture section**.
+A reusable, **configuration-driven hierarchical SoC test vehicle** built from publicly available RTL. One `config/soc.yaml` selects compute subsystems, CPU IP, reserved DMA interfaces, memory targets, data/config NoCs, addresses, and verification scopes. The same configuration generates **SystemVerilog testbench code, NoC connectivity metadata, executable test plans, 2D diagrams, and this README's architecture section**. No DMA engine is currently instantiated.
+
+The [GitHub Pages verification hub](https://r987r.github.io/xezim-hello-world/)
+publishes this README, all documentation, the canonical topology and actual CI
+test results with tested commits, logs and AXI traffic reports.
+See [publication and retention](docs/publication.md).
 
 ## Architecture, real RTL connectivity, and verification
 
@@ -129,7 +134,11 @@ regression driven by the generated boot configuration package.
 The NoC and chip cocotb runs also produce a [per-test AXI run report](docs/axi-run-reports.md):
 an offline HTML page with a filterable transaction table and completion
 timeline, plus raw events/transaction JSON. Dedicated CI artifacts retain
-the pages for positive and negative runs.
+the pages for positive and negative runs. The Pages hub collects their full CI
+evidence after main workflows finish. New reports label real CPU/BFM/idle actors,
+show phase markers, and distinguish explicitly expected SLVERR requests from
+undeclared initiator errors. Normal CPU boot does not expect SLVERR; error-path
+tests deliberately inject target faults or exceed the 64-KiB memory models.
 
 ## Reproducible generation
 

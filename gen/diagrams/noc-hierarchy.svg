@@ -10,8 +10,8 @@
 <text x="90.0" y="220.0" font-size="19" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">picorv32 CPU</text>
 <text x="90.0" y="252.0" font-size="13" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">axi4_lite to AXI</text>
 <rect x="311.0" y="208.0" width="213.0" height="76.0" rx="12.0" fill="#E9F1FD" stroke="#255BAE" stroke-width="1"/>
-<text x="327.0" y="220.0" font-size="19" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">PULP iDMA + CSR</text>
-<text x="327.0" y="252.0" font-size="14" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">IP wiring pending</text>
+<text x="327.0" y="220.0" font-size="18" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">Reserved DMA / CSR</text>
+<text x="327.0" y="252.0" font-size="13" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">No engine instantiated</text>
 <rect x="542.0" y="208.0" width="235.0" height="76.0" rx="12.0" fill="#FFF2E4" stroke="#B66B22" stroke-width="1"/>
 <text x="558.0" y="220.0" font-size="19" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">Local SRAM</text>
 <text x="558.0" y="252.0" font-size="13" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">global remote address</text>
@@ -37,8 +37,8 @@
 <text x="874.0" y="220.0" font-size="19" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">serv CPU</text>
 <text x="874.0" y="252.0" font-size="13" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">wishbone to AXI</text>
 <rect x="1095.0" y="208.0" width="213.0" height="76.0" rx="12.0" fill="#E9F1FD" stroke="#255BAE" stroke-width="1"/>
-<text x="1111.0" y="220.0" font-size="19" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">PULP iDMA + CSR</text>
-<text x="1111.0" y="252.0" font-size="14" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">IP wiring pending</text>
+<text x="1111.0" y="220.0" font-size="18" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">Reserved DMA / CSR</text>
+<text x="1111.0" y="252.0" font-size="13" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">No engine instantiated</text>
 <rect x="1326.0" y="208.0" width="235.0" height="76.0" rx="12.0" fill="#FFF2E4" stroke="#B66B22" stroke-width="1"/>
 <text x="1342.0" y="220.0" font-size="19" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">Local SRAM</text>
 <text x="1342.0" y="252.0" font-size="13" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">global remote address</text>

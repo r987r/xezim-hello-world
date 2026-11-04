@@ -1,0 +1,81 @@
+name: Publish SoC verification hub
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  workflow_run:
+    workflows:
+      - Heterogeneous SoC AXI and CPU verification
+      - Full-chip coordinated CPU boot
+      - FlooNoC structural RTL compile and elaborate
+      - Checked-in FlooGen local and global NoC RTL
+    branches: [main]
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-${{ github.event_name == 'pull_request' && github.head_ref || 'publish' }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # workflow_run never executes or publishes pull-request code/artifacts.
+          ref: ${{ github.event_name == 'pull_request' && github.ref || 'main' }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python3 -m pip install -r requirements.txt
+      - name: Verify publication and report semantics
+        run: python3 -m unittest tests.test_publication tests.test_axi_report -v
+      - name: Build offline PR preview
+        if: github.event_name == 'pull_request'
+        run: python3 tools/publish_site.py
+      - name: Collect trusted main evidence and build site
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/publish_site.py --collect
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: .tools/pages-site
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python3 -m pip install -r requirements.txt
+      - name: Select Actions publishing for the enabled Pages site
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/publish_site.py --ensure-pages
+      - uses: actions/configure-pages@v5
+      - name: Deploy documentation and run evidence
+        id: deployment
+        uses: actions/deploy-pages@v4

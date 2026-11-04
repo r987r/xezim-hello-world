@@ -73,7 +73,8 @@ def load_config(path):
                 or ('context' in report and not isinstance(report['context'],str))
                 or not isinstance(report['axi'], dict)
                 or not required <= set(report['axi'])
-                or set(report['axi']) - required - {'max_events'}
+                or set(report['axi']) - required - {'max_events','actors'}
+                or ('actors' in report['axi'] and not isinstance(report['axi']['actors'],str))
                 or any(not isinstance(report['axi'][k],str) or not report['axi'][k] for k in required)
                 or type(report['axi'].get('max_events',500000)) is not int
                 or report['axi'].get('max_events',500000) <= 0):

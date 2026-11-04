@@ -222,16 +222,34 @@ def emit(cfg, noc_manifest, noc_root, out):
     (out/'soc_top.sv').write_text('\n'.join(lines)+'\n')
     emit_tb(cfg, fw, out)
     manifest = {'top':'soc_top','testbench':'full_chip_tb','cores':count,'networks':len(nets),
-                'fabric_core':'gen/supernoc/soc_noc.sv','memory_crossbar_inputs':1,
+                'fabric_core':'gen/supernoc/soc_noc.sv','dma_engines_instantiated':0,'memory_crossbar_inputs':1,
                 'memory_crossbar_outputs':len(cfg['memory_targets']),
                 'memory_controllers':'AXI slave SRAM models only; no physical HBM/DDR RTL',
-                'dma':'idle initiators and DECERR CSR targets; real iDMA not integrated',
+                'dma':'Reserved DMA boundaries; the coordinator port can host a verification AXI BFM. No iDMA engine is instantiated.',
                 'firmware':'firmware.json','reset_register_bytes':reg_bytes,
                 'memory_models':[{'name':t['name'], 'base':int(next(r['base'] for r in cfg['address_map']['data'] if r['name']==t['name']),0),
                                   'modeled_bytes':1 << cfg['verification']['memory']['model_address_bits']}
                                  for t in cfg['memory_targets']],
                 'verification_probe':'CPU0 DMA boundary AXI BFM only; disabled in standalone CPU boot',
                 'upstream':['PicoRV32','SERV','FlooNoC','PULP AXI','tech_cells_generic tc_sram','ZipCPU wbm2axilite','verilog-axi crossbar']}
+    actors = {}
+    for i, core in enumerate(cores):
+        name=core['name']
+        for plane in ('data','config'):
+            actors[f'{name}_local_{plane}.cpu']={'kind':'rtl_cpu','label':f'{core["cpu"]["ip"]} {name} (RTL CPU)',
+                                               'short_label':f'{name} {core["cpu"]["ip"]} ({plane})'}
+        actors[f'{name}_local_data.dma'] = {
+            'kind':'verification_bfm' if i==0 else 'reserved_idle',
+            'short_label':f'{name} test BFM (reserved DMA)' if i==0 else f'{name} DMA reserved / idle',
+            'label':'Verification AXI BFM at reserved DMA port' if i==0 else 'Reserved DMA port: idle, no engine'}
+    for port in noc_manifest['slaves']:
+        endpoint=port['endpoint']
+        actor={'kind':'rtl_model','label':'Upstream AXI SRAM/ROM model'} if endpoint in ('sram','boot_rom','boot_flash') else (
+            {'kind':'rtl_registers','label':'Reset register bank (RTL)'} if endpoint=='reset_ctrl' else (
+            {'kind':'rtl_model','label':'Memory crossbar and bounded AXI SRAM stand-ins'} if endpoint=='target_crossbar' else
+            {'kind':'reserved_error','label':'DECERR responder: controller/DMA registers not integrated'}))
+        actors[port['network']+'.'+endpoint]=actor
+    manifest['axi_actors']=actors
     (out/'manifest.json').write_text(json.dumps(manifest, indent=2, sort_keys=True)+'\n')
     return manifest
 
