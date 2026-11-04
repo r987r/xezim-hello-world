@@ -226,6 +226,50 @@ class FabricExplorerTests(unittest.TestCase):
         self.assertEqual(row['mesh_cycles']['global_data']['read']['avg_cycles'],8)
         self.assertIsNone(row['end_to_end_cycles']['write'])
 
+    def test_same_tree_merge_evidence_is_measured_without_rewriting_tested_sha(self):
+        data=copy.deepcopy(self.report)
+        route=next(r for r in data['routes']
+                   if r['source']=='compute0_local_data.cpu'
+                   and r['target']=='compute0.sram')
+        catalog=json.loads((ROOT/'gen/supernoc/axi_monitors.json').read_text())
+        by_ep={ep:m['id'] for m in catalog['monitors'] for ep in m['endpoints']}
+        src=by_ep[route['source']]
+        dst=by_ep[route['stages'][0]['to']]
+        phase='Fabric baseline: single-outstanding one-beat'
+        rows=[]
+        for monitor,role,start,end in ((src,'initiator',10000,100000),
+                                       (dst,'target',40000,70000)):
+            rows.append({'monitor':monitor,'role':role,
+                         'status':'complete','expected_beats':1,'issues':[],
+                         'response':'0x0','latency_ps':end-start,
+                         'start_ps':start,'end_ps':end,'address':'0x10000000',
+                         'operation':'read','plane':'data','phase':phase})
+        trace={'run':{'capture_bound':True,'capture_overflow':False,
+                      'dirty':False,'clock_period_ps':10000},
+               'sections':{'axi':{'transactions':rows,
+                                  'monitors':catalog['monitors']}}}
+        tested_sha='b'*40; site_sha='c'*40
+        with tempfile.TemporaryDirectory() as tmp:
+            folder=Path(tmp)/'runs/1-1/supernoc';folder.mkdir(parents=True)
+            (folder/'axi-transactions.json').write_text(json.dumps(trace))
+            entry={'axi':True,'passed':True,'assets':['axi-transactions.json'],
+                   'path':'runs/1-1/supernoc/report.html','source_sha':tested_sha,
+                   'target':'supernoc','engine':'cocotb-verilator',
+                   'merged_pr':17, 'verified_site_source_sha':site_sha}
+            fabric_report.attach_one_beat_observations(data,[entry],Path(tmp),site_sha)
+        obs=route['one_beat_stage_observations']
+        self.assertEqual(len(obs),1)
+        self.assertEqual(obs[0]['source_sha'],tested_sha)
+        self.assertEqual(obs[0]['source_equivalence'],'verified_same_tree')
+        self.assertTrue(obs[0]['matches_site_source'])
+        row=next(x for x in data['latency_table']['rows'] if x['route_id']==route['id'])
+        self.assertEqual(row['mesh_cycles']['compute0_local_data']['read']['avg_cycles'],6)
+        self.assertEqual(row['target_cycles']['read']['avg_cycles'],3)
+        self.assertEqual(row['end_to_end_cycles']['read']['avg_cycles'],9)
+        self.assertEqual(row['end_to_end_cycles']['read']['run_sha'],tested_sha)
+        self.assertEqual(row['end_to_end_cycles']['read']['source_equivalence'],
+                         'verified_same_tree')
+
     def test_serial_baseline_does_not_project_historical_timings(self):
         data=copy.deepcopy(self.report)
         route=next(r for r in data['routes']
