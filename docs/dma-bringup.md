@@ -9,7 +9,13 @@
 - sw/dma/dma.h and dma.c provide the shared SRAM allocator, 32-byte upstream descriptor construction, release fence and 32-bit firmware CSR submit/status/IRQ helpers. Hosted tests validate software behavior; real CPU execution of these functions is not yet integrated.
 - dv/common/dma_vectors.py generates host-side deterministic descriptor chains, SRAM contents and independent AXI expected-data checks. tools/dma_vectors.py provides CLI generation.
 
-For both BFM and CPU execution modes, reuse the same scenario and memory\nregion planner; never copy target address math into another test.\nSee [unified SRAM/DDR/HBM memory allocation](memory-allocation.md) for\nthe shared virtual Python plan, physical C region allocator, model capacity\nlimits and quiescence rules.\n\n## Boot-live-compatible SRAM allocation
+For both BFM and CPU execution modes, reuse the same scenario and memory
+region planner; never copy target address math into another test.
+See [unified SRAM/DDR/HBM memory allocation](memory-allocation.md) for
+the shared virtual Python plan, physical C region allocator, model capacity
+limits and quiescence rules.
+
+## Boot-live-compatible SRAM allocation
 
 For combined boot + DMA tests, each compute SRAM currently models only 16 KiB; the full architectural window is larger.
 
@@ -197,7 +203,8 @@ This *only* proves two DMA RTL engines in a host-assisted, CPU-reset
 simulation against bounded AXI memory targets. The CPU0 AXI BFMs are not PCIe.
 **Not yet verified:** CPU-executed DMA driver, CPU interrupt-service routines,
 hardware SS0-to-SS1 doorbells, integrated LiteDRAM/physical DDR4 or HBM,
-error-injection cases, or high-outstanding/prefetch performance. The integration is eligible to merge only after conflict resolution and the\ncombined-tree verification gates pass.
+error-injection cases, or high-outstanding/prefetch performance. The integration is eligible to merge only after conflict resolution and the
+combined-tree verification gates pass.
 
 ## CPU firmware MMIO driver — incremental contract
 
