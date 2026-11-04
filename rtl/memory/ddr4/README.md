@@ -58,6 +58,7 @@ Optional pinned upstream RTL-generation attempt, in a network-enabled environmen
     python3 tools/ip_fetch.py litedram
     python3 -m pip install -e .tools/litedram
     python3 rtl/memory/ddr4/bringup.py generate
+    python3 rtl/memory/ddr4/check_rtl.py --tool both  # separate compile-only results
 
 Generation uses local sim_model.py --sim, invoking pinned upstream litedram.gen with simulation-only reduced geometry (rather than editing upstream RTL). It writes only beneath ignored .tools/ddr4/ (enforced by a negative path guard), not the generator-owned gen/ tree. Successful generation produces a SHA-256 manifest and **generated-not-simulated** status; it is not a simulation pass.
 
@@ -65,7 +66,8 @@ Generation uses local sim_model.py --sim, invoking pinned upstream litedram.gen 
 
 - [x] Stage 0: Dedicated branch and memory-only scaffold; existing top-level files untouched.
 - [x] Stage 0: Pin reference, DDR4 profile, static interface/address checks and negative unit tests added.
-- [ ] Stage 0 acceptance: execute unit tests and preflight against current PR SHA; attach logs.
+- [x] Stage 0: 33 memory-only Python unit tests pass locally, including negative signal-direction/address-width cases and both simulator command shapes.
+- [ ] Stage 0 acceptance: run `bringup.py check` against the complete repo and capture local/CI DDR-only evidence on the final PR SHA; current shared SoC workflows do **not** run this memory-directory test suite.
 - [ ] Stage 1: Generate real DDR4 LiteDRAM + simulation-PHY Verilog from pinned source. Record generated port map, CSR map, build commands, hashes and all dependency revisions.
 - [ ] Stage 1: Isolated Verilator elaboration **and** independent Xezim compatibility check. Do not misreport structural compilation as traffic.
 - [ ] Stage 2: Initialize controller over wb_ctrl, check init_done/init_error, reset/reinit.
@@ -99,12 +101,57 @@ reject out-of-model accesses.
 Local check performed (Python 3.13 + PyYAML):
 
     python3 -m unittest discover -s rtl/memory/ddr4 -p 'test_*.py' -v
-    # Ran 23 tests, OK
+    # Ran 33 tests, OK
 
-This verifies Python contract/negative cases and capacity calculations,
+This verifies Python contract/negative cases, signal direction, control-port requirements, safe compile-command planning and capacity calculations,
 **not real generated Verilog**. The execution container lacks internet
 resolution for github.com, Verilator, Xezim and LiteX/Migen; thus pinned
 upstream generation, HDL elaboration and DDR AXI traffic are not yet
 executable here. The regular SoC PR workflows passed at previous head
 b118adaf3e4724285a9b1596a91f1b8d35284084; new commits must get
 their own green results before merging.
+
+## Upstream debugging references and isolated compile gate
+
+The generated core exports LiteX Wishbone `wb_ctrl`, plus DDR init
+status. The memory-only port checker now checks full AXI5-channel
+request/response **directions**, WSTRB/ID/data widths, controller-local
+address width (32 MiB = 25 bits), user clock/reset, init/error status,
+and Wishbone control pins (including CTI/BTE/ERR). Fake ANSI Verilog
+fixtures exercise these checks; they do **not** establish that the actual
+pinned LiteDRAM generator emits precisely these pins. Generation will
+fail closed if upstream output differs.
+
+After successful RTL generation:
+
+    python3 rtl/memory/ddr4/check_rtl.py --tool verilator
+    XEZIM_BIN=/path/to/xezim python3 rtl/memory/ddr4/check_rtl.py --tool xezim
+
+The independent checks generate a local filelist and save
+`verilator.log`, `xezim.log`, and `ddr4_compile_results.json` under
+ignored `.tools/ddr4/litedram_sim/`. A missing Verilator/Xezim binary,
+missing generated source, nonzero compile or timeout is a failure, not a
+pass. The Xezim command matches this repo's existing
+`--compile --no-cache -s <top> -f <filelist>` convention.
+**Neither engine has actually compiled this DDR4 RTL yet.**
+
+If generation raises a Python traceback under Python 3.13, examine
+[upstream LiteX issue #2152](https://github.com/enjoy-digital/litex/issues/2152)
+before creating any local Migen/CSR monkeypatch. Use Python 3.11 as
+a conservative isolated-generator baseline and record **actual**
+Migen/LiteX versions; pin those dependencies in the memory subsystem
+once a working combination is demonstrated. Do not claim Python 3.13
+is necessarily broken: that issue may be fixed in newer releases.
+
+For Verilator slowdown/OOM, check its
+[memory/runtime FAQ](https://veripool.org/guide/latest/faq.html),
+the generated DFI model's dense bank memories and the simulation-only
+geometry limit. Do not disable refresh, silently delete model storage
+or invent a fake DDR/PHY stub to make tests green.
+
+Expected functional follow-up: use upstream LiteDRAM
+[standalone generator documentation](https://github.com/enjoy-digital/litedram/blob/3506dc02e2b790011c1c147e2aad4541a6ddf836/doc/gen.md),
+initialize over Wishbone `wb_ctrl` (CPU is null), wait for
+`init_done` and ensure `init_error` is low, then run cocotbext-axi
+transaction/scoreboard tests against **real generated controller +
+DFI simulation PHY**, not the existing AXI SRAM stand-in.
