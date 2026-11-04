@@ -179,3 +179,41 @@ initialization, or run AXI traffic. In a future cocotb test, derive CSR
 addresses from the generated CSR map, translate the upstream BIOS delay
 units into verified simulation waits, and use the upstream control
 register sequencing; do **not** simply force init_done high.
+
+## Continuous DDR4 monitoring contract (mandatory, 2026-11-04)
+
+**Original coverage bug:** the ad hoc passive AXI counter started *after*
+DDR initialization and was killed after the first transfer. It therefore
+missed initialization and the later AXI burst and WSTRB tests. That bug is
+independent of cocotbext-axi's response-receiver timeout.
+
+The new memory-local passive observer (traffic_observer.py) starts before
+the first DUT clock, continuously samples AW/W/B/AR/R plus Wishbone
+acknowledgements, and remains active through all four phases:
+pre_init, initialization, traffic, post_traffic. It captures status changes,
+every accepted transfer with address, ID, data and response when present,
+plus clock heartbeats. It drives **no pins** and never replaces the
+upstream cocotbext-axi protocol/response monitor or DRAM model.
+
+The observer stops once, at test teardown, after coverage checks. Even
+on failure, it writes terminal fail status and a summary. CI uploads
+these memory-local generated artifacts:
+- ddr4_traffic_events.jsonl: capture start/end, phase events, clock
+  heartbeats, AXI and Wishbone handshakes, DDR init/reset status
+- ddr4_traffic_summary.json: verdict, phase sample totals, channel/beat
+  counts, Wishbone transactions, last observed payload, overflow status
+- ddr4_functional_result.json: PASS only when the actual AXI tests and
+  the independent verify_capture() monitoring gate both succeed
+
+Fail-closed checks catch missing clock edges (10 ns expected), premature
+monitor task termination, missing phases/channels, incomplete AW/WLAST/B
+or AR/RLAST beat accounting, event overflow, and truncated capture files.
+The tests in test_traffic_observer.py exercise deliberately broken and
+successful traces. Generation and RTL lint passing cannot mask a functional
+test or passive monitoring failure.
+
+This observer is continuously active **during a simulation**, not a
+24-hour background service between CI runs. GitHub CI trigger and job
+scheduling are a separate concern. The unresolved AXI receiver timeout
+still requires debugging even when the passive monitor records a valid
+R-channel handshake.
