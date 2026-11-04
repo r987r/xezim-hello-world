@@ -174,6 +174,10 @@ def verified_pr_tree_equivalent(client, run, tested_sha, site_sha, cache=None):
 # All unlisted files remain fingerprinted (safe default).
 FABRIC_EXCLUDED_PREFIXES = (
     'docs/', 'tests/', '.github/workflows/', 'tools/templates/site_',
+    # Staged DDR4 generation/test *not* in the active Bender NoC or chip
+    # simulation source lists. Future integration changes the included
+    # Bender/config/generated RTL input hashes and invalidates old evidence.
+    'rtl/memory/ddr4/',
 )
 FABRIC_EXCLUDED_FILES = {
     'README.md', 'AGENTS.md', 'tools/publish_site.py',
