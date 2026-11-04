@@ -11,6 +11,7 @@ import json
 from pathlib import Path
 import struct
 from tools.sram_layout import (build_sram_layout, DESC_START, DESC_BYTES as DESC_POOL_BYTES, PAYLOAD_START)
+from tools.memory_plan import configured_regions
 
 DESC = struct.Struct("<IIQQQ")  # length, flags, next, src, dst
 DESC_BYTES = DESC.size
@@ -67,8 +68,11 @@ def build_dma_vector(cfg, *, subsystem="compute0", destination="memory0.ddr0",
         limit = sram_bytes
         dst_offset = 0x3000 if destination == f"{subsystem}.sram" else PAYLOAD_OFFSET
     elif destination in [t["name"] for t in cfg["memory_targets"]]:
-        limit = 1 << cfg["verification"]["memory"]["model_address_bits"]
-        dst_offset = 0x100
+        # Share the exact Python/C modeled DDR/HBM allocation contract.
+        # The first 0x100 bytes are reserved for unrelated memory tests.
+        target_region = configured_regions(cfg, profile=profile)[destination]
+        dst_offset = target_region.base - dst_base
+        limit = dst_offset + target_region.capacity
     else:
         raise ValueError("destination is not a modeled target")
     if dst_offset + count*length > min(window_size, limit):
@@ -108,7 +112,7 @@ def build_dma_vector(cfg, *, subsystem="compute0", destination="memory0.ddr0",
         "destination_base": dst_base+dst_offset,
         "destination_modeled_bytes": limit,
         "irq_last": irq_last, "copies": copies,
-        "note": "Host-prepared vector; real DMA RTL integration not yet proven."
+        "note": "Shared scenario for isolated RTL / full-NoC BFM DMA. CPU cold boot does not preload SRAM."
     }, bytes(image))
 
 
