@@ -8,8 +8,12 @@ sdram_module: MT40A512M8
 sdram_module_nb: 8
 sdram_rank_nb: 1
 cmd_latency: 1
-input_clk_freq: 150000000
-sys_clk_freq: 150000000
+# SimPlatform uses one pass-through source clock; match the actual 10 ns
+# cocotb clock and the independently measured 100 MHz fabric test clock.
+# This is the simulation profile, NOT a silicon PHY frequency constraint.
+input_clk_freq: 100000000
+sys_clk_freq: 100000000
+# Xilinx physical IODELAY reference is unused by SDRAMPHYModel --sim.
 iodelay_clk_freq: 300000000
 cmd_buffer_depth: 16
 with_refresh: true
