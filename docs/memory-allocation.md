@@ -4,6 +4,33 @@ The single allocator is `sw/common/memory_pool.[ch]`. Existing
 `soc_sram_pool_*` and `soc_dma_arena_*` APIs are compatibility wrappers
 around the same implementation, **not independent bump allocators**.
 
+## One test framework, two execution adapters
+
+The test scenario, memory regions, expected contents, INIT/RUN/CHECK
+lifecycle and AXI correlation are common. **CPU and BFM are modes of
+execution, not independently maintained test definitions or scoreboards.**
+The existing `dv/common/dma_vectors.py` BFM fixture now obtains DDR/HBM
+physical target windows from the same `tools/memory_plan.py` used to
+predict allocations for CPU mode; `tools/sram_layout.py` remains the
+shared boot-live/dma-only SRAM placement contract.
+
+- `cpu`: Only real boot copies firmware to cold SRAM. Compiled C must call
+  the shared `soc_mem_*` allocator, build descriptors and program the
+  existing DMA CSR over the real configuration NoCs. Python observes and
+  checks; it must not preload or masquerade as the CPU.
+- `bfm`: The same scenario's intended regions, descriptor ABI and golden
+  payloads are prepared by cocotb AXI agents via actual NoC transactions
+  for quicker isolated/integration debugging. The CPU is held in reset.
+- Both: Use the same passive AXI monitors and report generator to validate
+  accepted request/response handshakes and independent memory readback.
+
+Keeping an isolated RTL bench and a full-chip boot bench is deliberate
+verification *coverage*, not a second memory allocator or architecture.
+The existing compiled C run-hook file is **not wired into a runnable SoC
+regression** yet. No full-chip CPU-executed C DMA claim is made without a
+cross-compiler, linked image, loaded immutable flash, execution and
+observed DMA traffic. Do not merge based on hosted tests alone.
+
 ## Two coordinated contexts
 
 | Context | Responsibility | What it must not do |
