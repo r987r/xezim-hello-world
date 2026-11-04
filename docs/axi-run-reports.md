@@ -123,6 +123,36 @@ addition to their full evidence artifacts. Download the artifact from the
 Actions run, extract it and open a target's `report.html`; GitHub artifact
 downloads do not execute or host the HTML page directly.
 
+## Controlled one-beat fabric latency baseline
+
+The existing **supernoc** test runs serial one-beat transactions across each allowed
+initiator-to-target route before applying concurrent stalls/bursts or faults.
+It uses three distinct addresses per route and checks the correct destination,
+write data and readback. This does not replace concurrent traffic tests.
+
+The passive AXI collector records a measured clock period and annotates each
+AR/AW with its test phase. Per-mesh request and response timing is published
+only when the complete, clean, successful capture matches the Pages source SHA
+exactly, the clock period is known, and all boundaries agree uniquely on
+address, plane, operation, one-beat length and ordering.
+
+Each mesh's request delay runs from incoming AXI acceptance to outgoing
+AXI acceptance. Response delay runs from downstream B/RLAST acceptance
+to upstream B/RLAST acceptance. The final target-facing AXI service
+covers the last target port's request-to-completion interval; in the memory
+subsystem it includes the behavioral memory crossbar and model, **not** an
+isolated DDR/HBM controller or device measurement. The sums must equal the
+measured end-to-end request-to-completion interval, or the trace is rejected.
+
+All timing values are retained in picoseconds; reported cycles divide by
+the **observed simulation clock period**, not an assumed hardware frequency.
+Individual router/flit/NI latencies, inter-mesh physical link costs and
+standalone target service are still unknown. Stalled, unmatched and
+historical captures remain end-to-end observations with explicit provenance,
+not fabricated per-mesh timing.
+
+After merging, a same-SHA passing main-branch NoC run must be published
+before the public Fabric Explorer can show a current-source decomposition.
 ## Extension points
 
 New captures record CPU/test phase markers and explicit one-request expected
