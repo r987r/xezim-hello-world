@@ -66,6 +66,18 @@ int cpu_dma_run(void) {
         !soc_mem_alloc(&hbm, PAYLOAD_BYTES, 64, &hbm_dst)) {
         *evidence = 0xd0000002u; return 2;
     }
+    /* Publish the CPU's ACTUAL runtime allocator results to reserved
+     * mailbox telemetry. Python independently computes the same physical
+     * addresses using configured model regions; this is not a preload.
+     */
+    volatile uint32_t * const allocation_report =
+        (volatile uint32_t *)(uintptr_t)(SOC_MAILBOX + STATUS_OFFSET + 4u);
+    allocation_report[0] = (uint32_t)src.phys;
+    allocation_report[1] = (uint32_t)peer_dst.phys;
+    allocation_report[2] = (uint32_t)ddr_dst.phys;
+    allocation_report[3] = (uint32_t)(ddr_dst.phys >> 32);
+    allocation_report[4] = (uint32_t)hbm_dst.phys;
+    allocation_report[5] = (uint32_t)(hbm_dst.phys >> 32);
     volatile uint8_t * const dst =
         (volatile uint8_t *)(uintptr_t)peer_dst.phys;
     uint8_t * const src_bytes = (uint8_t *)src.cpu_ptr;
