@@ -22,4 +22,4 @@ class DmaSoftwareTests(unittest.TestCase):
                            check=True, capture_output=True, text=True)
             result = subprocess.run([str(output)], check=True,
                                     capture_output=True, text=True)
-            self.assertIn("PASS dma C descriptor allocator and chain ABI", result.stdout)
+            self.assertIn("PASS dma C descriptor allocator, chain ABI and CPU CSR driver", result.stdout)
