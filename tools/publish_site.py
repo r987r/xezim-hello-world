@@ -548,7 +548,8 @@ def build(output,evidence,repository,sha,config):
     fabric_report.attach_one_beat_observations(fabric, entries, output, sha)
     dump(output/'data/fabric.json',fabric)
     from design_explorer import catalog as design_catalog
-    dump(output/'data/design-graph.json', design_catalog(ROOT))
+    design_graph = design_catalog(ROOT)
+    dump(output/'data/design-graph.json', design_graph)
     dataset={'schema_version':1,'title':config['title'],'source_sha':sha,'repository':repository,
              'built_at':datetime.now(timezone.utc).isoformat(),'runs':runs,'entries':entries,
              'notes':notes,'documents':docs,'networks':noc['networks'],'chip':chip,
@@ -557,6 +558,9 @@ def build(output,evidence,repository,sha,config):
     data=json.dumps(dataset,separators=(',',':')).replace('<','\\u003c')
     for page in ('index','topology','explorer','fabric','runs','docs','reference'):
         body=(ROOT/('tools/templates/site_'+page+'.html')).read_text().replace('__SITE_DATA__',data)
+        if page=='explorer':
+            graph_data = json.dumps(design_graph, separators=(',', ':')).replace('<','\\u003c')
+            body = body.replace('__GRAPH_DATA__',graph_data)
         if page=='fabric':
             fabric_data=json.dumps(fabric,separators=(',',':')).replace('<','\\u003c')
             body=body.replace('__FABRIC_DATA__',fabric_data)
