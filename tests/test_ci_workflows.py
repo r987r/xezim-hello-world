@@ -34,6 +34,8 @@ class WorkflowPolicyTests(unittest.TestCase):
         noc=(ROOT/'.github/workflows/floonoc-elab.yml').read_text()
         self.assertNotIn("'tools/templates/**'",noc)
         self.assertIn("'tools/templates/run_report.html'",noc)
+        self.assertIn("'tools/fabric_report.py'",noc)
+        self.assertNotIn("'tools/templates/site_fabric.html'",noc)
 
 if __name__=='__main__':
     unittest.main()
