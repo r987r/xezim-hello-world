@@ -23,7 +23,8 @@ The entire data/config NoC hierarchy is exercised through **one** integrated
 - **Data/config protocol:** FlooGen carries AXI4 physical transport for
   both; config operations are single-beat 32-bit accesses. Actual CPU/CSR
   AXI4-Lite CPU/reset bridges execute in the separate chip boot scope.
-  DMA/controller CSR bridges remain future integration work.
+  The optional DMA CSR/doorbell bridge now exists in the generated
+full-chip DMA configuration; memory-controller CSR integration remains future work.
 - **Test acceptance:** reports must show actual B/R OKAY, correct data
   readback at the intended endpoint and all 28 source/window routes across
   the **connected** local/global data/config networks. The same test runs
@@ -121,8 +122,8 @@ The NoC wrapper terminates true external CPU/DMA/CSR/SRAM boundaries
 using reusable AXI BFMs. Real CPU, DMA, SRAM register adapters, and the
 memory target crossbar are **not attached to this BFM wrapper**. The separate
 [CPU boot configuration](full-chip-boot.md) instantiates the same shared
-NoC core with real CPUs, SRAM, reset adapters and AXI memory models; real
-iDMA remains unintegrated. Physical HBM/DDR controllers
+NoC core with real CPUs, SRAM, reset adapters and AXI memory models; optional PULP iDMA/CSR RTL is now generator-connected in the separate
+full-chip DMA mode, with CI gating real traffic. Physical HBM/DDR controllers
 remain future work. A successful NoC BFM test does not imply the complete
 CPU+iDMA+memory system is functional.
 

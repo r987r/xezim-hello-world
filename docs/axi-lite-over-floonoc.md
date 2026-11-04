@@ -7,7 +7,9 @@ declares `protocol: AXI4`. **It is not an AXI4-Lite native transport**.
 Separate global and local configuration NoCs use 32-bit AXI4 wire ports.
 The connected BFM regression sends single-beat, non-atomic AXI4 accesses.
 The chip boot configuration attaches real CPU AXI4-Lite bridges and reset
-CSR registers. DMA/controller CSRs remain pending.
+CSR registers. DMA CSR endpoints are generator-wired in optional `DmaEnable=1` mode,
+with upstream AXI-to-Lite register logic and 32-bit HEAD staging; controller
+CSRs remain pending.
 
 The chip boot path converts CPU AXI4-Lite through upstream `axi_lite_to_axi`,
 traverses local/global/remote-local config FlooNoCs as needed, then converts
@@ -60,7 +62,8 @@ compile in Verilator and Xezim, and pass routed single-beat AXI4 BFM
 read/write, byte-strobe, stall and SLVERR checks in Verilator. Actual
 CPU AXI4-Lite bridge instances and the reset register bank also execute
 in the chip boot scope; secondary CPUs acknowledge initialization through
-the remote configuration path. DMA/controller registers remain pending.
+the remote configuration path. DMA registers are generated and are verified by the separate `chip-dma`
+regression once CI passes. Physical memory-controller registers remain pending.
 The 0x40030000 memory controller register aperture is reserved
 only. It is not yet a working controller.
 

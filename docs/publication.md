@@ -62,12 +62,14 @@ relative so project Pages URLs and nested report/document paths work.
 
 ## DMA names and expected errors
 
-There are **zero instantiated DMA engines** in the chip boot configuration.
-`dma` and `dma_regs` are reserved architecture endpoint names, not evidence of
-integration. The chip test temporarily drives compute0's reserved initiator
-with upstream `cocotbext-axi` verification BFM traffic after the real CPUs finish
-coordination. Compute1's DMA boundary remains idle. Generated actor metadata and
-new reports explicitly distinguish real CPUs, BFMs, idle ports and error responders.
+There are **zero active DMA engines in the default cold-boot mode**
+(`DmaEnable=0`). The chip test temporarily drives compute0's otherwise
+inactive DMA manager with the upstream verification BFM after CPU coordination.
+A separate explicit `DmaEnable=1, DmaTestMode=1` configuration generates real
+DMA engines and CSR bridges for both SS0 and SS1, and substitutes host BFMs
+at CPU0's data/config NoC managers while the CPUs are held reset. Actor
+metadata distinguishes these two test modes; a DMA simulation should
+never be counted as a cold-boot or CPU-driver test.
 
 Normal CPU boot expects OKAY. SLVERR checks are deliberate verification stimuli:
 24 write/read pairs at injected faulty NoC targets, and four out-of-capacity

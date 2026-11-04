@@ -59,8 +59,8 @@ explicit supported limits; other values are rejected.
 2. Run `make dv-boot`: CPU0 executes Boot ROM, reads flash, writes both blank
    SRAMs, releases CPU1 via reset MMIO, and requires **both** CPU signatures.
 3. Run `make dv-chip` for the implemented local/global NoCs, upstream
-   AXI/AXI-Lite bridges and CPU0-coordinated phases. Real programmable
-   PULP iDMA is the next hardware integration step.
+   AXI/AXI-Lite bridges and CPU0-coordinated phases. PULP iDMA is generated in an optional separate hardware configuration;
+   CPU-started descriptors and interrupt-driven firmware remain next.
 
 Xezim 0.11.4 uses unmodified upstream SERV RTL. The prior compatibility
 workaround and the independent regression are documented in [boot-debug.md](boot-debug.md).
@@ -86,8 +86,8 @@ is also useful for bypass/accelerated tests, but such tests must be labeled
 | Local SRAM0 | `0x10000000` | R/W 32-bit | volatile 16-KiB modeled subset of 1-MiB window |
 | Local SRAM1 | `0x11000000` | R/W 32-bit | volatile 16-KiB modeled subset of 1-MiB window |
 | Boot flash | `0x20000000` | read-only 32-bit | immutable model backing flash slots |
-| DMA0 CSR | `0x40000000` | AXI4-Lite | **planned**, no register bank yet |
-| DMA1 CSR | `0x40010000` | AXI4-Lite | **planned**, no register bank yet |
+| DMA0 CSR | `0x40000000` | AXI4-Lite | optional AXI4-to-Lite and staged 64-bit head/doorbell CSR in `DmaEnable=1` |
+| DMA1 CSR | `0x40010000` | AXI4-Lite | optional AXI4-to-Lite and staged 64-bit head/doorbell CSR in `DmaEnable=1` |
 | Reset control | `0x40020000` | R/W 32-bit | legacy boot responder and chip PULP AXI-Lite register bank |
 | Memory controller CSR aperture | `0x40030000` | 32-bit config transport | **reserved**, BFM storage only in the NoC test; no controller register RTL |
 | HBM data | `0x1_00000000` | AXI4 64-bit | AXI RAM in memory DV; bounded AXI SRAM stand-in in chip boot |
@@ -96,7 +96,7 @@ is also useful for bypass/accelerated tests, but such tests must be labeled
 `memory0.ctrl` reserves one subsystem aperture; it does not invent actual
 HBM/DDR controller registers. Per-controller register maps must come from
 the selected controller's real management interface. CPU0 and CPU1 are 32-bit cores and **cannot directly
-load/store addresses above 4 GiB**; later DMA engines will have 64-bit
+load/store addresses above 4 GiB**; the generated DMA engines have 64-bit
 source/destination registers for transfers to HBM/DDR.
 
 The legacy bootstrap responder supports aligned, full-word transfers only.
@@ -114,9 +114,9 @@ permissions. Secure boot is **not implemented**.
 2. Add a minimal SPI/QSPI reader or a debug/UART streaming boot interface;
    keep exactly the same image/load, reset and completion contracts. Test
    *traffic-driven* SRAM loading (no SRAM backdoor preload in cold boot).
-3. Integrate PULP iDMA frontend CSRs: CPU0 programs source, destination,
+3. Integrate CPU-side descriptor/IRQ firmware with the generated PULP iDMA CSR: CPU0 prepares descriptor chains,
    length, status and interrupt. Accelerate future firmware staging/copies.
-4. Attach real DMA/controller endpoints alongside the CPU/SRAM/reset
+4. Validate the optional real DMA/CSR endpoints, then add memory controllers alongside CPU/SRAM/reset
    attachments in the chip boot scope. CPU0 must initialize controllers and
    wait for DDR/HBM ready before issuing DMA there.
 5. Extend the implemented addressable secondary reset with recovery/error

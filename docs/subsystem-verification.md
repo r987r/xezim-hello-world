@@ -14,11 +14,11 @@ single connected BFM test's coverage and results.
 | `memory_tb` | Real Verilog-AXI 2x2 crossbar, independent HBM/DDR behavioral windows, full/sparse route tests |
 | `boot_tb`, SRAM and SERV checks | Preserve real two-core cold boot, no SRAM preload, independent bring-up checks |
 | `supernoc_tb` | One generated wrapper, all eight real meshes, upstream AXI agents, local/remote reads/writes and stress/error checks |
-| compute0 boot configuration | PicoRV32/SRAM/upstream adapters connected; real iDMA/CSRs next |
-| compute1 boot configuration | SERV/Wishbone/AXI adaptation and SRAM connected; real iDMA next |
-| config endpoints | CPU/reset AXI-Lite boundaries connected; DMA/controller registers remain pending |
+| compute0 boot configuration | PicoRV32/SRAM/upstream adapters connected; optional real iDMA/CSR generated for DMA test mode |
+| compute1 boot configuration | SERV/Wishbone/AXI adaptation and SRAM connected; optional real iDMA generated for DMA test mode |
+| config endpoints | CPU/reset AXI-Lite boundaries connected; DMA CSR bridge generated in DMA mode; controller registers pending |
 | memory boot configuration | Local NoC attached to target crossbar and AXI slave models; both global memory ingress links retained |
-| full-chip boot | Real CPUs coordinate init/run/check; upstream AXI BFM checks HBM/DDR stand-ins; real DMA/physical endpoints remain pending |
+| full-chip boot | Real CPUs coordinate init/run/check; upstream AXI BFM checks HBM/DDR stand-ins; optional DMA connections generated but must pass full-chip CI; physical controllers pending |
 
 Do not add another testbench per bridge, router or simulator issue.
 Extend the one integrated NoC DUT and the substantive subsystem scopes.
@@ -43,5 +43,5 @@ NoC transaction path yet. Preserve diagnostics in
 Unmapped NoC accesses assert upstream `DecodeError`; they are not yet
 handled as recoverable DECERR. The NoC BFM error test injects mapped
 slave faults and checks propagated SLVERR. Sparse crossbar DECERR tests
-remain a separate scope. Real HBM/DDR timing, PHYs, coherency, iDMA,
-interrupts, reset-during-traffic and UVM VIP integration remain future work.
+remain a separate scope. Real HBM/DDR timing, PHYs, coherency, CPU-triggered DMA/interrupt firmware,
+reset-during-traffic and UVM VIP integration remain future work.
