@@ -6,7 +6,7 @@
 
 - Reuse pinned PULP iDMA with its descriptor frontend and generated AXI backend. Do not write another DMA engine.
 - Reuse existing cocotb + cocotbext-axi drivers, AXI trace collection, and declarative regression framework.
-- sw/dma/dma.h and dma.c provide a portable freestanding SRAM arena, 32-byte upstream descriptor construction, bounds checks and a release fence; no heap is required.
+- sw/dma/dma.h and dma.c provide the shared SRAM allocator, 32-byte upstream descriptor construction, release fence and 32-bit firmware CSR submit/status/IRQ helpers. Hosted tests validate software behavior; real CPU execution of these functions is not yet integrated.
 - dv/common/dma_vectors.py generates host-side deterministic descriptor chains, SRAM contents and independent AXI expected-data checks. tools/dma_vectors.py provides CLI generation.
 
 ## Boot-live-compatible SRAM allocation
@@ -84,28 +84,6 @@ CHECK completion and user quiescence. Executing SRAM firmware and observed
 mailboxes remain reserved. Reusing those requires a verified CPU handoff,
 relocation/parking outside reclaimed SRAM, and retired AXI accesses; that
 runtime handoff is future work.
-
-## Split-run SRAM reuse: explicit profiles
-
-The shared SRAM allocation policy supports two contexts:
-
-- `boot_live`: preserves executing firmware and coordination mailboxes.
-  Descriptor pool begins at SRAM + 0x1000; payload at +0x2000.
-  CPU0 still copies firmware through the real buses, never via preload.
-- `dma_only`: separate simulation, starting at reset with CPUs stopped.
-  Reuses the boot area: descriptors begin at SRAM + 0x0000 and the
-  12 KiB payload pool starts at +0x1000 (for the current 16 KiB SRAM).
-
-Use `python3 tools/dma_vectors.py --profile dma_only` for an isolated
-DMA run, or `--profile boot_live` for a future combined CPU + DMA run.
-The host CLI defaults to dma_only. The Python API defaults to boot_live
-to preserve existing integration-test address expectations. case.json
-records the profile and all physical regions.
-
-The original cold-boot regression must never use dma_only. For a running
-chip, only a distinct boot_scratch region is presently releasable after
-CHECK and quiescence; executing SRAM firmware and live mailboxes cannot be
-reclaimed until a verified relocation/parking and access-drain handoff.
 
 ## Automated SS0/SS1 DMA and NoC integration
 
@@ -220,3 +198,25 @@ simulation against bounded AXI memory targets. The CPU0 AXI BFMs are not PCIe.
 **Not yet verified:** CPU-executed DMA driver, CPU interrupt-service routines,
 hardware SS0-to-SS1 doorbells, integrated LiteDRAM/physical DDR4 or HBM,
 error-injection cases, or high-outstanding/prefetch performance. The integration is eligible to merge only after conflict resolution and the\ncombined-tree verification gates pass.
+
+## CPU firmware MMIO driver — incremental contract
+
+`sw/dma/dma.[ch]` exposes `soc_dma_mmio_submit`,
+`soc_dma_mmio_wait_irq`, and `soc_dma_mmio_ack_irq`. The first
+rejects unaligned descriptor heads and STATUS busy/IRQ/error, performs two
+32-bit HEAD writes, publishes a release fence, and rings the one-shot
+COMMAND doorbell. Polling is bounded and returns failure on APB submission
+errors. The helpers are deliberately independent of the host AXI BFM.
+
+**This is software API and hosted-test coverage, not CPU-executed SoC DMA.**
+A live-CPU test must still add a verified firmware image/link path,
+CPU-side DMA MMIO and CPU interrupt routing/service (or bounded polling),
+and independent NoC readback/writeback checks. Running DMA and boot together
+requires `boot_live`, never `dma_only`. The 32-bit PicoRV32/SERV CPU
+cannot directly map a 64-bit memory window without a reviewed address
+translation/indirection mechanism; the descriptor pointer halves do not
+grant CPU accessibility to the >4-GiB destinations. Do not reclaim pools
+on APB_BUSY deassertion; wait for completed writebacks and actual DMA idle.
+Cacheful CPUs will additionally require cache maintenance. The current RTL
+DMA backend uses `NO_ERROR_HANDLING`; do not mistake STATUS bit2 (APB
+submission error) for a downstream AXI read/write-fault report.
