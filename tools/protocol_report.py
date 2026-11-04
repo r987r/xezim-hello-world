@@ -12,6 +12,7 @@ import os
 import subprocess
 from pathlib import Path
 import re
+from dv.common.protocol_trace import normalize_sources
 
 PROTOCOL = re.compile(r"^[a-z][a-z0-9_.-]{0,95}$")
 SAFE_INT = 2**53 - 1
@@ -102,8 +103,7 @@ def parse_capture(path: Path, configured_sources: dict):
     """
     if not path.is_file():
         raise ValueError("configured protocol capture missing")
-    sources = {_source(name): _source(protocol)
-               for name,protocol in configured_sources.items()}
+    sources = normalize_sources(configured_sources)
     if not sources:
         raise ValueError("empty protocol capture catalog")
     lines = path.read_text().splitlines()
@@ -127,8 +127,11 @@ def parse_capture(path: Path, configured_sources: dict):
         if kind not in ("start", "end", "event", "transaction"):
             raise ValueError(f"unsupported event kind {kind}")
         if kind == "start":
-            if source in starts or counts[source] or source in ends or event.get("protocol") != sources[source]:
+            if source in starts or counts[source] or source in ends or event.get("protocol") != sources[source]["protocol"]:
                 raise ValueError("invalid or duplicate capture_start")
+            for attr in ("clock_domain", "role", "implementation", "modeling"):
+                if event.get(attr) != sources[source][attr]:
+                    raise ValueError(f"protocol source metadata changed: {source}.{attr}")
             starts.add(source)
             continue
         if source not in starts or source in ends:
@@ -174,10 +177,7 @@ def parse_capture(path: Path, configured_sources: dict):
         raise ValueError("protocol capture missing one or more required start/end markers")
     if failed_sources:
         raise ValueError('protocol capture ended with failure: ' + ', '.join(sorted(failed_sources)))
-    return {"sources": [{"id": name, "protocol": protocol,
-                          "role": "unspecified", "clock_domain": "unknown",
-                          "implementation": "external_vip_or_testbench"}
-                         for name,protocol in sources.items()],
+    return {"sources": list(sources.values()),
             "records": records, "events": counts}
 
 
