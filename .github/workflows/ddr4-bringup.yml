@@ -34,11 +34,37 @@ jobs:
           python3 -m unittest discover -s rtl/memory/ddr4 -p 'test_*.py' -v
           python3 rtl/memory/ddr4/bringup.py check
 
-      - name: Fetch pinned LiteDRAM and install its dependencies
+      - name: Fetch pinned LiteX and LiteDRAM generator dependencies
         run: |
           set -euo pipefail
           python3 tools/ip_fetch.py litedram
-          python3 -m pip install --disable-pip-version-check -e .tools/litedram
+          # PyPI litex==2024.12 cannot satisfy this 2026 LiteDRAM pin:
+          # litedram/gen.py imports SoCCore from litex.soc.integration.soc.
+          # Use the reviewed immutable LiteX source instead; do not patch IP.
+          python3 - <<'PY'
+          import pathlib, re, subprocess, yaml
+          pin = yaml.safe_load(pathlib.Path("rtl/memory/ddr4/toolchain.lock.yml").read_text())["litex"]
+          assert re.fullmatch(r"[0-9a-f]{40}", pin["commit"])
+          dest = pathlib.Path(".tools/litex")
+          dest.parent.mkdir(parents=True, exist_ok=True)
+          subprocess.run(["git", "init", "-q", str(dest)], check=True)
+          subprocess.run(["git", "-C", str(dest), "remote", "add", "origin", pin["git"]], check=True)
+          subprocess.run(["git", "-C", str(dest), "fetch", "-q", "--depth", "1", "origin", pin["commit"]], check=True)
+          subprocess.run(["git", "-C", str(dest), "checkout", "-q", "--detach", pin["commit"]], check=True)
+          sha = subprocess.check_output(["git", "-C", str(dest), "rev-parse", "HEAD"], text=True).strip()
+          assert sha == pin["commit"], (sha, pin["commit"])
+          print("LiteX pinned SHA:", sha)
+          PY
+          python3 -m pip install --disable-pip-version-check -e .tools/litex
+          python3 -m pip install --disable-pip-version-check --no-deps -e .tools/litedram
+          python3 - <<'PY'
+          from litex.soc.integration.soc import SoCCore
+          from litex.soc.integration.builder import Builder
+          from litedram import gen
+          import importlib.metadata as meta
+          print("Verified generator prerequisites:", SoCCore, Builder, gen.LiteDRAMCore)
+          print("litex:", meta.version("litex"), "litedram:", meta.version("litedram"))
+          PY
           mkdir -p .tools/ddr4
           python3 -m pip freeze > .tools/ddr4/dependency_versions.txt
           git -C .tools/litedram rev-parse HEAD
