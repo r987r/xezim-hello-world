@@ -142,3 +142,27 @@ through all local/global data NoCs and memory models. The CPU cold-boot
 regression remains unpreloaded. **The new integrated regression should be
 treated as unverified until its CI gate passes**, regardless of whether
 `make gen` produces structurally connected RTL.
+
+## AXI test-mode isolation and regression diagnostics
+
+When `DmaTestMode=1`, the host BFM borrows the coordinator CPU0's AXI
+data/config NoC ports **only** after all CPU cores are held in reset. The
+generator muxes the BFM requests onto those ports and explicitly returns
+zero AXI responses to the inactive CPU adapters. This is required because
+feeding host-issued B/R responses into a CPU-side width converter with no
+matching requests violates the upstream `cc_rr_arb_tree` request invariant.
+
+The first full-chip hardware run ([failed diagnostic run
+41867680450](https://github.com/r987r/xezim-hello-world/actions/runs/41867680450))
+reported exactly that upstream assertion after a successful 128-byte
+SRAM write. The fix is real request/response ownership isolation, **not**
+disabling assertions or changing third-party FlooNoC or AXI RTL. The
+generator now has a regression assertion guarding this behavior. Keep
+the full-chip DMA stage explicitly failing until a later CI run demonstrates
+both complete DMA chains, SRAM writebacks and IRQs.
+
+The CSR command word is one-shot. While a submitted descriptor head waits
+for APB acceptance, the hardware-loaded COMMAND byte stalls colliding
+AXI-Lite submissions, rather than silently dropping a second head. This is
+only front-end submission ordering; descriptor memory itself must still
+remain allocated until transfer retirement.
