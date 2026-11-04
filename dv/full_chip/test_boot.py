@@ -70,6 +70,28 @@ async def coordinated_cold_boot(dut):
         assert events_file.is_file(), "missing passive NoC AXI events"
         regions = configured_regions(yaml.safe_load(
             (ROOT/"config/soc.yaml").read_text()))
+        from tools.memory_plan import validate_cpu_allocation
+        # C writes its *actual* allocated physical addresses into the
+        # reserved mailbox telemetry. Decode observed RTL SRAM stores and
+        # compare them with an independently allocated Python virtual plan.
+        assert int(dut.cpu_dma_address_seen.value) == 0x3f
+        actual_addresses = int(dut.cpu_dma_addresses.value)
+        recorded = [(actual_addresses >> (32*i)) & 0xffffffff
+                    for i in range(6)]
+        predicted = [
+            regions["compute0.sram.payload"].allocate(
+                64, 64, owner="cpu0", phase="run"),
+            regions["compute1.sram.payload"].allocate(
+                64, 64, owner="cpu0", phase="run"),
+            regions["memory0.ddr0"].allocate(
+                64, 64, owner="dma0", phase="run"),
+            regions["memory0.hbm0"].allocate(
+                64, 64, owner="dma0", phase="run")]
+        for observed, expected in zip(
+                (recorded[0], recorded[1],
+                 recorded[2] | (recorded[3] << 32),
+                 recorded[4] | (recorded[5] << 32)), predicted):
+            validate_cpu_allocation(observed, expected)
         from tools.axi_report import read_events
         events, issues = read_events(events_file)
         assert not issues, f"bad AXI trace: {issues[:3]}"
