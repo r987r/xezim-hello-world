@@ -13,9 +13,12 @@ Never invent a custom bus fabric, SRAM or AXI VIP simply because it is easy.
 **Do not claim the full SoC is running from a scoped NoC BFM pass**: `fabrics.global_data.backend: floonoc`
 in `config/soc.yaml` denotes selected architecture only. The current
 `tools/noc_backends.py` has `floonoc.executable=False` and likewise
-`pulp_axi.executable=False`. There is **no full-chip soc_top**. The
-Verilog-AXI crossbar testbench and two-core boot testbench are separate,
-real executable *scopes*. Read [implementation-status](docs/implementation-status.md)
+`pulp_axi.executable=False`. `gen/chip/soc_top.sv` is now an actual **chip boot configuration** with
+real CPUs, the shared NoCs, upstream AXI adapters, SRAM, reset registers
+and AXI memory stand-ins. Real iDMA/CSRs and physical controllers remain
+unintegrated. The generic backend flag still does not describe a complete
+arbitrary-configuration SoC emitter. Legacy memory/boot benches remain
+independent executable scopes. Read [implementation-status](docs/implementation-status.md)
 before describing progress.
 
 Keep boot cold: CPU0 must really read ROM/flash, write **uninitialized**
@@ -40,10 +43,11 @@ resolved in pinned Xezim 0.11.4 and the historical bug reproducer was removed fr
    `tools/noc_diagrams.py` reads **actual generated** FlooGen YAML and
    manifest for every mesh; it produces one complete SoC/FlooNoC SVG preview, one Mermaid source, and Diagram-gen-style JSON
    (`gen/diagrams/noc-topology.json`). The local router-router/NI
-   edges are **generated structural RTL**; all cross-NoC and CPU/DMA/CSR
-   endpoint links remain **planned** in the full SoC. Cross-NoC wiring
-   exists in the separate generated `supernoc_tb`; its traffic gate is
-   `make dv-supernoc`. Never conflate that scope with real CPU/DMA/CSR wiring.
+   edges are **generated structural RTL**; the shared `gen/supernoc/soc_noc.sv` connects the networks.
+   `gen/chip/soc_top.sv` adds real CPU/SRAM/reset attachments and a target
+   crossbar with AXI memory stand-ins. iDMA/CSR and physical-controller
+   links remain planned. `make dv-supernoc` is the independent BFM gate;
+   `make dv-chip` proves the CPU boot configuration.
    FlooNoC does not directly render Diagram-gen; use our generated
    Diagram-gen-style instance/connection/group metadata, and avoid
    inventing router positions or claiming a 3D viewer integration test
@@ -90,8 +94,9 @@ upstream PULP AXI bridge tests. For every NoC, review checked-in
 `floo_xezim_*_noc.sv` and `*_pkg.sv` rather than a CI-only archive.
 Commit generated outputs alongside their input config. A checked-in
 NoC is **structural RTL** until actual upstream dependency compilation,
-elaboration and request/response traffic pass; the backend must remain
-non-executable until then.
+elaboration and request/response traffic pass; the evidence must remain scope-specific. The generic backend stays
+non-executable until a general complete SoC emitter exists; the scoped
+NoC and chip boot tests already execute real traffic.
 
 ## Linkable interface sizing gate
 
@@ -103,7 +108,7 @@ tracks planned per-fabric and per-subsystem read/write budgets, native
 PULP/FlooNoC/Verilog AXI parameter targets, and per-port overrides.
 FlooNoC chimney transaction caps are bound to generated RTL. The connected
 BFM traffic baseline is verified; maximum configured capacities and every
-parameter combination are not. Real local CPU/DMA/CSR hookups remain pending.
+parameter combination are not. CPU/reset hookups exist in the chip boot scope; real iDMA/CSRs remain pending.
 Check that configured compute local output ID width is input ID width
 plus ceil(log2(CPU/DMA initiator count)), and that global FlooGen input IDs agree.
 Never mistake planned quotas for implemented capacity or FlooGen emission
@@ -136,17 +141,21 @@ AXI_CONFIG=config/examples/memory-fabric-sparse.yaml make dv-memory
 make dv-memory-negative
 make dv-sram
 make dv-serv
+make dv-chip
 BOOT_WAVE=1 BOOT_TRACE=1 make dv-boot
 make test
 ```
 
-`make test` is the tracked default config suite. The two
-`AXI_CONFIG=...` variants are extra required runs for fabric changes:
-the first proves all ingress-target pairs; the second proves allowed
-pairs and denied read/write responses (AXI DECERR). A green unit-test
-suite by itself **does not** prove new RTL integration.
+`make test` runs all tests declared in `config/regression.yaml`, including
+full/sparse memory profiles, relocated cold boot, diagnostics and both
+simulator paths. It requires Bender 0.32.1, Verilator and pinned cocotb
+libraries as described in [docs/regression.md](docs/regression.md).
+`make test-xezim` and `make test-noc` select the blocking CI scopes. A green
+unit-test suite by itself **does not** prove new RTL integration.
 
-`scripts/common.sh` resolves `XEZIM_BIN` or a cached binary.
+`tools/regress.py` resolves `XEZIM_BIN` or a cached binary and standard
+Bender source sets. `Bender.yml` owns source ordering;
+`config/regression.yaml` owns tests/variants/suites and acceptance rules.
 `tools/ip_fetch.py` fetches pinned third-party RTL on demand to
 ignored `.tools/`. No `cargo build` or recompilation of Xezim for
 normal RTL edits. Simulator releases are built separately in
@@ -165,8 +174,8 @@ the connected super-NoC traffic and corruption checks. These are different
 verification gates from Xezim CPU/memory simulation; report them separately.
 **All eight generated local and global FlooNoC meshes now also
 compile with pinned Xezim 0.11.4** using
-`scripts/run-floonoc-xezim.sh all` and the *same upstream Bender
-filelist* as the Verilator elaboration gate. The script discovers its
+`python3 tools/regress.py compatibility` and the *same upstream Bender
+filelist* as the Verilator elaboration gate. The runner discovers its
 tops from `gen/noc/floonoc/manifest.json` so a new subsystem scales
 without editing hardcoded lists.
 **Xezim reports potentially significant RoB/FIFO port width warnings
@@ -195,17 +204,18 @@ See [docs/supernoc-verification.md](docs/supernoc-verification.md).
 
 ## One unified super-NoC traffic test
 
-`tools/supernoc_gen.py` generates **one** `gen/supernoc/supernoc_tb.sv`
-from the eight real FlooGen profiles; it uses only packed AXI4
+`tools/supernoc_gen.py` generates shared `gen/supernoc/soc_noc.sv`
+and one thin `supernoc_tb.sv` BFM wrapper from the real FlooGen profiles.
+Both the BFM wrapper and chip boot top instantiate the shared core; it uses only packed AXI4
 struct-to-flat-port assignments and true upstream FlooNoC modules.
 `dv/supernoc/test_supernoc.py` uses mature third-party
 `cocotbext-axi` `AxiMaster` and `AxiSlave` with mapped upstream
-`AddressSpace`/`SparseMemoryRegion` storage rather than custom AXI BFMs or new per-router testbenches. Run `bash scripts/run-supernoc.sh`
-after pinned Bender checkout (see `.github/workflows/floonoc-elab.yml`).
+`AddressSpace`/`SparseMemoryRegion` storage rather than custom AXI BFMs or new per-router testbenches. Run `make dv-supernoc`; the shared runner performs the pinned Bender
+checkout (see `.github/workflows/floonoc-elab.yml`).
 **Do not claim the super-NoC is working from a compile-only result.**
 A successful result must include all mapped routes, intended destination
 storage, bursts/byte strobes, concurrent reused IDs, five-channel stalls,
-and routed SLVERR checks with test logs. The optional corruption run must
+and routed SLVERR checks with test logs. The required corruption run must
 fail with its exact named mismatch. Never accept a generic compile exit
 or an empty cocotb results file. Boot routing reads use seeded BFMs only;
 the independent CPU cold-boot SRAM must stay uninitialized. Xezim remains the
@@ -253,9 +263,11 @@ Primary verification scopes: compute0, compute1, memory0, global_data
 NoC, global_config NoC, and soc_top. Avoid new per-bridge/SRAM/router
 testbench proliferation. See docs/subsystem-verification.md.
 
-Next actual integration work: use the generated FlooNoC modules in
-subsystem-level testbenches, connect real upstream AXI-Lite adapters,
-CPU and DMA/SRAM ports, and demonstrate bidirectional AXI traffic
-through local and global routers with both simulator toolchains where
-supported. Preserve the existing bus-driven cold-boot proof. HBM/DDR
+The chip boot configuration uses the same generated NoC assembly as
+the BFM scope. See [docs/full-chip-boot.md](docs/full-chip-boot.md) for the
+CPU0 init/run/check mailbox contract, upstream WB/AXI bridges, AXI memory
+stand-ins, negative missing-CPU check and simulator limits. Firmware must
+execute on the real CPUs; the host never drives CPU result mailboxes.
+Next actual integration work: real PULP iDMA/CSR/interrupt hookups, a
+portable C runtime/BSP when required, and Xezim chip-level functional traffic. Preserve the existing bus-driven cold-boot proof. HBM/DDR
 controller/PHY integration is a separate stage.

@@ -7,11 +7,14 @@ on:
       - 'tools/floonoc_gen.py'
       - 'tools/supernoc_gen.py'
       - 'gen/supernoc/**'
-      - 'scripts/run-supernoc.sh'
+      - 'Bender.yml'
+      - 'Bender.lock'
+      - '.github/actions/setup-bender/**'
+      - 'tools/regress.py'
+      - 'tools/sim_cocotb.py'
       - 'dv/supernoc/**'
       - 'tests/test_supernoc_gen.py'
       - 'config/**'
-      - 'scripts/run-floonoc-xezim.sh'
       - '.github/workflows/floonoc-elab.yml'
   pull_request:
     paths:
@@ -19,11 +22,14 @@ on:
       - 'tools/floonoc_gen.py'
       - 'tools/supernoc_gen.py'
       - 'gen/supernoc/**'
-      - 'scripts/run-supernoc.sh'
+      - 'Bender.yml'
+      - 'Bender.lock'
+      - '.github/actions/setup-bender/**'
+      - 'tools/regress.py'
+      - 'tools/sim_cocotb.py'
       - 'dv/supernoc/**'
       - 'tests/test_supernoc_gen.py'
       - 'config/**'
-      - 'scripts/run-floonoc-xezim.sh'
       - '.github/workflows/floonoc-elab.yml'
   workflow_dispatch:
 
@@ -36,140 +42,34 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      - name: Fetch locked FlooNoC source and upstream Bender dependencies
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 -m pip install -r requirements.txt
-          python3 tools/ip_fetch.py floonoc
-          mkdir -p .tools/bin
-          gh release download v0.32.1 --repo pulp-platform/bender \
-            --pattern 'bender-x86_64-unknown-linux-gnu.tar.xz' \
-            --pattern 'bender-x86_64-unknown-linux-gnu.tar.xz.sha256' --dir .tools/bin
-          (cd .tools/bin && sha256sum -c bender-x86_64-unknown-linux-gnu.tar.xz.sha256)
-          tar -xJf .tools/bin/bender-x86_64-unknown-linux-gnu.tar.xz -C .tools/bin
-          echo "Bender archive contents:"
-          tar -tf .tools/bin/bender-x86_64-unknown-linux-gnu.tar.xz
-          candidate="$(find .tools/bin -maxdepth 4 -type f -name 'bender*' ! -name '*.tar.xz*' -print -quit)"
-          if [ -z "$candidate" ]; then
-            echo "Bender executable not found in archive" >&2
-            exit 1
-          fi
-          if [ "$candidate" != ".tools/bin/bender" ]; then
-            cp "$candidate" .tools/bin/bender
-          fi
-          chmod +x .tools/bin/bender
-          echo "$GITHUB_WORKSPACE/.tools/bin" >> "$GITHUB_PATH"
+      - uses: ./.github/actions/setup-bender
         env:
           GH_TOKEN: ${{ github.token }}
-      - name: Resolve pinned upstream FlooNoC compile filelist
+      - name: Install configuration and pinned upstream RTL dependencies
         run: |
-          set -euo pipefail
-          cd .tools/floonoc
-          bender --version
-          bender checkout
-          bender script flist -t rtl -t cc_no_deprecated > "$GITHUB_WORKSPACE/.tools/floonoc-rtl.f"
-          test -s "$GITHUB_WORKSPACE/.tools/floonoc-rtl.f"
-          echo "Upstream Bender include directories and packages:"
-          grep -E 'incdir|floo_pkg|axi_pkg' "$GITHUB_WORKSPACE/.tools/floonoc-rtl.f" | head -n 35 || true
-          # tech_cells_generic pad_functional contains legacy switch-level
-          # MOSFET primitives unsupported by Verilator and unrelated to the
-          # NoC. We exclude only that unreachable vendor-pad simulation cell.
-          # The upstream Bender.lock resolves the whole SoC dependency graph,
-          # including iDMA, APB, OBI and FPnew. Those are NOT part of a
-          # standalone router/chimney elaboration, so compile only the pinned
-          # FlooNoC/AXI/common_cells/tech_cells source subset.
-          grep -Ev '/(idma|fpnew|fpu_div_sqrt_mvp|register_interface|obi|axi_stream|apb|common_verification)-[^/]+/|/src/deprecated/pad_functional[.]sv' \
-            "$GITHUB_WORKSPACE/.tools/floonoc-rtl.f" > "$GITHUB_WORKSPACE/.tools/floonoc-lint.f"
-          echo "NoC dependency filelist lines: $(wc -l < "$GITHUB_WORKSPACE/.tools/floonoc-lint.f")"
-      - name: Assert all generated NIs disable unused AXI atomic-ID reservations
-        run: |
-          python3 - <<'PY'
-          import json
-          from pathlib import Path
-          root=Path("gen/noc/floonoc")
-          nets=json.loads((root/"manifest.json").read_text())["networks"]
-          assert len(nets)==8
-          for name, cfg in nets.items():
-              top=(root/cfg["top"]).read_text()
-              count=cfg["network_interfaces_with_native_knobs"]
-              assert top.count(".AtopSupport(1'b0)") == count,name
-              assert top.count(".MaxAtomicTxns(0)") == count,name
-              # Target-only NIs have EnMgrPort=0. Pinned FlooNoC
-              # asserts NoMgrPortRobType unless their R/B RoBs are NoRoB.
-              import yaml
-              profile=yaml.safe_load((root/cfg["config"]).read_text())
-              dest=sum(bool(e.get("sbr_port_protocol")) for e in profile["endpoints"])
-              src=sum(bool(e.get("mgr_port_protocol")) for e in profile["endpoints"])
-              assert src+dest == count,(name,src,dest,count)
-              assert top.count("set_ports(xezim_chimney_cfg_no_mgr(),") == dest,name
-              assert top.count("set_ports(xezim_chimney_cfg(),") == src,name
-              print("PASS FlooNoC chimney native role/atomic contracts",name,src,dest)
-          PY
-      - name: Install Verilator
-        run: |
+          python3 -m pip install -r requirements.txt
+          python3 tools/ip_fetch.py floonoc
+          python3 -m pip install -e .tools/floonoc
+          python3 -m pip install 'cocotb==1.9.2' 'cocotbext-axi==0.1.24'
           sudo apt-get update -qq
           sudo apt-get install -y verilator
           verilator --version
-      - name: Elaborate all eight upstream-generated local/global NoC RTL modules
+      - name: Verify generated artifacts and configured native NoC contracts
         run: |
-          set -euo pipefail
-          includes=()
-          for d in .tools/floonoc/.bender/git/checkouts/*/include; do
-            [ -d "$d" ] && includes+=("-I$d")
-          done
-          includes+=("-I.tools/floonoc/hw/include")
-          python3 - <<'PY' > .tools/noc-toplist.tsv
-          import json
-          from pathlib import Path
-          root = Path("gen/noc/floonoc")
-          networks=json.loads((root/"manifest.json").read_text())["networks"]
-          for name, network in sorted(networks.items()):
-              print("\t".join((network["top_module"],
-                    str(root/network["package"]), str(root/network["top"]))))
-          PY
-          count=0
-          while read -r top pkg rtl; do
-            echo "ELABORATE $top from $rtl"
-            verilator --lint-only --timing --top-module "$top" \
-              -Wno-fatal "${includes[@]}" \
-              -f .tools/floonoc-lint.f "$pkg" "$rtl"
-            count=$((count+1))
-          done < .tools/noc-toplist.tsv
-          test "$count" -eq 8
-          echo "PASS: elaborated $count real upstream FlooNoC networks"
-
-      - name: Install cocotb 1.9 libraries compatible with Ubuntu Verilator 5.020
-        run: python3 -m pip install 'cocotb==1.9.2' 'cocotbext-axi==0.1.24'
-      - name: Simulate all eight connected real FlooNoCs with cocotbext-axi readback BFMs
-        timeout-minutes: 30
-        shell: bash
-        run: |
-          set -euo pipefail
-          bash scripts/run-supernoc.sh 2>&1 | tee supernoc-build-and-run.log
-      - name: Prove the routed readback scoreboard detects data corruption
-        shell: bash
-        run: |
-          set -euo pipefail
-          if SUPERNOC_TEST_ONLY=1 SUPERNOC_NEGATIVE=1 SUPERNOC_RESULTS_XML=negative-results.xml python3 dv/supernoc/run.py > supernoc-negative.log 2>&1; then
-            echo "ERROR: injected corruption unexpectedly passed" >&2
-            exit 1
-          fi
-          grep -q 'FAIL supernoc injected data mismatch detected' supernoc-negative.log
-          echo "PASS: routed data corruption detected"
-      - name: Save supernoc AXI traffic results and diagnostics
+          make check-generated
+          python3 tools/regress.py --check-noc
+      - name: Run YAML-defined Verilator elaboration, connected traffic and named corruption check
+        run: python3 tools/regress.py noc
+      - name: Retain resolved NoC filelists, plans, logs and cocotb XML
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: supernoc-real-axi-traffic
           path: |
-            supernoc-build-and-run.log
-            supernoc-dv.log
-            supernoc-negative.log
-            dv/supernoc/*results.xml
+            .tools/regression/
             gen/supernoc/manifest.json
-            gen/supernoc/supernoc_tb.sv
-          if-no-files-found: ignore
+          include-hidden-files: true
+          if-no-files-found: error
       - name: Download the checksum-verified pinned Xezim release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -184,28 +84,15 @@ jobs:
           (cd .tools/bin && sha256sum -c "$XEZIM_ASSET_NAME.sha256")
           chmod +x ".tools/bin/$XEZIM_ASSET_NAME"
           echo "XEZIM_BIN=$GITHUB_WORKSPACE/.tools/bin/$XEZIM_ASSET_NAME" >> "$GITHUB_ENV"
-      - name: Compare Xezim and Verilator compile coverage for all eight generated FlooNoCs
+      - name: Xezim structural compatibility probe (not a traffic result)
         continue-on-error: true
-        timeout-minutes: 5
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "Verilator: all eight structural NoCs passed elaboration." >> "$GITHUB_STEP_SUMMARY"
-          echo "Xezim: attempting --compile against the same pinned Bender source list." >> "$GITHUB_STEP_SUMMARY"
-          if timeout 240s bash scripts/run-floonoc-xezim.sh all > xezim-noc-compile.log 2>&1; then
-            reported="$(grep -cF '[xezim][warning]' xezim-noc-compile.log || true)"
-            echo "Xezim: all 8 generated local/global NoCs compile (reported warning lines: $reported, which may be capped by Xezim). **Not a warning-free or traffic-level pass.**" >> "$GITHUB_STEP_SUMMARY"
-            cat xezim-noc-compile.log
-          else
-            status=$?
-            echo "Xezim: NoC compile probe FAILED/UNSUPPORTED (exit $status), see artifact; existing Xezim CPU/AXI tests are separate." >> "$GITHUB_STEP_SUMMARY"
-            tail -n 100 xezim-noc-compile.log || true
-            exit "$status"
-          fi
-      - name: Preserve Xezim diagnostics for simulator-diff investigations
+        timeout-minutes: 10
+        run: python3 tools/regress.py compatibility
+      - name: Preserve Xezim diagnostics for simulator comparison
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: xezim-floonoc-compile-probe
-          path: xezim-noc-compile.log
+          path: .tools/regression/noc-xezim/
+          include-hidden-files: true
           if-no-files-found: ignore

@@ -2,13 +2,13 @@
 <rect width="1600" height="1030" fill="#F7F9FC"/>
 <text x="64.0" y="28.0" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#255BAE" text-anchor="start" dominant-baseline="hanging">REAL UPSTREAM-GENERATED NOC HIERARCHY</text>
 <text x="64.0" y="55.0" font-size="32" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">Full-chip FlooNoC network map</text>
-<text x="64.0" y="101.0" font-size="18" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">8 generated meshes; dashed links show pending full-SoC integration (see the separate NoC BFM test)</text>
+<text x="64.0" y="101.0" font-size="18" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">8 meshes shared by CPU boot and NoC BFM tests; dashed links mark pending DMA/controller integration</text>
 <polyline points="64.0,137.0 1536.0,137.0" fill="none" stroke="#D8E1EB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 <rect x="56.0" y="158.0" width="744.0" height="267.0" rx="17.0" fill="#FFFFFF" stroke="#D8E1EB" stroke-width="2"/>
 <text x="74.0" y="172.0" font-size="22" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">compute0 / compute subsystem</text>
 <rect x="74.0" y="208.0" width="220.0" height="76.0" rx="12.0" fill="#E9F1FD" stroke="#255BAE" stroke-width="1"/>
 <text x="90.0" y="220.0" font-size="19" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">picorv32 CPU</text>
-<text x="90.0" y="252.0" font-size="13" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">axi4_lite adapter pending</text>
+<text x="90.0" y="252.0" font-size="13" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">axi4_lite to AXI</text>
 <rect x="311.0" y="208.0" width="213.0" height="76.0" rx="12.0" fill="#E9F1FD" stroke="#255BAE" stroke-width="1"/>
 <text x="327.0" y="220.0" font-size="19" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">PULP iDMA + CSR</text>
 <text x="327.0" y="252.0" font-size="14" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">IP wiring pending</text>
@@ -21,13 +21,13 @@
 <rect x="442.0" y="313.0" width="335.0" height="81.0" rx="12.0" fill="#F3EDFD" stroke="#7047B5" stroke-width="1"/>
 <text x="458.0" y="325.0" font-size="19" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">LOCAL CONFIG  /  FlooNoC</text>
 <text x="458.0" y="357.0" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">6 generated routers / 32b AXI4</text>
-<polyline points="185.0,284.0 185.0,313.0" fill="none" stroke="#255BAE" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="9 6"/>
+<polyline points="185.0,284.0 185.0,313.0" fill="none" stroke="#255BAE" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 <polygon points="185.0,313.0 180.0,304.3 190.0,304.3" fill="#255BAE"/>
 <polyline points="416.0,284.0 336.0,313.0" fill="none" stroke="#255BAE" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="9 6"/>
 <polygon points="336.0,313.0 342.4,305.3 345.8,314.7" fill="#255BAE"/>
-<polyline points="184.0,284.0 609.0,313.0" fill="none" stroke="#7047B5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="9 6"/>
+<polyline points="184.0,284.0 609.0,313.0" fill="none" stroke="#7047B5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 <polygon points="609.0,313.0 600.0,317.4 600.7,307.4" fill="#7047B5"/>
-<polyline points="376.0,313.0 659.0,284.0" fill="none" stroke="#19734B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="9 6"/>
+<polyline points="376.0,313.0 659.0,284.0" fill="none" stroke="#19734B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 <polygon points="659.0,284.0 650.9,289.9 649.9,279.9" fill="#19734B"/>
 <polyline points="609.0,313.0 456.0,284.0" fill="none" stroke="#7047B5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="9 6"/>
 <polygon points="456.0,284.0 465.4,280.7 463.6,290.5" fill="#7047B5"/>
@@ -35,7 +35,7 @@
 <text x="858.0" y="172.0" font-size="22" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">compute1 / compute subsystem</text>
 <rect x="858.0" y="208.0" width="220.0" height="76.0" rx="12.0" fill="#E9F1FD" stroke="#255BAE" stroke-width="1"/>
 <text x="874.0" y="220.0" font-size="19" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">serv CPU</text>
-<text x="874.0" y="252.0" font-size="13" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">wishbone adapter pending</text>
+<text x="874.0" y="252.0" font-size="13" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">wishbone to AXI</text>
 <rect x="1095.0" y="208.0" width="213.0" height="76.0" rx="12.0" fill="#E9F1FD" stroke="#255BAE" stroke-width="1"/>
 <text x="1111.0" y="220.0" font-size="19" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">PULP iDMA + CSR</text>
 <text x="1111.0" y="252.0" font-size="14" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">IP wiring pending</text>
@@ -48,13 +48,13 @@
 <rect x="1226.0" y="313.0" width="335.0" height="81.0" rx="12.0" fill="#F3EDFD" stroke="#7047B5" stroke-width="1"/>
 <text x="1242.0" y="325.0" font-size="19" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">LOCAL CONFIG  /  FlooNoC</text>
 <text x="1242.0" y="357.0" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">4 generated routers / 32b AXI4</text>
-<polyline points="969.0,284.0 969.0,313.0" fill="none" stroke="#255BAE" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="9 6"/>
+<polyline points="969.0,284.0 969.0,313.0" fill="none" stroke="#255BAE" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 <polygon points="969.0,313.0 964.0,304.3 974.0,304.3" fill="#255BAE"/>
 <polyline points="1200.0,284.0 1120.0,313.0" fill="none" stroke="#255BAE" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="9 6"/>
 <polygon points="1120.0,313.0 1126.4,305.3 1129.8,314.7" fill="#255BAE"/>
-<polyline points="968.0,284.0 1393.0,313.0" fill="none" stroke="#7047B5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="9 6"/>
+<polyline points="968.0,284.0 1393.0,313.0" fill="none" stroke="#7047B5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 <polygon points="1393.0,313.0 1384.0,317.4 1384.7,307.4" fill="#7047B5"/>
-<polyline points="1160.0,313.0 1443.0,284.0" fill="none" stroke="#19734B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="9 6"/>
+<polyline points="1160.0,313.0 1443.0,284.0" fill="none" stroke="#19734B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 <polygon points="1443.0,284.0 1434.9,289.9 1433.9,279.9" fill="#19734B"/>
 <polyline points="1393.0,313.0 1240.0,284.0" fill="none" stroke="#7047B5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="9 6"/>
 <polygon points="1240.0,284.0 1249.4,280.7 1247.6,290.5" fill="#7047B5"/>
@@ -65,17 +65,17 @@
 <rect x="840.0" y="489.0" width="704.0" height="113.0" rx="12.0" fill="#F3EDFD" stroke="#7047B5" stroke-width="1"/>
 <text x="856.0" y="501.0" font-size="24" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">GLOBAL CONFIG / FlooNoC</text>
 <text x="856.0" y="533.0" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">6 routers / XY mesh / 32-bit AXI4</text>
-<text x="856.0" y="552.5" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">PULP upstream AXI4-Lite bridges required at CSR boundaries</text>
-<polyline points="248.0,394.0 248.0,434.0 428.0,479.0 428.0,489.0" fill="none" stroke="#19734B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="9 6"/>
+<text x="856.0" y="552.5" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">Upstream AXI4-Lite adapters at CPU and reset CSR boundaries</text>
+<polyline points="248.0,394.0 248.0,434.0 428.0,479.0 428.0,489.0" fill="none" stroke="#19734B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 <polygon points="428.0,489.0 423.0,480.3 433.0,480.3" fill="#19734B"/>
 <polygon points="248.0,394.0 253.0,402.7 243.0,402.7" fill="#19734B"/>
-<polyline points="611.0,394.0 611.0,438.0 1193.0,479.0 1193.0,489.0" fill="none" stroke="#7047B5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="9 6"/>
+<polyline points="611.0,394.0 611.0,438.0 1193.0,479.0 1193.0,489.0" fill="none" stroke="#7047B5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 <polygon points="1193.0,489.0 1188.0,480.3 1198.0,480.3" fill="#7047B5"/>
 <polygon points="611.0,394.0 616.0,402.7 606.0,402.7" fill="#7047B5"/>
-<polyline points="1032.0,394.0 1032.0,434.0 428.0,479.0 428.0,489.0" fill="none" stroke="#19734B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="9 6"/>
+<polyline points="1032.0,394.0 1032.0,434.0 428.0,479.0 428.0,489.0" fill="none" stroke="#19734B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 <polygon points="428.0,489.0 423.0,480.3 433.0,480.3" fill="#19734B"/>
 <polygon points="1032.0,394.0 1037.0,402.7 1027.0,402.7" fill="#19734B"/>
-<polyline points="1395.0,394.0 1395.0,438.0 1193.0,479.0 1193.0,489.0" fill="none" stroke="#7047B5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="9 6"/>
+<polyline points="1395.0,394.0 1395.0,438.0 1193.0,479.0 1193.0,489.0" fill="none" stroke="#7047B5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 <polygon points="1193.0,489.0 1188.0,480.3 1198.0,480.3" fill="#7047B5"/>
 <polygon points="1395.0,394.0 1400.0,402.7 1390.0,402.7" fill="#7047B5"/>
 <rect x="56.0" y="670.0" width="1488.0" height="307.0" rx="17.0" fill="#FFFFFF" stroke="#D8E1EB" stroke-width="2"/>
@@ -85,34 +85,34 @@
 <text x="99.0" y="778.0" font-size="14" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">4 routers / two AXI ingress ports</text>
 <rect x="622.0" y="734.0" width="485.0" height="71.0" rx="12.0" fill="#F3EDFD" stroke="#7047B5" stroke-width="1"/>
 <text x="638.0" y="746.0" font-size="20" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">LOCAL CONFIG / FlooNoC</text>
-<text x="638.0" y="778.0" font-size="14" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">2 generated routers / CSR bridge pending</text>
+<text x="638.0" y="778.0" font-size="14" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">2 routers / reserved CSR target</text>
 <rect x="1142.0" y="734.0" width="375.0" height="71.0" rx="12.0" fill="#F3EDFD" stroke="#7047B5" stroke-width="1"/>
 <text x="1158.0" y="746.0" font-size="20" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">Controller CSRs</text>
-<text x="1158.0" y="778.0" font-size="14" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">Upstream AXI-Lite bridge pending</text>
+<text x="1158.0" y="778.0" font-size="14" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">Controller registers pending</text>
 <polyline points="1107.0,770.0 1142.0,770.0" fill="none" stroke="#7047B5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="9 6"/>
 <polygon points="1142.0,770.0 1133.3,775.0 1133.3,765.0" fill="#7047B5"/>
 <rect x="83.0" y="841.0" width="702.0" height="75.0" rx="12.0" fill="#E6F6EC" stroke="#19734B" stroke-width="1"/>
-<text x="99.0" y="853.0" font-size="22" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">Internal 2x2 Verilog-AXI crossbar</text>
-<text x="99.0" y="885.0" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">Real independently tested memory fabric RTL</text>
+<text x="99.0" y="853.0" font-size="22" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">Internal 1x2 Verilog-AXI crossbar</text>
+<text x="99.0" y="885.0" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">One local-NoC output; upstream target crossbar</text>
 <rect x="810.0" y="840.0" width="346.0" height="78.0" rx="12.0" fill="#FFF2E4" stroke="#B66B22" stroke-width="1"/>
-<text x="826.0" y="852.0" font-size="20" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">HBM AXI RAM</text>
+<text x="826.0" y="852.0" font-size="20" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">HBM AXI slave model</text>
 <text x="826.0" y="884.0" font-size="14" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">Behavioral model; physical controller pending</text>
 <polyline points="785.0,878.0 810.0,878.0" fill="none" stroke="#19734B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 <polygon points="810.0,878.0 801.3,883.0 801.3,873.0" fill="#19734B"/>
 <rect x="1173.0" y="840.0" width="346.0" height="78.0" rx="12.0" fill="#FFF2E4" stroke="#B66B22" stroke-width="1"/>
-<text x="1189.0" y="852.0" font-size="20" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">DDR AXI RAM</text>
+<text x="1189.0" y="852.0" font-size="20" font-family="Arial, Helvetica, sans-serif" fill="#17253B" text-anchor="start" dominant-baseline="hanging">DDR AXI slave model</text>
 <text x="1189.0" y="884.0" font-size="14" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">Behavioral model; physical controller pending</text>
 <polyline points="785.0,890.0 795.0,890.0 795.0,929.0 1346.0,929.0 1346.0,918.0" fill="none" stroke="#19734B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 <polygon points="1346.0,918.0 1351.0,926.7 1341.0,926.7" fill="#19734B"/>
-<polyline points="290.0,602.0 290.0,734.0" fill="none" stroke="#19734B" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="9 6"/>
+<polyline points="290.0,602.0 290.0,734.0" fill="none" stroke="#19734B" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 <polygon points="290.0,734.0 285.0,725.3 295.0,725.3" fill="#19734B"/>
-<polyline points="350.0,602.0 350.0,734.0" fill="none" stroke="#19734B" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="9 6"/>
+<polyline points="350.0,602.0 350.0,734.0" fill="none" stroke="#19734B" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 <polygon points="350.0,734.0 345.0,725.3 355.0,725.3" fill="#19734B"/>
 <text x="390.0" y="718.0" font-size="12" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">2 AXI4 ingress ports</text>
-<polyline points="1193.0,602.0 1193.0,712.0 864.0,712.0 864.0,734.0" fill="none" stroke="#7047B5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="9 6"/>
+<polyline points="1193.0,602.0 1193.0,712.0 864.0,712.0 864.0,734.0" fill="none" stroke="#7047B5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 <polygon points="864.0,734.0 859.0,725.3 869.0,725.3" fill="#7047B5"/>
-<polyline points="320.0,805.0 320.0,841.0" fill="none" stroke="#19734B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="9 6"/>
+<polyline points="320.0,805.0 320.0,841.0" fill="none" stroke="#19734B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 <polygon points="320.0,841.0 315.0,832.3 325.0,832.3" fill="#19734B"/>
-<text x="83.0" y="944.0" font-size="17" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">Solid target links: standalone memory testbench ONLY. Full SoC NoC links and endpoint bridges: planned.</text>
+<text x="83.0" y="944.0" font-size="17" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">Solid: boot-configuration wiring and AXI memory models. Dashed: real iDMA/CSRs and physical controllers pending.</text>
 <text x="65.0" y="1001.0" font-size="15" font-family="Arial, Helvetica, sans-serif" fill="#53657C" text-anchor="start" dominant-baseline="hanging">Router coordinates and link details: gen/diagrams/noc-topology.json and gen/noc/floonoc/*/floogen.yaml.</text>
 </svg>

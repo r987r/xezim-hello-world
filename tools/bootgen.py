@@ -151,6 +151,16 @@ def build(cfg: dict) -> dict:
 def emit(cfg: dict, destination: Path) -> dict:
     fw = build(cfg)
     destination.mkdir(parents=True, exist_ok=True)
+    constants = {name.upper() + '_BASE': value for name, value in fw['addresses'].items()
+                 if name in ('bootrom', 'flash', 'sram0', 'sram1', 'reset_ctrl')}
+    lines = ['// Generated from config/soc.yaml; do not edit.', 'package boot_config_pkg;']
+    lines += [f"    localparam logic [31:0] {name} = 32'h{value:08x};"
+              for name, value in constants.items()]
+    lines += [f"    localparam integer SRAM_BYTES = {cfg['boot']['simulation_sram_bytes']};",
+              f"    localparam integer PROGRAM_WORDS = {cfg['boot']['program_words']};",
+              f"    localparam integer FLASH_SLOT_WORDS = {fw['addresses']['flash_slot_stride'] // 4};",
+              'endpackage', '']
+    (destination/'boot_config_pkg.sv').write_text('\n'.join(lines))
     rom = fw['bootrom']
     (destination/'bootrom.hex').write_text('\n'.join(f'{word:08x}' for word, _ in rom) + '\n')
     (destination/'bootrom.lst').write_text('\n'.join(f'0x{i*4:04x}: {word:08x}  {asm}' for i, (word, asm) in enumerate(rom)) + '\n')

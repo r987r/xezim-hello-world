@@ -1,17 +1,16 @@
-.PHONY: help gen check-generated check-config dv-memory dv-memory-negative dv-cpu dv-serv dv-sram dv-boot dv-supernoc smoke test
+.PHONY: help gen check-generated check-config dv-memory dv-memory-negative dv-cpu dv-serv dv-sram dv-boot dv-supernoc dv-chip smoke test test-xezim test-noc test-list
 
 help:
-	@echo 'make gen                Generate all tracked gen/ artifacts, FlooNoC RTL and README diagrams'
-	@echo 'make check-generated    Fail on missing/changed/stale generated files'
-	@echo 'make check-config       Validate architecture and generator behavior'
-	@echo 'make dv-memory          Verify 2x2 AXI4 crossbar with HBM + DDR models'
-	@echo 'make dv-memory-negative Prove readback checker detects corruption'
-	@echo 'make dv-cpu             Optional fetch-only diagnostic (excluded from CI)'
-	@echo 'make dv-sram            Exercise standalone RTL SRAM ports and byte strobes'
-	@echo 'make dv-serv            Minimal standalone SERV execution (no bootloader)'
-	@echo 'make dv-boot            ROM -> flash -> SRAM -> CPU1 reset release -> real firmware'
-	@echo 'make dv-supernoc        Eight real connected FlooNoCs with upstream AXI agents (Bender prerequisite)'
-	@echo 'make test               Run checked-in generation and all RTL tests'
+	@echo 'make gen             Generate tracked RTL, firmware and documentation'
+	@echo 'make check-generated Check exact generated file/content drift'
+	@echo 'make check-config    Run configuration/generator/runner unit tests'
+	@echo 'make test-list       List every YAML-defined regression target'
+	@echo 'make test            Full suite: all profiles, diagnostics and both simulators'
+	@echo 'make test-xezim      CPU, SRAM and default/full/sparse memory traffic'
+	@echo 'make test-noc        Verilator NoC elaboration, traffic and negative check'
+	@echo 'make dv-boot         Real cold boot (BOOT_WAVE=1 BOOT_TRACE=1 for debug)'
+	@echo 'make dv-chip         Chip boot: CPU0 coordinates init/run/check; AXI memory stand-ins'
+	@echo 'python3 tools/regress.py --help    Filelist/build/run stages and target selection'
 
 gen:
 	python3 tools/generate.py
@@ -22,33 +21,41 @@ check-generated:
 check-config:
 	python3 -m unittest discover -s tests -v
 
+test-list:
+	python3 tools/regress.py full --list
+
 dv-memory:
-	bash scripts/run-dv.sh
+	python3 tools/regress.py memory $(if $(AXI_CONFIG),--memory-config $(AXI_CONFIG))
 
 dv-memory-negative:
-	@set -e; log=$$(mktemp); trap 'rm -f "$$log"' EXIT; \
-	  if bash scripts/run-dv.sh --negative > "$$log" 2>&1; then \
-	    echo 'ERROR: negative test unexpectedly passed'; cat "$$log"; exit 1; \
-	  fi; \
-	  grep -q 'FAIL AXI read:' "$$log" || { echo 'Unexpected failure'; cat "$$log"; exit 1; }; \
-	  echo 'PASS: expected data mismatch detected'
+	python3 tools/regress.py memory-negative
 
 dv-cpu:
-	bash scripts/run-cpu.sh
+	python3 tools/regress.py cpu-fetch
 
 dv-sram:
-	bash scripts/run-local-sram.sh
+	python3 tools/regress.py sram
 
 dv-serv:
-	bash scripts/run-serv-minimal.sh
+	python3 tools/regress.py serv
 
 dv-boot:
-	bash scripts/run-boot.sh
+	python3 tools/regress.py boot $(if $(filter 1,$(BOOT_WAVE)),--arg=--wave --arg=+BOOT_WAVE) $(if $(filter 1,$(BOOT_TRACE)),--arg=+BOOT_TRACE)
 
 dv-supernoc:
-	bash scripts/run-supernoc.sh
+	python3 tools/regress.py supernoc
+
+dv-chip:
+	python3 tools/regress.py chip
 
 smoke:
-	@$${XEZIM_BIN:-xezim} -s hello_world_tb dv/smoke/hello_world_tb.sv
+	python3 tools/regress.py smoke
 
-test: check-config check-generated dv-memory dv-memory-negative dv-serv dv-sram dv-boot
+test-xezim: check-config check-generated
+	python3 tools/regress.py xezim
+
+test-noc: check-generated
+	python3 tools/regress.py noc
+
+test: check-config check-generated
+	python3 tools/regress.py full

@@ -70,13 +70,6 @@ class Art:
         self.text(64,101,subtitle,18,MUTED)
         self.line([(64,137),(self.width-64,137)],color=FAINT,width=2)
 
-    def badge(self,x,y,value,kind="planned",w=None):
-        c,b = (GREEN,GREEN_BG) if kind=="tested" else (PURPLE,PURPLE_BG) if kind=="selected" else (GRAY,GRAY_BG)
-        w=w or 16+len(value)*10
-        self.rect(x,y,w,27,fill=b,outline=b,r=8,width=1)
-        self.text(x+10,y+5,value,13,c)
-        return w
-
     def box_label(self,x,y,w,h,title,detail="",kind="neutral",title_size=21,detail_size=15):
         styles={"cpu":(BLUE_BG,BLUE),"dma":(BLUE_BG,BLUE),"fabric":(GREEN_BG,GREEN),
                 "config":(PURPLE_BG,PURPLE),"memory":(ORANGE_BG,ORANGE),

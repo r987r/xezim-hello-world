@@ -59,6 +59,6 @@
       }
     },
     "source": "gen/noc/floonoc/manifest.json",
-    "status": "real_structural_networks_with_planned_inter_network_links"
+    "status": "structural_nocs_and_cpu_boot_configuration_with_pending_dma_controllers"
   }
 }

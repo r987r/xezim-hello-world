@@ -2,11 +2,11 @@
 """Count signal transitions in a VCD file over a time window.
 
 Usage:
-    python3 scripts/vcd/vcd_signal_activity.py <vcd_file> <signal_name> [--start <ps>] [--end <ps>]
+    python3 tools/debug/vcd_signal_activity.py <vcd_file> <signal_name> [--start <ps>] [--end <ps>]
 
 Examples:
-    python3 scripts/vcd_signal_activity.py run/axis_single/trace.vcd tb_top.axis_in.tvalid
-    python3 scripts/vcd_signal_activity.py run/axis_single/trace.vcd tb_top.dut.pipe_valid[49] --start 0 --end 5000000
+    python3 tools/debug/vcd_signal_activity.py run/axis_single/trace.vcd tb_top.axis_in.tvalid
+    python3 tools/debug/vcd_signal_activity.py run/axis_single/trace.vcd tb_top.dut.pipe_valid[49] --start 0 --end 5000000
 """
 
 from __future__ import annotations

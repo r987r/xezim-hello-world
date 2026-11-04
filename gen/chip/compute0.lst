@@ -1,0 +1,53 @@
+0000: 100002b7  lui x5, 0x10000
+0004: 40028293  addi x5, x5, 1024
+0008: 00100313  addi x6, zero, 1
+000c: 0062a223  sw x6, 4(x5)
+0010: 00428593  addi x11, x5, 4
+0014: 00200493  addi x9, zero, 2
+0018: 00100313  addi x6, zero, 1
+001c: 0005a383  lw x7, 0(x11)
+0020: fe639ee3  bne x7, x6, wait_init
+0024: 01058593  addi x11, x11, 16
+0028: fff48493  addi x9, x9, -1
+002c: fe0498e3  bne x9, zero, wait_init
+0030: 40020437  lui x8, 0x40020
+0034: 00440593  addi x11, x8, 4
+0038: 00100493  addi x9, zero, 1
+003c: 00100313  addi x6, zero, 1
+0040: 0005a383  lw x7, 0(x11)
+0044: fe639ee3  bne x7, x6, wait_config
+0048: 00458593  addi x11, x11, 4
+004c: fff48493  addi x9, x9, -1
+0050: fe0498e3  bne x9, zero, wait_config
+0054: 00200313  addi x6, zero, 2
+0058: 0062a023  sw x6, 0(x5)
+005c: 55000313  addi x6, zero, 1360
+0060: 0062a423  sw x6, 8(x5)
+0064: 00828593  addi x11, x5, 8
+0068: 00200493  addi x9, zero, 2
+006c: 55000313  addi x6, zero, 1360
+0070: 0005a383  lw x7, 0(x11)
+0074: fe639ee3  bne x7, x6, wait_hello
+0078: 01058593  addi x11, x11, 16
+007c: 00130313  addi x6, x6, 1
+0080: fff48493  addi x9, x9, -1
+0084: fe0496e3  bne x9, zero, wait_hello
+0088: 00300313  addi x6, zero, 3
+008c: 0062a023  sw x6, 0(x5)
+0090: 55100313  addi x6, zero, 1361
+0094: 0182a383  lw x7, 24(x5)
+0098: fe639ee3  bne x7, x6, check_peer
+009c: 00100313  addi x6, zero, 1
+00a0: 0062a623  sw x6, 12(x5)
+00a4: 00c28593  addi x11, x5, 12
+00a8: 00200493  addi x9, zero, 2
+00ac: 00100313  addi x6, zero, 1
+00b0: 0005a383  lw x7, 0(x11)
+00b4: fe639ee3  bne x7, x6, wait_checked
+00b8: 01058593  addi x11, x11, 16
+00bc: fff48493  addi x9, x9, -1
+00c0: fe0498e3  bne x9, zero, wait_checked
+00c4: 00006337  lui x6, 0x6
+00c8: 00d30313  addi x6, x6, 13
+00cc: 0262a223  sw x6, 36(x5)
+00d0: 0000006f  jal zero, 0  # park

@@ -1,7 +1,7 @@
 `timescale 1ns/1ps
 // Distinct CPU integration contract: SERV exposes separate Wishbone-like
-// instruction and data buses, not AXI. A Wishbone-to-AXI bridge is required
-// when this CPU is attached to the real compute-subsystem fabric.
+// instruction and data buses. The chip boot configuration uses pinned
+// ZipCPU bridges in serv_axi_lite_adapter and a PULP instruction/data mux.
 module serv_cpu_adapter #(parameter [31:0] RESET_PC = 32'h0) (
     input wire clk, input wire rst,
     output wire [31:0] ibus_addr, output wire ibus_cyc,

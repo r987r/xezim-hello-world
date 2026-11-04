@@ -36,16 +36,17 @@ class RealNetworkDiagrams(unittest.TestCase):
         self.assertTrue(all(l["from"]["instance"] in nodes and l["to"]["instance"] in nodes for l in links))
         physical = [l for l in links if l["status"] == "generated_structural"]
         planned = [l for l in links if l["status"] == "planned_integration"]
+        wired = [l for l in links if l["status"] == "wired_boot_configuration"]
         self.assertTrue(physical)
         self.assertTrue(planned)
         self.assertTrue(all(l["from"]["instance"].split(".")[0] ==
                             l["to"]["instance"].split(".")[0] for l in physical))
-        self.assertTrue(any("compute1_sram" in l["from"]["instance"] for l in planned))
+        self.assertTrue(any("compute1_sram" in l["from"]["instance"] for l in wired))
         for block in ("compute0.cpu", "compute0.dma", "compute0.sram",
                       "compute1.cpu", "compute1.dma", "compute1.sram",
                       "memory0.ctrl", "memory0.internal_target_crossbar"):
             self.assertIn(block, nodes)
-        self.assertTrue(any(l["from"]["instance"] == "compute0.cpu" for l in planned))
+        self.assertTrue(any(l["from"]["instance"] == "compute0.cpu" for l in wired))
         self.assertTrue(any(l["to"]["instance"] == "memory0.ctrl" for l in planned))
         self.assertIn("groups", graph)
         self.assertEqual(len([g for g in graph["groups"] if g["name"] in self.networks]), 8)

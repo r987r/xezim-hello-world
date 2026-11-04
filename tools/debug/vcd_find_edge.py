@@ -2,11 +2,11 @@
 """Find the first rising or falling edge of a signal in a VCD file.
 
 Usage:
-    python3 scripts/vcd/vcd_find_edge.py <vcd_file> <signal_name> [--edge rising|falling|any]
+    python3 tools/debug/vcd_find_edge.py <vcd_file> <signal_name> [--edge rising|falling|any]
 
 Examples:
-    python3 scripts/vcd/vcd_find_edge.py run/axis_single/trace.vcd tb_top.dut.pipe_valid[0] --edge rising
-    python3 scripts/vcd/vcd_find_edge.py run/axis_single/trace.vcd tb_top.axis_in.tvalid
+    python3 tools/debug/vcd_find_edge.py run/axis_single/trace.vcd tb_top.dut.pipe_valid[0] --edge rising
+    python3 tools/debug/vcd_find_edge.py run/axis_single/trace.vcd tb_top.axis_in.tvalid
 """
 
 from __future__ import annotations

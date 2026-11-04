@@ -1,0 +1,19 @@
+name: Install pinned Bender
+description: Download checksum-verified Bender 0.32.1; no Rust build
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        set -euo pipefail
+        mkdir -p .tools/bin
+        gh release download v0.32.1 --repo pulp-platform/bender \
+          --pattern bender-x86_64-unknown-linux-gnu.tar.xz \
+          --pattern bender-x86_64-unknown-linux-gnu.tar.xz.sha256 --dir .tools/bin
+        (cd .tools/bin && sha256sum -c bender-x86_64-unknown-linux-gnu.tar.xz.sha256)
+        tar -xJf .tools/bin/bender-x86_64-unknown-linux-gnu.tar.xz -C .tools/bin
+        candidate="$(find .tools/bin -maxdepth 4 -type f -name bender -print -quit)"
+        test -n "$candidate"
+        if [ "$candidate" != .tools/bin/bender ]; then cp "$candidate" .tools/bin/bender; fi
+        chmod +x .tools/bin/bender
+        echo "$GITHUB_WORKSPACE/.tools/bin" >> "$GITHUB_PATH"

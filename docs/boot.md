@@ -39,7 +39,18 @@ The tiny RV32I images are generated deterministically from `config/soc.yaml`.
 address for code review; `gen/boot/manifest.json` states the addresses,
 image sizes, reset policy, completion signatures and model limitations.
 `make gen` removes obsolete image files, and `make check-generated` catches
-drift.
+drift. `gen/boot/boot_config_pkg.sv` binds the same YAML addresses to SERV's
+reset PC, both memory-model decoders, SRAM sizes and the bench's fetch/copy
+checks. No executable address defaults are relied on by the boot bench.
+
+`python3 tools/regress.py boot-relocated` runs this same bench with SRAM0
+at `0x12000000`, SRAM1 at `0x13000000`, flash at `0x21000000`, and reset
+control at `0x41020000`. The runner validates and emits the variant's
+package and firmware under its result directory, then supplies only ROM/
+flash image paths via plusargs. SRAM remains uninitialized. Both default
+and relocated boots are required in the YAML `xezim` suite. ROM reset PC
+zero, four-word programs, 256-byte slots and 16-KiB model SRAM remain
+explicit supported limits; other values are rejected.
 
 ## Minimal bring-up ladder
 
@@ -47,8 +58,9 @@ drift.
    RAM, and a four-word RV32I test with a checked data store.
 2. Run `make dv-boot`: CPU0 executes Boot ROM, reads flash, writes both blank
    SRAMs, releases CPU1 via reset MMIO, and requires **both** CPU signatures.
-3. Only after that integrate local AXI/AXI-Lite fabrics and the real
-   programmable PULP iDMA.
+3. Run `make dv-chip` for the implemented local/global NoCs, upstream
+   AXI/AXI-Lite bridges and CPU0-coordinated phases. Real programmable
+   PULP iDMA is the next hardware integration step.
 
 Xezim 0.11.4 uses unmodified upstream SERV RTL. The prior compatibility
 workaround and the independent regression are documented in [boot-debug.md](boot-debug.md).
@@ -76,10 +88,10 @@ is also useful for bypass/accelerated tests, but such tests must be labeled
 | Boot flash | `0x20000000` | read-only 32-bit | immutable model backing flash slots |
 | DMA0 CSR | `0x40000000` | AXI4-Lite | **planned**, no register bank yet |
 | DMA1 CSR | `0x40010000` | AXI4-Lite | **planned**, no register bank yet |
-| Reset control | `0x40020000` | R/W 32-bit | **implemented only in scoped boot TB** |
+| Reset control | `0x40020000` | R/W 32-bit | legacy boot responder and chip PULP AXI-Lite register bank |
 | Memory controller CSR aperture | `0x40030000` | 32-bit config transport | **reserved**, BFM storage only in the NoC test; no controller register RTL |
-| HBM data | `0x1_00000000` | AXI4 64-bit | behavioral AXI RAM in separate memory DV |
-| DDR data | `0x1_40000000` | AXI4 64-bit | behavioral AXI RAM in separate memory DV |
+| HBM data | `0x1_00000000` | AXI4 64-bit | AXI RAM in memory DV; bounded AXI SRAM stand-in in chip boot |
+| DDR data | `0x1_40000000` | AXI4 64-bit | AXI RAM in memory DV; bounded AXI SRAM stand-in in chip boot |
 
 `memory0.ctrl` reserves one subsystem aperture; it does not invent actual
 HBM/DDR controller registers. Per-controller register maps must come from
@@ -87,26 +99,28 @@ the selected controller's real management interface. CPU0 and CPU1 are 32-bit co
 load/store addresses above 4 GiB**; later DMA engines will have 64-bit
 source/destination registers for transfers to HBM/DDR.
 
-The bootstrap model supports aligned, full-word transfers only. Future boot
+The legacy bootstrap responder supports aligned, full-word transfers only.
+The separate chip AXI memory path checks bursts and partial writes. Future boot
 ROM implementation should check a firmware container header, lengths,
 checksums/authentication, failures, timeouts, image placement, and reset
 permissions. Secure boot is **not implemented**.
 
-## Next hardware integration
+## Hardware integration beyond the standalone bootstrap
 
-1. Replace the bootstrap-only bus responders with upstream AXI integration,
-   connect the existing byte-enabled SRAM through appropriate adapters,
-   and add Wishbone-to-AXI adaptation for SERV. Physical SRAM macros remain future work.
+1. The [chip boot configuration](full-chip-boot.md) now uses upstream AXI
+   responders, generic SRAM, and a Wishbone-to-AXI bridge for SERV across
+   the shared NoCs. The standalone bootstrap below is retained independently.
+   Physical SRAM macros remain future work.
 2. Add a minimal SPI/QSPI reader or a debug/UART streaming boot interface;
    keep exactly the same image/load, reset and completion contracts. Test
    *traffic-driven* SRAM loading (no SRAM backdoor preload in cold boot).
 3. Integrate PULP iDMA frontend CSRs: CPU0 programs source, destination,
    length, status and interrupt. Accelerate future firmware staging/copies.
-4. Attach the real endpoints to the already generated and BFM-tested global
-   data/config networks. CPU0 must eventually initialize controllers and
+4. Attach real DMA/controller endpoints alongside the CPU/SRAM/reset
+   attachments in the chip boot scope. CPU0 must initialize controllers and
    wait for DDR/HBM ready before issuing DMA there.
-5. Release the secondary core through controlled, addressable reset with
-   error handling. Add optional secure management processor only if isolation,
+5. Extend the implemented addressable secondary reset with recovery/error
+   policies. Add an optional secure management processor only if isolation,
    always-on power domains, or recovery requirements justify it.
 
 The system remains intentionally **non-cache-coherent** for now. Once caches
@@ -141,9 +155,18 @@ supported boot mode, and actual physical SRAM macro selection is pending.
 
 Required CI scopes are configuration and deterministic generation, AXI crossbar
 memory/negative scoreboard, independent uninitialized dual-port SRAM, standalone
-SERV instruction execution, and ROM/flash-to-SRAM cold boot. The earlier
-`dv-cpu` request-only fetch smoke remains an optional manual diagnostic but
-is **not** a CI pass condition: full instruction execution is already proved.
+SERV instruction execution, and ROM/flash-to-SRAM cold boot. The `dv-cpu` request-only fetch smoke is retained as a diagnostic in the
+full/CI diagnostics suite; it does not prove instruction execution.
 We no longer pass `SERV_CLEAR_RAM`: the SERV architectural register file
 starts without a testbench initialization and the real program executes.
 Boot SRAM contains unspecified contents, never zero-preloaded firmware.
+
+## Chip-level execution
+
+`make dv-chip` runs a separate, real CPU/NoC boot assembly with upstream
+WB/AXI/width adapters, upstream SRAM, reset registers and AXI memory
+stand-ins. CPU0 coordinates init/run/check and every CPU checks a peer.
+The legacy four-word prototype images above remain its independent
+bring-up scope. The chip has its own generated phased firmware in
+`gen/chip/`, using the same ROM-copy boot policy and address map.
+See [full-chip boot](full-chip-boot.md) for its framework and boundaries.

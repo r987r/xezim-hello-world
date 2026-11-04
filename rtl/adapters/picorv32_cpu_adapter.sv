@@ -1,7 +1,7 @@
 `timescale 1ns/1ps
 // PicoRV32's native AXI4-Lite initiator, normalized to an active-high reset.
-// Full-chip data-fabric attachment additionally needs AXI4-Lite to AXI4
-// conversion and a 32-to-64-bit address translator at the subsystem edge.
+// cpu_noc_adapter attaches upstream AXI-Lite conversion and data upsizing.
+// Addresses zero-extend to 64 bits; no remapping above 4 GiB is implied.
 module picorv32_cpu_adapter (
     input wire clk, input wire rst,
     output wire trap,

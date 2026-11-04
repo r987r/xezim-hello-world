@@ -12,8 +12,10 @@ on:
       - 'tests/**'
       - 'dv/**'
       - 'rtl/**'
-      - 'scripts/**'
       - 'Makefile'
+      - 'Bender.yml'
+      - 'Bender.lock'
+      - '.github/actions/setup-bender/**'
       - '.github/workflows/dv-soc.yml'
   pull_request:
     paths:
@@ -24,8 +26,10 @@ on:
       - 'tests/**'
       - 'dv/**'
       - 'rtl/**'
-      - 'scripts/**'
       - 'Makefile'
+      - 'Bender.yml'
+      - 'Bender.lock'
+      - '.github/actions/setup-bender/**'
       - '.github/workflows/dv-soc.yml'
   workflow_dispatch:
   workflow_run:
@@ -45,6 +49,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - uses: ./.github/actions/setup-bender
+        env:
+          GH_TOKEN: ${{ github.token }}
       - name: Install configuration parser
         run: python -m pip install --disable-pip-version-check -r requirements.txt
       - name: Install pinned upstream FlooGen (no simulator rebuild)
@@ -72,36 +79,16 @@ jobs:
           (cd .tools/bin && sha256sum -c "$XEZIM_ASSET_NAME.sha256")
           chmod +x ".tools/bin/$XEZIM_ASSET_NAME"
           echo "XEZIM_BIN=$GITHUB_WORKSPACE/.tools/bin/$XEZIM_ASSET_NAME" >> "$GITHUB_ENV"
-      - name: Exercise both memory destinations through AXI4 fabric
-        run: bash -o pipefail -c 'make dv-memory | tee memory-dv.log'
-      - name: Simulate configured fully connected AXI crossbar profile
-        run: AXI_CONFIG=config/examples/memory-fabric-connectivity.yaml make dv-memory
-      - name: Simulate sparse AXI crossbar (allowed transfers and forbidden DECERR)
-        run: AXI_CONFIG=config/examples/memory-fabric-sparse.yaml make dv-memory
-      - name: Prove scoreboard detects incorrect memory data
-        run: bash -o pipefail -c 'make dv-memory-negative | tee memory-negative.log'
-      - name: Test reusable local SRAM read/write ports and byte strobes
-        run: bash -o pipefail -c 'make dv-sram | tee local-sram.log'
-      - name: Execute a minimal SERV-only 4-instruction program
-        run: bash -o pipefail -c 'make dv-serv | tee serv-minimal.log'
-      - name: Boot both CPUs from ROM and flash into blank SRAM
-        run: bash -o pipefail -c 'BOOT_WAVE=1 BOOT_TRACE=1 make dv-boot | tee boot-dv.log'
-      - name: Upload failed test logs
-        if: failure()
+      - name: Run YAML-defined Xezim profiles and relocated cold boot
+        run: python3 tools/regress.py xezim diagnostics
+      - name: Retain resolved filelists, commands and results
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: heterogeneous-soc-debug
+          name: heterogeneous-soc-results
           path: |
-            memory-dv.log
-            memory-negative.log
-            cpu-dv.log
-            boot-dv.log
-            local-sram.log
-            serv-minimal.log
-            port-slice.log
-            boot-trace.vcd
+            .tools/regression/
             gen/boot/manifest.json
             gen/memory/manifest.json
-            gen/noc/fabric_ir.json
-            gen/verification/routes.json
-          if-no-files-found: ignore
+          include-hidden-files: true
+          if-no-files-found: error
