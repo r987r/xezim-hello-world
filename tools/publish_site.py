@@ -483,7 +483,7 @@ def shell(title,body,relative,repository,sha):
     else:prefix+='/'
     template=(ROOT/'tools/templates/site.html').read_text()
     navigation=''.join(f'<a href="{prefix}{path}">{label}</a>' for path,label in
-                       [('index.html','Overview'),('topology.html','Topology'),('fabric.html','Fabric Explorer'),('runs.html','Test runs'),('docs.html','Documentation'),('reference.html','Source data')])
+                       [('index.html','Overview'),('topology.html','Topology'),('explorer.html','2D Explorer'),('fabric.html','Fabric Explorer'),('runs.html','Test runs'),('docs.html','Documentation'),('reference.html','Source data')])
     return (template.replace('__TITLE__',escape(title)).replace('__NAV__',navigation).replace('__HOME__',prefix+'index.html')
             .replace('__CONTENT__',body).replace('__SOURCE__',escape(sha[:12]))
             .replace('__REPO__',f'https://github.com/{repository}/tree/{sha}'))
@@ -547,13 +547,15 @@ def build(output,evidence,repository,sha,config):
     monitors=json.loads((ROOT/'gen/supernoc/axi_monitors.json').read_text())
     fabric_report.attach_one_beat_observations(fabric, entries, output, sha)
     dump(output/'data/fabric.json',fabric)
+    from design_explorer import catalog as design_catalog
+    dump(output/'data/design-graph.json', design_catalog(ROOT))
     dataset={'schema_version':1,'title':config['title'],'source_sha':sha,'repository':repository,
              'built_at':datetime.now(timezone.utc).isoformat(),'runs':runs,'entries':entries,
              'notes':notes,'documents':docs,'networks':noc['networks'],'chip':chip,
              'monitors':monitors['monitors'],'fabric':fabric['summary'],'tests':catalog['tests']}
     dump(output/'data/site.json',dataset)
     data=json.dumps(dataset,separators=(',',':')).replace('<','\\u003c')
-    for page in ('index','topology','fabric','runs','docs','reference'):
+    for page in ('index','topology','explorer','fabric','runs','docs','reference'):
         body=(ROOT/('tools/templates/site_'+page+'.html')).read_text().replace('__SITE_DATA__',data)
         if page=='fabric':
             fabric_data=json.dumps(fabric,separators=(',',':')).replace('<','\\u003c')
