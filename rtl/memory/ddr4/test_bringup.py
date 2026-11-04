@@ -146,6 +146,18 @@ class TestDDR4GeneratedHeader(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "different widths"):
             bringup.emitted_port_widths(text)
 
+    def test_simulation_can_prune_unused_physical_reset(self):
+        text = self.fixture().replace("    input wire rst,\n", "")
+        # The chip-specific sim CRG does not connect the physical reset pad.
+        result = bringup.emitted_port_widths(text)
+        self.assertNotIn("rst", result)
+        self.assertIn("user_rst", result)
+
+    def test_if_physical_reset_present_must_be_input(self):
+        text = self.fixture().replace("input wire rst", "output wire rst")
+        with self.assertRaisesRegex(ValueError, "rst: unexpected"):
+            bringup.emitted_port_widths(text)
+
     def test_init_status_port_required(self):
         text = self.fixture().replace("init_done", "init_not_done")
         with self.assertRaisesRegex(ValueError, "init_done"):
