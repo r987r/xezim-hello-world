@@ -126,6 +126,11 @@ both toolchains. [Setup, filelists, build/run stages and results](docs/regressio
 replace the old per-test shell runners. Cold boot includes a relocated-map
 regression driven by the generated boot configuration package.
 
+The NoC and chip cocotb runs also produce a [per-test AXI run report](docs/axi-run-reports.md):
+an offline HTML page with a filterable transaction table and completion
+timeline, plus raw events/transaction JSON. Dedicated CI artifacts retain
+the pages for positive and negative runs.
+
 ## Reproducible generation
 
 Everything under **[`gen/`](gen/)** is committed to Git for version-to-version diffs. The directory is exclusively generator-owned and contains a marker protecting against accidental replacement of user-owned trees.

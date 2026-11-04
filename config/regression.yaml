@@ -96,6 +96,9 @@ tests:
     build: .tools/supernoc-obj
     timeout_s: 1800
     pass: 'PASS supernoc:'
+    report:
+      context: 'Upstream AXI BFMs drive every initiator and model every leaf target. This scope exercises the shared NoCs without real CPUs or iDMA.'
+      axi: {scope: u_noc, clock: clk_i, reset: rst_ni, catalog: gen/supernoc/axi_monitors.json, max_events: 500000}
   supernoc-negative:
     <<: *supernoc
     reuse_build: true
@@ -114,6 +117,9 @@ tests:
     env: {MAKEFLAGS: '-j2'}
     timeout_s: 1800
     pass: 'PASS fullchip:'
+    report:
+      context: 'Real PicoRV32 and SERV firmware coordinate boot phases. The compute0 DMA boundary is driven by a verification AXI manager; real iDMA and physical HBM/DDR controllers remain pending.'
+      axi: {scope: dut.u_noc, clock: clk, reset: rst_n, catalog: gen/supernoc/axi_monitors.json, max_events: 500000}
   chip-boot-negative:
     <<: *chip
     reuse_build: true

@@ -25,7 +25,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ENGINES = {'xezim', 'xezim-compile', 'verilator-lint', 'cocotb-verilator'}
 FIELDS = {'engine', 'sources', 'ip', 'top', 'args', 'pass', 'expect_failure',
           'timeout_s', 'memory_config', 'boot_relocate', 'module', 'test_dir',
-          'build', 'reuse_build', 'env', 'seed', 'bender_targets', 'mode'}
+          'build', 'reuse_build', 'env', 'seed', 'bender_targets', 'mode', 'report'}
 
 
 def expand(config, names, stack=()):
@@ -65,6 +65,19 @@ def load_config(path):
             raise ValueError(f'{name}: build reuse is only supported by cocotb-verilator')
         if test.get('mode', 'simulate') not in ('simulate', 'compile') or (test.get('mode') == 'compile' and test['engine'] != 'xezim'):
             raise ValueError(f'{name}: mode=compile requires the Xezim engine')
+        if 'report' in test:
+            report = test['report']
+            required = {'scope','clock','reset','catalog'}
+            if (test['engine'] != 'cocotb-verilator' or not isinstance(report, dict)
+                or 'axi' not in report or set(report) - {'axi','context'}
+                or ('context' in report and not isinstance(report['context'],str))
+                or not isinstance(report['axi'], dict)
+                or not required <= set(report['axi'])
+                or set(report['axi']) - required - {'max_events'}
+                or any(not isinstance(report['axi'][k],str) or not report['axi'][k] for k in required)
+                or type(report['axi'].get('max_events',500000)) is not int
+                or report['axi'].get('max_events',500000) <= 0):
+                raise ValueError(f'{name}: invalid AXI report configuration for cocotb-verilator')
     for name in config['suites']:
         expand(config, [name])
     if set(expand(config, ['full'])) != set(config['tests']):
@@ -250,7 +263,7 @@ def run_target(name, test, resolver, options):
     defines = list(dict.fromkeys(defines))
     filelist = out/'sources.f'
     filelist.write_text(filelist_text(sources, includes, defines))
-    plan = {**test, 'sources': sources, 'includes': includes, 'defines': defines,
+    plan = {**test, 'target': name, 'sources': sources, 'includes': includes, 'defines': defines,
             'args': args, 'results_xml': str(out/'results.xml'), 'stage': options.stage}
     plan_file = out/'plan.json'
     plan_file.write_text(json.dumps(plan, indent=2) + '\n')
@@ -284,6 +297,8 @@ def run_target(name, test, resolver, options):
     plan['commands'] = commands
     plan_file.write_text(json.dumps(plan, indent=2) + '\n')
     env = dict(os.environ)
+    env['SOC_RUN_PLAN'] = str(plan_file)
+    env['PYTHONPATH'] = str(ROOT) + os.pathsep + env.get('PYTHONPATH', '')
     env.pop('SUPERNOC_NEGATIVE', None)
     env.update(test.get('env', {}))
     started = time.monotonic()
@@ -304,8 +319,20 @@ def run_target(name, test, resolver, options):
         if not ok:
             print('\n'.join(text.splitlines()[-30:]), flush=True)
     passed = all(r['passed'] for r in results)
-    (out/'result.json').write_text(json.dumps({'target': name, 'passed': passed, 'stage': options.stage,
-                                             'elapsed_s': round(time.monotonic()-started, 3), 'results': results}, indent=2) + '\n')
+    result = {'target': name, 'passed': passed, 'stage': options.stage,
+              'elapsed_s': round(time.monotonic()-started, 3), 'results': results}
+    if test.get('report') and options.stage in ('all','run'):
+        from axi_report import write_report
+        # This runs after failed/negative simulations too; JSONL is flushed
+        # during capture so a fatal simulator exit still leaves useful data.
+        summary = write_report(out,plan,result)
+        if passed and not test.get('expect_failure') and (not summary['capture_bound'] or summary['overflow'] or summary['issues'] or not summary['transactions']):
+            passed = result['passed'] = False
+            results.append({'name':'AXI capture','passed':False,'reason':'missing, empty or inconsistent AXI capture'})
+            print(f'FAIL {name}/AXI capture: missing, empty or inconsistent capture',flush=True)
+            write_report(out,plan,result)
+        print(f'REPORT {name}: {summary["transactions"]} AXI observations; {out.relative_to(ROOT)}/report.html',flush=True)
+    (out/'result.json').write_text(json.dumps(result, indent=2) + '\n')
     return passed
 
 

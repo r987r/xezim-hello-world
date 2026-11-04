@@ -52,8 +52,9 @@
     "noc/floonoc/memory0/local_data/floo_xezim_memory0_local_data_noc.sv": "8a5bb79556ee41e93077e0d56db14b9df487b58a35ef819b33776817cfbf6638",
     "noc/floonoc/memory0/local_data/floo_xezim_memory0_local_data_noc_pkg.sv": "2788d66c12e90772af6683f73b9c324ee71a62b0e3c66e4857a8a3461f63dc0a",
     "noc/floonoc/memory0/local_data/floogen.yaml": "2bcf9f6af2ae63ad27e0370b3946e7d7e00d467d44ea5059363ec5bf20cc8aea",
+    "supernoc/axi_monitors.json": "1485e5c5079190e6a11a3f380dc447f193a277b838b50976d237c883172e7b71",
     "supernoc/manifest.json": "7b88e10e1d3929b7dbea8ab6fb0e04806457f1dce62a6588d4acf1429ecf2178",
-    "supernoc/soc_noc.sv": "1b8a7a19690bb0909d75534e63efed983bf464c545182957d4bb9d9a417f2b8f",
+    "supernoc/soc_noc.sv": "e7ad1c7153eebb4231b3efeb3e60d2f068b23c65d64660f080fa05769164d8b2",
     "supernoc/supernoc_tb.sv": "536b875c65a60960d0a2a17343b98694f9b8c697e1e24fbbee03f49c9b831626",
     "verification/plan.json": "1a6491efc7e4224e4dd848caa1503d9b663677e88801e5f34357a92c7a3c9b4d",
     "verification/routes.json": "b3422dcb7d7550ab7db1614af7569b5abbbfd15c1f038060394eab8f9b697c71"

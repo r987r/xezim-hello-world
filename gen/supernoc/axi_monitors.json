@@ -1,0 +1,418 @@
+{
+  "monitors": [
+    {
+      "addr_width": 32,
+      "data_width": 32,
+      "endpoints": [
+        "compute0_local_config.cpu"
+      ],
+      "id": "compute0_local_config.cpu",
+      "id_width": 1,
+      "network": "compute0_local_config",
+      "plane": "config",
+      "prefix": "tap_compute0_local_config__cpu",
+      "role": "initiator"
+    },
+    {
+      "addr_width": 32,
+      "data_width": 32,
+      "endpoints": [
+        "compute0_local_config.dma_regs"
+      ],
+      "id": "compute0_local_config.dma_regs",
+      "id_width": 1,
+      "network": "compute0_local_config",
+      "plane": "config",
+      "prefix": "tap_compute0_local_config__dma_regs",
+      "role": "target"
+    },
+    {
+      "addr_width": 32,
+      "data_width": 32,
+      "endpoints": [
+        "compute0_local_config.reset_ctrl"
+      ],
+      "id": "compute0_local_config.reset_ctrl",
+      "id_width": 1,
+      "network": "compute0_local_config",
+      "plane": "config",
+      "prefix": "tap_compute0_local_config__reset_ctrl",
+      "role": "target"
+    },
+    {
+      "addr_width": 64,
+      "data_width": 64,
+      "endpoints": [
+        "compute0_local_data.boot_flash"
+      ],
+      "id": "compute0_local_data.boot_flash",
+      "id_width": 5,
+      "network": "compute0_local_data",
+      "plane": "data",
+      "prefix": "tap_compute0_local_data__boot_flash",
+      "role": "target"
+    },
+    {
+      "addr_width": 64,
+      "data_width": 64,
+      "endpoints": [
+        "compute0_local_data.boot_rom"
+      ],
+      "id": "compute0_local_data.boot_rom",
+      "id_width": 5,
+      "network": "compute0_local_data",
+      "plane": "data",
+      "prefix": "tap_compute0_local_data__boot_rom",
+      "role": "target"
+    },
+    {
+      "addr_width": 64,
+      "data_width": 64,
+      "endpoints": [
+        "compute0_local_data.cpu"
+      ],
+      "id": "compute0_local_data.cpu",
+      "id_width": 4,
+      "network": "compute0_local_data",
+      "plane": "data",
+      "prefix": "tap_compute0_local_data__cpu",
+      "role": "initiator"
+    },
+    {
+      "addr_width": 64,
+      "data_width": 64,
+      "endpoints": [
+        "compute0_local_data.dma"
+      ],
+      "id": "compute0_local_data.dma",
+      "id_width": 4,
+      "network": "compute0_local_data",
+      "plane": "data",
+      "prefix": "tap_compute0_local_data__dma",
+      "role": "initiator"
+    },
+    {
+      "addr_width": 64,
+      "data_width": 64,
+      "endpoints": [
+        "compute0_local_data.sram"
+      ],
+      "id": "compute0_local_data.sram",
+      "id_width": 5,
+      "network": "compute0_local_data",
+      "plane": "data",
+      "prefix": "tap_compute0_local_data__sram",
+      "role": "target"
+    },
+    {
+      "addr_width": 32,
+      "data_width": 32,
+      "endpoints": [
+        "compute1_local_config.cpu"
+      ],
+      "id": "compute1_local_config.cpu",
+      "id_width": 1,
+      "network": "compute1_local_config",
+      "plane": "config",
+      "prefix": "tap_compute1_local_config__cpu",
+      "role": "initiator"
+    },
+    {
+      "addr_width": 32,
+      "data_width": 32,
+      "endpoints": [
+        "compute1_local_config.dma_regs"
+      ],
+      "id": "compute1_local_config.dma_regs",
+      "id_width": 1,
+      "network": "compute1_local_config",
+      "plane": "config",
+      "prefix": "tap_compute1_local_config__dma_regs",
+      "role": "target"
+    },
+    {
+      "addr_width": 64,
+      "data_width": 64,
+      "endpoints": [
+        "compute1_local_data.cpu"
+      ],
+      "id": "compute1_local_data.cpu",
+      "id_width": 4,
+      "network": "compute1_local_data",
+      "plane": "data",
+      "prefix": "tap_compute1_local_data__cpu",
+      "role": "initiator"
+    },
+    {
+      "addr_width": 64,
+      "data_width": 64,
+      "endpoints": [
+        "compute1_local_data.dma"
+      ],
+      "id": "compute1_local_data.dma",
+      "id_width": 4,
+      "network": "compute1_local_data",
+      "plane": "data",
+      "prefix": "tap_compute1_local_data__dma",
+      "role": "initiator"
+    },
+    {
+      "addr_width": 64,
+      "data_width": 64,
+      "endpoints": [
+        "compute1_local_data.sram"
+      ],
+      "id": "compute1_local_data.sram",
+      "id_width": 5,
+      "network": "compute1_local_data",
+      "plane": "data",
+      "prefix": "tap_compute1_local_data__sram",
+      "role": "target"
+    },
+    {
+      "addr_width": 32,
+      "data_width": 32,
+      "endpoints": [
+        "memory0_local_config.controller_regs"
+      ],
+      "id": "memory0_local_config.controller_regs",
+      "id_width": 1,
+      "network": "memory0_local_config",
+      "plane": "config",
+      "prefix": "tap_memory0_local_config__controller_regs",
+      "role": "target"
+    },
+    {
+      "addr_width": 64,
+      "data_width": 64,
+      "endpoints": [
+        "memory0_local_data.target_crossbar"
+      ],
+      "id": "memory0_local_data.target_crossbar",
+      "id_width": 4,
+      "network": "memory0_local_data",
+      "plane": "data",
+      "prefix": "tap_memory0_local_data__target_crossbar",
+      "role": "target"
+    },
+    {
+      "addr_width": 64,
+      "data_width": 64,
+      "endpoints": [
+        "compute0_local_data.global_out",
+        "global_data.compute0"
+      ],
+      "id": "compute0_local_data.global_out",
+      "id_width": 5,
+      "network": "compute0_local_data",
+      "plane": "data",
+      "prefix": "tap_compute0_local_data__global_out",
+      "role": "link"
+    },
+    {
+      "addr_width": 64,
+      "data_width": 64,
+      "endpoints": [
+        "global_data.compute0_sram",
+        "compute0_local_data.global_in"
+      ],
+      "id": "global_data.compute0_sram",
+      "id_width": 4,
+      "network": "global_data",
+      "plane": "data",
+      "prefix": "tap_global_data__compute0_sram",
+      "role": "link"
+    },
+    {
+      "addr_width": 32,
+      "data_width": 32,
+      "endpoints": [
+        "compute0_local_config.global_out",
+        "global_config.compute0"
+      ],
+      "id": "compute0_local_config.global_out",
+      "id_width": 1,
+      "network": "compute0_local_config",
+      "plane": "config",
+      "prefix": "tap_compute0_local_config__global_out",
+      "role": "link"
+    },
+    {
+      "addr_width": 32,
+      "data_width": 32,
+      "endpoints": [
+        "global_config.compute0_regs",
+        "compute0_local_config.global_in"
+      ],
+      "id": "global_config.compute0_regs",
+      "id_width": 1,
+      "network": "global_config",
+      "plane": "config",
+      "prefix": "tap_global_config__compute0_regs",
+      "role": "link"
+    },
+    {
+      "addr_width": 64,
+      "data_width": 64,
+      "endpoints": [
+        "compute1_local_data.global_out",
+        "global_data.compute1"
+      ],
+      "id": "compute1_local_data.global_out",
+      "id_width": 5,
+      "network": "compute1_local_data",
+      "plane": "data",
+      "prefix": "tap_compute1_local_data__global_out",
+      "role": "link"
+    },
+    {
+      "addr_width": 64,
+      "data_width": 64,
+      "endpoints": [
+        "global_data.compute1_sram",
+        "compute1_local_data.global_in"
+      ],
+      "id": "global_data.compute1_sram",
+      "id_width": 4,
+      "network": "global_data",
+      "plane": "data",
+      "prefix": "tap_global_data__compute1_sram",
+      "role": "link"
+    },
+    {
+      "addr_width": 32,
+      "data_width": 32,
+      "endpoints": [
+        "compute1_local_config.global_out",
+        "global_config.compute1"
+      ],
+      "id": "compute1_local_config.global_out",
+      "id_width": 1,
+      "network": "compute1_local_config",
+      "plane": "config",
+      "prefix": "tap_compute1_local_config__global_out",
+      "role": "link"
+    },
+    {
+      "addr_width": 32,
+      "data_width": 32,
+      "endpoints": [
+        "global_config.compute1_regs",
+        "compute1_local_config.global_in"
+      ],
+      "id": "global_config.compute1_regs",
+      "id_width": 1,
+      "network": "global_config",
+      "plane": "config",
+      "prefix": "tap_global_config__compute1_regs",
+      "role": "link"
+    },
+    {
+      "addr_width": 64,
+      "data_width": 64,
+      "endpoints": [
+        "global_data.memory_ingress0",
+        "memory0_local_data.memory_ingress0"
+      ],
+      "id": "global_data.memory_ingress0",
+      "id_width": 4,
+      "network": "global_data",
+      "plane": "data",
+      "prefix": "tap_global_data__memory_ingress0",
+      "role": "link"
+    },
+    {
+      "addr_width": 64,
+      "data_width": 64,
+      "endpoints": [
+        "global_data.memory_ingress1",
+        "memory0_local_data.memory_ingress1"
+      ],
+      "id": "global_data.memory_ingress1",
+      "id_width": 4,
+      "network": "global_data",
+      "plane": "data",
+      "prefix": "tap_global_data__memory_ingress1",
+      "role": "link"
+    },
+    {
+      "addr_width": 32,
+      "data_width": 32,
+      "endpoints": [
+        "global_config.memory0_regs",
+        "memory0_local_config.global_in"
+      ],
+      "id": "global_config.memory0_regs",
+      "id_width": 1,
+      "network": "global_config",
+      "plane": "config",
+      "prefix": "tap_global_config__memory0_regs",
+      "role": "link"
+    }
+  ],
+  "regions": [
+    {
+      "base": "0x00000000",
+      "name": "boot.rom",
+      "plane": "data",
+      "size": "0x00001000"
+    },
+    {
+      "base": "0x20000000",
+      "name": "boot.flash",
+      "plane": "data",
+      "size": "0x00010000"
+    },
+    {
+      "base": "0x10000000",
+      "name": "compute0.sram",
+      "plane": "data",
+      "size": "0x00100000"
+    },
+    {
+      "base": "0x11000000",
+      "name": "compute1.sram",
+      "plane": "data",
+      "size": "0x00100000"
+    },
+    {
+      "base": "0x100000000",
+      "name": "memory0.hbm0",
+      "plane": "data",
+      "size": "0x40000000"
+    },
+    {
+      "base": "0x140000000",
+      "name": "memory0.ddr0",
+      "plane": "data",
+      "size": "0x40000000"
+    },
+    {
+      "base": "0x40000000",
+      "name": "compute0.dma",
+      "plane": "config",
+      "size": "0x10000"
+    },
+    {
+      "base": "0x40010000",
+      "name": "compute1.dma",
+      "plane": "config",
+      "size": "0x10000"
+    },
+    {
+      "base": "0x40020000",
+      "name": "boot.reset_ctrl",
+      "plane": "config",
+      "size": "0x1000"
+    },
+    {
+      "base": "0x40030000",
+      "name": "memory0.ctrl",
+      "plane": "config",
+      "size": "0x1000"
+    }
+  ],
+  "schema_version": 1,
+  "scope": "soc_noc",
+  "semantics": "One passive observation per distinct AXI connection; IDs are local to each observation."
+}

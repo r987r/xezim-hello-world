@@ -46,6 +46,19 @@ class RegressionTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     regress.load_config(path)
 
+    def test_report_configuration_fails_closed(self):
+        for mutation in ('engine','clock','limit','field'):
+            cfg=copy.deepcopy(self.config)
+            test=cfg['tests']['supernoc']
+            if mutation=='engine': test['engine']='xezim'
+            elif mutation=='clock': del test['report']['axi']['clock']
+            elif mutation=='limit': test['report']['axi']['max_events']=0
+            else: test['report']['axi']['unknown']=True
+            with tempfile.TemporaryDirectory() as tmp:
+                path=Path(tmp)/'regression.yaml';path.write_text(yaml.safe_dump(cfg))
+                with self.assertRaisesRegex(ValueError,'invalid AXI report'):
+                    regress.load_config(path)
+
     def test_negative_requires_named_failure_and_failed_process(self):
         test = self.config['tests']['memory-negative']
         marker = test['expect_failure']

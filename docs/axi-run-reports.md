@@ -1,0 +1,127 @@
+# AXI traffic capture and per-test run reports
+
+The NoC and chip boot cocotb targets produce a self-contained `report.html`
+beside their logs. The page embeds its data, works offline, and contains:
+
+- a filterable table of reads/writes at initiator, inter-mesh and target boundaries;
+- full address, local AXI ID, every data beat, write strobes, responses and sidebands;
+- a completion timeline with one row per initiator and simulation time on the X axis;
+- accepted B and accepted final-R-beat completion points, with latency/details on selection;
+- run outcome, capture coverage, in-flight/reset-aborted observations and diagnostics;
+- filtered CSV/JSON export, with wide addresses/data retained as hexadecimal strings.
+
+The timeline defaults to initiator observations. The same transfer is also
+observed at downstream links/targets; those observations are available in
+the table or by clearing the initiator-only timeline control. Performance
+summaries count initiator completions once. These are simulation bus metrics,
+not physical DDR/HBM timing or maximum-throughput measurements.
+
+## Capture provider and coverage
+
+The pinned `cocotbext-axi==0.1.24` package already used for the AXI agents
+also provides passive `AxiAWMonitor`, `AxiWMonitor`, `AxiBMonitor`,
+`AxiARMonitor` and `AxiRMonitor`. These upstream monitors sample handshakes;
+the collector does not drive VALID, READY, data or reset.
+
+`tools/supernoc_gen.py` emits read-only channel aliases under `COCOTB_SIM`
+and `gen/supernoc/axi_monitors.json` from the same actual endpoint/link graph
+as `soc_noc`. The default architecture has 26 distinct AXI connections:
+six initiator boundaries, nine target boundaries and eleven inter-mesh
+links, covering all 37 NoC endpoint ports. Each link is captured once and
+catalogs both connected endpoints. Router-to-router FlooNoC flits are not
+AXI channels and are outside this capture scope.
+
+Both existing testbenches attach this catalog: `u_noc` in the NoC BFM test,
+and `dut.u_noc` in the chip boot test. There is no extra RTL testbench or
+vendor fork. Eager bus binding rejects missing channel aliases. A configured
+event limit fails the test explicitly and marks the artifact incomplete.
+Successful monitored simulations also require nonempty, internally
+consistent capture; an idle individual boundary is allowed.
+
+The PULP AXI revision already locked by FlooNoC also contains
+[`axi_dumper`](https://github.com/pulp-platform/axi/blob/0ccc838fe06aeeb857eb83c6be9a915c4bf99566/src/axi_dumper.sv),
+which can log all five channels when enabled. Its simulation-only SV
+implementation and dictionary-log format would need separate simulator
+validation and transaction/report processing. Reusing the working cocotb
+flow avoids introducing another logger or AXI dependency revision.
+
+## Transaction semantics and limits
+
+`dv/common/axi_trace.py` writes accepted channel events to flushed JSONL.
+`tools/axi_report.py` correlates them after the simulator process exits,
+including failed and expected-failure runs. Ordering rules are explicit:
+
+- AW and W are independent. AXI4 has no WID; complete W bursts pair with
+  accepted AW requests in address-channel order, including W-before-AW.
+- B responses pair by BID and FIFO order within that ID. Different IDs
+  can complete out of order. A write completes on BVALID && BREADY.
+- R beats pair by RID and FIFO order within that ID. Interleaved read IDs
+  are supported. A read completes on RVALID && RREADY && RLAST.
+- Reset starts a new correlation epoch. Old in-flight requests become
+  `reset_aborted`; late/unmatched responses are diagnostics.
+- Same-edge events are processed in request/data/response order. All
+  accepted data beats, responses and local IDs remain available in JSONL.
+
+IDs can be remapped through the NoCs. The report deliberately correlates
+within each observed interface, rather than guessing a global transaction
+identity from matching addresses, payloads or IDs. The address-region label
+comes from the architecture map; it is not proof of the original source or
+actual destination. Existing independent destination/readback scoreboards
+remain the functional acceptance checks.
+
+Data values are full AXI bus beats. For narrow or unaligned reads, interpret
+valid byte lanes using ARSIZE and address; R has no write-strobe field.
+The shared memory crossbar's HBM/DDR traffic is observed at its common
+NoC target boundary and labeled by address region. Downstream crossbar
+ports and non-AXI CPU interfaces are separate future capture points.
+
+Pending traffic at test termination is retained without a completion point.
+Malformed/truncated logs, response orphans and burst-length mismatches are
+visible. The report is not full AXI protocol VIP. Startup failures before a
+simulation plan exists may stop before a report is created. Xezim targets
+retain their current logs; this first capture provider runs in the two
+Verilator/cocotb NoC scopes and their negative variants.
+
+## YAML, commands and published artifacts
+
+Each observed target opts in through `config/regression.yaml`:
+
+```yaml
+report:
+  context: 'Real CPU firmware; compute0 DMA boundary is a verification AXI manager.'
+  axi:
+    scope: dut.u_noc
+    clock: clk
+    reset: rst_n
+    catalog: gen/supernoc/axi_monitors.json
+    max_events: 500000
+```
+
+The provider currently requires active-low reset and the declared common
+clock. New clock domains need separate explicit clocks/timestamps and
+correlation review.
+
+```bash
+make dv-chip
+make dv-supernoc
+python3 tools/regress.py chip-boot --stage run
+```
+
+Open `.tools/regression/<target>/report.html`. That directory also contains
+`axi-events.jsonl` (raw accepted handshakes), `axi-transactions.json`
+(versioned run metadata and AXI observations), `result.json`, and the
+existing plans/logs/XML. Local attempts replace that target's prior output;
+CI artifacts preserve the workflow run and attempt.
+
+The chip and NoC workflows upload dedicated AXI run report artifacts in
+addition to their full evidence artifacts. Download the artifact from the
+Actions run, extract it and open a target's `report.html`; GitHub artifact
+downloads do not execute or host the HTML page directly.
+
+## Extension points
+
+Run metadata and report `sections` are versioned separately from raw event
+capture. Later sections can add CPU phase markers, DMA descriptors,
+interrupts, latency distributions or throughput windows without changing
+AXI monitor behavior. A public hosted dashboard, waveform/flit trace and
+cross-NoC global transaction correlation are separate future work.
