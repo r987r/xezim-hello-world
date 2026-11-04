@@ -110,7 +110,7 @@ class ProtocolTrace:
             raise ValueError("completed transaction missing observed end")
         self._accept(source, max(start_ps, end_ps or start_ps))
         self._write({"version": 1, "type": "transaction", "source": source,
-                     "operation": operation, "start_ps": start_ps, "end_ps": end_ps,
+                     "operation": operation, "time_ps": max(start_ps, end_ps or start_ps), "start_ps": start_ps, "end_ps": end_ps,
                      "id": json_fields(identifier), "status": status,
                      "fields": json_fields(fields or {})})
 
