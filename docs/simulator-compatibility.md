@@ -83,10 +83,23 @@ this guard or suppress the error silently.
 - Compare observed data, IDs and backpressure; if Xezim differs from
   Verilator, record the precise hierarchy, source line, configuration,
   waveform and result in this doc and an upstream issue.
-- Treat all cross-NoC edges in the full-chip diagram as planned
-  until an assembled SoC top runs actual transactions.
+- The shared NoC assembly now serves the CPU boot configuration. Keep
+  actual CPU/bridge/SRAM/reset paths distinct from pending real iDMA and
+  physical-controller paths in the one chip diagram.
 
 The regular [`dv-soc.yml`](../.github/workflows/dv-soc.yml)
 continues to execute the existing Xezim CPU ROM boot, SERV program,
 local SRAM and 2x2 Verilog-AXI memory tests. It does not replace this
 independent upstream FlooNoC compatibility check.
+
+## Chip boot configuration
+
+`chip-xezim-compile` compiles the assembled chip and shared SV checker;
+`chip-boot` runs it with Verilator/cocotb. Keep these results separate.
+The first Xezim functional probe exceeded a 180-second wall budget before
+phase completion; it is not a functional pass. The CPU address-classification
+adapter uses named select wires: Xezim 0.11.4 warned about implicit nets for
+parameter names in inline instance-port expressions. Upstream IP is unmodified.
+The first local Verilator build also hit an undefined generated scheduling
+helper at link time; validation must use a complete successfully linked
+current configuration, never patched generated C++.

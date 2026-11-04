@@ -6,7 +6,7 @@ package:
 # FlooNoC uses its own upstream Bender.yml + Bender.lock, without merging
 # its AXI dependency with the separate, planned SoC PULP AXI revision.
 sources:
-  - target: memory
+  - target: any(memory, chip_boot)
     files:
       - .tools/verilog_axi/rtl/priority_encoder.v
       - .tools/verilog_axi/rtl/arbiter.v
@@ -17,15 +17,17 @@ sources:
       - .tools/verilog_axi/rtl/axi_crossbar_rd.v
       - .tools/verilog_axi/rtl/axi_crossbar.v
       - .tools/verilog_axi/rtl/axi_ram.v
+  - target: memory
+    files:
       - rtl/adapters/axi_memory_target_model.sv
       - dv/common/axi_master_bfm.sv
       - dv/common/axi_route_monitor.sv
       - gen/memory/memory_tb.sv
-  - target: any(boot, cpu)
+  - target: any(boot, cpu, chip_boot)
     files:
       - .tools/picorv32/picorv32.v
       - rtl/adapters/picorv32_cpu_adapter.sv
-  - target: any(boot, cpu, serv)
+  - target: any(boot, cpu, serv, chip_boot)
     files:
       - .tools/serv/rtl/serv_bufreg.v
       - .tools/serv/rtl/serv_bufreg2.v
@@ -62,3 +64,16 @@ sources:
     files: [dv/cpu/heterogeneous_cpu_tb.sv]
   - target: smoke
     files: [dv/smoke/hello_world_tb.sv]
+  - target: any(supernoc, chip_boot)
+    files: [gen/supernoc/soc_noc.sv]
+  - target: supernoc
+    files: [gen/supernoc/supernoc_tb.sv]
+  - target: chip_boot
+    files:
+      - .tools/wb2axip/rtl/wbm2axilite.v
+      - rtl/adapters/chip_types_pkg.sv
+      - rtl/adapters/serv_axi_lite_adapter.sv
+      - rtl/adapters/cpu_noc_adapter.sv
+      - rtl/adapters/axi_sram_target.sv
+      - gen/chip/soc_top.sv
+      - gen/chip/full_chip_tb.sv

@@ -1,0 +1,21 @@
+0000: 100002b7  lui x5, 0x10000
+0004: 40028293  addi x5, x5, 1024
+0008: 00100313  addi x6, zero, 1
+000c: 0062aa23  sw x6, 20(x5)
+0010: 40020437  lui x8, 0x40020
+0014: 00100313  addi x6, zero, 1
+0018: 00642223  sw x6, 4(x8)
+001c: 00200313  addi x6, zero, 2
+0020: 0002a383  lw x7, 0(x5)
+0024: fe639ee3  bne x7, x6, wait_run
+0028: 55100313  addi x6, zero, 1361
+002c: 0062ac23  sw x6, 24(x5)
+0030: 00300313  addi x6, zero, 3
+0034: 0002a383  lw x7, 0(x5)
+0038: fe639ee3  bne x7, x6, wait_check
+003c: 55000313  addi x6, zero, 1360
+0040: 0082a383  lw x7, 8(x5)
+0044: fe639ee3  bne x7, x6, check_peer
+0048: 00100313  addi x6, zero, 1
+004c: 0062ae23  sw x6, 28(x5)
+0050: 0000006f  jal zero, 0  # park

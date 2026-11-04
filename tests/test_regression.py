@@ -90,7 +90,7 @@ class RegressionTests(unittest.TestCase):
     def test_bender_vendor_sources_match_locked_allowlist(self):
         lock = yaml.safe_load((ROOT/'config/ip.lock.yaml').read_text())['third_party']
         bender = yaml.safe_load((ROOT/'Bender.yml').read_text())
-        for ip in ('serv', 'picorv32', 'verilog_axi'):
+        for ip in ('serv', 'picorv32', 'verilog_axi', 'wb2axip'):
             prefix = f'.tools/{ip}/'
             actual = {f[len(prefix):] for group in bender['sources'] for f in group['files'] if f.startswith(prefix)}
             self.assertEqual(actual, set(lock[ip]['modules']))

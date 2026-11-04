@@ -137,6 +137,19 @@
       "dut": "soc_top",
       "name": "full_chip",
       "status": "planned"
+    },
+    {
+      "checks": [
+        "bus_loaded_firmware",
+        "real_cpus",
+        "init_run_check",
+        "peer_coordination",
+        "upstream_axi_memory_models"
+      ],
+      "command": "make dv-chip",
+      "dut": "soc_top+full_chip_tb",
+      "name": "full_chip_boot",
+      "status": "executable"
     }
   ],
   "source_config": "config/soc.yaml"

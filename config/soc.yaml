@@ -95,6 +95,12 @@ address_map:
     - {name: memory0.ctrl, base: '0x40030000', size: '0x1000'}
 
 verification:
+  full_chip_boot:
+    memory_model: axi_to_mem_tc_sram
+    phases: [init, run, check]
+    mailbox_offset: '0x400'
+    timeout_cycles: 80000
+    phase_timeout_cycles: 6000
   memory:
     ingress_master_agents: 2
     model_address_bits: 16
@@ -150,3 +156,8 @@ verification:
       dut: soc_top
       status: planned
       checks: [cpu_dma_hbm_ddr, interrupts, congestion]
+    - name: full_chip_boot
+      dut: soc_top+full_chip_tb
+      status: executable
+      command: make dv-chip
+      checks: [bus_loaded_firmware, real_cpus, init_run_check, peer_coordination, upstream_axi_memory_models]

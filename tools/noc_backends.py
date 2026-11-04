@@ -20,7 +20,7 @@ class FabricImplementation:
 BACKENDS = {
     "verilog_axi": FabricImplementation("verilog_axi", "axi_crossbar", "alexforencich/verilog-axi", True, "AXI4 crossbar"),
     "pulp_axi": FabricImplementation("pulp_axi", "axi_xbar", "pulp-platform/axi", False, "Requires PULP package/typedef generation"),
-    "floonoc": FabricImplementation("floonoc", "floo_noc", "pulp-platform/FlooNoC", False, "Scoped FlooGen and supernoc BFM wrapper exist; full SoC endpoint integration pending"),
+    "floonoc": FabricImplementation("floonoc", "floo_noc", "pulp-platform/FlooNoC", False, "Shared NoC/BFM and CPU boot-configuration emitters exist; general SoC/iDMA/controller integration remains pending"),
 }
 
 

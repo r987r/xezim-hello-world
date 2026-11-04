@@ -23,6 +23,7 @@ import bootgen
 import socgen
 import floonoc_gen
 import supernoc_gen
+import full_chip_gen
 
 ROOT = Path(__file__).resolve().parents[1]
 START = "<!-- BEGIN GENERATED SOC -->"
@@ -49,8 +50,8 @@ def generated_section(cfg: dict, meta: dict, diagrams: dict[str, str], nocs: dic
         "The **single architecture diagram** below includes all local/global FlooNoCs, "
         "compute CPU/DMA/SRAM blocks and memory target crossbar. It is generated "
         "from the same SoC configuration and FlooGen endpoint topology as the real "
-        "structural RTL. **Dashed links show pending full-SoC endpoint integration.** "
-        "Cross-NoC links are connected separately in the generated NoC BFM testbench.",
+        "structural RTL. **Dashed links show pending iDMA/controller integration.** "
+        "The shared NoC core is instantiated by both the BFM regression and the CPU boot configuration.",
         "",
         "[![Complete hierarchical SoC and all data/config FlooNoCs](gen/diagrams/noc-hierarchy.svg)](gen/diagrams/noc-hierarchy.svg)",
         "",
@@ -64,15 +65,16 @@ def generated_section(cfg: dict, meta: dict, diagrams: dict[str, str], nocs: dic
         f"{sum(x['routers'] for x in networks.values())} total generated routers. "
         f"Data: {meta['data_bits']}-bit AXI4; control: "
         f"{cfg['buses']['config']['data_bits']}-bit AXI4 transport "
-        "for planned AXI4-Lite endpoint bridges. Those upstream adapters "
-        "are not attached in the NoC BFM test.",
+        "for AXI4-Lite endpoint bridges. CPU/reset adapters are attached in the boot configuration; the BFM scope uses AXI agents.",
         "",
         "**Verification truth:** Xezim exercises separate CPU cold-boot/SRAM and "
         "Verilog-AXI memory testbenches. Both Xezim and Verilator have compiled "
         "the eight structural FlooNoCs. The unified `make dv-supernoc` regression "
         "connects all meshes to upstream AXI agents and checks destinations, data, "
         "bursts, concurrent IDs, stalls and downstream SLVERR. Xezim NoC traffic "
-        "is not verified. See [test scope and results](docs/supernoc-verification.md).",
+        "is not verified. The `make dv-chip` boot configuration runs the real CPUs through "
+        "the shared NoCs with CPU0-coordinated init/run/check and AXI memory stand-ins. "
+        "See [chip boot scope](docs/full-chip-boot.md).",
         "",
         "### Generated NoC sources (no duplicate pictures)",
         "",
@@ -158,7 +160,8 @@ def build(cfg_path: Path, out: Path, readme: Path) -> str:
     # checked-in RTL alongside all diagrams and the generated NoC IR.
     knobs = yaml.safe_load((ROOT / "config/interface_contracts.yaml").read_text())
     nocs = floonoc_gen.generate_all(cfg, knobs, out / "noc" / "floonoc")
-    supernoc_gen.emit(cfg, out / "noc" / "floonoc", out / "supernoc" / "supernoc_tb.sv")
+    noc_dv = supernoc_gen.emit(cfg, out / "noc" / "floonoc", out / "supernoc" / "supernoc_tb.sv")
+    full_chip_gen.emit(cfg, noc_dv, out / "noc" / "floonoc", out / "chip")
     diagrams = diagram_gen.render(cfg, meta, out / "diagrams", out / "noc" / "floonoc")
     dump(out / "verification" / "plan.json", verification_plan(cfg, meta))
     dump(out / "verification" / "routes.json", route_matrix(meta))
@@ -170,7 +173,8 @@ def build(cfg_path: Path, out: Path, readme: Path) -> str:
         "networks have checked-in structural SystemVerilog in noc/floonoc. "
         "supernoc/supernoc_tb.sv connects them with upstream AXI BFMs; run "
         "make dv-supernoc for current-source routed-traffic verification. "
-        "CPU, DMA, AXI-Lite bridges and physical controllers are separate integration work.\n"
+        "chip/ contains the actual CPU/NoC boot configuration, phased firmware and shared checker; "
+        "run make dv-chip. Real iDMA and physical controllers remain separate integration work.\n"
     )
     (out / STAMP).write_text("socgen-v2\n")
     files = {p.relative_to(out).as_posix(): sha(p.read_bytes())

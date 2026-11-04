@@ -31,12 +31,16 @@ tests:
     <<: *memory
     args: [--max-time, 200us, '+INJECT_BAD_EXPECTED']
     expect_failure: 'FAIL AXI read:'
-  sram:
+  sram: &sram
     engine: xezim
     sources: sram
     top: local_sram_tb
     args: [--max-time, 10us]
     pass: 'PASS: local_sram_tb'
+  sram-synthesis:
+    <<: *sram
+    # Functional read behavior must survive simulation with synthesis guards.
+    args: [-D, SYNTHESIS, --max-time, 10us]
   serv:
     engine: xezim
     sources: serv
@@ -84,6 +88,7 @@ tests:
   supernoc: &supernoc
     engine: cocotb-verilator
     sources: noc
+    bender_targets: [supernoc]
     top: supernoc_tb
     module: test_supernoc
     seed: 1
@@ -96,12 +101,40 @@ tests:
     reuse_build: true
     env: {SUPERNOC_NEGATIVE: '1'}
     expect_failure: 'FAIL supernoc injected data mismatch detected'
+  chip-boot: &chip
+    engine: cocotb-verilator
+    sources: noc
+    bender_targets: [chip_boot]
+    ip: [picorv32, serv, wb2axip, verilog_axi]
+    top: full_chip_tb
+    module: dv.full_chip.test_boot
+    seed: 1
+    test_dir: .
+    build: .tools/chip-obj
+    env: {MAKEFLAGS: '-j2'}
+    timeout_s: 1800
+    pass: 'PASS fullchip:'
+  chip-boot-negative:
+    <<: *chip
+    reuse_build: true
+    args: ['+HOLD_SECONDARY']
+    expect_failure: 'FAIL fullchip missing init acknowledgement'
+  chip-xezim-compile:
+    engine: xezim
+    sources: noc
+    bender_targets: [chip_boot]
+    ip: [picorv32, serv, wb2axip, verilog_axi]
+    top: full_chip_tb
+    mode: compile
+    timeout_s: 240
+    pass: 'PASS fullchip:'
 
 suites:
-  xezim: [memory, memory-full, memory-sparse, memory-negative, sram, serv, boot, boot-relocated]
+  xezim: [memory, memory-full, memory-sparse, memory-negative, sram, sram-synthesis, serv, boot, boot-relocated]
   noc: [noc-verilator, supernoc, supernoc-negative]
   compatibility: [noc-xezim]
   diagnostics: [cpu-fetch, smoke]
+  chip: [chip-boot, chip-boot-negative, chip-xezim-compile]
   # Every declared test is covered. Structural Xezim probes stay distinct
   # from the Verilator traffic gate; make test requires both toolchains.
-  full: [xezim, noc, compatibility, diagnostics]
+  full: [xezim, noc, compatibility, diagnostics, chip]

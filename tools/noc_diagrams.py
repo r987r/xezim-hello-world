@@ -66,13 +66,13 @@ def diagram_gen_metadata(cfg: dict, networks: dict) -> dict:
     """Instances/connections/groups model also understood by Diagram-gen viewers.
 
     Router-to-router and router-to-chimney are generated *structural* RTL.
-    NoC-to-NoC bridges and CPU/DMA/endpoints are *planned*, not wired SoC RTL.
+    The boot configuration wires CPU/SRAM/reset/model endpoints; DMA and physical controllers remain planned.
     """
     modules = {
         "floo_axi_router": {"description": "Real upstream FlooNoC router", "color": "#14845A", "ports": []},
         "floo_axi_chimney": {"description": "Real upstream AXI network interface", "color": "#2877B5", "ports": []},
-        "soc_boundary": {"description": "Planned SoC component or protocol adapter", "color": "#64748B", "ports": []},
-        "axi_crossbar": {"description": "Existing standalone Verilog-AXI memory crossbar", "color": "#16A34A", "ports": []},
+        "soc_boundary": {"description": "SoC component or protocol adapter; see per-instance status", "color": "#64748B", "ports": []},
+        "axi_crossbar": {"description": "Upstream Verilog-AXI target crossbar", "color": "#16A34A", "ports": []},
     }
     instances = []
     connections = []
@@ -85,7 +85,7 @@ def diagram_gen_metadata(cfg: dict, networks: dict) -> dict:
         info = {"id": f"noc_link_{next_id:04d}", "name": name,
                 "from": {"instance": src, "port": ports[0]},
                 "to": {"instance": dst, "port": ports[1]},
-                "type": "noc_link" if status == "generated_structural" else "planned_interconnect",
+                "type": "noc_link" if status == "generated_structural" else ("planned_interconnect" if status == "planned_integration" else "axi_interconnect"),
                 "status": status,
                 "signals": [{"name": "floo_req_and_rsp", "width": None}]
                            if status == "generated_structural" else
@@ -147,57 +147,56 @@ def diagram_gen_metadata(cfg: dict, networks: dict) -> dict:
                                 "source": entry["top"], "status": "generated_structural"}})
 
     # Show actual CPU/DMA/SRAM/CSR block boundaries in Diagram-gen too.
-    # Their links to the generated FlooNoCs are PLANNED, not instantiated.
+    # CPU/SRAM/reset links are instantiated in the boot configuration.
     for ci, subsystem in enumerate(s for s in cfg["subsystems"] if s["type"] == "compute"):
         name = subsystem["name"]
         for suffix, kind in (("cpu", subsystem["cpu"]["ip"]), ("dma", cfg["subsystem_types"]["compute"]["dma"]),
                              ("sram", "local_sram"), ("dma_csr", "dma_registers")):
             instances.append({"name": f"{name}.{suffix}", "module": "soc_boundary",
                               "position": {"x": 20 + ci * 12, "y": 72 + 3 * len(instances) % 12, "z": 0},
-                              "info": {"ip": kind, "status": "planned_noc_endpoint_integration"}})
+                              "info": {"ip": kind, "status": "wired_boot_configuration" if suffix in ("cpu", "sram") else "planned_noc_endpoint_integration"}})
         ld, lc = name+"_local_data", name+"_local_config"
-        edge(name+".cpu", _inst(ld,"cpu"), "CPU adapter to local data", "planned_integration", width=64)
-        edge(name+".cpu", _inst(lc,"cpu"), "upstream protocol-to-AXI4-Lite adapter", "planned_integration", width=32)
+        edge(name+".cpu", _inst(ld,"cpu"), "CPU adapter to local data", "wired_boot_configuration", width=64)
+        edge(name+".cpu", _inst(lc,"cpu"), "upstream protocol-to-AXI4-Lite adapter", "wired_boot_configuration", width=32)
         edge(name+".dma", _inst(ld,"dma"), "PULP iDMA AXI4 initiator", "planned_integration", width=64)
-        edge(_inst(ld,"sram"), name+".sram", "local SRAM AXI destination", "planned_integration", width=64)
+        edge(_inst(ld,"sram"), name+".sram", "local SRAM AXI destination", "wired_boot_configuration", width=64)
         edge(_inst(lc,"dma_regs"), name+".dma_csr", "PULP iDMA CSR port", "planned_integration", width=32)
         if name == cfg["boot"]["primary"]:
             instances.append({"name": name+".reset_ctrl", "module": "soc_boundary",
                               "position": {"x": 20, "y": 89, "z": 0},
-                              "info": {"status": "planned_noc_endpoint_integration"}})
+                              "info": {"status": "wired_boot_configuration"}})
             edge(_inst(lc,"reset_ctrl"), name+".reset_ctrl",
-                 "reset-control CSR", "planned_integration", width=32)
+                 "reset-control CSR", "wired_boot_configuration", width=32)
 
-    # These are planned inter-fabric and subsystem endpoint links. Never
-    # present them as real continuous RTL until an actual SoC top is compiled.
+    # Cross-fabric links are shared by the BFM and boot-configuration tops.
     for compute in (s["name"] for s in cfg["subsystems"] if s["type"] == "compute"):
         ld = compute + "_local_data"
         lc = compute + "_local_config"
         edge(_inst(ld, "global_out"), _inst("global_data", compute),
-             "64b AXI4 uplink (planned)", "planned_integration", width=64)
+             "64b AXI4 uplink", "wired_boot_configuration", width=64)
         edge(_inst("global_data", compute + "_sram"), _inst(ld, "global_in"),
-             "64b AXI4 remote SRAM return path (planned)", "planned_integration", width=64)
+             "64b AXI4 remote SRAM return path", "wired_boot_configuration", width=64)
         edge(_inst(lc, "global_out"), _inst("global_config", compute),
-             "32b AXI4 control transport (planned)", "planned_integration", width=32)
+             "32b AXI4 control transport", "wired_boot_configuration", width=32)
         edge(_inst("global_config", compute + "_regs"), _inst(lc, "global_in"),
-             "32b AXI4 control ingress (planned)", "planned_integration", width=32)
+             "32b AXI4 control ingress", "wired_boot_configuration", width=32)
 
     memory = next(s["name"] for s in cfg["subsystems"] if s["type"] == "memory")
     for output in cfg["networks"]["global_data"]["outputs"]:
         name = output["name"]
         edge(_inst("global_data", name), _inst(memory + "_local_data", name),
-             "64b AXI4 memory ingress (planned)", "planned_integration", width=64)
+             "64b AXI4 memory ingress", "wired_boot_configuration", width=64)
     edge(_inst("global_config", memory + "_regs"),
          _inst(memory + "_local_config", "global_in"),
-         "32b AXI4 memory control (planned)", "planned_integration", width=32)
+         "32b AXI4 memory control", "wired_boot_configuration", width=32)
 
     xbar = memory + ".internal_target_crossbar"
     instances.append({"name": xbar, "module": "axi_crossbar",
                       "position": {"x": 8, "y": 80, "z": 0},
-                      "info": {"status": "verified_separate_memory_tb",
-                               "source": "gen/memory/memory_tb.sv"}})
+                      "info": {"status": "wired_boot_configuration",
+                               "source": "gen/chip/soc_top.sv", "standalone_test": "gen/memory/memory_tb.sv"}})
     edge(_inst(memory + "_local_data", "target_crossbar"), xbar,
-         "memory0 local-to-crossbar link (planned)", "planned_integration", width=64)
+         "memory0 local-to-crossbar link", "wired_boot_configuration", width=64)
     instances.append({"name": memory + ".ctrl", "module": "soc_boundary",
                       "position": {"x": 21, "y": 90, "z": 0},
                       "info": {"status": "reserved_controller_csr_no_RTL"}})
@@ -207,9 +206,9 @@ def diagram_gen_metadata(cfg: dict, networks: dict) -> dict:
         ep = target["name"]
         instances.append({"name": ep, "module": "soc_boundary",
                           "position": {"x": 8, "y": 85 + 3 * len(instances) % 9, "z": 0},
-                          "info": {"status": "verified_separate_memory_tb",
-                                   "kind": target["kind"], "model": "axi_ram"}})
-        edge(xbar, ep, "Memory0 testbench AXI RAM route", "verified_separate_memory_tb", width=64)
+                          "info": {"status": "axi_slave_model_in_boot_configuration",
+                                   "kind": target["kind"], "model": "axi_to_detailed_mem + tc_sram"}})
+        edge(xbar, ep, "AXI slave memory model route", "wired_boot_configuration", width=64)
 
     for sub in cfg["subsystems"]:
         prefix = sub["name"] + "_"
@@ -224,8 +223,8 @@ def diagram_gen_metadata(cfg: dict, networks: dict) -> dict:
         "schema_version": 1,
         "source_of_truth": ["config/soc.yaml", "config/interface_contracts.yaml",
                             "gen/noc/floonoc/*/floogen.yaml"],
-        "status": "real_structural_networks_with_planned_inter_network_links",
-        "scope_note": "Cross-NoC wiring exists in gen/supernoc/supernoc_tb.sv; full SoC endpoint integration is planned",
+        "status": "structural_nocs_and_cpu_boot_configuration_with_pending_dma_controllers",
+        "scope_note": "Shared soc_noc core connects all meshes; gen/chip/soc_top.sv attaches CPUs/SRAM/reset and AXI memory models. iDMA and physical controllers remain pending.",
         "modules": modules, "instances": instances, "connections": connections, "groups": groups,
         "networks": {name: {"plane": net["entry"]["plane"], "routers": net["entry"]["routers"],
                             "endpoints": len(net["endpoints"]), "top": net["entry"]["top"],
@@ -242,13 +241,16 @@ def hierarchy_mermaid(cfg: dict, networks: dict) -> str:
         "  classDef model fill:#f5f6f7,stroke:#7b8794,color:#233047;",
         "  classDef verified fill:#e4f8e8,stroke:#228450,color:#12432b;",
         "  %% All FlooNoC internal router and NI RTL is generated.",
-        "  %% Every dashed subsystem-to-NoC connection remains unimplemented.",
+        "  %% Solid links are wired in the boot configuration; DMA/controller links remain dashed.",
     ]
     def node(id, label, kind):
         lines.append('  ' + identifier(id) + '["' + label + '"]:::' + kind)
 
     def planned(src, dst, label):
         lines.append("  " + identifier(src) + ' -.->|' + label + '| ' + identifier(dst))
+
+    def wired(src, dst, label):
+        lines.append("  " + identifier(src) + " -->|" + label + "| " + identifier(dst))
 
     memory = next(x["name"] for x in cfg["subsystems"] if x["type"] == "memory")
     computes = [x for x in cfg["subsystems"] if x["type"] == "compute"]
@@ -262,12 +264,12 @@ def hierarchy_mermaid(cfg: dict, networks: dict) -> str:
         node(ld, f"Local DATA FlooNoC / {networks[ld]['entry']['routers']} routers / AXI4", "data")
         node(lc, f"Local CONFIG FlooNoC / {networks[lc]['entry']['routers']} routers / 32-bit AXI4 transport", "config")
         lines.append("  end")
-        planned(name+".cpu", ld, "CPU adapter")
+        wired(name+".cpu", ld, "CPU adapter")
         planned(name+".dma", ld, "DMA")
-        planned(ld, name+".sram", "local")
-        planned(name+".cpu", lc, "AXI-Lite bridge")
-        planned(ld, "global_data", "global data")
-        planned(lc, "global_config", "global control")
+        wired(ld, name+".sram", "local")
+        wired(name+".cpu", lc, "AXI-Lite bridge")
+        wired(ld, "global_data", "global data")
+        wired(lc, "global_config", "global control")
     for name, color in (("global_data", "data"), ("global_config", "config")):
         n = networks[name]
         bits = "64b AXI4" if color == "data" else "32b AXI4 via AXI-Lite bridges"
@@ -278,21 +280,21 @@ def hierarchy_mermaid(cfg: dict, networks: dict) -> str:
          + str(networks[memory+"_local_data"]["entry"]["routers"])+" routers", "data")
     node(memory+"_local_config", "Local CONFIG FlooNoC / "
          + str(networks[memory+"_local_config"]["entry"]["routers"])+" routers", "config")
-    node("xbar", "Internal Verilog-AXI 2x2 crossbar (standalone RTL tested)", "verified")
+    node("xbar", "Memory target crossbar / boot configuration", "verified")
     for target in cfg["memory_targets"]:
         node(target["name"], target["kind"].upper()+" AXI RAM model", "model")
     lines.append("  end")
     for c in computes:
-        planned("global_data", c["name"]+"_local_data", "remote SRAM ingress")
-        planned("global_config", c["name"]+"_local_config", "CSR ingress")
+        wired("global_data", c["name"]+"_local_data", "remote SRAM ingress")
+        wired("global_config", c["name"]+"_local_config", "CSR ingress")
     for output in cfg["networks"]["global_data"]["outputs"]:
-        planned("global_data", memory+"_local_data", output["name"])
-    planned("global_config", memory+"_local_config", "control ingress")
-    planned(memory+"_local_data", "xbar", "AXI4")
+        wired("global_data", memory+"_local_data", output["name"])
+    wired("global_config", memory+"_local_config", "control ingress")
+    wired(memory+"_local_data", "xbar", "AXI4")
     for target in cfg["memory_targets"]:
         lines.append("  " + identifier("xbar") + " -->|" + target["kind"].upper()
-                     + " tested separately| " + identifier(target["name"]))
-    lines.append("  %% Solid crossbar paths are only proven in a standalone memory TB.")
+                     + " model| " + identifier(target["name"]))
+    lines.append("  %% Physical HBM/DDR controllers and iDMA engines remain unintegrated.")
     return "\n".join(lines)+"\n"
 
 
@@ -307,13 +309,13 @@ def overview_svg(cfg: dict, networks: dict, dst: Path):
     h=my+360
     a=Art(1600,h)
     a.heading("Real upstream-generated NoC hierarchy","Full-chip FlooNoC network map",
-              f"{len(networks)} generated meshes; dashed links show pending full-SoC integration (see the separate NoC BFM test)")
+              f"{len(networks)} meshes shared by CPU boot and NoC BFM tests; dashed links mark pending DMA/controller integration")
     for i, compute in enumerate(computes):
         name=compute["name"];x=56+(i%2)*784;y=158+(i//2)*285
         a.rect(x,y,744,267,WHITE,FAINT,r=17,width=2)
         a.text(x+18,y+14,name+" / compute subsystem",22,INK)
         a.box_label(x+18,y+50,220,76,compute["cpu"]["ip"]+" CPU",
-                    compute["cpu"]["bus"]+" adapter pending","cpu",title_size=19,detail_size=13)
+                    compute["cpu"]["bus"]+" to AXI","cpu",title_size=19,detail_size=13)
         a.box_label(x+255,y+50,213,76,"PULP iDMA + CSR","IP wiring pending","dma",title_size=19,detail_size=14)
         a.box_label(x+486,y+50,235,76,"Local SRAM","global remote address", "memory",title_size=19,detail_size=13)
         ld=name+"_local_data";lc=name+"_local_config"
@@ -323,39 +325,39 @@ def overview_svg(cfg: dict, networks: dict, dst: Path):
         a.box_label(x+386,y+155,335,81,"LOCAL CONFIG  /  FlooNoC",
                     str(networks[lc]["entry"]["routers"])+" generated routers / 32b AXI4", "config",
                     title_size=19,detail_size=15)
-        a.line([(x+129,y+126),(x+129,y+155)],BLUE,2,True,True)
+        a.line([(x+129,y+126),(x+129,y+155)],BLUE,2,False,True)
         a.line([(x+360,y+126),(x+280,y+155)],BLUE,2,True,True)
-        a.line([(x+128,y+126),(x+553,y+155)],PURPLE,2,True,True)
-        a.line([(x+320,y+155),(x+603,y+126)],GREEN,2,True,True)
+        a.line([(x+128,y+126),(x+553,y+155)],PURPLE,2,False,True)
+        a.line([(x+320,y+155),(x+603,y+126)],GREEN,2,False,True)
         a.line([(x+553,y+155),(x+400,y+126)],PURPLE,2,True,True)
     a.box_label(56,gy,744,113,"GLOBAL DATA / FlooNoC",
                 str(networks["global_data"]["entry"]["routers"])+" routers / XY mesh / 64-bit AXI4\ncompute uplinks, remote SRAMs, configured memory ingress ports",
                 "fabric",title_size=24,detail_size=15)
     a.box_label(840,gy,704,113,"GLOBAL CONFIG / FlooNoC",
-                str(networks["global_config"]["entry"]["routers"])+" routers / XY mesh / 32-bit AXI4\nPULP upstream AXI4-Lite bridges required at CSR boundaries",
+                str(networks["global_config"]["entry"]["routers"])+" routers / XY mesh / 32-bit AXI4\nUpstream AXI4-Lite adapters at CPU and reset CSR boundaries",
                 "config",title_size=24,detail_size=15)
     for i,c in enumerate(computes):
         x=56+(i%2)*784
         y=158+(i//2)*285+236
-        a.line([(x+192,y),(x+192,y+40),(428,gy-10),(428,gy)],GREEN,2,True,"both")
-        a.line([(x+555,y),(x+555,y+44),(1193,gy-10),(1193,gy)],PURPLE,2,True,"both")
+        a.line([(x+192,y),(x+192,y+40),(428,gy-10),(428,gy)],GREEN,2,False,"both")
+        a.line([(x+555,y),(x+555,y+44),(1193,gy-10),(1193,gy)],PURPLE,2,False,"both")
     a.rect(56,my,1488,307,WHITE,FAINT,r=17,width=2)
     a.text(82,my+18,mem+" / memory subsystem",24,INK)
     a.box_label(83,my+64,500,71,"LOCAL DATA / FlooNoC",
                 str(networks[mem+"_local_data"]["entry"]["routers"])+" routers / two AXI ingress ports",
                 "fabric",title_size=20,detail_size=14)
     a.box_label(622,my+64,485,71,"LOCAL CONFIG / FlooNoC",
-                str(networks[mem+"_local_config"]["entry"]["routers"])+" generated routers / CSR bridge pending",
+                str(networks[mem+"_local_config"]["entry"]["routers"])+" routers / reserved CSR target",
                 "config",title_size=20,detail_size=14)
     a.box_label(1142,my+64,375,71,"Controller CSRs",
-                "Upstream AXI-Lite bridge pending", "config",title_size=20,detail_size=14)
+                "Controller registers pending", "config",title_size=20,detail_size=14)
     a.line([(1107,my+100),(1142,my+100)],PURPLE,2,True,True)
-    a.box_label(83,my+171,702,75,"Internal 2x2 Verilog-AXI crossbar",
-                "Real independently tested memory fabric RTL","rtl",title_size=22,detail_size=15)
+    a.box_label(83,my+171,702,75,f"Internal 1x{len(cfg["memory_targets"])} Verilog-AXI crossbar",
+                "One local-NoC output; upstream target crossbar","rtl",title_size=22,detail_size=15)
     targets=cfg["memory_targets"]
     for j,t in enumerate(targets):
         tx=810+j*363
-        a.box_label(tx,my+170,346,78,t["kind"].upper()+" AXI RAM",
+        a.box_label(tx,my+170,346,78,t["kind"].upper()+" AXI slave model",
                     "Behavioral model; physical controller pending",
                     "memory",title_size=20,detail_size=14)
         if j == 0:
@@ -366,12 +368,12 @@ def overview_svg(cfg: dict, networks: dict, dst: Path):
     outputs=cfg["networks"]["global_data"]["outputs"]
     for i, output in enumerate(outputs):
         x=320+(i-(len(outputs)-1)/2)*60
-        a.line([(x,gy+113),(x,my+64)],GREEN,3,True,True)
+        a.line([(x,gy+113),(x,my+64)],GREEN,3,False,True)
     a.text(390,my+48,f"{len(outputs)} AXI4 ingress ports",12,MUTED)
-    a.line([(1193,gy+113),(1193,my+42),(864,my+42),(864,my+64)],PURPLE,3,True,True)
-    a.line([(320,my+135),(320,my+171)],GREEN,2,True,True)
+    a.line([(1193,gy+113),(1193,my+42),(864,my+42),(864,my+64)],PURPLE,3,False,True)
+    a.line([(320,my+135),(320,my+171)],GREEN,2,False,True)
     a.text(83,my+274,
-           "Solid target links: standalone memory testbench ONLY. Full SoC NoC links and endpoint bridges: planned.",
+           "Solid: boot-configuration wiring and AXI memory models. Dashed: real iDMA/CSRs and physical controllers pending.",
            17,MUTED)
     a.text(65,h-29,
            "Router coordinates and link details: gen/diagrams/noc-topology.json and gen/noc/floonoc/*/floogen.yaml.",

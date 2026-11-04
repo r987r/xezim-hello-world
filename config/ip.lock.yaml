@@ -2,6 +2,11 @@ schema_version: 1
 # Public source revisions are locked. Controllers are integration candidates;
 # simulation currently uses the AXI RAM backend, not physical DRAM RTL.
 third_party:
+  wb2axip:
+    git: https://github.com/ZipCPU/wb2axip.git
+    commit: 2e8d3bc2d26ddc33d1881022a2a2b9d3f0c16b9b
+    license: Apache-2.0
+    modules: [rtl/wbm2axilite.v]
   verilog_axi:
     git: https://github.com/alexforencich/verilog-axi.git
     commit: 516bd5dadc3365b7f9e225d2af8fe0b8d804fe53

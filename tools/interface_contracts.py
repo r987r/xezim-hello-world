@@ -313,7 +313,7 @@ def build(soc, contract, floogen=None):
     fabrics["global_data"] = {
         "backend": soc["fabrics"]["global_data"]["backend"],
         "topology": soc["fabrics"]["global_data"]["topology"],
-        "rtl_status": "floogen_structural_rtl_with_separate_bfm_regression",
+        "rtl_status": "floogen_structural_rtl_with_bfm_and_cpu_boot_scopes",
         "n_sources": len(computes), "n_targets": len(outs),
         "input_id_bits": iw + 1, "output_id_bits": iw,
         "parameters": deepcopy(params["global_data"]),

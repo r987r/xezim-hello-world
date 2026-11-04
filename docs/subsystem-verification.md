@@ -1,7 +1,8 @@
 # Verification scopes and remaining integration
 
 All local/global data/config networks use pinned upstream FlooNoC.
-The Verilog-AXI target crossbar remains a separate memory0 component.
+The chip boot configuration attaches a 1×2 Verilog-AXI target crossbar;
+the older 2×2 memory stress scope remains independent.
 FlooNoC's config transport is 32-bit AXI4; CSR-facing AXI4-Lite requires
 upstream PULP `axi_lite_to_axi` and `axi_to_axi_lite` adapters.
 See [implementation status](implementation-status.md) for the current
@@ -13,11 +14,11 @@ single connected BFM test's coverage and results.
 | `memory_tb` | Real Verilog-AXI 2x2 crossbar, independent HBM/DDR behavioral windows, full/sparse route tests |
 | `boot_tb`, SRAM and SERV checks | Preserve real two-core cold boot, no SRAM preload, independent bring-up checks |
 | `supernoc_tb` | One generated wrapper, all eight real meshes, upstream AXI agents, local/remote reads/writes and stress/error checks |
-| compute0 subsystem | Connect PicoRV32, local SRAM, upstream protocol adapters and iDMA CSR/data ports to local data/config meshes |
-| compute1 subsystem | Connect SERV, upstream Wishbone/AXI adaptation, SRAM and iDMA to its local meshes |
-| config endpoint integration | Add upstream AXI4-Lite boundary bridges and actual CSR targets to the same hierarchy |
-| memory subsystem integration | Connect local NoC egress to the real target crossbar; retain two independently decoded global memory ingress links |
-| full `soc_top` | CPU-programmed DMA transfers through local/global meshes to actual integrated memory endpoints |
+| compute0 boot configuration | PicoRV32/SRAM/upstream adapters connected; real iDMA/CSRs next |
+| compute1 boot configuration | SERV/Wishbone/AXI adaptation and SRAM connected; real iDMA next |
+| config endpoints | CPU/reset AXI-Lite boundaries connected; DMA/controller registers remain pending |
+| memory boot configuration | Local NoC attached to target crossbar and AXI slave models; both global memory ingress links retained |
+| full-chip boot | Real CPUs coordinate init/run/check; upstream AXI BFM checks HBM/DDR stand-ins; real DMA/physical endpoints remain pending |
 
 Do not add another testbench per bridge, router or simulator issue.
 Extend the one integrated NoC DUT and the substantive subsystem scopes.

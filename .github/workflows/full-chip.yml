@@ -1,0 +1,60 @@
+name: Full-chip coordinated CPU boot
+
+on:
+  push:
+    paths: ['config/**', 'gen/**', 'tools/**', 'rtl/**', 'dv/full_chip/**', 'tests/**', 'Bender.yml', 'Bender.lock', 'Makefile', '.github/actions/setup-bender/**', '.github/workflows/full-chip.yml']
+  pull_request:
+    paths: ['config/**', 'gen/**', 'tools/**', 'rtl/**', 'dv/full_chip/**', 'tests/**', 'Bender.yml', 'Bender.lock', 'Makefile', '.github/actions/setup-bender/**', '.github/workflows/full-chip.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: full-chip-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  boot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: ./.github/actions/setup-bender
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Install pinned upstream generation and verification tools
+        run: |
+          python3 -m pip install -r requirements.txt
+          python3 tools/ip_fetch.py floonoc
+          python3 -m pip install -e .tools/floonoc
+          python3 -m pip install 'cocotb==1.9.2' 'cocotbext-axi==0.1.24'
+          sudo apt-get update -qq
+          sudo apt-get install -y verilator
+      - name: Verify configuration and generated chip/firmware
+        run: make check-config check-generated
+      - name: Fetch checksum-verified Xezim release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          source toolchains/xezim.env
+          gh release download "$XEZIM_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern "$XEZIM_ASSET_NAME" --pattern "$XEZIM_ASSET_NAME.sha256" --dir .tools/bin
+          (cd .tools/bin && sha256sum -c "$XEZIM_ASSET_NAME.sha256")
+          chmod +x ".tools/bin/$XEZIM_ASSET_NAME"
+          echo "XEZIM_BIN=$GITHUB_WORKSPACE/.tools/bin/$XEZIM_ASSET_NAME" >> "$GITHUB_ENV"
+      - name: Run YAML chip boot, missing-CPU negative and Xezim compile probe
+        run: make dv-chip
+      - name: Retain all chip build/phase/memory results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-chip-boot-results
+          path: |
+            .tools/regression/chip-*/
+            gen/chip/
+          include-hidden-files: true
+          if-no-files-found: error

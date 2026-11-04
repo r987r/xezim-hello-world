@@ -28,6 +28,7 @@ filelist inspection, stage separation and retained results.
 | Local SRAM | Existing reusable dual-port SRAM test model | Uninitialized power-up, byte strobes and both ports |
 | SERV execution | Real SERV and standalone Wishbone RAM | Three instructions execute and store the checked signature from a four-word image |
 | CPU cold boot | PicoRV32/SERV, ROM, flash, blank SRAM and reset MMIO | CPU0 copies both programs through bus stores, releases CPU1 and both produce signatures; default and relocated address maps |
+| Chip boot configuration | Real CPUs, shared NoCs, upstream WB/AXI/SRAM/reset and AXI memory stand-ins | CPU0-driven cold boot and init/run/check, every CPU greeting/peer check, missing-CPU negative, HBM/DDR model readback |
 | Connected NoC BFM | All eight real FlooGen data/config meshes | All 28 mapped source/window routes, intended storage, concurrent reused IDs with distinct stream payloads, bursts, byte guards, stalls, SLVERR and corruption detection |
 
 The CPU fetch smoke is a request-only diagnostic included in `full` and
@@ -39,17 +40,17 @@ physical HBM/DDR controller or PHY behavior.
 
 ## Next integration sequence
 
-1. Connect real CPU/SRAM ports and upstream protocol/width adapters to the
-   already generated local data/config FlooNoCs, preserving cold boot.
-2. Attach PULP iDMA frontends, CSRs and data ports; verify programmed copies.
-3. Attach the actual memory target crossbar to the memory-local NoC and
-   verify both global memory ingress paths against distinct memory targets.
-4. Expand the existing connected NoC DUT for real CSR logic and AXI-Lite
-   bridges, fairness/congestion, reset-during-traffic and interrupt checks.
-5. Integrate real controller models/PHY environments in their proper scopes,
-   then demonstrate CPU-programmed DMA transfers through full `soc_top`.
-6. Extend scaling coverage. Extra compute profiles are generated today;
-   a second memory subsystem requires generator support, not just a YAML edit.
+The [chip boot configuration](full-chip-boot.md) now attaches the CPUs,
+SRAM, upstream protocol/width adapters, reset registers and target crossbar.
+Keep the existing independent memory/boot/NoC scopes for fault isolation.
+
+1. Attach real PULP iDMA frontends/CSRs/data ports and verify CPU-programmed copies.
+2. Add real controller register maps, ready/interrupt behavior and physical
+   controller/PHY models in their proper scopes.
+3. Extend the chip scope with congestion/fairness, reset during traffic,
+   interrupts and a portable C runtime/BSP as application tests grow.
+4. Establish Xezim functional NoC/chip execution; compile-only probes stay
+   separate from Verilator's routed-traffic proof.
 
 ## Acceptance gates and present limits
 
@@ -65,8 +66,8 @@ physical HBM/DDR controller or PHY behavior.
   retained diagnostics. Current-source CI must pass before merge.
 - Xezim executes boot/memory/SRAM/SERV and compiles all eight NoCs. Verilator
   runs the connected NoC traffic test. Xezim NoC traffic remains unverified.
-- Simulation gates do not cover synthesis. The known `SYNTHESIS` SRAM B-read
-  guard defect remains open; see [implementation status](implementation-status.md).
+- The SRAM target also runs with `-D SYNTHESIS` to preserve registered
+  reads under synthesis guards. This is functional simulation, not synthesis.
 - The simulator binary is pinned separately; HDL changes do not rebuild Xezim.
 
 See [implementation status](implementation-status.md) for integration limits

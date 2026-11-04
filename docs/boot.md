@@ -103,21 +103,22 @@ ROM implementation should check a firmware container header, lengths,
 checksums/authentication, failures, timeouts, image placement, and reset
 permissions. Secure boot is **not implemented**.
 
-## Next hardware integration
+## Hardware integration beyond the standalone bootstrap
 
-1. Replace the bootstrap-only bus responders with upstream AXI integration,
-   connect the existing byte-enabled SRAM through appropriate adapters,
-   and add Wishbone-to-AXI adaptation for SERV. Physical SRAM macros remain future work.
+1. The [chip boot configuration](full-chip-boot.md) now uses upstream AXI
+   responders, generic SRAM, and a Wishbone-to-AXI bridge for SERV across
+   the shared NoCs. The standalone bootstrap below is retained independently.
+   Physical SRAM macros remain future work.
 2. Add a minimal SPI/QSPI reader or a debug/UART streaming boot interface;
    keep exactly the same image/load, reset and completion contracts. Test
    *traffic-driven* SRAM loading (no SRAM backdoor preload in cold boot).
 3. Integrate PULP iDMA frontend CSRs: CPU0 programs source, destination,
    length, status and interrupt. Accelerate future firmware staging/copies.
-4. Attach the real endpoints to the already generated and BFM-tested global
-   data/config networks. CPU0 must eventually initialize controllers and
+4. Attach real DMA/controller endpoints alongside the CPU/SRAM/reset
+   attachments in the chip boot scope. CPU0 must initialize controllers and
    wait for DDR/HBM ready before issuing DMA there.
-5. Release the secondary core through controlled, addressable reset with
-   error handling. Add optional secure management processor only if isolation,
+5. Extend the implemented addressable secondary reset with recovery/error
+   policies. Add an optional secure management processor only if isolation,
    always-on power domains, or recovery requirements justify it.
 
 The system remains intentionally **non-cache-coherent** for now. Once caches
@@ -157,3 +158,13 @@ full/CI diagnostics suite; it does not prove instruction execution.
 We no longer pass `SERV_CLEAR_RAM`: the SERV architectural register file
 starts without a testbench initialization and the real program executes.
 Boot SRAM contains unspecified contents, never zero-preloaded firmware.
+
+## Chip-level execution
+
+`make dv-chip` runs a separate, real CPU/NoC boot assembly with upstream
+WB/AXI/width adapters, upstream SRAM, reset registers and AXI memory
+stand-ins. CPU0 coordinates init/run/check and every CPU checks a peer.
+The legacy four-word prototype images above remain its independent
+bring-up scope. The chip has its own generated phased firmware in
+`gen/chip/`, using the same ROM-copy boot policy and address map.
+See [full-chip boot](full-chip-boot.md) for its framework and boundaries.

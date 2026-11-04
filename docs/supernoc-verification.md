@@ -121,8 +121,10 @@ functional NoC verification.
 
 The NoC wrapper terminates true external CPU/DMA/CSR/SRAM boundaries
 using reusable AXI BFMs. Real CPU, DMA, SRAM register adapters, and the
-memory target crossbar are **not yet attached to this full-chip wrapper**;
-they are separately tested where available. Physical HBM/DDR controllers
+memory target crossbar are **not attached to this BFM wrapper**. The separate
+[CPU boot configuration](full-chip-boot.md) instantiates the same shared
+NoC core with real CPUs, SRAM, reset adapters and AXI memory models; real
+iDMA remains unintegrated. Physical HBM/DDR controllers
 remain future work. A successful NoC BFM test does not imply the complete
 CPU+iDMA+memory system is functional.
 

@@ -53,6 +53,7 @@ without substituting for real CPU execution.
 | `noc` | Verilator elaboration of every configured network, one connected-NoC traffic test, named routed corruption failure |
 | `compatibility` | Xezim compile-only probe of every configured network |
 | `diagnostics` | CPU fetch request activity and arithmetic simulator smoke |
+| `chip` | CPU-coordinated boot and AXI model readback, held-secondary negative, Xezim chip structural compilation |
 | `full` | All suites above; schema validation rejects an uncovered declared test |
 
 Every invocation checks generated-file drift before resolving RTL. The
@@ -105,8 +106,8 @@ probe failure. CI keeps the Xezim NoC compile probe separately nonblocking
 while its width warnings/functional compatibility remain under review;
 the Verilator connected traffic and Xezim CPU/memory gates are blocking.
 Simulation success does not establish synthesis or full-SoC integration.
-The outstanding SRAM `SYNTHESIS` port-B read issue is recorded in
-[implementation status](implementation-status.md).
+The SRAM registered-read guard fix is checked by `sram-synthesis`, which
+runs the existing bench with `-D SYNTHESIS`; no technology synthesis is claimed.
 
 ## Add or scale work
 
@@ -116,3 +117,9 @@ with common source sets/options. No new shell script, CI test list or
 Python test-name branch is needed for another existing-engine target.
 New SoC meshes are discovered from generated manifests and checked against
 the configuration. New simulator engines require a reviewed adapter.
+
+Chip source lists use the `chip_boot` Bender target alongside the locked
+NoC provider. `bender_targets` composes ordered root source sets after
+generated NoC packages/tops; it replaces hardcoded wrapper paths.
+`mode: compile` explicitly marks the Xezim chip structural target.
+See [chip boot](full-chip-boot.md).

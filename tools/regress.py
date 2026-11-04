@@ -25,7 +25,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ENGINES = {'xezim', 'xezim-compile', 'verilator-lint', 'cocotb-verilator'}
 FIELDS = {'engine', 'sources', 'ip', 'top', 'args', 'pass', 'expect_failure',
           'timeout_s', 'memory_config', 'boot_relocate', 'module', 'test_dir',
-          'build', 'reuse_build', 'env', 'seed'}
+          'build', 'reuse_build', 'env', 'seed', 'bender_targets', 'mode'}
 
 
 def expand(config, names, stack=()):
@@ -63,6 +63,8 @@ def load_config(path):
             raise ValueError(f'{name}: simulations require an explicit pass marker')
         if test.get('reuse_build') and test['engine'] != 'cocotb-verilator':
             raise ValueError(f'{name}: build reuse is only supported by cocotb-verilator')
+        if test.get('mode', 'simulate') not in ('simulate', 'compile') or (test.get('mode') == 'compile' and test['engine'] != 'xezim'):
+            raise ValueError(f'{name}: mode=compile requires the Xezim engine')
     for name in config['suites']:
         expand(config, [name])
     if set(expand(config, ['full'])) != set(config['tests']):
@@ -235,10 +237,17 @@ def run_target(name, test, resolver, options):
     for network, entry in sorted(networks.items()):
         (out/f'{network}.f').write_text(filelist_text(
             sources + [str(root/entry['package']), str(root/entry['top'])], includes, defines))
-    if networks and test['engine'] == 'cocotb-verilator':
+    if networks and test['engine'] not in {'xezim-compile', 'verilator-lint'}:
         sources += [str(root/entry['package']) for _, entry in sorted(networks.items())]
         sources += [str(root/entry['top']) for _, entry in sorted(networks.items())]
-        sources += [str(ROOT/'gen/supernoc/supernoc_tb.sv')]
+    for target in test.get('bender_targets', []):
+        extra, inc, defs = resolver.sources({'sources': target})
+        sources += extra
+        includes += inc
+        defines += defs
+    sources = list(dict.fromkeys(sources))
+    includes = list(dict.fromkeys(includes))
+    defines = list(dict.fromkeys(defines))
     filelist = out/'sources.f'
     filelist.write_text(filelist_text(sources, includes, defines))
     plan = {**test, 'sources': sources, 'includes': includes, 'defines': defines,
@@ -269,7 +278,7 @@ def run_target(name, test, resolver, options):
             raise ValueError('empty or unknown NoC network selection')
     elif engine == 'xezim':
         sim = executable('XEZIM_BIN', ROOT/'.tools/bin/xezim-linux-x86_64', 'xezim')
-        commands = [(name, [sim, *(['--compile'] if options.stage == 'build' else []), '--no-cache', '-s', test['top'], '-f', str(filelist), *args])]
+        commands = [(name, [sim, *(['--compile'] if options.stage == 'build' or test.get('mode') == 'compile' else []), '--no-cache', '-s', test['top'], '-f', str(filelist), *args])]
     else:
         commands = [(name, [sys.executable, str(ROOT/'tools/sim_cocotb.py'), str(plan_file)])]
     plan['commands'] = commands
@@ -287,7 +296,7 @@ def run_target(name, test, resolver, options):
             for collateral in ('build.log', 'simulation.log'):
                 if (out/collateral).is_file():
                     text += '\n' + (out/collateral).read_text(errors='replace')
-        expectation = {} if options.stage == 'build' else test
+        expectation = {} if options.stage == 'build' or test.get('mode') == 'compile' else test
         ok, reason = check_outcome(code, text, expectation, timed_out)
         warnings = sum('[xezim][warning]' in line or '%Warning-' in line for line in text.splitlines())
         results.append({'name': label, 'passed': ok, 'exit_code': code, 'reason': reason, 'reported_warning_lines': warnings})

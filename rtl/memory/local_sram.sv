@@ -25,8 +25,8 @@ module local_sram #(parameter integer BYTES = 16384) (
     reg [31:0] mem [0:WORDS-1]; // intentionally no reset or initialization
     assign a_rdata = mem[a_read_addr[31:2]];
     always @(posedge clk) begin
-`ifndef SYNTHESIS
         if (b_read_en) b_rdata <= mem[b_read_addr[31:2]];
+`ifndef SYNTHESIS
         if (a_we && b_we && (a_write_addr[31:2] == b_write_addr[31:2]))
             $fatal(1, "SRAM: same-address dual-writer collision");
 `endif

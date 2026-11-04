@@ -6,11 +6,16 @@ FlooNoC's [upstream AXI4 generator](https://github.com/pulp-platform/FlooNoC/tre
 declares `protocol: AXI4`. **It is not an AXI4-Lite native transport**.
 Separate global and local configuration NoCs use 32-bit AXI4 wire ports.
 The connected BFM regression sends single-beat, non-atomic AXI4 accesses.
-Real AXI4-Lite endpoint bridges and CSR register logic remain pending.
+The chip boot configuration attaches real CPU AXI4-Lite bridges and reset
+CSR registers. DMA/controller CSRs remain pending.
 
-The planned path converts CPU AXI4-Lite through upstream `axi_lite_to_axi`,
+The chip boot path converts CPU AXI4-Lite through upstream `axi_lite_to_axi`,
 traverses local/global/remote-local config FlooNoCs as needed, then converts
 through upstream `axi_to_axi_lite` at the actual CSR subordinate.
+
+The chip uses the AXI revision locked by FlooNoC's upstream `Bender.lock`,
+without mixing it with the separately planned SoC PULP AXI revision below.
+See [chip boot integration](full-chip-boot.md).
 
 **Reuse exact pinned upstream modules; do NOT write adapters or a custom
 AXI4-Lite NoC:**

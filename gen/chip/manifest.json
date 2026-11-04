@@ -1,0 +1,35 @@
+{
+  "cores": 2,
+  "dma": "idle initiators and DECERR CSR targets; real iDMA not integrated",
+  "fabric_core": "gen/supernoc/soc_noc.sv",
+  "firmware": "firmware.json",
+  "memory_controllers": "AXI slave SRAM models only; no physical HBM/DDR RTL",
+  "memory_crossbar_inputs": 1,
+  "memory_crossbar_outputs": 2,
+  "memory_models": [
+    {
+      "base": 4294967296,
+      "modeled_bytes": 65536,
+      "name": "memory0.hbm0"
+    },
+    {
+      "base": 5368709120,
+      "modeled_bytes": 65536,
+      "name": "memory0.ddr0"
+    }
+  ],
+  "networks": 8,
+  "reset_register_bytes": 8,
+  "testbench": "full_chip_tb",
+  "top": "soc_top",
+  "upstream": [
+    "PicoRV32",
+    "SERV",
+    "FlooNoC",
+    "PULP AXI",
+    "tech_cells_generic tc_sram",
+    "ZipCPU wbm2axilite",
+    "verilog-axi crossbar"
+  ],
+  "verification_probe": "CPU0 DMA boundary AXI BFM only; disabled in standalone CPU boot"
+}

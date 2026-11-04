@@ -1733,12 +1733,12 @@
           "width": 64
         }
       ],
-      "status": "planned_integration",
+      "status": "wired_boot_configuration",
       "to": {
         "instance": "compute0_local_data.cpu",
         "port": "in"
       },
-      "type": "planned_interconnect"
+      "type": "axi_interconnect"
     },
     {
       "from": {
@@ -1753,12 +1753,12 @@
           "width": 32
         }
       ],
-      "status": "planned_integration",
+      "status": "wired_boot_configuration",
       "to": {
         "instance": "compute0_local_config.cpu",
         "port": "in"
       },
-      "type": "planned_interconnect"
+      "type": "axi_interconnect"
     },
     {
       "from": {
@@ -1793,12 +1793,12 @@
           "width": 64
         }
       ],
-      "status": "planned_integration",
+      "status": "wired_boot_configuration",
       "to": {
         "instance": "compute0.sram",
         "port": "in"
       },
-      "type": "planned_interconnect"
+      "type": "axi_interconnect"
     },
     {
       "from": {
@@ -1833,12 +1833,12 @@
           "width": 32
         }
       ],
-      "status": "planned_integration",
+      "status": "wired_boot_configuration",
       "to": {
         "instance": "compute0.reset_ctrl",
         "port": "in"
       },
-      "type": "planned_interconnect"
+      "type": "axi_interconnect"
     },
     {
       "from": {
@@ -1853,12 +1853,12 @@
           "width": 64
         }
       ],
-      "status": "planned_integration",
+      "status": "wired_boot_configuration",
       "to": {
         "instance": "compute1_local_data.cpu",
         "port": "in"
       },
-      "type": "planned_interconnect"
+      "type": "axi_interconnect"
     },
     {
       "from": {
@@ -1873,12 +1873,12 @@
           "width": 32
         }
       ],
-      "status": "planned_integration",
+      "status": "wired_boot_configuration",
       "to": {
         "instance": "compute1_local_config.cpu",
         "port": "in"
       },
-      "type": "planned_interconnect"
+      "type": "axi_interconnect"
     },
     {
       "from": {
@@ -1913,12 +1913,12 @@
           "width": 64
         }
       ],
-      "status": "planned_integration",
+      "status": "wired_boot_configuration",
       "to": {
         "instance": "compute1.sram",
         "port": "in"
       },
-      "type": "planned_interconnect"
+      "type": "axi_interconnect"
     },
     {
       "from": {
@@ -1946,19 +1946,19 @@
         "port": "out"
       },
       "id": "noc_link_0098",
-      "name": "64b AXI4 uplink (planned)",
+      "name": "64b AXI4 uplink",
       "signals": [
         {
           "name": "AXI4",
           "width": 64
         }
       ],
-      "status": "planned_integration",
+      "status": "wired_boot_configuration",
       "to": {
         "instance": "global_data.compute0",
         "port": "in"
       },
-      "type": "planned_interconnect"
+      "type": "axi_interconnect"
     },
     {
       "from": {
@@ -1966,19 +1966,19 @@
         "port": "out"
       },
       "id": "noc_link_0099",
-      "name": "64b AXI4 remote SRAM return path (planned)",
+      "name": "64b AXI4 remote SRAM return path",
       "signals": [
         {
           "name": "AXI4",
           "width": 64
         }
       ],
-      "status": "planned_integration",
+      "status": "wired_boot_configuration",
       "to": {
         "instance": "compute0_local_data.global_in",
         "port": "in"
       },
-      "type": "planned_interconnect"
+      "type": "axi_interconnect"
     },
     {
       "from": {
@@ -1986,19 +1986,19 @@
         "port": "out"
       },
       "id": "noc_link_0100",
-      "name": "32b AXI4 control transport (planned)",
+      "name": "32b AXI4 control transport",
       "signals": [
         {
           "name": "AXI4",
           "width": 32
         }
       ],
-      "status": "planned_integration",
+      "status": "wired_boot_configuration",
       "to": {
         "instance": "global_config.compute0",
         "port": "in"
       },
-      "type": "planned_interconnect"
+      "type": "axi_interconnect"
     },
     {
       "from": {
@@ -2006,19 +2006,19 @@
         "port": "out"
       },
       "id": "noc_link_0101",
-      "name": "32b AXI4 control ingress (planned)",
+      "name": "32b AXI4 control ingress",
       "signals": [
         {
           "name": "AXI4",
           "width": 32
         }
       ],
-      "status": "planned_integration",
+      "status": "wired_boot_configuration",
       "to": {
         "instance": "compute0_local_config.global_in",
         "port": "in"
       },
-      "type": "planned_interconnect"
+      "type": "axi_interconnect"
     },
     {
       "from": {
@@ -2026,19 +2026,19 @@
         "port": "out"
       },
       "id": "noc_link_0102",
-      "name": "64b AXI4 uplink (planned)",
+      "name": "64b AXI4 uplink",
       "signals": [
         {
           "name": "AXI4",
           "width": 64
         }
       ],
-      "status": "planned_integration",
+      "status": "wired_boot_configuration",
       "to": {
         "instance": "global_data.compute1",
         "port": "in"
       },
-      "type": "planned_interconnect"
+      "type": "axi_interconnect"
     },
     {
       "from": {
@@ -2046,19 +2046,19 @@
         "port": "out"
       },
       "id": "noc_link_0103",
-      "name": "64b AXI4 remote SRAM return path (planned)",
+      "name": "64b AXI4 remote SRAM return path",
       "signals": [
         {
           "name": "AXI4",
           "width": 64
         }
       ],
-      "status": "planned_integration",
+      "status": "wired_boot_configuration",
       "to": {
         "instance": "compute1_local_data.global_in",
         "port": "in"
       },
-      "type": "planned_interconnect"
+      "type": "axi_interconnect"
     },
     {
       "from": {
@@ -2066,19 +2066,19 @@
         "port": "out"
       },
       "id": "noc_link_0104",
-      "name": "32b AXI4 control transport (planned)",
+      "name": "32b AXI4 control transport",
       "signals": [
         {
           "name": "AXI4",
           "width": 32
         }
       ],
-      "status": "planned_integration",
+      "status": "wired_boot_configuration",
       "to": {
         "instance": "global_config.compute1",
         "port": "in"
       },
-      "type": "planned_interconnect"
+      "type": "axi_interconnect"
     },
     {
       "from": {
@@ -2086,19 +2086,19 @@
         "port": "out"
       },
       "id": "noc_link_0105",
-      "name": "32b AXI4 control ingress (planned)",
+      "name": "32b AXI4 control ingress",
       "signals": [
         {
           "name": "AXI4",
           "width": 32
         }
       ],
-      "status": "planned_integration",
+      "status": "wired_boot_configuration",
       "to": {
         "instance": "compute1_local_config.global_in",
         "port": "in"
       },
-      "type": "planned_interconnect"
+      "type": "axi_interconnect"
     },
     {
       "from": {
@@ -2106,19 +2106,19 @@
         "port": "out"
       },
       "id": "noc_link_0106",
-      "name": "64b AXI4 memory ingress (planned)",
+      "name": "64b AXI4 memory ingress",
       "signals": [
         {
           "name": "AXI4",
           "width": 64
         }
       ],
-      "status": "planned_integration",
+      "status": "wired_boot_configuration",
       "to": {
         "instance": "memory0_local_data.memory_ingress0",
         "port": "in"
       },
-      "type": "planned_interconnect"
+      "type": "axi_interconnect"
     },
     {
       "from": {
@@ -2126,19 +2126,19 @@
         "port": "out"
       },
       "id": "noc_link_0107",
-      "name": "64b AXI4 memory ingress (planned)",
+      "name": "64b AXI4 memory ingress",
       "signals": [
         {
           "name": "AXI4",
           "width": 64
         }
       ],
-      "status": "planned_integration",
+      "status": "wired_boot_configuration",
       "to": {
         "instance": "memory0_local_data.memory_ingress1",
         "port": "in"
       },
-      "type": "planned_interconnect"
+      "type": "axi_interconnect"
     },
     {
       "from": {
@@ -2146,19 +2146,19 @@
         "port": "out"
       },
       "id": "noc_link_0108",
-      "name": "32b AXI4 memory control (planned)",
+      "name": "32b AXI4 memory control",
       "signals": [
         {
           "name": "AXI4",
           "width": 32
         }
       ],
-      "status": "planned_integration",
+      "status": "wired_boot_configuration",
       "to": {
         "instance": "memory0_local_config.global_in",
         "port": "in"
       },
-      "type": "planned_interconnect"
+      "type": "axi_interconnect"
     },
     {
       "from": {
@@ -2166,19 +2166,19 @@
         "port": "out"
       },
       "id": "noc_link_0109",
-      "name": "memory0 local-to-crossbar link (planned)",
+      "name": "memory0 local-to-crossbar link",
       "signals": [
         {
           "name": "AXI4",
           "width": 64
         }
       ],
-      "status": "planned_integration",
+      "status": "wired_boot_configuration",
       "to": {
         "instance": "memory0.internal_target_crossbar",
         "port": "in"
       },
-      "type": "planned_interconnect"
+      "type": "axi_interconnect"
     },
     {
       "from": {
@@ -2206,19 +2206,19 @@
         "port": "out"
       },
       "id": "noc_link_0111",
-      "name": "Memory0 testbench AXI RAM route",
+      "name": "AXI slave memory model route",
       "signals": [
         {
           "name": "AXI4",
           "width": 64
         }
       ],
-      "status": "verified_separate_memory_tb",
+      "status": "wired_boot_configuration",
       "to": {
         "instance": "memory0.hbm0",
         "port": "in"
       },
-      "type": "planned_interconnect"
+      "type": "axi_interconnect"
     },
     {
       "from": {
@@ -2226,19 +2226,19 @@
         "port": "out"
       },
       "id": "noc_link_0112",
-      "name": "Memory0 testbench AXI RAM route",
+      "name": "AXI slave memory model route",
       "signals": [
         {
           "name": "AXI4",
           "width": 64
         }
       ],
-      "status": "verified_separate_memory_tb",
+      "status": "wired_boot_configuration",
       "to": {
         "instance": "memory0.ddr0",
         "port": "in"
       },
-      "type": "planned_interconnect"
+      "type": "axi_interconnect"
     }
   ],
   "groups": [
@@ -4224,7 +4224,7 @@
     {
       "info": {
         "ip": "picorv32",
-        "status": "planned_noc_endpoint_integration"
+        "status": "wired_boot_configuration"
       },
       "module": "soc_boundary",
       "name": "compute0.cpu",
@@ -4250,7 +4250,7 @@
     {
       "info": {
         "ip": "local_sram",
-        "status": "planned_noc_endpoint_integration"
+        "status": "wired_boot_configuration"
       },
       "module": "soc_boundary",
       "name": "compute0.sram",
@@ -4275,7 +4275,7 @@
     },
     {
       "info": {
-        "status": "planned_noc_endpoint_integration"
+        "status": "wired_boot_configuration"
       },
       "module": "soc_boundary",
       "name": "compute0.reset_ctrl",
@@ -4288,7 +4288,7 @@
     {
       "info": {
         "ip": "serv",
-        "status": "planned_noc_endpoint_integration"
+        "status": "wired_boot_configuration"
       },
       "module": "soc_boundary",
       "name": "compute1.cpu",
@@ -4314,7 +4314,7 @@
     {
       "info": {
         "ip": "local_sram",
-        "status": "planned_noc_endpoint_integration"
+        "status": "wired_boot_configuration"
       },
       "module": "soc_boundary",
       "name": "compute1.sram",
@@ -4339,8 +4339,9 @@
     },
     {
       "info": {
-        "source": "gen/memory/memory_tb.sv",
-        "status": "verified_separate_memory_tb"
+        "source": "gen/chip/soc_top.sv",
+        "standalone_test": "gen/memory/memory_tb.sv",
+        "status": "wired_boot_configuration"
       },
       "module": "axi_crossbar",
       "name": "memory0.internal_target_crossbar",
@@ -4365,8 +4366,8 @@
     {
       "info": {
         "kind": "hbm",
-        "model": "axi_ram",
-        "status": "verified_separate_memory_tb"
+        "model": "axi_to_detailed_mem + tc_sram",
+        "status": "axi_slave_model_in_boot_configuration"
       },
       "module": "soc_boundary",
       "name": "memory0.hbm0",
@@ -4379,8 +4380,8 @@
     {
       "info": {
         "kind": "ddr",
-        "model": "axi_ram",
-        "status": "verified_separate_memory_tb"
+        "model": "axi_to_detailed_mem + tc_sram",
+        "status": "axi_slave_model_in_boot_configuration"
       },
       "module": "soc_boundary",
       "name": "memory0.ddr0",
@@ -4394,7 +4395,7 @@
   "modules": {
     "axi_crossbar": {
       "color": "#16A34A",
-      "description": "Existing standalone Verilog-AXI memory crossbar",
+      "description": "Upstream Verilog-AXI target crossbar",
       "ports": []
     },
     "floo_axi_chimney": {
@@ -4409,7 +4410,7 @@
     },
     "soc_boundary": {
       "color": "#64748B",
-      "description": "Planned SoC component or protocol adapter",
+      "description": "SoC component or protocol adapter; see per-instance status",
       "ports": []
     }
   },
@@ -4472,11 +4473,11 @@
     }
   },
   "schema_version": 1,
-  "scope_note": "Cross-NoC wiring exists in gen/supernoc/supernoc_tb.sv; full SoC endpoint integration is planned",
+  "scope_note": "Shared soc_noc core connects all meshes; gen/chip/soc_top.sv attaches CPUs/SRAM/reset and AXI memory models. iDMA and physical controllers remain pending.",
   "source_of_truth": [
     "config/soc.yaml",
     "config/interface_contracts.yaml",
     "gen/noc/floonoc/*/floogen.yaml"
   ],
-  "status": "real_structural_networks_with_planned_inter_network_links"
+  "status": "structural_nocs_and_cpu_boot_configuration_with_pending_dma_controllers"
 }
