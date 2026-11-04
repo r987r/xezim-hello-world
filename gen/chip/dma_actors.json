@@ -5,8 +5,8 @@
       "label": "Host AXI BFM at held CPU boundary in isolated full-chip DMA test"
     },
     "compute0_local_config.dma_regs": {
-      "kind": "rtl_registers_optional",
-      "label": "AXI4 32-bit DMA head staging/doorbell and IRQ status when DmaEnable=1; error responder otherwise"
+      "kind": "rtl_registers",
+      "label": "Real 32-bit DMA CSR staging/doorbell and sticky IRQ bridge"
     },
     "compute0_local_config.reset_ctrl": {
       "kind": "rtl_registers",
@@ -25,9 +25,9 @@
       "label": "Host AXI BFM at held CPU boundary in isolated full-chip DMA test"
     },
     "compute0_local_data.dma": {
-      "kind": "rtl_dma_optional",
-      "label": "Generated real PULP iDMA frontend/backend when DmaEnable=1; optional BFM only with DmaEnable=0",
-      "short_label": "compute0 iDMA (DmaEnable)"
+      "kind": "rtl_dma",
+      "label": "Real generated PULP descriptor frontend + AXI backend (DmaEnable=1)",
+      "short_label": "compute0 real PULP iDMA"
     },
     "compute0_local_data.sram": {
       "kind": "rtl_model",
@@ -39,8 +39,8 @@
       "short_label": "compute1 serv (config)"
     },
     "compute1_local_config.dma_regs": {
-      "kind": "rtl_registers_optional",
-      "label": "AXI4 32-bit DMA head staging/doorbell and IRQ status when DmaEnable=1; error responder otherwise"
+      "kind": "rtl_registers",
+      "label": "Real 32-bit DMA CSR staging/doorbell and sticky IRQ bridge"
     },
     "compute1_local_data.cpu": {
       "kind": "rtl_cpu",
@@ -48,9 +48,9 @@
       "short_label": "compute1 serv (data)"
     },
     "compute1_local_data.dma": {
-      "kind": "rtl_dma_optional",
-      "label": "Generated real PULP iDMA frontend/backend when DmaEnable=1; optional BFM only with DmaEnable=0",
-      "short_label": "compute1 iDMA (DmaEnable)"
+      "kind": "rtl_dma",
+      "label": "Real generated PULP descriptor frontend + AXI backend (DmaEnable=1)",
+      "short_label": "compute1 real PULP iDMA"
     },
     "compute1_local_data.sram": {
       "kind": "rtl_model",

@@ -6,8 +6,8 @@
       "short_label": "compute0 picorv32 (config)"
     },
     "compute0_local_config.dma_regs": {
-      "kind": "rtl_registers_optional",
-      "label": "AXI4 32-bit DMA head staging/doorbell and IRQ status when DmaEnable=1; error responder otherwise"
+      "kind": "reserved_error",
+      "label": "DMA CSR error responder; DmaEnable=0 in cold boot"
     },
     "compute0_local_config.reset_ctrl": {
       "kind": "rtl_registers",
@@ -27,9 +27,9 @@
       "short_label": "compute0 picorv32 (data)"
     },
     "compute0_local_data.dma": {
-      "kind": "rtl_dma_optional",
-      "label": "Generated real PULP iDMA frontend/backend when DmaEnable=1; optional BFM only with DmaEnable=0",
-      "short_label": "compute0 iDMA (DmaEnable)"
+      "kind": "verification_bfm",
+      "label": "Verification AXI BFM at inactive DMA port",
+      "short_label": "compute0 host BFM (default boot)"
     },
     "compute0_local_data.sram": {
       "kind": "rtl_model",
@@ -41,8 +41,8 @@
       "short_label": "compute1 serv (config)"
     },
     "compute1_local_config.dma_regs": {
-      "kind": "rtl_registers_optional",
-      "label": "AXI4 32-bit DMA head staging/doorbell and IRQ status when DmaEnable=1; error responder otherwise"
+      "kind": "reserved_error",
+      "label": "DMA CSR error responder; DmaEnable=0 in cold boot"
     },
     "compute1_local_data.cpu": {
       "kind": "rtl_cpu",
@@ -50,9 +50,9 @@
       "short_label": "compute1 serv (data)"
     },
     "compute1_local_data.dma": {
-      "kind": "rtl_dma_optional",
-      "label": "Generated real PULP iDMA frontend/backend when DmaEnable=1; optional BFM only with DmaEnable=0",
-      "short_label": "compute1 iDMA (DmaEnable)"
+      "kind": "reserved_idle",
+      "label": "Inactive DMA port; DmaEnable=0",
+      "short_label": "compute1 DMA disabled"
     },
     "compute1_local_data.sram": {
       "kind": "rtl_model",
