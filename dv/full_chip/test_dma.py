@@ -17,6 +17,7 @@ from cocotb.triggers import RisingEdge, FallingEdge, Timer, with_timeout
 from cocotbext.axi import AxiBus, AxiMaster
 from dv.common.dma_vectors import build_dma_vector
 from dv.common.axi_trace import attach_observers, trace_phase
+from tools.axi_report import correlate, read_events
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -100,6 +101,28 @@ def summarize_accepted_axi(dut, compute):
             name, events[name]["aw"], events[name]["w"], events[name]["b"],
             events[name]["ar"], events[name]["r"], events[name]["rlast"],
             last_ps[name]//1000)
+
+    # Reuse the existing AXI report transaction correlator (same logic as
+    # the published explorer) to identify *accepted but unretired* AR/B
+    # operations. Some cross-NoC IDs are remapped, so compare per-boundary
+    # progress rather than assuming IDs are globally stable.
+    catalog=json.loads((ROOT/"gen/supernoc/axi_monitors.json").read_text())
+    accepted, parse_issues=read_events(path)
+    rows, correlation_issues, _ = correlate(accepted, catalog)
+    for issue in (parse_issues+correlation_issues)[:10]:
+        dut._log.error("AXI trace/correlation issue: %s", issue)
+    for name in observed:
+        waiting = [row for row in rows
+                   if row["monitor"]==name and row["status"]=="incomplete"]
+        if waiting:
+            dut._log.error("DMA stalled %s: %d accepted requests still pending",
+                           name, len(waiting))
+            for row in waiting[:10]:
+                dut._log.error(
+                    "  pending %-5s ID=%s ADDR=%s beats=%d/%d start_ns=%d",
+                    row["operation"], row["axi_id"], row["address"],
+                    len(row["beats"]), row["expected_beats"],
+                    row["start_ps"]//1000)
 
 
 @cocotb.test(timeout_time=15, timeout_unit="ms")
