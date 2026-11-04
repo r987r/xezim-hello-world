@@ -31,7 +31,7 @@ For combined boot + DMA tests, each compute SRAM currently models only 16 KiB; t
 
     python3 -m unittest discover -s tests -p 'test_dma_*.py' -v
     python3 tools/dma_vectors.py --count 100 --length 64 --out .tools/dma-vectors
-    cc -std=c11 -Wall -Wextra -Werror -pedantic sw/common/sram_pool.c sw/dma/dma.c sw/dma/tests/test_dma.c -o /tmp/dma-sw-test
+    cc -std=c11 -Wall -Wextra -Werror -pedantic sw/common/memory_pool.c sw/common/sram_pool.c sw/dma/dma.c sw/dma/tests/test_dma.c -o /tmp/dma-sw-test
     /tmp/dma-sw-test
 
 The generator writes source_sram.hex in 64-bit readmemh word order, plus case.json with chain head and every independent expected payload. Successful generation alone is NOT a hardware DMA test. For the actual independent RTL test run `make dv-dma`; it uses upstream Cocotb AXI RAM targets and checks real transactions and completion. The host preload is never enabled in the CPU cold-boot regression.
@@ -205,6 +205,28 @@ simulation against bounded AXI memory targets. The CPU0 AXI BFMs are not PCIe.
 hardware SS0-to-SS1 doorbells, integrated LiteDRAM/physical DDR4 or HBM,
 error-injection cases, or high-outstanding/prefetch performance. The integration is eligible to merge only after conflict resolution and the
 combined-tree verification gates pass.
+
+## Real CPU C DMA regression (opt-in, pending CI evidence)
+
+`make dv-chip-cpu-dma` reuses the same `soc_top`, `full_chip_tb`,
+ROM/flash cold-boot copy, two CPU phase mailboxes and passive AXI monitors.
+The `tools/cpu_dma_firmware.py` builder compiles real freestanding RV32I
+C with pinned CPU/NoC configuration-defined addresses; it generates a
+**temporary immutable flash-image variant** under `.tools/regression/`,
+not another RTL testbench and not a modification to tracked `gen/`.
+CPU0's RUN phase calls C. The C app allocates real runtime SRAM/DDR/HBM
+physical regions, creates desc64 chains, submits and polls MMIO through
+config NoC, then copies DDR/HBM back into CPU-visible SRAM using DMA for
+integrity verification. Python's shared plan independently predicts legal
+addresses; the existing report correlator checks accepted transactions.
+The CPU-BFM DMA tests remain fast independent regressions over the same
+memory-region contract.
+
+**The opt-in integration must not be described as verified until a CI run
+for its current SHA passes, including real CPU startup, C result,
+AXI captures, and DDR/HBM roundtrip.** The stock default boot remains
+unchanged. CPU IRQ handling via interrupt pin is still pending; the first
+CPU regression uses bounded STATUS polling.
 
 ## CPU firmware MMIO driver — incremental contract
 
