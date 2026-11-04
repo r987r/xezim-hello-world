@@ -194,6 +194,13 @@ def build(directory: Path, plan: dict, *, axi_payload=None):
         axi = adapt_axi(axi_payload)
         sources += axi["sources"]
         records += axi["records"]
+        # A generic projection must never upgrade an incomplete AXI capture
+        # into a supposedly complete measurement.
+        run = axi_payload.get("run", {})
+        if run.get("capture_bound") is False or run.get("capture_overflow") is True:
+            issues.append("AXI capture incomplete or overflowed")
+        if axi_payload.get("sections", {}).get("axi", {}).get("issues"):
+            issues.append("AXI channel correlation reported issues")
     configured = reported.get("protocols")
     if configured is not None:
         try:
