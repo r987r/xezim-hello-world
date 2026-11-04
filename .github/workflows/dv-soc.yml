@@ -25,6 +25,7 @@ on:
       - 'tests/test_boot_policy.py'
       - 'tests/test_socgen.py'
       - 'tests/test_regression.py'
+      - 'tests/test_axi_monitor_lifecycle.py'
       - 'tests/test_full_chip_gen.py'
       - 'tests/test_interface_contracts.py'
       - 'tests/test_fabric_config.py'
