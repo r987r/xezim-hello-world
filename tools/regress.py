@@ -260,7 +260,17 @@ def run_target(name, test, resolver, options):
         # before Bender expands the dma source set. This shares the existing
         # FlooNoC AXI dependency graph; no second AXI checkout is introduced.
         idma_rtl.generate()
-        includes += [str(ROOT/'.tools/pulp_idma/src/include'),
+        # FlooNoC's Bender.lock also pins PULP APB, but our standard NoC
+        # source exclusion removes its unused files and include directories.
+        # Bring back ONLY the genuine upstream APB pkg/typedef for desc64.
+        # Never fetch a second APB/AXI revision or copy these definitions.
+        apb_root = Path(capture([resolver.bender, '-d',
+                                 str(ROOT/'.tools/floonoc'), 'path', 'apb']).strip())
+        if not (apb_root/'src/apb_pkg.sv').is_file():
+            raise ValueError('pinned FlooNoC APB package missing')
+        sources.insert(0, str(apb_root/'src/apb_pkg.sv'))
+        includes += [str(apb_root/'include'),
+                     str(ROOT/'.tools/pulp_idma/src/include'),
                      str(ROOT/'.tools/pulp_idma/target/rtl/include')]
     for target in test.get('bender_targets', []):
         extra, inc, defs = resolver.sources({'sources': target})
