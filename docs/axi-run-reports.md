@@ -88,12 +88,13 @@ Each observed target opts in through `config/regression.yaml`:
 
 ```yaml
 report:
-  context: 'Real CPU firmware; compute0 DMA boundary is a verification AXI manager.'
+  context: 'Real CPU firmware; a verification AXI BFM uses the reserved compute0 DMA boundary. No DMA engine is instantiated.'
   axi:
     scope: dut.u_noc
     clock: clk
     reset: rst_n
     catalog: gen/supernoc/axi_monitors.json
+    actors: gen/chip/manifest.json
     max_events: 500000
 ```
 
@@ -113,6 +114,10 @@ Open `.tools/regression/<target>/report.html`. That directory also contains
 existing plans/logs/XML. Local attempts replace that target's prior output;
 CI artifacts preserve the workflow run and attempt.
 
+The [GitHub Pages hub](https://r987r.github.io/xezim-hello-world/) publishes
+the topology, docs and trusted main CI results. See [publication](publication.md)
+for provenance, retention and offline preview instructions.
+
 The chip and NoC workflows upload dedicated AXI run report artifacts in
 addition to their full evidence artifacts. Download the artifact from the
 Actions run, extract it and open a target's `report.html`; GitHub artifact
@@ -120,8 +125,17 @@ downloads do not execute or host the HTML page directly.
 
 ## Extension points
 
+New captures record CPU/test phase markers and explicit one-request expected
+responses. Generated actor metadata labels RTL CPUs, verification BFMs and idle
+reserved DMA ports. Expected-error markers name an initiator, operation and
+address before the request; undeclared initiator SLVERR/DECERR or mismatched
+responses fail capture validation. Downstream errors remain observations, and
+legacy captures without intent markers are labeled unannotated. The standalone
+NoC checks 24 write/read SLVERR pairs; chip memory capacity tests check four
+SLVERR transactions. Normal CPU boot expects successful responses.
+
 Run metadata and report `sections` are versioned separately from raw event
-capture. Later sections can add CPU phase markers, DMA descriptors,
-interrupts, latency distributions or throughput windows without changing
-AXI monitor behavior. A public hosted dashboard, waveform/flit trace and
-cross-NoC global transaction correlation are separate future work.
+capture. Later sections can add real DMA descriptors when integrated, interrupts,
+latency distributions or throughput windows without changing AXI monitor
+behavior. Waveform/flit traces and cross-NoC global transaction correlation
+remain separate future work.

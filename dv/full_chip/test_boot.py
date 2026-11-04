@@ -7,7 +7,7 @@ from cocotb.clock import Clock
 from cocotb.triggers import FallingEdge, RisingEdge, Timer, with_timeout
 from cocotb.result import SimTimeoutError
 from cocotbext.axi import AxiBus, AxiMaster
-from dv.common.axi_trace import attach_observers
+from dv.common.axi_trace import attach_observers, expect_axi_response, trace_phase
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[2]
 async def phase(dut, signal, name):
     await with_timeout(RisingEdge(signal), 1000, 'us')
     dut._log.info('observed firmware phase %s complete', name)
+    trace_phase('CPU '+name+' complete')
 
 
 async def memory_transaction(dut, operation):
@@ -55,6 +56,7 @@ async def coordinated_cold_boot(dut):
     # Only a verification manager occupies the not-yet-integrated DMA port.
     # It never drives SRAM/boot mailboxes. Distinct values detect model aliasing.
     expected = []
+    trace_phase('Verification BFM: memory burst/partial-write checks')
     for index, target in enumerate(memory):
         address = target['base'] + 0x40
         payload = bytearray((index*83 + i*7) % 256 for i in range(16))
@@ -69,10 +71,14 @@ async def coordinated_cold_boot(dut):
         assert result.resp == 0, f'fullchip {name} read response {result.resp}'
         assert result.data == payload, f'fullchip {name} model readback/independence mismatch'
         dut._log.info('PASS fullchip AXI memory model %s at 0x%x', name, address)
+    trace_phase('Verification BFM: capacity checks — expected SLVERR')
+    monitor=manifest['coordinator']+'_local_data.dma'
     for target in memory:
         address = target['base'] + target['modeled_bytes']
+        expect_axi_response(monitor,'write',address,2,'Deliberate write beyond the 64-KiB '+target['name']+' model')
         result = await memory_transaction(dut, probe.write(address, b'NOALIAS!'))
         assert result.resp == 2, f'fullchip {target["name"]} out-of-range write must return SLVERR'
+        expect_axi_response(monitor,'read',address,2,'Deliberate read beyond the 64-KiB '+target['name']+' model')
         result = await memory_transaction(dut, probe.read(address, 8))
         assert result.resp == 2, f'fullchip {target["name"]} out-of-range read must return SLVERR'
     await Timer(1, 'ns')  # drain passive same-edge channel callbacks

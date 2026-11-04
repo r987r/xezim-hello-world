@@ -229,6 +229,13 @@ def emit(soc, noc_root, dest):
             if isinstance(regions,dict):regions=[regions]
             t["regions"]=[{"base":int(x["base"]),"size":int(x["size"])} for x in regions]
             meta["slaves"].append(t)
+    meta['axi_actors'] = {
+        m['network']+'.'+m['endpoint']:{'kind':'verification_bfm','label':'AXI verification BFM (reserved '+m['endpoint']+' boundary)',
+                                       'short_label':m['network']+'.'+m['endpoint']+' BFM'}
+        for m in meta['masters']}
+    meta['axi_actors'].update({
+        s['network']+'.'+s['endpoint']:{'kind':'verification_target','label':'AXI verification target BFM'}
+        for s in meta['slaves']})
     (dest.parent/"manifest.json").write_text(json.dumps(meta,indent=2,sort_keys=True)+"\n")
     regions = [{'name':r['name'],'plane':plane,'base':r['base'],'size':r['size']}
                for plane in ('data','config') for r in soc['address_map'][plane]]

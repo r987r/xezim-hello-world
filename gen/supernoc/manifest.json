@@ -1,4 +1,72 @@
 {
+  "axi_actors": {
+    "compute0_local_config.cpu": {
+      "kind": "verification_bfm",
+      "label": "AXI verification BFM (reserved cpu boundary)",
+      "short_label": "compute0_local_config.cpu BFM"
+    },
+    "compute0_local_config.dma_regs": {
+      "kind": "verification_target",
+      "label": "AXI verification target BFM"
+    },
+    "compute0_local_config.reset_ctrl": {
+      "kind": "verification_target",
+      "label": "AXI verification target BFM"
+    },
+    "compute0_local_data.boot_flash": {
+      "kind": "verification_target",
+      "label": "AXI verification target BFM"
+    },
+    "compute0_local_data.boot_rom": {
+      "kind": "verification_target",
+      "label": "AXI verification target BFM"
+    },
+    "compute0_local_data.cpu": {
+      "kind": "verification_bfm",
+      "label": "AXI verification BFM (reserved cpu boundary)",
+      "short_label": "compute0_local_data.cpu BFM"
+    },
+    "compute0_local_data.dma": {
+      "kind": "verification_bfm",
+      "label": "AXI verification BFM (reserved dma boundary)",
+      "short_label": "compute0_local_data.dma BFM"
+    },
+    "compute0_local_data.sram": {
+      "kind": "verification_target",
+      "label": "AXI verification target BFM"
+    },
+    "compute1_local_config.cpu": {
+      "kind": "verification_bfm",
+      "label": "AXI verification BFM (reserved cpu boundary)",
+      "short_label": "compute1_local_config.cpu BFM"
+    },
+    "compute1_local_config.dma_regs": {
+      "kind": "verification_target",
+      "label": "AXI verification target BFM"
+    },
+    "compute1_local_data.cpu": {
+      "kind": "verification_bfm",
+      "label": "AXI verification BFM (reserved cpu boundary)",
+      "short_label": "compute1_local_data.cpu BFM"
+    },
+    "compute1_local_data.dma": {
+      "kind": "verification_bfm",
+      "label": "AXI verification BFM (reserved dma boundary)",
+      "short_label": "compute1_local_data.dma BFM"
+    },
+    "compute1_local_data.sram": {
+      "kind": "verification_target",
+      "label": "AXI verification target BFM"
+    },
+    "memory0_local_config.controller_regs": {
+      "kind": "verification_target",
+      "label": "AXI verification target BFM"
+    },
+    "memory0_local_data.target_crossbar": {
+      "kind": "verification_target",
+      "label": "AXI verification target BFM"
+    }
+  },
   "connections": [
     {
       "from": "compute0_local_data.global_out",

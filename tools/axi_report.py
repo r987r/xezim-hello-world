@@ -10,7 +10,8 @@ from pathlib import Path
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
-ORDER = {'reset':0, 'capture_start':1, 'aw':2, 'ar':3, 'w':4, 'r':5, 'b':6}
+ORDER = {'reset':0, 'capture_start':1,'phase':1,'expect_response':1,
+         'aw':2, 'ar':3, 'w':4, 'r':5, 'b':6}
 
 
 def number(value):
@@ -28,6 +29,7 @@ class Boundary:
         self.aw, self.wbursts = deque(), deque()
         self.wcurrent = []
         self.reads, self.writes = defaultdict(deque), defaultdict(deque)
+        self.expectations = []
 
     def reset(self):
         for row in self.rows:
@@ -50,6 +52,12 @@ class Boundary:
                'start_ps':event['time_ps'],'end_ps':None,'latency_ps':None,
                'expected_beats':number(f['len'])+1,'beats':[],
                'response':None,'status':'incomplete','issues':[]}
+        expectation = next((e for e in self.expectations if e['operation']==operation
+                            and number(e['address'])==address and e['time_ps']<=event['time_ps']),None)
+        if expectation:
+            self.expectations.remove(expectation)
+            row['expected_response']=expectation['response']
+            row['expected_reason']=expectation['reason']
         self.rows.append(row)
         return row
 
@@ -120,8 +128,12 @@ def correlate(events, catalog):
             if event['active']:
                 for state in states.values():
                     state.reset()
-        elif ch in ('capture_start','capture_overflow'):
+        elif ch in ('capture_start','capture_overflow','phase'):
             controls.append(event)
+        elif ch == 'expect_response':
+            if event['monitor'] not in states or states[event['monitor']].entry['role']!='initiator':
+                raise ValueError('AXI expectations must name an initiator boundary')
+            states[event['monitor']].expectations.append(event)
         elif ch in ('aw','w','b','ar','r'):
             if event['monitor'] not in states:
                 raise ValueError('event for uncataloged AXI boundary: '+event['monitor'])
@@ -148,9 +160,27 @@ def write_report(directory, plan, result):
     catalog = json.loads((ROOT/plan['report']['axi']['catalog']).read_text())
     events, issues = read_events(directory/'axi-events.jsonl')
     rows, correlation_issues, controls = correlate(events,catalog)
+    starts = [e for e in controls if e['channel']=='capture_start']
+    annotated = bool(starts) and starts[0].get('annotations_version',0)>=1
+    actors_path=plan['report']['axi'].get('actors')
+    actors=json.loads((ROOT/actors_path).read_text()).get('axi_actors',{}) if actors_path else {}
+    for monitor in catalog['monitors']:
+        monitor['actor']=actors.get(monitor['id'],{'kind':'interconnect' if monitor['role']=='link' else 'unspecified',
+                                                  'label':'Inter-NoC AXI link' if monitor['role']=='link' else 'Actor not recorded in this report'})
+    by_id={m['id']:m for m in catalog['monitors']}
+    for row in rows:
+        row['actor']=by_id[row['monitor']]['actor']
+        error=row['response'] is not None and number(row['response'])>=2
+        expected=row.get('expected_response')
+        if row['status']=='complete' and expected is not None and number(expected)!=number(row['response']):
+            row['issues'].append('response differs from the explicitly declared expectation')
+        row['error_intent']=('expected' if expected is not None and error and number(expected)==number(row['response']) else
+                             'undeclared' if error and row['role']=='initiator' and annotated else
+                             'observed' if error else 'none')
+        if row['error_intent']=='undeclared':
+            row['issues'].append('initiator error response has no declared expectation')
     correlation_issues += [{'monitor':row['monitor'],'transaction':row['uid'],'message':message}
                            for row in rows for message in row['issues']]
-    starts = [e for e in controls if e['channel']=='capture_start']
     binding_complete = bool(starts) and set(starts[0]['monitors']) == {m['id'] for m in catalog['monitors']}
     if not binding_complete:
         issues.append({'message':'AXI capture did not bind every cataloged boundary; no complete capture is claimed'})
@@ -162,7 +192,8 @@ def write_report(directory, plan, result):
         dirty = bool(subprocess.check_output(['git','status','--porcelain'],cwd=ROOT,text=True))
     except subprocess.CalledProcessError:
         sha, dirty = 'unknown', True
-    payload = {'schema_version':1,'run':{'target':plan['target'],'commit':sha,'dirty':dirty,
+    payload = {'schema_version':2,'run':{'target':plan['target'],'commit':sha,'dirty':dirty,
+                'annotations_available':annotated,
                 'context':plan['report'].get('context',''),
                 'engine':plan['engine'],'seed':plan.get('seed'),'result':result,
                 'workflow_run_id':os.environ.get('GITHUB_RUN_ID'),
@@ -170,12 +201,17 @@ def write_report(directory, plan, result):
                 'expected_failure':plan.get('expect_failure'),'capture_bound':binding_complete,
                 'event_count':len(events),'capture_overflow':overflow},
                'sections':{'axi':{'monitors':catalog['monitors'],'transactions':rows,
+                                 'phases':[e for e in controls if e['channel']=='phase'],
                                  'issues':issues+correlation_issues}}}
     (directory/'axi-transactions.json').write_text(json.dumps(payload,indent=2)+'\n')
     # Escape '<' even inside JSON strings: transaction text must never close
     # the embedded script element. All table/details text uses textContent.
-    data = json.dumps(payload,separators=(',',':')).replace('<','\\u003c')
-    template = (ROOT/'tools/templates/run_report.html').read_text()
-    (directory/'report.html').write_text(template.replace('__RUN_DATA__',data))
+    render_report(payload,directory/'report.html')
     return {'transactions':len(rows),'events':len(events),'capture_bound':binding_complete,
             'overflow':overflow,'issues':len(issues)+len(correlation_issues)}
+
+
+def render_report(payload,path):
+    data=json.dumps(payload,separators=(',',':')).replace('<','\\u003c')
+    template=(ROOT/'tools/templates/run_report.html').read_text()
+    Path(path).write_text(template.replace('__RUN_DATA__',data))

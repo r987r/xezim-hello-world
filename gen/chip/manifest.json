@@ -1,6 +1,75 @@
 {
+  "axi_actors": {
+    "compute0_local_config.cpu": {
+      "kind": "rtl_cpu",
+      "label": "picorv32 compute0 (RTL CPU)",
+      "short_label": "compute0 picorv32 (config)"
+    },
+    "compute0_local_config.dma_regs": {
+      "kind": "reserved_error",
+      "label": "DECERR responder: controller/DMA registers not integrated"
+    },
+    "compute0_local_config.reset_ctrl": {
+      "kind": "rtl_registers",
+      "label": "Reset register bank (RTL)"
+    },
+    "compute0_local_data.boot_flash": {
+      "kind": "rtl_model",
+      "label": "Upstream AXI SRAM/ROM model"
+    },
+    "compute0_local_data.boot_rom": {
+      "kind": "rtl_model",
+      "label": "Upstream AXI SRAM/ROM model"
+    },
+    "compute0_local_data.cpu": {
+      "kind": "rtl_cpu",
+      "label": "picorv32 compute0 (RTL CPU)",
+      "short_label": "compute0 picorv32 (data)"
+    },
+    "compute0_local_data.dma": {
+      "kind": "verification_bfm",
+      "label": "Verification AXI BFM at reserved DMA port",
+      "short_label": "compute0 test BFM (reserved DMA)"
+    },
+    "compute0_local_data.sram": {
+      "kind": "rtl_model",
+      "label": "Upstream AXI SRAM/ROM model"
+    },
+    "compute1_local_config.cpu": {
+      "kind": "rtl_cpu",
+      "label": "serv compute1 (RTL CPU)",
+      "short_label": "compute1 serv (config)"
+    },
+    "compute1_local_config.dma_regs": {
+      "kind": "reserved_error",
+      "label": "DECERR responder: controller/DMA registers not integrated"
+    },
+    "compute1_local_data.cpu": {
+      "kind": "rtl_cpu",
+      "label": "serv compute1 (RTL CPU)",
+      "short_label": "compute1 serv (data)"
+    },
+    "compute1_local_data.dma": {
+      "kind": "reserved_idle",
+      "label": "Reserved DMA port: idle, no engine",
+      "short_label": "compute1 DMA reserved / idle"
+    },
+    "compute1_local_data.sram": {
+      "kind": "rtl_model",
+      "label": "Upstream AXI SRAM/ROM model"
+    },
+    "memory0_local_config.controller_regs": {
+      "kind": "reserved_error",
+      "label": "DECERR responder: controller/DMA registers not integrated"
+    },
+    "memory0_local_data.target_crossbar": {
+      "kind": "rtl_model",
+      "label": "Memory crossbar and bounded AXI SRAM stand-ins"
+    }
+  },
   "cores": 2,
-  "dma": "idle initiators and DECERR CSR targets; real iDMA not integrated",
+  "dma": "Reserved DMA boundaries; the coordinator port can host a verification AXI BFM. No iDMA engine is instantiated.",
+  "dma_engines_instantiated": 0,
   "fabric_core": "gen/supernoc/soc_noc.sv",
   "firmware": "firmware.json",
   "memory_controllers": "AXI slave SRAM models only; no physical HBM/DDR RTL",

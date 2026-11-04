@@ -7,7 +7,7 @@ flowchart TB
   %% Solid links are wired in the boot configuration; DMA/controller links remain dashed.
   subgraph n_compute0_box["compute0 / compute subsystem"]
   n_compute0_cpu["picorv32 CPU"]:::model
-  n_compute0_dma["PULP iDMA (planned)"]:::model
+  n_compute0_dma["Reserved DMA port (no engine)"]:::model
   n_compute0_sram["Local SRAM"]:::model
   n_compute0_local_data["Local DATA FlooNoC / 9 routers / AXI4"]:::data
   n_compute0_local_config["Local CONFIG FlooNoC / 6 routers / 32-bit AXI4 transport"]:::config
@@ -20,7 +20,7 @@ flowchart TB
   n_compute0_local_config -->|global control| n_global_config
   subgraph n_compute1_box["compute1 / compute subsystem"]
   n_compute1_cpu["serv CPU"]:::model
-  n_compute1_dma["PULP iDMA (planned)"]:::model
+  n_compute1_dma["Reserved DMA port (no engine)"]:::model
   n_compute1_sram["Local SRAM"]:::model
   n_compute1_local_data["Local DATA FlooNoC / 6 routers / AXI4"]:::data
   n_compute1_local_config["Local CONFIG FlooNoC / 4 routers / 32-bit AXI4 transport"]:::config

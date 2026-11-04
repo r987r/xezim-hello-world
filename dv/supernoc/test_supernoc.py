@@ -10,7 +10,7 @@ from cocotb.triggers import RisingEdge, Timer, with_timeout
 from cocotbext.axi import (
     AddressSpace, AxiBus, AxiMaster, AxiResp, AxiSlave, SparseMemoryRegion,
 )
-from dv.common.axi_trace import attach_observers
+from dv.common.axi_trace import attach_observers, expect_axi_response, trace_phase
 
 ROOT = Path(__file__).resolve().parents[2]
 CONTRACT = json.loads((ROOT / "gen/supernoc/manifest.json").read_text())
@@ -79,6 +79,7 @@ async def transfer(agent, desc, memory, address, pattern, txn_id=0, readonly=Fal
 @cocotb.test(timeout_time=500, timeout_unit="us")
 async def routed_data_and_config_all_local_global_nocs(dut):
     masters, sinks, memory = await setup(dut)
+    trace_phase('Mapped-route read/write checks')
     visits = set()
     for index, desc in enumerate(CONTRACT["masters"]):
         word_bytes = desc["data_width"] // 8
@@ -94,6 +95,7 @@ async def routed_data_and_config_all_local_global_nocs(dut):
     reached = {expected_sink(d, r["base"], 1) for d in CONTRACT["masters"] for r in d["regions"]}
     assert reached == set(sinks), f"unvisited leaf endpoints: {set(sinks) - reached}"
 
+    trace_phase('Burst, byte-strobe and channel-stall stress')
     # All five channels stall through upstream pause generators.
     for sink in sinks.values():
         for channel in (sink.write_if.aw_channel, sink.write_if.w_channel,
@@ -143,6 +145,7 @@ async def routed_data_and_config_all_local_global_nocs(dut):
     # Upstream AxiSlave + an empty upstream AddressSpace produces SLVERR.
     # Mapped target faults are distinct from unmapped NoC addresses, for
     # which pinned FlooNoC asserts DecodeError rather than returning DECERR.
+    trace_phase('Injected mapped-target faults — expected SLVERR')
     errors = 0
     for desc in CONTRACT["masters"]:
         for region in desc["regions"]:
@@ -154,7 +157,10 @@ async def routed_data_and_config_all_local_global_nocs(dut):
             sink.write_if.target = sink.read_if.target = AddressSpace(size=1 << desc["addr_width"])
             try:
                 agent = masters[desc["name"]]
+                monitor=desc['network']+'.'+desc['endpoint']
+                expect_axi_response(monitor,'write',address,2,'Deliberate mapped-target write fault')
                 wr = await bounded(agent.write(address, b"\x01"), "SLVERR write")
+                expect_axi_response(monitor,'read',address,2,'Deliberate mapped-target read fault')
                 rd = await bounded(agent.read(address, 1), "SLVERR read")
                 assert wr.resp == rd.resp == AxiResp.SLVERR, f"lost downstream SLVERR: {desc['name']}"
                 errors += 1
@@ -164,6 +170,7 @@ async def routed_data_and_config_all_local_global_nocs(dut):
 
     # Opt-in negative run must fail on an actual routed corrupt readback.
     if os.getenv("SUPERNOC_NEGATIVE") == "1":
+        trace_phase('Injected readback corruption — expected test failure')
         desc = CONTRACT["masters"][0]
         address = desc["regions"][0]["base"] + 0x40
         target = expected_sink(desc, address, 4)

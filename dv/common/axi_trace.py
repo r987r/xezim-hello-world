@@ -48,7 +48,8 @@ class AxiTrace:
                 monitor = monitor_type(bus, clock, reset, reset_active_level=False)
                 self.monitors.append(monitor)
                 cocotb.start_soon(self.consume(entry['id'], channel.lower(), monitor))
-        self.emit({'channel':'capture_start', 'monitors':[m['id'] for m in catalog['monitors']]})
+        self.emit({'channel':'capture_start', 'annotations_version':1,
+                   'monitors':[m['id'] for m in catalog['monitors']]})
         cocotb.start_soon(self.resets(reset))
 
     def emit(self, event):
@@ -82,3 +83,15 @@ def attach_observers(dut):
     plan = json.loads(plan_path.read_text())
     if 'axi' in plan.get('report', {}):
         _active.append(AxiTrace(dut, plan_path))
+
+
+def trace_phase(label):
+    for observer in _active:
+        observer.emit({'channel':'phase','label':label})
+
+
+def expect_axi_response(monitor, operation, address, response, reason):
+    """Declare one expected response before submitting its exact request."""
+    for observer in _active:
+        observer.emit({'channel':'expect_response','monitor':monitor,'operation':operation,
+                       'address':hex(address),'response':hex(int(response)),'reason':reason})

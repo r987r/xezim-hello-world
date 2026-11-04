@@ -259,7 +259,7 @@ def hierarchy_mermaid(cfg: dict, networks: dict) -> str:
         ld, lc = name+"_local_data", name+"_local_config"
         lines.append(f'  subgraph {identifier(name+"_box")}["{name} / compute subsystem"]')
         node(name+".cpu", c["cpu"]["ip"] + " CPU", "model")
-        node(name+".dma", "PULP iDMA (planned)", "model")
+        node(name+".dma", "Reserved DMA port (no engine)", "model")
         node(name+".sram", "Local SRAM", "model")
         node(ld, f"Local DATA FlooNoC / {networks[ld]['entry']['routers']} routers / AXI4", "data")
         node(lc, f"Local CONFIG FlooNoC / {networks[lc]['entry']['routers']} routers / 32-bit AXI4 transport", "config")
@@ -316,7 +316,7 @@ def overview_svg(cfg: dict, networks: dict, dst: Path):
         a.text(x+18,y+14,name+" / compute subsystem",22,INK)
         a.box_label(x+18,y+50,220,76,compute["cpu"]["ip"]+" CPU",
                     compute["cpu"]["bus"]+" to AXI","cpu",title_size=19,detail_size=13)
-        a.box_label(x+255,y+50,213,76,"PULP iDMA + CSR","IP wiring pending","dma",title_size=19,detail_size=14)
+        a.box_label(x+255,y+50,213,76,"Reserved DMA / CSR","No engine instantiated","dma",title_size=18,detail_size=13)
         a.box_label(x+486,y+50,235,76,"Local SRAM","global remote address", "memory",title_size=19,detail_size=13)
         ld=name+"_local_data";lc=name+"_local_config"
         a.box_label(x+18,y+155,351,81,"LOCAL DATA  /  FlooNoC",
