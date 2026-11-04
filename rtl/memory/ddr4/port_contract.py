@@ -33,7 +33,7 @@ AXI_OUTPUT_SIGNALS = frozenset((
 # an external test master and does not autonomously initialize the controller.
 # Names/directions follow pinned LiteX Wishbone Interface.get_ios/connect_to_pads.
 CONTROL_SIGNALS = {
-    "clk": ("input", 1), "rst": ("input", 1),
+    "clk": ("input", 1),
     "init_done": ("output", 1), "init_error": ("output", 1),
     "wb_ctrl_cyc": ("input", 1), "wb_ctrl_stb": ("input", 1),
     "wb_ctrl_we": ("input", 1), "wb_ctrl_ack": ("output", 1),
@@ -103,4 +103,12 @@ def emitted_port_widths(verilog: str, module: str = CORE_NAME,
             require(actual_width == width,
                     f"{name}: expected {width}-bit control pin, generated {actual_width}")
         found[name] = actual_width
+    # LiteDRAM's --sim CRG is clock-only and does not consume the physical
+    # pad "rst"; Migen therefore drops that input from the generated top.
+    # Keep the exported user_rst and PHY init handshake mandatory above.
+    if re.search(r"\\b(?:input|output|inout)\\s+(?:(?:wire|reg|logic)\\s+)*rst\\b", header):
+        actual_dir, actual_width = _generated_port(header, "rst")
+        require((actual_dir, actual_width) == ("input", 1),
+                f"rst: unexpected simulation reset port {actual_dir}[{actual_width}]")
+        found["rst"] = actual_width
     return found
