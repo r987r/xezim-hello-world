@@ -195,6 +195,15 @@ class TestDDR4SimGeometry(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "banks changed"):
             sim_model.scaled_device_class(Device, self.geometry)
 
+    def test_generator_output_confined_to_ddr_sandbox(self):
+        allowed = bringup.checked_output_dir(bringup.ROOT / ".tools/ddr4/test-output")
+        self.assertEqual(allowed, (bringup.ROOT / ".tools/ddr4/test-output").resolve())
+        for forbidden in (bringup.ROOT / "gen/chip", bringup.ROOT / "rtl/memory/ddr4",
+                          bringup.ROOT / ".tools/litedram"):
+            with self.subTest(forbidden=forbidden):
+                with self.assertRaisesRegex(ValueError, ".tools/ddr4"):
+                    bringup.checked_output_dir(forbidden)
+
     def test_generator_uses_isolated_entrypoint(self):
         cmd = bringup.generator_argv(Path("/tmp/out"))
         self.assertEqual(Path(cmd[1]).name, "sim_model.py")
