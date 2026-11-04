@@ -27,6 +27,7 @@
 .ex-selected.ex-edge{stroke:#d97706;stroke-width:4;opacity:1}
 @media(max-width:820px){.ex-layout{grid-template-columns:1fr}.ex-scroll{min-height:380px}.ex-detail{min-height:130px}#ex-detail{max-height:200px}}
 </style>
+<script type="application/json" id="ex-embedded-graph">__GRAPH_DATA__</script>
 <script>
 (function(){
 "use strict";
@@ -84,7 +85,7 @@ function render(){
 }
 document.getElementById("ex-reset").addEventListener("click",function(){s.value="all";render()});
 s.addEventListener("change",render);p.addEventListener("change",render);
-fetch("data/design-graph.json").then(function(r){if(!r.ok)throw Error("HTTP "+r.status);return r.json()}).then(function(data){
+Promise.resolve(JSON.parse(document.getElementById("ex-embedded-graph").textContent)).then(function(data){
  graph=data;
  [["all","Whole SoC"]].concat(data.groups.map(function(g){return [g.name,g.name]})).forEach(function(pair){var o=document.createElement("option");o.value=pair[0];o.textContent=pair[1];s.append(o)});
  Object.keys(data.profiles).forEach(function(k){var o=document.createElement("option");o.value=k;o.textContent=k;p.append(o)});
