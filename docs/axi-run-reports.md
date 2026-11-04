@@ -156,10 +156,15 @@ from the eventual main merge SHA, even when the two Git source trees are
 identical. The published evidence collector first verifies that the PR really
 merged into main, validates the CI tested merge commit against the exact PR
 head, and compares the tested Git tree to the published main Git tree.
-Only exact-SHA or verified identical-tree serial one-beat captures can populate
-per-mesh timing. The original tested SHA remains on every measurement; when
-source trees differ, the observations stay historical rather than silently
-being presented as current. The wide table shows min, arithmetic average and
+Only captures with the same tested SHA, identical authenticated Git tree,
+or a verified matching RTL/DV execution-input fingerprint can populate
+per-mesh timing. The fingerprint includes pinned dependencies, RTL, generated
+NoC, AXI monitors, test stimulus, clock/capture code and simulation CI job
+execution steps; report rendering, docs and workflow scheduling do not alter
+it. Any execution-input modification forces new evidence rather than silently
+reusing old timing. The original tested SHA remains on every measurement. When execution inputs
+change, observations remain historical, even if a route is still structurally
+reachable. A new passing real NoC AXI test must then supply current timing. The wide table shows min, arithmetic average and
 max cycles on read and write separately, with sample count and the measured
 clock period. Stage minima/maxima are independent quantiles and need not
 sum to end-to-end extrema; for the same paired samples, stage averages sum.
