@@ -386,6 +386,8 @@ def main():
     cli.add_argument('--config', type=Path, default=ROOT/'config/regression.yaml')
     cli.add_argument('--list', action='store_true')
     cli.add_argument('--check-noc', action='store_true')
+    cli.add_argument('--fail-fast', action='store_true',
+                     help='stop this suite at the first failing target (CI quick feedback)')
     cli.add_argument('--stage', choices=['files', 'build', 'run', 'all'], default='all')
     cli.add_argument('--memory-config')
     cli.add_argument('--network', action='append', default=[])
@@ -410,10 +412,16 @@ def main():
     passed = True
     for name in targets:
         try:
-            passed = run_target(name, config['tests'][name], resolver, options) and passed
+            target_passed = run_target(name, config['tests'][name], resolver, options)
         except (ValueError, OSError, subprocess.SubprocessError) as error:
             print(f'FAIL {name}: {error}', file=sys.stderr, flush=True)
+            target_passed = False
+        if not target_passed:
             passed = False
+            if options.fail_fast:
+                print(f'STOP after {name}: subsequent suite targets skipped; '
+                      'failing log and AXI report already preserved', flush=True)
+                break
     return 0 if passed else 1
 
 

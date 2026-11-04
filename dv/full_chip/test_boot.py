@@ -40,7 +40,16 @@ async def memory_transaction(dut, operation):
 async def coordinated_cold_boot(dut):
     manifest = json.loads((ROOT/'gen/chip/firmware.json').read_text())
     memory = json.loads((ROOT/'gen/chip/manifest.json').read_text())['memory_models']
-    probe = AxiMaster(AxiBus.from_prefix(dut, 'probe'), dut.clk, dut.rst_n, reset_active_level=False)
+    cpu_dma_mode = os.environ.get('SOC_CPU_DMA_MODE') == '1'
+    # The probe outputs mirror the *real iDMA response* when DmaEnable=1
+    # and ProbeEnable=0. Attaching AxiMaster in CPU mode would let its
+    # unsolicited R-channel worker consume the DMA's valid descriptor R
+    # (ID=7), raising cocotbext-axi "unexpected burst ID". In this mode
+    # the probe is an observation port only: NEVER attach an active agent.
+    probe = None
+    if not cpu_dma_mode:
+        probe = AxiMaster(AxiBus.from_prefix(dut, 'probe'), dut.clk,
+                          dut.rst_n, reset_active_level=False)
     dut.rst_n.value = 0
     attach_observers(dut)
     cocotb.start_soon(Clock(dut.clk, 10, 'ns').start())
@@ -57,7 +66,8 @@ async def coordinated_cold_boot(dut):
     assert int(dut.hello_mask.value) == mask
     assert int(dut.check_mask.value) == mask
     assert int(dut.app_fetch.value) == mask
-    if os.environ.get('SOC_CPU_DMA_MODE') == '1':
+    if cpu_dma_mode:
+        assert probe is None  # a CPU-DMA run must never own the BFM port
         # Same testbench and INIT/RUN/CHECK checker; no AXI BFM drives the
         # CPU or memory. Real PicoRV32 has already called compiled C, which
         # sends both engines' traffic through the configured NoCs.

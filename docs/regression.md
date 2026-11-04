@@ -53,7 +53,7 @@ without substituting for real CPU execution.
 | `noc` | Verilator elaboration of every configured network, one connected-NoC traffic test, named routed corruption failure |
 | `compatibility` | Xezim compile-only probe of every configured network |
 | `diagnostics` | CPU fetch request activity and arithmetic simulator smoke |
-| `chip` | Shared RTL plus (1) dual RTL iDMA CPU-BFM scope, (2) cold real-CPU INIT/RUN/CHECK, (3) opt-in compiled CPU0 C DMA during RUN with DDR/HBM roundtrip and passive AXI monitoring, (4) held-secondary negative, (5) Xezim structural compile |
+| `chip` | One RTL framework: CPU0 compiled C DMA roundtrip (first/fast-fail), independent real-DMA BFM coverage, cold CPU boot, held-secondary negative, Xezim structural compile. Every scope is still required for a green suite. |
 | `full` | All suites above; schema validation rejects an uncovered declared test |
 
 Every invocation checks generated-file drift before resolving RTL. The
@@ -150,3 +150,13 @@ FlooNoC's pinned AXI/APB versions provide shared bus types. Existing `gen/`
 NoC and cold-boot artifacts remain unchanged. Run the dedicated
 `.github/workflows/dma.yml` action for complete compiler and simulation logs;
 [successful 2026-11-04 head](https://github.com/r987r/xezim-hello-world/actions/runs/41860245485).
+
+For rapid PR feedback, full-chip CI first cross-links real RV32I C firmware and tests
+allocation/probe ownership without FlooNoC generation. It then runs
+`make dv-chip FAST_FAIL=1`, which starts with the CPU C DMA gate and stops
+subsequent expensive targets on the first failure while retaining logs and
+AXI traces. Run plain `make dv-chip` locally to continue all tests even if
+one fails. In CPU C mode the AXI probe BFM must *not* instantiate: its
+output pins mirror real iDMA response IDs, so the passive AXI monitor is
+the correct nonintrusive observer. Keep performance and memory-init/check
+benchmarks on the same strict/hybrid/fast scenario contract.

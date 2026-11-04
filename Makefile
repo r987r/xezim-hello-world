@@ -50,7 +50,7 @@ dv-supernoc:
 	python3 tools/regress.py supernoc
 
 dv-chip:
-	python3 tools/regress.py chip
+	python3 tools/regress.py chip $(if $(filter 1,$(FAST_FAIL)),--fail-fast)
 
 dv-chip-dma:
 	python3 tools/regress.py chip-dma

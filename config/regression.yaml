@@ -189,8 +189,10 @@ suites:
   compatibility: [noc-xezim]
   diagnostics: [cpu-fetch, smoke]
   dma: [dma-rtl]
-  # Fail fast on the new generator-wired DMA hardware, then gate cold boot.
-  chip: [chip-dma, chip-boot, chip-cpu-dma, chip-boot-negative, chip-xezim-compile]
+  # Run the unstable CPU C + real-DMA integration FIRST. With --fail-fast
+  # do not pay for the known-good BFM/boot/Xezim builds if CPU mode fails.
+  # Every scope still runs when CPU mode succeeds.
+  chip: [chip-cpu-dma, chip-dma, chip-boot, chip-boot-negative, chip-xezim-compile]
   # Every declared test is covered. Structural Xezim probes stay distinct
   # from the Verilator traffic gate; make test requires both toolchains.
   full: [xezim, noc, compatibility, diagnostics, dma, chip]
