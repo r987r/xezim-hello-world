@@ -431,7 +431,12 @@ def emit_tb(cfg, fw, out, *, image_prefix='gen/chip', cpu_dma_mode=False):
     max_words = max(words)
     bases = '{'+', '.join(f"32'h{v:08x}" for v in reversed(fw['sram_bases']))+'}'
     counts = '{'+', '.join(f"32'd{v}" for v in reversed(words))+'}'
-    opts = cfg['verification']['full_chip_boot']
+    opts = dict(cfg['verification']['full_chip_boot'])
+    if cpu_dma_mode:
+        # Compiled CPU C code executes over real NoCs: much longer than the
+        # tiny minimal RV32I mailbox bootstrap, but still strictly bounded.
+        opts['timeout_cycles'] = max(opts['timeout_cycles'], 400000)
+        opts['phase_timeout_cycles'] = max(opts['phase_timeout_cycles'], 350000)
     probe = probe_ports()
     cfgprobe = probe_ports('cfgprobe', addr_bits=32, data_bits=32, id_bits=1)
     lines = ['`timescale 1ns/1ps', '// One boot/coordination checker shared by both simulators.',
