@@ -83,7 +83,7 @@ class FullChipTests(unittest.TestCase):
             self.assertIn('cpu0_config_bfm_awid', tb)
             self.assertIn('.probe_awid(cpu0_data_bfm_awid)', tb)
             self.assertIn('.cfgprobe_awid(cpu0_config_bfm_awid)', tb)
-            self.assertIn('NumAxInFlight(1)',top)
+            self.assertIn('NumAxInFlight(2)',top)
             self.assertIn('DescriptorPrefetch(0)',top)
             self.assertEqual(chip['dma_parameters_by_compute']['compute0'],
                              self.cfg['subsystem_types']['compute']['dma_parameters'])
@@ -98,14 +98,14 @@ class FullChipTests(unittest.TestCase):
         compute0=self.cfg['subsystems'][0]
         compute1=self.cfg['subsystems'][1]
         self.assertEqual(full_chip_gen.dma_params_for(self.cfg, compute0),
-                         {'num_ax_in_flight':1,'buffer_depth':3,'descriptor_prefetch':0})
+                         {'num_ax_in_flight':2,'buffer_depth':3,'descriptor_prefetch':0})
         cfg=copy.deepcopy(self.cfg)
         cfg['subsystems'][0]['dma_parameters']={
-            'num_ax_in_flight':2, 'descriptor_prefetch':4}
+            'num_ax_in_flight':3, 'descriptor_prefetch':4}
         self.assertEqual(full_chip_gen.dma_params_for(cfg,cfg['subsystems'][0]),
-                         {'num_ax_in_flight':2,'buffer_depth':3,'descriptor_prefetch':4})
-        self.assertEqual(full_chip_gen.dma_params_for(cfg,cfg['subsystems'][1])['num_ax_in_flight'],1)
-        for bad in ({'num_ax_in_flight':0},{'descriptor_prefetch':-1},
+                         {'num_ax_in_flight':3,'buffer_depth':3,'descriptor_prefetch':4})
+        self.assertEqual(full_chip_gen.dma_params_for(cfg,cfg['subsystems'][1])['num_ax_in_flight'],2)
+        for bad in ({'num_ax_in_flight':0},{'num_ax_in_flight':1},{'descriptor_prefetch':-1},
                     {'buffer_depth':0},{'invented_option':123}):
             cfg['subsystems'][0]['dma_parameters']=bad
             with self.subTest(bad=bad), self.assertRaises(ValueError):

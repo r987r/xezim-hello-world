@@ -39,7 +39,7 @@ def request_field(channel, member):
 
 def dma_params_for(cfg, core):
     """Per-compute iDMA concurrency from YAML; fail closed on bad settings."""
-    allowed = {'num_ax_in_flight': (1, 16),
+    allowed = {'num_ax_in_flight': (2, 16),
                'buffer_depth': (1, 32),
                'descriptor_prefetch': (0, 16)}
     defaults = {'num_ax_in_flight': 4, 'buffer_depth': 3,

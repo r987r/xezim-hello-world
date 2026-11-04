@@ -166,3 +166,19 @@ for APB acceptance, the hardware-loaded COMMAND byte stalls colliding
 AXI-Lite submissions, rather than silently dropping a second head. This is
 only front-end submission ordering; descriptor memory itself must still
 remain allocated until transfer retirement.
+
+## iDMA outstanding-depth legality regression (November 4, 2026)
+
+The first conservative full-chip test tried `num_ax_in_flight: 1` and
+immediately hit upstream `cc_stream_fifo_optimal_wrap.sv`'s mandatory
+minimum depth of two. This is **not** a memory-model or NoC timeout;
+it was an illegal parameter caught at time zero by upstream RTL in
+[run 41881553547](https://github.com/r987r/xezim-hello-world/actions/runs/41881553547).
+The generator now rejects any per-compute `num_ax_in_flight < 2` before
+RTL build, the iDMA wrapper independently checks the same condition, and
+the diagnostic profile uses `num_ax_in_flight: 2`,
+`descriptor_prefetch: 0`, `buffer_depth: 3`. Retain the standalone
+4-in-flight/4-prefetch reference. Passing at two outstanding transfers
+will be a *smoke test*, not proof that higher-concurrency NoC behavior
+is correct. Do not blame the independent LiteDRAM PR #13; this chip scope
+still drives the bounded behavioral AXI RAM memory target.

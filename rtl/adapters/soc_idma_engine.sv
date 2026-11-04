@@ -76,7 +76,9 @@ module soc_idma_engine #(
 
   // Standalone RTL retains upstream 4/3/4; full-chip opts in to safe limits.
   initial begin
-    if (NumAxInFlight == 0 || BufferDepth == 0 || DescriptorPrefetch > 16)
+    // Upstream idma_backend_rw_axi uses this value as the
+    // cc_stream_fifo_optimal_wrap depth and rejects depth one in RTL.
+    if (NumAxInFlight < 2 || BufferDepth == 0 || DescriptorPrefetch > 16)
       $fatal(1, "Invalid iDMA concurrency parameters");
   end
   axi3_req_t descriptor_req, read_req, write_req, backend_req;
