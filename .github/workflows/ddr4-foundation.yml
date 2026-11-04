@@ -94,6 +94,37 @@ jobs:
       - name: Lint actual generated DDR4 RTL
         run: python3 rtl/memory/ddr4/check_rtl.py --tool verilator --timeout 600
 
+      - name: Install upstream Cocotb AXI test framework
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check 'cocotb==1.9.2' 'cocotbext-axi==0.1.28' 'cocotb-test==0.2.6'
+          python3 - <<'PY'
+          import cocotb
+          import importlib.metadata as metadata
+          from cocotbext.axi import AxiMaster
+          from cocotb_test.simulator import run
+          assert metadata.version('cocotbext-axi') == '0.1.28'
+          print('Cocotb', cocotb.__version__, 'cocotbext-axi', metadata.version('cocotbext-axi'))
+          PY
+
+      - name: Run real DDR4 Wishbone init and AXI traffic with continuous capture
+        timeout-minutes: 18
+        run: |
+          set -euo pipefail
+          python3 rtl/memory/ddr4/run_functional.py
+
+      - name: Check all-simulation AXI/Wishbone monitor evidence
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import sys
+          from pathlib import Path
+          sys.path.insert(0, 'rtl/memory/ddr4')
+          from traffic_observer import verify_capture
+          report = verify_capture(Path('.tools/ddr4/litedram_sim'))
+          print('DDR4 monitor PASS:', report['sampled_cycles'], 'cycles,', report['channels'])
+          PY
+
       - name: Upload generated RTL, initialization plan and diagnostic logs
         if: always()
         uses: actions/upload-artifact@v4
