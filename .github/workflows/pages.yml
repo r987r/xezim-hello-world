@@ -38,7 +38,7 @@ jobs:
           python-version: '3.12'
       - run: python3 -m pip install -r requirements.txt
       - name: Verify publication and report semantics
-        run: python3 -m unittest tests.test_publication tests.test_axi_report -v
+        run: python3 -m unittest tests.test_publication tests.test_axi_report tests.test_fabric_report -v
       - name: Build offline PR preview
         if: github.event_name == 'pull_request'
         run: python3 tools/publish_site.py
