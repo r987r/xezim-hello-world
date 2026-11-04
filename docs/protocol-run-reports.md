@@ -57,13 +57,15 @@ try:
                         start_ps=120000, end_ps=140000,
                         identifier=5,
                         fields={"address": "0x20", "response": "okay"})
-finally:
+except BaseException as error:
+    capture.close("fail", error=error)
+    raise
+else:
     capture.close("pass")
 ```
 
 The timestamps above illustrate API usage, **not measured timings**. An
-actual test must pass its observed simulation timestamps. Call `close("fail")`
-on failed tests and always close the capture in a top-level `finally`.
+actual test must pass its observed simulation timestamps. Call `close("fail")` on failed tests and `close("pass")` only after all VIP assertions succeed. Ensure every code path closes the sink, even on failure.
 The sink does not poll DUT signals or interpret protocol handshakes.
 
 For combined AXI + additional protocols, include both `axi` and
