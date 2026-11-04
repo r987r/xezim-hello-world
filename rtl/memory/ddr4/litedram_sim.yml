@@ -1,0 +1,22 @@
+# Isolated DDR4 controller + DFI simulation PHY. Upstream pin is config/ip.lock.yaml.
+# Deliberately NOT connected to the shared chip generator or FlooNoC yet.
+cpu: null               # Exposes Wishbone wb_ctrl initialization bus.
+speedgrade: -2
+memtype: DDR4
+sdram_phy: USPDDRPHY    # Replaced by SDRAMPHYModel with --sim.
+sdram_module: MT40A512M8
+sdram_module_nb: 8
+sdram_rank_nb: 1
+cmd_latency: 1
+input_clk_freq: 150000000
+sys_clk_freq: 150000000
+iodelay_clk_freq: 300000000
+cmd_buffer_depth: 16
+with_refresh: true
+with_ecc: false
+user_ports:
+  axi_0:
+    type: axi
+    data_width: 64
+    id_width: 4
+    block_until_ready: true
