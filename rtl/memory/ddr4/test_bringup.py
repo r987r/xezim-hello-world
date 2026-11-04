@@ -114,6 +114,11 @@ class TestDDR4GeneratedHeader(unittest.TestCase):
             "    input wire [31:0] wb_ctrl_dat_w",
             "    output wire [31:0] wb_ctrl_dat_r",
             "    input wire [3:0] wb_ctrl_sel",
+            "    input wire [2:0] wb_ctrl_cti",
+            "    input wire [1:0] wb_ctrl_bte",
+            "    output wire wb_ctrl_err",
+            "    output wire user_clk",
+            "    output wire user_rst",
         ]
         return "module soc_ddr4_sim (\n" + ",\n".join(port_lines) + "\n);\nendmodule\n"
 
@@ -165,6 +170,11 @@ class TestDDR4GeneratedHeader(unittest.TestCase):
     def test_required_wishbone_bus_width(self):
         text = self.fixture().replace("[31:0] wb_ctrl_dat_w", "[15:0] wb_ctrl_dat_w")
         with self.assertRaisesRegex(ValueError, "wb_ctrl_dat_w: expected 32-bit"):
+            bringup.emitted_port_widths(text)
+
+    def test_full_wishbone_control_port_required(self):
+        text = self.fixture().replace("wb_ctrl_cti", "missing_wb_ctrl_cti")
+        with self.assertRaisesRegex(ValueError, "wb_ctrl_cti"):
             bringup.emitted_port_widths(text)
 
     def test_local_ddr_address_width_must_match_capacity(self):
