@@ -51,6 +51,21 @@ class DDR4LatencyContractTests(unittest.TestCase):
         self.assertEqual(report["internal_stages"]["physical_phy"]["status"], "not_modeled")
         self.assertEqual(report["internal_stages"]["noc_and_soc"]["status"], "not_connected")
 
+    def test_last_accepted_read_beat_after_phase_transition_is_counted(self):
+        # Test's task/monitor scheduler may update the label at the same
+        # boundary where the final accepted read was observed. Don't lose it.
+        events = complete()
+        events[2]["phase"] = "post_traffic"
+        result = calculate(events, 10000)
+        self.assertEqual(result["measured"]["read"]["avg_cycles"], 12)
+        self.assertEqual(result["measured"]["write"]["avg_cycles"], 10)
+
+    def test_reject_uninitialized_axi_request(self):
+        events = complete()
+        events[0]["phase"] = "initialization"
+        with self.assertRaisesRegex(ValueError, "outside traffic"):
+            calculate(events, 10000)
+
     def test_reject_missing_rlast(self):
         events = complete()
         events[2]["fields"]["last"] = 0
