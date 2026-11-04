@@ -123,6 +123,8 @@ class TrafficObserverTests(unittest.TestCase):
             "phases": {p: 1 for p in
                        ("pre_init", "initialization", "traffic", "post_traffic")},
             "channels": {c: 1 for c in CHANNELS}, "rlast_count": 1,
+            "wlast_count": 1, "expected_write_beats": 1,
+            "expected_read_beats": 1,
             "wishbone": {"writes": 1, "reads": 1},
         })
         self.observer.summary_path.write_text(json.dumps(summary))
