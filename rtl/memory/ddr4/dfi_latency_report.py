@@ -211,6 +211,17 @@ def report_from_dfi(directory: Path, period_ps: int) -> dict:
             raise ValueError(f"DDR4 probe missing actual {k} event")
     axi = json.loads((directory / "ddr4_latency.json").read_text())
     report = calculate_internal(axi, events, period_ps)
+    # This standalone positive smoke test must actually measure its modeled
+    # READ and bank-storage WRITE boundaries. AW->DFI remains unmeasured
+    # by design because AXI B does not prove storage completion.
+    for key in ("controller_ar_to_dfi_read", "dfi_read_to_dfi_valid",
+                "dfi_write_to_bankmodel_storage"):
+        if report["internal_stages"][key]["status"] != "measured":
+            raise ValueError(f"DDR4 positive run missing measured {key}")
+    pairs = report.get("dfi_write_model_pairs", [])
+    if (len(pairs) != summary["counters"]["dfi_write"]
+        or any(p["status"] != "measured" for p in pairs)):
+        raise ValueError("DDR4 modeled DFI write/storage pairing incomplete")
     report["capture"] = {
         "cycles": summary["sampled_cycles"], "events": len(events),
         "status": "pass", "probe_contract": "ddr4_probe_contract.json",
