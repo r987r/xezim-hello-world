@@ -7,15 +7,21 @@
 <div class="grid" style="align-items:end"><label>Fabric plane <select id="fabric-plane"><option value="data">Data (AXI4)</option><option value="config">Configuration (AXI4 transport)</option></select></label><label>Filter by endpoint, subsystem or target <input id="fabric-search" type="search" placeholder="e.g. compute0, sram, hbm0" autocomplete="off"></label></div>
 <h2>Route-by-route latency in reference clock cycles</h2>
 <p class="muted" id="fabric-reference-clock">Reference clock: awaiting measured simulation evidence.</p>
-<p class="muted">One row per initiator → target. Each NoC column covers the measured AXI ingress-to-egress request <em>plus</em> response delay; target R and W service is measured at the last observed target-facing AXI port, including any downstream crossbar/model delay. Cells show <strong>min / avg / max</strong> over serial one-beat samples, followed by n. Clock normalization uses the measured testbench period (10 ns in current simulations), <em>not</em> an assumed physical implementation frequency. — means this block is not on the route or the operation is not permitted; “unmeasured” means the route exists but eligible verified RTL-equivalent evidence is missing. Independent stage minima/maxima need not sum to end-to-end extrema (averages sum for the same paired samples).</p>
-<div class="scroll" role="region" aria-label="Wide source to target AXI latency table" tabindex="0"><table id="fabric-latency-table"><thead></thead><tbody></tbody></table></div>
-<h2>Selected route</h2><div class="card" id="fabric-route"><p class="muted">Select a routed source/destination row for detailed router and timing provenance.</p></div>
+<p class="muted fabric-desktop-explainer">One row per initiator → target. Each NoC column covers the measured AXI ingress-to-egress request <em>plus</em> response delay; target R and W service is measured at the last observed target-facing AXI port, including any downstream crossbar/model delay. Cells show <strong>min / avg / max</strong> over serial one-beat samples, followed by n. Clock normalization uses the measured testbench period (10 ns in current simulations), <em>not</em> an assumed physical implementation frequency. — means this block is not on the route or the operation is not permitted; “unmeasured” means the route exists but eligible verified RTL-equivalent evidence is missing. Independent stage minima/maxima need not sum to end-to-end extrema (averages sum for the same paired samples).</p>
+<p class="muted fabric-mobile-explainer">Tap a route for its per-NoC read/write latency. Values are <strong>min / avg / max cycles</strong> from real one-beat AXI traces (n = sample count). Unreachable paths can be shown separately; missing measurements are never displayed as zero.</p>
+<div id="fabric-wide-view" class="scroll" role="region" aria-label="Wide source to target AXI latency table" tabindex="0"><table id="fabric-latency-table"><thead></thead><tbody></tbody></table></div>
+<section id="fabric-mobile-view" aria-label="Mobile initiator-to-target latency explorer">
+ <div class="fabric-mobile-toolbar"><label class="fabric-unreachable-toggle"><input id="fabric-show-unreachable" type="checkbox"> Include unreachable paths</label><span class="muted" id="fabric-mobile-count" role="status" aria-live="polite"></span></div>
+ <div id="fabric-mobile-routes" class="fabric-mobile-routes"></div>
+</section>
+<h2 id="fabric-route-detail-heading">Selected route</h2><div class="card" id="fabric-route"><p class="muted">Select a routed source/destination row for detailed router and timing provenance.</p></div>
 <h2>Interface inventory</h2>
 <p class="muted">Data width, ID width and fabric limits come from emitted FlooGen profiles. Read/write outstanding entries are configured interface budgets, <em>not</em> independent capacities in FlooNoC's shared MaxTxns resource. Clock frequency is intentionally unspecified.</p>
-<div class="scroll"><table id="fabric-interfaces"><thead><tr><th>Interface</th><th>Subsystem</th><th>Role / integration</th><th>AXI data / ID</th><th>Pending R / W budget</th><th>Shared Txns / IDs</th><th>Clock</th></tr></thead><tbody></tbody></table></div>
-<h2>Static address map</h2><p class="muted">Target address windows are independent of run-specific latency. For measured target-facing read/write service, see the one-beat route table above.</p><div class="scroll"><table id="fabric-targets"><thead><tr><th>Target</th><th>Address base</th><th>Size</th></tr></thead><tbody></tbody></table></div>
+<div class="scroll fabric-small-table"><table id="fabric-interfaces"><thead><tr><th>Interface</th><th>Subsystem</th><th>Role / integration</th><th>AXI data / ID</th><th>Pending R / W budget</th><th>Shared Txns / IDs</th><th>Clock</th></tr></thead><tbody></tbody></table></div>
+<h2>Static address map</h2><p class="muted">Target address windows are independent of run-specific latency. For measured target-facing read/write service, see the one-beat route table above.</p><div class="scroll fabric-small-table"><table id="fabric-targets"><thead><tr><th>Target</th><th>Address base</th><th>Size</th></tr></thead><tbody></tbody></table></div>
 <p class="muted">Source: checked-in SoC YAML, interface-sizing contracts, pinned FlooGen profiles, shared NoC route manifest, and chip actor manifest. All report data is generated at publication time from these inputs; this page does not duplicate the architectural diagram.</p>
 <style>
+#fabric-mobile-view,.fabric-mobile-explainer{display:none}
 #fabric-latency-table{border-collapse:separate;border-spacing:0;font-variant-numeric:tabular-nums}
 #fabric-latency-table th,#fabric-latency-table td{white-space:nowrap;text-align:left;vertical-align:top;padding:.52rem .65rem}
 #fabric-latency-table th{font-size:.8rem}
@@ -29,6 +35,78 @@
 #fabric-latency-table .metric-n{font-size:.75rem;color:var(--muted)}
 #fabric-latency-table .missing{color:var(--muted)}
 #fabric-interfaces td:first-child,#fabric-targets td:first-child{white-space:nowrap}#fabric-route table{width:100%}
+
+/* Mobile route cards make every source/destination and R/W total visible
+   without requiring two-dimensional scrolling through a 10+ column table. */
+@media(max-width:820px){
+ #fabric-wide-view,.fabric-desktop-explainer{display:none}
+ #fabric-mobile-view,.fabric-mobile-explainer{display:block}
+ #fabric-facts{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+ #fabric-facts .stat{font-size:clamp(18px,5vw,26px)}
+ #fabric-facts .card{min-width:0;padding:12px}
+ .fabric-mobile-toolbar{display:flex;flex-direction:column;align-items:flex-start;gap:6px;margin:12px 0}
+ .fabric-unreachable-toggle{display:flex;gap:9px;align-items:center;min-height:42px;color:var(--fg);font-size:14px}
+ .fabric-unreachable-toggle input{width:19px;height:19px;margin:0;flex-shrink:0;accent-color:var(--accent)}
+ .fabric-mobile-routes{display:flex;flex-direction:column;gap:12px;margin:12px 0 24px;min-width:0}
+ .fabric-mobile-card{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;min-width:0}
+ .fabric-mobile-card[open]{border-color:var(--accent)}
+ .fabric-mobile-card summary{list-style:none;padding:14px 14px 12px;cursor:pointer}
+ .fabric-mobile-card summary::-webkit-details-marker{display:none}
+ .fabric-mobile-card summary:focus-visible,.fabric-mobile-card button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+ .fabric-mobile-card[open] summary{border-bottom:1px solid var(--line)}
+ .fabric-mobile-path{display:flex;flex-wrap:wrap;gap:5px 8px;align-items:center;font-size:14px;line-height:1.4;font-weight:650;min-width:0}
+ .fabric-mobile-path span{overflow-wrap:anywhere;min-width:0}
+ .fabric-mobile-src{color:var(--accent)}.fabric-mobile-dst{color:var(--fg)}
+ .fabric-mobile-arrow{color:var(--muted)}
+ .fabric-mobile-topline{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:12px}
+ .fabric-access{color:var(--muted);font-size:11px;flex-shrink:0;border:1px solid var(--line);border-radius:999px;padding:2px 7px;line-height:1.4}
+ .fabric-mobile-totals,.fabric-stage-ops{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+ .fabric-mobile-metric{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 9px;min-width:0}
+ .fabric-mobile-metric-name{display:block;color:var(--muted);font-size:11px;font-weight:600;line-height:1.5}
+ .fabric-mobile-metric-value{display:block;font:650 13px/1.6 ui-monospace,SFMono-Regular,monospace;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+ .fabric-mobile-metric-samples{display:block;color:var(--muted);font-size:11px}
+ .fabric-mobile-hint{display:block;margin-top:8px;color:var(--accent);font-size:12px}
+ .fabric-mobile-card[open] .fabric-mobile-hint{display:none}
+ .fabric-mobile-details{padding:12px 14px 14px}
+ .fabric-mobile-stage{padding:10px 0;border-bottom:1px solid var(--line)}
+ .fabric-mobile-stage:first-child{padding-top:0}
+ .fabric-mobile-stage-name{font-weight:650;font-size:13px;margin-bottom:7px;overflow-wrap:anywhere}
+ .fabric-mobile-stage .fabric-mobile-metric{padding:7px 9px}
+ .fabric-mobile-stage-note{font-size:12px;color:var(--muted);margin:10px 0}
+ .fabric-mobile-detail-button{display:block;width:100%;margin-top:12px;min-height:44px;border:1px solid var(--accent);color:var(--accent);background:transparent;font-size:14px;font-weight:650}
+ .fabric-denied{padding:12px 14px;opacity:.78}
+ .fabric-denied-label{font-size:13px;color:var(--muted);margin-top:5px}
+ #fabric-route-detail-heading{scroll-margin-top:20px}
+ #fabric-route{overflow-wrap:anywhere}
+ #fabric-route .fabric-detail-table,
+ #fabric-route .fabric-detail-table tbody,
+ #fabric-route .fabric-detail-table tr,
+ #fabric-route .fabric-detail-table td,
+ #fabric-interfaces,#fabric-targets,
+ #fabric-interfaces tbody,#fabric-targets tbody,
+ #fabric-interfaces tr,#fabric-targets tr,
+ #fabric-interfaces td,#fabric-targets td{display:block;width:100%;min-width:0}
+ #fabric-route .fabric-detail-table thead,
+ #fabric-interfaces thead,#fabric-targets thead{display:none}
+ #fabric-route .fabric-detail-table tr,
+ #fabric-interfaces tr,#fabric-targets tr{padding:6px 12px 10px;border-bottom:1px solid var(--line)}
+ #fabric-route .fabric-detail-table tr:last-child,
+ #fabric-interfaces tr:last-child,#fabric-targets tr:last-child{border-bottom:0}
+ #fabric-route .fabric-detail-table td,
+ #fabric-interfaces td,#fabric-targets td{display:grid;grid-template-columns:minmax(0,36%) minmax(0,1fr);gap:10px;align-items:baseline;padding:4px 0;border:0;white-space:normal;font-size:13px;overflow-wrap:anywhere}
+ #fabric-route .fabric-detail-table td::before,
+ #fabric-interfaces td::before,#fabric-targets td::before{content:attr(data-label);color:var(--muted);font-weight:650;font-size:12px}
+ #fabric-interfaces td:first-child,#fabric-targets td:first-child{white-space:normal}
+ #fabric-route .scroll,#fabric-mobile-view .scroll{overflow:visible}
+ .fabric-small-table{overflow:visible}
+}
+@media(max-width:370px){
+ .fabric-mobile-card summary{padding:12px}
+ .fabric-mobile-details{padding:10px 12px 12px}
+ .fabric-mobile-metric-value{font-size:12px}
+ .fabric-mobile-path{font-size:13px}
+}
+
 #fabric-route code{overflow-wrap:anywhere}#fabric-route details{margin:.45rem 0}#fabric-plane,#fabric-search{display:block;width:100%;padding:.65rem;border-radius:7px;border:1px solid var(--line);background:var(--panel);color:var(--fg)}
 </style>
 <script type="application/json" id="fabric-data">__FABRIC_DATA__</script>
@@ -64,6 +142,83 @@ function statLine(parent,prefix,s,applicable){
  }
  parent.append(line);
 }
+
+const showUnreachable=byId('fabric-show-unreachable');
+const expandedMobileRoutes=new Set();
+function filteredRoutes(){
+ return latency.rows.filter(r=>r.plane===plane.value&&
+  (!search.value||visible(r.source)||visible(r.destination)||r.network_path.some(visible)));
+}
+function meshLabel(name){
+ return name.replace(/^compute(\d+)_local_(data|config)$/,'Compute$1 local $2 NoC')
+            .replace(/^memory(\d+)_local_(data|config)$/,'Memory$1 local $2 NoC')
+            .replace(/^global_(data|config)$/,'Global $1 NoC');
+}
+function mobileMetric(title,stats,applicable){
+ const tile=E('div',undefined,'fabric-mobile-metric');
+ tile.append(E('span',title,'fabric-mobile-metric-name'));
+ if(!applicable){
+  tile.append(E('span','—','fabric-mobile-metric-value'));
+ }else if(!stats){
+  tile.append(E('span','unmeasured','fabric-mobile-metric-value'));
+ }else{
+  tile.append(E('span',[stats.min_cycles,stats.avg_cycles,stats.max_cycles].map(fmt).join(' / '),'fabric-mobile-metric-value'));
+  tile.append(E('span','n='+stats.n,'fabric-mobile-metric-samples'));
+  tile.title='Simulation period '+stats.reference_clock_period_ps+' ps · tested SHA '+stats.run_sha;
+ }
+ return tile;
+}
+function mobilePath(row){
+ const path=E('div',undefined,'fabric-mobile-path');
+ path.append(E('span',row.source,'fabric-mobile-src'),E('span','→','fabric-mobile-arrow'),E('span',row.destination,'fabric-mobile-dst'));
+ return path;
+}
+function addMobileStage(body,label,stats,access){
+ const stage=E('div',undefined,'fabric-mobile-stage');
+ stage.append(E('div',label,'fabric-mobile-stage-name'));
+ const metrics=E('div',undefined,'fabric-stage-ops');
+ metrics.append(mobileMetric('Read · min / avg / max',stats.read,access!=='none'));
+ metrics.append(mobileMetric('Write · min / avg / max',stats.write,access==='RW'));
+ stage.append(metrics);body.append(stage);
+}
+function renderMobileRoutes(){
+ const list=byId('fabric-mobile-routes');
+ list.replaceChildren();
+ const all=filteredRoutes();
+ const denied=all.filter(r=>!r.route_id).length;
+ const rows=showUnreachable.checked?all:all.filter(r=>r.route_id);
+ byId('fabric-mobile-count').textContent=rows.length+' paths displayed'+
+    (!showUnreachable.checked&&denied?', '+denied+' unreachable hidden':'');
+ if(!rows.length){list.append(E('p','No matching routes. Try changing the plane, search or unreachable filter.','muted'));return}
+ for(const row of rows){
+  if(!row.route_id){
+   const item=E('article',undefined,'fabric-mobile-card fabric-denied');
+   item.append(mobilePath(row),E('div','Not reachable from this initiator','fabric-denied-label'));
+   list.append(item);continue;
+  }
+  const details=E('details',undefined,'fabric-mobile-card'),summary=E('summary');
+  details.open=expandedMobileRoutes.has(row.route_id);
+  details.addEventListener('toggle',()=>{if(details.open)expandedMobileRoutes.add(row.route_id);else expandedMobileRoutes.delete(row.route_id)});
+  const topline=E('div',undefined,'fabric-mobile-topline');
+  topline.append(mobilePath(row),E('span',row.access==='R'?'Read only':'Read + write','fabric-access'));
+  summary.append(topline);
+  const totals=E('div',undefined,'fabric-mobile-totals');
+  totals.append(mobileMetric('Total read · min / avg / max',row.end_to_end_cycles.read,true));
+  totals.append(mobileMetric('Total write · min / avg / max',row.end_to_end_cycles.write,row.access==='RW'));
+  summary.append(totals,E('span','Tap to show per-NoC latencies','fabric-mobile-hint'));
+  details.append(summary);
+  const body=E('div',undefined,'fabric-mobile-details');
+  for(const mesh of row.network_path)addMobileStage(body,meshLabel(mesh),row.mesh_cycles[mesh]||{},row.access);
+  addMobileStage(body,'Target-facing AXI service',row.target_cycles,row.access);
+  body.append(E('p','Per-NoC totals combine request and response at AXI boundaries. Target service may include the crossbar and memory model; these are not individual-router or physical DDR/HBM delays.','fabric-mobile-stage-note'));
+  const button=E('button','Open router path and CI evidence','fabric-mobile-detail-button');
+  button.type='button';
+  button.addEventListener('click',()=>{selected=row.route_id;renderRoute();byId('fabric-route-detail-heading').scrollIntoView({behavior:'smooth',block:'start'})});
+  body.append(button);
+  details.append(body);
+  list.append(details);
+ }
+}
 function renderLatencyTable(){
  const tbl=byId('fabric-latency-table'),hdr=tbl.querySelector('thead'),body=tbl.querySelector('tbody');
  hdr.replaceChildren();body.replaceChildren();
@@ -72,7 +227,7 @@ function renderLatencyTable(){
  for(const name of ['Source','Destination','Access',...meshes.map(x=>x.replaceAll('_',' ')),'Target read','Target write','Total read','Total write'])addCell(h,name,'th');
  hdr.append(h);
  let shown=0;
- for(const r of latency.rows.filter(r=>r.plane===plane.value&&(!search.value||visible(r.source)||visible(r.destination)||r.network_path.some(visible)))){
+ for(const r of filteredRoutes()){
   shown++;const tr=E('tr'),s=E('td'),b=E('button',r.source);
   b.type='button';b.setAttribute('aria-pressed',String(selected===r.route_id));
   b.disabled=!r.route_id;
@@ -99,8 +254,8 @@ function renderRoute(){const box=byId('fabric-route');box.replaceChildren();cons
  if(!r){box.append(E('p','Select a routed source/destination row above.','muted'));return}
  box.append(E('h3',r.source+' → '+r.target));box.append(E('p',r.access+' · '+r.network_count+' NoC mesh(es) · '+r.router_links+' router-to-router links · '+r.inter_mesh_links+' inter-mesh AXI link(s)'));
  box.append(E('p','Initiator: '+r.source_integration+' · Target boundary: '+r.target_integration,'muted'));
- const table=E('table'),head=E('thead'),tr=E('tr');for(const t of ['Stage','Endpoint / network','Router links'])addCell(tr,t,'th');head.append(tr);table.append(head);
- const body=E('tbody');for(const stage of r.stages){const row=E('tr');addCell(row,stage.kind.replaceAll('_',' '));const place=E('td');place.append(E('code',stage.kind==='mesh'?stage.network:stage.from+' → '+stage.to));row.append(place);addCell(row,stage.router_links);body.append(row)}table.append(body);
+ const table=E('table',undefined,'fabric-detail-table'),head=E('thead'),tr=E('tr');for(const t of ['Stage','Endpoint / network','Router links'])addCell(tr,t,'th');head.append(tr);table.append(head);
+ const body=E('tbody');for(const stage of r.stages){const row=E('tr');addCell(row,stage.kind.replaceAll('_',' ')).dataset.label='Stage';const place=E('td');place.dataset.label='Endpoint';place.append(E('code',stage.kind==='mesh'?stage.network:stage.from+' → '+stage.to));row.append(place);addCell(row,stage.router_links).dataset.label='Router links';body.append(row)}table.append(body);
  const sc=E('div',undefined,'scroll');sc.append(table);box.append(sc);
  const detail=E('details'),summary=E('summary','Show exact generated XY router sequence');detail.append(summary);
  for(const stage of r.stages.filter(s=>s.kind==='mesh')){detail.append(E('strong',stage.network));detail.append(E('p',stage.routers.join(' → ')))}box.append(detail);
@@ -110,17 +265,17 @@ function renderRoute(){const box=byId('fabric-route');box.replaceChildren();cons
   for(const o of r.one_beat_stage_observations){
     const p=E('p',o.operation.toUpperCase()+' · '+o.sample_count+' isolated sample(s) · measured clock '+o.clock_period_ps+' ps · end-to-end min / avg / max '+[o.end_to_end.min_cycles,o.end_to_end.avg_cycles,o.end_to_end.max_cycles].map(fmt).join(' / ')+' cycles');
     box.append(p);
-    const st=E('table'),thead=E('thead'),hr=E('tr');
+    const st=E('table',undefined,'fabric-detail-table'),thead=E('thead'),hr=E('tr');
     for(const h of ['Observed stage','Request min / avg / max (cycles)','Response min / avg / max (cycles)','Combined min / avg / max (cycles)'])addCell(hr,h,'th');
     thead.append(hr);st.append(thead);
     const tb=E('tbody');
     for(const metric of o.stage_metrics){
       const tr=E('tr');
-      addCell(tr,metric.kind==='mesh'?metric.network:'Terminal target-facing AXI service*');
+      addCell(tr,metric.kind==='mesh'?metric.network:'Terminal target-facing AXI service*').dataset.label='Stage';
       const showStats=t=>t?[t.min_cycles,t.avg_cycles,t.max_cycles].map(fmt).join(' / '):'—';
-      addCell(tr,showStats(metric.request_stats));
-      addCell(tr,showStats(metric.response_stats));
-      addCell(tr,showStats(metric.sum_stats));
+      addCell(tr,showStats(metric.request_stats)).dataset.label='Request cycles';
+      addCell(tr,showStats(metric.response_stats)).dataset.label='Response cycles';
+      addCell(tr,showStats(metric.sum_stats)).dataset.label='Combined cycles';
       tb.append(tr);
     }
     st.append(tb);const scroll=E('div',undefined,'scroll');scroll.append(st);box.append(scroll);
@@ -133,12 +288,15 @@ function renderRoute(){const box=byId('fabric-route');box.replaceChildren();cons
  }else box.append(E('p','No eligible one-beat observations in the published CI evidence. Controlled per-mesh timing requires a successful capture for exactly this site source revision.','muted'));
 }
 function renderInventory(){const body=byId('fabric-interfaces').querySelector('tbody');body.replaceChildren();for(const i of report.interfaces.filter(i=>i.plane===plane.value&&(!search.value||visible(i.name)||visible(i.subsystem)||visible(i.actor)))){
- const tr=E('tr');addCell(tr,i.name);addCell(tr,i.subsystem);addCell(tr,i.role+' / '+i.integration);addCell(tr,i.data_bits+'b / '+i.id_bits+'b');addCell(tr,i.max_pending_reads_budget+' / '+i.max_pending_writes_budget);addCell(tr,dash(i.fabric_shared_max_txns)+' / '+dash(i.fabric_max_unique_ids));addCell(tr,i.clock_signal+' (freq uncharacterized)');body.append(tr)}
+ const tr=E('tr');for(const [label,value] of [['Interface',i.name],['Subsystem',i.subsystem],['Role / integration',i.role+' / '+i.integration],['Data / ID',i.data_bits+'b / '+i.id_bits+'b'],['Pending R / W',i.max_pending_reads_budget+' / '+i.max_pending_writes_budget],['Shared Txns / IDs',dash(i.fabric_shared_max_txns)+' / '+dash(i.fabric_max_unique_ids)],['Clock',i.clock_signal+' (hardware frequency uncharacterized)']]){addCell(tr,value).dataset.label=label}body.append(tr)}
 }
 function renderTargets(){const body=byId('fabric-targets').querySelector('tbody');body.replaceChildren();for(const t of report.targets.filter(t=>t.plane===plane.value&&(!search.value||visible(t.name)))){
- const tr=E('tr');for(const value of [t.name,t.address_base,t.address_size])addCell(tr,value);body.append(tr)}
+ const tr=E('tr');for(const [label,value] of [['Target',t.name],['Address base',t.address_base],['Size',t.address_size]]){addCell(tr,value).dataset.label=label}body.append(tr)}
 }
-function render(){renderLatencyTable();renderRoute();renderInventory();renderTargets()}
-plane.addEventListener('change',()=>{selected=null;render()});search.addEventListener('input',render);render();
+function render(){renderLatencyTable();renderMobileRoutes();renderRoute();renderInventory();renderTargets()}
+plane.addEventListener('change',()=>{selected=null;expandedMobileRoutes.clear();render()});
+search.addEventListener('input',render);
+showUnreachable.addEventListener('change',renderMobileRoutes);
+render();
 })();
 </script>

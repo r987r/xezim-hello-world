@@ -13,6 +13,18 @@ for an already enabled site using the deployment job's `pages: write` token.
   `gen/diagrams/noc-hierarchy.svg` used by the README. No second architecture
   diagram is maintained.
 - Fabric Explorer: address-accurate initiator-to-target route table, AXI port inventory with planned outstanding budgets and physically generated XY router/link paths. Controlled one-beat RTL timings attach only to clean, complete serial traces from the exact published SHA, an identical verified Git tree, or verified identical RTL/simulation execution inputs from trusted CI. They decompose observed AXI mesh boundaries into request/return deltas and combined terminal service; internal router cycles and isolated HBM/DDR controller latency remain unmeasured. Older or stressed observations retain their original SHA and end-to-end-only scope.
+- Mobile Fabric Explorer: at viewport widths up to 820 px, replace the wide
+  route table with vertical source → target cards; their headers show total
+  one-beat read/write min/average/max simulation cycles and sample counts.
+  Expand a card to compare the local/global NoC and target-facing AXI stages
+  with separate read/write values, then open the full XY router path and
+  original CI evidence. Plane/search filters apply to both views, unreachable
+  routes are hidden by default on mobile and can be included explicitly,
+  and the interface inventory, address map and route detail tables become
+  stacked labeled rows. Desktop retains the full comparative table.
+  The responsive view is presentation-only and consumes the same publication
+  dataset; it never changes latency calculations, source verification,
+  generated RTL or simulator runs.
 - Wide latency comparison: one source/destination row per route, with dynamic
   per-plane NoC columns (compute0, compute1, global, memory0 when present),
   terminal AXI read/write service and end-to-end read/write columns.
