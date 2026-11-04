@@ -111,3 +111,21 @@ architecture drawings or any 3D diagram infrastructure.
    expansion; render graph diffs directly in Pages.
 4. Add actual runtime verification topology export for future UVM tests
    and cocotb BFM registration checks for current test suites.
+
+## Source-built slang-netlist and slang-report adapters
+
+After building the pinned upstream executables and resolving the normal Bender
+sources, use the project wrappers rather than reconstructing the RTL list:
+
+~~~sh
+python3 tools/regress.py chip-dma --stage files
+python3 tools/design_netlist.py --profile chip-dma --mode ports --output .tools/chip-dma-ports.json
+python3 tools/design_netlist.py --profile chip-dma --mode drivers --output .tools/chip-dma-drivers.json
+python3 tools/design_netlist.py --profile chip-dma --mode netlist --output .tools/chip-dma-netlist.json
+~~~
+
+The wrapper writes JSON and a metadata sidecar recording the profile, source
+list fingerprint, tool invocation and evidence provenance. If the executable is
+missing, compilation fails or JSON is missing/invalid, there is no successful
+output. This does **not** make the external toolchain installed or validated
+by this PR; cross-profile functional RTL tests remain separate.
