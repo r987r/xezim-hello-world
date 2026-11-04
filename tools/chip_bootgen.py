@@ -188,5 +188,7 @@ def emit(cfg, out: Path, *, cpu0_run_hook=None):
                     for i, c in enumerate(fw['cores'])],
                 'sram_initialization': 'none: ROM firmware copies images and clears mailboxes through CPU stores',
                 'runtime': 'minimal RV32I mailbox bootstrap; not an unmodified Snitch/PULP runtime port'}
-    if cpu0_run_hook is not None:\n        manifest['cpu0_run_hook'] = cpu0_run_hook\n    (out/'firmware.json').write_text(json.dumps(manifest, indent=2, sort_keys=True)+'\n')
+    if cpu0_run_hook is not None:
+        manifest['cpu0_run_hook'] = cpu0_run_hook
+    (out/'firmware.json').write_text(json.dumps(manifest, indent=2, sort_keys=True)+'\n')
     return fw, manifest
