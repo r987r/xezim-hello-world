@@ -1,11 +1,9 @@
 name: DDR4 isolated LiteDRAM generation
 
 on:
-  push:
-    paths:
-      - 'rtl/memory/ddr4/**'
-      - '.github/workflows/ddr4-bringup.yml'
   pull_request:
+    branches:
+      - main
     paths:
       - 'rtl/memory/ddr4/**'
       - '.github/workflows/ddr4-bringup.yml'
