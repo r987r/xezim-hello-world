@@ -101,13 +101,13 @@ class DDR4LatencyContractTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "WLAST"):
             calculate(events, 10000)
 
-    def test_ignore_nontraffic_phase(self):
+    def test_reject_preinit_request_even_if_it_completes(self):
         events = [ev("ar", 1, id=9, addr=0x1200, len=0),
                   ev("r", 2, id=9, last=1, resp=0)]
         for event in events:
             event["phase"] = "initialization"
-        report = calculate(events + complete(), 10000)
-        self.assertEqual(report["measured"]["read"]["samples"], 1)
+        with self.assertRaisesRegex(ValueError, "outside traffic"):
+            calculate(events + complete(), 10000)
 
 
 if __name__ == "__main__":
