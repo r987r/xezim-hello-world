@@ -84,16 +84,16 @@ def load_config(path):
                     or axi.get('max_events',500000) <= 0):
                     raise ValueError(f'{name}: invalid AXI report configuration for cocotb-verilator')
             if 'protocols' in report:
-                from protocol_report import PROTOCOL
+                from protocol_report import normalize_sources
                 p = report['protocols']
                 if (not isinstance(p,dict) or set(p)-{'sources','max_events'}
-                    or not isinstance(p.get('sources'),dict) or not p['sources']
-                    or any(not isinstance(k,str) or not PROTOCOL.fullmatch(k)
-                           or not isinstance(v,str) or not PROTOCOL.fullmatch(v)
-                           for k,v in p['sources'].items())
                     or type(p.get('max_events',100000)) is not int
                     or p.get('max_events',100000) <= 0):
                     raise ValueError(f'{name}: invalid generic protocol report configuration')
+                try:
+                    normalize_sources(p.get('sources'))
+                except ValueError as exc:
+                    raise ValueError(f'{name}: invalid generic protocol report configuration: {exc}') from exc
     for name in config['suites']:
         expand(config, [name])
     if set(expand(config, ['full'])) != set(config['tests']):
