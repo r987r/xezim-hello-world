@@ -56,8 +56,8 @@ def run_selective(control_file: Path, **kwargs):
                     line = await stream.readline()
                     if not line:
                         break
-                    message = line.decode("utf-8", errors="replace").rstrip("\\n")
-                    log.write(message + "\\n")
+                    message = line.decode("utf-8", errors="replace").rstrip("\n")
+                    log.write(message + "\n")
                     if message.startswith("%Error"):
                         self.logger.error(message)
 
