@@ -13,7 +13,7 @@ on:
       - 'dv/common/dma_vectors.py'
       - 'sw/dma/**'
       - 'sw/common/**'
-      - 'tests/test_dma*'
+      - 'tests/test_dma*'\n      - 'tests/test_memory_plan.py'\n      - 'tools/memory_plan.py'
       - 'tests/test_sram_layout.py'
       - '.github/workflows/dma.yml'
   workflow_dispatch:
