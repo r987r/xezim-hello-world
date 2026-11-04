@@ -182,3 +182,22 @@ the diagnostic profile uses `num_ax_in_flight: 2`,
 will be a *smoke test*, not proof that higher-concurrency NoC behavior
 is correct. Do not blame the independent LiteDRAM PR #13; this chip scope
 still drives the bounded behavioral AXI RAM memory target.
+
+## Regeneration and hardware CI provenance
+
+The full-chip pipeline validates committed generated RTL before simulation.
+A push that changes `config/soc.yaml` can start CI before the separate
+branch-scoped generator workflow commits the updated `gen/chip/` artifacts.
+Such an initial CI failure is **generated-file drift**, not a functional
+DMA regression. Only evaluate the real hardware run at the subsequent
+commit containing matching generated RTL and `dma_parameters_by_compute`.
+The corrected legal minimum of two outstanding transactions is checked
+in three places: `config/soc.yaml`, `tools/full_chip_gen.py` and
+`rtl/adapters/soc_idma_engine.sv`. The generated manifest and instantiated
+RTL must agree with all three before any DMA traffic verdict is accepted.
+
+The first source-only run following the fix, [41885042155](https://github.com/r987r/xezim-hello-world/actions/runs/41885042155),
+failed the consistency contract against its older generated manifest.
+The regeneration commit `4e4ed3b551454a73cacf63ad7ec1f0dadf3f82a7`
+contains the updated two-entry parameter values. Hardware evidence must
+come from a subsequent CI checkout of this or a descendant commit.
