@@ -124,3 +124,39 @@ class AgentOwnershipTests(unittest.TestCase):
         isolated = (ROOT/"dv/dma/test_dma.py").read_text()
         self.assertIn("SparseMemoryRegion", isolated)
         self.assertIn("AxiSlave(", isolated)
+
+    def test_sv_memory_bfm_and_route_monitor_ownership(self):
+        # The standalone memory fabric uses its own SV AXI master BFM,
+        # never the executing SoC CPUs or their DMA port.
+        generator = (ROOT/"tools/socgen.py").read_text()
+        memory_tb = (ROOT/"gen/memory/memory_tb.sv").read_text()
+        active = (ROOT/"dv/common/axi_master_bfm.sv").read_text()
+        passive = (ROOT/"dv/common/axi_route_monitor.sv").read_text()
+        self.assertIn("axi_master_bfm #(", generator)
+        self.assertIn("axi_master_bfm #(", memory_tb)
+        self.assertIn("module axi_master_bfm", active)
+        self.assertIn("output reg", active)
+        self.assertIn("module axi_route_monitor", passive)
+        # Port declarations on the passive monitor must remain input-only.
+        ports = passive.split(");", 1)[0]
+        self.assertNotIn("output ", ports)
+        self.assertIn("m_awvalid[target] && m_awready[target]", passive)
+        self.assertIn("m_arvalid[target] && m_arready[target]", passive)
+        chip_gen = (ROOT/"tools/full_chip_gen.py").read_text()
+        self.assertNotIn("axi_master_bfm #(", chip_gen)
+
+    def test_ddr_observer_is_read_only_and_init_is_external(self):
+        observer = (ROOT/"rtl/memory/ddr4/traffic_observer.py").read_text()
+        tree = ast.parse(observer)
+        for node in ast.walk(tree):
+            # Only reads of simulator DUT pins: no .value assignments.
+            targets = ([*node.targets] if isinstance(node, ast.Assign)
+                       else [node.target] if isinstance(node, (ast.AnnAssign, ast.AugAssign))
+                       else [])
+            self.assertFalse(any(isinstance(t, ast.Attribute) and t.attr=="value"
+                                 for t in targets),
+                             "DDR passive observer must not drive DUT pins")
+        bench = (ROOT/"rtl/memory/ddr4/functional_tb.py").read_text()
+        self.assertIn('AxiBus.from_prefix(dut, "user_port_axi_0")', bench)
+        self.assertIn("TrafficObserver", bench)
+        self.assertIn("await initialize(dut)", bench)
