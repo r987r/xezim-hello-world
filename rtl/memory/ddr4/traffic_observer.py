@@ -145,8 +145,17 @@ class TrafficObserver:
             raise AssertionError("monitor finalized twice")
         if status not in ("pass", "fail"):
             raise ValueError("invalid monitor terminal status")
-        self._emit({"kind": "capture_end", "status": status,
-                    "error": error})
+        terminal = {"kind": "capture_end", "status": status, "error": error}
+        if self.event_count >= self.max_events:
+            # The hard capture limit MUST fail the test, but must not prevent
+            # the final failure summary from being saved to CI artifacts.
+            terminal.update({"cycle": self.samples, "phase": self.phase,
+                             "truncated": True})
+            self.log.write(json.dumps(terminal, separators=(",", ":"),
+                                      sort_keys=True) + "\n")
+            self.event_count += 1
+        else:
+            self._emit(terminal)
         summary = {
             "status": status, "error": error, "started_before_init": self.phase_cycles["pre_init"] > 0,
             "continuous_capture": all(self.phase_cycles[p] > 0 for p in PHASES),
