@@ -15,6 +15,7 @@ import sys
 from bringup import CORE_NAME, DEFAULT_OUTPUT, checked_output_dir
 from check_rtl import generated_sources
 from traffic_observer import clear_prior_capture, verify_capture
+from latency_report import configured_clock_period_ps, report_from_capture
 
 
 def preflight(path: Path):
@@ -44,6 +45,11 @@ def main() -> int:
         # Stale summaries or traces from earlier local runs must never let a
         # new run pass if the observer was omitted or failed to initialize.
         clear_prior_capture(output)
+        latency_file = output / 'ddr4_latency.json'
+        if latency_file.exists():
+            if latency_file.is_symlink() or not latency_file.is_file():
+                raise ValueError('invalid DDR4 latency artifact path')
+            latency_file.unlink()
         from cocotb_test.simulator import run
         here = Path(__file__).resolve().parent
         # Cocotb drives exactly one clock. No duplicate Verilator --timing
@@ -62,9 +68,14 @@ def main() -> int:
         # Independent post-run check: the protocol test is not enough to
         # claim a pass if passive capture was disabled, truncated or stopped.
         capture = verify_capture(output)
+        latency = report_from_capture(output, configured_clock_period_ps())
         (output / "ddr4_functional_result.json").write_text(
             json.dumps({"status": "pass", "top": CORE_NAME,
                         "scope": "isolated LiteDRAM generated RTL/DFI model",
+                        "latency": {"status": "measured_axi_only",
+                                    "file": "ddr4_latency.json",
+                                    "reads": latency["measured"]["read"]["samples"],
+                                    "writes": latency["measured"]["write"]["samples"]},
                         "monitor": {"status": capture["status"],
                                     "sampled_cycles": capture["sampled_cycles"],
                                     "phases": capture["phases"],
