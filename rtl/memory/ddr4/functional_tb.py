@@ -201,6 +201,26 @@ async def ddr4_wishbone_init_axi_readwrite(dut):
         assert rd.resp == AxiResp.OKAY and rd.data == expected, \
             f"DDR4 byte-strobe guard mismatch: {rd.data.hex()}"
 
+        # Check reduced geometry did not silently alias high DDR addresses.
+        # The generated model has 32 MiB backed storage, not the 1 GiB
+        # architectural aperture. Exercise both ends and a bank-sized offset,
+        # then reread earlier locations AFTER later writes to detect aliasing.
+        geometry_vectors = (
+            (0x0000000, bytes((i * 13 + 0x31) & 255 for i in range(64)), 4),
+            (0x07fffc0, bytes((i * 19 + 0x57) & 255 for i in range(64)), 5),
+            (0x1ffffc0, bytes((i * 29 + 0x83) & 255 for i in range(64)), 6),
+        )
+        for address, payload, ident in geometry_vectors:
+            write_result = await with_timeout(master.write(address, payload, awid=ident), 80, "us")
+            assert write_result.resp == AxiResp.OKAY, "DDR geometry write response mismatch"
+        for address, payload, ident in geometry_vectors:
+            read_result = await with_timeout(master.read(address, len(payload), arid=ident), 80, "us")
+            assert read_result.resp == AxiResp.OKAY, "DDR geometry read response mismatch"
+            assert read_result.data == payload, (
+                f"DDR geometry alias/truncation at {address:#x}: "
+                f"{read_result.data.hex()} != {payload.hex()}")
+        dut._log.info("PASS DDR4 modeled 32MiB low/mid/high address alias guard")
+
         observer.assert_health(monitor)
         observer.next_phase("post_traffic")
         await tick(dut, 5)
