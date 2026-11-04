@@ -87,7 +87,7 @@ The upstream DFI PHY model expands this into dense per-bank simulation
 memories: generating/elaborating the full-size model can be prohibitively
 expensive. The isolated sim_geometry.yml intentionally reduces rows to
 2048 and columns to 128, retaining 16 banks and the DDR4 command-address
-A10 requirement. This yields **32 MiB** of *non-JEDEC production geometry*.
+A10 requirement. This yields **32 MiB** of *non-JEDEC production geometry*. The generator wrapper preserves the original **15-bit DDR4 DFI command address** even though its simulated row storage uses 11 bits, avoiding accidental truncation of DDR4 mode-register command bits. The controller still sees the smaller row/column geometry, so this is an isolated functional model, not an accurate full-capacity DDR4 device.
 The budget checker caps it at 64 MiB and rejects unexpected source
 geometry. This override applies **only to --sim generation**, with no
 upstream LiteDRAM file modifications. Use the real geometry/timings and an
@@ -99,7 +99,7 @@ reject out-of-model accesses.
 Local check performed (Python 3.13 + PyYAML):
 
     python3 -m unittest discover -s rtl/memory/ddr4 -p 'test_*.py' -v
-    # Ran 20 tests, OK
+    # Ran 22 tests, OK
 
 This verifies Python contract/negative cases and capacity calculations,
 **not real generated Verilog**. The execution container lacks internet
