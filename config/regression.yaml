@@ -130,7 +130,7 @@ tests:
     timeout_s: 900
     pass: 'PASS chipdma: both compute DMA engines'
     report:
-      context: 'True iDMA0/iDMA1 instances drive configured local/global FlooNoC data traffic. CPU0 AXI data and configuration managers are temporarily driven by a cocotb host for SRAM descriptor loading and 32-bit DMA doorbells; CPUs stay in reset, so this is NOT a cold-boot pass. Real descriptor fetch, writeback, SSRAM, HBM, DDR and config NoCs are exercised.'
+      context: 'True iDMA0/iDMA1 instances drive configured local/global FlooNoC data traffic. CPU0 AXI BFM (data) and CPU0 AXI BFM (config) temporarily drive their original CPU0 ports for descriptor/payload SRAM loading and DMA doorbells (simulation only, no PCIe); CPUs stay in reset, so this is NOT a cold-boot pass. Real descriptor fetch, writeback, SSRAM, HBM, DDR and config NoCs are exercised.'
       axi: {scope: dut.u_noc, clock: clk_i, reset: rst_ni, catalog: gen/supernoc/axi_monitors.json, actors: gen/chip/dma_actors.json, max_events: 500000}
   chip-boot: &chip
     engine: cocotb-verilator

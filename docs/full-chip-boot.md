@@ -13,7 +13,7 @@ configured compute, and replaces each `dma_regs` error target with upstream
 AXI-to-Lite/register blocks and a 64-bit APB head/doorbell adapter. DMA data
 traverses the local/global FlooNoCs, and control writes traverse the
 configuration NoCs. The separate `full_chip_dma_tb` holds CPUs in reset
-and uses AXI host managers to initialize only DMA SRAM and start transfers
+and uses **CPU0 AXI BFMs** (data/config, cocotb simulation-only) to initialize DMA SRAM and start transfers
 via 32-bit CSRs; that is NOT a CPU firmware or cold-boot test. Hardware IRQ
 pending/status are exposed to the verification framework, but CPU IRQ
 service software and physical memory controllers/PHYs remain pending.

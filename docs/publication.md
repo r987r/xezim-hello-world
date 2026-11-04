@@ -66,8 +66,9 @@ There are **zero active DMA engines in the default cold-boot mode**
 (`DmaEnable=0`). The chip test temporarily drives compute0's otherwise
 inactive DMA manager with the upstream verification BFM after CPU coordination.
 A separate explicit `DmaEnable=1, DmaTestMode=1` configuration generates real
-DMA engines and CSR bridges for both SS0 and SS1, and substitutes host BFMs
-at CPU0's data/config NoC managers while the CPUs are held reset. Actor
+DMA engines and CSR bridges for both SS0 and SS1, and substitutes **CPU0 AXI BFM (data)** and **CPU0 AXI BFM (config)**
+on CPU0's data/config NoC managers while the CPUs are held reset.
+These are simulation initiators, never a PCIe host. Actor
 metadata distinguishes these two test modes; a DMA simulation should
 never be counted as a cold-boot or CPU-driver test.
 
@@ -86,8 +87,8 @@ labeled as such and never retroactively classified as expected.
 
 The `chip-dma` target uses the same generated NoC core and monitor catalog
 as CPU boot, but runs with CPUs held in reset and a real PULP iDMA instance
-at every compute DMA endpoint. Host BFMs use the CPU0 data/config AXI
-interfaces only for memory preparation and CSR submission. The event table,
+at every compute DMA endpoint. **CPU0 AXI BFMs** use the CPU0 data/config AXI
+interfaces only for memory preparation and CSR submission (not PCIe). The event table,
 timing chart, result and source SHA are published from the full-chip CI
 artifact when that regression actually executes. This is NOT evidence of
 CPU-launched DMA firmware or physical DDR/HBM controller integration.

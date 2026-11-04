@@ -21,7 +21,14 @@ class DmaDocumentContract(unittest.TestCase):
             self.assertIn(f'u_dma_csr_{name}', top)
             self.assertEqual(actors[name+'_local_data.dma']['kind'], 'rtl_dma')
             self.assertEqual(actors[name+'_local_config.dma_regs']['kind'], 'rtl_registers')
-        self.assertIn('DmaTestMode', (ROOT/'gen/chip/full_chip_dma_tb.sv').read_text())
+        tb = (ROOT/'gen/chip/full_chip_dma_tb.sv').read_text()
+        self.assertIn('DmaTestMode', tb)
+        self.assertIn('cpu0_data_bfm_awid', tb)
+        self.assertIn('cpu0_config_bfm_awid', tb)
+        self.assertEqual(chip['dma_parameters_by_compute']['compute0'],
+                         cfg['subsystem_types']['compute']['dma_parameters'])
+        self.assertIn('CPU0 AXI BFM',
+                      actors['compute0_local_data.cpu']['label'])
 
     def test_docs_show_optional_real_dma_but_not_cpu_firmware_or_phy(self):
         files = ['README.md', 'AGENTS.md', 'docs/architecture.md',
@@ -35,7 +42,9 @@ class DmaDocumentContract(unittest.TestCase):
             self.assertTrue('pending' in contents[f].lower(), f)
         stale = ('real PULP iDMA integration, DMA CSRs and interrupts',
                  'There are **zero instantiated DMA engines**',
-                 'Real DMA backend/frontend integration and CSR mapping are pending')
+                 'Real DMA backend/frontend integration and CSR mapping are pending',
+                 'No DMA engine is currently instantiated.',
+                 'The real DMA is **not attached** to the full-chip FlooNoC')
         for f, data in contents.items():
             for phrase in stale:
                 self.assertNotIn(phrase, data, f)

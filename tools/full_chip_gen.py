@@ -37,6 +37,26 @@ def request_field(channel, member):
     return ((channel in ('aw', 'w', 'ar')) == (member != 'ready')) if member in ('valid', 'ready') else channel in ('aw','w','ar')
 
 
+def dma_params_for(cfg, core):
+    """Per-compute iDMA concurrency from YAML; fail closed on bad settings."""
+    allowed = {'num_ax_in_flight': (1, 16),
+               'buffer_depth': (1, 32),
+               'descriptor_prefetch': (0, 16)}
+    defaults = {'num_ax_in_flight': 4, 'buffer_depth': 3,
+                'descriptor_prefetch': 4}
+    vals = dict(defaults)
+    for scope in (cfg['subsystem_types']['compute'].get('dma_parameters', {}),
+                  core.get('dma_parameters', {})):
+        if not isinstance(scope, dict) or set(scope) - set(allowed):
+            raise ValueError('unsupported iDMA parameter in SoC configuration')
+        vals.update(scope)
+    for key, (low, high) in allowed.items():
+        value = vals[key]
+        if type(value) is not int or not low <= value <= high:
+            raise ValueError(f"invalid iDMA parameter {key}={value}")
+    return vals
+
+
 def emit(cfg, noc_manifest, noc_root, out):
     fw, firmware = chip_bootgen.emit(cfg, out)
     nets = json.loads((noc_root/'manifest.json').read_text())['networks']
@@ -87,7 +107,7 @@ def emit(cfg, noc_manifest, noc_root, out):
                 lines += [f"  assign {rsp(p)}.{ch}.user = '0;"]
     lines += ['  soc_noc u_noc (\n    '+',\n    '.join(connections)+'\n  );']
     lines += ['  initial if (DmaTestMode && (!DmaEnable || !ProbeEnable))',
-              '    $fatal(1, "DMA host mode requires active DMA and host probe");']
+              '    $fatal(1, "DMA CPU0 AXI BFM mode requires active DMA and probe");']
     ctrl = {x['name']:int(x['base'],0) for x in cfg['address_map']['config']}
     cfg_base = min(ctrl.values())
     cfg_end = max(int(x['base'],0)+int(x['size'],0) for x in cfg['address_map']['config'])
@@ -198,8 +218,13 @@ def emit(cfg, noc_manifest, noc_root, out):
             for member in [*members.values(), 'valid', 'ready']:
                 is_req = request_field(ch, member)
                 engine_con['dma_'+ch+member] = field(req(dma) if is_req else rsp(dma), ch, member)
+        dma_opts = dma_params_for(cfg, core)
         lines += [f'  if (DmaEnable) begin: gen_dma_{name}',
-                  module('soc_idma_engine', 'u_dma_'+name, {}, engine_con),
+                  module('soc_idma_engine', 'u_dma_'+name, {
+                      'NumAxInFlight': dma_opts['num_ax_in_flight'],
+                      'BufferDepth': dma_opts['buffer_depth'],
+                      'DescriptorPrefetch': dma_opts['descriptor_prefetch']
+                  }, engine_con),
                   f'    assign {req(dma)}.aw.atop = \'0;',
                   *[f"    assign {req(dma)}.{ch}.user = '0;" for ch in ('aw','w','ar')],
                   '  end else begin: gen_dma_disabled_'+name]
@@ -314,7 +339,7 @@ def emit(cfg, noc_manifest, noc_root, out):
                 'memory_models':[{'name':t['name'], 'base':int(next(r['base'] for r in cfg['address_map']['data'] if r['name']==t['name']),0),
                                   'modeled_bytes':1 << cfg['verification']['memory']['model_address_bits']}
                                  for t in cfg['memory_targets']],
-                'verification_probe':'When DMA enabled, host BFM shares coordinator CPU data/config boundaries in DMA-only test mode. Cold boot retains former optional DMA probe.',
+                'verification_probe':'In DMA-only simulation, CPU0 AXI BFMs temporarily drive CPU0 data/config NoC ports with CPUs in reset; no PCIe/external host. Cold boot retains its separate legacy DMA-port probe.',
                 'upstream':['PicoRV32','SERV','FlooNoC','PULP AXI','tech_cells_generic tc_sram','ZipCPU wbm2axilite','verilog-axi crossbar']}
     actors = {}
     for i, core in enumerate(cores):
@@ -326,7 +351,7 @@ def emit(cfg, noc_manifest, noc_root, out):
         # Engines exist in optional generate blocks but DmaEnable is off.
         actors[f'{name}_local_data.dma'] = {
             'kind':'verification_bfm' if i == 0 else 'reserved_idle',
-            'short_label':f'{name} host BFM (default boot)' if i == 0 else f'{name} DMA disabled',
+            'short_label':f'{name} boot test BFM at reserved DMA port' if i == 0 else f'{name} DMA disabled',
             'label':'Verification AXI BFM at inactive DMA port' if i == 0 else 'Inactive DMA port; DmaEnable=0'}
         actors[f'{name}_local_config.dma_regs'] = {
             'kind':'reserved_error',
@@ -340,6 +365,8 @@ def emit(cfg, noc_manifest, noc_root, out):
         if endpoint == 'dma_regs':
             continue
         actors[port['network']+'.'+endpoint]=actor
+    manifest['dma_parameters_by_compute'] = {
+        core['name']: dma_params_for(cfg, core) for core in cores}
     manifest['axi_actors']=actors
     (out/'manifest.json').write_text(json.dumps(manifest, indent=2, sort_keys=True)+'\n')
     dma_actors = json.loads(json.dumps({'axi_actors': actors}))
@@ -354,16 +381,17 @@ def emit(cfg, noc_manifest, noc_root, out):
     for plane in ('data', 'config'):
         dma_actors['axi_actors'][cores[0]['name']+'_local_'+plane+'.cpu'] = {
             'kind':'verification_bfm',
-            'label':'Host AXI BFM at held CPU boundary in isolated full-chip DMA test'}
+            'label':'CPU0 AXI BFM at held CPU0 boundary (simulation-only; no PCIe)'}
     (out/'dma_actors.json').write_text(json.dumps(dma_actors, indent=2, sort_keys=True)+'\n')
     return manifest
 
 
 def emit_dma_tb(cfg, fw, out):
     """Dedicated reset-isolated DMA-through-NoC test (no firmware preload)."""
-    probe = probe_ports()
-    cfgprobe = probe_ports('cfgprobe', addr_bits=32, data_bits=32, id_bits=1)
-    lines = ['// Host BFMs replace CPUs only in this explicit DMA-only simulation mode.',
+    probe = probe_ports('cpu0_data_bfm')
+    cfgprobe = probe_ports('cpu0_config_bfm', addr_bits=32, data_bits=32, id_bits=1)
+    lines = ['// CPU0 AXI BFMs drive data/config NoC manager ports during DMA-only simulation.',
+             '// These are cocotb testbench initiators, not PCIe; CPUs are held in reset.',
              'module full_chip_dma_tb (',
              '  input logic clk_i, rst_ni,',
              f'  output logic [{len(fw["cores"])-1}:0] dma_irq_o, dma_irq_pending_o,',
@@ -376,7 +404,9 @@ def emit_dma_tb(cfg, fw, out):
              '    .sram_valid_o(), .sram_write_o(), .sram_addr_o(),',
              '    .sram_data_o(), .sram_strb_o(), .rom_reads_o(), .flash_reads_o(),',
              '    .dma_irq_o(dma_irq_o), .dma_irq_pending_o(dma_irq_pending_o),',
-             '    '+',\n    '.join(f'.{p[0]}({p[0]})' for p in [*probe,*cfgprobe])+');',
+             '    '+',\n    '.join(
+                 f'.{("probe_" if p[0].startswith("cpu0_data_bfm_") else "cfgprobe_") + p[0].split("_bfm_",1)[1]}({p[0]})'
+                 for p in [*probe,*cfgprobe])+');',
              'endmodule']
     (out/'full_chip_dma_tb.sv').write_text('\n'.join(lines)+'\n')
 

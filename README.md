@@ -2,7 +2,7 @@
 
 [![SoC regression](https://github.com/r987r/xezim-hello-world/actions/workflows/dv-soc.yml/badge.svg)](https://github.com/r987r/xezim-hello-world/actions/workflows/dv-soc.yml)
 
-A reusable, **configuration-driven hierarchical SoC test vehicle** built from publicly available RTL. One `config/soc.yaml` selects compute subsystems, CPU IP, reserved DMA interfaces, memory targets, data/config NoCs, addresses, and verification scopes. The same configuration generates **SystemVerilog testbench code, NoC connectivity metadata, executable test plans, 2D diagrams, and this README's architecture section**. No DMA engine is currently instantiated.
+A reusable, **configuration-driven hierarchical SoC test vehicle** built from publicly available RTL. One `config/soc.yaml` selects compute subsystems, CPU IP, reserved DMA interfaces, memory targets, data/config NoCs, addresses, and verification scopes. The same configuration generates **SystemVerilog testbench code, NoC connectivity metadata, executable test plans, 2D diagrams, and this README's architecture section**. Both PULP iDMA engines and their CSR bridges are generated in the explicit `DmaEnable=1` mode; the default cold-boot mode keeps them disabled. The full-chip DMA path still requires a passing end-to-end regression.
 
 The [GitHub Pages verification hub](https://r987r.github.io/xezim-hello-world/)
 publishes this README, all documentation, the canonical topology and actual CI
@@ -221,3 +221,20 @@ See [architecture contracts](docs/architecture.md) and the [hierarchical verific
 GitHub Actions first validates the configuration, then checks the committed `gen/` tree and embedded README diagrams for drift, and only then runs the RTL regressions. A change to a configuration or generator must be followed by `make gen` in the same commit. An intentionally removed subsystem must result in a **Git deletion** of its obsolete generated files; it must never leave misleading diagrams behind.
 
 The simulator publishing workflow is independent of the SoC verification workflow, so an RTL-only change never initiates a Rust build.
+
+## CPU0 AXI BFM terminology and DMA bring-up
+
+The `CPU0 AXI BFM (data)` and `CPU0 AXI BFM (config)` are
+**cocotb-driven simulation-only AXI initiators** temporarily replacing
+CPU0's traffic while every CPU is held in reset in `DmaTestMode=1`.
+They initialize local DMA-only SRAM and program the real DMA CSR NoC
+doorbells. The actual PULP iDMA RTL then fetches its own descriptors
+and performs all payload transfers through the NoCs. There is no PCIe
+host, PCIe link, or external initiator involved in this verification.
+
+DDR PR #13 is isolated: the full-chip DDR target still uses its bounded
+behavioral AXI SRAM stand-in. The integrated DMA timeout is an AXI
+progress/response-backpressure failure, not an issue in the unconnected
+LiteDRAM controller. `config/soc.yaml` declares explicit conservative
+DMA concurrency parameters for this diagnostic; the isolated iDMA
+regression retains its higher outstanding/prefetch settings.

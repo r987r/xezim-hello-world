@@ -1,6 +1,6 @@
 # DMA bring-up foundation
 
-**Current status (2026-11-04):** The reusable descriptor allocator and host vectors are implemented. The **real pinned PULP iDMA frontend + generated rw_axi backend now compile and pass isolated Verilator/cocotb RTL traffic verification**: a 100-descriptor chain to the DDR model and a separate descriptor to the HBM model. The checker verifies actual payload memory, descriptor writeback, final IRQ and idle before SRAM reuse. [Successful DMA CI run](https://github.com/r987r/xezim-hello-world/actions/runs/41860245485), commit `a2c12133b2a57c49ae90b638384335fc6584f331`. The real DMA is **not attached** to the full-chip FlooNoC or CPU CSR/IRQ paths, and physical DDR/HBM controllers are not modeled.
+**Current status (2026-11-04):** The reusable descriptor allocator and CPU0 AXI BFM preload vectors are implemented. The **real pinned PULP iDMA frontend + generated rw_axi backend now compile and pass isolated Verilator/cocotb RTL traffic verification**: a 100-descriptor chain to the DDR model and a separate descriptor to the HBM model. The checker verifies actual payload memory, descriptor writeback, final IRQ and idle before SRAM reuse. [Successful DMA CI run](https://github.com/r987r/xezim-hello-world/actions/runs/41860245485), commit `a2c12133b2a57c49ae90b638384335fc6584f331`. Both engine and CSR wiring now *is generated* for the full-chip FlooNoCs, but its end-to-end DMA traffic test is **failing**, while CPU-initiated DMA/ISR software and physical DDR/HBM controllers remain unintegrated.
 
 ## Existing libraries and software
 
@@ -134,7 +134,7 @@ descriptor-chain retirement**. Consumers must still wait for completion,
 descriptor writeback and DMA idle before reclaiming shared SRAM.
 
 `DmaEnable=0` is the default boot mode; `DmaEnable=1` instantiates real
-DMA engines and CSRs. `DmaTestMode=1` is an explicit host-BFM-only test mode
+DMA engines and CSRs. `DmaTestMode=1` is an explicit CPU0 AXI BFM simulation-only test mode
 with CPUs held in reset. `make dv-chip-dma` writes DMA descriptor/payload
 memory through CPU0's real AXI data NoC port, then programs each engine's
 registers over the local/global configuration NoCs and verifies payload
@@ -145,11 +145,11 @@ treated as unverified until its CI gate passes**, regardless of whether
 
 ## AXI test-mode isolation and regression diagnostics
 
-When `DmaTestMode=1`, the host BFM borrows the coordinator CPU0's AXI
+When `DmaTestMode=1`, the **CPU0 AXI BFMs (data/config)** temporarily drive CPU0's AXI
 data/config NoC ports **only** after all CPU cores are held in reset. The
 generator muxes the BFM requests onto those ports and explicitly returns
 zero AXI responses to the inactive CPU adapters. This is required because
-feeding host-issued B/R responses into a CPU-side width converter with no
+feeding CPU0 AXI BFM-issued B/R responses into a CPU-side width converter with no
 matching requests violates the upstream `cc_rr_arb_tree` request invariant.
 
 The first full-chip hardware run ([failed diagnostic run

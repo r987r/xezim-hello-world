@@ -5,7 +5,11 @@
 `include "apb/typedef.svh"
 `include "axi/typedef.svh"
 `include "idma/typedef.svh"
-module soc_idma_engine (
+module soc_idma_engine #(
+  parameter int unsigned NumAxInFlight = 4,
+  parameter int unsigned BufferDepth = 3,
+  parameter int unsigned DescriptorPrefetch = 4
+) (
   input logic clk_i, rst_ni,
   input logic [63:0] apb_addr_i, apb_data_i,
   input logic apb_write_i, apb_select_i, apb_enable_i,
@@ -70,8 +74,11 @@ module soc_idma_engine (
   typedef struct packed { axi3_aw_chan_t aw_chan; } axi_write_meta_channel_t;
   typedef struct packed { axi_write_meta_channel_t axi; } write_meta_channel_t;
 
-  localparam int unsigned NumAxInFlight = 4;
-  localparam int unsigned BufferDepth = 3;
+  // Standalone RTL retains upstream 4/3/4; full-chip opts in to safe limits.
+  initial begin
+    if (NumAxInFlight == 0 || BufferDepth == 0 || DescriptorPrefetch > 16)
+      $fatal(1, "Invalid iDMA concurrency parameters");
+  end
   axi3_req_t descriptor_req, read_req, write_req, backend_req;
   axi3_resp_t descriptor_rsp, read_rsp, write_rsp, backend_rsp;
   axi4_req_t dma_req;
@@ -102,7 +109,7 @@ module soc_idma_engine (
     .axi_ar_chan_t(axi3_ar_chan_t), .axi_r_chan_t(axi3_r_chan_t),
     .apb_req_t(apb_req_t), .apb_rsp_t(apb_resp_t),
     .InputFifoDepth(8), .PendingFifoDepth(8),
-    .BackendDepth(NumAxInFlight + BufferDepth), .NSpeculation(4)
+    .BackendDepth(NumAxInFlight + BufferDepth), .NSpeculation(DescriptorPrefetch)
   ) u_frontend (
     .clk_i, .rst_ni,
     .master_req_o(descriptor_req), .master_rsp_i(descriptor_rsp),
