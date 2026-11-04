@@ -20,7 +20,7 @@ import subprocess
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-FORMAT = "{inst}\\t{module}\\t{file}"
+FORMAT = "{inst}|||{module}|||{file}"
 
 
 def analyze(root: Path, profile: str, binary: str = "slang-hier") -> dict:
@@ -45,7 +45,7 @@ def analyze(root: Path, profile: str, binary: str = "slang-hier") -> dict:
                          + (run.stderr + "\n" + run.stdout)[-6000:])
     instances = []
     for line in run.stdout.splitlines():
-        fields = line.split("\t")
+        fields = line.split("|||")
         if len(fields) == 3 and fields[0].strip():
             instances.append({"path": fields[0].strip(), "module": fields[1].strip(),
                               "source": fields[2].strip()})
