@@ -95,6 +95,35 @@ async def initialize(dut):
     dut._log.info("DDR4 DFII initialization and software status handoff complete")
 
 
+def axi_snapshot(dut):
+    # Top-level pin observations only; do not rely on simulator-private
+    # internal objects or suppress upstream assertions.
+    names = (
+        "user_port_axi_0_awvalid", "user_port_axi_0_awready",
+        "user_port_axi_0_wvalid", "user_port_axi_0_wready",
+        "user_port_axi_0_bvalid", "user_port_axi_0_bready",
+        "user_port_axi_0_arvalid", "user_port_axi_0_arready",
+        "user_port_axi_0_rvalid", "user_port_axi_0_rready",
+        "init_done", "init_error", "user_rst",
+    )
+    return {name: int(getattr(dut, name).value) for name in names}
+
+
+async def observe_axi(dut, counts):
+    names = ("aw", "w", "b", "ar", "r")
+    while True:
+        await RisingEdge(dut.clk)
+        for channel in names:
+            val = int(getattr(dut, f"user_port_axi_0_{channel}valid").value)
+            ready = int(getattr(dut, f"user_port_axi_0_{channel}ready").value)
+            if val:
+                counts[f"{channel}_valid"] = counts.get(f"{channel}_valid", 0) + 1
+            if ready:
+                counts[f"{channel}_ready"] = counts.get(f"{channel}_ready", 0) + 1
+            if val and ready:
+                counts[f"{channel}_handshake"] = counts.get(f"{channel}_handshake", 0) + 1
+
+
 async def transfer(master, dut, address, data, ident):
     wr = await with_timeout(master.write(address, data, awid=ident), 80, "us")
     assert wr.resp == AxiResp.OKAY, f"AXI B error {address:#x}: {wr}"
@@ -126,7 +155,24 @@ async def ddr4_wishbone_init_axi_readwrite(dut):
     master = AxiMaster(AxiBus.from_prefix(dut, "user_port_axi_0"),
                        dut.user_clk, dut.user_rst, reset_active_level=True)
     await tick(dut, 16)
-    await transfer(master, dut, 0x4000, bytes((i*17+3)&255 for i in range(64)), 1)
+    counts = {}
+    monitor = cocotb.start_soon(observe_axi(dut, counts))
+    try:
+        # A read before a write separates DFI/scheduler readiness from the
+        # write-buffer path and the AW/W two-channel arbitration.
+        probe = await with_timeout(master.read(0x4000, 8, arid=0), 80, "us")
+        assert probe.resp == AxiResp.OKAY, f"DDR4 initial read response: {probe}"
+        dut._log.info("PASS DDR4 prewrite read: controller returned R channel data")
+    except Exception:
+        dut._log.error("DDR4 read-side failure: pins=%s counts=%s", axi_snapshot(dut), counts)
+        raise
+    try:
+        await transfer(master, dut, 0x4000, bytes((i*17+3)&255 for i in range(64)), 1)
+    except Exception:
+        dut._log.error("DDR4 write-side failure: pins=%s counts=%s", axi_snapshot(dut), counts)
+        raise
+    finally:
+        monitor.kill()
     await transfer(master, dut, 0x8000, bytes((i*37+7)&255 for i in range(32)), 2)
     initial = bytes([0xA5])*24
     await transfer(master, dut, 0x9000, initial, 3)
