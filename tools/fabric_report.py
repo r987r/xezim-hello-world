@@ -425,7 +425,7 @@ def attach_one_beat_observations(report, entries, output, source_sha):
                         number(target["address_base"]) + number(target["address_size"])):
                     matched[(route["id"], item["operation"])].append(number(item["latency_ps"]))
                     if item.get("phase") == baseline_phase:
-                        source_samples[route["id"]].append(item)
+                        source_samples[(route["id"], item["operation"])].append(item)
 
         for (route_id, operation), samples in matched.items():
             routes[route_id]["one_beat_observations"].append({
@@ -453,7 +453,7 @@ def attach_one_beat_observations(report, entries, output, source_sha):
                     raise FabricReportError(f"ambiguous AXI monitor endpoint {endpoint}")
                 boundary[endpoint] = monitor["id"]
         indexed = _observed_transfers(rows, baseline_phase)
-        for route_id, samples in source_samples.items():
+        for (route_id, operation), samples in source_samples.items():
             route = routes[route_id]
             # Require all baseline source samples to be unique under the
             # observable key, otherwise pairing could select wrong traffic.
@@ -481,7 +481,7 @@ def attach_one_beat_observations(report, entries, output, source_sha):
                 stage_stats.append(current)
             elapsed = [tx["latency_ps"] for tx,_ in paired]
             route["one_beat_stage_observations"].append({
-                "operation": paired[0][0]["operation"],
+                "operation": operation,
                 "sample_count": len(paired), "clock_period_ps": clock_ps,
                 "end_to_end": {**_quantiles(elapsed),
                                "median_cycles": median(elapsed) / clock_ps},
