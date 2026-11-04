@@ -23,6 +23,41 @@ def stats(durations_ps: list[int], period_ps: int) -> dict:
     }
 
 
+def pair_dfi_model_writes(groups: dict[str, list[dict]]) -> list[dict]:
+    """Pair DFI WRITE with a modeled storage enable on the *same bank*.
+
+    This boundary does not need AXI IDs. Require a unique store before the
+    next DFI WRITE for that bank. Never infer which AXI AW caused a command:
+    LiteDRAM can return AXI B before issuing DFI WRITE.
+    """
+    writes = groups.get("dfi_write", [])
+    stores = groups.get("bankmodel_storage_write", [])
+    pairs = []
+    for i, cmd in enumerate(writes):
+        bank = cmd.get("bank")
+        if type(bank) is not int:
+            raise ValueError("DFI WRITE event missing bank identity")
+        next_command = min(
+            (other["time_ps"] for other in writes[i+1:]
+             if other.get("bank") == bank),
+            default=None,
+        )
+        matches = [store for store in stores
+                   if store.get("bank") == bank
+                   and cmd["time_ps"] <= store["time_ps"]
+                   and (next_command is None or store["time_ps"] < next_command)]
+        detail = {"dfi_write_ps": cmd["time_ps"], "bank": bank,
+                  "candidate_storage_events": len(matches)}
+        if len(matches) == 1:
+            detail["status"] = "measured"
+            detail["bank_storage_ps"] = matches[0]["time_ps"]
+            detail["latency_ps"] = matches[0]["time_ps"] - cmd["time_ps"]
+        else:
+            detail["status"] = "unmeasured_ambiguous_bank_storage"
+        pairs.append(detail)
+    return pairs
+
+
 def calculate_internal(axi: dict, events: list[dict], period_ps: int) -> dict:
     if period_ps <= 0 or not axi.get("transactions"):
         raise ValueError("no independently verified AXI timing baseline")
@@ -53,6 +88,13 @@ def calculate_internal(axi: dict, events: list[dict], period_ps: int) -> dict:
         "dfi_write_to_bankmodel_storage": [],
     }
     details = []
+    # Model-internal write activity may happen AFTER AXI B. Measure the
+    # independent DFI->BankModel boundary directly, with bank identity.
+    write_pairs = pair_dfi_model_writes(groups)
+    stages["dfi_write_to_bankmodel_storage"] += [
+        pair["latency_ps"] for pair in write_pairs
+        if pair["status"] == "measured"
+    ]
     # These are serial smoke tests, with no overlapping AXI requests.
     # If overlap exists, matching DFI commands to AXI IDs by time is unsafe.
     intervals = []
@@ -77,31 +119,39 @@ def calculate_internal(axi: dict, events: list[dict], period_ps: int) -> dict:
     # Report first-access latency only, NOT all-bank service duration.
     for txn, (start, stop) in zip(transactions, intervals):
         op = txn["operation"]
-        kind = "dfi_read" if op == "read" else "dfi_write"
-        matching = [e for e in groups.get(kind, [])
-                    if start <= e["time_ps"] <= stop
-                    and e.get("test_phase") in ("traffic", "post_traffic")]
         sample = {"operation": op, "axi_id": txn["id"],
                   "address": txn["address"],
-                  "axi_start_ps": start, "axi_end_ps": stop,
-                  "dfi_commands": len(matching)}
+                  "axi_start_ps": start, "axi_end_ps": stop}
+        if op == "write":
+            # AXI B is a controller/frontend completion, not DRAM commit.
+            # As seen in real CI, deferred DFI writes frequently fall after
+            # B and can land within a later AW->B interval. Reporting those
+            # as per-ID stage delays creates incorrect *numeric* evidence.
+            sample["status"] = "unmeasured_axi_dfi_write_attribution"
+            sample["reason"] = "DFI WRITE has no AXI ID; AXI B may precede DFI/model storage"
+            details.append(sample)
+            continue
+
+        matching = [e for e in groups.get("dfi_read", [])
+                    if start <= e["time_ps"] <= stop
+                    and e.get("test_phase") in ("traffic", "post_traffic")]
+        sample["dfi_commands"] = len(matching)
         if not matching:
             sample["status"] = "unmeasured_no_dfi_command"
             details.append(sample)
             continue
-        first = matching[0]["time_ps"]
+        command = matching[0]
+        first = command["time_ps"]
         sample["first_dfi_command_ps"] = first
         sample["status"] = "first_command_measured"
-        stages["controller_ar_to_dfi_read" if op == "read" else
-               "controller_aw_to_dfi_write"].append(first - start)
-        bankkind = "bankmodel_read" if op == "read" else "bankmodel_storage_write"
-        bank_events = [e for e in groups.get(bankkind, [])
-                       if first <= e["time_ps"] <= stop]
+        stages["controller_ar_to_dfi_read"].append(first - start)
+        bank_events = [e for e in groups.get("bankmodel_read", [])
+                       if first <= e["time_ps"] <= stop
+                       and e.get("bank") == command.get("bank")]
         if bank_events:
             first_bank = bank_events[0]["time_ps"]
             sample["first_bank_access_ps"] = first_bank
-            stages["dfi_read_to_bankmodel_access" if op == "read" else
-                   "dfi_write_to_bankmodel_storage"].append(first_bank - first)
+            stages["dfi_read_to_bankmodel_access"].append(first_bank - first)
         if op == "read":
             valids = [e for e in groups.get("dfi_rddata_valid", [])
                       if first <= e["time_ps"] <= stop]
@@ -122,14 +172,22 @@ def calculate_internal(axi: dict, events: list[dict], period_ps: int) -> dict:
             "phy": "LiteDRAM SDRAMPHYModel (behavioral, not silicon)",
             "dram": "LiteDRAM BankModel (behavioral, not physical DRAM)",
         },
-        "internal_stages": {k: stats(v, period_ps) for k, v in stages.items()},
+        "internal_stages": {
+            **{k: stats(v, period_ps) for k, v in stages.items()},
+            "controller_aw_to_dfi_write": {
+                "status": "unmeasured",
+                "reason": "AXI B may precede DFI WRITE and DFI has no AXI ID; no verified queue attribution",
+            },
+        },
+        "dfi_write_model_pairs": write_pairs,
         "events": {k: len(v) for k, v in groups.items()},
         "transactions": details,
         "limitations": [
             "first modeled access per serialized AXI request, not full burst service",
             "no DFI AXI ID tagging; overlaps are not attributed to transactions",
             "PHY and BankModel intervals are simulation delays, not silicon timing",
-            "write response and model storage commit may occur at different times",
+            "AXI B can precede DFI WRITE and modeled storage; no AW-to-DFI per-ID interval is reported",
+            "DFI WRITE to modeled-bank storage is paired independently by bank",
             "actual model signals are required; no guessed component latency",
         ],
     }
