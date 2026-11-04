@@ -1,50 +1,60 @@
 name: Publish SoC verification hub
 
+# PRs targeting main and manual dispatch are the only automatic entry points.
+# Open PRs preview; merged PRs dispatch a separate main-ref run for Pages.
+# Manual feature-branch dispatch builds preview only and can never deploy.
 on:
-  push:
-    branches: [main]
   pull_request:
-  workflow_dispatch:
-  workflow_run:
-    workflows:
-      - Heterogeneous SoC AXI and CPU verification
-      - Full-chip coordinated CPU boot
-      - FlooNoC structural RTL compile and elaborate
-      - Checked-in FlooGen local and global NoC RTL
-      - PULP iDMA descriptor-chain RTL verification
     branches: [main]
-    types: [completed]
+    types: [opened, synchronize, reopened, closed]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: pages-${{ github.event_name == 'pull_request' && github.head_ref || 'publish' }}
-  cancel-in-progress: false
+  group: pages-${{ github.event_name == 'pull_request' && github.event.action != 'closed' && github.event.pull_request.number || 'publish' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
 
 jobs:
+  dispatch-after-merge:
+    # The GitHub Pages environment must see a workflow whose *run ref* is
+    # main, not a PR run whose checkout happens to use main.
+    if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Start one trusted main-ref publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run pages.yml --ref main --repo "$GITHUB_REPOSITORY"
+
   build:
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.action != 'closed')
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: read
       actions: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@v4
         with:
-          # workflow_run never executes or publishes pull-request code/artifacts.
-          ref: ${{ github.event_name == 'pull_request' && github.ref || 'main' }}
+          ref: ${{ github.ref }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - run: python3 -m pip install -r requirements.txt
-      - name: Verify publication and report semantics
-        run: python3 -m unittest tests.test_publication tests.test_axi_report -v
-      - name: Build offline PR preview
-        if: github.event_name == 'pull_request'
+      - name: Verify publication, CI trigger and report semantics
+        run: python3 -m unittest tests.test_ci_workflows tests.test_publication tests.test_merged_pr_evidence tests.test_axi_report tests.test_fabric_report -v
+      - name: Build offline PR or manual branch preview
+        if: (github.event_name == 'pull_request' && github.event.action != 'closed') || (github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main')
         run: python3 tools/publish_site.py
-      - name: Collect trusted main evidence and build site
-        if: github.event_name != 'pull_request'
+      - name: Collect verified merged-PR and main evidence
+        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 tools/publish_site.py --collect
@@ -53,7 +63,7 @@ jobs:
           path: .tools/pages-site
 
   deploy:
-    if: github.event_name != 'pull_request'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -77,6 +87,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: python3 tools/publish_site.py --ensure-pages
       - uses: actions/configure-pages@v5
-      - name: Deploy documentation and run evidence
+      - name: Deploy documentation and verified run evidence
         id: deployment
         uses: actions/deploy-pages@v4

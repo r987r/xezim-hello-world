@@ -123,6 +123,52 @@ addition to their full evidence artifacts. Download the artifact from the
 Actions run, extract it and open a target's `report.html`; GitHub artifact
 downloads do not execute or host the HTML page directly.
 
+## Controlled one-beat fabric latency baseline
+
+The existing **supernoc** test runs serial one-beat transactions across each allowed
+initiator-to-target route before applying concurrent stalls/bursts or faults.
+It uses three distinct addresses per route and checks the correct destination,
+write data and readback. This does not replace concurrent traffic tests.
+
+The passive AXI collector records a measured clock period and annotates each
+AR/AW with its test phase. Per-mesh request and response timing is published
+only when the complete, clean, successful capture matches the Pages source SHA
+exactly, the clock period is known, and all boundaries agree uniquely on
+address, plane, operation, one-beat length and ordering.
+
+Each mesh's request delay runs from incoming AXI acceptance to outgoing
+AXI acceptance. Response delay runs from downstream B/RLAST acceptance
+to upstream B/RLAST acceptance. The final target-facing AXI service
+covers the last target port's request-to-completion interval; in the memory
+subsystem it includes the behavioral memory crossbar and model, **not** an
+isolated DDR/HBM controller or device measurement. The sums must equal the
+measured end-to-end request-to-completion interval, or the trace is rejected.
+
+All timing values are retained in picoseconds; reported cycles divide by
+the **observed simulation clock period**, not an assumed hardware frequency.
+Individual router/flit/NI latencies, inter-mesh physical link costs and
+standalone target service are still unknown. Stalled, unmatched and
+historical captures remain end-to-end observations with explicit provenance,
+not fabricated per-mesh timing.
+
+GitHub may execute a PR against a temporary merge commit whose SHA differs
+from the eventual main merge SHA, even when the two Git source trees are
+identical. The published evidence collector first verifies that the PR really
+merged into main, validates the CI tested merge commit against the exact PR
+head, and compares the tested Git tree to the published main Git tree.
+Only captures with the same tested SHA, identical authenticated Git tree,
+or a verified matching RTL/DV execution-input fingerprint can populate
+per-mesh timing. The fingerprint includes pinned dependencies, RTL, generated
+NoC, AXI monitors, test stimulus, clock/capture code and simulation CI job
+execution steps; report rendering, docs and workflow scheduling do not alter
+it. Any execution-input modification forces new evidence rather than silently
+reusing old timing. The original tested SHA remains on every measurement. When execution inputs
+change, observations remain historical, even if a route is still structurally
+reachable. A new passing real NoC AXI test must then supply current timing. The wide table shows min, arithmetic average and
+max cycles on read and write separately, with sample count and the measured
+clock period. Stage minima/maxima are independent quantiles and need not
+sum to end-to-end extrema; for the same paired samples, stage averages sum.
+
 ## Extension points
 
 New captures record CPU/test phase markers and explicit one-request expected
@@ -135,7 +181,7 @@ NoC checks 24 write/read SLVERR pairs; chip memory capacity tests check four
 SLVERR transactions. Normal CPU boot expects successful responses.
 
 Run metadata and report `sections` are versioned separately from raw event
-capture. Later sections can add real DMA descriptors when integrated, interrupts,
+capture. Later sections can add descriptor-level DMA correlation and CPU-driven interrupts,
 latency distributions or throughput windows without changing AXI monitor
 behavior. Waveform/flit traces and cross-NoC global transaction correlation
 remain separate future work.
@@ -166,3 +212,5 @@ stall, not a mere interrupt observation problem. The DDR4 controller
 under development in draft PR #13 is not part of this setup: the current
 target is a bounded behavioral `axi_ram` model. Keep DDR4 integration
 results separate until its PHY/init and AXI regression pass independently.
+
+The later [full-chip run 41885417960](https://github.com/r987r/xezim-hello-world/actions/runs/41885417960) passed all 105 descriptors with 1,902 observed AXI handshakes using the conservative two-outstanding/no-prefetch setting. This is a simulated AXI-memory-model verification, not physical DDR/HBM characterization.

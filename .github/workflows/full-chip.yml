@@ -1,17 +1,16 @@
 name: Full-chip coordinated CPU boot
 
 on:
-  push:
-    paths: ['config/**', 'gen/**', 'tools/**', 'rtl/**', 'dv/full_chip/**', 'dv/common/axi_trace.py', 'docs/dma-bringup.md', 'tests/**', 'Bender.yml', 'Bender.lock', 'Makefile', '.github/actions/setup-bender/**', '.github/workflows/full-chip.yml']
   pull_request:
-    paths: ['config/**', 'gen/**', 'tools/**', 'rtl/**', 'dv/full_chip/**', 'dv/common/axi_trace.py', 'docs/dma-bringup.md', 'tests/**', 'Bender.yml', 'Bender.lock', 'Makefile', '.github/actions/setup-bender/**', '.github/workflows/full-chip.yml']
+    branches: [main]
+    paths: ['config/soc.yaml', 'config/regression.yaml', 'config/interface_contracts.yaml', 'config/ip.lock.yaml', 'gen/**', 'tools/chip_bootgen.py', 'tools/full_chip_gen.py', 'tools/sim_cocotb.py', 'tools/regress.py', 'tools/axi_report.py', 'tools/fabric_config.py', 'tools/generate.py', 'tools/ip_fetch.py', 'rtl/**', '!rtl/memory/ddr4/**', 'dv/full_chip/**', 'dv/dma/**', 'dv/common/axi_trace.py', 'dv/common/dma_vectors.py', 'sw/common/**', 'sw/dma/**', 'tests/test_dma*', 'tests/test_full_chip_gen.py', 'tests/test_boot_policy.py', 'tests/test_regression.py', 'Bender.yml', 'Bender.lock', 'Makefile', '.github/actions/setup-bender/**', '.github/workflows/full-chip.yml']
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: full-chip-${{ github.head_ref || github.ref_name }}
+  group: full-chip-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -47,7 +46,7 @@ jobs:
           (cd .tools/bin && sha256sum -c "$XEZIM_ASSET_NAME.sha256")
           chmod +x ".tools/bin/$XEZIM_ASSET_NAME"
           echo "XEZIM_BIN=$GITHUB_WORKSPACE/.tools/bin/$XEZIM_ASSET_NAME" >> "$GITHUB_ENV"
-      - name: Run CPU boot, negative/compile checks, and DMA across all configured FlooNoCs
+      - name: Run CPU boot, dual DMA chains, negatives and Xezim compile probe
         run: make dv-chip
       - name: Retain all chip build/phase/memory results
         if: always()
@@ -65,9 +64,9 @@ jobs:
         with:
           name: chip-axi-run-reports-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            .tools/regression/chip-boot*/report.html
             .tools/regression/chip-dma/report.html
             .tools/regression/chip-dma/axi-*.json*
+            .tools/regression/chip-boot*/report.html
             .tools/regression/chip-boot*/axi-*.json*
           include-hidden-files: true
           if-no-files-found: warn

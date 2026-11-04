@@ -1,22 +1,8 @@
 name: PULP iDMA descriptor-chain RTL verification
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'Bender.yml'
-      - 'config/**'
-      - 'tools/idma_rtl.py'
-      - 'tools/regress.py'
-      - 'tools/sim_cocotb.py'
-      - 'dv/dma/**'
-      - 'dv/common/dma_vectors.py'
-      - 'sw/dma/**'
-      - 'sw/common/**'
-      - 'tests/test_dma*'
-      - 'tests/test_sram_layout.py'
-      - '.github/workflows/dma.yml'
   pull_request:
+    branches: [main]
     paths:
       - 'Bender.yml'
       - 'config/**'

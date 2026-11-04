@@ -1,0 +1,8 @@
+# DDR4-only generator dependency pin; no changes to shared config/ip.lock.yaml.
+# LiteDRAM itself remains pinned at the existing central IP lock.
+# LiteX 2024.12 from PyPI lacks SoCCore in litex.soc.integration.soc,
+# which pinned LiteDRAM's standalone gen.py imports using '*'.
+# This 2026-10-27 upstream source revision exports SoCCore and Builder.
+litex:
+  git: https://github.com/enjoy-digital/litex.git
+  commit: e9c83b312ff739263763827c42f4594a3bf03107

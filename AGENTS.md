@@ -17,8 +17,8 @@ in `config/soc.yaml` denotes selected architecture only. The current
 real CPUs, the shared NoCs, upstream AXI adapters, SRAM, reset registers
 and AXI memory stand-ins. Optional real PULP iDMA and CSRs are generator-wired for every compute
 subsystem in `DmaEnable=1`; CPU firmware IRQ handlers and physical controllers
-remain unintegrated. The separate full-NoC DMA gate must pass before claiming
-verified traffic. The generic backend flag still does not describe a complete
+remain unintegrated. The separate full-NoC DMA gate **passed** with 105 real descriptor transfers
+in CI run 41885417960 (CPU0 AXI BFMs drive preparation, not CPU firmware). The generic backend flag still does not describe a complete
 arbitrary-configuration SoC emitter. Legacy memory/boot benches remain
 independent executable scopes. Read [implementation-status](docs/implementation-status.md)
 before describing progress.

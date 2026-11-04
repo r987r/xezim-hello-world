@@ -1,0 +1,11 @@
+# Isolated DDR4 regression only. This is not a JEDEC-valid production device.
+# Geometry is reduced so LiteDRAM's dense Migen bank memories stay small.
+module: MT40A512M8
+expected_upstream:
+  banks: 16
+  rows: 32768
+  cols: 1024
+simulation:
+  rows: 2048  # Keep A10 address command capability; do not reduce below 2^11.
+  cols: 128   # Keeps burst-8 columns; deliberately smaller than real DDR4.
+max_model_bytes: 67108864   # 64 MiB ceiling for dense RTL simulation

@@ -61,6 +61,29 @@ class AxiReportTests(unittest.TestCase):
         self.assertNotEqual(rows[0]['epoch'],rows[1]['epoch'])
         self.assertIsNone(rows[1]['end_ps'])
 
+    def test_phase_and_measured_clock_period_are_preserved(self):
+        events=[
+            {'channel':'capture_start','time_ps':0,'monitors':['cpu']},
+            {'channel':'clock_period','time_ps':10000,'period_ps':10000},
+            {'channel':'phase','time_ps':20000,
+             'label':'Fabric baseline: single-outstanding one-beat'},
+            event('ar',30000,id=0,addr=0x1000,len=0,size=3),
+            event('r',50000,id=0,data=42,last=1,resp=0),
+            {'channel':'phase','time_ps':60000,'label':'Stalled stress'},
+            event('ar',70000,id=1,addr=0x1008,len=0,size=3),
+            event('r',90000,id=1,data=43,last=1,resp=0)]
+        rows,issues,controls=axi_report.correlate(events,CATALOG)
+        self.assertEqual(issues,[])
+        self.assertEqual([r['phase'] for r in rows],
+                         ['Fabric baseline: single-outstanding one-beat','Stalled stress'])
+        self.assertEqual(next(c['period_ps'] for c in controls
+                              if c['channel']=='clock_period'),10000)
+        data,summary=self.intent_report(events[1:])
+        self.assertEqual(data['run']['clock_period_ps'],10000)
+        self.assertEqual(data['sections']['axi']['transactions'][0]['phase'],
+                         'Fabric baseline: single-outstanding one-beat')
+        self.assertEqual(summary['issues'],0)
+
     def test_same_cycle_request_response_and_bad_last_length(self):
         # Collector coroutine ordering within an edge is not channel ordering.
         events = [event('r',1,id=0,data=123,last=1,resp=0),

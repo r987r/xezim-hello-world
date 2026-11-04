@@ -1,11 +1,7 @@
 name: Publish pinned Xezim Linux executable
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - toolchains/xezim.env
-      - .github/workflows/publish-xezim.yml
+  # Pinned simulator publishing is deliberate, never a side-effect of PR merge.
   workflow_dispatch:
 
 permissions:

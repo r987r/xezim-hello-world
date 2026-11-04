@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 
 import cocotb
-from cocotb.triggers import Edge
+from cocotb.triggers import Edge, RisingEdge
 from cocotb.utils import get_sim_time
 from cocotbext.axi import axi_channels
 
@@ -51,10 +51,21 @@ class AxiTrace:
         self.emit({'channel':'capture_start', 'annotations_version':1,
                    'monitors':[m['id'] for m in catalog['monitors']]})
         cocotb.start_soon(self.resets(reset))
+        cocotb.start_soon(self.sample_clock(clock))
 
     def emit(self, event):
         event['time_ps'] = int(get_sim_time(units='ps'))
         self.output.write(json.dumps(event, separators=(',',':'))+'\n')
+
+    async def sample_clock(self, clock):
+        """Measure the simulation clock period, not an architectural frequency."""
+        await RisingEdge(clock)
+        first = int(get_sim_time(units='ps'))
+        await RisingEdge(clock)
+        period = int(get_sim_time(units='ps')) - first
+        if period <= 0:
+            raise ValueError('AXI capture clock has a nonpositive measured period')
+        self.emit({'channel':'clock_period', 'period_ps':period})
 
     async def resets(self, reset):
         while True:

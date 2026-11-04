@@ -186,11 +186,12 @@ still drives the bounded behavioral AXI RAM memory target.
 ## Regeneration and hardware CI provenance
 
 The full-chip pipeline validates committed generated RTL before simulation.
-A push that changes `config/soc.yaml` can start CI before the separate
-branch-scoped generator workflow commits the updated `gen/chip/` artifacts.
-Such an initial CI failure is **generated-file drift**, not a functional
-DMA regression. Only evaluate the real hardware run at the subsequent
-commit containing matching generated RTL and `dma_parameters_by_compute`.
+Development history included a now-removed branch-push generator job
+which could race its generated-file checks. The merged workflow follows
+the project's PR-to-main/manual-dispatch policy: regenerate `gen/chip/`
+from YAML in the same change as the source edits and require
+`make check-config check-generated` in CI. Treat any stale generated file
+as a failed source contract, not a DMA simulation result.
 The corrected legal minimum of two outstanding transactions is checked
 in three places: `config/soc.yaml`, `tools/full_chip_gen.py` and
 `rtl/adapters/soc_idma_engine.sv`. The generated manifest and instantiated
@@ -218,5 +219,4 @@ This *only* proves two DMA RTL engines in a host-assisted, CPU-reset
 simulation against bounded AXI memory targets. The CPU0 AXI BFMs are not PCIe.
 **Not yet verified:** CPU-executed DMA driver, CPU interrupt-service routines,
 hardware SS0-to-SS1 doorbells, integrated LiteDRAM/physical DDR4 or HBM,
-error-injection cases, or high-outstanding/prefetch performance. The PR
-remains draft and will need concurrent-main conflict resolution before merge.
+error-injection cases, or high-outstanding/prefetch performance. The integration is eligible to merge only after conflict resolution and the\ncombined-tree verification gates pass.
