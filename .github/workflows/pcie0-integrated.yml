@@ -3,7 +3,7 @@ name: PCIe0 integrated real bridge and generated local FlooNoC
 on:
   pull_request:
     branches: [agent/38-subsystem-registry-bringup, main]
-    paths: ['dv/pcie0/**', 'tests/test_pcie*', 'tools/full_chip_gen.py', 'tools/chip_bootgen.py', 'tools/pcie_chip.py', 'config/regression.yaml', 'sw/common/test_flow.h', 'sw/dma/tests/cpu_dma_run.c', 'tests/test_test_flow*', 'tools/test_flow*', '.github/workflows/pcie0-integrated.yml']
+    paths: ['dv/pcie0/**', 'tests/test_pcie*', 'tests/test_protocol_report.py', 'tools/protocol_report.py', 'tools/pcie_latency_report.py', 'tools/axi_report.py', 'tools/regress.py', 'tools/full_chip_gen.py', 'tools/chip_bootgen.py', 'tools/pcie_chip.py', 'config/regression.yaml', 'sw/common/test_flow.h', 'sw/dma/tests/cpu_dma_run.c', 'tests/test_test_flow*', 'tools/test_flow*', '.github/workflows/pcie0-integrated.yml']
   workflow_dispatch:
 
 permissions: {contents: read}
@@ -38,7 +38,7 @@ jobs:
       - name: Validate real RTL pins, test contracts and generated endpoints
         run: |
           python3 dv/pcie0/run_rtl_smoke.py --check-pin
-          python3 -m unittest tests.test_pcie_bar_contract tests.test_pcie_diagnostic_contract tests.test_test_flow tests.test_test_flow_cross_source tests.test_pcie_tlp_trace -v
+          python3 -m unittest tests.test_pcie_bar_contract tests.test_pcie_diagnostic_contract tests.test_test_flow tests.test_test_flow_cross_source tests.test_pcie_tlp_trace tests.test_pcie_latency_report tests.test_protocol_report -v
           python3 dv/pcie0/prepare_rtl.py
           python3 tools/regress.py --check-noc
           make check-generated
