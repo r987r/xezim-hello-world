@@ -1,0 +1,86 @@
+<div class="eyebrow">Architecture explorer · structural RTL</div>
+<h1>Chip composition &amp; connectivity</h1>
+<p class="lede">Follow the real design hierarchy: the full SoC contains subsystems; subsystems contain IP and local fabrics; fabrics contain the exact FlooGen router mesh and network interfaces. Click a block to drill down.</p>
+<div class="arch-toolbar" aria-label="Diagram controls">
+  <div id="arch-crumbs" class="arch-crumbs" aria-label="Hierarchy breadcrumb"></div>
+  <label>Test mode <select id="arch-profile"></select></label>
+  <label>Connections <select id="arch-plane"><option value="all">Data + config</option><option value="data">Data only</option><option value="config">Config only</option></select></label>
+  <button type="button" id="arch-zoom-out" title="Zoom out">−</button>
+  <button type="button" id="arch-fit">Fit</button>
+  <button type="button" id="arch-zoom-in" title="Zoom in">+</button>
+  <button type="button" id="arch-export" title="Download current drawing as SVG">Export SVG</button>
+</div>
+<div class="arch-layout">
+  <section class="arch-stage">
+    <div id="arch-viewport" class="arch-viewport" tabindex="0" aria-label="Scrollable chip diagram. Select a block for details.">
+      <svg xmlns="http://www.w3.org/2000/svg" id="arch-svg" role="img" aria-label="Hierarchical 2D SoC diagram"></svg>
+    </div>
+    <div class="arch-bottom">
+      <span id="arch-status" aria-live="polite">Loading structural design…</span>
+      <div class="arch-legend"><span class="arch-key"><i class="arch-dot data"></i> AXI data</span><span class="arch-key"><i class="arch-dot config"></i> Config/control</span><span class="arch-key"><i class="arch-dot module"></i> IP / model</span><span class="arch-key"><i class="arch-dot planned"></i> Planned only</span></div>
+    </div>
+  </section>
+  <aside class="arch-inspector">
+    <div class="eyebrow">Inspector</div>
+    <h2 id="arch-inspect-title">Select a block or connection</h2>
+    <p id="arch-inspect-subtitle" class="muted">Click a subsystem to see its composition, or a NoC to see its routers and interfaces.</p>
+    <div id="arch-inspect-facts"></div>
+    <div id="arch-inspect-links"></div>
+    <button id="arch-inspect-open" type="button" hidden>Open this block</button>
+  </aside>
+</div>
+<div class="arch-evidence">Source distinction: router coordinates and FlooNoC links are from generated structural topology; inter-subsystem links are generator-declared RTL integration. Signal widths/directions come from generated RTL port declarations. A drawn connection is not evidence of a successful AXI transfer or a slang-netlist path.</div>
+<details id="arch-signals" class="arch-signal-panel">
+  <summary>Signal and bus inspector <span id="arch-signals-count"></span></summary>
+  <div class="arch-signal-controls">
+    <label>RTL endpoint <select id="ex-endpoint"></select></label>
+    <label>Bus / interface <select id="ex-bus"></select></label>
+    <label>Signal filter <input type="search" id="ex-signal-filter" placeholder="awaddr, valid, clk…"></label>
+  </div>
+  <p id="ex-signal-status" class="muted"></p>
+  <div class="scroll"><table><thead><tr><th>Signal</th><th>Channel</th><th>Bits</th><th>Direction</th><th>RTL source</th></tr></thead><tbody id="ex-signal-rows"></tbody></table></div>
+  <h3>Declared neighboring connections</h3><p class="muted">Links below show configured endpoint connectivity, not verified bit-level driver traces.</p>
+  <div class="scroll"><table><thead><tr><th>Source</th><th>Destination</th><th>Bus</th><th>Status</th></tr></thead><tbody id="ex-connection-rows"></tbody></table></div>
+</details>
+<div class="actions"><a href="data/design-graph.json">Design graph JSON</a><a href="data/signal-inventory.json">Physical signal inventory JSON</a><a href="topology.html">Generation sources and NoC tables</a></div>
+
+<style>
+.arch-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;border:1px solid var(--line);background:#101f31;padding:12px 14px;border-radius:12px;margin:20px 0 12px}
+.arch-toolbar label{display:flex;align-items:center;gap:6px}
+.arch-toolbar button{padding:7px 11px;font-size:13px}
+.arch-toolbar select{max-width:220px;padding:7px}
+.arch-crumbs{display:flex;align-items:center;flex:1 1 250px;flex-wrap:wrap;gap:5px}
+.arch-crumbs button{border:0;background:transparent;padding:3px 6px;color:#9dddec}
+.arch-crumbs button[aria-current="page"]{color:#f6fbff;font-weight:750}
+.arch-crumbs span{color:#7f95aa}
+.arch-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(230px,300px);gap:14px;align-items:stretch}
+.arch-stage{min-width:0;min-height:530px;display:flex;flex-direction:column;border:1px solid #38506a;border-radius:14px;overflow:hidden;background:#081522}
+.arch-viewport{overflow:auto;max-width:100%;height:600px;overscroll-behavior:contain;scrollbar-color:#63819f #0e1c2b}
+#arch-svg{display:block;background:#081522;max-width:none;user-select:none}
+#arch-svg .arch-click{cursor:pointer;transition:filter .15s ease}
+#arch-svg .arch-click:hover{filter:brightness(1.25)}
+#arch-svg .arch-click:focus-visible{outline:none;filter:brightness(1.5)}
+.arch-bottom{display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;padding:9px 14px;border-top:1px solid #273e52;color:#a6b9cf;font-size:12px;line-height:1.5}
+.arch-legend{display:flex;gap:12px;flex-wrap:wrap}
+.arch-key{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.arch-dot{width:10px;height:10px;border-radius:3px;display:inline-block}
+.arch-dot.data{background:#28b8b3}.arch-dot.config{background:#a78bfa}.arch-dot.module{background:#55758f}.arch-dot.planned{border:1px dashed #e7a453}
+.arch-inspector{min-width:0;border:1px solid var(--line);padding:18px;border-radius:14px;background:#111e30}
+.arch-inspector h2{font-size:21px;margin:10px 0}.arch-inspector p{font-size:13px}
+.arch-inspector dl{margin:15px 0}.arch-inspector dt{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#9db0c9;margin-top:12px}.arch-inspector dd{margin:2px 0 6px;color:#ecf3fa;font-size:13px;overflow-wrap:anywhere}
+.arch-inspector .arch-chip{display:inline-block;padding:2px 8px;border:1px solid #3d6b8a;border-radius:12px;background:#1a3043;font:11px ui-monospace,monospace;color:#a8e8f5}
+.arch-inspector button{margin-top:12px;display:block;max-width:100%;white-space:normal}
+.arch-evidence{font-size:12px;line-height:1.6;color:#abc4d4;margin:12px 2px 20px;padding:11px 14px;border-left:3px solid #4e97a9;background:#122235}
+.arch-signal-panel{border:1px solid var(--line);background:var(--panel);border-radius:12px;padding:12px 18px;margin:18px 0}
+.arch-signal-panel summary{font-size:16px;font-weight:700;cursor:pointer;color:#dff2ff}
+.arch-signal-panel summary span{font:12px ui-monospace,monospace;color:#8eb6d3;padding-left:6px}
+.arch-signal-controls{display:flex;gap:12px;flex-wrap:wrap;align-items:end;margin:14px 0}
+.arch-signal-controls label{display:flex;flex-direction:column;gap:5px;min-width:180px}
+.arch-signal-controls select,.arch-signal-controls input{max-width:290px}
+.arch-signal-panel td{font-size:12px}.arch-signal-panel td:first-child{overflow-wrap:anywhere;max-width:320px}
+@media(max-width:960px){.arch-layout{grid-template-columns:1fr}.arch-stage{min-height:440px}.arch-viewport{height:480px}.arch-inspector{padding:14px}.arch-crumbs{flex-basis:100%}}
+@media(max-width:650px){.arch-toolbar{gap:7px;padding:10px}.arch-toolbar label{font-size:11px}.arch-toolbar select{max-width:160px}.arch-viewport{height:450px}.arch-signal-panel{padding:12px}.arch-signal-controls label{min-width:140px;flex:1}.arch-signal-controls select{max-width:100%}}
+</style>
+<script type="application/json" id="ex-embedded-graph">__GRAPH_DATA__</script>
+<script type="application/json" id="ex-embedded-signals">__SIGNAL_DATA__</script>
+<script>__ARCH_JS__</script>
