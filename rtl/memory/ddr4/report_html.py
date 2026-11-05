@@ -65,6 +65,12 @@ def render(data: dict) -> str:
                               stage.get("reason", "No justified event association"))
     channels = " · ".join(f"{h(ch.upper())} {h(monitor['channels'].get(ch, 0))}"
                           for ch in ("aw", "w", "b", "ar", "r"))
+    stalls=monitor.get("backpressure_valid_not_ready_cycles") or {}
+    stalled_r=int(stalls.get("r", 0))
+    stalled_b=int(stalls.get("b", 0))
+    if stalled_r < 0 or stalled_b < 0:
+        raise ValueError("negative DDR4 backpressure observation")
+
     period_ns = period / 1000
     run = data["run"]
     warnings = data["compiler"].get("total_warnings", "not available")
@@ -102,7 +108,9 @@ to individual DFI commands; missing correlations stay explicitly UNMEASURED.</p>
 <div class="scroll"><table><thead><tr><th>Observed stage</th><th>Status</th><th>Samples</th><th>Avg cycles</th><th>Evidence/limitation</th></tr></thead>
 <tbody>{stage_rows}</tbody></table></div>
 <h2>Passive protocol coverage</h2>
-<p>{channels}. Capture: {h(monitor["sampled_cycles"])} continuous clock samples,
+<p>{channels}. Backpressure observed on real controller outputs:
+R VALID&&!READY {h(stalled_r)} cycles, B VALID&&!READY {h(stalled_b)} cycles.
+Capture: {h(monitor["sampled_cycles"])} continuous clock samples,
 zero overflow, all initialization/traffic/post-traffic phases present.
 Actual Verilator errors: 0; upstream warnings remain audited rather than globally suppressed.</p>
 <p>Report source: {h(run.get("top", "soc_ddr4_sim"))} / standalone generated controller;
