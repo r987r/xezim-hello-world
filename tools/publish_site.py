@@ -176,6 +176,8 @@ def verified_pr_tree_equivalent(client, run, tested_sha, site_sha, cache=None):
 # All unlisted files remain fingerprinted (safe default).
 FABRIC_EXCLUDED_PREFIXES = (
     'docs/', 'tests/', '.github/workflows/', 'tools/templates/site_',
+    # Static schematic assets are not compiled into RTL or testbench executables.
+    'gen/diagrams/',
     # Staged DDR4 generation/test *not* in the active Bender NoC or chip
     # simulation source lists. Future integration changes the included
     # Bender/config/generated RTL input hashes and invalidates old evidence.
@@ -185,6 +187,12 @@ FABRIC_EXCLUDED_FILES = {
     'README.md', 'AGENTS.md', 'tools/publish_site.py',
     'tools/fabric_report.py', 'tools/templates/site.html',
     'tools/templates/run_report.html',
+    # Read-only architecture extraction and diagram rendering have no
+    # simulator or AXI monitor runtime side effects.
+    'tools/rtl_instance_parser.py', 'tools/design_explorer.py',
+    'tools/signal_inventory.py', 'tools/signal_paths.py',
+    'tools/design_elaborate.py', 'tools/design_netlist.py',
+    'tools/noc_diagrams.py', 'tools/diagram_svg.py', 'tools/diagram_gen.py',
 }
 # CI execution jobs (tool versions and invocation) must also be identical.
 # Trigger/scheduling-only edits do not alter simulated timing and are ignored.

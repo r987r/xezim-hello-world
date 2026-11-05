@@ -33,6 +33,18 @@ def main():
         assert "GLOBAL FABRIC" in driver.find_element(By.ID,"arch-svg").text
         assert "COMPUTE0" in driver.find_element(By.ID,"arch-svg").text
         assert "MEMORY0" in driver.find_element(By.ID,"arch-svg").text
+        # The same generated topology must reflect the *selected* RTL/test
+        # actor manifest, not a stale boot-only DMA placeholder.
+        assert driver.find_element(By.ID,"arch-profile").get_attribute("value")=="chip-dma"
+        assert "Real PULP iDMA RTL" in driver.find_element(By.ID,"arch-svg").text
+        assert "AXI RAM model" in driver.find_element(By.ID,"arch-svg").text
+        driver.execute_script(
+            """const p=document.getElementById('arch-profile');
+               p.value='chip-boot';p.dispatchEvent(new Event('change',{bubbles:true}));""")
+        assert "AXI verification BFM" in driver.find_element(By.ID,"arch-svg").text
+        driver.execute_script(
+            """const p=document.getElementById('arch-profile');
+               p.value='chip-dma';p.dispatchEvent(new Event('change',{bubbles:true}));""")
         driver.save_screenshot(str(args.screenshots/"01-full-chip.png"))
 
         def dblclick_by_label(label):
