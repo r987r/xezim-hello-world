@@ -67,7 +67,7 @@ jobs:
           # Their existing compile/link step needs the same freestanding
           # LLVM toolchain used in full-chip CI.
           sudo apt-get update -qq
-          sudo apt-get install -y clang llvm lld
+          sudo apt-get install -y clang llvm lld iverilog
           command -v clang
           command -v llvm-objcopy
       - name: Install official checksum-verified slang release
