@@ -57,6 +57,7 @@ module ethernet_queue_ctrl #(
 );
     localparam integer RING_DEPTH = 1 << RING_LOG2;
     localparam integer DESC_BYTES = 32;
+    localparam logic [31:0] RING_MASK = RING_DEPTH - 1;
     localparam integer QMAX = RX_QUEUES > TX_QUEUES ? RX_QUEUES : TX_QUEUES;
 
     // Sticky error bits: multi-match, no-buffer, invalid CSR, bad completion,
@@ -116,12 +117,12 @@ module ethernet_queue_ctrl #(
     assign rx_desc_valid = rx_fetch;
     assign rx_desc_queue = rx_active_q;
     assign rx_desc_addr = rx_base[rx_active_q] +
-                     (({32'd0, rx_cons[rx_active_q] & (RING_DEPTH-1)}) * DESC_BYTES);
+                     (({32'd0, (rx_cons[rx_active_q] & RING_MASK)}) * DESC_BYTES);
 
     // One receive and one transmit operation can be outstanding concurrently.
     // A future implementation can add an in-flight tag table without changing
     // the ring ABI. Completion counters are never advanced on mere DMA issue.
-    always_comb begin
+    always @* begin
         match_count = 0;
         matched_q = '0;
         matched_policy = '0;
@@ -146,7 +147,7 @@ module ethernet_queue_ctrl #(
 
     // Fixed-priority TX descriptor selection is sufficient for one queue;
     // round-robin fairness is required before raising TX_QUEUES above one.
-    always_comb begin
+    always @* begin
         tx_pick_valid = 1'b0;
         tx_pick = '0;
         for (integer k=0; k<TX_QUEUES; k=k+1) begin
@@ -161,11 +162,11 @@ module ethernet_queue_ctrl #(
     assign tx_desc_valid = tx_pick_valid;
     assign tx_desc_queue = tx_pick;
     assign tx_desc_addr = tx_base[tx_pick] +
-                  (({32'd0, tx_cons[tx_pick] & (RING_DEPTH-1)}) * DESC_BYTES);
+                  (({32'd0, (tx_cons[tx_pick] & RING_MASK)}) * DESC_BYTES);
 
     // CSR reads are non-destructive; software must explicitly retire CQ
     // entries by advancing the appropriate completion-consumer pointer.
-    always_comb begin
+    always @* begin
         cfg_rdata = 32'd0;
         cfg_error = 1'b0;
         case (cfg_addr)
