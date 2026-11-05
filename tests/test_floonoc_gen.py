@@ -27,8 +27,9 @@ class FlooNoCProfilesTest(unittest.TestCase):
             "compute1_local_data", "compute1_local_config",
             "memory0_local_data", "memory0_local_config",
             "pcie0_local_data", "pcie0_local_config",
+            "ethernet0_local_data", "ethernet0_local_config",
             "global_data", "global_config"})
-        self.assertEqual(len({p["path"] for p in nocs.values()}), 10)
+        self.assertEqual(len({p["path"] for p in nocs.values()}), 12)
         for name, entry in nocs.items():
             cfg = entry["config"]
             self.assertEqual(cfg["network_type"], "axi")
@@ -168,15 +169,15 @@ class FlooNoCProfilesTest(unittest.TestCase):
         })
         soc["networks"]["global_config"]["reachable_subsystems"].insert(2, "compute2")
         soc["address_map"]["data"].append({
-            "name": "compute2.sram", "base": "0x13000000", "size": "0x00100000"
+            "name": "compute2.sram", "base": "0x14000000", "size": "0x00100000"
         })
         soc["address_map"]["config"].append({
-            "name": "compute2.dma", "base": "0x40050000", "size": "0x10000"
+            "name": "compute2.dma", "base": "0x40060000", "size": "0x10000"
         })
         got = floonoc_gen.profiles(soc, self.knobs)
         self.assertIn("compute2_local_config", got)
         self.assertIn("compute2_local_data", got)
-        self.assertEqual(len(got), 12)
+        self.assertEqual(len(got), 14)
         global_eps = {e["name"] for e in got["global_data"]["config"]["endpoints"]}
         self.assertIn("compute2_sram", global_eps)
 

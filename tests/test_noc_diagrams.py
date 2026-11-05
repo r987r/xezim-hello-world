@@ -21,12 +21,12 @@ class RealNetworkDiagrams(unittest.TestCase):
         cls.networks = noc_diagrams.read_generated_nocs(cls.root)
 
     def test_every_generated_mesh_uses_real_endpoint_coordinates(self):
-        self.assertEqual(len(self.networks), 10)
+        self.assertEqual(len(self.networks), 12)
         for name, n in self.networks.items():
             self.assertEqual(n["entry"]["routers"], n["width"] * n["height"])
             self.assertEqual(set(n["endpoints"]), set(n["positions"]), name)
             self.assertEqual(len(n["positions"]), n["entry"]["endpoint_count"])
-        self.assertEqual(self.networks["global_data"]["entry"]["routers"], 9)
+        self.assertEqual(self.networks["global_data"]["entry"]["routers"], 12)
         self.assertEqual(self.networks["global_data"]["endpoints"]["compute1_sram"]["addr_range"]["base"], 0x11000000)
 
     def test_physical_links_are_not_confused_with_planned_soc_wiring(self):
@@ -49,7 +49,7 @@ class RealNetworkDiagrams(unittest.TestCase):
         self.assertTrue(any(l["from"]["instance"] == "compute0.cpu" for l in wired))
         self.assertTrue(any(l["to"]["instance"] == "memory0.ctrl" for l in planned))
         self.assertIn("groups", graph)
-        self.assertEqual(len([g for g in graph["groups"] if g["name"] in self.networks]), 10)
+        self.assertEqual(len([g for g in graph["groups"] if g["name"] in self.networks]), 12)
 
     def test_render_diagrams_and_xml(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -62,7 +62,7 @@ class RealNetworkDiagrams(unittest.TestCase):
             self.assertIn("global_config", diagrams["noc-hierarchy"])
             self.assertIn("CPU boot and optional real DMA/CSR wiring", diagrams["noc-hierarchy"])
             self.assertTrue((out/"noc-topology.json").exists())
-            self.assertEqual(len(json.loads((out/"noc-topology.json").read_text())["networks"]), 10)
+            self.assertEqual(len(json.loads((out/"noc-topology.json").read_text())["networks"]), 12)
             self.assertFalse((out / "noc").exists())
             self.assertFalse((out / "architecture.svg").exists())
             for name in diagrams:
