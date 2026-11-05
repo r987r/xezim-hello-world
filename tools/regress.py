@@ -43,6 +43,10 @@ def expand(config, names, stack=()):
 
 
 def load_config(path):
+    # Direct `python tools/regress.py` starts with tools/ on sys.path; the
+    # shared DV evidence ABI lives under repository root, not tools/.
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
     config = yaml.safe_load(path.read_text())
     if set(config) != {'schema_version', 'defaults', 'upstream_noc', 'tests', 'suites'} or config['schema_version'] != 1:
         raise ValueError('unsupported regression schema')
