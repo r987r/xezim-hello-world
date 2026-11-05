@@ -124,7 +124,7 @@ async def transfer(master, dut, address, data, ident):
 
 
 
-async def exercise_controller_stress(master, dut, observer):
+async def exercise_controller_stress(master, dut, observer, monitor):
     """Real LiteDRAM AXI+DFI stress, not a pure-Python oracle pass.
 
     The existing passive AXI/Wishbone and 72-net DFI monitors stay active.
@@ -174,7 +174,7 @@ async def exercise_controller_stress(master, dut, observer):
         assert final.resp == AxiResp.OKAY and final.data == expected, (
             f"DDR4 stress masked data/alias mismatch @{case.address:#x}: "
             f"{final.data.hex()} != {expected.hex()}")
-        observer.assert_health(None)
+        observer.assert_health(monitor)
         completed += 1
     assert completed == 4, "DDR4 stress cases were skipped"
     dut._log.info("PASS real LiteDRAM stress: 4 address regions, "
@@ -281,9 +281,7 @@ async def ddr4_wishbone_init_axi_readwrite(dut):
                 f"{read_result.data.hex()} != {payload.hex()}")
         dut._log.info("PASS DDR4 modeled 32MiB low/mid/high address alias guard")
 
-        observer.next_phase("stress")
-        await exercise_controller_stress(master, dut, observer)
-        observer.next_phase("traffic")
+        await exercise_controller_stress(master, dut, observer, monitor)
         observer.assert_health(monitor)
         observer.next_phase("post_traffic")
         await tick(dut, 5)
