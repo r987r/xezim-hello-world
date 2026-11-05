@@ -203,6 +203,17 @@ def write_report(directory, plan):
     result["issues"] = issues + result["issues"]
     result["passed"] = not result["issues"]
     (directory/"test-flow.json").write_text(json.dumps(result,indent=2)+"\n")
+    render_summary(result,directory/"test-flow.html")
+    # Only augment existing canonical report; do not create second run hub.
+    index=directory/"report.html"
+    if index.is_file() and "test-flow.html" not in index.read_text():
+        original=index.read_text()
+        index.write_text(original.replace("<main>",'<main><p><a href="test-flow.html">INIT/RUN/CHECK step flow</a></p>',1))
+    return result
+
+
+def render_summary(result, output):
+    """Trusted renderer for CI and GitHub Pages; never run artifact HTML."""
     rows = []
     for row in result["rows"]:
         values = (row["phase"], row["actor"], row["step"], row["origin"],
@@ -213,7 +224,7 @@ def write_report(directory, plan):
     html = """<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width">
 <title>Test flow</title><style>
 body{font:15px system-ui;margin:1.5rem;max-width:1200px;background:#10151e;color:#e9ecf0}
-a{color:#91caff}table{border-collapse:collapse;width:100%;font-size:13px}
+a{color:#91caff}table{border-collapse:collapse;width:100%;font-size:13px}\n.tablewrap{overflow-x:auto;max-width:100%}
 th,td{padding:.5rem;text-align:left;border-bottom:1px solid #394453}
 th{position:sticky;top:0;background:#182332}tr:hover{background:#202c3b}
 .pass{color:#88dfa7}.fail{color:#ff9b93}
@@ -222,12 +233,6 @@ th{position:sticky;top:0;background:#182332}tr:hover{background:#202c3b}
 Evidence provenance is explicit in the Origin column.</p>"""
     html += "<h2 class='"+("pass" if result["passed"] else "fail")+"'>"+("PASS" if result["passed"] else "FAIL")+"</h2>"
     html += "<ul>"+problems+"</ul>"
-    html += "<table><thead><tr>"+"".join("<th>"+x+"</th>" for x in ("Phase","Actor","Step","Origin","Status","Start ps","Duration ps","Details"))+"</tr></thead><tbody>"
-    html += "".join(rows)+"</tbody></table>"
-    (directory/"test-flow.html").write_text(html)
-    # Only augment existing canonical report; do not create second run hub.
-    index=directory/"report.html"
-    if index.is_file() and "test-flow.html" not in index.read_text():
-        original=index.read_text()
-        index.write_text(original.replace("<main>",'<main><p><a href="test-flow.html">INIT/RUN/CHECK step flow</a></p>',1))
-    return result
+    html += '<div class="tablewrap"><table><thead><tr>'+"".join("<th>"+x+"</th>" for x in ("Phase","Actor","Step","Origin","Status","Start ps","Duration ps","Details"))+"</tr></thead><tbody>"
+    html += "".join(rows)+"</tbody></table></div>"
+    Path(output).write_text(html)
