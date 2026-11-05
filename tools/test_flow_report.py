@@ -224,7 +224,8 @@ def render_summary(result, output):
     html = """<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width">
 <title>Test flow</title><style>
 body{font:15px system-ui;margin:1.5rem;max-width:1200px;background:#10151e;color:#e9ecf0}
-a{color:#91caff}table{border-collapse:collapse;width:100%;font-size:13px}\n.tablewrap{overflow-x:auto;max-width:100%}
+a{color:#91caff}table{border-collapse:collapse;width:100%;font-size:13px}
+.tablewrap{overflow-x:auto;max-width:100%}
 th,td{padding:.5rem;text-align:left;border-bottom:1px solid #394453}
 th{position:sticky;top:0;background:#182332}tr:hover{background:#202c3b}
 .pass{color:#88dfa7}.fail{color:#ff9b93}
