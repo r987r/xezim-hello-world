@@ -112,12 +112,29 @@ module ethernet_queue_ctrl_tb;
     receive(16'h0806,0,0,1);
     rd(8'h94,32'h12);rd(8'h98,2);
     wr(8'h74,16'h0806,1);rd(8'h94,32'h16);
+    // Recycle completion slots and roll the RX descriptor pointer through
+    // one full 16-entry wrap. No buffer may be reused before software reposts.
+    wr(8'h3c,2,0);
+    for (integer idx=2; idx<18; idx=idx+1) begin
+      wr(8'h28,idx+1,0);
+      receive(16'h0800,1,6000,0);
+      consume(64'h100004000 + ((idx & 15) * 32));
+    end
+    rd(8'h2c,18);rd(8'h38,18);
+    // CQ now full with 16 unread entries, despite a preposted new buffer.
+    wr(8'h28,19,0);
+    receive(16'h0800,1,6000,1);
+    rd(8'h94,32'h36);
+    rd(8'h98,4);
+    wr(8'h3c,18,0);
+    wr(8'h94,32'h20,0);
+    rd(8'h94,32'h16);
     wr(8'h08,0,0);
     wr(8'h70,1,0);wr(8'h74,16'h0800,0);wr(8'h78,16'hffff,0);
     wr(8'h7c,6000,0);wr(8'h80,16'hffff,0);wr(8'h84,3,0);
-    wr(8'h28,3,0);wr(8'h08,1,0);
+    wr(8'h08,1,0);
     receive(16'h0800,1,6000,1);
-    rd(8'h9c,1);rd(8'h98,3);rd(8'h94,32'h17);
+    rd(8'h9c,1);rd(8'h98,5);rd(8'h94,32'h17);
     wr(8'h08,0,0);wr(8'h70,1,0);
     wr(8'h84,32'h103,1);rd(8'h94,32'h17);
     @(negedge clk);rx_cpl_written=1;
