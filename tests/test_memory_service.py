@@ -7,7 +7,7 @@ import unittest
 
 from tools.memory_plan import VirtualRegion
 from tools.memory_service import (
-    AxiFrontdoor, HostSparseMemory, MemoryAccessError, MemoryMismatch,
+    AxiFrontdoor, HostSparseMemory, CombinedMemoryProvider, MemoryAccessError, MemoryMismatch,
     MemoryService, Pattern,
 )
 
@@ -127,6 +127,30 @@ class MemoryServiceTests(unittest.IsolatedAsyncioTestCase):
             await self.svc.initialize(self.a, Pattern(), policy="oops")
         with self.assertRaises(ValueError):
             Pattern("no-such-mode", 5)
+
+    async def test_backdoor_must_pass_reciprocal_frontdoor_proof(self):
+        front = DummyProvider(self.base, validated=False, frontdoor=True)
+        rear = front  # shared store for the valid backing case
+        provider = CombinedMemoryProvider(front, rear)
+        self.svc.register("memory0.ddr0", provider)
+        with self.assertRaisesRegex(MemoryAccessError, "validated backdoor"):
+            await self.svc.initialize(self.a, Pattern(), policy="fast")
+        initial = bytes(front.storage[:32])
+        with self.assertRaisesRegex(MemoryAccessError, "quiescent"):
+            await provider.validate_backdoor(self.base, consumers_quiesced=False)
+        await provider.validate_backdoor(self.base, consumers_quiesced=True, width=32)
+        self.assertTrue(provider.validated_backdoor)
+        self.assertEqual(bytes(front.storage[:32]), initial)
+        e = await self.svc.initialize(self.a, Pattern("counter8"), policy="fast")
+        self.assertEqual(e.method, "backdoor")
+
+    async def test_bad_backdoor_mapping_is_rejected(self):
+        front = DummyProvider(self.base, validated=False)
+        wrong = DummyProvider(self.base+8, validated=False)
+        provider = CombinedMemoryProvider(front, wrong)
+        with self.assertRaises(MemoryMismatch):
+            await provider.validate_backdoor(self.base, consumers_quiesced=True)
+        self.assertFalse(provider.validated_backdoor)
 
     async def test_recipe_invariant_across_chunks_and_high_addresses(self):
         for p in [Pattern("constant", 0x5a), Pattern("counter8", 17),
