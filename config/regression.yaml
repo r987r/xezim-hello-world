@@ -157,6 +157,10 @@ tests:
           init: [cpu0.firmware_init]
           run: [cpu0.firmware_run, cpu0.alloc_phys, cpu0.dma_roundtrip, cpu0.verify_memory]
           check: [cpu0.firmware_check]
+        required_origins:
+          init: {cpu0.firmware_init: rtl_observed}
+          run: {cpu0.firmware_run: rtl_observed, cpu0.alloc_phys: rtl_observed, cpu0.dma_roundtrip: rtl_observed, cpu0.verify_memory: rtl_observed}
+          check: {cpu0.firmware_check: rtl_observed}
         firmware_mmio:
           monitor: compute0_local_data.cpu
           address: '0x1000045c'
@@ -217,6 +221,10 @@ tests:
           init: [host0.enumerate, host0.wait_device_ready, host0.init_ack, cpu0.init_complete, cpu0.firmware_init]
           run: [host0.wait_run_enable, host0.bar_roundtrip, host0.bar_write_0, host0.bar_read_0, host0.bar_write_1, host0.bar_read_1, host0.bar_write_2, host0.bar_read_2, host0.bar_write_3, host0.bar_read_3, host0.run_ack, cpu0.run_complete, cpu0.firmware_run]
           check: [host0.wait_check_enable, host0.check_ack, cpu0.check_complete, cpu0.firmware_check, host0.final_verify]
+        required_origins:
+          init: {host0.enumerate: stimulus, host0.wait_device_ready: observed, host0.init_ack: stimulus, cpu0.init_complete: checker, cpu0.firmware_init: rtl_observed}
+          run: {host0.wait_run_enable: observed, host0.bar_roundtrip: checker, host0.bar_write_0: stimulus, host0.bar_read_0: checker, host0.bar_write_1: stimulus, host0.bar_read_1: checker, host0.bar_write_2: stimulus, host0.bar_read_2: checker, host0.bar_write_3: stimulus, host0.bar_read_3: checker, host0.run_ack: stimulus, cpu0.run_complete: checker, cpu0.firmware_run: rtl_observed}
+          check: {host0.wait_check_enable: observed, host0.check_ack: stimulus, cpu0.check_complete: checker, cpu0.firmware_check: rtl_observed, host0.final_verify: checker}
       axi: {scope: dut.u_noc, clock: clk, reset: rst_n, catalog: gen/supernoc/axi_monitors.json, actors: .tools/regression/chip-pcie-host/variant/manifest.json, max_events: 500000}
       protocols:
         sources:
