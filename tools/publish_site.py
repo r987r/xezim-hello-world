@@ -26,10 +26,12 @@ from markdown_it import MarkdownIt
 import yaml
 
 from axi_report import render_report
+from protocol_report import render as render_protocol_report
 
 ROOT=Path(__file__).resolve().parents[1]
 FILES={'result.json','plan.json','sources.f','simulation.log','build.log','results.xml',
-       'axi-transactions.json','axi-events.jsonl'}
+       'axi-transactions.json','axi-events.jsonl',
+       'protocol-transactions.json','protocol-events.jsonl'}
 
 
 def dump(path,data):
@@ -325,7 +327,7 @@ def collect(client,config,destination):
                 if run.get('verified_merged_pr') is not None:
                     verified=set(run.get('verified_tested_shas',[]))
                     invalid=None
-                    for trace_file in target.rglob('axi-transactions.json'):
+                    for trace_file in [*target.rglob('axi-transactions.json'), *target.rglob('protocol-transactions.json')]:
                         trace_run=json.loads(trace_file.read_text()).get('run',{})
                         tested_sha=trace_run.get('commit')
                         if not verified_pr_test_commit(client,run,tested_sha,verified_cache):
@@ -394,13 +396,32 @@ def evidence_index(evidence,output,repository):
                     shutil.copyfile(item,destination/item.name);assets.append(item.name)
             trace_path=source_dir/'axi-transactions.json'
             trace=json.loads(trace_path.read_text()) if trace_path.exists() else None
+            protocol_path=source_dir/'protocol-transactions.json'
+            protocol_data=json.loads(protocol_path.read_text()) if protocol_path.exists() else None
             entry={'target':target,'engine':plan.get('engine','unknown'),'passed':result.get('passed') is True,
                    'expected_failure':plan.get('expect_failure'),'stage':result.get('stage'),
                    'run_id':run['id'],'attempt':run.get('run_attempt',1),'source_sha':run['tested_sha'],
                    'pr_head_sha':run['head_sha'],'merged_pr':run.get('merged_pr'),
                    'recorded_at':run['created_at'],'workflow':run['label'],'workflow_url':run['html_url'],
                    'path':str(relative/'report.html'),'assets':sorted(assets),
-                   'axi':trace is not None,'result':result}
+                   'axi':trace is not None,
+                   'protocols':sorted({r['protocol'] for r in protocol_data.get('records',[])}) if protocol_data else [],
+                   'protocol_observations':len(protocol_data['records']) if protocol_data else 0,
+                   'result':result}
+            if protocol_data:
+                protocol_run=protocol_data.get('run',{})
+                protocol_sha=protocol_run.get('commit')
+                if (protocol_sha not in (verified_shas | {run['head_sha']})
+                    or protocol_run.get('dirty') is not False
+                    or str(protocol_run.get('workflow_run_id'))!=str(run['id'])
+                    or str(protocol_run.get('workflow_attempt'))!=str(run.get('run_attempt',1))):
+                    raise ValueError('protocol report provenance differs from clean CI run')
+                if protocol_data.get('schema_version')!=1:
+                    raise ValueError('unsupported protocol publication schema')
+                entry['source_sha']=protocol_sha
+                # Do not publish artifact-supplied HTML. Re-render the trusted
+                # JSON through the site source's audited escaping/textContent UI.
+                render_protocol_report(protocol_data, destination/'protocols.html')
             if trace:
                 tested_sha=trace['run'].get('commit')
                 if (tested_sha not in (verified_shas | {run['head_sha']})
@@ -431,6 +452,8 @@ def evidence_index(evidence,output,repository):
                 nav=f'<p style="margin:0 0 12px"><a href="{up}/index.html">Verification hub</a> · <a href="{up}/runs.html">All runs</a> · <a href="{escape(run["html_url"])}">CI evidence</a></p>'
                 nav+='<details><summary>Original evidence: raw events, transactions, logs, plan and filelists</summary><ul>'
                 nav+=''.join(f'<li><a href="{escape(name)}">{escape(name)}</a></li>' for name in sorted(assets))+'</ul></details>'
+                if protocol_data:
+                    nav+='<p><a href="protocols.html">Unified protocol explorer</a></p>'
                 (destination/'report.html').write_text(html.replace('<main>','<main>'+nav,1))
                 transactions=trace['sections']['axi']['transactions']
                 entry['observations']=len(transactions)
@@ -438,6 +461,10 @@ def evidence_index(evidence,output,repository):
                 entry['undeclared_errors']=sum(r.get('error_intent')=='undeclared' and r['role']=='initiator' for r in transactions)
                 entry['annotations']=trace['run'].get('annotations_available',False)
             else:
+                if protocol_data and (destination/'protocols.html').is_file():
+                    (destination/'report.html').write_text((destination/'protocols.html').read_text())
+                    entries.append(entry)
+                    continue
                 body='<p>This scope publishes its actual result, plan, filelist and logs. It has no AXI traffic observer.</p>'
                 body+=f'<p><strong>Regression {"PASS" if entry["passed"] else "FAIL"}</strong> · {escape(entry["engine"])} · tested SHA <code>{escape(entry["source_sha"])}</code></p>'
                 if entry['expected_failure']:body+='<p>Expected-failure case: '+escape(entry['expected_failure'])+'</p>'
@@ -456,7 +483,7 @@ def shell(title,body,relative,repository,sha):
     else:prefix+='/'
     template=(ROOT/'tools/templates/site.html').read_text()
     navigation=''.join(f'<a href="{prefix}{path}">{label}</a>' for path,label in
-                       [('index.html','Overview'),('topology.html','Topology'),('fabric.html','Fabric Explorer'),('runs.html','Test runs'),('docs.html','Documentation'),('reference.html','Source data')])
+                       [('index.html','Overview'),('topology.html','Topology'),('explorer.html','2D Explorer'),('fabric.html','Fabric Explorer'),('runs.html','Test runs'),('docs.html','Documentation'),('reference.html','Source data')])
     return (template.replace('__TITLE__',escape(title)).replace('__NAV__',navigation).replace('__HOME__',prefix+'index.html')
             .replace('__CONTENT__',body).replace('__SOURCE__',escape(sha[:12]))
             .replace('__REPO__',f'https://github.com/{repository}/tree/{sha}'))
@@ -520,14 +547,25 @@ def build(output,evidence,repository,sha,config):
     monitors=json.loads((ROOT/'gen/supernoc/axi_monitors.json').read_text())
     fabric_report.attach_one_beat_observations(fabric, entries, output, sha)
     dump(output/'data/fabric.json',fabric)
+    from design_explorer import catalog as design_catalog
+    design_graph = design_catalog(ROOT)
+    dump(output/'data/design-graph.json', design_graph)
+    from signal_inventory import build as signal_inventory_build
+    signal_inventory = signal_inventory_build(ROOT)
+    dump(output/'data/signal-inventory.json', signal_inventory)
     dataset={'schema_version':1,'title':config['title'],'source_sha':sha,'repository':repository,
              'built_at':datetime.now(timezone.utc).isoformat(),'runs':runs,'entries':entries,
              'notes':notes,'documents':docs,'networks':noc['networks'],'chip':chip,
              'monitors':monitors['monitors'],'fabric':fabric['summary'],'tests':catalog['tests']}
     dump(output/'data/site.json',dataset)
     data=json.dumps(dataset,separators=(',',':')).replace('<','\\u003c')
-    for page in ('index','topology','fabric','runs','docs','reference'):
+    for page in ('index','topology','explorer','fabric','runs','docs','reference'):
         body=(ROOT/('tools/templates/site_'+page+'.html')).read_text().replace('__SITE_DATA__',data)
+        if page=='explorer':
+            graph_data = json.dumps(design_graph, separators=(',', ':')).replace('<','\\u003c')
+            body = body.replace('__GRAPH_DATA__',graph_data)
+            signal_data = json.dumps(signal_inventory, separators=(',', ':')).replace('<','\\u003c')
+            body = body.replace('__SIGNAL_DATA__', signal_data)
         if page=='fabric':
             fabric_data=json.dumps(fabric,separators=(',',':')).replace('<','\\u003c')
             body=body.replace('__FABRIC_DATA__',fabric_data)

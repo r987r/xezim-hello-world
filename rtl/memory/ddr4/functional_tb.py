@@ -13,6 +13,8 @@ from cocotb.clock import Clock
 from cocotb.triggers import RisingEdge, FallingEdge, Timer, with_timeout
 from cocotbext.axi import AxiBus, AxiMaster, AxiResp
 from init_plan import wishbone_script
+from latency_report import configured_clock_period_ps
+from dfi_probe import DFIProbe, observe_dfi
 from traffic_observer import TrafficObserver, observe_forever
 
 OUTPUT = Path(os.environ["DDR4_GENERATED_DIR"])
@@ -138,12 +140,19 @@ async def ddr4_wishbone_init_axi_readwrite(dut):
     # independent of cocotbext-axi's protocol-aware BFM/response scoreboard.
     observer = TrafficObserver(OUTPUT)
     monitor = cocotb.start_soon(observe_forever(dut, observer))
+    internal = DFIProbe(OUTPUT)
+    internal_task = cocotb.start_soon(
+        observe_dfi(dut, internal, observer, configured_clock_period_ps())
+    )
     succeeded = False
     failure = None
     try:
-        cocotb.start_soon(Clock(dut.clk, 10, units="ns").start())
+        period_ps = configured_clock_period_ps()
+        assert period_ps == 10000, "source clock and DDR4 100 MHz sim profile disagree"
+        cocotb.start_soon(Clock(dut.clk, period_ps, units="ps").start())
         await tick(dut, 10)
         observer.assert_health(monitor, min_samples=9)
+        internal.assert_alive(internal_task)
         assert not int(dut.user_rst.value), "simulation reset did not release"
         assert not int(dut.init_done.value), "DDR must be explicitly initialized"
         assert not int(dut.init_error.value), "unexpected initial DDR error"
@@ -192,11 +201,32 @@ async def ddr4_wishbone_init_axi_readwrite(dut):
         assert rd.resp == AxiResp.OKAY and rd.data == expected, \
             f"DDR4 byte-strobe guard mismatch: {rd.data.hex()}"
 
+        # Check reduced geometry did not silently alias high DDR addresses.
+        # The generated model has 32 MiB backed storage, not the 1 GiB
+        # architectural aperture. Exercise both ends and a bank-sized offset,
+        # then reread earlier locations AFTER later writes to detect aliasing.
+        geometry_vectors = (
+            (0x0000000, bytes((i * 13 + 0x31) & 255 for i in range(64)), 4),
+            (0x07fffc0, bytes((i * 19 + 0x57) & 255 for i in range(64)), 5),
+            (0x1ffffc0, bytes((i * 29 + 0x83) & 255 for i in range(64)), 6),
+        )
+        for address, payload, ident in geometry_vectors:
+            write_result = await with_timeout(master.write(address, payload, awid=ident), 80, "us")
+            assert write_result.resp == AxiResp.OKAY, "DDR geometry write response mismatch"
+        for address, payload, ident in geometry_vectors:
+            read_result = await with_timeout(master.read(address, len(payload), arid=ident), 80, "us")
+            assert read_result.resp == AxiResp.OKAY, "DDR geometry read response mismatch"
+            assert read_result.data == payload, (
+                f"DDR geometry alias/truncation at {address:#x}: "
+                f"{read_result.data.hex()} != {payload.hex()}")
+        dut._log.info("PASS DDR4 modeled 32MiB low/mid/high address alias guard")
+
         observer.assert_health(monitor)
         observer.next_phase("post_traffic")
         await tick(dut, 5)
         observer.assert_health(monitor)
         observer.assert_complete()
+        internal.assert_alive(internal_task)
         succeeded = True
         dut._log.info("PASS actual LiteDRAM DDR4 AXI integrity with continuous monitoring")
     except Exception as exc:
@@ -212,5 +242,9 @@ async def ddr4_wishbone_init_axi_readwrite(dut):
         # a partial trace/summary before the exception is reported to CI.
         if not monitor.done():
             monitor.kill()
+        if not internal_task.done():
+            internal_task.kill()
         observer.finish("pass" if succeeded else "fail",
+                        error=None if succeeded else repr(failure))
+        internal.finish("pass" if succeeded else "fail",
                         error=None if succeeded else repr(failure))

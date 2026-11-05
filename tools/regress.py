@@ -76,16 +76,31 @@ def load_config(path):
             report = test['report']
             required = {'scope','clock','reset','catalog'}
             if (test['engine'] != 'cocotb-verilator' or not isinstance(report, dict)
-                or 'axi' not in report or set(report) - {'axi','context'}
-                or ('context' in report and not isinstance(report['context'],str))
-                or not isinstance(report['axi'], dict)
-                or not required <= set(report['axi'])
-                or set(report['axi']) - required - {'max_events','actors'}
-                or ('actors' in report['axi'] and not isinstance(report['axi']['actors'],str))
-                or any(not isinstance(report['axi'][k],str) or not report['axi'][k] for k in required)
-                or type(report['axi'].get('max_events',500000)) is not int
-                or report['axi'].get('max_events',500000) <= 0):
-                raise ValueError(f'{name}: invalid AXI report configuration for cocotb-verilator')
+                or not ({'axi','protocols'} & set(report))
+                or set(report) - {'axi','protocols','context'}
+                or ('context' in report and not isinstance(report['context'],str))):
+                raise ValueError(f'{name}: invalid protocol report configuration for cocotb-verilator')
+            if 'axi' in report:
+                axi = report['axi']
+                if (not isinstance(axi, dict)
+                    or not required <= set(axi)
+                    or set(axi) - required - {'max_events','actors'}
+                    or ('actors' in axi and not isinstance(axi['actors'],str))
+                    or any(not isinstance(axi[k],str) or not axi[k] for k in required)
+                    or type(axi.get('max_events',500000)) is not int
+                    or axi.get('max_events',500000) <= 0):
+                    raise ValueError(f'{name}: invalid AXI report configuration for cocotb-verilator')
+            if 'protocols' in report:
+                from protocol_report import normalize_sources
+                p = report['protocols']
+                if (not isinstance(p,dict) or set(p)-{'sources','max_events'}
+                    or type(p.get('max_events',100000)) is not int
+                    or p.get('max_events',100000) <= 0):
+                    raise ValueError(f'{name}: invalid generic protocol report configuration')
+                try:
+                    normalize_sources(p.get('sources'))
+                except ValueError as exc:
+                    raise ValueError(f'{name}: invalid generic protocol report configuration: {exc}') from exc
     for name in config['suites']:
         expand(config, [name])
     if set(expand(config, ['full'])) != set(config['tests']):
@@ -366,16 +381,36 @@ def run_target(name, test, resolver, options):
     result = {'target': name, 'passed': passed, 'stage': options.stage,
               'elapsed_s': round(time.monotonic()-started, 3), 'results': results}
     if test.get('report') and options.stage in ('all','run'):
-        from axi_report import write_report
-        # This runs after failed/negative simulations too; JSONL is flushed
-        # during capture so a fatal simulator exit still leaves useful data.
-        summary = write_report(out,plan,result)
-        if passed and not test.get('expect_failure') and (not summary['capture_bound'] or summary['overflow'] or summary['issues'] or not summary['transactions']):
+        # The existing AXI report remains byte-for-byte compatible.
+        # Other upstream VIPs feed a separate protocol-neutral capture.
+        if 'axi' in test['report']:
+            from axi_report import write_report
+            summary = write_report(out,plan,result)
+            axi_bad = (not summary['capture_bound'] or summary['overflow']
+                       or summary['issues'] or not summary['transactions'])
+        else:
+            from protocol_report import build
+            protocol_only = build(out, plan)
+            summary = {'transactions':len(protocol_only['records']),
+                       'capture_bound':protocol_only['capture_complete'],
+                       'overflow':False,'issues':len(protocol_only['issues'])}
+            axi_bad = False
+            if (out/'protocols.html').exists():
+                shutil.copyfile(out/'protocols.html',out/'report.html')
+        if 'protocols' in test['report']:
+            protocol_data = json.loads((out/'protocol-transactions.json').read_text())
+            protocol_bad = (not protocol_data['capture_complete']
+                            or not any(row['protocol']!='axi4' for row in protocol_data['records']))
+        else:
+            protocol_bad = False
+        if passed and not test.get('expect_failure') and (axi_bad or protocol_bad):
             passed = result['passed'] = False
-            results.append({'name':'AXI capture','passed':False,'reason':'missing, empty or inconsistent AXI capture'})
-            print(f'FAIL {name}/AXI capture: missing, empty or inconsistent capture',flush=True)
-            write_report(out,plan,result)
-        print(f'REPORT {name}: {summary["transactions"]} AXI observations; {out.relative_to(ROOT)}/report.html',flush=True)
+            results.append({'name':'protocol capture','passed':False,
+                            'reason':'missing, incomplete or inconsistent protocol evidence'})
+            print(f'FAIL {name}/protocol capture: missing, incomplete or inconsistent evidence',flush=True)
+            if 'axi' in test['report']:
+                write_report(out,plan,result)
+        print(f'REPORT {name}: {summary["transactions"]} observations; {out.relative_to(ROOT)}/report.html',flush=True)
     (out/'result.json').write_text(json.dumps(result, indent=2) + '\n')
     return passed
 
