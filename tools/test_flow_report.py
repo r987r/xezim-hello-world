@@ -13,16 +13,26 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
-from dv.common.test_flow import PHASES, validate_event
+from dv.common.test_flow import PHASES, ORIGINS, validate_event
 
 
-def summarize(events, expected):
+def summarize(events, expected, required_origins=None):
     if type(expected) is not dict or set(expected) != set(PHASES):
         raise ValueError("flow config must cover init, run, check")
     for phase in PHASES:
         if not isinstance(expected[phase], list) or not expected[phase] or len(set(expected[phase])) != len(expected[phase]):
             raise ValueError(f"{phase}: empty/duplicate required steps")
+    origins = required_origins or {}
+    if not isinstance(origins, dict) or set(origins) - set(PHASES):
+        raise ValueError("invalid required step origin phases")
+    for phase, mapping in origins.items():
+        if not isinstance(mapping, dict):
+            raise ValueError("required origins must be maps of actor.step to origin")
+        for key, origin in mapping.items():
+            if key not in expected[phase] or origin not in ORIGINS:
+                raise ValueError("invalid required step origin contract")
     active, rows, issues, previous_seq, previous_ps = {}, [], [], -1, -1
+    previous_phase_rank = -1
     allowed = set()
     for phase, step_ids in expected.items():
         for item in step_ids:
@@ -33,6 +43,13 @@ def summarize(events, expected):
     for event in events:
         validate_event(event)
         key = (event["phase"], event["actor"]+"."+event["step"])
+        phase_rank = PHASES.index(event["phase"])
+        if phase_rank < previous_phase_rank:
+            issues.append(f"phase order regressed at {key}: INIT/RUN/CHECK must be monotonic")
+        previous_phase_rank = max(previous_phase_rank, phase_rank)
+        expected_origin = origins.get(event["phase"], {}).get(key[1])
+        if expected_origin and event["origin"] != expected_origin:
+            issues.append(f"origin mismatch for {key}: expected {expected_origin}")
         if event["seq"] != previous_seq+1 or event["time_ps"] < previous_ps:
             issues.append("missing/reordered sequence or non-monotonic timestamp")
         previous_seq, previous_ps = event["seq"], event["time_ps"]
@@ -46,6 +63,8 @@ def summarize(events, expected):
             if start is None:
                 issues.append(f"completion without start {key}")
             else:
+                if start["origin"] != event["origin"]:
+                    issues.append(f"start/completion origin mismatch {key}")
                 rows.append({**event, "start_ps":start["time_ps"],
                              "duration_ps":event["time_ps"]-start["time_ps"]})
             if event["status"] == "fail":
@@ -177,7 +196,7 @@ def write_report(directory, plan):
     for i,e in enumerate(events):
         e["seq"]=i
     try:
-        result = summarize(events, required)
+        result = summarize(events, required, plan["report"]["flow"].get("required_origins"))
     except (ValueError, TypeError, KeyError) as exc:
         result = {"schema_version":1, "rows":[], "issues":[f"invalid capture: {exc}"],
                   "passed":False, "phases":list(PHASES),"expected_steps":required, "totals":{}}
