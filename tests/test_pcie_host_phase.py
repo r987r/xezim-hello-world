@@ -37,6 +37,44 @@ class PcieHostPhaseTests(unittest.TestCase):
         self.assertLessEqual(len(code) * 4, pcie_chip.host_variant_config(self.cfg)["boot"]["flash_slot_stride"])
         self.assertEqual(fw["sram_bases"], [0x10000000, 0x11000000])
 
+    def test_minimal_real_dma_host_variant_is_one_chip(self):
+        # Existing pinned iDMA + real PCIe bridge are both enabled.
+        cfg=pcie_chip.host_variant_config(self.cfg)
+        flash=next(int(x["base"],0) for x in cfg["address_map"]["data"]
+                   if x["name"]=="boot.flash")
+        hook=flash+0x1000
+        manifest=json.loads((ROOT/"gen/supernoc/manifest.json").read_text())
+        fw=chip_bootgen.build(cfg,cpu0_run_hook=hook,pcie_host_phase=True)
+        opcodes="\\n".join(asm for _,asm in fw["images"]["compute0"])
+        self.assertIn("jalr ra, 0(a0)",opcodes)
+        self.assertIn("wait_host_init",opcodes)
+        self.assertIn("wait_host_run",opcodes)
+        with tempfile.TemporaryDirectory() as tmp:
+            path=Path(tmp)
+            result=full_chip_gen.emit(cfg,manifest,ROOT/"gen/noc/floonoc",path,
+                     image_prefix="gen/chip",cpu0_run_hook=hook,
+                     cpu_dma_mode=True,pcie_host_mode=True)
+            tb=(path/"full_chip_tb.sv").read_text()
+            rtl=(path/"soc_top.sv").read_text()
+            self.assertIn(".DmaEnable(1'b1)",tb)
+            self.assertIn("pcie_axi_master",rtl)
+            self.assertIn("gen_dma_compute0",rtl)
+            self.assertIn("m_pcie0_local_data_host_req = pcie_req",rtl)
+            self.assertIn("cpu0_run_hook",result)
+            self.assertIn("external_host",result["firmware"] if "firmware" in result else
+                          json.loads((path/"firmware.json").read_text()))
+
+    def test_host_and_firmware_have_distinct_bounded_dma_buffers(self):
+        host=(ROOT/"dv/pcie0/host_adapter.py").read_text()
+        firmware=(ROOT/"sw/dma/tests/cpu_dma_run.c").read_text()
+        self.assertIn("0x500",host)
+        self.assertIn("0x600",host)
+        self.assertIn("SOC_PCIE_SRAM + 0x500u",firmware)
+        self.assertIn("SOC_PCIE_SRAM + 0x600u",firmware)
+        self.assertIn("SOC_DDR_BASE + 0x800u",firmware)
+        self.assertIn("soc_dma_chain_build(&desc, across_pcie, 3",firmware)
+        self.assertIn("host_verify[i] !=",firmware)
+
     def test_host_contract_rejects_missing_peripheral(self):
         cfg = copy.deepcopy(self.cfg)
         cfg["subsystems"] = [s for s in cfg["subsystems"]
