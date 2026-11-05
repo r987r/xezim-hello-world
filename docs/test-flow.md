@@ -48,7 +48,7 @@ It is essential that:
 | Native C firmware (prepared reusable ABI) | `sw/common/test_flow.h`, `soc_flow_emit(volatile uint32_t *sink, ...)` | **only** after correlated accepted AXI write with OKAY response; optional `report.flow.firmware_mmio` codebook |
 | Ethernet/IP/other external actors | same Python step context; their VIP monitor reports independently through `dv/common/protocol_trace.py` | events are `stimulus`; real packets/completions require VIP/RTL evidence |
 
-Only the PCIe-host scenario opts into the strict step-flow gate in this PR.
+The PCIe-host and CPU C/iDMA scenarios opt into the strict step-flow gate in this PR.
 The generic API and cross-language adapters are implemented and unit-tested;
 **other existing tests have not all been instrumented**. Their existing
 capture/results remain unchanged. Add the `report.flow` contract to each
@@ -105,6 +105,32 @@ test owns phase order. `dv/pcie0/host_adapter.py` owns only host actions.
 The full-chip SV checker prints observed firmware start/pass steps.
 All stages are bound to the same regression YAML plan and output directory.
 
+### PCIe TLP traffic in the same explorer
+
+The opt-in `chip-pcie-host` run declares `pcie0.rx_req` and
+`pcie0.tx_cpl` in its existing `report.protocols.sources`. A passive
+accepted-beat observer at the real bridge interface reconstructs the
+upstream `PcieIfFrame` and invokes its `to_tlp()` method, which uses
+`cocotbext-pcie` for the actual PCIe header parsing. It must **not**
+instantiate a second `PcieIfSink` on the live bus: that class drives
+`READY` and would contend with the real bridge. The adapter never drives
+pins, never implements an independent TLP decoder and never changes the
+NoC or PCIe verification stimulus.
+
+The shared `dv/common/protocol_trace.py` reporter records accepted packet
+start/end timestamps, PCIe tag/requester, address/length/byte-enables,
+completion status, payload and matching request-to-completion delay.
+`tools/protocol_report.py` merges these with *existing* AXI monitor rows;
+`protocols.html` filters by protocol, monitor, time, status, and payload.
+`protocol-events.jsonl` and `protocol-transactions.json` accompany the
+existing AXI and DDR/memory reports. A green PCIe-host run requires accepted
+memory read/write TLPs, actual completions, matched outstanding tags, and
+closed, complete monitor streams. Reported TLP timings are bridge-port
+observations, **not** PCIe PHY/LTSSM or wire latency; the Root Complex and
+link remain modeled. PCIe config enumeration happens inside the upstream
+Root Complex/Endpoint model and is not falsely counted as bridge TLPs.
+
+
 The original CPU → PCIe0 SRAM DecodeError was a genuine missing destination
 from compute-local `global_out`. PR #53 now generates peripheral SRAM
 routes from the shared `compute_like` set and includes a negative guard.
@@ -112,7 +138,7 @@ routes from the shared `compute_like` set and includes a negative guard.
 ## Planned rollout / no false coverage
 
 Before claiming *all tests* have uniform step coverage, migrate:
-1. Existing BFM `chip-boot` and the CPU C/iDMA test to step contexts
+1. Existing BFM `chip-boot` and other CPU tests to step contexts
    while preserving their physical region allocator and telemetry checks.
 2. Standalone super-NoC, DDR, HBM and memory tests: one recorded start/pass/fail
    around every read/write/doorbell/check, plus actual monitor evidence.
