@@ -217,6 +217,80 @@ async def exercise_concurrent_axi_ids(master, dut, observer, monitor):
                   "128-byte independent readback and passive DFI capture")
 
 
+
+async def exercise_real_axi_response_backpressure(master, dut, observer, monitor):
+    """Hold real BREADY/RREADY low and check stable pin-level DDR responses.
+
+    This intentionally uses the existing pinned cocotbext-axi sink pause
+    API, not a new bus driver. Observing BVALID/RVALID while !READY is
+    required; merely toggling pause without seeing a real stall is a FAIL.
+    """
+    address = 0x5c000
+    ident = 9
+    payload = bytes((i * 19 + 0x27) & 0xff for i in range(64))
+
+    async def hold_until_valid(channel, cycles=1200):
+        ready = getattr(dut, f"user_port_axi_0_{channel}ready")
+        valid = getattr(dut, f"user_port_axi_0_{channel}valid")
+        for _ in range(cycles):
+            await tick(dut)
+            if int(valid.value) and not int(ready.value):
+                return
+        raise AssertionError(
+            f"DDR4 {channel.upper()} response never stalled with VALID && !READY")
+
+    # AW/W can legally arrive in either order; the passive AXI correlator
+    # reconciles accepted W beats and enforces AWLEN/WLAST/BID.
+    master.write_if.b_channel.pause = True
+    write_task = cocotb.start_soon(master.write(address, payload, awid=ident))
+    try:
+        await hold_until_valid("b")
+        stable = tuple(int(getattr(dut, f"user_port_axi_0_b{name}").value)
+                       for name in ("id", "resp"))
+        for _ in range(20):
+            await tick(dut)
+            assert int(dut.user_port_axi_0_bvalid.value), (
+                "LiteDRAM BVALID dropped under BREADY backpressure")
+            assert not int(dut.user_port_axi_0_bready.value), (
+                "DDR4 BREADY unexpectedly asserted during forced stall")
+            assert stable == tuple(int(getattr(dut, f"user_port_axi_0_b{name}").value)
+                                   for name in ("id", "resp")), (
+                "LiteDRAM BID/BRESP changed under stall")
+        assert stable == (ident, int(AxiResp.OKAY)), (
+            f"DDR4 stalled write response differs: {stable}")
+    finally:
+        master.write_if.b_channel.pause = False
+    write = await with_timeout(write_task, 120, "us")
+    assert write.resp == AxiResp.OKAY, "stalled LiteDRAM B did not complete"
+
+    master.read_if.r_channel.pause = True
+    read_task = cocotb.start_soon(master.read(address, len(payload), arid=ident))
+    try:
+        await hold_until_valid("r")
+        stable = tuple(int(getattr(dut, f"user_port_axi_0_r{name}").value)
+                       for name in ("id", "data", "resp", "last"))
+        for _ in range(20):
+            await tick(dut)
+            assert int(dut.user_port_axi_0_rvalid.value), (
+                "LiteDRAM RVALID dropped under RREADY backpressure")
+            assert not int(dut.user_port_axi_0_rready.value), (
+                "DDR4 RREADY unexpectedly asserted during forced stall")
+            assert stable == tuple(int(getattr(dut, f"user_port_axi_0_r{name}").value)
+                                   for name in ("id", "data", "resp", "last")), (
+                "LiteDRAM RID/RDATA/RRESP/RLAST changed under stall")
+        assert stable[0] == ident and stable[2] == int(AxiResp.OKAY), (
+            f"DDR4 stalled read ID/response mismatch: {stable}")
+    finally:
+        master.read_if.r_channel.pause = False
+    read = await with_timeout(read_task, 120, "us")
+    assert read.resp == AxiResp.OKAY and read.data == payload, (
+        "LiteDRAM R after forced backpressure did not match golden data")
+    observer.assert_health(monitor)
+    dut._log.info("PASS real LiteDRAM B/R backpressure: actual VALID && !READY, "
+                  "20 stable cycles per response, original ID/data, "
+                  "complete B/R and independent passive AXI/DFI capture")
+
+
 @cocotb.test(timeout_time=3, timeout_unit="ms")
 async def ddr4_wishbone_init_axi_readwrite(dut):
     """One always-active passive observer from before clock start to teardown."""
@@ -318,6 +392,7 @@ async def ddr4_wishbone_init_axi_readwrite(dut):
 
         await exercise_controller_stress(master, dut, observer, monitor)
         await exercise_concurrent_axi_ids(master, dut, observer, monitor)
+        await exercise_real_axi_response_backpressure(master, dut, observer, monitor)
         observer.assert_health(monitor)
         observer.next_phase("post_traffic")
         await tick(dut, 5)
