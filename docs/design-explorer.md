@@ -151,3 +151,32 @@ list fingerprint, tool invocation and evidence provenance. If the executable is
 missing, compilation fails or JSON is missing/invalid, there is no successful
 output. This does **not** make the external toolchain installed or validated
 by this PR; cross-profile functional RTL tests remain separate.
+
+## Compiler-parsed RTL composition (PR #48)
+
+The 2D architecture explorer now additionally consumes a source-hash-bound
+`slang --parse-only --cst-json --cst-json-mode simple-tokens` report for
+`gen/chip/soc_top.sv` and `gen/supernoc/soc_noc.sv`. It reads actual
+SystemVerilog module instantiation syntax and **named port binding expressions**,
+and validates that all eight expected FlooGen NoC modules have real
+instantiations. Data and configuration NoCs are separate module instances.
+
+The raw CST is not checked in. The normal GitHub Pages CI downloads the same
+SHA-verified slang binary as the existing RTL lint workflow, runs the parser,
+checks the source fingerprints, and publishes a compact
+`data/rtl-architecture.json`. The expandable **Compiler-parsed RTL hierarchy**
+section exposes module names, instance names and port connection expressions.
+
+Architectural subsystem grouping/placement continues to reuse generated SoC
+metadata. It is not sufficient proof of a simulated or elaborated design:
+syntax-only CST includes inactive generate branches. True active instance
+selection, driver tracing, and bit-level cross-hierarchy connection checks
+remain follow-up work with the pinned slang elaborator/slang-netlist. The
+viewer must never label a CST match as verified path reachability.
+
+You can regenerate independently with:
+
+~~~sh
+python3 tools/rtl_instance_parser.py --slang .tools/bin/slang --output .tools/rtl-architecture.json
+python3 -m unittest tests.test_rtl_instance_parser -v
+~~~
