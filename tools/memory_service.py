@@ -81,6 +81,62 @@ class HostSparseMemory:
         raise MemoryAccessError("host sparse memory needs an attached AXI frontdoor")
 
 
+class CombinedMemoryProvider:
+    """Compose an existing active BFM and a host/RTL backdoor for same bytes.
+
+    Never silently validate a backdoor. First use a quiescent sacrificial
+    scratch range, with genuine frontdoor transfers and independent backdoor
+    comparison in BOTH directions. Not for live CPU ports with active BFMs.
+    """
+    def __init__(self, frontdoor, backdoor):
+        self.frontdoor = frontdoor
+        self.backdoor = backdoor
+        self.validated_backdoor = False
+        self.frontdoor_available = bool(frontdoor.frontdoor_available)
+
+    async def frontdoor_read(self, phys, length):
+        return await self.frontdoor.frontdoor_read(phys, length)
+
+    async def frontdoor_write(self, phys, data):
+        await self.frontdoor.frontdoor_write(phys, data)
+
+    async def backdoor_read(self, phys, length):
+        return await self.backdoor.backdoor_read(phys, length)
+
+    async def backdoor_write(self, phys, data):
+        await self.backdoor.backdoor_write(phys, data)
+
+    async def validate_backdoor(self, scratch_phys, *, consumers_quiesced,
+                                width=16):
+        if not consumers_quiesced:
+            raise MemoryAccessError("backdoor validation requires quiescent scratch")
+        if not self.frontdoor_available:
+            raise MemoryAccessError("backdoor proof requires real AXI frontdoor")
+        if not isinstance(width, int) or not 1 <= width <= 4096:
+            raise ValueError("invalid proof width")
+        # Preserve bytes to avoid corrupting another test's data. The caller
+        # owns and isolates scratch_phys; validation makes no allocation.
+        previous = await self.frontdoor_read(scratch_phys, width)
+        first = Pattern("address_xor", seed=0x5a33).chunk(scratch_phys, width)
+        second = Pattern("counter8", seed=0x7c12).chunk(scratch_phys, width)
+        self.validated_backdoor = False
+        try:
+            await self.frontdoor_write(scratch_phys, first)
+            if await self.backdoor_read(scratch_phys, width) != first:
+                raise MemoryMismatch("frontdoor write != backdoor read")
+            await self.backdoor_write(scratch_phys, second)
+            if await self.frontdoor_read(scratch_phys, width) != second:
+                raise MemoryMismatch("backdoor write != frontdoor read")
+            self.validated_backdoor = True
+        finally:
+            # Restore via the real frontdoor, then confirm backdoor view
+            # remains coherent. Failed restoration never validates access.
+            await self.frontdoor_write(scratch_phys, previous)
+            if await self.backdoor_read(scratch_phys, width) != previous:
+                self.validated_backdoor = False
+                raise MemoryMismatch("backdoor validation scratch restoration failed")
+
+
 class AxiFrontdoor:
     """Use an existing, explicitly authorized AXI BFM; never create one.
 
