@@ -29,6 +29,21 @@ class ExplorerTests(unittest.TestCase):
         self.assertNotIn("position", graph["nodes"][0])
         self.assertTrue(all("position" not in node for node in graph["nodes"]))
 
+    def test_current_rtl_memory_backend_and_real_dma_actors_are_profile_accurate(self):
+        graph = design_explorer.catalog(ROOT)
+        nodes = {n["id"]: n for n in graph["nodes"]}
+        ddr = nodes["memory0.ddr0"]["info"]["memory_integration"]
+        hbm = nodes["memory0.hbm0"]["info"]["memory_integration"]
+        self.assertEqual(ddr["soc_backend"], "axi_ram")
+        self.assertEqual(hbm["soc_backend"], "axi_ram")
+        self.assertEqual(ddr["integration"], "behavioral_axi_ram")
+        self.assertNotEqual(ddr["controller_profile"], None)
+        dma = "compute0_local_data.dma"
+        self.assertEqual(graph["profiles"]["chip-dma"]["actors"][dma]["kind"], "rtl_dma")
+        self.assertEqual(graph["profiles"]["chip-boot"]["actors"][dma]["kind"], "verification_bfm")
+        self.assertEqual(graph["profiles"]["chip-cpu-dma"]["actor_catalog_status"],
+                         "runtime_generated_not_available")
+
     def test_new_subsystem_is_generic_without_parser_changes(self):
         graph = design_explorer.catalog(ROOT)
         source = graph["nodes"][0]
