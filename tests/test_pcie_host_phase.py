@@ -60,7 +60,7 @@ class PcieHostPhaseTests(unittest.TestCase):
             self.assertIn("pcie_axi_master",rtl)
             self.assertIn("gen_dma_compute0",rtl)
             self.assertIn("m_pcie0_local_data_host_req = pcie_req",rtl)
-            self.assertIn("cpu0_run_hook",result)
+            self.assertIn("cpu0_run_hook",json.loads((path/"firmware.json").read_text()))
             self.assertIn("external_host",json.loads((path/"firmware.json").read_text()))
 
     def test_host_and_firmware_have_distinct_bounded_dma_buffers(self):
