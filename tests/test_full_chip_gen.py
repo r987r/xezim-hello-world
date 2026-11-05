@@ -42,7 +42,7 @@ class FullChipTests(unittest.TestCase):
             if region['name']=='compute1.sram': region['base']='0x14000000'
         with tempfile.TemporaryDirectory() as tmp:
             _, meta = chip_bootgen.emit(self.cfg, Path(tmp))
-            self.assertEqual(meta['mailbox'],0x12000400)
+            self.assertEqual(meta['mailbox'],0x13000400)
             self.assertEqual([c['sram_base'] for c in meta['cores']],[0x13000000,0x14000000])
             self.assertIn('none:',meta['sram_initialization'])
 

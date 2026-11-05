@@ -26,7 +26,7 @@ class RealNetworkDiagrams(unittest.TestCase):
             self.assertEqual(n["entry"]["routers"], n["width"] * n["height"])
             self.assertEqual(set(n["endpoints"]), set(n["positions"]), name)
             self.assertEqual(len(n["positions"]), n["entry"]["endpoint_count"])
-        self.assertEqual(self.networks["global_data"]["entry"]["routers"], 6)
+        self.assertEqual(self.networks["global_data"]["entry"]["routers"], 9)
         self.assertEqual(self.networks["global_data"]["endpoints"]["compute1_sram"]["addr_range"]["base"], 0x11000000)
 
     def test_physical_links_are_not_confused_with_planned_soc_wiring(self):
