@@ -23,6 +23,10 @@ subsystem_types:
     local_data_fabric: memory_data
     local_config_fabric: local_config
     data_ingress_ports: 2
+  peripheral:
+    local_data_fabric: local_data
+    local_config_fabric: local_config
+    sram_count: 1
 
 subsystems:
   - name: compute0
@@ -32,6 +36,8 @@ subsystems:
     type: compute
     cpu: {ip: serv, bus: wishbone, adapter: serv_wishbone}
   - {name: memory0, type: memory}
+  - {name: pcie0, type: peripheral, ip: verilog_pcie,
+     data_initiator: host, config_initiator: management, clock_domain: soc}
 
 # One primary CPU boots from immutable ROM, copies both firmware images from
 # a modeled read-only flash window into uninitialized local SRAM, then releases
@@ -70,7 +76,7 @@ networks:
       - {name: memory_ingress1, target: memory0.ddr0}
   global_config:
     protocol: axi4_lite
-    reachable_subsystems: [compute0, compute1, memory0]
+    reachable_subsystems: [compute0, compute1, memory0, pcie0]
 
 # HBM and DDR use different controller profiles, but the same AXI4 port
 # contract. AXI RAM is the explicitly *behavioral* backing model used for
@@ -91,6 +97,7 @@ address_map:
     - {name: boot.flash, base: '0x20000000', size: '0x00010000'}
     - {name: compute0.sram, base: '0x10000000', size: '0x00100000'}
     - {name: compute1.sram, base: '0x11000000', size: '0x00100000'}
+    - {name: pcie0.sram, base: '0x12000000', size: '0x00100000'}
     - {name: memory0.hbm0, base: '0x100000000', size: '0x40000000'}
     - {name: memory0.ddr0, base: '0x140000000', size: '0x40000000'}
   config:
@@ -99,6 +106,8 @@ address_map:
     - {name: boot.reset_ctrl, base: '0x40020000', size: '0x1000'}
     # Reserved controller CSR aperture; behavioral controller RTL is not integrated.
     - {name: memory0.ctrl, base: '0x40030000', size: '0x1000'}
+    # PCIe CSR responder is reserved pending bridge integration.
+    - {name: pcie0.ctrl, base: '0x40040000', size: '0x10000'}
 
 verification:
   full_chip_boot:

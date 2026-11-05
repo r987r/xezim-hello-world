@@ -13,6 +13,7 @@ import sys
 
 import yaml
 import bootgen
+from subsystem_fabric import peripherals
 from noc_backends import BACKENDS, BackendError, get_backend, emit_memory_crossbar_parameters
 from fabric_config import (FabricConfigError, memory_parameters, memory_connectivity,
                            parameter_packed_literal)
@@ -80,6 +81,11 @@ def validate(doc):
     for sub in instances:
         if sub["type"] not in types:
             raise ConfigError(f"unknown subsystem type {sub['type']}")
+    # Each additional type must have a checked plugin contract; no implicit RTL.
+    try:
+        io = peripherals(doc)
+    except (ValueError, TypeError, KeyError) as exc:
+        raise ConfigError(f"invalid peripheral fabric contract: {exc}") from exc
     compute = [s for s in instances if s["type"] == "compute"]
     valid_cpus = {"picorv32": ("axi4_lite", "picorv32_axi"),
                   "serv": ("wishbone", "serv_wishbone")}
@@ -186,7 +192,7 @@ def validate(doc):
             "address_bits": aw, "data_bits": dw, "id_bits": iw,
             "ingress": ingress, "targets": targets,
             "backing_addr_bits": mem_bits, "burst_beats": beats,
-            "subsystems": instances, "cpu_instances": cpu_instances,
+            "subsystems": instances, "peripheral_instances": io, "cpu_instances": cpu_instances,
             "common_dma": types["compute"]["dma"],
             "global_data_outputs": outs, "fabrics": fabrics,
             "data_regions": [{"name": n,"base": b,"size": s} for b,s,n in data_ranges],
