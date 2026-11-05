@@ -21,12 +21,12 @@ sys.path.insert(0,str(UPSTREAM_TB))
 from pcie_if import PcieIfDevice, PcieIfRxBus, PcieIfTxBus
 
 
-async def poll_bar(bar, offset, value):
-    for _ in range(5000):
+async def poll_bar(bar, offset, value, *, attempts=5000, interval_ns=20):
+    for _ in range(attempts):
         current=int.from_bytes(await bar.read(offset,4),"little")
         if current==value:
             return
-        await Timer(20,units="ns")
+        await Timer(interval_ns,units="ns")
     raise AssertionError(f"PCIe host never observed firmware handshake {offset:#x}={value:#x}")
 
 
@@ -92,7 +92,13 @@ class PcieHostParticipant:
             trace_phase("PCIe host INIT acknowledged through real BAR")
         elif stage=="run":
             with self.flow.step(stage,"host0","wait_run_enable",origin="observed"):
-                await with_timeout(poll_bar(self.bar,0x808,self.magic["run_enable"]),1000,"us")
+                # Real CPU C/iDMA takes ~3.2 ms before the extra PCIe
+                # exchange; poll sparingly to avoid creating bus congestion.
+                await with_timeout(poll_bar(
+                    self.bar,0x808,self.magic["run_enable"],
+                    attempts=9000 if self.dma_exchange else 5000,
+                    interval_ns=1000 if self.dma_exchange else 20),
+                    9000 if self.dma_exchange else 1000,"us")
             self.before_write=int(self.dut.pcie_sram_write_count.value)
             self.before_read=int(self.dut.pcie_sram_read_count.value)
             with self.flow.step(stage,"host0","bar_roundtrip",origin="checker",details={"vectors":4}):
