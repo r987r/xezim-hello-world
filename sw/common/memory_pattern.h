@@ -1,6 +1,7 @@
 #ifndef SOC_MEMORY_PATTERN_H_
 #define SOC_MEMORY_PATTERN_H_
 #include <stddef.h>
+#include <stdbool.h>
 #include <stdint.h>
 
 /* Same physical-address recipe as tools/memory_service.py::Pattern.
@@ -13,6 +14,7 @@ typedef enum {
     SOC_PATTERN_ADDRESS_XOR = 3
 } soc_pattern_kind_t;
 
+bool soc_mem_pattern_valid(soc_pattern_kind_t kind);
 uint8_t soc_mem_expected_byte(uint64_t phys_addr, uint32_t seed,
                               soc_pattern_kind_t kind);
 /* Writes exactly n bytes to mapped CPU RAM; no implicit full-image preload. */
