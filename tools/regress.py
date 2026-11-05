@@ -438,7 +438,8 @@ def run_target(name, test, resolver, options):
             print('\n'.join(text.splitlines()[-30:]), flush=True)
     passed = all(r['passed'] for r in results)
     result = {'target': name, 'passed': passed, 'stage': options.stage,
-              'elapsed_s': round(time.monotonic()-started, 3), 'results': results}
+              'elapsed_s': round(time.monotonic()-started, 3), 'results': results,
+              'test_flow': {'status':'unmeasured','steps':0,'issues':0}}
     if test.get('report') and options.stage in ('all','run'):
         # The existing AXI report remains byte-for-byte compatible.
         # Other upstream VIPs feed a separate protocol-neutral capture.
@@ -472,7 +473,8 @@ def run_target(name, test, resolver, options):
         if 'flow' in test['report']:
             from test_flow_report import write_report as write_flow
             flow_result = write_flow(out, plan)
-            result['test_flow'] = {'passed':flow_result['passed'],
+            result['test_flow'] = {'status':'complete' if flow_result['passed'] else 'incomplete',
+                                   'passed':flow_result['passed'],
                                    'steps':len(flow_result['rows']),
                                    'issues':len(flow_result['issues'])}
             if not flow_result['passed']:

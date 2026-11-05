@@ -228,6 +228,12 @@ def write_report(directory, plan, result):
     # Escape '<' even inside JSON strings: transaction text must never close
     # the embedded script element. All table/details text uses textContent.
     render_report(payload,directory/'report.html')
+    # Explicitly label legacy tests without complete step instrumentation.
+    if 'flow' not in plan['report']:
+        index = directory/'report.html'
+        current = index.read_text()
+        index.write_text(current.replace('<main>',
+            '<main><p>INIT/RUN/CHECK step coverage: UNMEASURED (not instrumented)</p>',1))
     # The existing AXI correlator remains the sole owner of AXI semantics.
     # Export its completed observations through the protocol-neutral view.
     import protocol_report
