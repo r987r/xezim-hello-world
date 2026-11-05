@@ -51,8 +51,8 @@ class PcieHostPhaseTests(unittest.TestCase):
         win["base"] = "0x13000000"
         fw = chip_bootgen.build(pcie_chip.host_variant_config(cfg), pcie_host_phase=True)
         cpu0 = "\n".join(asm for _, asm in fw["images"]["compute0"])
-        self.assertIn("0x13000", cpu0)
-        self.assertNotIn("0x12000", cpu0)
+        self.assertIn("lui x12, 0x13001", cpu0)
+        self.assertNotIn("lui x12, 0x12001", cpu0)
 
     def test_generic_generator_keeps_explicit_reserved_peripheral_control(self):
         manifest = json.loads((ROOT/"gen/supernoc/manifest.json").read_text())

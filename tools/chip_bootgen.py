@@ -201,7 +201,8 @@ def build(cfg, *, cpu0_run_hook=None, pcie_host_phase=False):
     rom.add(rv._jalr(0, 5), 'jalr zero, 0(x5)')
     return {'cores': cores, 'images': images, 'rom': rom.finish(), 'mailbox': mailbox,
             'done_offset': done_offset, 'stride': stride, 'addresses': addresses,
-            'sram_bases': [data[c['name']+'.sram'] for c in cores]}
+            'sram_bases': [data[c['name']+'.sram'] for c in cores],
+            **({'pcie_host_mailbox': host_base} if pcie_host_phase else {})}
 
 
 def emit(cfg, out: Path, *, cpu0_run_hook=None, pcie_host_phase=False):
@@ -237,7 +238,7 @@ def emit(cfg, out: Path, *, cpu0_run_hook=None, pcie_host_phase=False):
     if pcie_host_phase:
         manifest['external_host'] = {
             'type': 'pcie_root_complex_model', 'coordinator': cfg['boot']['primary'],
-            'mailbox_base': host_base,
+            'mailbox_base': fw['pcie_host_mailbox'],
             'roles': ['enumerate', 'init_ack', 'run_data', 'check_ack'],
             'magic': {'device_init_ready': 0xc0011001, 'host_init_ack': 0xc0011002,
                       'run_enable': 0xc0012001, 'host_run_ack': 0xc0012002,
