@@ -31,7 +31,7 @@ from protocol_report import render as render_protocol_report
 ROOT=Path(__file__).resolve().parents[1]
 FILES={'result.json','plan.json','sources.f','simulation.log','build.log','results.xml',
        'axi-transactions.json','axi-events.jsonl',
-       'protocol-transactions.json','protocol-events.jsonl'}
+       'protocol-transactions.json','protocol-events.jsonl','memory-operations.json'}
 
 
 def dump(path,data):
@@ -176,8 +176,7 @@ def verified_pr_tree_equivalent(client, run, tested_sha, site_sha, cache=None):
 # All unlisted files remain fingerprinted (safe default).
 FABRIC_EXCLUDED_PREFIXES = (
     'docs/', 'tests/', '.github/workflows/', 'tools/templates/site_',
-    # Generated diagrams contain visual layouts/labels, not simulator RTL.
-    # gen/noc and gen/supernoc remain fully fingerprinted below.
+    # Static schematic assets are not compiled into RTL or testbench executables.
     'gen/diagrams/',
     # Staged DDR4 generation/test *not* in the active Bender NoC or chip
     # simulation source lists. Future integration changes the included
@@ -188,15 +187,12 @@ FABRIC_EXCLUDED_FILES = {
     'README.md', 'AGENTS.md', 'tools/publish_site.py',
     'tools/fabric_report.py', 'tools/templates/site.html',
     'tools/templates/run_report.html',
-    # Syntax-only architecture inspection is presentation evidence and is
-    # never imported by RTL generation, Bender or the simulator filelists.
-    # Adding the viewer in #33 must not invalidate previously measured AXI
-    # timing for an identical RTL/DV execution input tree.
-    'tools/rtl_instance_parser.py',
-    'tools/design_explorer.py', 'tools/signal_inventory.py',
-    'tools/signal_paths.py', 'tools/design_elaborate.py',
-    'tools/design_netlist.py', 'tools/noc_diagrams.py',
-    'tools/diagram_svg.py', 'tools/diagram_gen.py',
+    # Read-only architecture extraction and diagram rendering have no
+    # simulator or AXI monitor runtime side effects.
+    'tools/rtl_instance_parser.py', 'tools/design_explorer.py',
+    'tools/signal_inventory.py', 'tools/signal_paths.py',
+    'tools/design_elaborate.py', 'tools/design_netlist.py',
+    'tools/noc_diagrams.py', 'tools/diagram_svg.py', 'tools/diagram_gen.py',
 }
 # CI execution jobs (tool versions and invocation) must also be identical.
 # Trigger/scheduling-only edits do not alter simulated timing and are ignored.
@@ -205,6 +201,7 @@ FABRIC_REQUIRED_INPUTS = frozenset({
     'config/soc.yaml', 'config/interface_contracts.yaml',
     'config/regression.yaml', 'config/ip.lock.yaml',
     'dv/supernoc/test_supernoc.py', 'dv/common/axi_trace.py',
+    'tools/memory_service.py', 'tools/memory_report.py',
     'tools/supernoc_gen.py', 'tools/floonoc_gen.py',
     'tools/axi_report.py', 'tools/regress.py', 'tools/sim_cocotb.py',
     'gen/supernoc/soc_noc.sv', 'gen/supernoc/axi_monitors.json',

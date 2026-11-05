@@ -14,6 +14,9 @@ on:
       - 'tools/regress.py'
       - 'tools/sim_cocotb.py'
       - 'tools/axi_report.py'
+      - 'tools/memory_service.py'
+      - 'tools/memory_report.py'
+      - 'tools/memory_plan.py'
       # Refresh RTL traffic evidence when its fabric reporting contract changes.
       - 'tools/fabric_report.py'
       - 'tools/templates/run_report.html'
@@ -77,6 +80,7 @@ jobs:
           path: |
             .tools/regression/supernoc*/report.html
             .tools/regression/supernoc*/axi-*.json*
+            .tools/regression/supernoc*/memory-operations.json
           include-hidden-files: true
           if-no-files-found: warn
       - name: Download the checksum-verified pinned Xezim release

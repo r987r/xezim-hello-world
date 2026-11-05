@@ -1,0 +1,49 @@
+name: Shared memory INIT/CHECK and benchmarks
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'tools/memory_service.py'
+      - 'tools/memory_benchmark.py'
+      - 'tools/memory_plan.py'
+      - 'sw/common/memory_pattern.*'
+      - 'tests/test_memory_service.py'
+      - 'tests/test_memory_pattern_c.py'
+      - 'tests/test_memory_benchmark.py'
+      - 'tests/test_memory_report.py'
+      - 'tools/memory_report.py'
+      - 'tools/axi_report.py'
+      - '.github/workflows/memory-service.yml'
+      - 'Makefile'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: memory-service-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  memory-contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install small Python test dependencies
+        run: python3 -m pip install 'PyYAML==6.0.3'
+      - name: Verify unified memory service and C/Python pattern ABI
+        run: make dv-memory-service
+      - name: Record synthetic benchmark contract (NOT RTL speedup)
+        run: make bench-memory
+      - name: Retain transparent synthetic benchmark evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: synthetic-memory-service-benchmark
+          path: .tools/benchmarks/memory.json
+          include-hidden-files: true
+          if-no-files-found: error

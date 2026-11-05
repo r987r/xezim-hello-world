@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import hashlib
+from tools.memory_service import Pattern
 import json
 from pathlib import Path
 import struct
@@ -43,10 +44,6 @@ def _region(cfg, name):
     if len(matches) != 1:
         raise ValueError(f"unknown/ambiguous data region: {name}")
     return int(matches[0]["base"], 0), int(matches[0]["size"], 0)
-
-
-def _pattern(index, length):
-    return bytes((0x35 + 29*index + 7*i) & 255 for i in range(length))
 
 
 def build_dma_vector(cfg, *, subsystem="compute0", destination="memory0.ddr0",
@@ -90,7 +87,8 @@ def build_dma_vector(cfg, *, subsystem="compute0", destination="memory0.ddr0",
         flags = FLAGS_COPY | (FLAGS_IRQ if irq_last and i == count-1 else 0)
         image[desc_offset+i*DESC_BYTES:desc_offset+(i+1)*DESC_BYTES] = DESC.pack(
             length, flags, nxt, src, dst)
-        payload = _pattern(i, length)
+        payload = Pattern("address_xor", seed=0x35 + 29 * i).chunk(
+            source + i * length, length)
         image[payload_offset+i*length:payload_offset+(i+1)*length] = payload
         copies.append({
             "descriptor": head + i*DESC_BYTES, "src": src, "dst": dst,

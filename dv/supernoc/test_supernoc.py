@@ -2,15 +2,21 @@
 import itertools
 import json
 import os
+import resource
 from pathlib import Path
 
 import cocotb
 from cocotb.clock import Clock
 from cocotb.triggers import RisingEdge, Timer, with_timeout
+from cocotb.utils import get_sim_time
 from cocotbext.axi import (
     AddressSpace, AxiBus, AxiMaster, AxiResp, AxiSlave, SparseMemoryRegion,
 )
 from dv.common.axi_trace import attach_observers, expect_axi_response, trace_phase
+from tools.memory_plan import configured_regions, VirtualRegion
+from tools.memory_service import (
+    MemoryService, Pattern, AxiFrontdoor, HostSparseMemory, CombinedMemoryProvider,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 CONTRACT = json.loads((ROOT / "gen/supernoc/manifest.json").read_text())
@@ -187,6 +193,76 @@ async def routed_data_and_config_all_local_global_nocs(dut):
             finally:
                 sink.write_if.target = sink.read_if.target = memory[name]
     dut._log.info("PASS downstream errors: %d routed B/R SLVERR pairs", errors)
+
+    # Reuse the SAME upstream BFM and sparse backing as routed NoC traffic.
+    # This is the first actual RTL validation of strict/fast/hybrid providers,
+    # not a second testbench or a CPU cold-SRAM preload. Active AXI master
+    # ownership is already established by setup(); monitors remain passive.
+    trace_phase("Memory INIT/CHECK: reciprocal AXI/backdoor proof")
+    # Select from configured modeled regions and actual generated route contract.
+    # Never assume a compute0 master, HBM first or 1-GiB backing capacity.
+    import yaml
+    cfg = yaml.safe_load((ROOT/"config/soc.yaml").read_text())
+    models = configured_regions(cfg)
+    target_names = {target["name"] for target in cfg["memory_targets"]}
+    routes = []
+    for physical in models.values():
+        if physical.name not in target_names or physical.capacity < 0x5000:
+            continue
+        offset = ((max(0x4000, physical.capacity // 2) + 63) // 64) * 64
+        if offset + 512 > physical.capacity:
+            continue
+        address = physical.base + offset
+        for desc in CONTRACT["masters"]:
+            if desc["plane"] != "data":
+                continue
+            if any(w["access"] == "read_write" and
+                   w["base"] <= address and address+512 <= w["base"]+w["size"]
+                   for w in desc["regions"]):
+                routes.append((physical.name, physical, desc, address))
+    assert routes, "no mapped modeled target with independent memory test scratch"
+    region_name, physical, desc, address = sorted(
+        routes, key=lambda x: (x[0], x[2]["name"]))[0]
+    target = expected_sink(desc, address, 512)
+    provider = CombinedMemoryProvider(
+        AxiFrontdoor(masters[desc["name"]]),
+        HostSparseMemory(memory[target], physical_base=0))
+    await bounded(provider.validate_backdoor(
+        address, consumers_quiesced=True), "memory provider reciprocal proof")
+    rss_at_start = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    region = VirtualRegion(region_name+".test", physical.kind,
+                           address, 512, False)
+    service = MemoryService({region.name: region}, chunk_bytes=64,
+                            cycle_counter=lambda: int(get_sim_time(units="ps")) // 10000)
+    service.register(region.name, provider)
+    allocation = service.allocate(region.name, 256, 64,
+                                  owner="supernoc_verification", phase="run")
+    recipe = Pattern("address_xor", 0x5a71)
+    for policy in ("strict", "fast", "hybrid"):
+        await bounded(service.initialize(allocation, recipe, policy=policy),
+                      "memory "+policy+" initialize")
+        await bounded(service.check(allocation, recipe, policy=policy),
+                      "memory "+policy+" check")
+    service.release(allocation, consumers_quiesced=True)
+    plan_file = os.environ.get("SOC_RUN_PLAN")
+    if plan_file:
+        result = {
+            "schema_version": 1, "source": "real_floonoc_host_sparse",
+            "scope": "noc_bfm", "region": region_name,
+            "route_initiator": desc["name"], "memory_target": target,
+            "address": hex(address), "size_bytes": 256,
+            "clock_period_ps": 10000,
+            "host_peak_rss_kib": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
+            "host_peak_rss_delta_kib": max(
+                0, resource.getrusage(resource.RUSAGE_SELF).ru_maxrss - rss_at_start),
+            "validation": "two-way AXI/backdoor proof plus scratch restoration",
+            "events": [event.as_dict() for event in service.events],
+        }
+        (Path(plan_file).parent/"memory-operations.json").write_text(
+            json.dumps(result, indent=2, sort_keys=True)+"\n")
+    trace_phase("Memory INIT/CHECK: strict fast hybrid verified")
+    dut._log.info("PASS memory provider: strict fast hybrid, %s to %s at %#x",
+                  desc["name"], target, address)
 
     # Opt-in negative run must fail on an actual routed corrupt readback.
     if os.getenv("SUPERNOC_NEGATIVE") == "1":
