@@ -1,0 +1,68 @@
+#!/usr/bin/env python3
+"""Visual browser smoke test of published self-contained hierarchical explorer.
+
+Requires selenium and the Chrome/Chromedriver pair available on GitHub's
+Ubuntu runner. Captures views for reviewer QA; validates actual SVG DOM
+and drilled-down router structures, not just static HTML presence.
+"""
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+
+from selenium import webdriver
+from selenium.webdriver import ChromeOptions
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+
+
+def main():
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--page",type=Path,default=Path(".tools/pages-site/explorer.html"))
+    parser.add_argument("--screenshots",type=Path,default=Path(".tools/architecture-screenshots"))
+    args=parser.parse_args()
+    args.screenshots.mkdir(parents=True,exist_ok=True)
+    options=ChromeOptions()
+    for flag in ("--headless=new","--no-sandbox","--disable-dev-shm-usage",
+                 "--disable-gpu","--window-size=1600,1000"):
+        options.add_argument(flag)
+    with webdriver.Chrome(options=options) as driver:
+        driver.get(args.page.resolve().as_uri())
+        wait=WebDriverWait(driver,20)
+        wait.until(lambda d:"SYSTEM-ON-CHIP" in d.find_element(By.ID,"arch-svg").text)
+        assert "GLOBAL FABRIC" in driver.find_element(By.ID,"arch-svg").text
+        assert "COMPUTE0" in driver.find_element(By.ID,"arch-svg").text
+        assert "MEMORY0" in driver.find_element(By.ID,"arch-svg").text
+        driver.save_screenshot(str(args.screenshots/"01-full-chip.png"))
+
+        def dblclick_by_label(label):
+            driver.execute_script(
+                """const node=[...document.querySelectorAll('#arch-svg .arch-click')]
+                     .find(n=>n.getAttribute('aria-label')===arguments[0]);
+                   if(!node)throw new Error('not clickable: '+arguments[0]);
+                   node.dispatchEvent(new MouseEvent('dblclick',{bubbles:true}));""",label)
+
+        dblclick_by_label("compute0")
+        wait.until(lambda d:"COMPUTE0  /  SUBSYSTEM" in d.find_element(By.ID,"arch-svg").text)
+        assert "LOCAL FABRICS" in driver.find_element(By.ID,"arch-svg").text
+        driver.save_screenshot(str(args.screenshots/"02-compute0-composition.png"))
+
+        dblclick_by_label("compute0_local_data")
+        wait.until(lambda d:"FLOONOC ROUTERS" in d.find_element(By.ID,"arch-svg").text)
+        mesh=driver.find_element(By.ID,"arch-svg").text
+        assert "9 routers" in mesh
+        assert len(driver.find_elements(By.XPATH,
+            "//*[name()='svg' and @id='arch-svg']//*[name()='text' and text()='ROUTER']"))==9
+        driver.save_screenshot(str(args.screenshots/"03-compute0-data-mesh.png"))
+
+        driver.execute_script(
+            """const e=document.getElementById('ex-endpoint');
+               e.value='compute0_local_data.cpu';
+               e.dispatchEvent(new Event('change',{bubbles:true}));""")
+        rows=driver.find_element(By.ID,"ex-signal-rows").text
+        assert "awaddr" in rows and "araddr" in rows and "rdata" in rows
+        print("PASS: browser rendered all three hierarchy levels, 9 real XY routers, and AXI signal details")
+
+
+if __name__=="__main__":
+    main()
