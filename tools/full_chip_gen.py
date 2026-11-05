@@ -502,13 +502,17 @@ def emit_dma_tb(cfg, fw, out):
     (out/'full_chip_dma_tb.sv').write_text('\n'.join(lines)+'\n')
 
 
-def emit_tb(cfg, fw, out, *, image_prefix='gen/chip', cpu_dma_mode=False):
+def emit_tb(cfg, fw, out, *, image_prefix='gen/chip', cpu_dma_mode=False,
+            pcie_host_mode=False):
     n = len(fw['cores'])
     words = [len(fw['images'][c['name']]) for c in fw['cores']]
     max_words = max(words)
     bases = '{'+', '.join(f"32'h{v:08x}" for v in reversed(fw['sram_bases']))+'}'
     counts = '{'+', '.join(f"32'd{v}" for v in reversed(words))+'}'
     opts = dict(cfg['verification']['full_chip_boot'])
+    if pcie_host_mode:
+        opts['timeout_cycles'] = max(opts['timeout_cycles'], 600000)
+        opts['phase_timeout_cycles'] = max(opts['phase_timeout_cycles'], 500000)
     if cpu_dma_mode:
         # Compiled CPU C code executes over real NoCs: much longer than the
         # tiny minimal RV32I mailbox bootstrap, but still strictly bounded.
@@ -518,6 +522,8 @@ def emit_tb(cfg, fw, out, *, image_prefix='gen/chip', cpu_dma_mode=False):
     cfgprobe = probe_ports('cfgprobe', addr_bits=32, data_bits=32, id_bits=1)
     lines = ['`timescale 1ns/1ps', '// One boot/coordination checker shared by both simulators.',
         'module full_chip_tb (', *[p[1] for p in probe]]
+    if pcie_host_mode:
+        lines += pcie_chip.top_ports()
     lines[-1] = lines[-1].rstrip(',')
     lines += [');', f'  localparam integer N = {n}, MAX_WORDS = {max_words};',
         f'  localparam [N*32-1:0] BASES = {bases};', f'  localparam [N*32-1:0] WORDS = {counts};',
@@ -529,17 +535,28 @@ def emit_tb(cfg, fw, out, *, image_prefix='gen/chip', cpu_dma_mode=False):
         '  wire [N-1:0] released, fetch_valid, sram_valid, sram_write;',
         '  wire [N*32-1:0] fetch_addr;', '  wire [N*64-1:0] sram_addr, sram_data;',
         '  wire [N*8-1:0] sram_strb;', '  wire [31:0] rom_reads, flash_reads;',
+        *(['  wire [31:0] pcie_sram_write_count, pcie_sram_read_count;',
+           '  wire [63:0] pcie_sram_last_write_addr, pcie_sram_last_read_addr;']
+          if pcie_host_mode else []),
         '`ifdef COCOTB_SIM', '  localparam bit ProbeEnable = 1;', '`else', '  localparam bit ProbeEnable = 0;', '`endif',
         ("  soc_top #(.ProbeEnable(1'b0), .DmaEnable(1'b1)) dut (.clk_i(clk), .rst_ni(rst_n), .hold_mask_i(hold_mask),"
          if cpu_dma_mode else
-         '  soc_top #(.ProbeEnable(ProbeEnable)) dut (.clk_i(clk), .rst_ni(rst_n), .hold_mask_i(hold_mask),'),
+         ("  soc_top #(.ProbeEnable(1'b0)) dut (.clk_i(clk), .rst_ni(rst_n), .hold_mask_i(hold_mask),"
+          if pcie_host_mode else
+          '  soc_top #(.ProbeEnable(ProbeEnable)) dut (.clk_i(clk), .rst_ni(rst_n), .hold_mask_i(hold_mask),')),
         '    .released_o(released), .fetch_valid_o(fetch_valid), .fetch_addr_o(fetch_addr),',
         '    .sram_valid_o(sram_valid), .sram_write_o(sram_write), .sram_addr_o(sram_addr),',
         '    .sram_data_o(sram_data), .sram_strb_o(sram_strb), .rom_reads_o(rom_reads), .flash_reads_o(flash_reads),',
         '    .dma_irq_o(), .dma_irq_pending_o(),',
         '    '+',\n    '.join([*(f'.{p[0]}({p[0]})' for p in probe),
                            *(f'.{p[0]}(\'0)' if request_field(p[2],p[3]) else f'.{p[0]}()'
-                             for p in cfgprobe)])+');',
+                             for p in cfgprobe),
+                             *(pcie_chip.instance_ports() if pcie_host_mode else []),
+                             *(['.pcie_sram_write_count(pcie_sram_write_count)',
+                                '.pcie_sram_read_count(pcie_sram_read_count)',
+                                '.pcie_sram_last_write_addr(pcie_sram_last_write_addr)',
+                                '.pcie_sram_last_read_addr(pcie_sram_last_read_addr)']
+                               if pcie_host_mode else [])])+');',
         '  reg [31:0] expected [0:N*MAX_WORDS-1];', '  reg [MAX_WORDS-1:0] copied [0:N-1];',
         '  reg [N-1:0] init_mask = 0, hello_mask = 0, check_mask = 0, app_fetch = 0;',
         '  reg init_complete = 0, run_complete = 0, check_complete = 0, pass_flag = 0;',
