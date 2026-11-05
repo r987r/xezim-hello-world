@@ -152,6 +152,44 @@ class MemoryServiceTests(unittest.IsolatedAsyncioTestCase):
             await provider.validate_backdoor(self.base, consumers_quiesced=True)
         self.assertFalse(provider.validated_backdoor)
 
+    async def test_sparse_provider_never_claims_frontdoor_without_agent(self):
+        class FakeSparse:
+            def __init__(self):
+                self.bytes = bytearray(256)
+            async def write(self, offset, data):
+                self.bytes[offset:offset+len(data)] = data
+            async def read(self, offset, length):
+                return bytes(self.bytes[offset:offset+length])
+
+        sparse = FakeSparse()
+        provider = HostSparseMemory(sparse, self.base)
+        self.assertFalse(provider.validated_backdoor)
+        self.assertFalse(provider.frontdoor_available)
+        with self.assertRaises(MemoryAccessError):
+            await provider.frontdoor_write(self.base, b"abc")
+        await provider.backdoor_write(self.base+16, b"hello")
+        self.assertEqual(await provider.backdoor_read(self.base+16, 5), b"hello")
+
+    async def test_frontdoor_wraps_existing_bfm_only(self):
+        class FakeResult:
+            resp = 0
+            def __init__(self, data=b""):
+                self.data = data
+        class FakeAgent:
+            async def write(self, addr, data):
+                self.last = (addr, bytes(data))
+                return FakeResult()
+            async def read(self, addr, length):
+                return FakeResult(b"z" * length)
+
+        existing = FakeAgent()
+        front = AxiFrontdoor(existing)
+        await front.frontdoor_write(self.base, b"hi")
+        self.assertEqual(existing.last, (self.base, b"hi"))
+        self.assertEqual(await front.frontdoor_read(self.base, 3), b"zzz")
+        with self.assertRaises(MemoryAccessError):
+            await front.backdoor_read(self.base, 3)
+
     async def test_recipe_invariant_across_chunks_and_high_addresses(self):
         for p in [Pattern("constant", 0x5a), Pattern("counter8", 17),
                   Pattern("address_xor", 0xdeadbeef)]:
