@@ -188,6 +188,11 @@ def write_report(directory, plan, result):
             row['issues'].append('initiator error response has no declared expectation')
     correlation_issues += [{'monitor':row['monitor'],'transaction':row['uid'],'message':message}
                            for row in rows for message in row['issues']]
+    if plan['report']['axi'].get('required_complete'):
+        correlation_issues += [
+            {'monitor':row['monitor'],'transaction':row['uid'],
+             'message':'AXI transaction remained incomplete at capture end'}
+            for row in rows if row['status'] != 'complete']
     binding_complete = bool(starts) and set(starts[0]['monitors']) == {m['id'] for m in catalog['monitors']}
     if not binding_complete:
         issues.append({'message':'AXI capture did not bind every cataloged boundary; no complete capture is claimed'})
