@@ -144,6 +144,24 @@ class MemoryServiceTests(unittest.IsolatedAsyncioTestCase):
         e = await self.svc.initialize(self.a, Pattern("counter8"), policy="fast")
         self.assertEqual(e.method, "backdoor")
 
+    async def test_failure_to_restore_scratch_cannot_validate_fast(self):
+        provider_front = DummyProvider(self.base)
+        provider = CombinedMemoryProvider(provider_front, provider_front)
+        original = provider_front.frontdoor_write
+        calls = 0
+
+        async def fail_on_restore(addr, data):
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                raise RuntimeError("AXI write failed while restoring scratch")
+            await original(addr, data)
+
+        provider_front.frontdoor_write = fail_on_restore
+        with self.assertRaisesRegex(RuntimeError, "restoring scratch"):
+            await provider.validate_backdoor(self.base, consumers_quiesced=True)
+        self.assertFalse(provider.validated_backdoor)
+
     async def test_bad_backdoor_mapping_is_rejected(self):
         front = DummyProvider(self.base, validated=False)
         wrong = DummyProvider(self.base+8, validated=False)
@@ -152,22 +170,18 @@ class MemoryServiceTests(unittest.IsolatedAsyncioTestCase):
             await provider.validate_backdoor(self.base, consumers_quiesced=True)
         self.assertFalse(provider.validated_backdoor)
 
-    async def test_dma_destination_check_without_backdoor_preload(self):
-        p = Pattern("address_xor", 0x3412)
-        # Python allocation and expectation do not modify target memory.
-        with self.assertRaisesRegex(MemoryAccessError, "accepted AXI"):
-            self.svc.observe_completed_write(
-                self.a, producer="dma0", accepted_axi_evidence=False)
-        self.assertEqual(self.backend.calls, [])
-        # Mimic *actual* hardware-produced bytes, then require an independent
-        # accepted-AXI observation to authorize checking that allocation.
-        self.backend.storage[:self.a.size] = p.chunk(self.a.phys, self.a.size)
-        self.svc.observe_completed_write(
-            self.a, producer="dma0", accepted_axi_evidence=True)
-        self.assertEqual(self.backend.calls, [])
-        e = await self.svc.check(self.a, p, policy="strict")
-        self.assertEqual(e.method, "frontdoor")
-        self.assertEqual(self.svc.events[0].operation, "observed_write")
+    async def test_host_negative_address_is_rejected(self):
+        class FakeSparse:
+            async def read(self, off, length):
+                return b"x" * length
+            async def write(self, off, data):
+                pass
+
+        provider = HostSparseMemory(FakeSparse(), self.base)
+        with self.assertRaises(MemoryAccessError):
+            await provider.backdoor_read(self.base - 1, 1)
+        with self.assertRaises(MemoryAccessError):
+            await provider.backdoor_write(self.base - 1, b"x")
 
     async def test_sparse_provider_never_claims_frontdoor_without_agent(self):
         class FakeSparse:

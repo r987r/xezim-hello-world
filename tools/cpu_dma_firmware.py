@@ -81,6 +81,7 @@ def compile_firmware(cfg, directory: Path):
             *[f"-D{name}=0x{value:x}ULL" for name, value in macros.items()],
             str(ROOT / "sw/dma/tests/cpu_dma_run.c"),
             str(ROOT / "sw/common/memory_pool.c"),
+            str(ROOT / "sw/common/memory_pattern.c"),
             str(ROOT / "sw/common/sram_pool.c"),
             str(ROOT / "sw/dma/dma.c"),
             str(ROOT / "sw/common/rv32i_runtime.c"),
