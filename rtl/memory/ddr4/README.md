@@ -288,9 +288,11 @@ warnings: CASEINCOMPLETE=84, WIDTHEXPAND=1709, WIDTHTRUNC=254, RTL
 compiler errors=0. No warnings were silently waived; the exact
 expected warning inventory remains a strict gate.
 
-Outstanding in DDR-A: multi-master concurrent ID stress, long forced stalls,
+At the PR #50 milestone, concurrent multi-ID stress, long forced stalls,
 bank/row conflict and forced refresh sequences, reset/reinitialization, and
-expanded timing distributions. Standalone DDR model does not constitute
+expanded timing distributions had not been exercised. Later PRs #65 and #71
+add concurrent submissions and observed B/R response stalls, respectively;
+bank/row/refresh and reset/reinit stress remain open. Standalone DDR model does not constitute
 physical PHY or integrated SoC controller verification. DDR-B integration
 is separately tracked under #40; main's DDR0 backing stays AXI RAM until
 real controller is opt-in, generated, and end-to-end verified.
@@ -328,6 +330,28 @@ download the `ddr4-foundation-generated-rtl` artifact, and open
 python3 rtl/memory/ddr4/run_functional.py
 python3 rtl/memory/ddr4/report_html.py --dir .tools/ddr4/litedram_sim
 ~~~
+
+## DDR-A real RTL response backpressure (PR #71)
+
+The existing pinned upstream `cocotbext-axi==0.1.28` AXI master
+already provides independent B/R channel sink pause controls. The
+standalone DDR4 test uses those controls to hold BREADY or RREADY low
+**while LiteDRAM's real BVALID/RVALID response is asserted**. It
+samples 20 successive source-clock cycles of the stalled transaction
+and requires BID/BRESP, or RID/RDATA/RRESP/RLAST, to remain stable
+under backpressure; after releasing READY it checks the actual B
+response and byte-perfect readback. A pause flag without observing
+`VALID && !READY` is a test failure. No custom responder, duplicate
+AXI VIP or disabled passive monitors are introduced.
+
+The actual pin-stability assertion, upstream LiteDRAM+DFI simulation,
+Wishbone/DFII init, existing AXI/DFI latency correlation and HTML review
+report run together under the unchanged standalone DDR4 CI. The test
+does **not** yet prove sustained arbitrary multi-initiator congestion,
+refresh/bank collisions, reset/reinit, physical DDR PHY or a controller
+integrated behind the full-chip NoCs. See DDR-A issue #35 and DDR-B
+issue #40. Latest exact-head CI evidence:
+https://github.com/r987r/xezim-hello-world/actions/runs/42125253119
 
 Full-chip DDR-B integration remains separate: memory0.ddr0 uses AXI RAM
 until real controller RTL is connected via the generated Data NoC, Wishbone
