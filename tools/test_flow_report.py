@@ -56,8 +56,12 @@ def summarize(events, expected):
             issues.append(f"unregistered test step {key}")
     for key in active:
         issues.append(f"unfinished test step {key}")
-    finished = {(r["phase"], r["actor"]+"."+r["step"])
-                for r in rows if r["status"]=="pass"}
+    completed=Counter((r["phase"],r["actor"]+"."+r["step"])
+                      for r in rows if r["status"]=="pass")
+    for key,count in completed.items():
+        if count!=1:
+            issues.append(f"duplicate completed step {key} count={count}")
+    finished=set(completed)
     for phase in PHASES:
         for step in expected[phase]:
             if (phase, step) not in finished:
@@ -132,15 +136,30 @@ def write_report(directory, plan):
                 issues.append(f"corrupt test-flow line {index}")
     # A C-only or SV-only test does not need the Cocotb JSONL producer.
     # summarize() rejects an actually empty combined evidence stream.
+    # Validate the source-local Cocotb sequence BEFORE normalizing timestamps
+    # across SV and C streams; otherwise corrupt JSONL ordering is masked.
+    previous_time=-1
+    for index,event in enumerate(events):
+        try:
+            validate_event(event)
+            if event["seq"]!=index or event["time_ps"]<previous_time:
+                issues.append(f"out-of-order raw Cocotb step line {index+1}")
+            previous_time=event["time_ps"]
+        except (ValueError,TypeError,KeyError) as exc:
+            issues.append(f"malformed raw step line {index+1}: {exc}")
     # RTL firmware and SV checkers publish actual observed phase milestones.
     # They come from the simulator transcript, NEVER from Python action intent.
     from test_flow_codec import SV_RE
     sim=directory/"simulation.log"
     if sim.is_file():
+        previous_ns=-1
         for line in sim.read_text(errors="replace").splitlines():
             marker=SV_RE.search(line)
             if marker:
                 ns,phase,actor,step,status=marker.groups()
+                if int(ns)<previous_ns:
+                    issues.append("out-of-order RTL firmware phase marker")
+                previous_ns=int(ns)
                 events.append({"schema_version":1,"seq":0,
                                "time_ps":int(ns)*1000,"phase":phase,
                                "actor":actor,"step":step,"status":status,
