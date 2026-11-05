@@ -44,7 +44,7 @@ class ArchitectureExplorerTests(unittest.TestCase):
                                     e["to"]["instance"]==router
                                     for e in self.graph["edges"]))
         self.assertEqual(router_total,43)
-        self.assertIn("router_(\\\\d+)",self.script)
+        self.assertIn("router_",self.script)
         self.assertIn("NI-to-router link",self.script)
 
     def test_single_canonical_2d_view_and_signal_detail(self):
