@@ -5,6 +5,14 @@ import cocotb
 from cocotb.clock import Clock
 from cocotb.triggers import RisingEdge, with_timeout
 from cocotbext.pcie.core import RootComplex
+# Cocotb runner constructs its own PYTHONPATH. Make the locked upstream
+# PcieIfDevice utility import path explicit inside the simulation process.
+import sys
+from pathlib import Path
+VENDOR_TESTS = Path(__file__).resolve().parents[2] / ".tools/verilog_pcie/tb/pcie_axi_master"
+if not (VENDOR_TESTS / "pcie_if.py").is_file():
+    raise RuntimeError("pinned upstream PcieIfDevice simulation helper missing")
+sys.path.insert(0, str(VENDOR_TESTS))
 from pcie_if import PcieIfDevice, PcieIfRxBus, PcieIfTxBus
 
 

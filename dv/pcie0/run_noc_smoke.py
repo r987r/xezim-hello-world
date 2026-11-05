@@ -68,6 +68,12 @@ def run():
         results_xml=str(output / "results.xml"),
         log_file=output / "simulation.log",
     )
+    if not Path(result).is_file():
+        transcript = output / "simulation.log"
+        details = transcript.read_text(errors="replace") if transcript.exists() else "(no simulation log)"
+        print("PCIe real NoC/SRAM simulator failed before writing results XML:",
+              details[-12000:], sep="\n", file=sys.stderr, flush=True)
+        raise RuntimeError("missing Cocotb results XML: see simulator log above")
     tests = ElementTree.parse(result).findall(".//testcase")
     if not tests or any(
         any(t.find(tag) is not None for tag in ("failure", "error", "skipped"))
