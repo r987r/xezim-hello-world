@@ -400,7 +400,8 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
                     'name':s['name'],'ip':s['ip'],
                     'local_data_noc':s['name']+'_local_data',
                     'local_config_noc':s['name']+'_local_config',
-                    'rtl_attachment':'reserved_idle',
+                    'rtl_attachment':('live_pcie_tlp_axi_bridge' if pcie_host_mode and
+                                      s.get('ip') == 'verilog_pcie' else 'reserved_idle'),
                     'csr_attachment':'explicit_axi_error'}
                     for s in cfg['subsystems'] if s['type']=='peripheral'],
                 'dma':'PULP iDMA engines generated for each compute, enabled by DmaEnable=1; data ports route via local FlooNoCs and 32-bit CSRs via local/global config FlooNoCs; old boot defaults to disabled.',
