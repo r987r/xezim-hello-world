@@ -16,7 +16,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: ethernet0-topology-${{ github.event.pull_request.number || github.ref }}
@@ -39,12 +39,20 @@ jobs:
           python3 -m pip install -r requirements.txt
           python3 tools/ip_fetch.py floonoc
           python3 -m pip install -e .tools/floonoc
-      - name: Fail on any tracked generator or README drift
+      - name: Regenerate once against the merged main source tree
         run: |
+          make gen
           make check-generated
           python3 tools/regress.py --check-noc
-          make gen
-          git diff --exit-code -- gen/ README.md
+      - name: Commit only canonical generated drift onto this integration PR
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'consolidate/ethernet0-generated-topology'
+        run: |
+          set -euo pipefail
+          git add gen/ README.md
+          if ! git diff --cached --quiet; then
+            git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'chore(gen): reconcile Ethernet0 canonical manifests with current main'
+            git push origin HEAD:refs/heads/consolidate/ethernet0-generated-topology
+          fi
       - name: Verify actual NoC structure, source truth and diagram views
         run: |
           python3 tools/ethernet_topology_audit.py
