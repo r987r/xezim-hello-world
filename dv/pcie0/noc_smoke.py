@@ -34,6 +34,13 @@ async def host_to_real_floonoc_tc_sram(dut):
     dut.clk.value = 0
     cocotb.start_soon(Clock(dut.clk, 10, units="ns").start())
     rc = RootComplex()
+    # In cocotbext-pcie 0.2.14 the RC constructor registers the outbound
+    # TLP region at its DEFAULT mem_base (0xc0000000). Changing mem_base
+    # afterward moves BAR allocation, but does not change the AddressSpace
+    # mapping, so BAR accesses fail before any TLP is sent. Install the
+    # address-qualified outbound TLP region inside its low-address mem_pool.
+    # This is RC BFM setup, not an RTL address-translation shortcut.
+    rc.mem_pool.register_region(rc.mem_region, 0x10000000, 0x100000, offset=None)
     rc.mem_base = 0x10000000
     dev = PcieIfDevice(
         clk=dut.clk, rst=dut.rst,
