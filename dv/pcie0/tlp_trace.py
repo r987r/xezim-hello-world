@@ -158,7 +158,7 @@ class LiveTlpCapture:
         import cocotb
         self.dut = dut
         self.trace = open_from_plan(Path(plan_path or os.environ["SOC_RUN_PLAN"]))
-        if self.trace is None or self.trace.sources != SOURCES:
+        if self.trace is None or set(self.trace.sources) != set(SOURCES):
             raise ValueError("PCIe TLP catalog mismatch")
         for source in SOURCES:
             prefix = "rx_req_tlp" if source == REQUEST else "tx_cpl_tlp"
