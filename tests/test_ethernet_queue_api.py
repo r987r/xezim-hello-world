@@ -12,7 +12,7 @@ class QueueApiTests(unittest.TestCase):
                      REG["VERSION"]: 0x00010000,
                      REG["CAPS"]: 0x04040101,
                      REG["ENABLE"]: 0}
-        self.api = QueueProgrammer(self.regs.get,
+        self.api = QueueProgrammer(lambda a: self.regs.get(a, 0),
                                    lambda a, v: self.regs.__setitem__(a, v))
 
     def test_descriptors_and_64bit_addresses(self):
