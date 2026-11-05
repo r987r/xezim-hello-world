@@ -215,6 +215,15 @@ def write_report(directory, plan, result):
                'sections':{'axi':{'monitors':catalog['monitors'],'transactions':rows,
                                  'phases':[e for e in controls if e['channel']=='phase'],
                                  'issues':issues+correlation_issues}}}
+    memory_issues = []
+    if plan['report'].get('memory'):
+        from memory_report import read_memory_report
+        section, memory_issues = read_memory_report(directory, rows, clock_period_ps)
+        if section is not None:
+            payload['sections']['memory'] = section
+        if memory_issues:
+            payload['sections']['axi']['issues'].extend(
+                {'message':'memory: '+message} for message in memory_issues)
     (directory/'axi-transactions.json').write_text(json.dumps(payload,indent=2)+'\n')
     # Escape '<' even inside JSON strings: transaction text must never close
     # the embedded script element. All table/details text uses textContent.
@@ -229,7 +238,7 @@ def write_report(directory, plan, result):
         link = '<p><a href="protocols.html">Unified protocol explorer (AXI + other VIP streams)</a></p>'
         path.write_text(html.replace('<main>', '<main>'+link, 1))
     return {'transactions':len(rows),'events':len(events),'capture_bound':binding_complete,
-            'overflow':overflow,'issues':len(issues)+len(correlation_issues)}
+            'overflow':overflow,'issues':len(issues)+len(correlation_issues)+len(memory_issues)}
 
 
 def render_report(payload,path):

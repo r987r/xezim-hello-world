@@ -54,6 +54,7 @@ header{display:flex;justify-content:space-between;align-items:center;gap:18px}h1
  <div class="bottom"><small id="page-label"></small><div class="actions"><button id="previous">Previous</button><button id="next">Next</button></div></div>
  <div class="details"><strong id="detail-title">Select a transaction to inspect every beat, strobe, sideband and timestamp.</strong><pre id="detail"></pre></div>
 </section>
+<section class="card" id="memory-section" hidden><h2>Memory INIT / CHECK</h2><p id="memory-context"></p><div class="table-wrap"><table><thead><tr><th>Operation</th><th>Method</th><th>Bytes</th><th>Wall ms</th><th>Sim cycles</th></tr></thead><tbody id="memory-rows"></tbody></table></div><p id="memory-note"></p></section>
 <section class="card"><h2>Capture coverage and diagnostics</h2><p id="coverage-summary"></p><div class="coverage" id="coverage"></div><pre id="diagnostics"></pre></section>
 <p style="margin-top:20px">Self-contained run report · passive cocotbext-axi channel capture · no external assets or server required</p>
 </main>
@@ -63,6 +64,19 @@ header{display:flex;justify-content:space-between;align-items:center;gap:18px}h1
 'use strict';
 const report=JSON.parse(document.getElementById('run-data').textContent), run=report.run, axi=report.sections.axi;
 const $=id=>document.getElementById(id), rows=axi.transactions, size=100;
+const memory=report.sections.memory;
+if(memory){
+ $('memory-section').hidden=false;
+ $('memory-context').textContent=memory.route_initiator+' to '+memory.memory_target+
+     ' / '+memory.region+' / '+memory.size_bytes+' bytes';
+ for(const event of memory.events){const tr=document.createElement('tr');
+   for(const value of [event.operation,event.method,event.bytes,
+       (event.wall_ns/1e6).toFixed(3),event.simulated_cycles==null?'—':event.simulated_cycles]){
+     const td=document.createElement('td');td.textContent=String(value);tr.append(td);
+   }$('memory-rows').append(tr);
+ }
+ $('memory-note').textContent='Actual NoC simulation with host-backed model. Direct backdoor accesses are not AXI traffic; reported wall timings include simulation scheduling. Real controller/PHY performance not represented.';
+}
 let filtered=rows, page=0, selected=null, points=[], plotRows=[];
 const ns=v=>v==null?'—':(v/1000).toLocaleString(undefined,{maximumFractionDigits:3});
 const response=v=>v==null?'Pending':({0:'OKAY',1:'EXOKAY',2:'SLVERR',3:'DECERR'}[Number(BigInt(v))]||v);

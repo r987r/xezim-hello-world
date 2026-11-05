@@ -77,9 +77,15 @@ def load_config(path):
             required = {'scope','clock','reset','catalog'}
             if (test['engine'] != 'cocotb-verilator' or not isinstance(report, dict)
                 or not ({'axi','protocols'} & set(report))
-                or set(report) - {'axi','protocols','context'}
+                or set(report) - {'axi','protocols','memory','context'}
                 or ('context' in report and not isinstance(report['context'],str))):
                 raise ValueError(f'{name}: invalid protocol report configuration for cocotb-verilator')
+            if 'memory' in report:
+                m = report['memory']
+                if ('axi' not in report or not isinstance(m,dict) or
+                    set(m) != {'required','policies'} or m['required'] is not True or
+                    m['policies'] != ['strict','fast','hybrid']):
+                    raise ValueError(f'{name}: memory report requires AXI and strict/fast/hybrid')
             if 'axi' in report:
                 axi = report['axi']
                 if (not isinstance(axi, dict)

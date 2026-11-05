@@ -11,6 +11,7 @@ sys.path.insert(0, str(ROOT))
 from dv.common.dma_vectors import (
     build_dma_vector, DESC, DESC_END, DESC_OFFSET, FLAGS_COPY, FLAGS_IRQ,
 )
+from tools.memory_service import Pattern
 
 
 class DmaVectorTests(unittest.TestCase):
@@ -34,6 +35,9 @@ class DmaVectorTests(unittest.TestCase):
             offset = entry["src"]-meta["source_sram_base"]
             self.assertEqual(case.source_sram[offset:offset+entry["length"]],
                              bytes.fromhex(entry["expected_hex"]))
+            self.assertEqual(bytes.fromhex(entry["expected_hex"]),
+                             Pattern("address_xor", 0x35+29*i).chunk(
+                                 entry["src"], entry["length"]))
 
     def test_dma_only_profile_reuses_boot_space(self):
         case = build_dma_vector(self.cfg, profile="dma_only", count=100)

@@ -4,6 +4,7 @@
  */
 #include "../dma.h"
 #include "../../common/memory_pool.h"
+#include "../../common/memory_pattern.h"
 #include <stdint.h>
 #include <stddef.h>
 
@@ -33,6 +34,7 @@
 #define DESCRIPTOR_OFF 0x1000u
 #define TARGET_RESERVE 0x100u
 #define PAYLOAD_BYTES 64u
+#define PAYLOAD_PATTERN_SEED 0x35u
 #define STATUS_OFFSET 0x40u
 
 __attribute__((used, noinline))
@@ -81,10 +83,12 @@ int cpu_dma_run(void) {
     volatile uint8_t * const dst =
         (volatile uint8_t *)(uintptr_t)peer_dst.phys;
     uint8_t * const src_bytes = (uint8_t *)src.cpu_ptr;
-    for (unsigned i=0; i<PAYLOAD_BYTES; ++i) {
-        src_bytes[i] = (uint8_t)((i*7u+0x35u)&0xffu);
-        dst[i] = 0;
-    }
+    /* Same byte recipe as BFM-side Python; fill CPU-addressable SRAM
+     * through real stores. Remote DDR/HBM is only initialized by real DMA.
+     */
+    soc_mem_fill_pattern(src_bytes, src.phys, PAYLOAD_BYTES,
+                         PAYLOAD_PATTERN_SEED, SOC_PATTERN_COUNTER8);
+    for (unsigned i=0; i<PAYLOAD_BYTES; ++i) dst[i] = 0;
     soc_dma_copy_t ops[3] = {
         {src.phys, peer_dst.phys, PAYLOAD_BYTES},
         {src.phys, ddr_dst.phys, PAYLOAD_BYTES},
@@ -111,10 +115,11 @@ int cpu_dma_run(void) {
             *evidence = 0xd0000007u; return 7;
         }
     }
-    for (unsigned i=0; i<PAYLOAD_BYTES; ++i) {
-        if (dst[i] != (uint8_t)((i*7u+0x35u)&0xffu)) {
-            *evidence = 0xd0000008u; return 8;
-        }
+    if (soc_mem_check_pattern((const void *)(uintptr_t)peer_dst.phys,
+                              src.phys, PAYLOAD_BYTES,
+                              PAYLOAD_PATTERN_SEED, SOC_PATTERN_COUNTER8) !=
+                              PAYLOAD_BYTES) {
+        *evidence = 0xd0000008u; return 8;
     }
     soc_dma_mmio_ack_irq(csr);
     /* CPU cannot directly load data above 4 GiB. Do a second real DMA chain
@@ -158,11 +163,13 @@ int cpu_dma_run(void) {
             *evidence=0xd000000du; return 13;
         }
     }
-    for(unsigned i=0; i<PAYLOAD_BYTES; ++i) {
-        uint8_t value=(uint8_t)((i*7u+0x35u)&0xffu);
-        if(ddr_copy[i]!=value || hbm_copy[i]!=value) {
-            *evidence=0xd000000eu; return 14;
-        }
+    if (soc_mem_check_pattern((const void *)(uintptr_t)from_ddr.phys,
+                              src.phys, PAYLOAD_BYTES,
+                              PAYLOAD_PATTERN_SEED, SOC_PATTERN_COUNTER8) != PAYLOAD_BYTES ||
+        soc_mem_check_pattern((const void *)(uintptr_t)from_hbm.phys,
+                              src.phys, PAYLOAD_BYTES,
+                              PAYLOAD_PATTERN_SEED, SOC_PATTERN_COUNTER8) != PAYLOAD_BYTES) {
+        *evidence=0xd000000eu; return 14;
     }
     soc_dma_mmio_ack_irq(csr);
     /* Retain descriptors and all physical buffers to simulation end;
