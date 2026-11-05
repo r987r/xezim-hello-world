@@ -333,3 +333,23 @@ Full-chip DDR-B integration remains separate: memory0.ddr0 uses AXI RAM
 until real controller RTL is connected via the generated Data NoC, Wishbone
 initialization through the independent Config NoC, and CPU/iDMA traffic
 with current-source regression evidence. See `SOC_BRIDGE.md`, #40/#38.
+
+
+## DDR-A controller-output backpressure coverage
+
+The existing pinned `cocotbext-axi==0.1.28` master `AxiRSink` and
+`AxiBSink` now exercise controlled periodic sink pauses on eight 256-byte
+actual LiteDRAM readbacks/writes with eight distinct AXI IDs. The existing
+read-only `TrafficObserver` independently measures cycles where the DUT
+asserts RVALID or BVALID while the master deasserts RREADY or BREADY.
+The Cocotb test requires nonzero **observed** stalls, OKAY completions and
+byte-for-byte readback, and the existing full AW/W/B/AR/R/DFI passive
+capture stays on throughout. No new BFM, protocol monitor, SRAM model or
+external test runner is introduced. The standalone `ddr4-report.html`
+now includes these per-channel stall counts alongside measured AXI latency.
+
+This is controller-output B/R backpressure only. It does **not** prove
+refresh/bank conflicts, reset/reinitialization, sustained upstream
+AW/W throttling, or a minimum controller-internal queue occupancy; those
+are separate #35 acceptance gates. Measured model intervals are
+simulation performance, not a physical DDR PHY or full-chip NoC result.
