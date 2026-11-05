@@ -74,6 +74,30 @@ AW→B boundary observations are distinct; **AW→DFI WRITE per-ID remains
 unmeasured**. This is standalone modeled controller timing, never a
 current-source NoC→DDR latency claim.
 
+## DDR-B Config NoC INIT transport (independent preflight)
+
+The standalone LiteDRAM `init_plan.wishbone_script()` is reused as the
+**single authoritative DDR4 controller-initialization script**.
+`config_noc_init_contract.py` maps its generated CSR writes and waits
+to **planned** 32-bit AXI-Lite accesses inside
+`memory0.ctrl` (`0x40030000` window). It preserves the original
+LiteDRAM Wishbone byte/word address and records the required address
+translation; the generated `wb_ctrl_adr` pin width and actual `csr.json`
+are checked during DDR4 CI. It fails if the CSR aperture is insufficient,
+addresses alias, the control path is absent, a Wishbone address truncates,
+or the required init_done/init_error/control readbacks cannot be reached.
+
+The result is `ddr4_config_noc_init_contract.json` in the **standalone
+DDR4 CI artifact** with `status=contract_only_not_driven_in_full_chip`.
+**No actual Config NoC transactions, LiteDRAM register writes, firmware
+execution or INIT/RUN/CHECK outcomes are implied.** The physical
+implementation remains the #38 generated AXI-Lite-to-Wishbone endpoint and
+the existing full-chip CPU INIT/RUN/CHECK coordinator. When the pending
+#60 universal per-step evidence ABI reaches main, register the DDR actor
+using that same ABI; do not add a second stage runner or mark a proposed
+Wishbone script as a runtime step PASS. Data NoC and Config NoC remain
+separate.
+
 ## Remaining DDR-B hardware and verification gates
 
 1. The standalone bridge/guard protocol tests are **merged and passed** on [exact combined-head CI 42057781622](https://github.com/r987r/xezim-hello-world/actions/runs/42057781622): 106 Python tests, Verilator guard and bridge handshake/DECERR tests, actual LiteDRAM/DFI Cocotb 1/1 and 121,795 passive monitor cycles. Expand malformed write/reset recovery, extra AXI attribute rules, and concurrent requester arbitration/ID remapping before accepting production-level integration. The bridge permits one concurrent read and one write; do not infer wider out-of-order capability.
