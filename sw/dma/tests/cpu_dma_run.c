@@ -184,6 +184,51 @@ int cpu_dma_run(void) {
         *evidence=0xd000000eu; return 14;
     }
     soc_dma_mmio_ack_irq(csr);
+#ifdef SOC_PCIE_SRAM
+    /* Minimal real-RLT cross-subsystem exchange.
+     * Host seeded PCIe SRAM before INIT ACK; CPU0 uses real PULP iDMA.
+     * DDR remains the explicitly selected SoC memory *model* at this stage.
+     */
+    soc_flow_emit(flow,SOC_FLOW_RUN,SOC_FLOW_START,1,104);
+    soc_mem_allocation_t host_copy={0};
+    if (!soc_mem_alloc(&peer,PAYLOAD_BYTES,64,&host_copy)) {
+        *evidence=0xd000000fu; return 15;
+    }
+    volatile uint8_t *host_verify=(volatile uint8_t *)(uintptr_t)host_copy.phys;
+    for (unsigned i=0; i<PAYLOAD_BYTES; ++i) host_verify[i]=0;
+    soc_dma_copy_t across_pcie[3]={
+        {SOC_PCIE_SRAM + 0x500u, (uint64_t)SOC_DDR_BASE + 0x800u, PAYLOAD_BYTES},
+        {ddr_dst.phys, (uint64_t)SOC_PCIE_SRAM + 0x600u, PAYLOAD_BYTES},
+        {(uint64_t)SOC_DDR_BASE + 0x800u, host_copy.phys, PAYLOAD_BYTES}
+    };
+    if (!soc_dma_chain_build(&desc, across_pcie, 3, true, &chain)) {
+        *evidence=0xd0000010u; return 16;
+    }
+    /* Existing CSR/IRQ scheme: avoid rearming before ACK has drained. */
+    attempts=0;
+    for(; attempts<10000u; ++attempts) {
+        clear=csr[SOC_DMA_REG_STATUS/4u];
+        if ((clear & (SOC_DMA_STATUS_IRQ | SOC_DMA_STATUS_APB_BUSY))==0) break;
+    }
+    if (attempts==10000u || !soc_dma_mmio_submit(csr,chain.head_phys) ||
+        !soc_dma_mmio_wait_irq(csr,200000u,&status)) {
+        *evidence=0xd0000011u; return 17;
+    }
+    for (unsigned i=0; i<3; ++i) {
+        volatile const uint64_t *done =
+            (volatile const uint64_t *)(const void *)&chain.cpu_descs[i];
+        if (*done != UINT64_MAX) {
+            *evidence=0xd0000012u; return 18;
+        }
+    }
+    for (unsigned i=0; i<PAYLOAD_BYTES; ++i) {
+        if (host_verify[i] != (uint8_t)(0x63u + 13u*i)) {
+            *evidence=0xd0000013u; return 19;
+        }
+    }
+    soc_dma_mmio_ack_irq(csr);
+    soc_flow_emit(flow,SOC_FLOW_RUN,SOC_FLOW_PASS,1,104);
+#endif
     /* Retain descriptors and all physical buffers to simulation end;
      * interrupt/writebacks alone do not prove backend globally idle.
      */
