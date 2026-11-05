@@ -1,0 +1,47 @@
+name: PCIe0 isolated real TLP-to-AXI bridge
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'dv/pcie0/**'
+      - 'tests/test_pcie_bar_contract.py'
+      - '.github/workflows/pcie0-bridge.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pcie0-bridge-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tlp-axi4:
+    name: PCIe host -> real TLP/AXI4 -> AXI RAM model
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: alexforencich/verilog-pcie
+          ref: 25156a9a162c41c60f11f41590c7d006d015ae5a
+          path: .tools/verilog_pcie
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Install Icarus and pinned Cocotb dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends iverilog
+          python -m pip install -r dv/pcie0/requirements-sim.txt
+      - name: Verify upstream revision and BAR contract
+        run: |
+          python dv/pcie0/run_rtl_smoke.py --check-pin
+          python -m unittest tests.test_pcie_bar_contract -v
+      - name: Run real RTL PCIe TLP-to-AXI4 bridge
+        env:
+          SIM: icarus
+        run: python dv/pcie0/run_rtl_smoke.py
