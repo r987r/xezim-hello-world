@@ -152,6 +152,16 @@ tests:
     pass: 'PASS fullchip:'
     report:
       context: 'The real PicoRV32 CPU calls compiled C in the shared cold-boot INIT/RUN/CHECK test, allocates SRAM/DDR/HBM physical regions, and programs the true PULP iDMA through its configuration NoC. No CPU BFM or preloaded SRAM. Check CPU-produced result and read/write AXI handshakes.'
+      flow:
+        required_steps:
+          init: [cpu0.firmware_init]
+          run: [cpu0.firmware_run, cpu0.alloc_phys, cpu0.dma_roundtrip, cpu0.verify_memory]
+          check: [cpu0.firmware_check]
+        firmware_mmio:
+          monitor: compute0_local_data.cpu
+          address: '0x1000045c'
+          actors: {'1': cpu0}
+          steps: {'101': alloc_phys, '102': dma_roundtrip, '103': verify_memory}
       axi: {scope: dut.u_noc, clock: clk, reset: rst_n, catalog: gen/supernoc/axi_monitors.json, actors: .tools/regression/chip-cpu-dma/variant/manifest.json, max_events: 500000}
   chip-boot: &chip
     engine: cocotb-verilator
