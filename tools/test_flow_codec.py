@@ -13,8 +13,8 @@ PHASE_IDS={"init":0,"run":1,"check":2}
 STATUS_IDS={"start":0,"pass":1,"fail":2}
 
 def sv_event(phase,actor,step,status):
-    from dv.common.test_flow import ID
-    if phase not in PHASE_IDS or status not in STATUS_IDS or any(not ID.fullmatch(v) for v in (actor,step)):
+    identifier=re.compile(r"^[a-z][a-z0-9_.-]{0,95}$")
+    if phase not in PHASE_IDS or status not in STATUS_IDS or any(not identifier.fullmatch(v) for v in (actor,step)):
         raise ValueError("invalid RTL step identification")
     return f'$display("SOC_FLOW_V1|%0d|{phase}|{actor}|{step}|{status}", $time);'
 

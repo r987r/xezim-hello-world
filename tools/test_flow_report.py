@@ -86,6 +86,23 @@ def write_report(directory, plan):
                 issues.append(f"corrupt test-flow line {index}")
     else:
         issues.append("missing test-flow capture")
+    # RTL firmware and SV checkers publish actual observed phase milestones.
+    # They come from the simulator transcript, NEVER from Python action intent.
+    from test_flow_codec import SV_RE
+    sim=directory/"simulation.log"
+    if sim.is_file():
+        for line in sim.read_text(errors="replace").splitlines():
+            marker=SV_RE.search(line)
+            if marker:
+                ns,phase,actor,step,status=marker.groups()
+                events.append({"schema_version":1,"seq":0,
+                               "time_ps":int(ns)*1000,"phase":phase,
+                               "actor":actor,"step":step,"status":status,
+                               "origin":"rtl_observed","details":{}})
+    events.sort(key=lambda e:e.get("time_ps",0))
+    # Canonical run-local sequence after cross-source timestamp merge.
+    for i,e in enumerate(events):
+        e["seq"]=i
     try:
         result = summarize(events, required)
     except (ValueError, TypeError, KeyError) as exc:
