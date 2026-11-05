@@ -93,6 +93,23 @@ class TrafficObserverTests(unittest.TestCase):
         summary = verify_capture(Path(self.temp.name))
         self.assertEqual(summary["sampled_cycles"], 9)
 
+    def test_backpressure_requires_valid_high_ready_low_on_real_pins(self):
+        obs = self.observer
+        observed = sample()
+        observed["r"]["valid"] = 1
+        observed["r"]["ready"] = 0
+        observed["b"]["valid"] = 1
+        observed["b"]["ready"] = 0
+        obs.sample(observed)
+        obs.sample(observed)
+        self.assertEqual(obs.stalled_cycles["r"], 2)
+        self.assertEqual(obs.stalled_cycles["b"], 2)
+        self.assertEqual(obs.channels["r"], 0)
+        self.assertEqual(obs.channels["b"], 0)
+        summary = obs.finish("fail", "unit test no full traffic")
+        self.assertEqual(summary["backpressure_valid_not_ready_cycles"]["r"], 2)
+        self.assertEqual(summary["backpressure_valid_not_ready_cycles"]["b"], 2)
+
     def test_detect_missing_clock_edge(self):
         obs = self.observer
         obs.sample(sample(), sim_time_ns=5)
