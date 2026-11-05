@@ -41,7 +41,10 @@ def source_contract():
 def run():
     cfg = source_contract()
     from cocotb_test.simulator import run as cocotb_run
-    sources = [str(VENDOR / p) for p in cfg["rtl_modules"]]
+    from prepare_rtl import assert_iverilog_clean
+    patched = assert_iverilog_clean()
+    sources = [str(patched) if p == "rtl/pcie_axi_master.v" else str(VENDOR / p)
+               for p in cfg["rtl_modules"]]
     params = dict(
         TLP_DATA_WIDTH=64,
         TLP_STRB_WIDTH=2,
