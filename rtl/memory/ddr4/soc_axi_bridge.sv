@@ -102,7 +102,6 @@ module ddr_litedram_axi_bridge #(
 
   wire [LOCAL_ADDR_WIDTH-1:0] aw_local, ar_local;
   wire aw_allow, ar_allow;
-  wire [2:0] aw_fault, ar_fault;
 
   ddr_litedram_axi_aperture_guard #(
     .LOCAL_ADDR_WIDTH(LOCAL_ADDR_WIDTH), .BASE(BASE),
@@ -111,7 +110,7 @@ module ddr_litedram_axi_bridge #(
     .phys_addr_i(s_awaddr), .axlen_i(s_awlen),
     .axsize_i(s_awsize), .axburst_i(s_awburst),
     .atop_i(s_awatop), .local_addr_o(aw_local),
-    .allow_o(aw_allow), .fault_o(aw_fault)
+    .allow_o(aw_allow), .fault_o()
   );
   ddr_litedram_axi_aperture_guard #(
     .LOCAL_ADDR_WIDTH(LOCAL_ADDR_WIDTH), .BASE(BASE),
@@ -120,12 +119,10 @@ module ddr_litedram_axi_bridge #(
     .phys_addr_i(s_araddr), .axlen_i(s_arlen),
     .axsize_i(s_arsize), .axburst_i(s_arburst),
     .atop_i(6'd0), .local_addr_o(ar_local),
-    .allow_o(ar_allow), .fault_o(ar_fault)
+    .allow_o(ar_allow), .fault_o()
   );
 
-  logic wr_error_respond;
   always_comb begin
-    wr_error_respond = (wb_state == WB_RESP) && wb_error;
     s_awready = wb_state == WB_IDLE && controller_ready_i;
     m_awvalid = wb_state == WB_ADDR;
     m_awid = w_id;
