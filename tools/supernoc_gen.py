@@ -23,9 +23,10 @@ def emit(soc, noc_root, dest):
              for n,m in sorted(manifest.items())}
     eps = {n:{e["name"]:e for e in c["endpoints"]} for n,c in confs.items()}
     computes = [x["name"] for x in soc["subsystems"] if x["type"]=="compute"]
+    peripheral = [x["name"] for x in soc["subsystems"] if x["type"]=="peripheral"]
     memory = next(x["name"] for x in soc["subsystems"] if x["type"]=="memory")
     links=[]
-    for c in computes:
+    for c in computes + peripheral:
         links.extend([
             ((c+"_local_data","global_out"),("global_data",c)),
             (("global_data",c+"_sram"),(c+"_local_data","global_in")),

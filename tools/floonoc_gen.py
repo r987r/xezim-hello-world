@@ -20,6 +20,7 @@ import subprocess
 import sys
 
 import yaml
+from subsystem_fabric import peripherals
 
 ROOT = Path(__file__).resolve().parents[1]
 FLOO_COMMIT = yaml.safe_load((ROOT / "config/ip.lock.yaml").read_text())["third_party"]["floonoc"]["commit"]
@@ -114,6 +115,9 @@ def profiles(soc, knobs):
     regions_config = mapped_regions(soc, "config")
     computes = [x["name"] for x in soc["subsystems"] if x["type"] == "compute"]
     memories = [x["name"] for x in soc["subsystems"] if x["type"] == "memory"]
+    peripheral_specs = peripherals(soc)
+    io = [x["name"] for x in peripheral_specs]
+    compute_like = computes + io
     if len(memories) != 1 or not computes:
         raise NoCGenerationError("memory model currently supports exactly one memory subsystem")
     memory = memories[0]
@@ -123,13 +127,13 @@ def profiles(soc, knobs):
             raise NoCGenerationError(f"FlooNoC selected architecture expects {k}.backend=floonoc")
     if soc["fabrics"]["memory_data"]["backend"] != "verilog_axi":
         raise NoCGenerationError("tested internal memory crossbar must remain Verilog AXI")
-    if set(soc["networks"]["global_config"]["reachable_subsystems"]) != set(computes + memories):
+    if set(soc["networks"]["global_config"]["reachable_subsystems"]) != set(compute_like + memories):
         raise NoCGenerationError("global config must reach all named subsystems")
     memory_outputs = soc["networks"]["global_data"]["outputs"]
     for m in memory_outputs:
         if m["target"] not in regions_data:
             raise NoCGenerationError(f"memory NoC output {m['name']} has unknown destination")
-    cfg_owned = {c: [] for c in computes + memories}
+    cfg_owned = {c: [] for c in compute_like + memories}
     for name, addr in regions_config.items():
         owner = soc["boot"]["primary"] if name.startswith("boot.") else name.split(".")[0]
         if owner not in cfg_owned:
@@ -186,21 +190,21 @@ def profiles(soc, knobs):
             "config": profile(name, plane, initiators, sinks, soc, knobs)
         }
 
-    remote_data = [regions_data[n + ".sram"] for n in computes]
+    remote_data = [regions_data[n + ".sram"] for n in compute_like]
     hbm_ddr = [regions_data[x["target"]] for x in memory_outputs]
     # Main global data NoC terminates on both compute SRAM apertures too:
     # CPU0's bus-based cold boot must be able to copy code into CPU1 SRAM.
     global_data_sinks = [(c + "_sram", [regions_data[c + ".sram"]])
-                         for c in computes]
+                         for c in compute_like]
     global_data_sinks.extend((x["name"], [regions_data[x["target"]]])
                              for x in memory_outputs)
-    add("global_data", "data", computes, global_data_sinks,
+    add("global_data", "data", compute_like, global_data_sinks,
         "global_data", "global_data")
 
     # AXI4 transport for AXI-Lite register accesses. Each remote
     # subsystem exposes its own (possibly disjoint) config windows.
-    add("global_config", "config", computes,
-        [(c + "_regs", cfg_owned[c]) for c in computes + memories],
+    add("global_config", "config", compute_like,
+        [(c + "_regs", cfg_owned[c]) for c in compute_like + memories],
         "global_config", "global_config")
 
     for comp in computes:
@@ -219,11 +223,27 @@ def profiles(soc, knobs):
         targets = [("dma_regs", [regions_config[comp + ".dma"]])]
         if comp == soc["boot"]["primary"]:
             targets.append(("reset_ctrl", [regions_config["boot.reset_ctrl"]]))
-        distant_cfg = [value for name in computes + memories if name != comp
+        distant_cfg = [value for name in compute_like + memories if name != comp
                        for value in cfg_owned[name]]
         targets.append(("global_out", distant_cfg))
         add(comp + "_local_config", "config", ["cpu", "global_in"],
             targets, "local_config", comp + "/local_config")
+
+    # Generic peripheral topology: local data + independent config NoC.
+    for sub in peripheral_specs:
+        name = sub["name"]
+        own = regions_data[name + ".sram"]
+        others = [regions_data[c + ".sram"] for c in compute_like if c != name]
+        add(name + "_local_data", "data",
+            [sub["data_initiator"], "global_in"],
+            [("sram", [own]), ("global_out", others + hbm_ddr)],
+            "local_data", name + "/local_data")
+        distant_cfg = [v for owner in compute_like + memories if owner != name
+                       for v in cfg_owned[owner]]
+        add(name + "_local_config", "config",
+            [sub["config_initiator"], "global_in"],
+            [("controller_regs", cfg_owned[name]), ("global_out", distant_cfg)],
+            "local_config", name + "/local_config")
 
     # Memory-local NoC has TWO separate upstream ingress managers feeding
     # the existing, already-tested crossbar. FlooNoC does not replace that
@@ -236,7 +256,7 @@ def profiles(soc, knobs):
         [("controller_regs", cfg_owned[memory])], "local_config",
         memory + "/local_config")
 
-    if len(result) != 2 + 2 * len(computes) + 2 * len(memories):
+    if len(result) != 2 + 2 * len(compute_like) + 2 * len(memories):
         raise NoCGenerationError("NoC count mismatch")
     return result
 
