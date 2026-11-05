@@ -53,9 +53,9 @@
 .arch-crumbs button{border:0;background:transparent;padding:3px 6px;color:#9dddec}
 .arch-crumbs button[aria-current="page"]{color:#f6fbff;font-weight:750}
 .arch-crumbs span{color:#7f95aa}
-.arch-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(230px,300px);gap:14px;align-items:stretch}
+.arch-layout{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;align-items:stretch}
 .arch-stage{min-width:0;min-height:530px;display:flex;flex-direction:column;border:1px solid #38506a;border-radius:14px;overflow:hidden;background:#081522}
-.arch-viewport{overflow:auto;max-width:100%;height:600px;overscroll-behavior:contain;scrollbar-color:#63819f #0e1c2b}
+.arch-viewport{overflow:auto;max-width:100%;height:650px;overscroll-behavior:contain;scrollbar-color:#63819f #0e1c2b}
 #arch-svg{display:block;background:#081522;max-width:none;user-select:none}
 #arch-svg .arch-click{cursor:pointer;transition:filter .15s ease}
 #arch-svg .arch-click:hover{filter:brightness(1.25)}
@@ -65,11 +65,11 @@
 .arch-key{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
 .arch-dot{width:10px;height:10px;border-radius:3px;display:inline-block}
 .arch-dot.data{background:#28b8b3}.arch-dot.config{background:#a78bfa}.arch-dot.module{background:#55758f}.arch-dot.planned{border:1px dashed #e7a453}
-.arch-inspector{min-width:0;border:1px solid var(--line);padding:18px;border-radius:14px;background:#111e30}
-.arch-inspector h2{font-size:21px;margin:10px 0}.arch-inspector p{font-size:13px}
+.arch-inspector{min-width:0;border:1px solid var(--line);padding:14px 18px;border-radius:12px;background:#111e30;display:grid;grid-template-columns:minmax(230px,1fr) minmax(260px,2fr);column-gap:20px;align-items:start}
+.arch-inspector h2{font-size:19px;margin:6px 0}.arch-inspector p{font-size:13px}
 .arch-inspector dl{margin:15px 0}.arch-inspector dt{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#9db0c9;margin-top:12px}.arch-inspector dd{margin:2px 0 6px;color:#ecf3fa;font-size:13px;overflow-wrap:anywhere}
 .arch-inspector .arch-chip{display:inline-block;padding:2px 8px;border:1px solid #3d6b8a;border-radius:12px;background:#1a3043;font:11px ui-monospace,monospace;color:#a8e8f5}
-.arch-inspector button{margin-top:12px;display:block;max-width:100%;white-space:normal}
+.arch-inspector button{margin-top:12px;display:block;max-width:100%;white-space:normal}.arch-inspector button[hidden]{display:none}
 .arch-evidence{font-size:12px;line-height:1.6;color:#abc4d4;margin:12px 2px 20px;padding:11px 14px;border-left:3px solid #4e97a9;background:#122235}
 .arch-signal-panel{border:1px solid var(--line);background:var(--panel);border-radius:12px;padding:12px 18px;margin:18px 0}
 .arch-signal-panel summary{font-size:16px;font-weight:700;cursor:pointer;color:#dff2ff}
@@ -78,7 +78,7 @@
 .arch-signal-controls label{display:flex;flex-direction:column;gap:5px;min-width:180px}
 .arch-signal-controls select,.arch-signal-controls input{max-width:290px}
 .arch-signal-panel td{font-size:12px}.arch-signal-panel td:first-child{overflow-wrap:anywhere;max-width:320px}
-@media(max-width:960px){.arch-layout{grid-template-columns:1fr}.arch-stage{min-height:440px}.arch-viewport{height:480px}.arch-inspector{padding:14px}.arch-crumbs{flex-basis:100%}}
+@media(max-width:960px){.arch-layout{grid-template-columns:1fr}.arch-stage{min-height:440px}.arch-viewport{height:480px}.arch-inspector{padding:14px;display:block}.arch-crumbs{flex-basis:100%}}
 @media(max-width:650px){.arch-toolbar{gap:7px;padding:10px}.arch-toolbar label{font-size:11px}.arch-toolbar select{max-width:160px}.arch-viewport{height:450px}.arch-signal-panel{padding:12px}.arch-signal-controls label{min-width:140px;flex:1}.arch-signal-controls select{max-width:100%}}
 </style>
 <script type="application/json" id="ex-embedded-graph">__GRAPH_DATA__</script>
