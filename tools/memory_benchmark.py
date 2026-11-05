@@ -11,6 +11,7 @@ import json
 from pathlib import Path
 from statistics import median
 import sys
+import resource
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -52,6 +53,7 @@ async def run_trial(size: int, mode: str, *, seed=1234, chunk_bytes=4096):
     allocation = service.allocate(region.name, size, 64,
                                   owner="benchmark", phase="run")
     recipe = Pattern("address_xor", seed)
+    peak_start = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss  # Linux KiB
     init = await service.initialize(allocation, recipe, policy=mode)
     check = await service.check(allocation, recipe, policy=mode)
     service.release(allocation, consumers_quiesced=True)
@@ -62,6 +64,9 @@ async def run_trial(size: int, mode: str, *, seed=1234, chunk_bytes=4096):
         "check_method": check.method,
         "init_wall_ns": init.wall_ns, "check_wall_ns": check.wall_ns,
         "total_wall_ns": init.wall_ns + check.wall_ns,
+        "host_peak_rss_kib": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
+        "host_peak_rss_delta_kib": max(
+            0, resource.getrusage(resource.RUSAGE_SELF).ru_maxrss - peak_start),
         "simulated_cycles": None, "axi_transactions": None,
         "note": "Only checks the benchmark harness; not a measured RTL speedup",
     }
