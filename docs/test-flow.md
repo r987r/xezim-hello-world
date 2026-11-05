@@ -1,0 +1,128 @@
+# Canonical test-flow step evidence (schema v1)
+
+The existing [regression YAML](../config/regression.yaml) and
+`tools/regress.py` remain the **only** test-selector/engine.
+The existing `dv/full_chip/test_boot.py` and SV/ROM CPU coordinator remain
+the **only** INIT → RUN → CHECK lifecycle. A PCIe root complex or a future
+Ethernet peer is a participant implementing actions, **not** a new phase engine.
+
+## What a recorded step means
+
+Each test action has: `phase` (`init`, `run`, `check`),
+`actor` (CPU, RTL engine, host/VIP), `step` (stable routine/operation),
+`status` (`start`, `pass`, `fail`), `origin`
+(`stimulus`, `observed`, `rtl_observed`, `checker`),
+`time_ps` (sim time), monotonic `seq`, and scalar `details`.
+
+An example event (one JSONL line):
+
+```json
+{"schema_version":1,"seq":6,"time_ps":131000,"phase":"run","actor":"host0","step":"bar_write_0","status":"start","origin":"stimulus","details":{"address":"0x12000100","bytes":8}}
+```
+
+It is essential that:
+- **Stimulus issued** does not imply real RTL acceptance. Real acceptance
+  must come from separately captured AXI AW/W/B, PCIe completion or target
+  accepted-SRAM evidence.
+- **RTL observed** comes only from accepted bus writes, or a conditional
+  assertion in the actual SV checker. Compiler and model-only events never
+  become real NoC traffic just by naming them.
+- **Checker pass** means a checker executed; it must contain independent
+  expected-vs-actual comparisons, and no result is green merely because
+  a routine returned.
+- Every expected step is explicitly listed in `report.flow.required_steps`
+  in the **same** regression test YAML. Unknown, duplicate, malformed,
+  incomplete, out-of-order, or failed steps fail the run.
+- Raw `test-flow-events.jsonl`, normalized `test-flow.json` and
+  `test-flow.html` appear alongside the existing `axi-events.jsonl`,
+  `axi-transactions.json`, `protocol-transactions.json`, and
+  `report.html`; there is no separate site or database.
+
+## Implemented sources
+
+| Producer | API / transport | Origin of proof |
+| --- | --- | --- |
+| Python stimulus / Root Complex | `dv.common.test_flow.StepRecorder.step()` context | `stimulus`, with failure captured even on exceptions |
+| Cocotb memory/check code | same context, `origin="checker"` | actual assertion result |
+| Real CPU firmware and SystemVerilog checker | generated `SOC_FLOW_V1` markers printed on accepted SV checker phase events | `rtl_observed` (phase start and pass) |
+| Native C firmware (prepared reusable ABI) | `sw/common/test_flow.h`, `soc_flow_emit(volatile uint32_t *sink, ...)` | **only** after correlated accepted AXI write with OKAY response; optional `report.flow.firmware_mmio` codebook |
+| Ethernet/IP/other external actors | same Python step context; their VIP monitor reports independently through `dv/common/protocol_trace.py` | events are `stimulus`; real packets/completions require VIP/RTL evidence |
+
+Only the PCIe-host scenario opts into the strict step-flow gate in this PR.
+The generic API and cross-language adapters are implemented and unit-tested;
+**other existing tests have not all been instrumented**. Their existing
+capture/results remain unchanged. Add the `report.flow` contract to each
+as it is migrated, and make the contract required before calling that
+scenario's step coverage complete.
+
+## Declaring a test in the existing YAML
+
+```yaml
+report:
+  axi:
+    scope: dut.u_noc
+    clock: clk
+    reset: rst_n
+    catalog: gen/supernoc/axi_monitors.json
+  flow:
+    required_steps:
+      init: [host0.enumerate, host0.init_ack, cpu0.firmware_init]
+      run: [host0.bar_roundtrip, host0.run_ack, cpu0.firmware_run]
+      check: [host0.check_ack, cpu0.firmware_check]
+```
+
+The full PCIe0 definition lists every one of the four BAR writes and reads
+individually, not just `bar_roundtrip`. Missing an expected operation fails
+CI. The plan is validated before the HDL build. Test writers add the
+corresponding `StepRecorder.step` around *each* routine invocation.
+
+For a native C program, the same YAML can optionally declare:
+```yaml
+  flow:
+    required_steps:
+      init: [cpu0.setup]
+      run: [cpu0.dma_start, cpu0.dma_end]
+      check: [cpu0.dma_check]
+    firmware_mmio:
+      monitor: compute0_local_data.cpu
+      address: '0x10000f00'
+      actors: {'7': cpu0}
+      steps: {'101': dma_start, '102': dma_end, '103': dma_check}
+```
+This is an example only: the trace-word sink address must be allocated,
+reserved and nonoverlapping through the existing SRAM memory planner for
+the particular test. The software marker consists of a 32-bit
+`0xF1`-prefixed code with phase, status, actor and step IDs; names resolve
+through the YAML codebook. An unobserved software emit is **never accepted**.
+
+## PCIe0 full-chip ownership
+
+The CPU0-generated firmware, not Python forcing, writes handshake words
+into real `pcie0.sram` over Compute0 local → global data → PCIe0 local
+NoCs. The modeled host RC enumerates and acknowledges the same words over
+BAR0 → real pinned TLP-to-AXI bridge → PCIe0 local NoC. The common CPU boot
+test owns phase order. `dv/pcie0/host_adapter.py` owns only host actions.
+The full-chip SV checker prints observed firmware start/pass steps.
+All stages are bound to the same regression YAML plan and output directory.
+
+The original CPU → PCIe0 SRAM DecodeError was a genuine missing destination
+from compute-local `global_out`. PR #53 now generates peripheral SRAM
+routes from the shared `compute_like` set and includes a negative guard.
+
+## Planned rollout / no false coverage
+
+Before claiming *all tests* have uniform step coverage, migrate:
+1. Existing BFM `chip-boot` and the CPU C/iDMA test to step contexts
+   while preserving their physical region allocator and telemetry checks.
+2. Standalone super-NoC, DDR, HBM and memory tests: one recorded start/pass/fail
+   around every read/write/doorbell/check, plus actual monitor evidence.
+3. Ethernet0 RX/TX: device queue programming, host packet generation, received
+   frame, DMA descriptor transaction, completion and content check, each a
+   step with independent GMII/VIP and AXI evidence.
+4. Negative tests (missing/late ack, wrong phase, corrupted data): a
+   *deliberate expected error* must be distinguished from unexpected
+   step failure, using the existing `expect_failure` contract. Avoid
+   reporting deliberate failures as an ordinary successful CHECK.
+
+The flow reporter is a **reporting and acceptance layer**, not a new
+protocol VIP, new DMA engine, or alternate test coordinator.
