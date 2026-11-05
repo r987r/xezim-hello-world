@@ -81,6 +81,30 @@ class CrossLanguageStepEvents(unittest.TestCase):
                 with self.subTest(problem=problem),self.assertRaises(ValueError):
                     firmware_mmio_events(out,cfg)
 
+    def test_sv_bench_macro_generates_parseable_common_step_record(self):
+        compiler=shutil.which("iverilog")
+        player=shutil.which("vvp")
+        if not compiler or not player:
+            self.skipTest("Icarus optional SV macro portability probe not installed")
+        with TemporaryDirectory() as tmp:
+            path=Path(tmp)
+            src=path/"sim.sv"
+            src.write_text(
+                '`timescale 1ns/1ps\n`include "dv/common/test_flow.svh"\n'
+                'module bench; initial begin\n'
+                '  #1; `SOC_FLOW_STEP("init","svtb","reset","start");\n'
+                '  #1; `SOC_FLOW_STEP("init","svtb","reset","pass");\n'
+                '  $finish; end endmodule\n')
+            output=path/"bench.vvp"
+            subprocess.run([compiler,"-g2012","-I",str(ROOT),
+                            "-s","bench","-o",str(output),str(src)],check=True)
+            text=subprocess.check_output([player,str(output)],text=True)
+            from test_flow_codec import SV_RE
+            found=[SV_RE.search(line) for line in text.splitlines()]
+            found=[item.groups() for item in found if item]
+            self.assertEqual([x[-1] for x in found],["start","pass"])
+            self.assertTrue(all(x[1:4]==("init","svtb","reset") for x in found))
+
     def test_sv_emitter_rejects_invalid_name(self):
         self.assertIn("SOC_FLOW_V1",sv_event("init","cpu0","dma_hook","start"))
         with self.assertRaises(ValueError):
