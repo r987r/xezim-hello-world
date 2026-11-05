@@ -66,7 +66,7 @@ class Program:
 
 
 def build(cfg, *, cpu0_run_hook=None, pcie_host_phase=False):
-    addresses = rv.build(cfg)['addresses']  # preserve explicit boot-policy validation
+    addresses = rv.build(cfg, allow_extended_flash_slot=pcie_host_phase)['addresses']  # preserve explicit boot-policy validation
     if cpu0_run_hook is not None:
         flash = next((r for r in cfg['address_map']['data']
                       if r['name'] == 'boot.flash'), None)
