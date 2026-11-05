@@ -1,12 +1,17 @@
 #include "memory_pattern.h"
 
+bool soc_mem_pattern_valid(soc_pattern_kind_t kind) {
+    return kind == SOC_PATTERN_COUNTER8 || kind == SOC_PATTERN_CONSTANT ||
+           kind == SOC_PATTERN_ADDRESS_XOR;
+}
+
 uint8_t soc_mem_expected_byte(uint64_t phys_addr, uint32_t seed,
                               soc_pattern_kind_t kind) {
     switch (kind) {
     case SOC_PATTERN_CONSTANT: return (uint8_t)seed;
     case SOC_PATTERN_COUNTER8: return (uint8_t)(phys_addr + seed);
     case SOC_PATTERN_ADDRESS_XOR: return (uint8_t)(phys_addr ^ seed);
-    default: return 0; /* callers validate the declared enum */
+    default: __builtin_trap(); /* no silent unknown-pattern fallback */
     }
 }
 
