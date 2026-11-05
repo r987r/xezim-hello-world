@@ -51,4 +51,30 @@ typedef struct {
 bool soc_dma_chain_build(soc_dma_arena_t *arena, const soc_dma_copy_t *copies,
                          size_t count, bool irq_last, soc_dma_chain_t *out);
 void soc_dma_publish(void);  /* cache clean required on noncoherent CPUs */
+
+/* Firmware-side 32-bit registers on the real soc_dma_regs MMIO boundary.
+ * APB_BUSY covers only head submission, never full descriptor retirement.
+ * Keep descriptors/source SRAM allocated until IRQ, writebacks and idle.
+ */
+#define SOC_DMA_REG_HEAD_LO       0x00u
+#define SOC_DMA_REG_HEAD_HI       0x04u
+#define SOC_DMA_REG_COMMAND       0x08u
+#define SOC_DMA_REG_STATUS        0x0cu
+#define SOC_DMA_CMD_SUBMIT        (1u << 0)
+#define SOC_DMA_CMD_IRQ_ACK       (1u << 1)
+#define SOC_DMA_STATUS_APB_BUSY   (1u << 0)
+#define SOC_DMA_STATUS_IRQ        (1u << 1)
+#define SOC_DMA_STATUS_APB_ERROR  (1u << 2)
+#define SOC_DMA_STATUS_RAW_IRQ    (1u << 3)
+
+/* Reject invalid, unaligned and busy/pending/error CSR submissions. A
+ * release fence precedes the doorbell; noncoherent CPUs need cache clean.
+ * The caller must still track engine completion and descriptor lifetime.
+ */
+bool soc_dma_mmio_submit(volatile uint32_t *csr, uint64_t head_phys);
+/* Bounded polling for the sticky completion status; errors win over IRQ. */
+bool soc_dma_mmio_wait_irq(volatile const uint32_t *csr,
+                           uint32_t max_polls, uint32_t *status_out);
+/* Asynchronous one-shot acknowledgement; re-read STATUS to confirm clear. */
+void soc_dma_mmio_ack_irq(volatile uint32_t *csr);
 #endif

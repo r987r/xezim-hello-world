@@ -65,8 +65,17 @@ class Program:
         return result
 
 
-def build(cfg):
+def build(cfg, *, cpu0_run_hook=None):
     addresses = rv.build(cfg)['addresses']  # preserve explicit boot-policy validation
+    if cpu0_run_hook is not None:
+        flash = next((r for r in cfg['address_map']['data']
+                      if r['name'] == 'boot.flash'), None)
+        if flash is None or type(cpu0_run_hook) is not int:
+            raise ValueError('CPU C run hook must be a configured flash address')
+        flash_base = int(flash['base'], 0)
+        flash_size = int(flash['size'], 0)
+        if cpu0_run_hook % 4 or not flash_base + 0x1000 <= cpu0_run_hook < flash_base + flash_size or cpu0_run_hook > 0xffffffff:
+            raise ValueError('CPU C run hook outside reserved aligned flash C region')
     primary = cfg['boot']['primary']
     cores = sorted((s for s in cfg['subsystems'] if s['type'] == 'compute'),
                    key=lambda s: (s['name'] != primary, s['name']))
@@ -107,6 +116,19 @@ def build(cfg):
         p.store(0x550+index, 8 + 16*index)
         if index == 0:
             p.wait_all(8, 0x550, len(cores), 'wait_hello', increment=True)
+            if cpu0_run_hook is not None:
+                # CPU0 jumps to real compiled RV32I firmware in the mapped
+                # read-only flash, then resumes the existing phase protocol.
+                # Stack occupies boot_scratch below the descriptor pool,
+                # without touching executing code, mailboxes or DMA data.
+                stack = primary_layout.descriptors.start - 16
+                if stack & 15:
+                    raise ValueError('CPU0 C stack must be 16-byte aligned')
+                p.li(2, stack)   # RV32I ABI stack pointer x2
+                p.li(10, cpu0_run_hook)  # a0 = C function address
+                p.add(rv._jalr(1, 10), 'jalr ra, 0(a0)  # call C DMA run hook')
+                p.code.append(((10, 0, 'dma_error'), 'bne a0, zero, dma_error'))
+                p.li(5, mailbox)  # C may clobber caller-saved registers
             p.store(3, 0)
         else:
             p.wait(0, 3, 'wait_check')
@@ -119,6 +141,9 @@ def build(cfg):
             p.wait_all(12, 1, len(cores), 'wait_checked')
             p.store(0x600d, done_offset)
         p.add(rv._jal_zero(), 'jal zero, 0  # park')
+        if index == 0 and cpu0_run_hook is not None:
+            p.label('dma_error')
+            p.add(rv._jal_zero(), 'jal zero, 0  # failed C hook: no CHECK')
         image = p.finish()
         if len(image)*4 > min(stride, offset):
             raise ValueError(f'{core["name"]}: phased firmware exceeds configured flash slot/mailbox offset')
@@ -148,8 +173,8 @@ def build(cfg):
             'sram_bases': [data[c['name']+'.sram'] for c in cores]}
 
 
-def emit(cfg, out: Path):
-    fw = build(cfg)
+def emit(cfg, out: Path, *, cpu0_run_hook=None):
+    fw = build(cfg, cpu0_run_hook=cpu0_run_hook)
     out.mkdir(parents=True, exist_ok=True)
     def words64(words):
         words = list(words)
@@ -176,5 +201,7 @@ def emit(cfg, out: Path):
                     for i, c in enumerate(fw['cores'])],
                 'sram_initialization': 'none: ROM firmware copies images and clears mailboxes through CPU stores',
                 'runtime': 'minimal RV32I mailbox bootstrap; not an unmodified Snitch/PULP runtime port'}
+    if cpu0_run_hook is not None:
+        manifest['cpu0_run_hook'] = cpu0_run_hook
     (out/'firmware.json').write_text(json.dumps(manifest, indent=2, sort_keys=True)+'\n')
     return fw, manifest

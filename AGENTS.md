@@ -16,12 +16,21 @@ in `config/soc.yaml` denotes selected architecture only. The current
 `pulp_axi.executable=False`. `gen/chip/soc_top.sv` is now an actual **chip boot configuration** with
 real CPUs, the shared NoCs, upstream AXI adapters, SRAM, reset registers
 and AXI memory stand-ins. Optional real PULP iDMA and CSRs are generator-wired for every compute
-subsystem in `DmaEnable=1`; CPU firmware IRQ handlers and physical controllers
+subsystem in `DmaEnable=1`; CPU0 C DMA submits/polls successfully; CPU firmware IRQ handlers and physical controllers
 remain unintegrated. The separate full-NoC DMA gate **passed** with 105 real descriptor transfers
 in CI run 41885417960 (CPU0 AXI BFMs drive preparation, not CPU firmware). The generic backend flag still does not describe a complete
 arbitrary-configuration SoC emitter. Legacy memory/boot benches remain
 independent executable scopes. Read [implementation-status](docs/implementation-status.md)
 before describing progress.
+
+Unified region allocation: `sw/common/memory_pool.[ch]` owns the
+physical SRAM, DDR and HBM allocator and `tools/memory_plan.py` independently
+plans configured model-bounded virtual allocations. `soc_sram_pool_*`
+is a compatibility wrapper using the same allocator implementation, not
+a separate heap. The 32-bit CPUs cannot dereference HBM/DDR above 4 GiB.
+Never treat Python planning or a C hosted test as CPU RTL execution; prove
+CPU addresses and DMA retirement from passive AXI monitors. See
+[docs/memory-allocation.md](docs/memory-allocation.md).
 
 Shared SRAM ownership: `tools/sram_layout.py` defines physical regions
 for both `tools/chip_bootgen.py` and `dv/common/dma_vectors.py`. Use
@@ -30,9 +39,9 @@ reclaims the whole simulated boot allocation only when all CPUs are stopped
 in a distinct reset/test run. Reclaim a running chip's boot scratch only
 after CHECK and all accesses drain; never reuse executable code or
 live mailboxes. In C, use `sw/common/sram_pool.[ch]` instead of
-independent DMA/boot bump allocators. Do not claim C executes in today's
-minimal generated RV32I boot: this is an ownership-policy unification
-until the compiled boot BSP is integrated.
+independent DMA/boot bump allocators. The default minimal RV32I boot remains independent of C. The opt-in
+`chip-cpu-dma` variant compiles the shared allocator and DMA driver into
+RV32I flash and calls it on the real CPU0 during RUN. That CPU-executed integration passed at commit `573dc871` ([CI 41933332567](https://github.com/r987r/xezim-hello-world/actions/runs/41933332567)); newer heads still require their own green CI.
 
 Keep boot cold: CPU0 must really read ROM/flash, write **uninitialized**
 SRAM over its bus, release CPU1 via MMIO, and both CPUs must execute code
@@ -121,7 +130,7 @@ tracks planned per-fabric and per-subsystem read/write budgets, native
 PULP/FlooNoC/Verilog AXI parameter targets, and per-port overrides.
 FlooNoC chimney transaction caps are bound to generated RTL. The connected
 BFM traffic baseline is verified; maximum configured capacities and every
-parameter combination are not. CPU/reset hookups exist in the chip boot scope; real iDMA/CSR hookup is optional and generated; CPU firmware support remains pending.
+parameter combination are not. CPU/reset hookups exist in the chip boot scope; real iDMA/CSR hookup is optional and generated; CPU0 C DMA firmware/polling is verified, but interrupt-service firmware remains pending.
 Check that configured compute local output ID width is input ID width
 plus ceil(log2(CPU/DMA initiator count)), and that global FlooGen input IDs agree.
 Never mistake planned quotas for implemented capacity or FlooGen emission
@@ -281,10 +290,10 @@ the BFM scope. See [docs/full-chip-boot.md](docs/full-chip-boot.md) for the
 CPU0 init/run/check mailbox contract, upstream WB/AXI bridges, AXI memory
 stand-ins, negative missing-CPU check and simulator limits. Firmware must
 execute on the real CPUs; the host never drives CPU result mailboxes.
-Next actual integration work: make both real-DMA full-NoC traffic and
-   32-bit CSR regressions green, then add CPU-started DMA and interrupt
-   servicing, a
-portable C runtime/BSP when required, and Xezim chip-level functional traffic. Preserve the existing bus-driven cold-boot proof. HBM/DDR
+Next integration work: get the opt-in CPU-started C DMA through the
+full-chip INIT/RUN/CHECK RTL gate with passive AXI evidence and reviewed
+results. Extend it to CPU IRQ handling after polling validation; Xezim
+chip-level functional traffic remains distinct. Preserve the existing bus-driven cold-boot proof. HBM/DDR
 controller/PHY integration is a separate stage.
 
 ## Passive AXI run reporting

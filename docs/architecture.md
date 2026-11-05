@@ -17,7 +17,7 @@ CPU0 (PicoRV32) is the primary boot core. CPU1 (SERV) stays in reset until CPU0 
 
 ## Stable contract vs backend
 
-The generator first validates an abstract graph of **initiators, targets, boundaries, address windows, and NoC ports**. It produces `gen/noc/fabric_ir.json`. The pinned upstream FlooGen generator now emits real structural module/package pairs under `gen/noc/floonoc/` for every local/global network, and `tools/full_chip_gen.py` assembles the CPU boot configuration around the same shared NoC core. General iDMA/controller integration remains pending. The separate connected NoC BFM test does run real routed RTL traffic.
+The generator first validates an abstract graph of **initiators, targets, boundaries, address windows, and NoC ports**. It produces `gen/noc/fabric_ir.json`. The pinned upstream FlooGen generator now emits real structural module/package pairs under `gen/noc/floonoc/` for every local/global network, and `tools/full_chip_gen.py` assembles the CPU boot configuration around the same shared NoC core. Real iDMA and CPU0 C-driven DMA are integrated and tested behind the opt-in enable; general controller/PHY integration remains pending. The separate connected NoC BFM test does run real routed RTL traffic.
 
 | Network | Backend | Actual status |
 | --- | --- | --- |
@@ -49,7 +49,7 @@ Both compute templates select pinned `pulp_idma`. The reusable frontend/backend
 passed the independent Verilator+AXI regression, and the full-chip generator
 now attaches a real engine to each compute DMA port plus a CSR/doorbell
 bridge at each config endpoint. The `chip-dma` test drove both engines
-through the real NoC hierarchy and **passed** on [November 4 CI](https://github.com/r987r/xezim-hello-world/actions/runs/41885417960) with CPU0 AXI BFMs preparing the DMA-only SRAM and CSRs. The standalone NoC BFM does not instantiate DMA. The final DMA must support source/destination addresses anywhere in the global data map and both HBM/DDR targets.
+through the real NoC hierarchy and **passed** on [November 4 CI](https://github.com/r987r/xezim-hello-world/actions/runs/41885417960) with CPU0 AXI BFMs preparing the DMA-only SRAM and CSRs. The standalone NoC BFM does not instantiate DMA. The independent compiled CPU0 C-DMA regression also passed full-chip CI with actual DDR/HBM roundtrip readback ([CI 41933332567](https://github.com/r987r/xezim-hello-world/actions/runs/41933332567), 39,150 accepted AXI observations). Only CPU0's engine is launched by C in that test; the independent BFM test exercises both engines. IRQ-service firmware, physical controller/PHYs and broader concurrency remain pending.
 
 ### Memory adapters
 

@@ -1,6 +1,9 @@
 """Host phases observe real CPU0-coordinated firmware, never drive CPU results."""
 import json
+import os
 from pathlib import Path
+import yaml
+from tools.memory_plan import configured_regions
 
 import cocotb
 from cocotb.clock import Clock
@@ -13,7 +16,8 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 async def phase(dut, signal, name):
-    await with_timeout(RisingEdge(signal), 1000, 'us')
+    timeout = 5 if os.environ.get('SOC_CPU_DMA_MODE') == '1' else 1
+    await with_timeout(RisingEdge(signal), timeout, 'ms')
     dut._log.info('observed firmware phase %s complete', name)
     trace_phase('CPU '+name+' complete')
 
@@ -36,7 +40,16 @@ async def memory_transaction(dut, operation):
 async def coordinated_cold_boot(dut):
     manifest = json.loads((ROOT/'gen/chip/firmware.json').read_text())
     memory = json.loads((ROOT/'gen/chip/manifest.json').read_text())['memory_models']
-    probe = AxiMaster(AxiBus.from_prefix(dut, 'probe'), dut.clk, dut.rst_n, reset_active_level=False)
+    cpu_dma_mode = os.environ.get('SOC_CPU_DMA_MODE') == '1'
+    # The probe outputs mirror the *real iDMA response* when DmaEnable=1
+    # and ProbeEnable=0. Attaching AxiMaster in CPU mode would let its
+    # unsolicited R-channel worker consume the DMA's valid descriptor R
+    # (ID=7), raising cocotbext-axi "unexpected burst ID". In this mode
+    # the probe is an observation port only: NEVER attach an active agent.
+    probe = None
+    if not cpu_dma_mode:
+        probe = AxiMaster(AxiBus.from_prefix(dut, 'probe'), dut.clk,
+                          dut.rst_n, reset_active_level=False)
     dut.rst_n.value = 0
     attach_observers(dut)
     cocotb.start_soon(Clock(dut.clk, 10, 'ns').start())
@@ -53,6 +66,62 @@ async def coordinated_cold_boot(dut):
     assert int(dut.hello_mask.value) == mask
     assert int(dut.check_mask.value) == mask
     assert int(dut.app_fetch.value) == mask
+    if cpu_dma_mode:
+        assert probe is None  # a CPU-DMA run must never own the BFM port
+        # Same testbench and INIT/RUN/CHECK checker; no AXI BFM drives the
+        # CPU or memory. Real PicoRV32 has already called compiled C, which
+        # sends both engines' traffic through the configured NoCs.
+        assert int(dut.cpu_dma_success.value) == 1, (
+            "real CPU did not finish C DMA/checks")
+        assert int(dut.cpu_dma_evidence.value) == 0x600dc0de
+        plan = os.environ.get("SOC_RUN_PLAN")
+        assert plan, "missing shared AXI capture configuration"
+        events_file = Path(plan).parent / "axi-events.jsonl"
+        assert events_file.is_file(), "missing passive NoC AXI events"
+        regions = configured_regions(yaml.safe_load(
+            (ROOT/"config/soc.yaml").read_text()))
+        from tools.memory_plan import validate_cpu_allocation
+        # C writes its *actual* allocated physical addresses into the
+        # reserved mailbox telemetry. Decode observed RTL SRAM stores and
+        # compare them with an independently allocated Python virtual plan.
+        assert int(dut.cpu_dma_address_seen.value) == 0x3f
+        actual_addresses = int(dut.cpu_dma_addresses.value)
+        recorded = [(actual_addresses >> (32*i)) & 0xffffffff
+                    for i in range(6)]
+        predicted = [
+            regions["compute0.sram.payload"].allocate(
+                64, 64, owner="cpu0", phase="run"),
+            regions["compute1.sram.payload"].allocate(
+                64, 64, owner="cpu0", phase="run"),
+            regions["memory0.ddr0"].allocate(
+                64, 64, owner="dma0", phase="run"),
+            regions["memory0.hbm0"].allocate(
+                64, 64, owner="dma0", phase="run")]
+        for observed, expected in zip(
+                (recorded[0], recorded[1],
+                 recorded[2] | (recorded[3] << 32),
+                 recorded[4] | (recorded[5] << 32)), predicted):
+            validate_cpu_allocation(observed, expected)
+        from tools.axi_report import read_events
+        events, issues = read_events(events_file)
+        assert not issues, f"bad AXI trace: {issues[:3]}"
+        actual = {target: {"ar": 0, "aw": 0}
+                  for target in ("memory0.ddr0","memory0.hbm0")}
+        for event in events:
+            if event.get("monitor") != "compute0_local_data.dma" or event.get("channel") not in ("ar","aw"):
+                continue
+            address = int(event["fields"]["addr"], 0)
+            for target in actual:
+                region = regions[target]
+                if region.base <= address < region.base + region.capacity:
+                    actual[target][event["channel"]] += 1
+        for target, counts in actual.items():
+            assert counts["aw"] > 0 and counts["ar"] > 0, (
+                f"real CPU DMA missing full-NoC DDR/HBM accepted writes+reads: {target}, {counts}")
+        trace_phase("CPU compiled C DMA complete: monitored DDR+HBM roundtrips")
+        dut._log.info("PASS fullchip: CPU-executed compiled C DMA, shared INIT/RUN/CHECK, "
+                      "DDR+HBM roundtrip, SRAM allocator and passive AXI monitors")
+        return
     # Only a verification manager occupies the not-yet-integrated DMA port.
     # It never drives SRAM/boot mailboxes. Distinct values detect model aliasing.
     expected = []

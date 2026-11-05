@@ -14,6 +14,8 @@ on:
       - 'sw/dma/**'
       - 'sw/common/**'
       - 'tests/test_dma*'
+      - 'tests/test_memory_plan.py'
+      - 'tools/memory_plan.py'
       - 'tests/test_sram_layout.py'
       - '.github/workflows/dma.yml'
   workflow_dispatch:

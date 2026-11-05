@@ -144,6 +144,6 @@ at every compute DMA endpoint. **CPU0 AXI BFMs** use the CPU0 data/config AXI
 interfaces only for memory preparation and CSR submission (not PCIe). The event table,
 timing chart, result and source SHA are published from the full-chip CI
 artifact when that regression actually executes. This is NOT evidence of
-CPU-launched DMA firmware or physical DDR/HBM controller integration.
+physical DDR/HBM controller integration (the separate `chip-cpu-dma` gate verifies CPU0-launched C DMA with passive AXI evidence).
 
 Successful [isolated](https://github.com/r987r/xezim-hello-world/actions/runs/41860245485) and [full-chip](https://github.com/r987r/xezim-hello-world/actions/runs/41885417960) DMA CI evidence is associated with its tested Git SHA. The Pages collector must verify a merged PR/source before treating either as current main evidence; the prior runs do not alone validate a new merged tree.

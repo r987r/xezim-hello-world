@@ -4,7 +4,7 @@ flowchart TB
   classDef model fill:#f5f6f7,stroke:#7b8794,color:#233047;
   classDef verified fill:#e4f8e8,stroke:#228450,color:#12432b;
   %% All FlooNoC internal router and NI RTL is generated.
-  %% Solid: generated boot + optional iDMA wiring. Dashed: pending physical controllers.
+  %% Solid: CPU boot and optional real DMA/CSR wiring. Dashed: controller/PHY pending.
   subgraph n_compute0_box["compute0 / compute subsystem"]
   n_compute0_cpu["picorv32 CPU"]:::model
   n_compute0_dma["PULP iDMA + CSR (DmaEnable=1)"]:::model
@@ -50,4 +50,4 @@ flowchart TB
   n_memory0_local_data -->|AXI4| n_xbar
   n_xbar -->|HBM model| n_memory0_hbm0
   n_xbar -->|DDR model| n_memory0_ddr0
-  %% Physical HBM/DDR controllers remain unintegrated; iDMA is generated/optional.
+  %% Real CPU0 C-DMA and dual-engine BFM DMA are verified test modes; physical controllers remain unintegrated.

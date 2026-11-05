@@ -45,3 +45,36 @@ void soc_dma_publish(void) {
 #error "soc_dma_publish requires an implementation of a CPU memory fence"
 #endif
 }
+
+/* The 64-bit upstream iDMA descriptor pointer crosses an AXI-Lite
+ * 32-bit firmware CSR in two writes, committed by a one-shot doorbell.
+ */
+bool soc_dma_mmio_submit(volatile uint32_t *csr, uint64_t head_phys) {
+    if (!csr || (head_phys & (SOC_DMA_DESC_ALIGN - 1u)) != 0)
+        return false;
+    uint32_t status = csr[SOC_DMA_REG_STATUS / 4u];
+    if (status & (SOC_DMA_STATUS_APB_BUSY | SOC_DMA_STATUS_IRQ |
+                  SOC_DMA_STATUS_APB_ERROR))
+        return false;
+    csr[SOC_DMA_REG_HEAD_LO / 4u] = (uint32_t)head_phys;
+    csr[SOC_DMA_REG_HEAD_HI / 4u] = (uint32_t)(head_phys >> 32);
+    soc_dma_publish();
+    csr[SOC_DMA_REG_COMMAND / 4u] = SOC_DMA_CMD_SUBMIT;
+    return true;
+}
+
+bool soc_dma_mmio_wait_irq(volatile const uint32_t *csr,
+                           uint32_t max_polls, uint32_t *status_out) {
+    if (!csr || !max_polls) return false;
+    for (uint32_t n = 0; n < max_polls; ++n) {
+        uint32_t status = csr[SOC_DMA_REG_STATUS / 4u];
+        if (status_out) *status_out = status;
+        if (status & SOC_DMA_STATUS_APB_ERROR) return false;
+        if (status & SOC_DMA_STATUS_IRQ) return true;
+    }
+    return false;
+}
+
+void soc_dma_mmio_ack_irq(volatile uint32_t *csr) {
+    if (csr) csr[SOC_DMA_REG_COMMAND / 4u] = SOC_DMA_CMD_IRQ_ACK;
+}

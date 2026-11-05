@@ -53,7 +53,7 @@ without substituting for real CPU execution.
 | `noc` | Verilator elaboration of every configured network, one connected-NoC traffic test, named routed corruption failure |
 | `compatibility` | Xezim compile-only probe of every configured network |
 | `diagnostics` | CPU fetch request activity and arithmetic simulator smoke |
-| `chip` | CPU-coordinated boot and AXI model readback, held-secondary negative, Xezim chip structural compilation |
+| `chip` | One RTL framework: CPU0 compiled C DMA roundtrip (first/fast-fail), independent real-DMA BFM coverage, cold CPU boot, held-secondary negative, Xezim structural compile. Every scope is still required for a green suite. |
 | `full` | All suites above; schema validation rejects an uncovered declared test |
 
 Every invocation checks generated-file drift before resolving RTL. The
@@ -135,8 +135,8 @@ See [chip boot](full-chip-boot.md).
 ## Pinned PULP iDMA RTL bring-up
 
 The `dma` suite is a separate **real Verilator/cocotb RTL** scope, not
-software-only descriptor-vector validation and not a claim of full-chip DMA
-integration. `make dv-dma` invokes the upstream-generated desc64 frontend and
+software-only descriptor-vector validation. Full-chip DMA has a distinct
+passing `chip-dma` gate (with CPU0 AXI BFMs, not executed CPU firmware). `make dv-dma` invokes the upstream-generated desc64 frontend and
 `rw_axi` backend with PULP AXI join/mux against cocotbext-axi memory targets.
 One 100-descriptor DDR transfer and one single-descriptor HBM transfer check
 payload data, descriptor writeback, final interrupt and idle-before-reclaim.
@@ -150,3 +150,32 @@ FlooNoC's pinned AXI/APB versions provide shared bus types. Existing `gen/`
 NoC and cold-boot artifacts remain unchanged. Run the dedicated
 `.github/workflows/dma.yml` action for complete compiler and simulation logs;
 [successful 2026-11-04 head](https://github.com/r987r/xezim-hello-world/actions/runs/41860245485).
+
+For rapid PR feedback, full-chip CI first cross-links real RV32I C firmware and tests
+allocation/probe ownership without FlooNoC generation. It then runs
+`make dv-chip FAST_FAIL=1`, which starts with the CPU C DMA gate and stops
+subsequent expensive targets on the first failure while retaining logs and
+AXI traces. Run plain `make dv-chip` locally to continue all tests even if
+one fails. In CPU C mode the AXI probe BFM must *not* instantiate: its
+output pins mirror real iDMA response IDs, so the passive AXI monitor is
+the correct nonintrusive observer. Keep performance and memory-init/check
+benchmarks on the same strict/hybrid/fast scenario contract.
+
+### Active versus passive AXI agent ownership
+
+All cocotb testbench AXI drivers are reviewed by
+`tests/test_axi_agent_ownership.py`. In standalone DMA, RTL is the AXI
+master and the host sparse memory is the only active AXI slave. In SuperNoC
+standalone DV, BFMs drive exposed manager ports and host sparse memory
+responds on external targets. In full-chip DMA-only mode, CPUs are held in
+reset and the CPU0 data/config BFMs own their two ports. In real CPU C DMA
+mode, **no active probe BFM is instantiated**: the probe response pins are
+an iDMA response mirror, while the passive AXI monitors still record all
+handshakes. In isolated DDR4, the external AXI BFM drives the controller,
+not internal DFI banks. Each future active agent must be added to the
+explicit scope inventory and checked for mutually exclusive bus ownership.
+
+Never attach an active `AxiMaster` to a monitor-only mirror; its response
+handler sees unrelated real RTL AXI IDs and can reject/consume legitimate
+responses. Static inventory tests protect common ownership mistakes, but
+passing real RTL simulations remain necessary to prove there is no contention.

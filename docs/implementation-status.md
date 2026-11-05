@@ -2,7 +2,7 @@
 
 The architecture comes from `config/soc.yaml`; its generated verification
 plan distinguishes independent executable scopes from the planned full SoC.
-A passing BFM test does not establish CPU/iDMA/controller integration.
+A passing BFM test does not by itself establish CPU/iDMA/controller integration. The real CPU0 C-DMA gate now provides separate CPU-executed proof; no physical DDR/HBM controllers or PHYs are integrated.
 
 | Part | Executable scope | Remaining boundary |
 | --- | --- | --- |
@@ -13,16 +13,16 @@ A passing BFM test does not establish CPU/iDMA/controller integration.
 | Eight local/global FlooNoCs | `make dv-supernoc`, all real meshes connected by 11 AXI4 links, six upstream managers and nine mapped sparse targets | AXI BFMs at CPU/DMA/CSR/SRAM/memory-crossbar boundaries |
 | Xezim FlooNoC compatibility | `python3 tools/regress.py compatibility`, all eight structural compilations | Data-mesh width warnings remain; no Xezim NoC traffic proof |
 | AXI-Lite endpoint adapters | Upstream converters/mux/demux and reset register bank attached in the chip boot scope | The independent NoC BFM wrapper still uses AXI agents |
-| PULP iDMA | Isolated `make dv-dma` verified RTL descriptors ([CI](https://github.com/r987r/xezim-hello-world/actions/runs/41860245485)). Generated `DmaEnable=1` instances attach to each compute data NoC and `dma_regs` config NoC; `make dv-chip-dma` **passed** the real dual-engine full-chip RTL traffic test ([CI](https://github.com/r987r/xezim-hello-world/actions/runs/41885417960), 1,902 AXI observations). | CPU-side submission and interrupt-service firmware, physical HBM/DDR remain pending |
+| PULP iDMA | Isolated `make dv-dma` verified RTL descriptors ([CI](https://github.com/r987r/xezim-hello-world/actions/runs/41860245485)). Generated `DmaEnable=1` instances attach to each compute data NoC and `dma_regs` config NoC; `make dv-chip-dma` **passed** the real dual-engine full-chip RTL traffic test ([CI](https://github.com/r987r/xezim-hello-world/actions/runs/41885417960), 1,902 AXI observations). | CPU0 C-side submission/polling is verified ([full-chip CPU DMA CI](https://github.com/r987r/xezim-hello-world/actions/runs/41933332567), 39,150 AXI observations); CPU ISR/service, simultaneous CPU-launched dual-DMA and physical HBM/DDR remain pending |
 | HBM/DDR controllers and PHYs | No executable physical path | All current targets are behavioral AXI models |
-| Chip boot `soc_top` | `make dv-chip`: CPU0 loads SRAM, releases SERV and coordinates init/run/check through real NoCs; AXI memory model readback | CPU-side DMA firmware and interrupt service and physical controllers remain pending |
+| Chip boot `soc_top` | `make dv-chip`: real CPUs cold-boot and coordinate INIT/RUN/CHECK; `chip-cpu-dma` runs compiled C on PicoRV32 and validates SRAM/DDR/HBM roundtrips through iDMA ([CI 41933332567](https://github.com/r987r/xezim-hello-world/actions/runs/41933332567)) | CPU ISR, mixed-engine concurrent firmware and physical controller/PHY integration remain pending |
 
 See [super-NoC verification](supernoc-verification.md) for the exact traffic
 checks, local evidence, test commands and known limitations. See
 [simulator compatibility](simulator-compatibility.md) for diagnostics.
 The generic FlooNoC backend registry remains non-executable because it does
 not emit a general complete SoC. Shared NoC, BFM and CPU boot-configuration
-emitters exist; optional real iDMA wiring is emitted and passed full-chip RTL traffic regression ([CI run 41885417960](https://github.com/r987r/xezim-hello-world/actions/runs/41885417960)); CPU firmware and physical controllers remain pending.
+emitters exist; optional real iDMA wiring is emitted and passed full-chip RTL traffic regression ([CI run 41885417960](https://github.com/r987r/xezim-hello-world/actions/runs/41885417960)); CPU C-DMA integration has been verified; interrupt-service firmware and physical controllers remain pending.
 
 ## Single architecture diagram
 

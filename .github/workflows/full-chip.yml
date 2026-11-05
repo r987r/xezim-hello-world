@@ -3,7 +3,7 @@ name: Full-chip coordinated CPU boot
 on:
   pull_request:
     branches: [main]
-    paths: ['config/soc.yaml', 'config/regression.yaml', 'config/interface_contracts.yaml', 'config/ip.lock.yaml', 'gen/**', 'tools/chip_bootgen.py', 'tools/full_chip_gen.py', 'tools/sim_cocotb.py', 'tools/regress.py', 'tools/axi_report.py', 'tools/fabric_config.py', 'tools/generate.py', 'tools/ip_fetch.py', 'rtl/**', '!rtl/memory/ddr4/**', 'dv/full_chip/**', 'dv/dma/**', 'dv/common/axi_trace.py', 'dv/common/dma_vectors.py', 'sw/common/**', 'sw/dma/**', 'tests/test_dma*', 'tests/test_full_chip_gen.py', 'tests/test_boot_policy.py', 'tests/test_regression.py', 'Bender.yml', 'Bender.lock', 'Makefile', '.github/actions/setup-bender/**', '.github/workflows/full-chip.yml']
+    paths: ['config/soc.yaml', 'config/regression.yaml', 'config/interface_contracts.yaml', 'config/ip.lock.yaml', 'gen/**', 'tools/chip_bootgen.py', 'tools/full_chip_gen.py', 'tools/sim_cocotb.py', 'tools/regress.py', 'tools/axi_report.py', 'tools/fabric_config.py', 'tools/generate.py', 'tools/ip_fetch.py', 'rtl/**', '!rtl/memory/ddr4/**', 'dv/full_chip/**', 'dv/dma/**', 'dv/common/axi_trace.py', 'dv/common/dma_vectors.py', 'sw/common/**', 'sw/dma/**', 'tests/test_dma*', 'tests/test_memory_plan.py', 'tools/memory_plan.py', 'tests/test_full_chip_gen.py', 'tests/test_boot_policy.py', 'tests/test_cpu_dma_probe.py', 'tests/test_axi_agent_ownership.py', 'tests/test_rv32i_runtime.py', 'tests/test_cpu_dma_firmware.py', 'tools/cpu_dma_firmware.py', 'tests/test_regression.py', 'Bender.yml', 'Bender.lock', 'Makefile', '.github/actions/setup-bender/**', '.github/workflows/full-chip.yml']
   workflow_dispatch:
 
 permissions:
@@ -14,7 +14,30 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Run exact CPU compiler/runtime and shared memory checks BEFORE the
+  # 10+ minute upstream IP generation/Verilator build. A failure here does
+  # not burn CPU time on a full-chip simulator that cannot run the image.
+  firmware-preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install minimal firmware-toolchain dependencies
+        run: |
+          python3 -m pip install 'PyYAML==6.0.3'
+          sudo apt-get update -qq
+          sudo apt-get install -y clang llvm lld
+          command -v clang
+          command -v ld.lld
+          command -v llvm-objcopy
+      - name: Fast CPU ELF link, memory allocator and probe-ownership tests
+        run: |
+          python3 -m unittest tests.test_rv32i_runtime tests.test_cpu_dma_firmware tests.test_cpu_dma_probe tests.test_axi_agent_ownership tests.test_dma_sw tests.test_memory_plan -v
   boot:
+    needs: firmware-preflight
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -33,7 +56,7 @@ jobs:
           python3 -m pip install -e .tools/floonoc
           python3 -m pip install 'cocotb==1.9.2' 'cocotbext-axi==0.1.24'
           sudo apt-get update -qq
-          sudo apt-get install -y verilator
+          sudo apt-get install -y verilator clang llvm lld
       - name: Verify configuration and generated chip/firmware
         run: make check-config check-generated
       - name: Fetch checksum-verified Xezim release
@@ -46,8 +69,8 @@ jobs:
           (cd .tools/bin && sha256sum -c "$XEZIM_ASSET_NAME.sha256")
           chmod +x ".tools/bin/$XEZIM_ASSET_NAME"
           echo "XEZIM_BIN=$GITHUB_WORKSPACE/.tools/bin/$XEZIM_ASSET_NAME" >> "$GITHUB_ENV"
-      - name: Run CPU boot, dual DMA chains, negatives and Xezim compile probe
-        run: make dv-chip
+      - name: 'Run common SoC INIT/RUN/CHECK: real CPU C DMA, dual BFM DMA, negatives, Xezim compile'
+        run: make dv-chip FAST_FAIL=1
       - name: Retain all chip build/phase/memory results
         if: always()
         uses: actions/upload-artifact@v4
@@ -66,6 +89,8 @@ jobs:
           path: |
             .tools/regression/chip-dma/report.html
             .tools/regression/chip-dma/axi-*.json*
+            .tools/regression/chip-cpu-dma/report.html
+            .tools/regression/chip-cpu-dma/axi-*.json*
             .tools/regression/chip-boot*/report.html
             .tools/regression/chip-boot*/axi-*.json*
           include-hidden-files: true

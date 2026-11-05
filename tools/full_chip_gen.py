@@ -57,8 +57,12 @@ def dma_params_for(cfg, core):
     return vals
 
 
-def emit(cfg, noc_manifest, noc_root, out):
-    fw, firmware = chip_bootgen.emit(cfg, out)
+def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
+         image_prefix='gen/chip', cpu_dma_mode=False):
+    """Emit standard chip, or opt-in CPU DMA firmware variant (same RTL/checker)."""
+    if cpu_dma_mode != (cpu0_run_hook is not None):
+        raise ValueError('CPU DMA mode requires a valid compiled C hook')
+    fw, firmware = chip_bootgen.emit(cfg, out, cpu0_run_hook=cpu0_run_hook)
     nets = json.loads((noc_root/'manifest.json').read_text())['networks']
     ports = noc_manifest['masters'] + noc_manifest['slaves']
     cores = fw['cores']
@@ -251,7 +255,7 @@ def emit(cfg, noc_manifest, noc_root, out):
                 mon = monitor(i)
             lines += [module('axi_sram_target', 'u_'+p['name'], {'req_t':dtype(p,'req'),'rsp_t':dtype(p,'rsp'),
                 'IdWidth':p['id_width'],'Base':f"64'h{region['base']:016x}",'Bytes':size,
-                'ReadOnly':int(is_rom),'InitFile':f'"gen/chip/{image}"' if image else '""'},
+                'ReadOnly':int(is_rom),'InitFile':f'"{image_prefix}/{image}"' if image else '""'},
                 {'clk_i':'clk_i','rst_ni':'rst_ni','req_i':req(p),'rsp_o':rsp(p),**mon})]
         elif ep == 'dma_regs':
             core = next((i for i,c in enumerate(cores) if p['network'] == c['name']+'_local_config'), None)
@@ -325,7 +329,7 @@ def emit(cfg, noc_manifest, noc_root, out):
               '      if (boot_flash_valid && !boot_flash_write) flash_reads_o <= flash_reads_o + 1;',
               '    end', 'endmodule']
     (out/'soc_top.sv').write_text('\n'.join(lines)+'\n')
-    emit_tb(cfg, fw, out)
+    emit_tb(cfg, fw, out, image_prefix=image_prefix, cpu_dma_mode=cpu_dma_mode)
     emit_dma_tb(cfg, fw, out)
     manifest = {'top':'soc_top','testbench':'full_chip_tb','dma_testbench':'full_chip_dma_tb',
                 'cores':count,'networks':len(nets),
@@ -369,6 +373,16 @@ def emit(cfg, noc_manifest, noc_root, out):
         core['name']: dma_params_for(cfg, core) for core in cores}
     manifest['axi_actors']=actors
     (out/'manifest.json').write_text(json.dumps(manifest, indent=2, sort_keys=True)+'\n')
+    if cpu_dma_mode:
+        manifest['dma_configuration'] = 'DmaEnable=1; real CPUs execute C DMA inside INIT/RUN/CHECK'
+        manifest['verification_probe'] = 'No BFM drives CPU ports; real CPU0 issues DMA CSRs and checks SRAM through NoCs'
+        for core in cores:
+            name = core['name']
+            actors[name+'_local_data.dma'] = {
+                'kind':'rtl_dma', 'label':'Real PULP iDMA driven by CPU firmware'}
+            actors[name+'_local_config.dma_regs'] = {
+                'kind':'rtl_registers', 'label':'Real DMA CSR programmed by CPU firmware'}
+        (out/'manifest.json').write_text(json.dumps(manifest, indent=2, sort_keys=True)+'\n')
     dma_actors = json.loads(json.dumps({'axi_actors': actors}))
     for core in cores:
         name = core['name']
@@ -411,13 +425,18 @@ def emit_dma_tb(cfg, fw, out):
     (out/'full_chip_dma_tb.sv').write_text('\n'.join(lines)+'\n')
 
 
-def emit_tb(cfg, fw, out):
+def emit_tb(cfg, fw, out, *, image_prefix='gen/chip', cpu_dma_mode=False):
     n = len(fw['cores'])
     words = [len(fw['images'][c['name']]) for c in fw['cores']]
     max_words = max(words)
     bases = '{'+', '.join(f"32'h{v:08x}" for v in reversed(fw['sram_bases']))+'}'
     counts = '{'+', '.join(f"32'd{v}" for v in reversed(words))+'}'
-    opts = cfg['verification']['full_chip_boot']
+    opts = dict(cfg['verification']['full_chip_boot'])
+    if cpu_dma_mode:
+        # Compiled CPU C code executes over real NoCs: much longer than the
+        # tiny minimal RV32I mailbox bootstrap, but still strictly bounded.
+        opts['timeout_cycles'] = max(opts['timeout_cycles'], 400000)
+        opts['phase_timeout_cycles'] = max(opts['phase_timeout_cycles'], 350000)
     probe = probe_ports()
     cfgprobe = probe_ports('cfgprobe', addr_bits=32, data_bits=32, id_bits=1)
     lines = ['`timescale 1ns/1ps', '// One boot/coordination checker shared by both simulators.',
@@ -434,7 +453,9 @@ def emit_tb(cfg, fw, out):
         '  wire [N*32-1:0] fetch_addr;', '  wire [N*64-1:0] sram_addr, sram_data;',
         '  wire [N*8-1:0] sram_strb;', '  wire [31:0] rom_reads, flash_reads;',
         '`ifdef COCOTB_SIM', '  localparam bit ProbeEnable = 1;', '`else', '  localparam bit ProbeEnable = 0;', '`endif',
-        '  soc_top #(.ProbeEnable(ProbeEnable)) dut (.clk_i(clk), .rst_ni(rst_n), .hold_mask_i(hold_mask),',
+        ("  soc_top #(.ProbeEnable(1'b0), .DmaEnable(1'b1)) dut (.clk_i(clk), .rst_ni(rst_n), .hold_mask_i(hold_mask),"
+         if cpu_dma_mode else
+         '  soc_top #(.ProbeEnable(ProbeEnable)) dut (.clk_i(clk), .rst_ni(rst_n), .hold_mask_i(hold_mask),'),
         '    .released_o(released), .fetch_valid_o(fetch_valid), .fetch_addr_o(fetch_addr),',
         '    .sram_valid_o(sram_valid), .sram_write_o(sram_write), .sram_addr_o(sram_addr),',
         '    .sram_data_o(sram_data), .sram_strb_o(sram_strb), .rom_reads_o(rom_reads), .flash_reads_o(flash_reads),',
@@ -445,11 +466,15 @@ def emit_tb(cfg, fw, out):
         '  reg [31:0] expected [0:N*MAX_WORDS-1];', '  reg [MAX_WORDS-1:0] copied [0:N-1];',
         '  reg [N-1:0] init_mask = 0, hello_mask = 0, check_mask = 0, app_fetch = 0;',
         '  reg init_complete = 0, run_complete = 0, check_complete = 0, pass_flag = 0;',
+        *(['  reg [31:0] cpu_dma_evidence = 0;',
+           '  reg cpu_dma_success = 0;',
+           '  reg [191:0] cpu_dma_addresses = 0;',
+           '  reg [5:0] cpu_dma_address_seen = 0;'] if cpu_dma_mode else []),
         '  reg [N-1:0] previous_release = 0;', '  integer phase = 0, previous_phase = 0, cycles = 0, stalled = 0;',
         '  integer i, lane, index, core, off;', '  reg [31:0] address, value;', '  reg copied_all;',
         '  initial begin']
     for i,c in enumerate(fw['cores']):
-        lines += [f'    $readmemh("gen/chip/{c["name"]}.hex", expected, {i}*MAX_WORDS, {i}*MAX_WORDS+{words[i]-1});', f"    copied[{i}] = '0;"]
+        lines += [f'    $readmemh("{image_prefix}/{c["name"]}.hex", expected, {i}*MAX_WORDS, {i}*MAX_WORDS+{words[i]-1});', f"    copied[{i}] = '0;"]
     lines += ['  end', '  always @(posedge clk) if (rst_n) begin', '    cycles <= cycles + 1;',
         f'    if (cycles > {opts["timeout_cycles"]}) $fatal(1, "FAIL fullchip overall boot timeout");',
         '    copied_all = 1;', '    for (i=0; i<N; i=i+1)',
@@ -468,6 +493,19 @@ def emit_tb(cfg, fw, out):
         '              index = (address - BASES[i*32 +: 32])/4;',
         '              if (value !== expected[i*MAX_WORDS+index]) $fatal(1, "FAIL fullchip copied firmware mismatch CPU=%0d word=%0d", i, index);',
         '              copied[i][index] <= 1;', '            end',
+        *(['            if (i==0) begin',
+            '              for (integer k=0; k<6; k=k+1) begin',
+            '                if (address==MAILBOX+68+k*4) begin',
+            '                  cpu_dma_addresses[k*32 +: 32] <= value;',
+            '                  cpu_dma_address_seen[k] <= 1;',
+            '                end',
+            '              end',
+            '            end'] if cpu_dma_mode else []),
+        *(['            if (i==0 && address==MAILBOX+64) begin',
+            '              cpu_dma_evidence <= value;',
+            "              if (value==32'h600dc0de) cpu_dma_success <= 1;",
+            '              $display("CPU C DMA evidence 0x%08x",value);',
+            '            end'] if cpu_dma_mode else []),
         '            if (i==0 && address >= MAILBOX && address <= MAILBOX + DONE_OFFSET) begin',
         '              off = address - MAILBOX;', '              if (off==0 && value!=0) begin',
         '                if (value==2) begin', '                  if (&init_mask !== 1\'b1) $fatal(1, "FAIL fullchip run before all CPUs initialized");',
@@ -486,6 +524,9 @@ def emit_tb(cfg, fw, out):
         "              if (off==DONE_OFFSET && value==32'h600d) begin",
         '                if (&check_mask !== 1\'b1 || &app_fetch !== 1\'b1 || !copied_all || rom_reads==0 || flash_reads==0)',
         '                  $fatal(1, "FAIL fullchip incomplete CPU execution/coordination");',
+        *(['                if (!cpu_dma_success) $fatal(1, "FAIL fullchip CPU DMA C evidence missing");',
+            "                if (cpu_dma_address_seen != 6'h3f) $fatal(1, \"FAIL fullchip CPU DMA physical allocation addresses missing\");"]
+           if cpu_dma_mode else []),
         '                check_complete <= 1;', '                pass_flag <= 1;',
         '                $display("PHASE check complete: coordinator observed all peer checks");',
         '                $display("PASS fullchip: %0d real CPUs, shared NoCs, cold boot, init/run/check", N);',

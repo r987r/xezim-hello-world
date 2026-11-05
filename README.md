@@ -2,7 +2,7 @@
 
 [![SoC regression](https://github.com/r987r/xezim-hello-world/actions/workflows/dv-soc.yml/badge.svg)](https://github.com/r987r/xezim-hello-world/actions/workflows/dv-soc.yml)
 
-A reusable, **configuration-driven hierarchical SoC test vehicle** built from publicly available RTL. One `config/soc.yaml` selects compute subsystems, CPU IP, reserved DMA interfaces, memory targets, data/config NoCs, addresses, and verification scopes. The same configuration generates **SystemVerilog testbench code, NoC connectivity metadata, executable test plans, 2D diagrams, and this README's architecture section**. Both PULP iDMA engines and their CSR bridges are generated in the explicit `DmaEnable=1` mode; the default cold-boot mode keeps them disabled. The **full-chip DMA RTL path passed**: SS0/SS1 descriptor chains, 32-bit CSR doorbells, real data/config FlooNoCs, memory-model readback and completion checks in [CI run 41885417960](https://github.com/r987r/xezim-hello-world/actions/runs/41885417960). This is the CPU0-AXI-BFM-assisted DMA-only verification scope, **not** CPU-firmware-launched DMA or physical DDR/HBM.
+A reusable, **configuration-driven hierarchical SoC test vehicle** built from publicly available RTL. One `config/soc.yaml` selects compute subsystems, CPU IP, reserved DMA interfaces, memory targets, data/config NoCs, addresses, and verification scopes. The same configuration generates **SystemVerilog testbench code, NoC connectivity metadata, executable test plans, 2D diagrams, and this README's architecture section**. Both PULP iDMA engines and their CSR bridges are generated in the explicit `DmaEnable=1` mode; the default cold-boot mode keeps them disabled. The **full-chip DMA RTL path passed**: SS0/SS1 descriptor chains, 32-bit CSR doorbells, real data/config FlooNoCs, memory-model readback and completion checks in [CI run 41885417960](https://github.com/r987r/xezim-hello-world/actions/runs/41885417960). This is the CPU0-AXI-BFM-assisted DMA-only scope. **Real CPU0 C firmware has now independently launched and checked DMA** through the same NoCs ([CI 41933332567](https://github.com/r987r/xezim-hello-world/actions/runs/41933332567)); DDR/HBM remain behavioral models.
 
 The [GitHub Pages verification hub](https://r987r.github.io/xezim-hello-world/)
 publishes this README, all documentation, the canonical topology and actual CI
@@ -16,7 +16,7 @@ See [publication and retention](docs/publication.md).
 <!-- Do not edit this section: regenerate with `make gen`. -->
 ### Whole-SoC data and configuration NoCs
 
-The **single architecture diagram** below includes all local/global FlooNoCs, compute CPU/DMA/SRAM blocks and memory target crossbar. It is generated from the same SoC configuration and FlooGen endpoint topology as the real structural RTL. **Solid links show generated optional iDMA/CSR wiring (enabled in DMA mode); dashed links show pending physical controllers.** The same NoC RTL is instantiated by BFM, CPU boot, and dual-DMA configurations.
+The **single architecture diagram** below includes all local/global FlooNoCs, compute CPU/DMA/SRAM blocks and memory target crossbar. It is generated from the same SoC configuration and FlooGen endpoint topology as the real structural RTL. **Solid links show generated optional iDMA/CSR wiring (enabled in DMA mode); dashed links show pending physical controllers.** The same NoC RTL serves cold boot, CPU0 C-launched DMA, and dual-engine BFM DMA.
 
 [![Complete hierarchical SoC and all data/config FlooNoCs](gen/diagrams/noc-hierarchy.svg)](gen/diagrams/noc-hierarchy.svg)
 
@@ -24,7 +24,7 @@ The **single architecture diagram** below includes all local/global FlooNoCs, co
 
 **Configured topology:** 2 compute subsystems, 8 independent FlooNoC instances, 43 total generated routers. Data: 64-bit AXI4; control: 32-bit AXI4 transport for AXI4-Lite endpoint bridges. CPU/reset adapters are attached in the boot configuration; the BFM scope uses AXI agents.
 
-**Verification truth:** Xezim exercises separate CPU cold-boot/SRAM and Verilog-AXI memory testbenches. Both Xezim and Verilator have compiled the eight structural FlooNoCs. The unified `make dv-supernoc` regression connects all meshes to upstream AXI agents and checks destinations, data, bursts, concurrent IDs, stalls and downstream SLVERR. Xezim NoC traffic is not verified. The `make dv-chip` boot configuration runs the real CPUs through the shared NoCs with CPU0-coordinated init/run/check and AXI memory stand-ins. See [chip boot scope](docs/full-chip-boot.md) and [DMA integration](docs/dma-bringup.md); `make dv-chip-dma` tests both real engines through data/config FlooNoCs with the CPUs held in reset and host-initialized DMA SRAM.
+**Verification truth:** Xezim exercises separate CPU cold-boot/SRAM and Verilog-AXI memory testbenches. Both Xezim and Verilator have compiled the eight structural FlooNoCs. The unified `make dv-supernoc` regression connects all meshes to upstream AXI agents and checks destinations, data, bursts, concurrent IDs, stalls and downstream SLVERR. Xezim NoC traffic is not verified. The `make dv-chip` boot configuration runs the real CPUs through the shared NoCs with CPU0-coordinated init/run/check and AXI memory stand-ins. The `make dv-chip-cpu-dma` variant also runs compiled C on real CPU0 to submit DMA through the configuration NoC, roundtrip DDR/HBM data, and compare actual CPU allocations with the Python plan (verified in CI run 41933332567). `make dv-chip-dma` independently tests both real engines with CPUs held in reset and BFM-initialized DMA SRAM. See [chip boot scope](docs/full-chip-boot.md) and [DMA integration](docs/dma-bringup.md).
 
 ### Generated NoC sources (no duplicate pictures)
 
@@ -59,7 +59,7 @@ with AXI slave stand-ins. `make dv-chip` checks CPU0-coordinated init/run/check.
 **New optional DMA mode:** `DmaEnable=1` generates PULP iDMA engines at
 each compute local data NoC and 32-bit CSR doorbells at each local
 configuration NoC. `make dv-chip-dma` is a separate hardware gate with
-CPUs held in reset; it passed the end-to-end NoC RTL regression at [commit d2868045](https://github.com/r987r/xezim-hello-world/commit/d2868045b7d8ba3b6a687f9639efea1d5c87af9a). **Still pending:** CPU-initiated DMA and IRQ-handler
+CPUs held in reset; it passed the end-to-end NoC RTL regression at [commit d2868045](https://github.com/r987r/xezim-hello-world/commit/d2868045b7d8ba3b6a687f9639efea1d5c87af9a). **Now verified:** CPU0-initiated C DMA with SRAM/DDR/HBM allocation and roundtrip checks. **Still pending:** CPU interrupt-service
 firmware, real HBM/DDR controllers/PHY.
 See [full-chip boot](docs/full-chip-boot.md) for the precise scope.
 
@@ -191,6 +191,8 @@ XEZIM_BIN=/path/to/xezim make test
 make dv-supernoc                    # independent NoC BFM regression
 make dv-chip                        # real CPU boot + independent DMA NoC gate
 make dv-chip-dma                    # real SS0/SS1 DMA+CSR across data/config NoCs
+make dv-chip-cpu-dma                # compiled C on real CPU0; same boot checker + DMA
+# CPU C DMA gate passed at 573dc871; future changes still require exact-head CI.
 ```
 
 The memory regression instantiates the publicly available Verilog-AXI crossbar and behavioral AXI RAM. It issues four-beat reads and writes from two independent AXI masters to HBM0 and DDR0 address regions, then checks responses, IDs, data, and reachability. The negative test intentionally corrupts an expectation and confirms the checker rejects it. The CPU smoke merely observes fetch requests; **`dv-boot` executes instructions** from ROM and then from SRAM, proving actual CPU-controlled SRAM loading.
@@ -200,7 +202,7 @@ The memory regression instantiates the publicly available Verilog-AXI crossbar a
 **Remaining integration:** dual DMA/CSR connections are now generated behind
 an explicit enable (separate from cold boot), and the independent iDMA RTL
 regression already passed. Full-chip DMA traffic is a new CI gate.
-CPU-side descriptor submission, IRQ handlers, general controller IP integration,
+CPU-side interrupt handlers, general controller IP integration,
 and physical HBM/DDR controller/PHY models are pending. Selected controller projects are research/integration candidates; the simulated `axi_ram` targets are **not timing-accurate HBM or DDR controllers**. The HBM candidate currently relies on vendor HBM PHY IP.
 
 ## IP replacement and implementation boundaries
@@ -209,7 +211,7 @@ and physical HBM/DDR controller/PHY models are pending. Selected controller proj
 - [`tools/socgen.py`](tools/socgen.py) emits the executable memory RTL and neutral NoC IR; [`tools/noc_backends.py`](tools/noc_backends.py) defines vendor-specific emitters. The **`verilog_axi` memory backend is executable**; PULP AXI backend emission for the independent DMA RTL now uses the pinned
 upstream MARIO generator; the generic non-DMA PULP AXI backend remains pending. [`tools/floonoc_gen.py`](tools/floonoc_gen.py) emits all eight real FlooGen networks, and [`tools/supernoc_gen.py`](tools/supernoc_gen.py) connects their AXI4 boundaries in one BFM testbench. `tools/full_chip_gen.py` emits the CPU boot configuration using the shared core. The generic full-SoC backend is not a universal SoC emitter; the dedicated
 chip generator emits real CPU and optionally DMA/CSR connections, while
-controller/PHY integration and CPU DMA firmware remain pending.
+controller/PHY integration and CPU interrupt-service firmware remain pending.
 - [`tools/noc_diagrams.py`](tools/noc_diagrams.py) builds and renders the single architecture view from the actual FlooGen profiles; [`tools/generate.py`](tools/generate.py) coordinates generation, stale cleanup, and drift verification.
 - [`config/ip.lock.yaml`](config/ip.lock.yaml) pins third-party IP commits. [`rtl/adapters/`](rtl/adapters/) isolates the CPU and behavioral memory interfaces.
 

@@ -25,7 +25,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ENGINES = {'xezim', 'xezim-compile', 'verilator-lint', 'cocotb-verilator'}
 FIELDS = {'engine', 'sources', 'ip', 'top', 'args', 'pass', 'expect_failure',
           'timeout_s', 'memory_config', 'boot_relocate', 'module', 'test_dir',
-          'build', 'reuse_build', 'env', 'seed', 'bender_targets', 'mode', 'report'}
+          'build', 'reuse_build', 'env', 'seed', 'bender_targets', 'mode', 'report', 'firmware_mode'}
 
 
 def expand(config, names, stack=()):
@@ -65,6 +65,13 @@ def load_config(path):
             raise ValueError(f'{name}: build reuse is only supported by cocotb-verilator')
         if test.get('mode', 'simulate') not in ('simulate', 'compile') or (test.get('mode') == 'compile' and test['engine'] != 'xezim'):
             raise ValueError(f'{name}: mode=compile requires the Xezim engine')
+        if test.get('firmware_mode') not in (None, 'cpu_dma'):
+            raise ValueError(f'{name}: unknown compiled CPU firmware mode')
+        if 'firmware_mode' in test and (
+            test['engine'] != 'cocotb-verilator' or
+            'chip_boot' not in test.get('bender_targets', []) or
+            'dma' not in test.get('bender_targets', [])):
+            raise ValueError(f'{name}: compiled CPU DMA requires real chip and iDMA RTL')
         if 'report' in test:
             report = test['report']
             required = {'scope','clock','reset','catalog'}
@@ -292,6 +299,24 @@ def run_target(name, test, resolver, options):
         sources += extra
         includes += inc
         defines += defs
+    if test.get('firmware_mode') == 'cpu_dma':
+        # Compile real C firmware into an alternate immutable FLASH image;
+        # change only this run's generated top/checker, not tracked gen/.
+        # Script invocation from tools/ otherwise omits the repository root
+        # from sys.path; the shared tools.memory_plan namespace needs it.
+        if str(ROOT) not in sys.path:
+            sys.path.insert(0, str(ROOT))
+        from cpu_dma_firmware import prepare as prepare_cpu_dma
+        cfg = yaml.safe_load((ROOT/'config/soc.yaml').read_text())
+        noc_manifest = json.loads((ROOT/'gen/supernoc/manifest.json').read_text())
+        variant = out/'variant'
+        prepare_cpu_dma(cfg, noc_manifest, ROOT/'gen/noc/floonoc', variant)
+        generated_root = ROOT/'gen/chip'
+        replacements = {'soc_top.sv', 'full_chip_tb.sv', 'full_chip_dma_tb.sv'}
+        sources = [str(variant/Path(filename).name)
+                   if Path(filename).parent == generated_root and
+                   Path(filename).name in replacements else filename
+                   for filename in sources]
     sources = list(dict.fromkeys(sources))
     includes = list(dict.fromkeys(includes))
     defines = list(dict.fromkeys(defines))
@@ -396,6 +421,8 @@ def main():
     cli.add_argument('--config', type=Path, default=ROOT/'config/regression.yaml')
     cli.add_argument('--list', action='store_true')
     cli.add_argument('--check-noc', action='store_true')
+    cli.add_argument('--fail-fast', action='store_true',
+                     help='stop this suite at the first failing target (CI quick feedback)')
     cli.add_argument('--stage', choices=['files', 'build', 'run', 'all'], default='all')
     cli.add_argument('--memory-config')
     cli.add_argument('--network', action='append', default=[])
@@ -420,10 +447,16 @@ def main():
     passed = True
     for name in targets:
         try:
-            passed = run_target(name, config['tests'][name], resolver, options) and passed
+            target_passed = run_target(name, config['tests'][name], resolver, options)
         except (ValueError, OSError, subprocess.SubprocessError) as error:
             print(f'FAIL {name}: {error}', file=sys.stderr, flush=True)
+            target_passed = False
+        if not target_passed:
             passed = False
+            if options.fail_fast:
+                print(f'STOP after {name}: subsequent suite targets skipped; '
+                      'failing log and AXI report already preserved', flush=True)
+                break
     return 0 if passed else 1
 
 
