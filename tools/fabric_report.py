@@ -42,28 +42,33 @@ def owner(network, subsystem_names):
 
 
 def contract_port(network, endpoint, subsystem):
-    if network.startswith("global_data"):
-        return "global_data." + endpoint + "_in" if endpoint.startswith("compute") and not endpoint.endswith("_sram") else None
-    if network.startswith("global_config"):
-        if endpoint.startswith("compute") and not endpoint.endswith("_regs"):
-            return "global_config." + endpoint + "_in"
+    """Expose known planned port contracts while preserving unknown as None."""
+    if network == "global_data":
+        if endpoint in ("compute0", "compute1") or (
+                endpoint.startswith("pcie") and not endpoint.endswith("_sram")):
+            return "global_data." + endpoint + "_in"
+        return None
+    if network == "global_config":
         if endpoint.endswith("_regs"):
             return "global_config." + endpoint[:-5] + "_out"
+        if endpoint in ("compute0", "compute1") or endpoint.startswith("pcie"):
+            return "global_config." + endpoint + "_in"
         return None
     if network == subsystem + "_local_data":
-        return {
-            "cpu": f"{subsystem}.local_data.cpu_in",
-            "dma": f"{subsystem}.local_data.dma_in",
-            "sram": f"{subsystem}.local_data.sram_out",
-            "global_out": f"{subsystem}.local_data.global_out",
-        }.get(endpoint)
+        return {"cpu":f"{subsystem}.local_data.cpu_in",
+                "dma":f"{subsystem}.local_data.dma_in",
+                "host":f"{subsystem}.local_data.data_in",
+                "global_in":f"{subsystem}.local_data.global_in",
+                "sram":f"{subsystem}.local_data.sram_out",
+                "global_out":f"{subsystem}.local_data.global_out"}.get(endpoint)
     if network == subsystem + "_local_config":
-        return f"{subsystem}.local_config." + {
-            "cpu": "cpu_in", "global_in": "global_in",
-            "dma_regs": "dma_csr_out", "global_out": "global_out",
-            "reset_ctrl": "reset_ctrl_out",
-        }.get(endpoint, "") if endpoint in {
-            "cpu", "global_in", "dma_regs", "global_out", "reset_ctrl"} else None
+        return {"cpu":f"{subsystem}.local_config.cpu_in",
+                "management":f"{subsystem}.local_config.config_in",
+                "global_in":f"{subsystem}.local_config.global_in",
+                "dma_regs":f"{subsystem}.local_config.dma_csr_out",
+                "controller_regs":f"{subsystem}.local_config.controller_regs_out",
+                "reset_ctrl":f"{subsystem}.local_config.reset_ctrl_out",
+                "global_out":f"{subsystem}.local_config.global_out"}.get(endpoint)
     return None
 
 
