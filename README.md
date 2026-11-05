@@ -233,9 +233,19 @@ doorbells. The actual PULP iDMA RTL then fetches its own descriptors
 and performs all payload transfers through the NoCs. There is no PCIe
 host, PCIe link, or external initiator involved in this verification.
 
-DDR PR #13 is isolated: the full-chip DDR target still uses its bounded
-behavioral AXI SRAM stand-in. The integrated DMA timeout is an AXI
-progress/response-backpressure failure, not an issue in the unconnected
-LiteDRAM controller. `config/soc.yaml` declares explicit conservative
-DMA concurrency parameters for this diagnostic; the isolated iDMA
-regression retains its higher outstanding/prefetch settings.
+**DDR-A and DDR-B status (November 2026):** [#50](https://github.com/r987r/xezim-hello-world/pull/50)
+and [#59](https://github.com/r987r/xezim-hello-world/pull/59) are merged.
+Standalone, pinned LiteDRAM/DFI RTL completes DFII/Wishbone initialization,
+deterministic AXI burst/strobe stress and passive DFI/BankModel timing capture.
+A **separate synthesizable DDR-B AXI bridge** now passes Verilator tests for
+full 64-bit physical address-window validation, 25-bit local address
+translation, real AW/W/B/AR/R forwarding and bounded DECERR completion.
+[Exact combined RTL/DDR4 verification](https://github.com/r987r/xezim-hello-world/actions/runs/42057781622)
+passed. **Memory0's generated full-chip DDR0 target still uses an AXI SRAM
+model:** the bridge is not yet instantiated through the Memory0 NoCs and
+the independent Config-NoC DFII init service is not yet connected.
+See [DDR-B handoff](rtl/memory/ddr4/SOC_BRIDGE.md) and
+[integration issue #40](https://github.com/r987r/xezim-hello-world/issues/40).
+The DMA concurrency defaults in `config/soc.yaml` are conservative
+bring-up settings; do not infer a DDR controller or PHY from successful
+DMA-to-AXI-RAM tests.
