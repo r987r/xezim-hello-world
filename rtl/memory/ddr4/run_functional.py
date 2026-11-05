@@ -125,6 +125,8 @@ def main() -> int:
                                     "channels": capture["channels"]},
                         "warning": "Does not prove full-chip DDR or silicon DDR PHY"}, indent=2) + "\n"
         )
+        from report_html import load, render
+        (output / "ddr4-report.html").write_text(render(load(output)))
         print("PASS actual DDR4 standalone Wishbone initialization and AXI integrity")
         return 0
     except (ValueError, OSError, ImportError, RuntimeError, AssertionError) as exc:
