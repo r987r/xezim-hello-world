@@ -8,7 +8,7 @@ class PcieDiagnosticContractTests(unittest.TestCase):
     def test_patch_only_four_unsized_literals(self):
         file = Path("dv/pcie0/prepare_rtl.py").read_text()
         ast.parse(file)
-        self.assertIn("TIE_OFFS = (", file)
+        self.assertIn("TIE_OFFS = {", file)
         self.assertIn('patched.count(anchor) != 1', file)
         self.assertIn("patch unpinned", file)
         self.assertIn("assert_iverilog_clean", file)
