@@ -151,6 +151,9 @@ def analyze(root: Path, profile: str, top: str, binary: str, outdir: Path,
             raise ValueError(f"{profile}/{mode}: slang infrastructure failure: {exc}") from exc
         transcript.write_text("command: " + " ".join(command) + "\n\n"
                               + run.stdout + "\n" + run.stderr)
+        if run.returncode != 0 and not diagnostic.is_file():
+            raise ValueError(f"{profile}/{mode}: slang failed without design diagnostics "
+                             f"(code={run.returncode}): {run.stderr[-1500:]}")
         findings = parse_diagnostics(diagnostic, root, profile, mode)
         errors = sum(row["severity"] == "error" for row in findings)
         # A nonzero exit without a structured design error is a tool failure;
