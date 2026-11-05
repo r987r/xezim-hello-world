@@ -35,6 +35,7 @@ def summarize(events, expected, required_origins=None):
     # Independent CPU, host and RTL monitor streams overlap legitimately.
     # Phase order is enforced per actor, not across unrelated actors.
     previous_phase_rank = {}
+    previous_phase_time = {}
     allowed = set()
     for phase, step_ids in expected.items():
         for item in step_ids:
@@ -48,9 +49,16 @@ def summarize(events, expected, required_origins=None):
         phase_rank = PHASES.index(event["phase"])
         actor = event["actor"]
         previous_actor_phase = previous_phase_rank.get(actor, -1)
-        if phase_rank < previous_actor_phase:
+        # Same simulator tick can produce an old phase PASS and the next
+        # phase START via separate callbacks; their order in JSONL vs SV
+        # evidence is not a physically ordered edge. Reject only regressions
+        # observed on a later simulation tick.
+        if (phase_rank < previous_actor_phase and
+                event["time_ps"] > previous_phase_time.get(actor, -1)):
             issues.append(f"phase order regressed at {key}: actor INIT/RUN/CHECK must be monotonic")
-        previous_phase_rank[actor] = max(previous_actor_phase, phase_rank)
+        if phase_rank > previous_actor_phase:
+            previous_phase_rank[actor] = phase_rank
+            previous_phase_time[actor] = event["time_ps"]
         expected_origin = origins.get(event["phase"], {}).get(key[1])
         if expected_origin and event["origin"] != expected_origin:
             issues.append(f"origin mismatch for {key}: expected {expected_origin}")
