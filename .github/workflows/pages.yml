@@ -58,6 +58,24 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 tools/publish_site.py --collect
+      - name: Verify offline 2D diagram preview has embedded graph data
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          import re
+          html = Path('.tools/pages-site/explorer.html').read_text()
+          match = re.search(r'<script type="application/json" id="ex-embedded-graph">(.*?)</script>', html, re.S)
+          if not match:
+              raise SystemExit('missing embedded 2D graph in Pages preview')
+          data = json.loads(match.group(1))
+          assert len(data['nodes']) >= 8, 'no diagram nodes'
+          assert len(data['edges']) >= 8, 'no diagram connections'
+          assert data['profiles']['chip-dma']['actors'], 'missing DMA testbench overlay'
+          assert 'fetch("data/design-graph.json")' not in html, 'preview still requires HTTP fetch'
+          assert Path('.tools/pages-site/data/design-graph.json').is_file(), 'graph download missing'
+          print('PASS: self-contained 2D explorer, graph and chip-DMA profile')
+          PY
       - uses: actions/upload-pages-artifact@v4
         with:
           path: .tools/pages-site
