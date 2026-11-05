@@ -1,0 +1,52 @@
+name: Ethernet0 isolated real GMII MAC bring-up
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'rtl/io/ethernet0/**'
+      - 'dv/ethernet0/**'
+      - 'tests/test_ethernet_frame_contract.py'
+      - '.github/workflows/ethernet-standalone.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ethernet0-real-rtl-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gmii:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+      - name: Python 3.11 for pinned Cocotb
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install pinned Cocotb Ethernet VIP and Icarus RTL simulator
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check \
+            'PyYAML==6.0.3' 'cocotb==1.9.2' \
+            'cocotbext-axi==0.1.28' 'cocotbext-eth==0.1.28' \
+            'cocotb-test==0.2.6'
+          sudo apt-get update -qq
+          sudo apt-get install -y iverilog
+          iverilog -V | head -3
+      - name: Run golden reference frame/CRC contract tests
+        run: python3 -m unittest tests.test_ethernet_frame_contract -v
+      - name: Fetch immutable MIT RTL and run actual GMII RX/TX Cocotb regression
+        run: python3 dv/ethernet0/run_mac_gmii.py
+      - name: Preserve actual RTL simulation outputs for review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ethernet0-real-mac-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .tools/regression/ethernet0-gmii/
+          include-hidden-files: true
+          if-no-files-found: warn
