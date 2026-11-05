@@ -63,7 +63,8 @@ def catalog(root: Path = ROOT, *, verification_reports: dict[str, Path] | None =
     # Do not mutate tracked generated JSON; next page build reflects new
     # config/backend integration automatically. Controller names in config
     # identify intended IP, not proof a physical controller was instantiated.
-    soc = yaml.safe_load((root / "config/soc.yaml").read_text())
+    soc_path = root / "config/soc.yaml"
+    soc = yaml.safe_load(soc_path.read_text()) if soc_path.is_file() else {"memory_targets": []}
     target_specs = {t["name"]: t for t in soc.get("memory_targets", [])}
     if len(target_specs) != len(soc.get("memory_targets", [])):
         raise ValueError("duplicate configured memory target")
