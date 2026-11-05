@@ -74,6 +74,25 @@ class TestFlowContract(unittest.TestCase):
                 with self.subTest(length=len(e)):
                     self.assertFalse(summarize(e,EXPECTED)["passed"])
 
+    def test_phase_regression_and_origin_spoofing_fail_closed(self):
+        with TemporaryDirectory() as tmp:
+            events=capture_events(tmp)
+            # Same six legitimate steps; a RUN action after CHECK is forbidden.
+            reordered=[*events[:4],*events[8:],*events[4:8]]
+            for i,event in enumerate(reordered):
+                event["seq"]=i
+                event["time_ps"]=i*100
+            result=summarize(reordered,EXPECTED)
+            self.assertFalse(result["passed"])
+            self.assertTrue(any("phase order" in issue for issue in result["issues"]))
+            clean=capture_events(tmp)
+            required={"init":{"host0.enumerate":"rtl_observed"}}
+            result=summarize(clean,EXPECTED,required)
+            self.assertFalse(result["passed"])
+            self.assertTrue(any("origin mismatch" in issue for issue in result["issues"]))
+            result=summarize(clean,EXPECTED,{"init":{"host0.enumerate":"stimulus"}})
+            self.assertTrue(result["passed"],result["issues"])
+
     def test_sync_exception_generates_failure_and_rejects_open_actions(self):
         with TemporaryDirectory() as tmp:
             recorder=StepRecorder(Path(tmp)/"events.jsonl",lambda:100)
