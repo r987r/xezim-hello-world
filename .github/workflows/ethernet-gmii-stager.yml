@@ -1,0 +1,42 @@
+name: Ethernet0 real GMII-to-policy-frame staging
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'rtl/io/ethernet0/**'
+      - 'dv/ethernet0/tb_gmii_frame_stager.py'
+      - 'dv/ethernet0/run_gmii_frame_stager.py'
+      - '.github/workflows/ethernet-gmii-stager.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ethernet-gmii-stager
+  cancel-in-progress: true
+jobs:
+  gmii-stager:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install pinned Cocotb/GMII VIP and Icarus
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y iverilog
+          python3 -m pip install --disable-pip-version-check \
+            'PyYAML==6.0.3' 'cocotb==1.9.2' \
+            'cocotbext-axi==0.1.28' 'cocotbext-eth==0.1.28' \
+            'cocotb-test==0.2.6'
+      - name: Elaborate and simulate real GMII MAC CDC frame staging
+        run: python3 dv/ethernet0/run_gmii_frame_stager.py
+      - name: Preserve real RTL simulator evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ethernet0-gmii-to-policy-${{ github.run_id }}
+          path: .tools/regression/ethernet0-gmii-stage/
+          include-hidden-files: true
+          if-no-files-found: warn
