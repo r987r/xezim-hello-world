@@ -276,7 +276,7 @@ def finalize_run(directory, result):
         from axi_report import render_report
         axi=json.loads(axi_path.read_text())
         axi["run"]["result"]=result
-        axi_path.write_text(json.dumps(axi,indent=2)+"\\n")
+        axi_path.write_text(json.dumps(axi,indent=2)+"\n")
         render_report(axi,directory/"report.html")
     if protocol_path.is_file():
         data=json.loads(protocol_path.read_text())
@@ -296,7 +296,7 @@ def finalize_run(directory, result):
         if issues:
             data["capture_complete"]=False
             data["issues"]=list(dict.fromkeys(data.get("issues",[])+issues))
-        protocol_path.write_text(json.dumps(data,indent=2)+"\\n")
+        protocol_path.write_text(json.dumps(data,indent=2)+"\n")
         render(data,directory/"protocols.html")
     index=directory/"report.html"
     if index.is_file():
