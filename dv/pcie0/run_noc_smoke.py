@@ -1,4 +1,4 @@
-"""Run isolated PCIe bridge on the *existing* generated SoC RTL (no generator edits)."""
+"""Run PCIe bridge through one generated FlooNoC and actual tc_sram RTL."""
 import json
 import os
 from pathlib import Path
@@ -18,29 +18,23 @@ def run():
     patched = assert_iverilog_clean()
     cfg = regress.load_config(ROOT / "config/regression.yaml")
     resolver = regress.Resolver(cfg)
-    for name in cfg["tests"]["chip-boot"].get("ip", []):
-        ip_fetch.fetch(name)
     noc_files, noc_inc, noc_defines = resolver.sources({"sources": "noc"})
-    chip_files, chip_inc, chip_defines = resolver.sources({"sources": "chip_boot"})
     manifest = json.loads((ROOT / "gen/noc/floonoc/manifest.json").read_text())
     actual = manifest["networks"].get("compute0_local_data")
     if not actual or actual["status"] != "real_upstream_structural_RTL":
         raise RuntimeError("compute0 FlooNoC generation evidence missing")
-    generated = []
-    for _, entry in sorted(manifest["networks"].items()):
-        generated.append(str(ROOT / "gen/noc/floonoc" / entry["package"]))
-    for _, entry in sorted(manifest["networks"].items()):
-        generated.append(str(ROOT / "gen/noc/floonoc" / entry["top"]))
+    generated = [str(ROOT / "gen/noc/floonoc" / actual[key])
+                 for key in ("package", "top")]
     vendor = ROOT / ".tools/verilog_pcie"
     files = list(dict.fromkeys(
-        noc_files + generated + chip_files + [str(patched)]
+        noc_files + generated + [str(ROOT / "rtl/adapters/axi_sram_target.sv"), str(patched)]
         + [str(vendor / p) for p in pin["rtl_modules"]
            if p != "rtl/pcie_axi_master.v"]
         + [str(ROOT / "dv/pcie0/pcie_noc_tb.sv")]
     ))
-    includes = list(dict.fromkeys(noc_inc + chip_inc))
+    includes = list(dict.fromkeys(noc_inc))
     defs = {}
-    for item in noc_defines + chip_defines:
+    for item in noc_defines:
         name, _, value = item.partition("=")
         defs[name] = value or "1"
     os.environ["PYTHONPATH"] = os.pathsep.join(
@@ -52,9 +46,8 @@ def run():
     output = ROOT / ".tools/pcie0/noc_build"
     output.mkdir(parents=True, exist_ok=True)
     simulator = get_runner("verilator")
-    # The generated FlooNoC package types MUST precede soc_noc.sv/soc_top.sv
-    # in Verilator's ordered filelist. Preserve the Bender upstream order.
-    assert files.index(str(ROOT / "gen/noc/floonoc" / actual["package"])) < files.index(str(ROOT / "gen/supernoc/soc_noc.sv"))
+    # Compile generated package before its NoC module.
+    assert files.index(generated[0]) < files.index(generated[1])
     try:
         simulator.build(
             sources=files, includes=includes, defines=defs,

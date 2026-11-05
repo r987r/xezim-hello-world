@@ -192,7 +192,7 @@ module pcie_noc_tb (
     .status_error_cor(status_error_cor),
     .status_error_uncor(status_error_uncor)
   );
-  // DmaTestMode exclusively connects the source to CPU0's real data NI.
+  // Reuse CPU0 local NoC source directly; no generated full-chip modification.
 
   floo_xezim_compute0_local_data_noc u_noc (
     .clk_i(clk), .rst_ni(~rst), .test_enable_i(1'b0),
