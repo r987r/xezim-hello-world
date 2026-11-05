@@ -38,7 +38,7 @@ jobs:
       - name: Validate real RTL pins, test contracts and generated endpoints
         run: |
           python3 dv/pcie0/run_rtl_smoke.py --check-pin
-          python3 -m unittest tests.test_pcie_bar_contract tests.test_pcie_diagnostic_contract -v
+          python3 -m unittest tests.test_pcie_bar_contract tests.test_pcie_diagnostic_contract tests.test_test_flow -v
           python3 dv/pcie0/prepare_rtl.py
           python3 tools/regress.py --check-noc
           make check-generated
