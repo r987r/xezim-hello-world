@@ -1,12 +1,12 @@
 # DMA bring-up foundation
 
-**Current status (2026-11-04):** The reusable descriptor allocator and CPU0 AXI BFM preload vectors are implemented. The **real pinned PULP iDMA frontend + generated rw_axi backend now compile and pass isolated Verilator/cocotb RTL traffic verification**: a 100-descriptor chain to the DDR model and a separate descriptor to the HBM model. The checker verifies actual payload memory, descriptor writeback, final IRQ and idle before SRAM reuse. [Successful DMA CI run](https://github.com/r987r/xezim-hello-world/actions/runs/41860245485), commit `a2c12133b2a57c49ae90b638384335fc6584f331`. Both engine and CSR wiring now *is generated* for the full-chip FlooNoCs, and their end-to-end DMA traffic **passed** [full-chip CI run 41885417960](https://github.com/r987r/xezim-hello-world/actions/runs/41885417960), while CPU-initiated DMA/ISR software and physical DDR/HBM controllers remain unintegrated.
+**Current status (2026-11-04):** The reusable descriptor allocator and CPU0 AXI BFM preload vectors are implemented. The **real pinned PULP iDMA frontend + generated rw_axi backend now compile and pass isolated Verilator/cocotb RTL traffic verification**: a 100-descriptor chain to the DDR model and a separate descriptor to the HBM model. The checker verifies actual payload memory, descriptor writeback, final IRQ and idle before SRAM reuse. [Successful DMA CI run](https://github.com/r987r/xezim-hello-world/actions/runs/41860245485), commit `a2c12133b2a57c49ae90b638384335fc6584f331`. Both engine and CSR wiring now *is generated* for the full-chip FlooNoCs, and their end-to-end DMA traffic **passed** [full-chip CI run 41885417960](https://github.com/r987r/xezim-hello-world/actions/runs/41885417960), while the independent **CPU0-initiated C DMA integration has now passed** [full-chip CI 41933332567](https://github.com/r987r/xezim-hello-world/actions/runs/41933332567). CPU IRQ-service firmware and physical DDR/HBM controllers remain unintegrated.
 
 ## Existing libraries and software
 
 - Reuse pinned PULP iDMA with its descriptor frontend and generated AXI backend. Do not write another DMA engine.
 - Reuse existing cocotb + cocotbext-axi drivers, AXI trace collection, and declarative regression framework.
-- sw/dma/dma.h and dma.c provide the shared SRAM allocator, 32-byte upstream descriptor construction, release fence and 32-bit firmware CSR submit/status/IRQ helpers. Hosted tests validate software behavior; real CPU execution of these functions is not yet integrated.
+- sw/dma/dma.h and dma.c provide the shared SRAM allocator, 32-byte upstream descriptor construction, release fence and 32-bit firmware CSR submit/status/IRQ helpers. Hosted tests validate the ABI independently; the actual CPU0 firmware also executes these C routines in `chip-cpu-dma`.
 - dv/common/dma_vectors.py generates host-side deterministic descriptor chains, SRAM contents and independent AXI expected-data checks. tools/dma_vectors.py provides CLI generation.
 
 For both BFM and CPU execution modes, reuse the same scenario and memory
@@ -42,8 +42,8 @@ The generator writes source_sram.hex in 64-bit readmemh word order, plus case.js
 2. **PASS, isolated:** Instantiate real desc64 frontend + backend, combine descriptor/payload AXI through upstream `axi_rw_join`/`axi_mux` with 3-bit internal / 4-bit shared external AXI IDs.
 3. **PASS, isolated:** Exercise a real upstream 64-bit APB head submission, hardware-prefetched linked descriptors, 100 copies to the DDR stand-in, another copy to the HBM stand-in, descriptor writebacks, and one sampled final IRQ per chain, with DMA idle before descriptor-pool reuse. `make dv-dma` executes this gate in Verilator.
 4. **PASS, full-chip RTL:** The same pinned engine is generated into both compute DMA ports, including 32-bit CSR writes through the config FlooNoCs. The [chip-dma regression](https://github.com/r987r/xezim-hello-world/actions/runs/41885417960) verified one DDR descriptor, four HBM descriptors, and a 100-descriptor DDR chain, independent AXI readback, descriptor writeback and IRQ handling. Maintain source-ID/outstanding budgets within `config/interface_contracts.yaml`.
-5. **PASS, CSR hardware; CPU software pending:** The generated AXI4-to-Lite/register adapter stages a 64-bit APB descriptor head as two 32-bit writes and commits via a doorbell. The test verifies 32-bit configuration writes, sticky IRQ/status and acknowledgments; CPU-written submission and interrupt-service firmware are not yet implemented.
-6. **PENDING, stronger regressions:** The basic remote DDR/HBM NoC transfers have passed. Still add stalls/negative SLVERR, deliberate corruption, unaligned payloads, additional queued-job and backpressure tests, and performance sweeps. Maintain cold boot's no-preload invariant and make a separate CPU-started DMA test.
+5. **PASS, CSR hardware and CPU0 C polling:** The generated AXI4-to-Lite/register adapter stages a 64-bit APB descriptor head as two 32-bit writes and commits via a doorbell. The test verifies 32-bit configuration writes, sticky IRQ/status and acknowledgments; CPU-written submission and bounded STATUS polling are verified. IRQ interrupt-service firmware is pending.
+6. **PENDING, stronger regressions:** The basic remote DDR/HBM NoC transfers have passed. Still add stalls/negative SLVERR, deliberate corruption, unaligned payloads, additional queued-job and backpressure tests, and performance sweeps. Maintain cold boot's no-preload invariant and retain the passing CPU-started DMA test as an independent gate.
 
 **Do not preload writable SRAM in existing cold-boot tests.** They prove CPU0 copies code through its bus and must remain unmodified. DMA preload must be an explicit DMA-only verification mode. The stock desc64 frontend overwrites the first 8 bytes of completed descriptors with a completion marker; the arena cannot be reused before retirement and descriptors must be reinitialized. Linked descriptors are not automatically a data-dependency barrier. A release fence does not replace cache maintenance on cacheful CPUs.
 
@@ -201,12 +201,12 @@ boot and Xezim compile also passed in that run.
 
 This *only* proves two DMA RTL engines in a host-assisted, CPU-reset
 simulation against bounded AXI memory targets. The CPU0 AXI BFMs are not PCIe.
-**Not yet verified:** CPU-executed DMA driver, CPU interrupt-service routines,
+**Now separately verified:** CPU0-executed C DMA driver, CPU runtime allocations and DDR/HBM roundtrip checks ([CI 41933332567](https://github.com/r987r/xezim-hello-world/actions/runs/41933332567)). **Still pending:** CPU interrupt-service routines,
 hardware SS0-to-SS1 doorbells, integrated LiteDRAM/physical DDR4 or HBM,
 error-injection cases, or high-outstanding/prefetch performance. The integration is eligible to merge only after conflict resolution and the
 combined-tree verification gates pass.
 
-## Real CPU C DMA regression (opt-in, pending CI evidence)
+## Real CPU C DMA regression (CI verified, opt-in)
 
 `make dv-chip-cpu-dma` reuses the same `soc_top`, `full_chip_tb`,
 ROM/flash cold-boot copy, two CPU phase mailboxes and passive AXI monitors.
@@ -222,9 +222,7 @@ addresses; the existing report correlator checks accepted transactions.
 The CPU-BFM DMA tests remain fast independent regressions over the same
 memory-region contract.
 
-**The opt-in integration must not be described as verified until a CI run
-for its current SHA passes, including real CPU startup, C result,
-AXI captures, and DDR/HBM roundtrip.** The stock default boot remains
+The opt-in integration **passed at commit `573dc871`** ([full-chip CI](https://github.com/r987r/xezim-hello-world/actions/runs/41933332567)) with real CPU startup, C result, AXI captures, and DDR/HBM roundtrip. Later changes require their own exact-commit passing CI. The stock default boot remains
 unchanged. CPU IRQ handling via interrupt pin is still pending; the first
 CPU regression uses bounded STATUS polling.
 
@@ -237,10 +235,7 @@ rejects unaligned descriptor heads and STATUS busy/IRQ/error, performs two
 COMMAND doorbell. Polling is bounded and returns failure on APB submission
 errors. The helpers are deliberately independent of the host AXI BFM.
 
-**This is software API and hosted-test coverage, not CPU-executed SoC DMA.**
-A live-CPU test must still add a verified firmware image/link path,
-CPU-side DMA MMIO and CPU interrupt routing/service (or bounded polling),
-and independent NoC readback/writeback checks. Running DMA and boot together
+**This API has executed on real RTL PicoRV32** with a compiled C firmware image, actual CPU MMIO and independent NoC roundtrip/readback checks. CPU interrupt routing/service is not yet tested; the application polls STATUS instead. Running DMA and boot together
 requires `boot_live`, never `dma_only`. The 32-bit PicoRV32/SERV CPU
 cannot directly map a 64-bit memory window without a reviewed address
 translation/indirection mechanism; the descriptor pointer halves do not

@@ -241,7 +241,7 @@ def hierarchy_mermaid(cfg: dict, networks: dict) -> str:
         "  classDef model fill:#f5f6f7,stroke:#7b8794,color:#233047;",
         "  classDef verified fill:#e4f8e8,stroke:#228450,color:#12432b;",
         "  %% All FlooNoC internal router and NI RTL is generated.",
-        "  %% Solid: generated boot + optional iDMA wiring. Dashed: pending physical controllers.",
+        "  %% Solid: CPU boot and optional real DMA/CSR wiring. Dashed: controller/PHY pending.",
     ]
     def node(id, label, kind):
         lines.append('  ' + identifier(id) + '["' + label + '"]:::' + kind)
@@ -294,7 +294,7 @@ def hierarchy_mermaid(cfg: dict, networks: dict) -> str:
     for target in cfg["memory_targets"]:
         lines.append("  " + identifier("xbar") + " -->|" + target["kind"].upper()
                      + " model| " + identifier(target["name"]))
-    lines.append("  %% Physical HBM/DDR controllers remain unintegrated; iDMA is generated/optional.")
+    lines.append("  %% Real CPU0 C-DMA and dual-engine BFM DMA are verified test modes; physical controllers remain unintegrated.")
     return "\n".join(lines)+"\n"
 
 
@@ -309,14 +309,14 @@ def overview_svg(cfg: dict, networks: dict, dst: Path):
     h=my+360
     a=Art(1600,h)
     a.heading("Real upstream-generated NoC hierarchy","Full-chip FlooNoC network map",
-              f"{len(networks)} meshes shared by CPU boot and NoC BFM tests; dashed links mark pending physical controllers")
+              f"{len(networks)} meshes / CPU boot, CPU C-DMA and BFM DMA; physical controllers pending")
     for i, compute in enumerate(computes):
         name=compute["name"];x=56+(i%2)*784;y=158+(i//2)*285
         a.rect(x,y,744,267,WHITE,FAINT,r=17,width=2)
         a.text(x+18,y+14,name+" / compute subsystem",22,INK)
         a.box_label(x+18,y+50,220,76,compute["cpu"]["ip"]+" CPU",
                     compute["cpu"]["bus"]+" to AXI","cpu",title_size=19,detail_size=13)
-        a.box_label(x+255,y+50,213,76,"PULP iDMA + CSR","Optional real RTL (DMA mode)","dma",title_size=18,detail_size=13)
+        a.box_label(x+255,y+50,213,76,"PULP iDMA + CSR","Opt-in RTL (CPU/BFM DMA)","dma",title_size=18,detail_size=13)
         a.box_label(x+486,y+50,235,76,"Local SRAM","global remote address", "memory",title_size=19,detail_size=13)
         ld=name+"_local_data";lc=name+"_local_config"
         a.box_label(x+18,y+155,351,81,"LOCAL DATA  /  FlooNoC",
@@ -373,7 +373,7 @@ def overview_svg(cfg: dict, networks: dict, dst: Path):
     a.line([(1193,gy+113),(1193,my+42),(864,my+42),(864,my+64)],PURPLE,3,False,True)
     a.line([(320,my+135),(320,my+171)],GREEN,2,False,True)
     a.text(83,my+274,
-           "Solid: boot and optional real DMA/CSR wiring. Dashed: physical HBM/DDR controller integration pending.",
+           "Solid: CPU boot / optional DMA+CSR wiring. Dashed: physical memory controllers pending.",
            17,MUTED)
     a.text(65,h-29,
            "Router coordinates and link details: gen/diagrams/noc-topology.json and gen/noc/floonoc/*/floogen.yaml.",

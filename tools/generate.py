@@ -51,7 +51,7 @@ def generated_section(cfg: dict, meta: dict, diagrams: dict[str, str], nocs: dic
         "compute CPU/DMA/SRAM blocks and memory target crossbar. It is generated "
         "from the same SoC configuration and FlooGen endpoint topology as the real "
         "structural RTL. **Solid links show generated optional iDMA/CSR wiring (enabled in DMA mode); dashed links show pending physical controllers.** "
-        "The same NoC RTL is instantiated by BFM, CPU boot, and dual-DMA configurations.",
+        "The same NoC RTL serves cold boot, CPU0 C-launched DMA, and dual-engine BFM DMA.",
         "",
         "[![Complete hierarchical SoC and all data/config FlooNoCs](gen/diagrams/noc-hierarchy.svg)](gen/diagrams/noc-hierarchy.svg)",
         "",
@@ -74,7 +74,7 @@ def generated_section(cfg: dict, meta: dict, diagrams: dict[str, str], nocs: dic
         "bursts, concurrent IDs, stalls and downstream SLVERR. Xezim NoC traffic "
         "is not verified. The `make dv-chip` boot configuration runs the real CPUs through "
         "the shared NoCs with CPU0-coordinated init/run/check and AXI memory stand-ins. "
-        "See [chip boot scope](docs/full-chip-boot.md) and [DMA integration](docs/dma-bringup.md); `make dv-chip-dma` tests both real engines through data/config FlooNoCs with the CPUs held in reset and host-initialized DMA SRAM.",
+        "The `make dv-chip-cpu-dma` variant also runs compiled C on real CPU0 to submit DMA through the configuration NoC, roundtrip DDR/HBM data, and compare actual CPU allocations with the Python plan (verified in CI run 41933332567). `make dv-chip-dma` independently tests both real engines with CPUs held in reset and BFM-initialized DMA SRAM. See [chip boot scope](docs/full-chip-boot.md) and [DMA integration](docs/dma-bringup.md).",
         "",
         "### Generated NoC sources (no duplicate pictures)",
         "",
@@ -174,7 +174,7 @@ def build(cfg_path: Path, out: Path, readme: Path) -> str:
         "supernoc/supernoc_tb.sv connects them with upstream AXI BFMs; run "
         "make dv-supernoc for current-source routed-traffic verification. "
         "chip/ contains the actual CPU/NoC boot configuration, phased firmware and shared checker; "
-        "run make dv-chip. Real iDMA and physical controllers remain separate integration work.\n"
+        "run make dv-chip. Optional real iDMA/CSR wiring and CPU0 C-DMA integration are verified with behavioral DDR/HBM models; physical controllers/PHYs and CPU IRQ handlers are separate integration work.\n"
     )
     (out / STAMP).write_text("socgen-v2\n")
     files = {p.relative_to(out).as_posix(): sha(p.read_bytes())

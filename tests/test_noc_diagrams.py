@@ -60,6 +60,7 @@ class RealNetworkDiagrams(unittest.TestCase):
             self.assertEqual(len(diagrams), 1)
             self.assertIn("compute0", diagrams["noc-hierarchy"])
             self.assertIn("global_config", diagrams["noc-hierarchy"])
+            self.assertIn("CPU boot and optional real DMA/CSR wiring", diagrams["noc-hierarchy"])
             self.assertTrue((out/"noc-topology.json").exists())
             self.assertEqual(len(json.loads((out/"noc-topology.json").read_text())["networks"]), 8)
             self.assertFalse((out / "noc").exists())

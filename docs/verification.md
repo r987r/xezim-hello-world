@@ -44,8 +44,7 @@ The [chip boot configuration](full-chip-boot.md) now attaches the CPUs,
 SRAM, upstream protocol/width adapters, reset registers and target crossbar.
 Keep the existing independent memory/boot/NoC scopes for fault isolation.
 
-1. Run the now-generator-wired SS0+SS1 DMA/CSR endpoints through full-chip NoCs,
-   then implement CPU-written descriptor submission and IRQ service.
+1. Preserve verified SS0+SS1 DMA/CSR BFM traffic and real CPU0 C-launched DMA through full-chip NoCs ([CI 41933332567](https://github.com/r987r/xezim-hello-world/actions/runs/41933332567)); next add CPU IRQ service, multi-engine concurrency and stronger faults.
 2. Add real controller register maps, ready/interrupt behavior and physical
    controller/PHY models in their proper scopes.
 3. Extend the chip scope with congestion/fairness, reset during traffic,

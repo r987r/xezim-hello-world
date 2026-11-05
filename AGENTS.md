@@ -16,7 +16,7 @@ in `config/soc.yaml` denotes selected architecture only. The current
 `pulp_axi.executable=False`. `gen/chip/soc_top.sv` is now an actual **chip boot configuration** with
 real CPUs, the shared NoCs, upstream AXI adapters, SRAM, reset registers
 and AXI memory stand-ins. Optional real PULP iDMA and CSRs are generator-wired for every compute
-subsystem in `DmaEnable=1`; CPU firmware IRQ handlers and physical controllers
+subsystem in `DmaEnable=1`; CPU0 C DMA submits/polls successfully; CPU firmware IRQ handlers and physical controllers
 remain unintegrated. The separate full-NoC DMA gate **passed** with 105 real descriptor transfers
 in CI run 41885417960 (CPU0 AXI BFMs drive preparation, not CPU firmware). The generic backend flag still does not describe a complete
 arbitrary-configuration SoC emitter. Legacy memory/boot benches remain
@@ -41,8 +41,7 @@ after CHECK and all accesses drain; never reuse executable code or
 live mailboxes. In C, use `sw/common/sram_pool.[ch]` instead of
 independent DMA/boot bump allocators. The default minimal RV32I boot remains independent of C. The opt-in
 `chip-cpu-dma` variant compiles the shared allocator and DMA driver into
-RV32I flash and calls it on the real CPU0 during RUN. Do not claim this
-CPU-executed integration passed until its exact CI commit is green.
+RV32I flash and calls it on the real CPU0 during RUN. That CPU-executed integration passed at commit `573dc871` ([CI 41933332567](https://github.com/r987r/xezim-hello-world/actions/runs/41933332567)); newer heads still require their own green CI.
 
 Keep boot cold: CPU0 must really read ROM/flash, write **uninitialized**
 SRAM over its bus, release CPU1 via MMIO, and both CPUs must execute code
@@ -131,7 +130,7 @@ tracks planned per-fabric and per-subsystem read/write budgets, native
 PULP/FlooNoC/Verilog AXI parameter targets, and per-port overrides.
 FlooNoC chimney transaction caps are bound to generated RTL. The connected
 BFM traffic baseline is verified; maximum configured capacities and every
-parameter combination are not. CPU/reset hookups exist in the chip boot scope; real iDMA/CSR hookup is optional and generated; CPU firmware support remains pending.
+parameter combination are not. CPU/reset hookups exist in the chip boot scope; real iDMA/CSR hookup is optional and generated; CPU0 C DMA firmware/polling is verified, but interrupt-service firmware remains pending.
 Check that configured compute local output ID width is input ID width
 plus ceil(log2(CPU/DMA initiator count)), and that global FlooGen input IDs agree.
 Never mistake planned quotas for implemented capacity or FlooGen emission

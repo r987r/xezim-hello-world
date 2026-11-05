@@ -18,7 +18,7 @@ single connected BFM test's coverage and results.
 | compute1 boot configuration | SERV/Wishbone/AXI adaptation and SRAM connected; optional real iDMA generated for DMA test mode |
 | config endpoints | CPU/reset AXI-Lite boundaries connected; DMA CSR bridge generated in DMA mode; controller registers pending |
 | memory boot configuration | Local NoC attached to target crossbar and AXI slave models; both global memory ingress links retained |
-| full-chip boot | Real CPUs coordinate init/run/check; upstream AXI BFM checks HBM/DDR stand-ins; generated SS0/SS1 DMA and CSR connections passed the full-chip NoC RTL traffic test ([CI 41885417960](https://github.com/r987r/xezim-hello-world/actions/runs/41885417960)); CPU DMA firmware and physical controllers pending |
+| full-chip boot | Real CPUs coordinate init/run/check; upstream AXI BFM checks HBM/DDR stand-ins; generated SS0/SS1 DMA and CSR connections passed the full-chip NoC RTL traffic test ([CI 41885417960](https://github.com/r987r/xezim-hello-world/actions/runs/41885417960)); CPU0 C-DMA firmware passed ([CI 41933332567](https://github.com/r987r/xezim-hello-world/actions/runs/41933332567)); CPU interrupt service, dual-engine CPU-directed stress and physical controllers pending |
 
 Do not add another testbench per bridge, router or simulator issue.
 Extend the one integrated NoC DUT and the substantive subsystem scopes.
@@ -43,5 +43,5 @@ NoC transaction path yet. Preserve diagnostics in
 Unmapped NoC accesses assert upstream `DecodeError`; they are not yet
 handled as recoverable DECERR. The NoC BFM error test injects mapped
 slave faults and checks propagated SLVERR. Sparse crossbar DECERR tests
-remain a separate scope. Real HBM/DDR timing, PHYs, coherency, CPU-triggered DMA/interrupt firmware,
+remain a separate scope. Real HBM/DDR timing, PHYs, coherency, CPU DMA interrupt-service firmware,
 reset-during-traffic and UVM VIP integration remain future work.

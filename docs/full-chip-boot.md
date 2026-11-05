@@ -18,8 +18,7 @@ checker, with two real DMA engines enabled. C is compiled by LLVM into
 the modeled read-only flash and uses the common SRAM/DDR/HBM allocator
 and desc64 MMIO driver. It checks remote DDR/HBM contents by DMA-copying
 them back into local SRAM. The same AXI monitors/reporting are used.
-This scenario is **not verified until the current PR's CI passes**,
-and uses status polling rather than CPU interrupt-service firmware.
+This scenario **passed** the real Verilator full-chip gate ([CI 41933332567](https://github.com/r987r/xezim-hello-world/actions/runs/41933332567), 39,150 AXI observations), and uses bounded STATUS polling rather than CPU interrupt-service firmware.
 No independent CPU testbench or backdoor SRAM initialization is added.
 
 The separate `full_chip_dma_tb` holds CPUs in reset
@@ -35,8 +34,7 @@ the cold-boot firmware generator and DMA test vector builder. Cold boot uses
 `boot_live`: executing SRAM firmware, CPU coordination mailboxes and DMA
 areas do not overlap. The minimal RV32I boot firmware is still generated
 and executed on the actual CPUs, **not** linked against the new C library.
-`sw/common/sram_pool.[ch]` provides a portable bounded region allocator for
-future compiled boot/runtime applications. The `dma_only` profile can reuse
+`sw/common/memory_pool.[ch]` is the shared SRAM/DDR/HBM physical-region allocator; `sram_pool` and the DMA descriptor routines reuse it. CPU0's compiled RUN application actually allocates buffers and descriptors with this contract; the minimal ROM/SRAM boot coordinator remains generated RV32I. The `dma_only` profile can reuse
 boot space only in a **separate** reset-and-preload regression with CPUs
 stopped; no cold SRAM in this scope may be backdoor-preloaded.
 
@@ -118,7 +116,7 @@ writes distinct burst data into both HBM/DDR windows, applies a partial write,
 then reads both back. Distinct data checks that the targets are independent.
 Read and write responses must be OKAY; accesses just beyond each model's
 capacity must return SLVERR rather than alias valid storage.
-The default cold-boot test still uses a BFM at the inactive DMA boundary.
+The default cold-boot test still uses a BFM at the inactive DMA boundary. **In real CPU C-DMA mode the active probe BFM must not be instantiated** because its response wires mirror true iDMA traffic; only passive AXI observers remain.
 The separate `make dv-chip-dma` test instead uses both real PULP iDMA
 engines over the same NoCs with CPUs held in reset. These are distinct scopes.
 The CPUs remain 32-bit and cannot directly address the windows above 4 GiB.
@@ -129,6 +127,7 @@ The CPUs remain 32-bit and cannot directly address the windows above 4 GiB.
 make gen
 make dv-chip
 make dv-chip-dma
+make dv-chip-cpu-dma  # actual CPU0 C DMA + DDR/HBM roundtrip + passive AXI evidence
 python3 tools/regress.py chip-boot --stage files
 python3 tools/regress.py chip-boot --stage run  # requires matching built RTL
 python3 tools/regress.py chip-boot-negative
