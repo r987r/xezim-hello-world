@@ -52,7 +52,7 @@ async def rx_and_tx_over_real_gmii_mac_and_async_fifos(dut):
     src, sink, axis_tx, axis_rx = await setup(dut)
     payloads = [
         bytes((i * 17 + j) & 0xff for j in range(length))
-        for i, length in enumerate((60, 84, 128, 512, 1514))
+        for i, length in enumerate((60, 85, 127, 513, 1514))
     ]
     # RX: GMII BFM -> real MAC FCS check -> frame FIFO CDC -> logic AXIS
     for payload in payloads:
@@ -70,7 +70,8 @@ async def rx_and_tx_over_real_gmii_mac_and_async_fifos(dut):
         assert tx.check_fcs(), "real MAC failed to insert valid FCS"
         assert tx.error is None, f"GMII errors: {tx.error}"
     assert sink.empty(), "extra/duplicated GMII TX frame"
-    assert int(dut.tx_error_underflow.value) == 0, "unexpected TX underflow pulse"
+    # Underflow is a pulse: monitored throughout in extended stress tests,
+    # not inferred from this single end-of-test sample.
     dut._log.info("PASS real GMII MAC RX/TX: %d frames each; distinct 8ns/10ns clocks",
                   len(payloads))
 
@@ -110,3 +111,47 @@ async def corrupted_fcs_is_detected_and_not_delivered(dut):
     fifo_task.kill()
     dut._log.info("PASS real GMII malformed frame rejection; MAC errors=%d FIFO drops=%d",
                   seen_bad_fcs[0], seen_fifo_bad[0])
+
+
+@cocotb.test(timeout_time=6, timeout_unit="ms")
+async def sustained_1gbe_rx_and_tx_without_width_bottleneck(dut):
+    src, sink, axis_tx, axis_rx = await setup(dut)
+    # Sending many frames with no artificial gaps would overrun an 8-bit
+    # 100MHz logic interface; the 64-bit tkeep adapter must drain promptly.
+    payloads = [bytes(((n * 31) + i * 7) & 0xff for i in range(1100 + n % 13))
+                for n in range(24)]
+    errors = {"bad_fcs": 0, "bad_frame": 0, "overflow": 0, "underflow": 0}
+
+    async def watch_rx():
+        while True:
+            await RisingEdge(dut.gmii_rx_clk)
+            errors["bad_fcs"] += int(dut.rx_error_bad_fcs.value)
+            errors["bad_frame"] += int(dut.rx_error_bad_frame.value)
+
+    async def watch_logic():
+        while True:
+            await RisingEdge(dut.logic_clk)
+            errors["overflow"] += int(dut.rx_fifo_overflow.value)
+
+    async def watch_tx():
+        while True:
+            await RisingEdge(dut.gmii_tx_clk)
+            errors["underflow"] += int(dut.tx_error_underflow.value)
+
+    monitors = [cocotb.start_soon(watch_rx()), cocotb.start_soon(watch_logic()),
+                cocotb.start_soon(watch_tx())]
+    for payload in payloads:
+        await src.send(GmiiFrame.from_payload(payload))
+        await axis_tx.send(AxiStreamFrame(payload))
+    for payload in payloads:
+        received = await bounded_recv(axis_rx, "64-bit RX frame")
+        sent = await bounded_recv(sink, "GMII TX frame")
+        assert bytes(received.tdata) == payload, "RX byte/keep corruption"
+        assert received.tuser == 0, "unexpected RX error"
+        assert bytes(sent.get_payload()) == payload, "TX tail/keep corruption"
+        assert sent.check_fcs(), "bad transmitted FCS"
+    for t in monitors:
+        t.kill()
+    assert not any(errors.values()), f"MAC/FIFO errors on good sustained traffic: {errors}"
+    assert axis_rx.empty() and sink.empty(), "duplicate or unconsumed Ethernet frames"
+    dut._log.info("PASS sustained GMII RX/TX: 24 frames both directions, 64-bit logic + 8-bit GMII, error counters=%r", errors)

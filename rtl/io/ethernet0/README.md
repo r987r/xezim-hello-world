@@ -19,14 +19,19 @@ ignored `.tools/ethernet0/` with exact-SHA checks.
 ## Clock and AXIS contracts
 
 * GMII RX and TX run on their respective 125 MHz clocks, while the SoC-side
-  AXI-Stream is 8-bit at 100 MHz in the test. **Separate clock domains** are
+  AXI-Stream is 64-bit with 8-bit `tkeep` at 100 MHz in the test. **Separate clock domains** are
   passed through real frame FIFOs. This profile implements 1 GbE only.
+* The pinned width adapters upsize RX GMII bytes and downsize TX `tkeep`
+  bytes without truncating non-multiple-of-eight frame tails. This avoids the
+  100 MB/s peak limit of an 8-bit 100 MHz logic bus against 1GbE's 125 MB/s.
 * TX FIFO stores an entire frame before sending through the MAC; TX adds
   preamble, padding as required and Ethernet FCS.
 * RX MAC checks FCS and strips FCS. RX FIFO drops whole errored or oversize
   frames (and on full). It never advertises a partial RX frame as complete.
 * RX/TX `tuser[0]` is the upstream error marker, not classification metadata.
   The existing Python `frame_contract.py` is a golden model, not RTL.
+* FIFO sizes in this milestone are 2048 bytes; byte capacity is independent
+  of the width adapter. Verify no incomplete frame can escape on overflow.
 * FIFO sizes in this milestone are 2048 bytes. Oversize/overflow and frame
   accounting require dedicated stress coverage before DMA integration.
 

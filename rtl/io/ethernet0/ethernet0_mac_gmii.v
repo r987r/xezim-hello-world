@@ -18,13 +18,15 @@ module ethernet0_mac_gmii #(
     input  wire       gmii_rx_clk,
     input  wire       gmii_rx_rst,
 
-    input  wire [7:0] tx_axis_tdata,
+    input  wire [63:0] tx_axis_tdata,
+    input  wire [7:0]  tx_axis_tkeep,
     input  wire       tx_axis_tvalid,
     output wire       tx_axis_tready,
     input  wire       tx_axis_tlast,
     input  wire       tx_axis_tuser,
 
-    output wire [7:0] rx_axis_tdata,
+    output wire [63:0] rx_axis_tdata,
+    output wire [7:0]  rx_axis_tkeep,
     output wire       rx_axis_tvalid,
     input  wire       rx_axis_tready,
     output wire       rx_axis_tlast,
@@ -60,13 +62,17 @@ wire       gmii_rx_axis_tready;
 wire       gmii_rx_axis_tlast;
 wire       gmii_rx_axis_tuser;
 
+// Width-convert logic 64-bit AXIS with tkeep to 8-bit GMII MAC stream.
 // Buffer complete TX frames in logic clock before handoff to MAC clock.
 // This prevents intermittent underflow during normal logic-domain stalls.
-axis_async_fifo #(
+axis_async_fifo_adapter #(
     .DEPTH(TX_FIFO_DEPTH),
-    .DATA_WIDTH(8),
-    .KEEP_ENABLE(0),
-    .KEEP_WIDTH(1),
+    .S_DATA_WIDTH(64),
+    .S_KEEP_ENABLE(1),
+    .S_KEEP_WIDTH(8),
+    .M_DATA_WIDTH(8),
+    .M_KEEP_ENABLE(0),
+    .M_KEEP_WIDTH(1),
     .LAST_ENABLE(1),
     .ID_ENABLE(0),
     .DEST_ENABLE(0),
@@ -80,7 +86,7 @@ axis_async_fifo #(
     .s_clk(logic_clk),
     .s_rst(logic_rst),
     .s_axis_tdata(tx_axis_tdata),
-    .s_axis_tkeep(1'b1),
+    .s_axis_tkeep(tx_axis_tkeep),
     .s_axis_tvalid(tx_axis_tvalid),
     .s_axis_tready(tx_axis_tready),
     .s_axis_tlast(tx_axis_tlast),
@@ -165,14 +171,18 @@ axis_gmii_rx #(
     .error_bad_fcs(rx_error_bad_fcs)
 );
 
+// Width-convert 8-bit GMII stream to logic 64-bit AXIS with tkeep.
 // GMII cannot be backpressured: frame FIFO must always accept source beats,
 // dropping the *whole* frame on bad FCS or overflow. Never deliver a partial
 // frame to memory or treat overflow as a successful RX packet.
-axis_async_fifo #(
+axis_async_fifo_adapter #(
     .DEPTH(RX_FIFO_DEPTH),
-    .DATA_WIDTH(8),
-    .KEEP_ENABLE(0),
-    .KEEP_WIDTH(1),
+    .S_DATA_WIDTH(8),
+    .S_KEEP_ENABLE(0),
+    .S_KEEP_WIDTH(1),
+    .M_DATA_WIDTH(64),
+    .M_KEEP_ENABLE(1),
+    .M_KEEP_WIDTH(8),
     .LAST_ENABLE(1),
     .ID_ENABLE(0),
     .DEST_ENABLE(0),
@@ -196,7 +206,7 @@ axis_async_fifo #(
     .m_clk(logic_clk),
     .m_rst(logic_rst),
     .m_axis_tdata(rx_axis_tdata),
-    .m_axis_tkeep(),
+    .m_axis_tkeep(rx_axis_tkeep),
     .m_axis_tvalid(rx_axis_tvalid),
     .m_axis_tready(rx_axis_tready),
     .m_axis_tlast(rx_axis_tlast),
