@@ -127,8 +127,9 @@ def load_config(path):
                 axi = report['axi']
                 if (not isinstance(axi, dict)
                     or not required <= set(axi)
-                    or set(axi) - required - {'max_events','actors'}
+                    or set(axi) - required - {'max_events','actors','required_complete'}
                     or ('actors' in axi and not isinstance(axi['actors'],str))
+                    or ('required_complete' in axi and type(axi['required_complete']) is not bool)
                     or any(not isinstance(axi[k],str) or not axi[k] for k in required)
                     or type(axi.get('max_events',500000)) is not int
                     or axi.get('max_events',500000) <= 0):
