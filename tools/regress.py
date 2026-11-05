@@ -69,12 +69,12 @@ def load_config(path):
             raise ValueError(f'{name}: build reuse is only supported by cocotb-verilator')
         if test.get('mode', 'simulate') not in ('simulate', 'compile') or (test.get('mode') == 'compile' and test['engine'] != 'xezim'):
             raise ValueError(f'{name}: mode=compile requires the Xezim engine')
-        if test.get('firmware_mode') not in (None, 'cpu_dma', 'pcie_host'):
+        if test.get('firmware_mode') not in (None, 'cpu_dma', 'pcie_host', 'pcie_dma_host'):
             raise ValueError(f'{name}: unknown compiled CPU firmware mode')
         if 'firmware_mode' in test and (
             test['engine'] != 'cocotb-verilator' or
             'chip_boot' not in test.get('bender_targets', []) or
-            (test['firmware_mode'] == 'cpu_dma'
+            (test['firmware_mode'] in ('cpu_dma','pcie_dma_host')
              and 'dma' not in test.get('bender_targets', []))):
             raise ValueError(f'{name}: selected test needs real chip RTL and specified active IP')
         if 'report' in test:
@@ -365,7 +365,7 @@ def run_target(name, test, resolver, options):
                    if Path(filename).parent == generated_root and
                    Path(filename).name in replacements else filename
                    for filename in sources]
-    if test.get('firmware_mode') == 'pcie_host':
+    if test.get('firmware_mode') in ('pcie_host', 'pcie_dma_host'):
         if str(ROOT) not in sys.path:
             sys.path.insert(0, str(ROOT))
         # Same generated SoC and CPU firmware semantics; only variant wires
@@ -378,9 +378,14 @@ def run_target(name, test, resolver, options):
         variant = out/'variant'
         vendor_pin = source_contract()
         bridge = assert_iverilog_clean()
-        emit_chip(cfg, noc_manifest, ROOT/'gen/noc/floonoc', variant,
-                  image_prefix=variant.relative_to(ROOT).as_posix(),
-                  pcie_host_mode=True)
+        if test['firmware_mode'] == 'pcie_dma_host':
+            from cpu_dma_firmware import prepare as prepare_cpu_dma
+            prepare_cpu_dma(cfg, noc_manifest, ROOT/'gen/noc/floonoc', variant,
+                            pcie_host_mode=True)
+        else:
+            emit_chip(cfg, noc_manifest, ROOT/'gen/noc/floonoc', variant,
+                      image_prefix=variant.relative_to(ROOT).as_posix(),
+                      pcie_host_mode=True)
         generated_root = ROOT/'gen/chip'
         replacements = {'soc_top.sv', 'full_chip_tb.sv'}
         sources = [str(variant/Path(filename).name)
