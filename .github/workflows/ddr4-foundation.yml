@@ -103,25 +103,46 @@ jobs:
           assert j['implementation']['modeled_size']==32*1024*1024
           print('DDR-B generated LiteDRAM pin/SoC contract PASS (not full-chip RTL)')
           PY
-      - name: Validate planned DDR-B Config NoC init mapping against actual generated LiteDRAM CSR
+      - name: Validate generated DDR CSR requires wider Config NoC aperture
         run: |
           set -euo pipefail
+          python3 - <<'PY'
+          import json, pathlib, sys, yaml
+          sys.path.insert(0, 'rtl/memory/ddr4')
+          from config_noc_init_contract import compile_transport
+          d=pathlib.Path('.tools/ddr4/litedram_sim')
+          soc=yaml.safe_load(pathlib.Path('config/soc.yaml').read_text())
+          plan=json.loads((d/'ddr4_init_plan.json').read_text())
+          csr=json.loads((d/'csr.json').read_text())
+          try:
+              compile_transport(soc, plan, csr)
+          except ValueError as exc:
+              assert 'exceeds Config NoC 4-KiB aperture' in str(exc), str(exc)
+              print('Expected negative PASS: current 4-KiB memory0.ctrl cannot fit generated LiteDRAM CSR banks')
+          else:
+              raise AssertionError('Real generated LiteDRAM CSR unexpectedly fit current 4-KiB window')
+          PY
+          # Contract-only probe of a proposed 16-KiB window. Do NOT mutate
+          # config/soc.yaml or claim it has been wired into an RTL Config NoC.
           python3 rtl/memory/ddr4/config_noc_init_contract.py \
             --soc config/soc.yaml \
             --plan .tools/ddr4/litedram_sim/ddr4_init_plan.json \
             --csr .tools/ddr4/litedram_sim/csr.json \
             --generated-verilog .tools/ddr4/litedram_sim/gateware/soc_ddr4_sim.v \
+            --proposed-window-bytes 0x4000 \
             --output .tools/ddr4/litedram_sim/ddr4_config_noc_init_contract.json
           python3 - <<'PY'
           import json
           from pathlib import Path
           d=json.loads(Path(".tools/ddr4/litedram_sim/ddr4_config_noc_init_contract.json").read_text())
-          assert d["status"]=="contract_only_not_driven_in_full_chip"
-          assert d["requires_hardware_translator"] is True
+          assert d["status"]=="proposed_aperture_not_in_soc"
+          assert d["configured_window_bytes"]==4096
+          assert d["proposed_window_bytes"]==16384
+          assert d["requires_config_change"] is True and d["ready_for_full_chip"] is False
           assert d["config_base"]==0x40030000
           assert d["actions"][-2]["csr"]=="ddrctrl_init_error"
           assert d["actions"][-2]["expect_value"]==0
-          print("DDR-B Config NoC init address/CSR pin contract passed, hardware bridge unconnected")
+          print('DDR-B 16KiB planned control CSR transport PASS (not integrated into SoC)')
           PY
 
       - name: Install Verilator for isolated RTL check
