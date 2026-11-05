@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "name": "verilog_pcie",
+  "git": "https://github.com/alexforencich/verilog-pcie.git",
+  "commit": "25156a9a162c41c60f11f41590c7d006d015ae5a",
+  "license": "MIT",
+  "stage": "isolated_tlp_to_axi4",
+  "module": "pcie_axi_master",
+  "rtl_modules": [
+    "rtl/pcie_axi_master.v",
+    "rtl/pcie_axi_master_rd.v",
+    "rtl/pcie_axi_master_wr.v",
+    "rtl/pcie_tlp_demux.v",
+    "rtl/pulse_merge.v"
+  ],
+  "python_models": [
+    "tb/pcie_axi_master/pcie_if.py"
+  ],
+  "simulator": "icarus",
+  "dependencies": {
+    "python": "3.10",
+    "cocotb": "1.7.2",
+    "cocotb-bus": "0.2.1",
+    "cocotb-test": "0.2.4",
+    "cocotbext-axi": "0.1.24",
+    "cocotbext-pcie": "0.2.14",
+    "pytest": "7.2.1"
+  }
+}

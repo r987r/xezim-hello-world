@@ -1,0 +1,55 @@
+name: PCIe0 integrated real bridge and generated local FlooNoC
+
+on:
+  pull_request:
+    branches: [agent/38-subsystem-registry-bringup, main]
+    paths: ['dv/pcie0/**', 'tests/test_pcie*', 'tools/full_chip_gen.py', 'tools/chip_bootgen.py', '.github/workflows/pcie0-integrated.yml']
+  workflow_dispatch:
+
+permissions: {contents: read}
+concurrency:
+  group: pcie0-integrated-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pcie0-real-noc:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: alexforencich/verilog-pcie
+          ref: 25156a9a162c41c60f11f41590c7d006d015ae5a
+          path: .tools/verilog_pcie
+          persist-credentials: false
+      - uses: ./.github/actions/setup-bender
+        env: {GH_TOKEN: "${{ github.token }}"}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Install pinned IP and verification dependencies
+        run: |
+          python3 -m pip install -r requirements.txt
+          python3 tools/ip_fetch.py floonoc picorv32 serv wb2axip verilog_axi
+          python3 -m pip install -e .tools/floonoc
+          python3 -m pip install 'cocotb==1.9.2' 'cocotb-bus==0.2.1' 'cocotbext-pcie==0.2.14' 'cocotbext-axi==0.1.24'
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends verilator iverilog
+      - name: Validate real RTL pins, test contracts and generated endpoints
+        run: |
+          python3 dv/pcie0/run_rtl_smoke.py --check-pin
+          python3 -m unittest tests.test_pcie_bar_contract tests.test_pcie_diagnostic_contract -v
+          python3 dv/pcie0/prepare_rtl.py
+          python3 tools/regress.py --check-noc
+          make check-generated
+      - name: PCIe TLP -> PCIe0 FlooNoC -> real PULP SRAM
+        run: python3 dv/pcie0/run_noc_smoke.py
+      - name: Preserve build, Cocotb XML and raw transaction logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pcie0-dedicated-noc-${{ github.run_id }}
+          path: |
+            .tools/pcie0/noc_build/
+          include-hidden-files: true
+          if-no-files-found: warn
