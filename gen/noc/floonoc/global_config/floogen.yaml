@@ -31,6 +31,9 @@ endpoints:
 - name: pcie0
   mgr_port_protocol:
   - axi_in
+- name: ethernet0
+  mgr_port_protocol:
+  - axi_in
 - name: compute0_regs
   sbr_port_protocol:
   - axi_out
@@ -50,6 +53,12 @@ endpoints:
   - axi_out
   addr_range:
     base: 1074003968
+    size: 65536
+- name: ethernet0_regs
+  sbr_port_protocol:
+  - axi_out
+  addr_range:
+    base: 1074069504
     size: 65536
 - name: memory0_regs
   sbr_port_protocol:
@@ -82,27 +91,39 @@ connections:
   - 2
   - 0
   dst_dir: Eject
-- src: compute0_regs
+- src: ethernet0
   dst: router
   dst_idx:
   - 0
+  - 1
+  dst_dir: Eject
+- src: compute0_regs
+  dst: router
+  dst_idx:
+  - 1
   - 1
   dst_dir: Eject
 - src: compute1_regs
   dst: router
   dst_idx:
-  - 1
+  - 2
   - 1
   dst_dir: Eject
 - src: pcie0_regs
   dst: router
   dst_idx:
+  - 0
   - 2
+  dst_dir: Eject
+- src: ethernet0_regs
+  dst: router
+  dst_idx:
   - 1
+  - 2
   dst_dir: Eject
 - src: memory0_regs
   dst: router
   dst_idx:
-  - 0
+  - 2
   - 2
   dst_dir: Eject

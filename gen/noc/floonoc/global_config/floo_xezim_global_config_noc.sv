@@ -17,12 +17,16 @@ module floo_xezim_global_config_noc
   output axi_in_rsp_t              compute1_axi_in_rsp_o,
   input axi_in_req_t              pcie0_axi_in_req_i,
   output axi_in_rsp_t              pcie0_axi_in_rsp_o,
+  input axi_in_req_t              ethernet0_axi_in_req_i,
+  output axi_in_rsp_t              ethernet0_axi_in_rsp_o,
   output axi_out_req_t              compute0_regs_axi_out_req_o,
   input axi_out_rsp_t              compute0_regs_axi_out_rsp_i,
   output axi_out_req_t              compute1_regs_axi_out_req_o,
   input axi_out_rsp_t              compute1_regs_axi_out_rsp_i,
   output axi_out_req_t              pcie0_regs_axi_out_req_o,
   input axi_out_rsp_t              pcie0_regs_axi_out_rsp_i,
+  output axi_out_req_t              ethernet0_regs_axi_out_req_o,
+  input axi_out_rsp_t              ethernet0_regs_axi_out_rsp_i,
   output axi_out_req_t              memory0_regs_axi_out_req_o,
   input axi_out_rsp_t              memory0_regs_axi_out_rsp_i
 
@@ -69,8 +73,8 @@ floo_rsp_t router_0_2_to_router_0_1_rsp;
 floo_req_t router_0_1_to_router_1_1_req;
 floo_rsp_t router_1_1_to_router_0_1_rsp;
 
-floo_req_t router_0_1_to_compute0_regs_ni_req;
-floo_rsp_t compute0_regs_ni_to_router_0_1_rsp;
+floo_req_t router_0_1_to_ethernet0_ni_req;
+floo_rsp_t ethernet0_ni_to_router_0_1_rsp;
 
 floo_req_t router_0_2_to_router_0_1_req;
 floo_rsp_t router_0_1_to_router_0_2_rsp;
@@ -78,8 +82,8 @@ floo_rsp_t router_0_1_to_router_0_2_rsp;
 floo_req_t router_0_2_to_router_1_2_req;
 floo_rsp_t router_1_2_to_router_0_2_rsp;
 
-floo_req_t router_0_2_to_memory0_regs_ni_req;
-floo_rsp_t memory0_regs_ni_to_router_0_2_rsp;
+floo_req_t router_0_2_to_pcie0_regs_ni_req;
+floo_rsp_t pcie0_regs_ni_to_router_0_2_rsp;
 
 floo_req_t router_1_0_to_router_0_0_req;
 floo_rsp_t router_0_0_to_router_1_0_rsp;
@@ -105,8 +109,8 @@ floo_rsp_t router_1_2_to_router_1_1_rsp;
 floo_req_t router_1_1_to_router_2_1_req;
 floo_rsp_t router_2_1_to_router_1_1_rsp;
 
-floo_req_t router_1_1_to_compute1_regs_ni_req;
-floo_rsp_t compute1_regs_ni_to_router_1_1_rsp;
+floo_req_t router_1_1_to_compute0_regs_ni_req;
+floo_rsp_t compute0_regs_ni_to_router_1_1_rsp;
 
 floo_req_t router_1_2_to_router_0_2_req;
 floo_rsp_t router_0_2_to_router_1_2_rsp;
@@ -116,6 +120,9 @@ floo_rsp_t router_1_1_to_router_1_2_rsp;
 
 floo_req_t router_1_2_to_router_2_2_req;
 floo_rsp_t router_2_2_to_router_1_2_rsp;
+
+floo_req_t router_1_2_to_ethernet0_regs_ni_req;
+floo_rsp_t ethernet0_regs_ni_to_router_1_2_rsp;
 
 floo_req_t router_2_0_to_router_1_0_req;
 floo_rsp_t router_1_0_to_router_2_0_rsp;
@@ -135,14 +142,17 @@ floo_rsp_t router_2_0_to_router_2_1_rsp;
 floo_req_t router_2_1_to_router_2_2_req;
 floo_rsp_t router_2_2_to_router_2_1_rsp;
 
-floo_req_t router_2_1_to_pcie0_regs_ni_req;
-floo_rsp_t pcie0_regs_ni_to_router_2_1_rsp;
+floo_req_t router_2_1_to_compute1_regs_ni_req;
+floo_rsp_t compute1_regs_ni_to_router_2_1_rsp;
 
 floo_req_t router_2_2_to_router_1_2_req;
 floo_rsp_t router_1_2_to_router_2_2_rsp;
 
 floo_req_t router_2_2_to_router_2_1_req;
 floo_rsp_t router_2_1_to_router_2_2_rsp;
+
+floo_req_t router_2_2_to_memory0_regs_ni_req;
+floo_rsp_t memory0_regs_ni_to_router_2_2_rsp;
 
 floo_req_t compute0_ni_to_router_0_0_req;
 floo_rsp_t router_0_0_to_compute0_ni_rsp;
@@ -153,17 +163,23 @@ floo_rsp_t router_1_0_to_compute1_ni_rsp;
 floo_req_t pcie0_ni_to_router_2_0_req;
 floo_rsp_t router_2_0_to_pcie0_ni_rsp;
 
-floo_req_t compute0_regs_ni_to_router_0_1_req;
-floo_rsp_t router_0_1_to_compute0_regs_ni_rsp;
+floo_req_t ethernet0_ni_to_router_0_1_req;
+floo_rsp_t router_0_1_to_ethernet0_ni_rsp;
 
-floo_req_t compute1_regs_ni_to_router_1_1_req;
-floo_rsp_t router_1_1_to_compute1_regs_ni_rsp;
+floo_req_t compute0_regs_ni_to_router_1_1_req;
+floo_rsp_t router_1_1_to_compute0_regs_ni_rsp;
 
-floo_req_t pcie0_regs_ni_to_router_2_1_req;
-floo_rsp_t router_2_1_to_pcie0_regs_ni_rsp;
+floo_req_t compute1_regs_ni_to_router_2_1_req;
+floo_rsp_t router_2_1_to_compute1_regs_ni_rsp;
 
-floo_req_t memory0_regs_ni_to_router_0_2_req;
-floo_rsp_t router_0_2_to_memory0_regs_ni_rsp;
+floo_req_t pcie0_regs_ni_to_router_0_2_req;
+floo_rsp_t router_0_2_to_pcie0_regs_ni_rsp;
+
+floo_req_t ethernet0_regs_ni_to_router_1_2_req;
+floo_rsp_t router_1_2_to_ethernet0_regs_ni_rsp;
+
+floo_req_t memory0_regs_ni_to_router_2_2_req;
+floo_rsp_t router_2_2_to_memory0_regs_ni_rsp;
 
 
 
@@ -275,7 +291,43 @@ floo_axi_chimney  #(
   .floo_rsp_o       ( pcie0_ni_to_router_2_0_rsp   )
 );
 
-  localparam id_t COMPUTE0_REGS_NI_ID = '{x: 0, y: 1, port_id: 0};
+  localparam id_t ETHERNET0_NI_ID = '{x: 0, y: 1, port_id: 0};
+
+floo_axi_chimney  #(
+  .AxiCfg(AxiCfg),
+  .AtopSupport(1'b0),
+    .MaxAtomicTxns(0),
+    .ChimneyCfg(set_ports(xezim_chimney_cfg(), 1'b0, 1'b1)),
+  .RouteCfg(RouteCfg),
+  .id_t(id_t),
+  .rob_idx_t(rob_idx_t),
+  .hdr_t  (hdr_t),
+  .sam_rule_t(sam_rule_t),
+  .Sam(Sam),
+  .axi_in_req_t(axi_in_req_t),
+  .axi_in_rsp_t(axi_in_rsp_t),
+  .axi_out_req_t(axi_out_req_t),
+  .axi_out_rsp_t(axi_out_rsp_t),
+  .floo_req_t(floo_req_t),
+  .floo_rsp_t(floo_rsp_t)
+) ethernet0_ni (
+  .clk_i,
+  .rst_ni,
+  .test_enable_i,
+  .sram_cfg_i ( '0 ),
+  .axi_in_req_i  ( ethernet0_axi_in_req_i ),
+  .axi_in_rsp_o  ( ethernet0_axi_in_rsp_o ),
+  .axi_out_req_o (    ),
+  .axi_out_rsp_i ( '0 ),
+  .id_i             ( ETHERNET0_NI_ID       ),
+  .route_table_i    ( '0                          ),
+  .floo_req_o       ( ethernet0_ni_to_router_0_1_req   ),
+  .floo_rsp_i       ( router_0_1_to_ethernet0_ni_rsp   ),
+  .floo_req_i       ( router_0_1_to_ethernet0_ni_req   ),
+  .floo_rsp_o       ( ethernet0_ni_to_router_0_1_rsp   )
+);
+
+  localparam id_t COMPUTE0_REGS_NI_ID = '{x: 1, y: 1, port_id: 0};
 
 floo_axi_chimney  #(
   .AxiCfg(AxiCfg),
@@ -305,13 +357,13 @@ floo_axi_chimney  #(
   .axi_out_rsp_i ( compute0_regs_axi_out_rsp_i ),
   .id_i             ( COMPUTE0_REGS_NI_ID       ),
   .route_table_i    ( '0                          ),
-  .floo_req_o       ( compute0_regs_ni_to_router_0_1_req   ),
-  .floo_rsp_i       ( router_0_1_to_compute0_regs_ni_rsp   ),
-  .floo_req_i       ( router_0_1_to_compute0_regs_ni_req   ),
-  .floo_rsp_o       ( compute0_regs_ni_to_router_0_1_rsp   )
+  .floo_req_o       ( compute0_regs_ni_to_router_1_1_req   ),
+  .floo_rsp_i       ( router_1_1_to_compute0_regs_ni_rsp   ),
+  .floo_req_i       ( router_1_1_to_compute0_regs_ni_req   ),
+  .floo_rsp_o       ( compute0_regs_ni_to_router_1_1_rsp   )
 );
 
-  localparam id_t COMPUTE1_REGS_NI_ID = '{x: 1, y: 1, port_id: 0};
+  localparam id_t COMPUTE1_REGS_NI_ID = '{x: 2, y: 1, port_id: 0};
 
 floo_axi_chimney  #(
   .AxiCfg(AxiCfg),
@@ -341,13 +393,13 @@ floo_axi_chimney  #(
   .axi_out_rsp_i ( compute1_regs_axi_out_rsp_i ),
   .id_i             ( COMPUTE1_REGS_NI_ID       ),
   .route_table_i    ( '0                          ),
-  .floo_req_o       ( compute1_regs_ni_to_router_1_1_req   ),
-  .floo_rsp_i       ( router_1_1_to_compute1_regs_ni_rsp   ),
-  .floo_req_i       ( router_1_1_to_compute1_regs_ni_req   ),
-  .floo_rsp_o       ( compute1_regs_ni_to_router_1_1_rsp   )
+  .floo_req_o       ( compute1_regs_ni_to_router_2_1_req   ),
+  .floo_rsp_i       ( router_2_1_to_compute1_regs_ni_rsp   ),
+  .floo_req_i       ( router_2_1_to_compute1_regs_ni_req   ),
+  .floo_rsp_o       ( compute1_regs_ni_to_router_2_1_rsp   )
 );
 
-  localparam id_t PCIE0_REGS_NI_ID = '{x: 2, y: 1, port_id: 0};
+  localparam id_t PCIE0_REGS_NI_ID = '{x: 0, y: 2, port_id: 0};
 
 floo_axi_chimney  #(
   .AxiCfg(AxiCfg),
@@ -377,13 +429,49 @@ floo_axi_chimney  #(
   .axi_out_rsp_i ( pcie0_regs_axi_out_rsp_i ),
   .id_i             ( PCIE0_REGS_NI_ID       ),
   .route_table_i    ( '0                          ),
-  .floo_req_o       ( pcie0_regs_ni_to_router_2_1_req   ),
-  .floo_rsp_i       ( router_2_1_to_pcie0_regs_ni_rsp   ),
-  .floo_req_i       ( router_2_1_to_pcie0_regs_ni_req   ),
-  .floo_rsp_o       ( pcie0_regs_ni_to_router_2_1_rsp   )
+  .floo_req_o       ( pcie0_regs_ni_to_router_0_2_req   ),
+  .floo_rsp_i       ( router_0_2_to_pcie0_regs_ni_rsp   ),
+  .floo_req_i       ( router_0_2_to_pcie0_regs_ni_req   ),
+  .floo_rsp_o       ( pcie0_regs_ni_to_router_0_2_rsp   )
 );
 
-  localparam id_t MEMORY0_REGS_NI_ID = '{x: 0, y: 2, port_id: 0};
+  localparam id_t ETHERNET0_REGS_NI_ID = '{x: 1, y: 2, port_id: 0};
+
+floo_axi_chimney  #(
+  .AxiCfg(AxiCfg),
+  .AtopSupport(1'b0),
+    .MaxAtomicTxns(0),
+    .ChimneyCfg(set_ports(xezim_chimney_cfg_no_mgr(), 1'b1, 1'b0)),
+  .RouteCfg(RouteCfg),
+  .id_t(id_t),
+  .rob_idx_t(rob_idx_t),
+  .hdr_t  (hdr_t),
+  .sam_rule_t(sam_rule_t),
+  .Sam(Sam),
+  .axi_in_req_t(axi_in_req_t),
+  .axi_in_rsp_t(axi_in_rsp_t),
+  .axi_out_req_t(axi_out_req_t),
+  .axi_out_rsp_t(axi_out_rsp_t),
+  .floo_req_t(floo_req_t),
+  .floo_rsp_t(floo_rsp_t)
+) ethernet0_regs_ni (
+  .clk_i,
+  .rst_ni,
+  .test_enable_i,
+  .sram_cfg_i ( '0 ),
+  .axi_in_req_i  ( '0 ),
+  .axi_in_rsp_o  (    ),
+  .axi_out_req_o ( ethernet0_regs_axi_out_req_o ),
+  .axi_out_rsp_i ( ethernet0_regs_axi_out_rsp_i ),
+  .id_i             ( ETHERNET0_REGS_NI_ID       ),
+  .route_table_i    ( '0                          ),
+  .floo_req_o       ( ethernet0_regs_ni_to_router_1_2_req   ),
+  .floo_rsp_i       ( router_1_2_to_ethernet0_regs_ni_rsp   ),
+  .floo_req_i       ( router_1_2_to_ethernet0_regs_ni_req   ),
+  .floo_rsp_o       ( ethernet0_regs_ni_to_router_1_2_rsp   )
+);
+
+  localparam id_t MEMORY0_REGS_NI_ID = '{x: 2, y: 2, port_id: 0};
 
 floo_axi_chimney  #(
   .AxiCfg(AxiCfg),
@@ -413,10 +501,10 @@ floo_axi_chimney  #(
   .axi_out_rsp_i ( memory0_regs_axi_out_rsp_i ),
   .id_i             ( MEMORY0_REGS_NI_ID       ),
   .route_table_i    ( '0                          ),
-  .floo_req_o       ( memory0_regs_ni_to_router_0_2_req   ),
-  .floo_rsp_i       ( router_0_2_to_memory0_regs_ni_rsp   ),
-  .floo_req_i       ( router_0_2_to_memory0_regs_ni_req   ),
-  .floo_rsp_o       ( memory0_regs_ni_to_router_0_2_rsp   )
+  .floo_req_o       ( memory0_regs_ni_to_router_2_2_req   ),
+  .floo_rsp_i       ( router_2_2_to_memory0_regs_ni_rsp   ),
+  .floo_req_i       ( router_2_2_to_memory0_regs_ni_req   ),
+  .floo_rsp_o       ( memory0_regs_ni_to_router_2_2_rsp   )
 );
 
 
@@ -481,23 +569,23 @@ floo_rsp_t [4:0] router_0_1_rsp_in;
     assign router_0_1_req_in[1] = router_1_1_to_router_0_1_req;
     assign router_0_1_req_in[2] = router_0_0_to_router_0_1_req;
     assign router_0_1_req_in[3] = '0;
-    assign router_0_1_req_in[4] = compute0_regs_ni_to_router_0_1_req;
+    assign router_0_1_req_in[4] = ethernet0_ni_to_router_0_1_req;
 
     assign router_0_1_to_router_0_2_rsp = router_0_1_rsp_out[0];
     assign router_0_1_to_router_1_1_rsp = router_0_1_rsp_out[1];
     assign router_0_1_to_router_0_0_rsp = router_0_1_rsp_out[2];
-    assign router_0_1_to_compute0_regs_ni_rsp = router_0_1_rsp_out[4];
+    assign router_0_1_to_ethernet0_ni_rsp = router_0_1_rsp_out[4];
 
     assign router_0_1_to_router_0_2_req = router_0_1_req_out[0];
     assign router_0_1_to_router_1_1_req = router_0_1_req_out[1];
     assign router_0_1_to_router_0_0_req = router_0_1_req_out[2];
-    assign router_0_1_to_compute0_regs_ni_req = router_0_1_req_out[4];
+    assign router_0_1_to_ethernet0_ni_req = router_0_1_req_out[4];
 
     assign router_0_1_rsp_in[0] = router_0_2_to_router_0_1_rsp;
     assign router_0_1_rsp_in[1] = router_1_1_to_router_0_1_rsp;
     assign router_0_1_rsp_in[2] = router_0_0_to_router_0_1_rsp;
     assign router_0_1_rsp_in[3] = '0;
-    assign router_0_1_rsp_in[4] = compute0_regs_ni_to_router_0_1_rsp;
+    assign router_0_1_rsp_in[4] = ethernet0_ni_to_router_0_1_rsp;
 
   localparam id_t ROUTER_0_1_ID = '{x: 0, y: 1, port_id: 0};
 
@@ -535,21 +623,21 @@ floo_rsp_t [4:0] router_0_2_rsp_in;
     assign router_0_2_req_in[1] = router_1_2_to_router_0_2_req;
     assign router_0_2_req_in[2] = router_0_1_to_router_0_2_req;
     assign router_0_2_req_in[3] = '0;
-    assign router_0_2_req_in[4] = memory0_regs_ni_to_router_0_2_req;
+    assign router_0_2_req_in[4] = pcie0_regs_ni_to_router_0_2_req;
 
     assign router_0_2_to_router_1_2_rsp = router_0_2_rsp_out[1];
     assign router_0_2_to_router_0_1_rsp = router_0_2_rsp_out[2];
-    assign router_0_2_to_memory0_regs_ni_rsp = router_0_2_rsp_out[4];
+    assign router_0_2_to_pcie0_regs_ni_rsp = router_0_2_rsp_out[4];
 
     assign router_0_2_to_router_1_2_req = router_0_2_req_out[1];
     assign router_0_2_to_router_0_1_req = router_0_2_req_out[2];
-    assign router_0_2_to_memory0_regs_ni_req = router_0_2_req_out[4];
+    assign router_0_2_to_pcie0_regs_ni_req = router_0_2_req_out[4];
 
     assign router_0_2_rsp_in[0] = '0;
     assign router_0_2_rsp_in[1] = router_1_2_to_router_0_2_rsp;
     assign router_0_2_rsp_in[2] = router_0_1_to_router_0_2_rsp;
     assign router_0_2_rsp_in[3] = '0;
-    assign router_0_2_rsp_in[4] = memory0_regs_ni_to_router_0_2_rsp;
+    assign router_0_2_rsp_in[4] = pcie0_regs_ni_to_router_0_2_rsp;
 
   localparam id_t ROUTER_0_2_ID = '{x: 0, y: 2, port_id: 0};
 
@@ -641,25 +729,25 @@ floo_rsp_t [4:0] router_1_1_rsp_in;
     assign router_1_1_req_in[1] = router_2_1_to_router_1_1_req;
     assign router_1_1_req_in[2] = router_1_0_to_router_1_1_req;
     assign router_1_1_req_in[3] = router_0_1_to_router_1_1_req;
-    assign router_1_1_req_in[4] = compute1_regs_ni_to_router_1_1_req;
+    assign router_1_1_req_in[4] = compute0_regs_ni_to_router_1_1_req;
 
     assign router_1_1_to_router_1_2_rsp = router_1_1_rsp_out[0];
     assign router_1_1_to_router_2_1_rsp = router_1_1_rsp_out[1];
     assign router_1_1_to_router_1_0_rsp = router_1_1_rsp_out[2];
     assign router_1_1_to_router_0_1_rsp = router_1_1_rsp_out[3];
-    assign router_1_1_to_compute1_regs_ni_rsp = router_1_1_rsp_out[4];
+    assign router_1_1_to_compute0_regs_ni_rsp = router_1_1_rsp_out[4];
 
     assign router_1_1_to_router_1_2_req = router_1_1_req_out[0];
     assign router_1_1_to_router_2_1_req = router_1_1_req_out[1];
     assign router_1_1_to_router_1_0_req = router_1_1_req_out[2];
     assign router_1_1_to_router_0_1_req = router_1_1_req_out[3];
-    assign router_1_1_to_compute1_regs_ni_req = router_1_1_req_out[4];
+    assign router_1_1_to_compute0_regs_ni_req = router_1_1_req_out[4];
 
     assign router_1_1_rsp_in[0] = router_1_2_to_router_1_1_rsp;
     assign router_1_1_rsp_in[1] = router_2_1_to_router_1_1_rsp;
     assign router_1_1_rsp_in[2] = router_1_0_to_router_1_1_rsp;
     assign router_1_1_rsp_in[3] = router_0_1_to_router_1_1_rsp;
-    assign router_1_1_rsp_in[4] = compute1_regs_ni_to_router_1_1_rsp;
+    assign router_1_1_rsp_in[4] = compute0_regs_ni_to_router_1_1_rsp;
 
   localparam id_t ROUTER_1_1_ID = '{x: 1, y: 1, port_id: 0};
 
@@ -697,21 +785,23 @@ floo_rsp_t [4:0] router_1_2_rsp_in;
     assign router_1_2_req_in[1] = router_2_2_to_router_1_2_req;
     assign router_1_2_req_in[2] = router_1_1_to_router_1_2_req;
     assign router_1_2_req_in[3] = router_0_2_to_router_1_2_req;
-    assign router_1_2_req_in[4] = '0;
+    assign router_1_2_req_in[4] = ethernet0_regs_ni_to_router_1_2_req;
 
     assign router_1_2_to_router_2_2_rsp = router_1_2_rsp_out[1];
     assign router_1_2_to_router_1_1_rsp = router_1_2_rsp_out[2];
     assign router_1_2_to_router_0_2_rsp = router_1_2_rsp_out[3];
+    assign router_1_2_to_ethernet0_regs_ni_rsp = router_1_2_rsp_out[4];
 
     assign router_1_2_to_router_2_2_req = router_1_2_req_out[1];
     assign router_1_2_to_router_1_1_req = router_1_2_req_out[2];
     assign router_1_2_to_router_0_2_req = router_1_2_req_out[3];
+    assign router_1_2_to_ethernet0_regs_ni_req = router_1_2_req_out[4];
 
     assign router_1_2_rsp_in[0] = '0;
     assign router_1_2_rsp_in[1] = router_2_2_to_router_1_2_rsp;
     assign router_1_2_rsp_in[2] = router_1_1_to_router_1_2_rsp;
     assign router_1_2_rsp_in[3] = router_0_2_to_router_1_2_rsp;
-    assign router_1_2_rsp_in[4] = '0;
+    assign router_1_2_rsp_in[4] = ethernet0_regs_ni_to_router_1_2_rsp;
 
   localparam id_t ROUTER_1_2_ID = '{x: 1, y: 2, port_id: 0};
 
@@ -801,23 +891,23 @@ floo_rsp_t [4:0] router_2_1_rsp_in;
     assign router_2_1_req_in[1] = '0;
     assign router_2_1_req_in[2] = router_2_0_to_router_2_1_req;
     assign router_2_1_req_in[3] = router_1_1_to_router_2_1_req;
-    assign router_2_1_req_in[4] = pcie0_regs_ni_to_router_2_1_req;
+    assign router_2_1_req_in[4] = compute1_regs_ni_to_router_2_1_req;
 
     assign router_2_1_to_router_2_2_rsp = router_2_1_rsp_out[0];
     assign router_2_1_to_router_2_0_rsp = router_2_1_rsp_out[2];
     assign router_2_1_to_router_1_1_rsp = router_2_1_rsp_out[3];
-    assign router_2_1_to_pcie0_regs_ni_rsp = router_2_1_rsp_out[4];
+    assign router_2_1_to_compute1_regs_ni_rsp = router_2_1_rsp_out[4];
 
     assign router_2_1_to_router_2_2_req = router_2_1_req_out[0];
     assign router_2_1_to_router_2_0_req = router_2_1_req_out[2];
     assign router_2_1_to_router_1_1_req = router_2_1_req_out[3];
-    assign router_2_1_to_pcie0_regs_ni_req = router_2_1_req_out[4];
+    assign router_2_1_to_compute1_regs_ni_req = router_2_1_req_out[4];
 
     assign router_2_1_rsp_in[0] = router_2_2_to_router_2_1_rsp;
     assign router_2_1_rsp_in[1] = '0;
     assign router_2_1_rsp_in[2] = router_2_0_to_router_2_1_rsp;
     assign router_2_1_rsp_in[3] = router_1_1_to_router_2_1_rsp;
-    assign router_2_1_rsp_in[4] = pcie0_regs_ni_to_router_2_1_rsp;
+    assign router_2_1_rsp_in[4] = compute1_regs_ni_to_router_2_1_rsp;
 
   localparam id_t ROUTER_2_1_ID = '{x: 2, y: 1, port_id: 0};
 
@@ -855,19 +945,21 @@ floo_rsp_t [4:0] router_2_2_rsp_in;
     assign router_2_2_req_in[1] = '0;
     assign router_2_2_req_in[2] = router_2_1_to_router_2_2_req;
     assign router_2_2_req_in[3] = router_1_2_to_router_2_2_req;
-    assign router_2_2_req_in[4] = '0;
+    assign router_2_2_req_in[4] = memory0_regs_ni_to_router_2_2_req;
 
     assign router_2_2_to_router_2_1_rsp = router_2_2_rsp_out[2];
     assign router_2_2_to_router_1_2_rsp = router_2_2_rsp_out[3];
+    assign router_2_2_to_memory0_regs_ni_rsp = router_2_2_rsp_out[4];
 
     assign router_2_2_to_router_2_1_req = router_2_2_req_out[2];
     assign router_2_2_to_router_1_2_req = router_2_2_req_out[3];
+    assign router_2_2_to_memory0_regs_ni_req = router_2_2_req_out[4];
 
     assign router_2_2_rsp_in[0] = '0;
     assign router_2_2_rsp_in[1] = '0;
     assign router_2_2_rsp_in[2] = router_2_1_to_router_2_2_rsp;
     assign router_2_2_rsp_in[3] = router_1_2_to_router_2_2_rsp;
-    assign router_2_2_rsp_in[4] = '0;
+    assign router_2_2_rsp_in[4] = memory0_regs_ni_to_router_2_2_rsp;
 
   localparam id_t ROUTER_2_2_ID = '{x: 2, y: 2, port_id: 0};
 
