@@ -234,6 +234,28 @@ class MemoryService:
         self.regions[a.region].release(a, consumers_quiesced=consumers_quiesced)
         del self.states[(a.region, a.generation, a.token)]
 
+    def observe_completed_write(self, a: VirtualAllocation, *, offset=0,
+                                size=None, producer: str,
+                                accepted_axi_evidence: bool):
+        """Account for a DMA/CPU-produced result WITHOUT initializing it.
+
+        Caller must have independent accepted AXI write / retirement proof,
+        not just a descriptor-doorbell or Python plan. The actual CHECK
+        still reads physical storage through its selected provider.
+        """
+        if size is None:
+            size = a.size - offset
+        if not producer or accepted_axi_evidence is not True:
+            raise MemoryAccessError(
+                "observed DMA/CPU write requires independent accepted AXI evidence")
+        if not isinstance(offset, int) or not isinstance(size, int) or (
+                offset < 0 or size < 1 or offset > a.size or size > a.size - offset):
+            raise ValueError("observed write outside allocation")
+        self._state(a).initialized.append((offset, offset + size))
+        self.events.append(MemoryEvent(
+            a.region, a.token, a.phase, "observed_write", "passive_axi_evidence",
+            "external_producer", 0, size, 0, None))
+
     def _access(self, a, offset, size, policy, operation):
         self._state(a)
         if not isinstance(offset, int) or offset < 0 or (
