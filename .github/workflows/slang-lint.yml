@@ -55,6 +55,13 @@ jobs:
           python3 -m pip install 'mako==1.3.10' 'hjson==3.1.0' 'peakrdl>=1.5.0' 'peakrdl-rawheader>=0.2.8' 'peakrdl-cheader>=1.1.0'
           python3 tools/ip_fetch.py floonoc pulp_idma
           python3 -m pip install -e .tools/floonoc
+          # CPU C-DMA variants are now auto-discovered by the lint inventory.
+          # Their existing compile/link step needs the same freestanding
+          # LLVM toolchain used in full-chip CI.
+          sudo apt-get update -qq
+          sudo apt-get install -y clang llvm lld
+          command -v clang
+          command -v llvm-objcopy
       - name: Install official checksum-verified slang release
         shell: bash
         run: |
@@ -77,7 +84,12 @@ jobs:
         run: |
           set -euo pipefail
           make check-generated
-          python3 tools/regress.py supernoc dma-rtl chip-boot chip-dma --stage files
+          # One discovery contract for lint and Bender-resolved filelists.
+          # Adding a new positive NoC/CPU RTL test cannot silently skip lint.
+          mapfile -t lint_profiles < <(python3 tools/lint_rtl.py --list)
+          test "${#lint_profiles[@]}" -gt 0
+          printf 'Lint profiles: %s\n' "${lint_profiles[*]}"
+          python3 tools/regress.py "${lint_profiles[@]}" --stage files
       - name: Export per-profile slang diagnostics and module elaboration evidence
         run: python3 tools/lint_rtl.py --slang .tools/bin/slang --output .tools/lint
       - name: Attach lint JSON, logs and resolved source provenance
