@@ -179,3 +179,20 @@ The JSON source is synthetic_bytes_not_rtl. Do NOT call these values measured
 RTL/DPI/AXI speedups. Real provider benchmarks will collect equal-case INIT
 and CHECK wall time, simulator cycles, host RSS, access method and AXI traffic.
 Strict frontdoor tests remain mandatory even when fast/hybrid becomes default.
+
+### First RTL-backed provider verification
+
+The existing single dv/supernoc/test_supernoc.py test now exercises all three
+INIT/CHECK methods against a real FlooNoC route to the public host
+SparseMemoryRegion. A previously owned cocotb AXI master supplies strict
+frontdoor requests; the same target's AddressSpace supplies backdoor bytes.
+The adapter first proves frontdoor-write/backdoor-read and the inverse
+with scratch restoration, then uses one 256-byte pattern through strict,
+fast and hybrid modes. The passive AXI report remains attached and must
+not count direct backdoor operations as AXI transactions.
+
+That test emits .tools/regression/supernoc/memory-provider-benchmark.json
+with real NoC test wall times and physical target identity, once CI passes.
+It does NOT represent actual DDR/HBM controller timing, tc_sram DPI access,
+or a CPU-executed mailbox. Do not claim that integration is proven until
+the exact head's real NoC workflow is green.
