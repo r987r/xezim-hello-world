@@ -49,7 +49,7 @@ jobs:
           python-version: '3.12'
       - run: python3 -m pip install -r requirements.txt
       - name: Verify publication, CI trigger and report semantics
-        run: python3 -m unittest tests.test_ci_workflows tests.test_publication tests.test_merged_pr_evidence tests.test_axi_report tests.test_fabric_report tests.test_protocol_report tests.test_design_explorer tests.test_design_netlist -v
+        run: python3 -m unittest tests.test_ci_workflows tests.test_publication tests.test_merged_pr_evidence tests.test_axi_report tests.test_fabric_report tests.test_protocol_report tests.test_design_explorer tests.test_design_netlist tests.test_signal_inventory tests.test_signal_paths -v
       - name: Build offline PR or manual branch preview
         if: (github.event_name == 'pull_request' && github.event.action != 'closed') || (github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main')
         run: python3 tools/publish_site.py
@@ -74,7 +74,17 @@ jobs:
           assert data['profiles']['chip-dma']['actors'], 'missing DMA testbench overlay'
           assert 'fetch("data/design-graph.json")' not in html, 'preview still requires HTTP fetch'
           assert Path('.tools/pages-site/data/design-graph.json').is_file(), 'graph download missing'
-          print('PASS: self-contained 2D explorer, graph and chip-DMA profile')
+          match = re.search(r'<script type="application/json" id="ex-embedded-signals">(.*?)</script>', html, re.S)
+          if not match:
+              raise SystemExit('missing embedded physical RTL signal inventory')
+          signals = json.loads(match.group(1))
+          assert signals['counts']['mapped'] >= 100, 'missing real RTL signal declarations'
+          cpu = signals['endpoints']['compute0_local_data.cpu']
+          assert 'AW' in cpu['protocols']['axi4:axi']['channels'], 'missing AXI AW breakdown'
+          assert 'R' in cpu['protocols']['axi4:axi']['channels'], 'missing AXI read-response breakdown'
+          assert signals['limits']['bit_level_wiring_proven'] is False, 'do not fabricate routing proof'
+          assert Path('.tools/pages-site/data/signal-inventory.json').is_file(), 'signal inventory download missing'
+          print('PASS: self-contained 2D explorer, graph, signals and chip-DMA profile')
           PY
       - uses: actions/upload-pages-artifact@v4
         with:
