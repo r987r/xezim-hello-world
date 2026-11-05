@@ -42,6 +42,14 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
+      # The lint inventory includes the real chip-pcie-host RTL profile.
+      # Reuse the exact immutable PCIe pin already tested in the host job.
+      - uses: actions/checkout@v4
+        with:
+          repository: alexforencich/verilog-pcie
+          ref: 25156a9a162c41c60f11f41590c7d006d015ae5a
+          path: .tools/verilog_pcie
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
