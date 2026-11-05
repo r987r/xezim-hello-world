@@ -518,8 +518,8 @@ def emit_tb(cfg, fw, out, *, image_prefix='gen/chip', cpu_dma_mode=False,
     if cpu_dma_mode:
         # Compiled CPU C code executes over real NoCs: much longer than the
         # tiny minimal RV32I mailbox bootstrap, but still strictly bounded.
-        opts['timeout_cycles'] = max(opts['timeout_cycles'], 400000)
-        opts['phase_timeout_cycles'] = max(opts['phase_timeout_cycles'], 350000)
+        opts['timeout_cycles'] = max(opts['timeout_cycles'], 1000000 if pcie_host_mode else 400000)
+        opts['phase_timeout_cycles'] = max(opts['phase_timeout_cycles'], 900000 if pcie_host_mode else 350000)
     probe = probe_ports()
     cfgprobe = probe_ports('cfgprobe', addr_bits=32, data_bits=32, id_bits=1)
     lines = ['`timescale 1ns/1ps', '// One boot/coordination checker shared by both simulators.',
