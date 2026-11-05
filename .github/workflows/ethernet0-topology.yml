@@ -1,0 +1,61 @@
+name: Ethernet0 real local NoCs and canonical topology
+on:
+  push:
+    branches: [agent/42-ethernet0-topology]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: ethernet0-topology-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  generate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: ./.github/actions/setup-bender
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Install pinned FlooGen and dependencies
+        run: |
+          python3 -m pip install -r requirements.txt
+          python3 tools/ip_fetch.py floonoc
+          python3 -m pip install -e .tools/floonoc
+      - name: Fail-closed generic peripheral/port/route checks
+        run: |
+          python3 -m unittest tests.test_subsystem_plugin_contract tests.test_peripheral_nocs tests.test_floonoc_gen -v
+      - name: Regenerate actual upstream FlooGen RTL and canonical diagrams
+        run: |
+          make gen
+          make check-generated
+          python3 tools/regress.py --check-noc
+      - name: Verify unified NoC graph, diagrams, chip and fabric explorer
+        run: |
+          python3 -m unittest tests.test_noc_diagrams tests.test_supernoc_gen tests.test_full_chip_gen tests.test_socgen tests.test_fabric_report -v
+      - name: Save canonical artifacts to the isolated integration branch
+        run: |
+          set -euo pipefail
+          git add gen/ README.md
+          if ! git diff --cached --quiet; then
+            git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'chore(gen): add Ethernet0 real local NoCs and source-derived topology'
+            git push origin HEAD:refs/heads/agent/42-ethernet0-topology
+          fi
+      - name: Retain generated router, diagram and connection evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ethernet0-topology-${{ github.run_id }}
+          path: |
+            gen/noc/floonoc/manifest.json
+            gen/noc/floonoc/ethernet0/
+            gen/supernoc/
+            gen/chip/
+            gen/diagrams/
+          if-no-files-found: warn
