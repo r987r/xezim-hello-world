@@ -98,14 +98,28 @@ def catalog(root: Path = ROOT, *, verification_reports: dict[str, Path] | None =
         axi = report.get("axi", {})
         actors_file = axi.get("actors")
         actors = {}
+        actor_catalog_status = "not_declared"
         if actors_file:
-            data = read_json(safe_source(root, actors_file))
-            if not isinstance(data.get("axi_actors"), dict):
-                raise ValueError(f"{name}: actor manifest lacks axi_actors")
-            actors = data["axi_actors"]
-            missing = set(actors) - name_set
-            if missing:
-                raise ValueError(f"{name}: actors are not in generated topology: {sorted(missing)}")
+            # Some positive regression variants (e.g. chip-cpu-dma) generate
+            # their actor manifest only when that particular test executes.
+            # Keep the profile visible without falsely claiming its runtime
+            # actor roles; missing checked-in manifests remain an error.
+            candidate = (root / actors_file).resolve()
+            generated_runtime = (
+                candidate.is_relative_to((root / ".tools/regression").resolve())
+                and candidate.is_relative_to(root.resolve())
+            )
+            if not candidate.is_file() and generated_runtime:
+                actor_catalog_status = "runtime_generated_not_available"
+            else:
+                data = read_json(safe_source(root, actors_file))
+                if not isinstance(data.get("axi_actors"), dict):
+                    raise ValueError(f"{name}: actor manifest lacks axi_actors")
+                actors = data["axi_actors"]
+                missing = set(actors) - name_set
+                if missing:
+                    raise ValueError(f"{name}: actors are not in generated topology: {sorted(missing)}")
+                actor_catalog_status = "loaded_checked_in" if not generated_runtime else "loaded_runtime_generated"
         monitors = []
         if axi.get("catalog"):
             data = read_json(safe_source(root, axi["catalog"]))
@@ -121,6 +135,8 @@ def catalog(root: Path = ROOT, *, verification_reports: dict[str, Path] | None =
                 "test_module": test.get("module"), "test_dir": test.get("test_dir"),
                 "context": report.get("context", ""),
                 "actors": actors, "monitors": monitors,
+                "actor_catalog_path": actors_file,
+                "actor_catalog_status": actor_catalog_status,
                 "evidence": "declared_test_profile",
                 "verification_observability": ("declared_axi_monitors" if monitors else
                                                "no_axi_monitor_catalog")}
