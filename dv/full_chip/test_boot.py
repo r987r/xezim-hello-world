@@ -95,7 +95,10 @@ async def execute_cold_boot(dut, *, external=None):
                 await phase(dut,signal,name)
         else:
             await phase(dut,signal,name)
-    await Timer(1, 'ns')
+    # Real CPUs can still be retiring final mailbox stores when CHECK rises.
+    # Give actual AXI B handshakes time to drain before the passive reporter
+    # closes; the strict AXI report will still reject any outstanding burst.
+    await Timer(1, 'us' if host is not None or cpu_dma_mode else 'ns')
     assert int(dut.pass_flag.value) == 1
     mask = (1 << len(manifest['cores'])) - 1
     assert int(dut.init_mask.value) == mask
