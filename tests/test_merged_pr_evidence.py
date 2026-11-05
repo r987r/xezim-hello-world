@@ -95,7 +95,10 @@ class MergedPrEvidenceTests(unittest.TestCase):
                    # current NoC latency measurements.
                    'rtl/memory/ddr4/bringup.py':'2'*40,
                    'rtl/memory/ddr4/sim_model.py':'3'*40,
-                   'rtl/memory/ddr4/toolchain.lock.yml':'4'*40}
+                   'rtl/memory/ddr4/toolchain.lock.yml':'4'*40,
+                   # The SoC diagram's new syntax-only parser runs only
+                   # during Pages publication, not in the RTL regression.
+                   'tools/rtl_instance_parser.py':'4'*40}
         workflows={}
         blob_sources={}
         for name in FABRIC_EXECUTION_WORKFLOWS:
