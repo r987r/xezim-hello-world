@@ -168,8 +168,29 @@ def diagram_gen_metadata(cfg: dict, networks: dict) -> dict:
             edge(_inst(lc,"reset_ctrl"), name+".reset_ctrl",
                  "reset-control CSR", "wired_boot_configuration", width=32)
 
+    # Peripheral endpoint facts come from the same generated FlooGen configs;
+    # the host/IP source is reserved until its own RTL attachment is checked.
+    for ci, sub in enumerate(s for s in cfg["subsystems"] if s["type"]=="peripheral"):
+        name = sub["name"]
+        ld, lc = name+"_local_data", name+"_local_config"
+        for suffix, desc, status in (("ip", sub["ip"], "reserved_pending_ip_bridge"),
+                                     ("sram", "local_sram", "wired_boot_configuration"),
+                                     ("csr", "management", "reserved_axi_error")):
+            instances.append({
+                "name":name+"."+suffix, "module":"soc_boundary",
+                "position":{"x":20+ci*12,"y":95+ci*13,"z":0},
+                "info":{"ip":desc,"status":status}})
+        edge(name+".ip", _inst(ld, sub["data_initiator"]),
+             "Device AXI data ingress (reserved)", "planned_integration", width=64)
+        edge(name+".ip", _inst(lc, sub["config_initiator"]),
+             "Device config initiator (reserved)", "planned_integration", width=32)
+        edge(_inst(ld,"sram"), name+".sram",
+             "Local SRAM RTL", "wired_boot_configuration", width=64)
+        edge(_inst(lc,"controller_regs"), name+".csr",
+             "Reserved CSR AXI error", "wired_boot_configuration", width=32)
+
     # Cross-fabric links are shared by the BFM and boot-configuration tops.
-    for compute in (s["name"] for s in cfg["subsystems"] if s["type"] == "compute"):
+    for compute in (s["name"] for s in cfg["subsystems"] if s["type"] in ("compute", "peripheral")):
         ld = compute + "_local_data"
         lc = compute + "_local_config"
         edge(_inst(ld, "global_out"), _inst("global_data", compute),
@@ -270,6 +291,22 @@ def hierarchy_mermaid(cfg: dict, networks: dict) -> str:
         wired(name+".cpu", lc, "AXI-Lite bridge")
         wired(ld, "global_data", "global data")
         wired(lc, "global_config", "global control")
+    for sub in (s for s in cfg["subsystems"] if s["type"]=="peripheral"):
+        name=sub["name"]
+        ld,lc=name+"_local_data",name+"_local_config"
+        lines.append(f'  subgraph {identifier(name+"_box")}["{name} / {sub["ip"]} subsystem"]')
+        node(name+".ip", sub["ip"]+" bridge (reserved)", "model")
+        node(name+".sram", "Local SRAM RTL", "model")
+        node(name+".csr", "Reserved CSR (AXI error)", "model")
+        node(ld,f"Local DATA FlooNoC / {networks[ld]['entry']['routers']} routers / AXI4","data")
+        node(lc,f"Local CONFIG FlooNoC / {networks[lc]['entry']['routers']} routers","config")
+        lines.append("  end")
+        planned(name+".ip", ld, "IP RTL connection pending")
+        planned(name+".ip", lc, "management RTL pending")
+        wired(ld,name+".sram","local")
+        wired(lc,name+".csr","reserved DECERR")
+        wired(ld,"global_data","AXI4 uplink")
+        wired(lc,"global_config","AXI4 control")
     for name, color in (("global_data", "data"), ("global_config", "config")):
         n = networks[name]
         bits = "64b AXI4" if color == "data" else "32b AXI4 via AXI-Lite bridges"
@@ -284,7 +321,7 @@ def hierarchy_mermaid(cfg: dict, networks: dict) -> str:
     for target in cfg["memory_targets"]:
         node(target["name"], target["kind"].upper()+" AXI RAM model", "model")
     lines.append("  end")
-    for c in computes:
+    for c in computes + [s for s in cfg["subsystems"] if s["type"]=="peripheral"]:
         wired("global_data", c["name"]+"_local_data", "remote SRAM ingress")
         wired("global_config", c["name"]+"_local_config", "CSR ingress")
     for output in cfg["networks"]["global_data"]["outputs"]:
@@ -301,10 +338,11 @@ def hierarchy_mermaid(cfg: dict, networks: dict) -> str:
 def overview_svg(cfg: dict, networks: dict, dst: Path):
     from diagram_svg import Art, BG, WHITE, INK, MUTED, FAINT, GREEN, PURPLE, BLUE, ORANGE
     computes=[s for s in cfg["subsystems"] if s["type"]=="compute"]
+    peripheral=[s for s in cfg["subsystems"] if s["type"]=="peripheral"]
     mem=next(s["name"] for s in cfg["subsystems"] if s["type"]=="memory")
     columns=2
     rows=math.ceil(len(computes)/columns)
-    gy=172+rows*285+32
+    gy=172+rows*285+32+len(peripheral)*270
     my=gy+181
     h=my+360
     a=Art(1600,h)
@@ -330,6 +368,22 @@ def overview_svg(cfg: dict, networks: dict, dst: Path):
         a.line([(x+128,y+126),(x+553,y+155)],PURPLE,2,False,True)
         a.line([(x+320,y+155),(x+603,y+126)],GREEN,2,False,True)
         a.line([(x+553,y+155),(x+400,y+126)],PURPLE,2,False,True)
+    for pi, sub in enumerate(peripheral):
+        name=sub["name"]
+        py=158+rows*285+pi*270
+        a.rect(56,py,1488,244,WHITE,FAINT,r=17,width=2)
+        a.text(76,py+12,name+" / "+sub["ip"]+" peripheral",23,INK)
+        a.box_label(76,py+52,364,70,sub["ip"]+" source (reserved)",
+                    "IP-to-AXI bridge pending","cpu",title_size=18,detail_size=13)
+        a.box_label(460,py+52,345,70,"Local SRAM RTL",
+                    "Bounded tc_sram backing","memory",title_size=18,detail_size=13)
+        a.box_label(830,py+52,670,70,"Controller CSR endpoint",
+                    "Reserved AXI error response until device registers wired","config",title_size=18,detail_size=13)
+        for col, key, kind in ((76,"local_data","fabric"),(830,"local_config","config")):
+            net=name+"_"+key
+            a.box_label(col,py+145,670,70,"LOCAL "+key.upper()+" / FlooNoC",
+                        str(networks[net]["entry"]["routers"])+" generated routers",kind,
+                        title_size=18,detail_size=13)
     a.box_label(56,gy,744,113,"GLOBAL DATA / FlooNoC",
                 str(networks["global_data"]["entry"]["routers"])+" routers / XY mesh / 64-bit AXI4\ncompute uplinks, remote SRAMs, configured memory ingress ports",
                 "fabric",title_size=24,detail_size=15)
