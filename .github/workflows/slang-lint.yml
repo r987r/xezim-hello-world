@@ -1,0 +1,93 @@
+name: Slang RTL lint and elaboration inventory
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/slang-lint.yml'
+      - '.github/actions/setup-bender/**'
+      - 'toolchains/slang.env'
+      - 'config/regression.yaml'
+      - 'config/ip.lock.yaml'
+      - 'config/interface_contracts.yaml'
+      - 'config/soc.yaml'
+      - 'Bender.yml'
+      - 'Bender.lock'
+      - 'rtl/**'
+      - '!rtl/memory/ddr4/**'
+      - 'gen/noc/**'
+      - 'gen/supernoc/**'
+      - 'gen/chip/**'
+      - 'tools/regress.py'
+      - 'tools/generate.py'
+      - 'tools/lint_rtl.py'
+      - 'tools/ip_fetch.py'
+      - 'tools/idma_rtl.py'
+      - 'tools/floonoc_gen.py'
+      - 'tools/supernoc_gen.py'
+      - 'tools/full_chip_gen.py'
+      - 'tests/test_lint_rtl.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: slang-lint-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: ./.github/actions/setup-bender
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Install pinned RTL generator dependencies
+        run: |
+          set -euo pipefail
+          python3 -m pip install -r requirements.txt
+          python3 -m pip install 'mako==1.3.10' 'hjson==3.1.0' 'peakrdl>=1.5.0' 'peakrdl-rawheader>=0.2.8' 'peakrdl-cheader>=1.1.0'
+          python3 tools/ip_fetch.py floonoc pulp_idma
+          python3 -m pip install -e .tools/floonoc
+      - name: Install official checksum-verified slang release
+        shell: bash
+        run: |
+          set -euo pipefail
+          source toolchains/slang.env
+          mkdir -p .tools/slang .tools/bin
+          curl --fail --location --silent --show-error --retry 3 --output ".tools/slang/$SLANG_ARCHIVE" "$SLANG_URL"
+          printf '%s  %s\n' "$SLANG_SHA256" ".tools/slang/$SLANG_ARCHIVE" | sha256sum --check
+          tar -xzf ".tools/slang/$SLANG_ARCHIVE" -C .tools/slang
+          candidate="$(find .tools/slang -type f -name slang -print -quit)"
+          test -n "$candidate"
+          cp "$candidate" .tools/bin/slang
+          chmod +x .tools/bin/slang
+          .tools/bin/slang --version
+      - name: Validate lint runner without vendor RTL
+        run: python3 -m unittest tests.test_lint_rtl -v
+      - name: Validate generated RTL and resolve positive test filelists
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          make check-generated
+          python3 tools/regress.py supernoc dma-rtl chip-boot chip-dma --stage files
+      - name: Export per-profile slang diagnostics and module elaboration evidence
+        run: python3 tools/lint_rtl.py --slang .tools/bin/slang --output .tools/lint
+      - name: Attach lint JSON, logs and resolved source provenance
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: slang-rtl-lint-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            .tools/lint/
+            .tools/regression/*/sources.f
+            .tools/regression/*/plan.json
+          include-hidden-files: true
+          if-no-files-found: warn
