@@ -2,7 +2,7 @@ name: PCIe0 integrated real bridge and generated local FlooNoC
 
 on:
   pull_request:
-    branches: [agent/38-subsystem-registry-bringup, main]
+    branches: [main]
     paths: ['dv/pcie0/**', 'tests/test_pcie*', 'tests/test_protocol_report.py', 'tools/protocol_report.py', 'tools/pcie_latency_report.py', 'tools/axi_report.py', 'tools/regress.py', 'tools/full_chip_gen.py', 'tools/chip_bootgen.py', 'tools/pcie_chip.py', 'config/regression.yaml', 'sw/common/test_flow.h', 'sw/dma/tests/cpu_dma_run.c', 'tests/test_test_flow*', 'tools/test_flow*', '.github/workflows/pcie0-integrated.yml']
   workflow_dispatch:
 
