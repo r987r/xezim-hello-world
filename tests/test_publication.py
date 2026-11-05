@@ -93,7 +93,7 @@ class PublicationTests(unittest.TestCase):
             self.assertNotIn('id="fabric-matrix"',html)
             self.assertNotIn('renderMatrix()',html)
             self.assertFalse(dataset['entries'])
-            self.assertEqual(len(dataset['monitors']),26)
+            self.assertEqual(len(dataset['monitors']),34)
             for path in output.rglob('*.html'):
                 parser=Links();parser.feed(path.read_text())
                 for href in parser.links:
