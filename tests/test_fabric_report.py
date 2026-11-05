@@ -46,8 +46,8 @@ class FabricExplorerTests(unittest.TestCase):
         self.assertEqual(len(report['rows']),len(self.report['matrix']))
         self.assertEqual(set(report['mesh_columns']),{'data','config'})
         self.assertEqual(report['mesh_columns']['data'],[
-            'compute0_local_data','compute1_local_data','ethernet0_local_data','global_data',
-            'memory0_local_data','pcie0_local_data'])
+            'compute0_local_data','compute1_local_data','global_data',
+            'memory0_local_data','ethernet0_local_data','pcie0_local_data'])
         denied=next(r for r in report['rows']
                     if r['source']=='compute1_local_data.cpu'
                     and r['destination']=='boot.rom')
