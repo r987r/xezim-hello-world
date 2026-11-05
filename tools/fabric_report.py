@@ -475,8 +475,33 @@ def latency_table(report):
                         and type(o.get("clock_period_ps")) is int
                         and o["clock_period_ps"] > 0}
     common_period = next(iter(eligible_periods)) if len(eligible_periods) == 1 else None
+    # Distinguish "no traffic ever captured" from "historical traffic
+    # captured but not valid for this RTL/DV execution input tree". Neither
+    # case may populate a current-source latency metric.
+    historical = [o for route in report["routes"]
+                  for o in route.get("one_beat_observations", [])
+                  if not o.get("matches_site_source")]
+    accepted = [o for route in report["routes"]
+                for o in route.get("one_beat_stage_observations", [])
+                if o.get("matches_site_source")]
+    measured_rows = sum(
+        bool(r["end_to_end_cycles"]["read"] or r["end_to_end_cycles"]["write"])
+        for r in rows)
+    coverage = {
+        "status": ("current_source_measured" if measured_rows else
+                   "historical_only" if historical else "no_observations"),
+        "current_measured_routes": measured_rows,
+        "total_routes": sum(bool(r["route_id"]) for r in rows),
+        "current_stage_observations": len(accepted),
+        "historical_observations": len(historical),
+        "historical_source_shas": sorted({o["source_sha"] for o in historical}),
+        "note": ("Historical traces remain available in original run reports but "
+                 "cannot be presented as current RTL latency; execute a fresh "
+                 "source-matched serial one-beat NoC regression to refresh."),
+    }
     return {
         "schema_version": 1,
+        "evidence_coverage": coverage,
         "units": "simulation_reference_clock_cycles",
         "reference_clock": {
             "domain": "soc_single_clock", "signal": "clk_i",
