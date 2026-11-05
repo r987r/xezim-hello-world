@@ -59,7 +59,8 @@ class PublicationTests(unittest.TestCase):
             self.assertIn('chip-dma',dataset['tests'])
             self.assertTrue((output/'fabric.html').is_file())
             self.assertTrue((output/'data/fabric.json').is_file())
-            self.assertEqual(json.loads((output/'data/fabric.json').read_text())['summary']['meshes'],10)
+            expected_networks=json.loads((ROOT/'gen/noc/floonoc/manifest.json').read_text())['networks']
+            self.assertEqual(json.loads((output/'data/fabric.json').read_text())['summary']['meshes'],len(expected_networks))
             self.assertNotIn('__FABRIC_DATA__',(output/'fabric.html').read_text())
             fabric=json.loads((output/'data/fabric.json').read_text())
             self.assertEqual(fabric['latency_table']['units'],

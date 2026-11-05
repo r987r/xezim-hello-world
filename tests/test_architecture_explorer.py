@@ -43,7 +43,8 @@ class ArchitectureExplorerTests(unittest.TestCase):
                 self.assertTrue(any(e["from"]["instance"]==router or
                                     e["to"]["instance"]==router
                                     for e in self.graph["edges"]))
-        self.assertEqual(router_total,57)
+        generated=json.loads((ROOT/'gen/noc/floonoc/manifest.json').read_text())['networks']
+        self.assertEqual(router_total,sum(net['routers'] for net in generated.values()))
         self.assertIn("router_",self.script)
         self.assertIn("NI-to-router link",self.script)
 
