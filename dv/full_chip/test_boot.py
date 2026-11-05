@@ -57,6 +57,7 @@ async def execute_cold_boot(dut, *, external=None):
     manifest=json.loads(firmware.read_text())
     flow = attach_from_plan(lambda:int(get_sim_time(units="ps"))) if external else None
     host = None
+    tlp_capture = None
     if external=="pcie0":
         from dv.pcie0.host_adapter import PcieHostParticipant
         host=PcieHostParticipant(flow,manifest)
@@ -81,6 +82,10 @@ async def execute_cold_boot(dut, *, external=None):
         await FallingEdge(dut.clk)
     dut.rst_n.value = 1
     if host is not None:
+        from dv.pcie0.tlp_trace import LiveTlpCapture
+        # The pinned helper already provides PcieIfFrame / Tlp decoding.
+        from pcie_if import PcieIfFrame
+        tlp_capture = LiveTlpCapture(dut, frame_type=PcieIfFrame)
         await host.setup(dut)
     for name, signal in (("init",dut.init_complete),("run",dut.run_complete),
                          ("check",dut.check_complete)):
@@ -100,6 +105,8 @@ async def execute_cold_boot(dut, *, external=None):
     if host is not None:
         assert probe is None, "PCIe mode must not instantiate active CPU0 AXI BFM"
         host.finish()
+        tlp_counts = tlp_capture.finish()
+        dut._log.info("PCIE0_ACCEPTED_TLP_REPORT_COUNTS=%s", tlp_counts)
         close_active()
         return
     if cpu_dma_mode:
