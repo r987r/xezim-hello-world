@@ -32,7 +32,9 @@ def summarize(events, expected, required_origins=None):
             if key not in expected[phase] or origin not in ORIGINS:
                 raise ValueError("invalid required step origin contract")
     active, rows, issues, previous_seq, previous_ps = {}, [], [], -1, -1
-    previous_phase_rank = -1
+    # Independent CPU, host and RTL monitor streams overlap legitimately.
+    # Phase order is enforced per actor, not across unrelated actors.
+    previous_phase_rank = {}
     allowed = set()
     for phase, step_ids in expected.items():
         for item in step_ids:
@@ -44,9 +46,11 @@ def summarize(events, expected, required_origins=None):
         validate_event(event)
         key = (event["phase"], event["actor"]+"."+event["step"])
         phase_rank = PHASES.index(event["phase"])
-        if phase_rank < previous_phase_rank:
-            issues.append(f"phase order regressed at {key}: INIT/RUN/CHECK must be monotonic")
-        previous_phase_rank = max(previous_phase_rank, phase_rank)
+        actor = event["actor"]
+        previous_actor_phase = previous_phase_rank.get(actor, -1)
+        if phase_rank < previous_actor_phase:
+            issues.append(f"phase order regressed at {key}: actor INIT/RUN/CHECK must be monotonic")
+        previous_phase_rank[actor] = max(previous_actor_phase, phase_rank)
         expected_origin = origins.get(event["phase"], {}).get(key[1])
         if expected_origin and event["origin"] != expected_origin:
             issues.append(f"origin mismatch for {key}: expected {expected_origin}")
