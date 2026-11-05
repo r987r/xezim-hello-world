@@ -70,6 +70,52 @@ def summarize(events, expected):
             "totals":dict(Counter(r["status"] for r in rows))}
 
 
+
+def firmware_mmio_events(directory, config):
+    """Resolve C firmware marks ONLY from completed, accepted, OKAY AXI writes.
+
+    The source code calling soc_flow_emit is NOT evidence. The real bus
+    monitor must observe all 4 bytes and the registered target address.
+    """
+    from test_flow_codec import decode_c_marker
+    source=directory/"axi-transactions.json"
+    if not source.is_file():
+        raise ValueError("firmware marker requires actual AXI capture")
+    if not isinstance(config,dict) or set(config)!={"monitor","address","actors","steps"}:
+        raise ValueError("invalid firmware marker source")
+    monitor=config["monitor"]
+    address=int(config["address"],0)
+    actors={int(key):value for key,value in config["actors"].items()}
+    steps={int(key):value for key,value in config["steps"].items()}
+    payload=json.loads(source.read_text())
+    if not payload["run"]["capture_bound"] or payload["run"]["capture_overflow"]:
+        raise ValueError("firmware marker AXI capture incomplete")
+    rows=payload["sections"]["axi"]["transactions"]
+    observed=[]
+    for row in rows:
+        if row["monitor"]!=monitor or int(row["address"],0)!=address or row["operation"]!="write":
+            continue
+        if row["status"]!="complete" or int(row["response"],0)!=0:
+            raise ValueError("non-OKAY or incomplete firmware test-flow marker write")
+        if len(row["beats"])!=1:
+            raise ValueError("firmware test-flow marker must be a single beat")
+        beat=row["beats"][0]
+        # AXI data/strb are aligned to a beat; locate the addressed 32-bit lane.
+        lane=(address % (int(row["request"]["data_width"],0)//8)
+              if "data_width" in row["request"] else address%8)
+        if lane+4>8 or (int(beat["strb"],0)>>lane)&0xf!=0xf:
+            raise ValueError("partial or unaligned test-flow marker")
+        value=(int(beat["data"],0)>>(lane*8))&0xffffffff
+        metadata=decode_c_marker(value,actors,steps)
+        observed.append({"schema_version":1,"seq":0,
+                         "time_ps":beat["time_ps"],"status":metadata["status"],
+                         "phase":metadata["phase"],"actor":metadata["actor"],
+                         "step":metadata["step"],"origin":"rtl_observed",
+                         "details":{"phys_address":hex(address)}})
+    if not observed:
+        raise ValueError("no real AXI firmware test-flow marker writes")
+    return observed
+
 def write_report(directory, plan):
     directory = Path(directory)
     required = plan.get("report",{}).get("flow",{}).get("required_steps")
@@ -99,6 +145,14 @@ def write_report(directory, plan):
                                "time_ps":int(ns)*1000,"phase":phase,
                                "actor":actor,"step":step,"status":status,
                                "origin":"rtl_observed","details":{}})
+    # Optional C/firmware source shares the exact same stream, but only after
+    # a matching observed AXI write is correlated by the existing reporter.
+    fw_source=plan["report"]["flow"].get("firmware_mmio")
+    if fw_source is not None:
+        try:
+            events.extend(firmware_mmio_events(directory,fw_source))
+        except (ValueError,TypeError,KeyError) as exc:
+            issues.append(f"firmware AXI evidence invalid: {exc}")
     events.sort(key=lambda e:e.get("time_ps",0))
     # Canonical run-local sequence after cross-source timestamp merge.
     for i,e in enumerate(events):

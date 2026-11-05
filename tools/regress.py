@@ -83,7 +83,7 @@ def load_config(path):
                 raise ValueError(f'{name}: invalid protocol report configuration for cocotb-verilator')
             if 'flow' in report:
                 flow = report['flow']
-                if not isinstance(flow, dict) or set(flow) != {'required_steps'}:
+                if not isinstance(flow, dict) or not {'required_steps'} <= set(flow) or set(flow)-{'required_steps','firmware_mmio'}:
                     raise ValueError(f'{name}: invalid test-flow configuration')
                 flow_required = flow['required_steps']
                 if (not isinstance(flow_required, dict) or set(flow_required) != {'init','run','check'} or
@@ -91,6 +91,23 @@ def load_config(path):
                             any(not isinstance(s, str) or not re.fullmatch(r'[a-z][a-z0-9_.-]*\.[a-z][a-z0-9_.-]*', s)
                                 for s in items) for items in flow_required.values())):
                     raise ValueError(f'{name}: invalid required test-flow steps')
+                if 'firmware_mmio' in flow:
+                    fw = flow['firmware_mmio']
+                    if (not isinstance(fw,dict) or set(fw) != {'monitor','address','actors','steps'}
+                            or not isinstance(fw['monitor'],str)
+                            or not isinstance(fw['address'],str)
+                            or not isinstance(fw['actors'],dict)
+                            or not isinstance(fw['steps'],dict)):
+                        raise ValueError(f'{name}: invalid firmware test-flow adapter')
+                    try:
+                        int(fw['address'],0)
+                        assert fw['actors'] and fw['steps']
+                        for table in (fw['actors'],fw['steps']):
+                            for num,label in table.items():
+                                assert str(int(num))==num
+                                assert isinstance(label,str) and re.fullmatch(r'[a-z][a-z0-9_.-]*',label)
+                    except (ValueError,AssertionError,TypeError) as exc:
+                        raise ValueError(f'{name}: invalid firmware codebook') from exc
             if 'memory' in report:
                 m = report['memory']
                 if ('axi' not in report or not isinstance(m,dict) or
