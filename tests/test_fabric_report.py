@@ -118,6 +118,24 @@ class FabricExplorerTests(unittest.TestCase):
         self.assertIsNone(row['end_to_end_cycles']['read'])
         self.assertIsNotNone(row['end_to_end_cycles']['write'])
 
+    def test_coverage_reports_historical_traffic_without_fake_current_latency(self):
+        report=copy.deepcopy(self.report)
+        route=next(r for r in report['routes']
+                   if r['source']=='compute0_local_data.cpu'
+                   and r['target']=='memory0.hbm0')
+        route['one_beat_observations']=[
+            {'source_sha':'a'*40,'count':4,'matches_site_source':False,
+             'source_equivalence':'historical'}]
+        result=fabric_report.latency_table(report)
+        coverage=result['evidence_coverage']
+        self.assertEqual(coverage['status'],'historical_only')
+        self.assertEqual(coverage['historical_observations'],1)
+        self.assertEqual(coverage['historical_source_shas'],['a'*40])
+        self.assertEqual(coverage['current_measured_routes'],0)
+        row=next(r for r in result['rows'] if r['route_id']==route['id'])
+        self.assertIsNone(row['end_to_end_cycles']['read'])
+        self.assertIsNone(row['end_to_end_cycles']['write'])
+
     def test_local_and_remote_sram_xy_hops(self):
         local=next(r for r in self.report['routes']
                    if r['source']=='compute0_local_data.cpu' and r['target']=='compute0.sram')
