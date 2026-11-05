@@ -88,7 +88,7 @@ def load_config(path):
                 required = flow['required_steps']
                 if (not isinstance(required, dict) or set(required) != {'init','run','check'} or
                         any(not isinstance(items, list) or not items or len(set(items)) != len(items) or
-                            any(not isinstance(s, str) or not re.fullmatch(r'[a-z][a-z0-9_.-]*\\.[a-z][a-z0-9_.-]*', s)
+                            any(not isinstance(s, str) or not re.fullmatch(r'[a-z][a-z0-9_.-]*\.[a-z][a-z0-9_.-]*', s)
                                 for s in items) for items in required.values())):
                     raise ValueError(f'{name}: invalid required test-flow steps')
             if 'memory' in report:
