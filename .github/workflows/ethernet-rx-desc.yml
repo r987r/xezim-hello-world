@@ -1,0 +1,37 @@
+name: Ethernet real RX descriptor fetch and validation
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'rtl/io/ethernet0/ethernet_rx_desc_fetch.v'
+      - 'dv/ethernet0/rx_desc_fetch_tb.v'
+      - '.github/workflows/ethernet-rx-desc.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ethernet-rx-desc
+  cancel-in-progress: true
+jobs:
+  rx-descriptor:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Icarus
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y iverilog
+      - name: Fetch immutable open-source AXI RTL
+        run: |
+          python3 -m pip install 'PyYAML==6.0.3'
+          python3 tools/ip_fetch.py verilog_axi
+      - name: Run descriptor ring SRAM frontdoor RTL test
+        run: |
+          set -euo pipefail
+          iverilog -g2012 -Wall -s ethernet_rx_desc_fetch_tb -o /tmp/eth_desc_tb \
+            rtl/io/ethernet0/ethernet_rx_desc_fetch.v \
+            dv/ethernet0/rx_desc_fetch_tb.v \
+            .tools/verilog_axi/rtl/axi_dma_rd.v \
+            .tools/verilog_axi/rtl/axi_ram.v
+          vvp /tmp/eth_desc_tb
