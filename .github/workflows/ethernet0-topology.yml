@@ -1,0 +1,62 @@
+name: Ethernet0 canonical NoC topology and source-fresh diagrams
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'config/soc.yaml'
+      - 'tools/socgen.py'
+      - 'tools/floonoc_gen.py'
+      - 'tools/noc_diagrams.py'
+      - 'gen/**'
+      - 'tests/test_peripheral_nocs.py'
+      - 'tests/test_ethernet_topology_audit.py'
+      - 'tools/ethernet_topology_audit.py'
+      - '.github/workflows/ethernet0-topology.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ethernet0-topology-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  generate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: ./.github/actions/setup-bender
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Load pinned upstream FlooGen
+        run: |
+          python3 -m pip install -r requirements.txt
+          python3 tools/ip_fetch.py floonoc
+          python3 -m pip install -e .tools/floonoc
+      - name: Fail on any tracked generator or README drift
+        run: |
+          make check-generated
+          python3 tools/regress.py --check-noc
+          make gen
+          git diff --exit-code -- gen/ README.md
+      - name: Verify actual NoC structure, source truth and diagram views
+        run: |
+          python3 tools/ethernet_topology_audit.py
+          python3 -m unittest tests.test_subsystem_plugin_contract tests.test_peripheral_nocs tests.test_floonoc_gen tests.test_noc_diagrams tests.test_supernoc_gen tests.test_full_chip_gen tests.test_socgen tests.test_fabric_report tests.test_ethernet_topology_audit -v
+      - name: Keep single canonical topology artifacts for review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ethernet0-canonical-topology-${{ github.run_id }}
+          path: |
+            gen/noc/floonoc/manifest.json
+            gen/noc/floonoc/ethernet0/
+            gen/chip/manifest.json
+            gen/diagrams/
+          if-no-files-found: warn
