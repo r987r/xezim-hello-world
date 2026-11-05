@@ -379,17 +379,17 @@ def build(soc, contract, floogen=None):
             if any(actual.get(k) != v for k, v in expected.items()):
                 raise InterfaceError(f"FlooGen {role} must match {expected}")
         f_endpoints = {ep["name"]: ep for ep in floogen["endpoints"]}
-        expected_ep = (set(s["name"] for s in computes)
-                       | set(s["name"] + "_sram" for s in computes)
+        expected_ep = (set(s["name"] for s in computes + peripheral)
+                       | set(s["name"] + "_sram" for s in computes + peripheral)
                        | set(o["name"] for o in outs))
         if set(f_endpoints) != expected_ep:
             raise InterfaceError(f"FlooGen endpoints mismatch: need {sorted(expected_ep)}")
-        for comp in computes:
+        for comp in computes + peripheral:
             ep = f_endpoints[comp["name"]]
             if ep.get("mgr_port_protocol") != ["axi_in"]:
                 raise InterfaceError(f"FlooGen {comp['name']} missing AXI4 manager interface")
         region = {r["name"]: r for r in soc["address_map"]["data"]}
-        for comp in computes:
+        for comp in computes + peripheral:
             name = comp["name"]
             addr = f"{name}_sram"
             exp = region[f"{name}.sram"]
