@@ -35,6 +35,10 @@ AGENT_SCOPES = {
         "allowed": {"AxiMaster"},
         "reason": "External AXI master accesses isolated real DDR controller",
     },
+    "dv/pcie0/rtl_smoke.py": {
+        "allowed": {"AxiRam"},
+        "reason": "Isolated PCIe TLP-to-AXI RTL bridge is sole AXI4 manager; AxiRam alone owns the exposed m_axi target response. No live SoC CPU, DMA, SRAM, or NoC is attached in this test.",
+    },
 }
 
 
