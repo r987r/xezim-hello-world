@@ -128,8 +128,10 @@ response processing, but are **not** a component-level decomposition.
 
 Model inventory, accurately labeled:
 - **Real RTL:** pinned LiteDRAM AXI frontend/controller, bank machines,
-  scheduler, queues, arbitration and refresh; controller events beyond
-  the external AXI boundary are not yet exported as standalone probes.
+  scheduler, queues, arbitration and refresh. A **selective, read-only
+  72-net Verilator VPI probe** now captures DFI/BankModel events and measured
+  controller-to-DFI read-side stage boundaries; it does not replace a DFI
+  protocol checker or prove silicon timing.
 - **Modeled:** LiteDRAM DFI-level `SDRAMPHYModel` and its configured
   command/data latency pipeline, DDR4 `BankModel` backed by dense
   simulation storage with a bounded 32 MiB geometry.
@@ -140,14 +142,14 @@ Model inventory, accurately labeled:
   NoC stages and this standalone timing report are separately sourced;
   **do not sum** them until real end-to-end DDR integration passes.
 
-Future distinct controller/DFI/bank stage timing requires exposing and
-validating stable generated-RTL signals, including DFI per-phase READ/
-WRITE commands, `rddata_en`, `rddata_valid`, write data, and
-BankModel access. Only measured boundaries may receive numeric values.
-Keep unavailable entries `unmeasured` rather than guessing a breakdown
-from PHY configuration. A high-outstanding/concurrent test additionally
-needs a verified mapping through bank-machine queues because DFI
-commands do not retain AXI IDs.
+The merged selective probe measures DFI per-phase READ/WRITE commands,
+`rddata_en`, `rddata_valid`, and modeled bank accesses with
+`ddr4_internal_latency.json` generated after real simulation.
+Only matched, observed stage boundaries receive numeric values. The
+AXI AW-to-DFI WRITE relationship remains **unmeasured**: DFI commands
+have no AXI IDs and AXI B can precede model bank storage. High-outstanding
+correlation additionally requires verified bank-machine queue mapping;
+never guess missing timing from PHY configuration.
 
 The planned final integration PR reuses this report's schema, attaches
 a real 64-bit-to-local-AXI address adapter and CSR init path, and adds
@@ -155,7 +157,7 @@ full-chip tests with the existing NoC monitors. No shared generator,
 clock domain, NoC, DMA, boot, or diagrams were changed for standalone
 timing instrumentation.
 
-## Experimental internal DFI and BankModel probes (follow-up PR)
+## Captured internal DFI and BankModel probes (merged #26)
 
 The merged 100 MHz latency report measures accepted AXI AR to last R
 and AW to B against real LiteDRAM RTL and behavioral SDRAMPHYModel/BankModel.
@@ -180,10 +182,11 @@ not attributed to particular transactions. Write B and modeled DRAM
 storage commit are separate events.
 
 Only observed stage intervals are numeric; unmatched steps are unmeasured.
-Actual clock timestamps are in picoseconds, initially at one 100 MHz
-simulation clock. Full-chip DDR remains a separate opt-in integration PR.
-Tests and successful real-model CI evidence are required before asserting
-that these internal latency checkpoints are validated.
+Actual timestamps are in picoseconds, for the standalone 100 MHz
+simulation clock. The internal probe checkpoints were exercised in the
+passing [combined real RTL CI run 42057781622](https://github.com/r987r/xezim-hello-world/actions/runs/42057781622).
+Full-chip Memory0 DDR remains separately unconnected; these measured
+model checkpoints are not a physical PHY/DRAM benchmark.
 
 ### Existing DFI verification reuse (explicit audit)
 
@@ -206,7 +209,9 @@ features, prefer reusing this library or upstream LiteDRAM timing checks.
 
 The read-only timestamp tap is allowed to remain small and local, but
 no custom DFI driver, checker, DRAM state machine or PHY should be built.
-Internal latency results are provisional until actual CI proves them.
+Internal event timing is accepted only when the real-model CI captures
+and reconciles complete DFI/BankModel evidence. Those measured intervals
+are simulation-stage observations, not DFI compliance or silicon latency.
 
 ## CI diagnostic policy (follow-up to warning audit)
 
