@@ -59,6 +59,8 @@ def main():
             """const e=document.getElementById('ex-endpoint');
                e.value='compute0_local_data.cpu';
                e.dispatchEvent(new Event('change',{bubbles:true}));""")
+        driver.execute_script("document.getElementById('arch-signals').open=true")
+        wait.until(lambda d: "awaddr" in d.find_element(By.ID,"ex-signal-rows").text)
         rows=driver.find_element(By.ID,"ex-signal-rows").text
         assert "awaddr" in rows and "araddr" in rows and "rdata" in rows
         print("PASS: browser rendered all three hierarchy levels, 9 real XY routers, and AXI signal details")
