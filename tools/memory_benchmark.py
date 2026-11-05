@@ -10,6 +10,11 @@ import asyncio
 import json
 from pathlib import Path
 from statistics import median
+import sys
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from tools.memory_plan import VirtualRegion
 from tools.memory_service import MemoryService, Pattern
