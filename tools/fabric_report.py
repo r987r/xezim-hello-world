@@ -44,16 +44,13 @@ def owner(network, subsystem_names):
 def contract_port(network, endpoint, subsystem):
     """Expose known planned port contracts while preserving unknown as None."""
     if network == "global_data":
-        if endpoint in ("compute0", "compute1") or (
-                endpoint.startswith("pcie") and not endpoint.endswith("_sram")):
-            return "global_data." + endpoint + "_in"
-        return None
+        if endpoint.endswith("_sram") or endpoint.startswith("memory_ingress"):
+            return None
+        return "global_data." + endpoint + "_in"
     if network == "global_config":
         if endpoint.endswith("_regs"):
             return "global_config." + endpoint[:-5] + "_out"
-        if endpoint in ("compute0", "compute1") or endpoint.startswith("pcie"):
-            return "global_config." + endpoint + "_in"
-        return None
+        return "global_config." + endpoint + "_in"
     if network == subsystem + "_local_data":
         return {"cpu":f"{subsystem}.local_data.cpu_in",
                 "dma":f"{subsystem}.local_data.dma_in",
