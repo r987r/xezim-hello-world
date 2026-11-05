@@ -28,6 +28,9 @@ endpoints:
 - name: compute1
   mgr_port_protocol:
   - axi_in
+- name: pcie0
+  mgr_port_protocol:
+  - axi_in
 - name: compute0_sram
   sbr_port_protocol:
   - axi_out
@@ -39,6 +42,12 @@ endpoints:
   - axi_out
   addr_range:
     base: 285212672
+    size: 1048576
+- name: pcie0_sram
+  sbr_port_protocol:
+  - axi_out
+  addr_range:
+    base: 301989888
     size: 1048576
 - name: memory_ingress0
   sbr_port_protocol:
@@ -56,7 +65,7 @@ routers:
 - name: router
   array:
   - 3
-  - 2
+  - 3
   degree: 5
 connections:
 - src: compute0
@@ -71,27 +80,39 @@ connections:
   - 1
   - 0
   dst_dir: Eject
-- src: compute0_sram
+- src: pcie0
   dst: router
   dst_idx:
   - 2
   - 0
   dst_dir: Eject
-- src: compute1_sram
+- src: compute0_sram
   dst: router
   dst_idx:
   - 0
+  - 1
+  dst_dir: Eject
+- src: compute1_sram
+  dst: router
+  dst_idx:
+  - 1
+  - 1
+  dst_dir: Eject
+- src: pcie0_sram
+  dst: router
+  dst_idx:
+  - 2
   - 1
   dst_dir: Eject
 - src: memory_ingress0
   dst: router
   dst_idx:
-  - 1
-  - 1
+  - 0
+  - 2
   dst_dir: Eject
 - src: memory_ingress1
   dst: router
   dst_idx:
-  - 2
   - 1
+  - 2
   dst_dir: Eject

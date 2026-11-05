@@ -31,16 +31,16 @@
       },
       "global_config": {
         "config": "global_config/floogen.yaml",
-        "endpoints": 5,
+        "endpoints": 7,
         "plane": "config",
-        "routers": 6,
+        "routers": 9,
         "top": "global_config/floo_xezim_global_config_noc.sv"
       },
       "global_data": {
         "config": "global_data/floogen.yaml",
-        "endpoints": 6,
+        "endpoints": 8,
         "plane": "data",
-        "routers": 6,
+        "routers": 9,
         "top": "global_data/floo_xezim_global_data_noc.sv"
       },
       "memory0_local_config": {
@@ -56,6 +56,20 @@
         "plane": "data",
         "routers": 4,
         "top": "memory0/local_data/floo_xezim_memory0_local_data_noc.sv"
+      },
+      "pcie0_local_config": {
+        "config": "pcie0/local_config/floogen.yaml",
+        "endpoints": 4,
+        "plane": "config",
+        "routers": 4,
+        "top": "pcie0/local_config/floo_xezim_pcie0_local_config_noc.sv"
+      },
+      "pcie0_local_data": {
+        "config": "pcie0/local_data/floogen.yaml",
+        "endpoints": 4,
+        "plane": "data",
+        "routers": 4,
+        "top": "pcie0/local_data/floo_xezim_pcie0_local_data_noc.sv"
       }
     },
     "source": "gen/noc/floonoc/manifest.json",

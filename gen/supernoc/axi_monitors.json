@@ -196,6 +196,58 @@
       "role": "target"
     },
     {
+      "addr_width": 32,
+      "data_width": 32,
+      "endpoints": [
+        "pcie0_local_config.controller_regs"
+      ],
+      "id": "pcie0_local_config.controller_regs",
+      "id_width": 1,
+      "network": "pcie0_local_config",
+      "plane": "config",
+      "prefix": "tap_pcie0_local_config__controller_regs",
+      "role": "target"
+    },
+    {
+      "addr_width": 32,
+      "data_width": 32,
+      "endpoints": [
+        "pcie0_local_config.management"
+      ],
+      "id": "pcie0_local_config.management",
+      "id_width": 1,
+      "network": "pcie0_local_config",
+      "plane": "config",
+      "prefix": "tap_pcie0_local_config__management",
+      "role": "initiator"
+    },
+    {
+      "addr_width": 64,
+      "data_width": 64,
+      "endpoints": [
+        "pcie0_local_data.host"
+      ],
+      "id": "pcie0_local_data.host",
+      "id_width": 4,
+      "network": "pcie0_local_data",
+      "plane": "data",
+      "prefix": "tap_pcie0_local_data__host",
+      "role": "initiator"
+    },
+    {
+      "addr_width": 64,
+      "data_width": 64,
+      "endpoints": [
+        "pcie0_local_data.sram"
+      ],
+      "id": "pcie0_local_data.sram",
+      "id_width": 5,
+      "network": "pcie0_local_data",
+      "plane": "data",
+      "prefix": "tap_pcie0_local_data__sram",
+      "role": "target"
+    },
+    {
       "addr_width": 64,
       "data_width": 64,
       "endpoints": [
@@ -311,6 +363,62 @@
       "addr_width": 64,
       "data_width": 64,
       "endpoints": [
+        "pcie0_local_data.global_out",
+        "global_data.pcie0"
+      ],
+      "id": "pcie0_local_data.global_out",
+      "id_width": 5,
+      "network": "pcie0_local_data",
+      "plane": "data",
+      "prefix": "tap_pcie0_local_data__global_out",
+      "role": "link"
+    },
+    {
+      "addr_width": 64,
+      "data_width": 64,
+      "endpoints": [
+        "global_data.pcie0_sram",
+        "pcie0_local_data.global_in"
+      ],
+      "id": "global_data.pcie0_sram",
+      "id_width": 4,
+      "network": "global_data",
+      "plane": "data",
+      "prefix": "tap_global_data__pcie0_sram",
+      "role": "link"
+    },
+    {
+      "addr_width": 32,
+      "data_width": 32,
+      "endpoints": [
+        "pcie0_local_config.global_out",
+        "global_config.pcie0"
+      ],
+      "id": "pcie0_local_config.global_out",
+      "id_width": 1,
+      "network": "pcie0_local_config",
+      "plane": "config",
+      "prefix": "tap_pcie0_local_config__global_out",
+      "role": "link"
+    },
+    {
+      "addr_width": 32,
+      "data_width": 32,
+      "endpoints": [
+        "global_config.pcie0_regs",
+        "pcie0_local_config.global_in"
+      ],
+      "id": "global_config.pcie0_regs",
+      "id_width": 1,
+      "network": "global_config",
+      "plane": "config",
+      "prefix": "tap_global_config__pcie0_regs",
+      "role": "link"
+    },
+    {
+      "addr_width": 64,
+      "data_width": 64,
+      "endpoints": [
         "global_data.memory_ingress0",
         "memory0_local_data.memory_ingress0"
       ],
@@ -376,6 +484,12 @@
       "size": "0x00100000"
     },
     {
+      "base": "0x12000000",
+      "name": "pcie0.sram",
+      "plane": "data",
+      "size": "0x00100000"
+    },
+    {
       "base": "0x100000000",
       "name": "memory0.hbm0",
       "plane": "data",
@@ -410,6 +524,12 @@
       "name": "memory0.ctrl",
       "plane": "config",
       "size": "0x1000"
+    },
+    {
+      "base": "0x40040000",
+      "name": "pcie0.ctrl",
+      "plane": "config",
+      "size": "0x10000"
     }
   ],
   "schema_version": 1,

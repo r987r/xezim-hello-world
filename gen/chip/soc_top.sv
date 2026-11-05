@@ -112,6 +112,14 @@ module soc_top #(parameter bit ProbeEnable = 0, DmaEnable = 0, DmaTestMode = 0) 
   floo_xezim_compute1_local_data_noc_pkg::axi_in_rsp_t m_compute1_local_data_dma_rsp;
   assign m_compute1_local_data_dma_rsp.b.user = '0;
   assign m_compute1_local_data_dma_rsp.r.user = '0;
+  floo_xezim_pcie0_local_config_noc_pkg::axi_in_req_t m_pcie0_local_config_management_req;
+  floo_xezim_pcie0_local_config_noc_pkg::axi_in_rsp_t m_pcie0_local_config_management_rsp;
+  assign m_pcie0_local_config_management_rsp.b.user = '0;
+  assign m_pcie0_local_config_management_rsp.r.user = '0;
+  floo_xezim_pcie0_local_data_noc_pkg::axi_in_req_t m_pcie0_local_data_host_req;
+  floo_xezim_pcie0_local_data_noc_pkg::axi_in_rsp_t m_pcie0_local_data_host_rsp;
+  assign m_pcie0_local_data_host_rsp.b.user = '0;
+  assign m_pcie0_local_data_host_rsp.r.user = '0;
   floo_xezim_compute0_local_config_noc_pkg::axi_out_req_t s_compute0_local_config_dma_regs_req;
   floo_xezim_compute0_local_config_noc_pkg::axi_out_rsp_t s_compute0_local_config_dma_regs_rsp;
   assign s_compute0_local_config_dma_regs_req.aw.user = '0;
@@ -166,6 +174,18 @@ module soc_top #(parameter bit ProbeEnable = 0, DmaEnable = 0, DmaTestMode = 0) 
   assign s_memory0_local_data_target_crossbar_req.w.user = '0;
   assign s_memory0_local_data_target_crossbar_req.ar.user = '0;
   assign s_memory0_local_data_target_crossbar_req.aw.atop = '0;
+  floo_xezim_pcie0_local_config_noc_pkg::axi_out_req_t s_pcie0_local_config_controller_regs_req;
+  floo_xezim_pcie0_local_config_noc_pkg::axi_out_rsp_t s_pcie0_local_config_controller_regs_rsp;
+  assign s_pcie0_local_config_controller_regs_req.aw.user = '0;
+  assign s_pcie0_local_config_controller_regs_req.w.user = '0;
+  assign s_pcie0_local_config_controller_regs_req.ar.user = '0;
+  assign s_pcie0_local_config_controller_regs_req.aw.atop = '0;
+  floo_xezim_pcie0_local_data_noc_pkg::axi_out_req_t s_pcie0_local_data_sram_req;
+  floo_xezim_pcie0_local_data_noc_pkg::axi_out_rsp_t s_pcie0_local_data_sram_rsp;
+  assign s_pcie0_local_data_sram_req.aw.user = '0;
+  assign s_pcie0_local_data_sram_req.w.user = '0;
+  assign s_pcie0_local_data_sram_req.ar.user = '0;
+  assign s_pcie0_local_data_sram_req.aw.atop = '0;
   soc_noc u_noc (
     .clk_i(clk_i),
     .rst_ni(rst_ni),
@@ -403,6 +423,84 @@ module soc_top #(parameter bit ProbeEnable = 0, DmaEnable = 0, DmaTestMode = 0) 
     .m_compute1_local_data_dma_rlast(m_compute1_local_data_dma_rsp.r.last),
     .m_compute1_local_data_dma_rvalid(m_compute1_local_data_dma_rsp.r_valid),
     .m_compute1_local_data_dma_rready(m_compute1_local_data_dma_req.r_ready),
+    .m_pcie0_local_config_management_awid(m_pcie0_local_config_management_req.aw.id),
+    .m_pcie0_local_config_management_awaddr(m_pcie0_local_config_management_req.aw.addr),
+    .m_pcie0_local_config_management_awlen(m_pcie0_local_config_management_req.aw.len),
+    .m_pcie0_local_config_management_awsize(m_pcie0_local_config_management_req.aw.size),
+    .m_pcie0_local_config_management_awburst(m_pcie0_local_config_management_req.aw.burst),
+    .m_pcie0_local_config_management_awlock(m_pcie0_local_config_management_req.aw.lock),
+    .m_pcie0_local_config_management_awcache(m_pcie0_local_config_management_req.aw.cache),
+    .m_pcie0_local_config_management_awprot(m_pcie0_local_config_management_req.aw.prot),
+    .m_pcie0_local_config_management_awqos(m_pcie0_local_config_management_req.aw.qos),
+    .m_pcie0_local_config_management_awregion(m_pcie0_local_config_management_req.aw.region),
+    .m_pcie0_local_config_management_awvalid(m_pcie0_local_config_management_req.aw_valid),
+    .m_pcie0_local_config_management_awready(m_pcie0_local_config_management_rsp.aw_ready),
+    .m_pcie0_local_config_management_wdata(m_pcie0_local_config_management_req.w.data),
+    .m_pcie0_local_config_management_wstrb(m_pcie0_local_config_management_req.w.strb),
+    .m_pcie0_local_config_management_wlast(m_pcie0_local_config_management_req.w.last),
+    .m_pcie0_local_config_management_wvalid(m_pcie0_local_config_management_req.w_valid),
+    .m_pcie0_local_config_management_wready(m_pcie0_local_config_management_rsp.w_ready),
+    .m_pcie0_local_config_management_bid(m_pcie0_local_config_management_rsp.b.id),
+    .m_pcie0_local_config_management_bresp(m_pcie0_local_config_management_rsp.b.resp),
+    .m_pcie0_local_config_management_bvalid(m_pcie0_local_config_management_rsp.b_valid),
+    .m_pcie0_local_config_management_bready(m_pcie0_local_config_management_req.b_ready),
+    .m_pcie0_local_config_management_arid(m_pcie0_local_config_management_req.ar.id),
+    .m_pcie0_local_config_management_araddr(m_pcie0_local_config_management_req.ar.addr),
+    .m_pcie0_local_config_management_arlen(m_pcie0_local_config_management_req.ar.len),
+    .m_pcie0_local_config_management_arsize(m_pcie0_local_config_management_req.ar.size),
+    .m_pcie0_local_config_management_arburst(m_pcie0_local_config_management_req.ar.burst),
+    .m_pcie0_local_config_management_arlock(m_pcie0_local_config_management_req.ar.lock),
+    .m_pcie0_local_config_management_arcache(m_pcie0_local_config_management_req.ar.cache),
+    .m_pcie0_local_config_management_arprot(m_pcie0_local_config_management_req.ar.prot),
+    .m_pcie0_local_config_management_arqos(m_pcie0_local_config_management_req.ar.qos),
+    .m_pcie0_local_config_management_arregion(m_pcie0_local_config_management_req.ar.region),
+    .m_pcie0_local_config_management_arvalid(m_pcie0_local_config_management_req.ar_valid),
+    .m_pcie0_local_config_management_arready(m_pcie0_local_config_management_rsp.ar_ready),
+    .m_pcie0_local_config_management_rid(m_pcie0_local_config_management_rsp.r.id),
+    .m_pcie0_local_config_management_rdata(m_pcie0_local_config_management_rsp.r.data),
+    .m_pcie0_local_config_management_rresp(m_pcie0_local_config_management_rsp.r.resp),
+    .m_pcie0_local_config_management_rlast(m_pcie0_local_config_management_rsp.r.last),
+    .m_pcie0_local_config_management_rvalid(m_pcie0_local_config_management_rsp.r_valid),
+    .m_pcie0_local_config_management_rready(m_pcie0_local_config_management_req.r_ready),
+    .m_pcie0_local_data_host_awid(m_pcie0_local_data_host_req.aw.id),
+    .m_pcie0_local_data_host_awaddr(m_pcie0_local_data_host_req.aw.addr),
+    .m_pcie0_local_data_host_awlen(m_pcie0_local_data_host_req.aw.len),
+    .m_pcie0_local_data_host_awsize(m_pcie0_local_data_host_req.aw.size),
+    .m_pcie0_local_data_host_awburst(m_pcie0_local_data_host_req.aw.burst),
+    .m_pcie0_local_data_host_awlock(m_pcie0_local_data_host_req.aw.lock),
+    .m_pcie0_local_data_host_awcache(m_pcie0_local_data_host_req.aw.cache),
+    .m_pcie0_local_data_host_awprot(m_pcie0_local_data_host_req.aw.prot),
+    .m_pcie0_local_data_host_awqos(m_pcie0_local_data_host_req.aw.qos),
+    .m_pcie0_local_data_host_awregion(m_pcie0_local_data_host_req.aw.region),
+    .m_pcie0_local_data_host_awvalid(m_pcie0_local_data_host_req.aw_valid),
+    .m_pcie0_local_data_host_awready(m_pcie0_local_data_host_rsp.aw_ready),
+    .m_pcie0_local_data_host_wdata(m_pcie0_local_data_host_req.w.data),
+    .m_pcie0_local_data_host_wstrb(m_pcie0_local_data_host_req.w.strb),
+    .m_pcie0_local_data_host_wlast(m_pcie0_local_data_host_req.w.last),
+    .m_pcie0_local_data_host_wvalid(m_pcie0_local_data_host_req.w_valid),
+    .m_pcie0_local_data_host_wready(m_pcie0_local_data_host_rsp.w_ready),
+    .m_pcie0_local_data_host_bid(m_pcie0_local_data_host_rsp.b.id),
+    .m_pcie0_local_data_host_bresp(m_pcie0_local_data_host_rsp.b.resp),
+    .m_pcie0_local_data_host_bvalid(m_pcie0_local_data_host_rsp.b_valid),
+    .m_pcie0_local_data_host_bready(m_pcie0_local_data_host_req.b_ready),
+    .m_pcie0_local_data_host_arid(m_pcie0_local_data_host_req.ar.id),
+    .m_pcie0_local_data_host_araddr(m_pcie0_local_data_host_req.ar.addr),
+    .m_pcie0_local_data_host_arlen(m_pcie0_local_data_host_req.ar.len),
+    .m_pcie0_local_data_host_arsize(m_pcie0_local_data_host_req.ar.size),
+    .m_pcie0_local_data_host_arburst(m_pcie0_local_data_host_req.ar.burst),
+    .m_pcie0_local_data_host_arlock(m_pcie0_local_data_host_req.ar.lock),
+    .m_pcie0_local_data_host_arcache(m_pcie0_local_data_host_req.ar.cache),
+    .m_pcie0_local_data_host_arprot(m_pcie0_local_data_host_req.ar.prot),
+    .m_pcie0_local_data_host_arqos(m_pcie0_local_data_host_req.ar.qos),
+    .m_pcie0_local_data_host_arregion(m_pcie0_local_data_host_req.ar.region),
+    .m_pcie0_local_data_host_arvalid(m_pcie0_local_data_host_req.ar_valid),
+    .m_pcie0_local_data_host_arready(m_pcie0_local_data_host_rsp.ar_ready),
+    .m_pcie0_local_data_host_rid(m_pcie0_local_data_host_rsp.r.id),
+    .m_pcie0_local_data_host_rdata(m_pcie0_local_data_host_rsp.r.data),
+    .m_pcie0_local_data_host_rresp(m_pcie0_local_data_host_rsp.r.resp),
+    .m_pcie0_local_data_host_rlast(m_pcie0_local_data_host_rsp.r.last),
+    .m_pcie0_local_data_host_rvalid(m_pcie0_local_data_host_rsp.r_valid),
+    .m_pcie0_local_data_host_rready(m_pcie0_local_data_host_req.r_ready),
     .s_compute0_local_config_dma_regs_awid(s_compute0_local_config_dma_regs_req.aw.id),
     .s_compute0_local_config_dma_regs_awaddr(s_compute0_local_config_dma_regs_req.aw.addr),
     .s_compute0_local_config_dma_regs_awlen(s_compute0_local_config_dma_regs_req.aw.len),
@@ -753,7 +851,85 @@ module soc_top #(parameter bit ProbeEnable = 0, DmaEnable = 0, DmaTestMode = 0) 
     .s_memory0_local_data_target_crossbar_rresp(s_memory0_local_data_target_crossbar_rsp.r.resp),
     .s_memory0_local_data_target_crossbar_rlast(s_memory0_local_data_target_crossbar_rsp.r.last),
     .s_memory0_local_data_target_crossbar_rvalid(s_memory0_local_data_target_crossbar_rsp.r_valid),
-    .s_memory0_local_data_target_crossbar_rready(s_memory0_local_data_target_crossbar_req.r_ready)
+    .s_memory0_local_data_target_crossbar_rready(s_memory0_local_data_target_crossbar_req.r_ready),
+    .s_pcie0_local_config_controller_regs_awid(s_pcie0_local_config_controller_regs_req.aw.id),
+    .s_pcie0_local_config_controller_regs_awaddr(s_pcie0_local_config_controller_regs_req.aw.addr),
+    .s_pcie0_local_config_controller_regs_awlen(s_pcie0_local_config_controller_regs_req.aw.len),
+    .s_pcie0_local_config_controller_regs_awsize(s_pcie0_local_config_controller_regs_req.aw.size),
+    .s_pcie0_local_config_controller_regs_awburst(s_pcie0_local_config_controller_regs_req.aw.burst),
+    .s_pcie0_local_config_controller_regs_awlock(s_pcie0_local_config_controller_regs_req.aw.lock),
+    .s_pcie0_local_config_controller_regs_awcache(s_pcie0_local_config_controller_regs_req.aw.cache),
+    .s_pcie0_local_config_controller_regs_awprot(s_pcie0_local_config_controller_regs_req.aw.prot),
+    .s_pcie0_local_config_controller_regs_awqos(s_pcie0_local_config_controller_regs_req.aw.qos),
+    .s_pcie0_local_config_controller_regs_awregion(s_pcie0_local_config_controller_regs_req.aw.region),
+    .s_pcie0_local_config_controller_regs_awvalid(s_pcie0_local_config_controller_regs_req.aw_valid),
+    .s_pcie0_local_config_controller_regs_awready(s_pcie0_local_config_controller_regs_rsp.aw_ready),
+    .s_pcie0_local_config_controller_regs_wdata(s_pcie0_local_config_controller_regs_req.w.data),
+    .s_pcie0_local_config_controller_regs_wstrb(s_pcie0_local_config_controller_regs_req.w.strb),
+    .s_pcie0_local_config_controller_regs_wlast(s_pcie0_local_config_controller_regs_req.w.last),
+    .s_pcie0_local_config_controller_regs_wvalid(s_pcie0_local_config_controller_regs_req.w_valid),
+    .s_pcie0_local_config_controller_regs_wready(s_pcie0_local_config_controller_regs_rsp.w_ready),
+    .s_pcie0_local_config_controller_regs_bid(s_pcie0_local_config_controller_regs_rsp.b.id),
+    .s_pcie0_local_config_controller_regs_bresp(s_pcie0_local_config_controller_regs_rsp.b.resp),
+    .s_pcie0_local_config_controller_regs_bvalid(s_pcie0_local_config_controller_regs_rsp.b_valid),
+    .s_pcie0_local_config_controller_regs_bready(s_pcie0_local_config_controller_regs_req.b_ready),
+    .s_pcie0_local_config_controller_regs_arid(s_pcie0_local_config_controller_regs_req.ar.id),
+    .s_pcie0_local_config_controller_regs_araddr(s_pcie0_local_config_controller_regs_req.ar.addr),
+    .s_pcie0_local_config_controller_regs_arlen(s_pcie0_local_config_controller_regs_req.ar.len),
+    .s_pcie0_local_config_controller_regs_arsize(s_pcie0_local_config_controller_regs_req.ar.size),
+    .s_pcie0_local_config_controller_regs_arburst(s_pcie0_local_config_controller_regs_req.ar.burst),
+    .s_pcie0_local_config_controller_regs_arlock(s_pcie0_local_config_controller_regs_req.ar.lock),
+    .s_pcie0_local_config_controller_regs_arcache(s_pcie0_local_config_controller_regs_req.ar.cache),
+    .s_pcie0_local_config_controller_regs_arprot(s_pcie0_local_config_controller_regs_req.ar.prot),
+    .s_pcie0_local_config_controller_regs_arqos(s_pcie0_local_config_controller_regs_req.ar.qos),
+    .s_pcie0_local_config_controller_regs_arregion(s_pcie0_local_config_controller_regs_req.ar.region),
+    .s_pcie0_local_config_controller_regs_arvalid(s_pcie0_local_config_controller_regs_req.ar_valid),
+    .s_pcie0_local_config_controller_regs_arready(s_pcie0_local_config_controller_regs_rsp.ar_ready),
+    .s_pcie0_local_config_controller_regs_rid(s_pcie0_local_config_controller_regs_rsp.r.id),
+    .s_pcie0_local_config_controller_regs_rdata(s_pcie0_local_config_controller_regs_rsp.r.data),
+    .s_pcie0_local_config_controller_regs_rresp(s_pcie0_local_config_controller_regs_rsp.r.resp),
+    .s_pcie0_local_config_controller_regs_rlast(s_pcie0_local_config_controller_regs_rsp.r.last),
+    .s_pcie0_local_config_controller_regs_rvalid(s_pcie0_local_config_controller_regs_rsp.r_valid),
+    .s_pcie0_local_config_controller_regs_rready(s_pcie0_local_config_controller_regs_req.r_ready),
+    .s_pcie0_local_data_sram_awid(s_pcie0_local_data_sram_req.aw.id),
+    .s_pcie0_local_data_sram_awaddr(s_pcie0_local_data_sram_req.aw.addr),
+    .s_pcie0_local_data_sram_awlen(s_pcie0_local_data_sram_req.aw.len),
+    .s_pcie0_local_data_sram_awsize(s_pcie0_local_data_sram_req.aw.size),
+    .s_pcie0_local_data_sram_awburst(s_pcie0_local_data_sram_req.aw.burst),
+    .s_pcie0_local_data_sram_awlock(s_pcie0_local_data_sram_req.aw.lock),
+    .s_pcie0_local_data_sram_awcache(s_pcie0_local_data_sram_req.aw.cache),
+    .s_pcie0_local_data_sram_awprot(s_pcie0_local_data_sram_req.aw.prot),
+    .s_pcie0_local_data_sram_awqos(s_pcie0_local_data_sram_req.aw.qos),
+    .s_pcie0_local_data_sram_awregion(s_pcie0_local_data_sram_req.aw.region),
+    .s_pcie0_local_data_sram_awvalid(s_pcie0_local_data_sram_req.aw_valid),
+    .s_pcie0_local_data_sram_awready(s_pcie0_local_data_sram_rsp.aw_ready),
+    .s_pcie0_local_data_sram_wdata(s_pcie0_local_data_sram_req.w.data),
+    .s_pcie0_local_data_sram_wstrb(s_pcie0_local_data_sram_req.w.strb),
+    .s_pcie0_local_data_sram_wlast(s_pcie0_local_data_sram_req.w.last),
+    .s_pcie0_local_data_sram_wvalid(s_pcie0_local_data_sram_req.w_valid),
+    .s_pcie0_local_data_sram_wready(s_pcie0_local_data_sram_rsp.w_ready),
+    .s_pcie0_local_data_sram_bid(s_pcie0_local_data_sram_rsp.b.id),
+    .s_pcie0_local_data_sram_bresp(s_pcie0_local_data_sram_rsp.b.resp),
+    .s_pcie0_local_data_sram_bvalid(s_pcie0_local_data_sram_rsp.b_valid),
+    .s_pcie0_local_data_sram_bready(s_pcie0_local_data_sram_req.b_ready),
+    .s_pcie0_local_data_sram_arid(s_pcie0_local_data_sram_req.ar.id),
+    .s_pcie0_local_data_sram_araddr(s_pcie0_local_data_sram_req.ar.addr),
+    .s_pcie0_local_data_sram_arlen(s_pcie0_local_data_sram_req.ar.len),
+    .s_pcie0_local_data_sram_arsize(s_pcie0_local_data_sram_req.ar.size),
+    .s_pcie0_local_data_sram_arburst(s_pcie0_local_data_sram_req.ar.burst),
+    .s_pcie0_local_data_sram_arlock(s_pcie0_local_data_sram_req.ar.lock),
+    .s_pcie0_local_data_sram_arcache(s_pcie0_local_data_sram_req.ar.cache),
+    .s_pcie0_local_data_sram_arprot(s_pcie0_local_data_sram_req.ar.prot),
+    .s_pcie0_local_data_sram_arqos(s_pcie0_local_data_sram_req.ar.qos),
+    .s_pcie0_local_data_sram_arregion(s_pcie0_local_data_sram_req.ar.region),
+    .s_pcie0_local_data_sram_arvalid(s_pcie0_local_data_sram_req.ar_valid),
+    .s_pcie0_local_data_sram_arready(s_pcie0_local_data_sram_rsp.ar_ready),
+    .s_pcie0_local_data_sram_rid(s_pcie0_local_data_sram_rsp.r.id),
+    .s_pcie0_local_data_sram_rdata(s_pcie0_local_data_sram_rsp.r.data),
+    .s_pcie0_local_data_sram_rresp(s_pcie0_local_data_sram_rsp.r.resp),
+    .s_pcie0_local_data_sram_rlast(s_pcie0_local_data_sram_rsp.r.last),
+    .s_pcie0_local_data_sram_rvalid(s_pcie0_local_data_sram_rsp.r_valid),
+    .s_pcie0_local_data_sram_rready(s_pcie0_local_data_sram_req.r_ready)
   );
   initial if (DmaTestMode && (!DmaEnable || !ProbeEnable))
     $fatal(1, "DMA CPU0 AXI BFM mode requires active DMA and probe");
@@ -847,7 +1023,7 @@ module soc_top #(parameter bit ProbeEnable = 0, DmaEnable = 0, DmaTestMode = 0) 
     .cfg_req_t(floo_xezim_compute0_local_config_noc_pkg::axi_in_req_t),
     .cfg_rsp_t(floo_xezim_compute0_local_config_noc_pkg::axi_in_rsp_t),
     .ConfigBase(32'h40000000),
-    .ConfigEnd(32'h40031000)
+    .ConfigEnd(32'h40050000)
   ) u_edge_compute0 (
     .clk_i(clk_i),
     .rst_ni(rst_ni),
@@ -1050,7 +1226,7 @@ module soc_top #(parameter bit ProbeEnable = 0, DmaEnable = 0, DmaTestMode = 0) 
     .cfg_req_t(floo_xezim_compute1_local_config_noc_pkg::axi_in_req_t),
     .cfg_rsp_t(floo_xezim_compute1_local_config_noc_pkg::axi_in_rsp_t),
     .ConfigBase(32'h40000000),
-    .ConfigEnd(32'h40031000)
+    .ConfigEnd(32'h40050000)
   ) u_edge_compute1 (
     .clk_i(clk_i),
     .rst_ni(rst_ni),
@@ -1131,6 +1307,8 @@ module soc_top #(parameter bit ProbeEnable = 0, DmaEnable = 0, DmaTestMode = 0) 
     assign m_compute1_local_data_dma_req = '0;
     assign dma_irq_o[1] = 1'b0;
   end
+  assign m_pcie0_local_data_host_req = '0;
+  assign m_pcie0_local_config_management_req = '0;
   if (DmaEnable) begin: gen_dma_csr_compute0
   soc_dma_regs #(
     .axi_req_t(floo_xezim_compute0_local_config_noc_pkg::axi_out_req_t),
@@ -1472,6 +1650,36 @@ module soc_top #(parameter bit ProbeEnable = 0, DmaEnable = 0, DmaTestMode = 0) 
     .m_axi_ruser({memory_1_rsp.r.user, memory_0_rsp.r.user}),
     .m_axi_rvalid({memory_1_rsp.r_valid, memory_0_rsp.r_valid}),
     .m_axi_rready({memory_1_req.r_ready, memory_0_req.r_ready})
+  );
+  axi_err_slv #(
+    .AxiIdWidth(1),
+    .axi_req_t(floo_xezim_pcie0_local_config_noc_pkg::axi_out_req_t),
+    .axi_resp_t(floo_xezim_pcie0_local_config_noc_pkg::axi_out_rsp_t),
+    .ATOPs(0)
+  ) u_reserved_s_pcie0_local_config_controller_regs (
+    .clk_i(clk_i),
+    .rst_ni(rst_ni),
+    .slv_req_i(s_pcie0_local_config_controller_regs_req),
+    .slv_resp_o(s_pcie0_local_config_controller_regs_rsp)
+  );
+  axi_sram_target #(
+    .req_t(floo_xezim_pcie0_local_data_noc_pkg::axi_out_req_t),
+    .rsp_t(floo_xezim_pcie0_local_data_noc_pkg::axi_out_rsp_t),
+    .IdWidth(5),
+    .Base(64'h0000000012000000),
+    .Bytes(16384),
+    .ReadOnly(0),
+    .InitFile("")
+  ) u_s_pcie0_local_data_sram (
+    .clk_i(clk_i),
+    .rst_ni(rst_ni),
+    .req_i(s_pcie0_local_data_sram_req),
+    .rsp_o(s_pcie0_local_data_sram_rsp),
+    .mon_valid_o(),
+    .mon_write_o(),
+    .mon_addr_o(),
+    .mon_data_o(),
+    .mon_strb_o()
   );
   always_ff @(posedge clk_i or negedge rst_ni)
     if (!rst_ni) begin rom_reads_o <= '0; flash_reads_o <= '0; end
