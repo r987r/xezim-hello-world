@@ -49,7 +49,7 @@ jobs:
           python-version: '3.12'
       - run: python3 -m pip install -r requirements.txt
       - name: Verify publication, CI trigger and report semantics
-        run: python3 -m unittest tests.test_ci_workflows tests.test_publication tests.test_merged_pr_evidence tests.test_axi_report tests.test_fabric_report tests.test_protocol_report -v
+        run: python3 -m unittest tests.test_ci_workflows tests.test_publication tests.test_merged_pr_evidence tests.test_axi_report tests.test_fabric_report tests.test_protocol_report tests.test_design_explorer tests.test_design_netlist -v
       - name: Build offline PR or manual branch preview
         if: (github.event_name == 'pull_request' && github.event.action != 'closed') || (github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main')
         run: python3 tools/publish_site.py
@@ -58,6 +58,24 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 tools/publish_site.py --collect
+      - name: Verify offline 2D diagram preview has embedded graph data
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          import re
+          html = Path('.tools/pages-site/explorer.html').read_text()
+          match = re.search(r'<script type="application/json" id="ex-embedded-graph">(.*?)</script>', html, re.S)
+          if not match:
+              raise SystemExit('missing embedded 2D graph in Pages preview')
+          data = json.loads(match.group(1))
+          assert len(data['nodes']) >= 8, 'no diagram nodes'
+          assert len(data['edges']) >= 8, 'no diagram connections'
+          assert data['profiles']['chip-dma']['actors'], 'missing DMA testbench overlay'
+          assert 'fetch("data/design-graph.json")' not in html, 'preview still requires HTTP fetch'
+          assert Path('.tools/pages-site/data/design-graph.json').is_file(), 'graph download missing'
+          print('PASS: self-contained 2D explorer, graph and chip-DMA profile')
+          PY
       - uses: actions/upload-pages-artifact@v4
         with:
           path: .tools/pages-site

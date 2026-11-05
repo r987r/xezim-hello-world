@@ -1,0 +1,95 @@
+<div class="eyebrow">2D · generic topology · testbench overlays</div>
+<h1>Design &amp; verification explorer</h1>
+<p class="lede">Explore the existing generated SoC and switch between verification profiles. Source: generator topology and actor manifests, not proof of slang-elaborated wiring. Dashed edges represent planned integration.</p>
+<div class="actions">
+<label>Scope <select id="ex-scope"></select></label>
+<label>Test profile <select id="ex-profile"></select></label>
+<button type="button" id="ex-reset">Fit diagram</button>
+<a href="data/design-graph.json">Graph JSON</a>
+</div>
+<p id="ex-status" class="muted">Loading graph…</p>
+<div class="ex-layout">
+<div class="ex-scroll"><svg id="ex-svg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="2D design graph"></svg></div>
+<div class="ex-detail"><h2>Selection</h2><pre id="ex-detail">Select a block or connection.</pre></div>
+</div>
+<style>
+.ex-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(230px,310px);gap:12px;margin:12px 0}
+.ex-scroll{max-width:100%;overflow:auto;border:1px solid #94a3b85c;border-radius:10px;min-height:500px}
+#ex-svg{min-width:760px;display:block;background:#f8fafc}
+.ex-detail{min-width:0;border:1px solid #94a3b85c;border-radius:10px;padding:10px}
+.ex-detail h2{font-size:1.1rem}
+#ex-detail{white-space:pre-wrap;overflow-wrap:anywhere;max-height:520px;overflow:auto;font-size:.8rem}
+.ex-node{cursor:pointer}.ex-node rect{fill:#e1ecf5;stroke:#59758c;stroke-width:1.4}
+.ex-node text{font:12px system-ui,sans-serif;fill:#17324d;pointer-events:none}
+.ex-edge{fill:none;stroke:#94a3b8;stroke-width:2;opacity:.55;cursor:pointer;pointer-events:stroke}
+.ex-edge.planned{stroke-dasharray:6 5}
+.ex-selected rect{stroke:#d97706;stroke-width:3}
+.ex-selected.ex-edge{stroke:#d97706;stroke-width:4;opacity:1}
+@media(max-width:820px){.ex-layout{grid-template-columns:1fr}.ex-scroll{min-height:380px}.ex-detail{min-height:130px}#ex-detail{max-height:200px}}
+</style>
+<script type="application/json" id="ex-embedded-graph">__GRAPH_DATA__</script>
+<script>
+(function(){
+"use strict";
+var ns="http://www.w3.org/2000/svg",s=document.getElementById("ex-scope"),p=document.getElementById("ex-profile"),svg=document.getElementById("ex-svg"),detail=document.getElementById("ex-detail"),status=document.getElementById("ex-status");
+var graph;
+function el(t,props,label){var e=document.createElementNS(ns,t);Object.keys(props||{}).forEach(function(k){e.setAttribute(k,props[k])});if(label!==undefined)e.textContent=String(label);return e}
+function selected(element,data){svg.querySelectorAll(".ex-selected").forEach(function(e){e.classList.remove("ex-selected")});element.classList.add("ex-selected");detail.textContent=JSON.stringify(data,null,2)}
+function render(){
+ if(!graph)return;
+ var groupMap=new Map(graph.groups.map(function(g){return [g.name,g]})),memberOf=new Map;
+ graph.groups.forEach(function(g){g.instances.forEach(function(n){if(!memberOf.has(n))memberOf.set(n,g.name)})});
+ var actor=(graph.profiles[p.value]||{}).actors||{},nodes=[],edges=[];
+ if(s.value==="all"){
+  nodes=graph.groups.map(function(g){return {id:"group:"+g.name,label:g.name,sub:g.instances.length+" components",group:g}});
+  graph.nodes.forEach(function(n){if(!memberOf.has(n.id))nodes.push({id:n.id,label:n.id,source:n})});
+  var collapsed=new Map;
+  graph.edges.forEach(function(e){
+   var a=memberOf.has(e.from.instance)?"group:"+memberOf.get(e.from.instance):e.from.instance;
+   var b=memberOf.has(e.to.instance)?"group:"+memberOf.get(e.to.instance):e.to.instance;
+   if(a===b)return;
+   var k=a+" -> "+b;
+   if(!collapsed.has(k))collapsed.set(k,{id:k,a:a,b:b,count:0,planned:false});
+   var c=collapsed.get(k);c.count++;if(e.status==="planned_integration")c.planned=true;
+  });edges=Array.from(collapsed.values());
+ }else{
+  var members=new Set(groupMap.get(s.value).instances),visible=new Set(members);
+  graph.edges.forEach(function(e){if(members.has(e.from.instance))visible.add(e.to.instance);if(members.has(e.to.instance))visible.add(e.from.instance)});
+  nodes=graph.nodes.filter(function(n){return visible.has(n.id)}).map(function(n){return {id:n.id,label:n.id,sub:(actor[n.id]||{}).kind||n.module,source:n,external:!members.has(n.id)}});
+  edges=graph.edges.filter(function(e){return visible.has(e.from.instance)&&visible.has(e.to.instance)&&(members.has(e.from.instance)||members.has(e.to.instance))}).map(function(e){return {id:e.id,a:e.from.instance,b:e.to.instance,count:1,planned:e.status==="planned_integration",raw:e}});
+ }
+ var columns=s.value==="all"?3:Math.min(5,Math.ceil(Math.sqrt(nodes.length))),w=195,h=62,dx=53,dy=60;
+ var places=new Map;
+ nodes.forEach(function(n,i){places.set(n.id,{x:32+(i%columns)*(w+dx),y:35+Math.floor(i/columns)*(h+dy)})});
+ var aw=Math.max(760,columns*(w+dx)+45),ah=Math.max(390,Math.ceil(nodes.length/columns)*(h+dy)+45);
+ svg.replaceChildren();svg.setAttribute("viewBox","0 0 "+aw+" "+ah);svg.setAttribute("width",aw);svg.setAttribute("height",ah);
+ edges.forEach(function(e){
+  var a=places.get(e.a),b=places.get(e.b);if(!a||!b)return;
+  var x=a.x+w/2,y=a.y+h/2,tx=b.x+w/2,ty=b.y+h/2;
+  var path=el("path",{d:"M "+x+" "+y+" C "+(x+40)+" "+y+" "+(tx-40)+" "+ty+" "+tx+" "+ty,class:"ex-edge"+(e.planned?" planned":"")});
+  path.addEventListener("click",function(){selected(path,{...e,evidence:"generated_declared_topology_not_elaboration"})});svg.append(path);
+ });
+ nodes.forEach(function(n){
+  var q=places.get(n.id),g=el("g",{class:"ex-node"});
+  g.append(el("rect",{x:q.x,y:q.y,width:w,height:h,rx:8}));
+  var label=n.label.length>27?n.label.slice(0,24)+"…":n.label;
+  g.append(el("text",{x:q.x+9,y:q.y+23},label));
+  var sub=n.sub||"boundary",small=sub.length>29?sub.slice(0,26)+"…":sub;
+  g.append(el("text",{x:q.x+9,y:q.y+42},small));
+  g.addEventListener("click",function(){selected(g,{...n,profile:p.value,actor:actor[n.id]||null,evidence:"generated_declared_not_runtime_verified"})});
+  if(n.group)g.addEventListener("dblclick",function(){s.value=n.group.name;render()});
+  svg.append(g);
+ });
+ status.textContent=nodes.length+" blocks, "+edges.length+" links; "+p.value+" test profile. Double-click a subsystem to drill down.";
+ detail.textContent=JSON.stringify({scope:s.value,profile:p.value,source:graph.source,notice:"Generated topology is not proof of elaborated RTL connectivity."},null,2);
+}
+document.getElementById("ex-reset").addEventListener("click",function(){s.value="all";render()});
+s.addEventListener("change",render);p.addEventListener("change",render);
+Promise.resolve(JSON.parse(document.getElementById("ex-embedded-graph").textContent)).then(function(data){
+ graph=data;
+ [["all","Whole SoC"]].concat(data.groups.map(function(g){return [g.name,g.name]})).forEach(function(pair){var o=document.createElement("option");o.value=pair[0];o.textContent=pair[1];s.append(o)});
+ Object.keys(data.profiles).forEach(function(k){var o=document.createElement("option");o.value=k;o.textContent=k;p.append(o)});
+ p.value=data.profiles["chip-dma"]?"chip-dma":Object.keys(data.profiles)[0];render();
+}).catch(function(err){status.textContent="Explorer unavailable: "+err.message});
+})();
+</script>
