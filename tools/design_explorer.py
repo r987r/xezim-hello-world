@@ -59,13 +59,35 @@ def catalog(root: Path = ROOT, *, verification_reports: dict[str, Path] | None =
                 raise ValueError(f"{group['name']}: group contains unknown instance {member}")
             memberships[member].append(group["name"])
 
+    # Enrich generated topology with *current* SoC target backend contracts.
+    # Do not mutate tracked generated JSON; next page build reflects new
+    # config/backend integration automatically. Controller names in config
+    # identify intended IP, not proof a physical controller was instantiated.
+    soc = yaml.safe_load((root / "config/soc.yaml").read_text())
+    target_specs = {t["name"]: t for t in soc.get("memory_targets", [])}
+    if len(target_specs) != len(soc.get("memory_targets", [])):
+        raise ValueError("duplicate configured memory target")
+    if set(target_specs) - name_set:
+        raise ValueError(f"configured memory target absent from generated topology: {sorted(set(target_specs) - name_set)}")
     nodes = []
     for item in sorted(instances, key=lambda node: node["name"]):
+        info = dict(item.get("info") or {})
+        target = target_specs.get(item["name"])
+        if target is not None:
+            backend = (target.get("simulation") or {}).get("backend")
+            info["memory_integration"] = {
+                "kind": target["kind"],
+                "controller_profile": target.get("controller"),
+                "soc_backend": backend,
+                "integration": ("behavioral_axi_ram" if backend == "axi_ram"
+                                else "configured_other_backend"),
+                "evidence": "soc_yaml_and_generated_rtl_contract",
+            }
         # Never carry legacy 3D x/y/z positions into the new view.
         nodes.append({"id": item["name"], "module": item["module"],
-                      "kind": (item.get("info") or {}).get("kind", "rtl_or_boundary"),
+                      "kind": info.get("kind", "rtl_or_boundary"),
                       "groups": memberships[item["name"]],
-                      "info": item.get("info", {})})
+                      "info": info})
 
     edges = []
     seen = set()
