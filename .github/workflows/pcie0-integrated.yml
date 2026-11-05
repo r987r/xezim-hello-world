@@ -3,7 +3,7 @@ name: PCIe0 integrated real bridge and generated local FlooNoC
 on:
   pull_request:
     branches: [agent/38-subsystem-registry-bringup, main]
-    paths: ['dv/pcie0/**', 'tests/test_pcie*', 'tools/full_chip_gen.py', 'tools/chip_bootgen.py', '.github/workflows/pcie0-integrated.yml']
+    paths: ['dv/pcie0/**', 'tests/test_pcie*', 'tools/full_chip_gen.py', 'tools/chip_bootgen.py', 'tools/pcie_chip.py', 'config/regression.yaml', '.github/workflows/pcie0-integrated.yml']
   workflow_dispatch:
 
 permissions: {contents: read}
@@ -44,6 +44,10 @@ jobs:
           make check-generated
       - name: PCIe TLP -> PCIe0 FlooNoC -> real PULP SRAM
         run: python3 dv/pcie0/run_noc_smoke.py
+      - name: Joint CPU0 cold boot and modeled PCIe Root Complex phase handshake
+        run: |
+          python3 -m unittest tests.test_pcie_host_phase -v
+          python3 tools/regress.py chip-pcie-host
       - name: Preserve build, Cocotb XML and raw transaction logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -51,5 +55,7 @@ jobs:
           name: pcie0-dedicated-noc-${{ github.run_id }}
           path: |
             .tools/pcie0/noc_build/
+            .tools/pcie0/full_chip_build/
+            .tools/regression/chip-pcie-host/
           include-hidden-files: true
           if-no-files-found: warn
