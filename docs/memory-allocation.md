@@ -142,3 +142,40 @@ latency. Report the access method and backing model in every run artifact.
 Minimum reference sweep: 64 B, 4 KiB, 64 KiB and the largest supported
 modeled size, with \`strict\`, \`hybrid\`, \`fast\`. Mark unsupported method/
 backing combinations explicitly instead of silently falling back.
+
+## Common memory INIT/CHECK service (incremental)
+
+The new tools/memory_service.py reuses physical-region allocations from tools/memory_plan.py.
+Allocation NEVER implicitly initializes memory. Explicit initialize() and check() accept
+a deterministic Pattern and bounded chunk size. An initialized-range tracker rejects
+checks of untouched bytes. Events separately record INIT/CHECK wall time, method,
+bytes and optional simulator cycles.
+
+| Policy | INIT | CHECK | Requirements |
+| --- | --- | --- | --- |
+| strict | CPU / AXI frontdoor | CPU / AXI frontdoor | Explicit authorized initiator |
+| fast | Verified backdoor | Verified backdoor | Cross-checked backing mapping |
+| hybrid | Verified backdoor | Full backdoor and sampled frontdoor | Both paths |
+| auto | Fastest validated method | Same | Fails if no validated access |
+
+HostSparseMemory reuses cocotbext-axi sparse storage without custom RTL;
+AxiFrontdoor wraps an EXISTING authorized BFM without attaching one.
+CombinedMemoryProvider must pass quiescent two-way frontdoor/backdoor
+consistency and scratch-restoration checks before enabling fast/hybrid.
+Do not attach an active AXI BFM to CPU-DMA mirrored response signals.
+These Python providers do not yet implement a PULP tc_sram DPI backdoor,
+the LiteDRAM/DFI bank mapping, or a live CPU simulation-service mailbox.
+Those require separately reviewed adapters and RTL tests.
+
+The matching sw/common/memory_pattern.[ch] and Python Pattern use byte-identical
+counter8, constant and address_xor recipes with a 32-bit seed and 64-bit physical
+addresses. C fills/checks only CPU-visible bytes; it never dereferences HBM/DDR.
+
+### Benchmarks
+
+Run python3 tools/memory_benchmark.py --out .tools/benchmarks/memory.json
+for the current synthetic interface baseline at 64 B, 4 KiB and 64 KiB.
+The JSON source is synthetic_bytes_not_rtl. Do NOT call these values measured
+RTL/DPI/AXI speedups. Real provider benchmarks will collect equal-case INIT
+and CHECK wall time, simulator cycles, host RSS, access method and AXI traffic.
+Strict frontdoor tests remain mandatory even when fast/hybrid becomes default.
