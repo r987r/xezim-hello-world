@@ -1,11 +1,12 @@
 <div class="eyebrow">Architecture-derived endpoint contracts · address decode · test evidence</div>
 <h1>Fabric Explorer</h1>
 <p class="lede">Inspect every NoC boundary, initiator-to-target reachability and the exact upstream-generated XY router path. The two planes and their source/target permissions stay separate.</p>
-<div class="notice"><strong>Timing semantics:</strong> router counts are structural, not clock-cycle delays. Where a clean controlled one-beat trace matches this site's source SHA, the measured AXI boundary deltas break down request/response time per mesh and terminal AXI service. Router-internal hop cycles and isolated DDR/HBM device latency are not measured. The optional iDMA engines are connected in the generated RTL and verified with behavioral DDR/HBM targets; physical controllers and CPU DMA firmware are not integrated.</div>
-<div class="actions"><a href="topology.html">One architecture diagram</a><a href="data/fabric.json">Download fabric report JSON</a><a href="config/interface_contracts.yaml">Sizing contracts</a><a href="gen/supernoc/manifest.json">Wired route manifest</a></div>
+<div class="notice"><strong>Timing semantics:</strong> router counts are structural, not clock-cycle delays. Where a clean controlled one-beat trace matches this site's source SHA, the measured AXI boundary deltas break down request/response time per mesh and terminal AXI service. Router-internal hop cycles and isolated DDR/HBM device latency are not measured. The real PULP iDMA engines are connected in the generated RTL and exercised in chip-dma mode; the chip-cpu-dma variant provides the CPU-programmed DMA path. DDR/HBM remain AXI SRAM models in the full-chip topology; DDR4 LiteDRAM is verified separately, not yet substituted for the full-chip DDR target.</div>
+<div class="actions"><a href="explorer.html">Interactive chip → subsystem → NoC topology</a><a href="data/fabric.json">Download fabric report JSON</a><a href="config/interface_contracts.yaml">Sizing contracts</a><a href="gen/supernoc/manifest.json">Wired route manifest</a></div>
 <div class="grid" id="fabric-facts"></div>
 <div class="grid" style="align-items:end"><label>Fabric plane <select id="fabric-plane"><option value="data">Data (AXI4)</option><option value="config">Configuration (AXI4 transport)</option></select></label><label>Filter by endpoint, subsystem or target <input id="fabric-search" type="search" placeholder="e.g. compute0, sram, hbm0" autocomplete="off"></label></div>
 <h2>Route-by-route latency in reference clock cycles</h2>
+<p id="fabric-evidence-coverage" class="muted" role="status" aria-live="polite"></p>
 <p class="muted" id="fabric-reference-clock">Reference clock: awaiting measured simulation evidence.</p>
 <p class="muted fabric-desktop-explainer">One row per initiator → target. Each NoC column covers the measured AXI ingress-to-egress request <em>plus</em> response delay; target R and W service is measured at the last observed target-facing AXI port, including any downstream crossbar/model delay. Cells show <strong>min / avg / max</strong> over serial one-beat samples, followed by n. Clock normalization uses the measured testbench period (10 ns in current simulations), <em>not</em> an assumed physical implementation frequency. — means this block is not on the route or the operation is not permitted; “unmeasured” means the route exists but eligible verified RTL-equivalent evidence is missing. Independent stage minima/maxima need not sum to end-to-end extrema (averages sum for the same paired samples).</p>
 <p class="muted fabric-mobile-explainer">Tap a route for its per-NoC read/write latency. Values are <strong>min / avg / max cycles</strong> from real one-beat AXI traces (n = sample count). Unreachable paths can be shown separately; missing measurements are never displayed as zero.</p>
@@ -125,6 +126,19 @@ for(const [name,value] of Object.entries(report.summary)){
 }
 function visible(s){return s.toLowerCase().includes(search.value.trim().toLowerCase())}
 const latency=report.latency_table||{mesh_columns:{data:[],config:[]},rows:[]};
+const coverage=latency.evidence_coverage||null;
+if(coverage){
+  const n=coverage.current_measured_routes||0;
+  const hist=coverage.historical_observations||0;
+  byId('fabric-evidence-coverage').textContent=
+    n
+    ?n+' source-verified routes measured on the current RTL/DV inputs ('+
+       coverage.current_stage_observations+' qualified per-operation stage records).'
+    :hist
+      ?'Current RTL latency unavailable. '+hist+
+         ' historical AXI observations are retained in past run reports, but the RTL/DV execution fingerprints do not match this published revision. A new serial one-beat NoC capture is required.'
+      :'No verified AXI baseline traces have been collected for this RTL/DV revision.';
+}
 const fmt=x=>Number.isInteger(x)?String(x):Number(x).toFixed(2).replace(/0+$/,'').replace(/\.$/,'');
 const ref=latency.reference_clock;
 byId('fabric-reference-clock').textContent=(ref&&ref.measured_period_ps)?
