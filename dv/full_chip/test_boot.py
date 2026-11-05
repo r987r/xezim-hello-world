@@ -11,13 +11,16 @@ from cocotb.triggers import FallingEdge, RisingEdge, Timer, with_timeout
 from cocotb.result import SimTimeoutError
 from cocotbext.axi import AxiBus, AxiMaster
 from dv.common.axi_trace import attach_observers, expect_axi_response, trace_phase
+from dv.common.test_flow import attach_from_plan, close_active
+from cocotb.utils import get_sim_time
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
 async def phase(dut, signal, name):
     timeout = 5 if os.environ.get('SOC_CPU_DMA_MODE') == '1' else 1
-    await with_timeout(RisingEdge(signal), timeout, 'ms')
+    if int(signal.value) != 1:
+        await with_timeout(RisingEdge(signal), timeout, 'ms')
     dut._log.info('observed firmware phase %s complete', name)
     trace_phase('CPU '+name+' complete')
 
@@ -38,7 +41,25 @@ async def memory_transaction(dut, operation):
 
 @cocotb.test()
 async def coordinated_cold_boot(dut):
-    manifest = json.loads((ROOT/'gen/chip/firmware.json').read_text())
+    await execute_cold_boot(dut)
+
+
+async def execute_cold_boot(dut, *, external=None):
+    if external not in (None,"pcie0"):
+        raise ValueError("unsupported shared test participant")
+    plan=os.environ.get("SOC_RUN_PLAN")
+    if external:
+        if not plan:
+            raise AssertionError("no shared regression plan")
+        firmware=Path(plan).parent/"variant"/"firmware.json"
+    else:
+        firmware=ROOT/"gen/chip/firmware.json"
+    manifest=json.loads(firmware.read_text())
+    flow = attach_from_plan(lambda:int(get_sim_time(units="ps"))) if external else None
+    host = None
+    if external=="pcie0":
+        from dv.pcie0.host_adapter import PcieHostParticipant
+        host=PcieHostParticipant(flow,manifest)
     memory = json.loads((ROOT/'gen/chip/manifest.json').read_text())['memory_models']
     cpu_dma_mode = os.environ.get('SOC_CPU_DMA_MODE') == '1'
     # The probe outputs mirror the *real iDMA response* when DmaEnable=1
@@ -47,18 +68,28 @@ async def coordinated_cold_boot(dut):
     # (ID=7), raising cocotbext-axi "unexpected burst ID". In this mode
     # the probe is an observation port only: NEVER attach an active agent.
     probe = None
-    if not cpu_dma_mode:
+    if not cpu_dma_mode and host is None:
         probe = AxiMaster(AxiBus.from_prefix(dut, 'probe'), dut.clk,
                           dut.rst_n, reset_active_level=False)
     dut.rst_n.value = 0
+    if host is not None:
+        dut.completer_id.value=0
+        dut.max_payload_size.value=0
     attach_observers(dut)
     cocotb.start_soon(Clock(dut.clk, 10, 'ns').start())
     for _ in range(10):
         await FallingEdge(dut.clk)
     dut.rst_n.value = 1
-    await phase(dut, dut.init_complete, 'init')
-    await phase(dut, dut.run_complete, 'run')
-    await phase(dut, dut.check_complete, 'check')
+    if host is not None:
+        await host.setup(dut)
+    for name, signal in (("init",dut.init_complete),("run",dut.run_complete),
+                         ("check",dut.check_complete)):
+        if host is not None:
+            await host.before_phase(name)
+            with flow.step(name,"cpu0",name+"_complete",origin="checker"):
+                await phase(dut,signal,name)
+        else:
+            await phase(dut,signal,name)
     await Timer(1, 'ns')
     assert int(dut.pass_flag.value) == 1
     mask = (1 << len(manifest['cores'])) - 1
@@ -66,6 +97,11 @@ async def coordinated_cold_boot(dut):
     assert int(dut.hello_mask.value) == mask
     assert int(dut.check_mask.value) == mask
     assert int(dut.app_fetch.value) == mask
+    if host is not None:
+        assert probe is None, "PCIe mode must not instantiate active CPU0 AXI BFM"
+        host.finish()
+        close_active()
+        return
     if cpu_dma_mode:
         assert probe is None  # a CPU-DMA run must never own the BFM port
         # Same testbench and INIT/RUN/CHECK checker; no AXI BFM drives the
