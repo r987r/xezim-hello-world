@@ -1,121 +1,86 @@
-# PCIe0 RC + CPU0: common INIT/RUN/CHECK and TestML-shaped integration
+# PCIe0: host participant in the existing INIT/RUN/CHECK framework
 
-## Current RTL truth
+This implementation is tracked in [draft PR #60](https://github.com/r987r/xezim-hello-world/pull/60),
+stacked on generator PR #53. It does **not** introduce another test runner,
+phase engine, TestML parser, or duplicate full-chip testbench.
 
-This stacked branch targets the already-generated PCIe0 subsystem from PR #53.
-The verification design uses **real pinned alexforencich verilog-pcie**
-`pcie_axi_master` TLP-to-AXI4 conversion, the **real generated PCIe0 local
-data FlooNoC**, existing global data/config FlooNoCs, a bounded real
-`axi_sram_target` backed by upstream PULP SRAM, and the standard CPU0+SERV
-boot/phase checker.
+## Verification layers and evidence
 
-**The Root Complex, Endpoint simulation link and enumeration are modeled**
-using `cocotbext-pcie`. There is no physical PCIe PHY, PIPE, LTSSM or board
-clock recovery here. Do not mislabel the test as PHY/link-training signoff.
-The PCIe0 local config NoC is real, but its controller CSR endpoint still
-returns an explicit AXI error because endpoint CSR RTL is not yet attached.
-PCIe0 outbound DMA, MSI/MSI-X, tag stress, link recovery and host-memory
-read/write remain follow-up verification tasks.
+- **Actual RTL:** pinned `pcie_axi_master` TLP→64-bit AXI4, independent
+  generated `pcie0_local_data` and `pcie0_local_config` FlooNoCs,
+  global data/config fabric, `axi_sram_target` and PULP `tc_sram`;
+  real PicoRV32/SERV boot firmware. The PCIe controller CSR is still
+  reserved and responds with AXI errors.
+- **Behavioral host:** `cocotbext-pcie` Root Complex and endpoint link
+  model; not a PHY, PIPE implementation, or real LTSSM.
+- **Single test owner:** `dv/full_chip/test_boot.py::execute_cold_boot`
+  controls *both* ordinary CPU tests and the PCIe0-host variant.
+- **External adapter:** `dv/pcie0/host_adapter.py` implements
+  enumeration, enabling BAR0, write/read/check, and acknowledgements.
+  It cannot advance CPU phases independently. The compatibility
+  selector `dv/pcie0/test_full_chip_host.py` merely invokes the shared
+  entrypoint.
+- **Execution:** `config/regression.yaml` test `chip-pcie-host`,
+  through existing `tools/regress.py`/Verilator/Cocotb, the established
+  generated SV checker, memory pattern model, passive AXI monitors,
+  and unified run explorer.
 
-## Reuse the existing execution methodology
+## End-to-end stage and ownership
 
-Executable entry point: `python3 tools/regress.py chip-pcie-host`.
-The `chip-pcie-host` entry in `config/regression.yaml` selects **the
-existing Cocotb/Verilator runner**, the same generated chip RTL and shared
-CPU0/CPU1 firmware coordinator, the existing passive AXI monitor catalog,
-and the single published run-report schema. `firmware_mode: pcie_host`
-generates the opt-in boot image and chip wrapper only inside
-`.tools/regression/chip-pcie-host/variant`. No cold writable SRAM is
-preloaded and tracked `gen/` remains unchanged.
-
-The test is split into actors with explicit resource ownership:
-
-| Actor | INIT | RUN | CHECK |
+| Stage | CPU coordinator and other CPUs | PCIe0 host participant | Independent checker |
 | --- | --- | --- | --- |
-| CPU0 RTL firmware | ROM-copy CPU images, release secondary, wait for CPU acks; publish device-ready to PCIe0 SRAM | Receive host init ack; publish host-run-enable; wait for host traffic completion | Wait for peer CPU ack; publish check-enable; wait for host check ack; write normal final CPU done marker |
-| CPU1 RTL firmware | Acknowledge normal boot/init | Execute existing hello/peer coordination | Acknowledge real CPU check |
-| Host RC model | Own RC topology, enumerate endpoint, enable function and BAR; poll device-ready then write host init ack through BAR | Wait for run-enable; issue TLP writes and reads; independently check returned bytes; write host-run ack | Wait for check-enable; verify no endpoint error and accepted SRAM traffic; write host check ack |
-| Common phase checker and passive AXI monitors | Observe actual CPU INIT and link transactions | Capture AXI4 AW/W/B/AR/R by source, destination, address, ID and response | Require CPU masks, CPU done, host acknowledgements and end-to-end payload matches |
+| INIT | CPU0 uses ROM/flash to start CPUs; CPU1 writes its ready mailbox; CPU0 emits `DEVICE_INIT_READY` to real remote PCIe0 SRAM over **Compute0 local → global data → PCIe0 local** | Root Complex enumerates and enables BAR0; observes ready by real BAR read, then writes host init acknowledgment | SV checker requires all CPU ready/config registers and emits actual RTL phase steps |
+| RUN | CPU0 waits for host acknowledgment before publishing RUN. CPU1 participates in normal hello/peer checks | Read RUN permission; four distinct BAR writes and four independent readbacks with address-based golden patterns; records every operation; write host RUN acknowledgment | PULP SRAM accepted-read/write counters, AXI monitor and independent data comparison |
+| CHECK | CPU0 waits for host check acknowledgment and final CPU peer checks | Waits for CHECK permission, writes acknowledgment through BAR, validates clean completion | CPU checker PASS, exact CPU masks, host markers, real SRAM path, and required-step report |
 
-The shared handshake occupies **PCIe0 SRAM bytes 0x800 through 0x817**,
-relative to `pcie0.sram` at `0x12000000` (variant-specific address is
-resolved from `config/soc.yaml`). CPU0 reaches it via
-compute0.local_data -> global_data -> pcie0.local_data -> SRAM. The host
-reaches those same bytes via BAR0 -> real pcie_axi_master ->
-pcie0.local_data -> SRAM. These are **frontdoor transactions**, not Cocotb
-forcing signals, preloading RAM or writing Python-only completion flags.
+Handshake addresses and constants are derived from the generated variant
+`firmware.json`, not manually preloaded into writable SRAM.
+The host phase mailbox is at the configured PCIe0 SRAM base + `0x800`
+for this test (currently `0x12000800`).
 
-The handshake consists of three CPU0-initiated pairs:
+The previously observed real CPU0 DecodeError for `0x12000800`
+came from compute-local FlooGen routes missing peripheral SRAM.
+Shared PR #53 now generates remote destinations from **all**
+compute/peripheral SRAM windows, with a fail-closed routing regression.
+PR #60 incorporates that regenerated RTL.
 
-1. INIT: `device_init_ready` at offset 0x800; host acknowledges at 0x804.
-2. RUN: `run_enable` at 0x808; host acknowledges completion at 0x80c.
-3. CHECK: `check_enable` at 0x810; host acknowledges checking at 0x814.
+The 512-byte CPU0 flash image is an opt-in variant under
+`.tools/regression/chip-pcie-host/variant`; standard 256-byte
+CPU boot and canonical checked-in `gen/` files are not overwritten.
 
-The existing CPU-only test retains its 256-byte flash image slot and default
-checker. Only this opt-in joint-actor variant explicitly authorizes a
-512-byte flash slot, still below the original mailbox/descriptor partition.
+## One step-report ABI for all sources
 
-## Proposed next TestML-level abstraction (not yet a generic interpreter)
+See [Canonical test-flow evidence](test-flow.md). Python host stimulus,
+actual SV firmware stage markers, and optional C firmware MMIO markers
+appear in one ordered `test-flow.json` and `test-flow.html`, linked
+from the existing AXI `report.html`. Each step is declared under
+`report.flow.required_steps` in **the same test YAML**.
+Missing, unregistered, duplicate, corrupt, or failed expected steps fail CI.
 
-Avoid a PCIe-only `run_test.py` architecture. Introduce declarative
-`config/testml/<scenario>.yaml` scenarios that the existing regression
-runner can pass to a shared phase engine. The engine should own phase
-barriers, actor activation, memory allocation/reservation, negative-case
-expectations, scoreboard and artifact metadata; adapters only implement
-transport-specific actions:
+The CPU C/iDMA test now uses the same ABI via
+`sw/common/test_flow.h`, an isolated CPU0 mailbox marker word, and
+the same AXI reporter. C statements are not considered RTL evidence
+unless the AXI monitor observes completed OKAY writes.
 
-```yaml
-schema_version: 1
-scenario: pcie0_host_bar_roundtrip
-transport: pcie
-actors:
-  cpu0: {kind: rtl_firmware, role: device_initializer}
-  host0: {kind: cocotb_pcie_rc, role: host_enumerator}
-  endpoint0: {kind: rtl_pcie_tlp_to_axi, subsystem: pcie0}
-phases:
-  init:
-    require: [cpu0_rom_boot, cpu1_init_ack, host0_enumeration, bar0_enabled]
-    barrier: device_init_ready_and_host_init_ack
-  run:
-    require: [host0_bar_write, host0_bar_read, pcie0_sram_axi_accept]
-    barrier: run_enable_and_host_run_ack
-  check:
-    require: [payload_scoreboard, cpu0_check, cpu1_check, host0_check]
-    barrier: check_enable_and_host_check_ack
-resources:
-  - {region: pcie0.sram, offset: 0x100, bytes: 128, owner: host0, phase: run}
-  - {region: pcie0.sram, offset: 0x800, bytes: 24, owner: shared_phase_mailbox, phase: all}
-reports: [axi_events, protocol_events, cpu_phase_timestamps, memory_operations]
+Non-instrumented legacy tests show **UNMEASURED** step coverage rather
+than incorrectly claiming every action was reported. This is an
+incremental migration gate, not a promise that all existing test
+drivers have already been instrumented.
+
+## Reproduce and acceptance
+
+```sh
+python3 -m unittest tests.test_test_flow tests.test_test_flow_cross_source -v
+python3 tools/regress.py chip-pcie-host
+python3 tools/regress.py chip-cpu-dma
 ```
 
-This YAML is an **API proposal**, not a claim that a generic TestML parser
-currently executes it. The executable `config/regression.yaml` remains
-authoritative in this PR. Prefer extracting the three handshake word pairs
-and host vector manifest into the shared schema in the follow-up, so CPU C
-or ROM firmware, host BFM and checker use the same generated ABI.
+Use `.github/workflows/pcie0-integrated.yml` for exact-head pinning,
+generated RTL drift checks, hosted RC smoke, and CPU C/iDMA phase tests.
+The unified artifact contains original AXI/protocol traces, pass/fail
+results, and the full step report.
 
-### Reuse with Ethernet0 and future interfaces
-
-The same actor/phase contract works when `host0` becomes a GMII/UDP peer,
-and `endpoint0` becomes Ethernet0 MAC + queue manager + AXI/stream DMA.
-Peripheral transport must not implicitly claim memory ownership; RX needs
-preposted destination descriptors before the host sends the first frame.
-The CPU0 INIT phase owns queue/buffer setup and programming; RUN can have
-asynchronous ingress at arbitrary times. Host and CPU0 CHECK must wait for
-queue drain, DMA completion and all packet/data scoreboards, not just an
-acknowledged host send.
-
-## Acceptance before marking the PCIe subsystem complete
-
-- Exact SHA from this stacked PR, green unit tests, generated code drift and real Verilator RTL simulation.
-- Both CPU0 and host ack through real NoCs/SRAM; missing/late host ack must time out.
-- At least four host BAR read/write vectors including unaligned partial writes,
-  with independent data reference and passive accepted SRAM counters.
-- Run-report metadata identifies the actual pcie0 host NoC initiator and shows
-  CPU0's remote phase stores at pcie0 SRAM, not an invented measurement.
-- The host and CPU checker report one success only after all three phases;
-  actual physical link training, outbound host DMA and controller CSR must
-  remain explicitly unverified until separate PRs demonstrate them.
-
-References: PR #51 (standalone bridge); PR #53 (generated PCIe0 fabrics);
-this stacked PR #60 (CPU/host integration); issues #36, #38, #41, #44.
+**Still separate from this scope:** silicon PCIe PHY/link recovery,
+upstream endpoint register RTL, outbound DMA to host memory, MSI/MSI-X,
+and full multiple-outstanding-tag stress. A modeled host enumeration
+is not a physical-link signoff.

@@ -94,6 +94,15 @@ firmware where relevant. Each attempt replaces
 that target's previous outputs. CI retains these artifacts on success
 and failure; preparation failures are failures even if no result is written.
 
+The optional strict `report.flow` contract uses the **same**
+`config/regression.yaml` and shared INIT/RUN/CHECK phase engine to
+enumerate every required actor/routine step. Python/Cocotb actions,
+accepted CPU C MMIO marker writes, and SV checker-observed firmware
+stages normalize into `test-flow.json` and `test-flow.html`, linked
+from the existing `report.html`. Omitted or failed steps fail CI;
+legacy tests not yet instrumented are labeled **UNMEASURED**, not
+silently counted as complete. See [step ABI and migration](test-flow.md).
+
 The NoC/chip cocotb targets also enable passive AXI capture through their
 YAML `report.axi` settings. Each produces a self-contained HTML explorer,
 raw JSONL events and versioned transaction JSON, including negative runs.
