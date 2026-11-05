@@ -1,0 +1,44 @@
+name: Ethernet integrated queue-descriptor-AXI write SRAM
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'rtl/io/ethernet0/ethernet_rx_queue_engine.v'
+      - 'rtl/io/ethernet0/ethernet_queue_ctrl.sv'
+      - 'rtl/io/ethernet0/ethernet_rx_desc_fetch.v'
+      - 'rtl/io/ethernet0/ethernet_rx_dma.v'
+      - 'dv/ethernet0/rx_queue_engine_tb.v'
+      - '.github/workflows/ethernet-rx-queue.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ethernet-integrated-queue
+  cancel-in-progress: true
+jobs:
+  queue-dma:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Icarus
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y iverilog
+      - name: Fetch exact pinned upstream AXI DMA and SRAM RTL
+        run: |
+          python3 -m pip install 'PyYAML==6.0.3'
+          python3 tools/ip_fetch.py verilog_axi
+      - name: Elaborate and simulate RTL queue, descriptor, SRAM DMA and CQ gate
+        run: |
+          set -euo pipefail
+          iverilog -g2012 -Wall -s ethernet_rx_queue_engine_tb -o /tmp/eth_queue_dma_tb \
+            rtl/io/ethernet0/ethernet_queue_ctrl.sv \
+            rtl/io/ethernet0/ethernet_rx_desc_fetch.v \
+            rtl/io/ethernet0/ethernet_rx_dma.v \
+            rtl/io/ethernet0/ethernet_rx_queue_engine.v \
+            dv/ethernet0/rx_queue_engine_tb.v \
+            .tools/verilog_axi/rtl/axi_dma_rd.v \
+            .tools/verilog_axi/rtl/axi_dma_wr.v \
+            .tools/verilog_axi/rtl/axi_ram.v
+          vvp /tmp/eth_queue_dma_tb
