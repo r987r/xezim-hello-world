@@ -15,7 +15,28 @@ const networkOf=id=>{for(const n of nets.keys())if(id.startsWith(n+"."))return n
 const networksOf=id=>[...nets.keys()].filter(n=>n.startsWith(id+"_"));
 const color=n=>n.includes("config")?C.config:C.data,clip=(s,n)=>String(s).length>n?String(s).slice(0,n-1)+"…":String(s);
 const short=id=>String(id).split(".").slice(-1)[0];
-const role=n=>n?.info?.ip||n?.info?.kind||n?.info?.model||n?.module||"RTL boundary";
+const actorFor=n=>{
+  const id=n?.id||"";
+  const p=g.profiles[profile.value]||{};
+  const actors=p.actors||{};
+  if(actors[id])return actors[id];
+  const m=id.match(/^([^.]+)\.(cpu|dma|sram|dma_csr|reset_ctrl|ctrl)$/);
+  if(!m)return null;
+  const suffix=m[2]==="dma_csr"?"dma_regs":m[2]==="ctrl"?"controller_regs":m[2];
+  return actors[m[1]+"_local_data."+suffix]||actors[m[1]+"_local_config."+suffix]||null;
+};
+const actorDisplay=n=>{
+  const actor=actorFor(n);
+  if(!actor)return null;
+  const kind=actor.kind||"";
+  if(kind==="verification_bfm")return "TEST BFM (substituted)";
+  if(kind==="rtl_dma")return "REAL RTL DMA · ACTIVE";
+  if(kind==="rtl_cpu")return "REAL RTL CPU";
+  if(kind==="verification_target")return "VERIFICATION TARGET";
+  if(kind==="rtl_model")return "RTL MODEL";
+  return actor.short_label||actor.label||kind;
+};
+const role=n=>actorDisplay(n)||(n?.info?.model?((n?.info?.kind||"Memory").toUpperCase()+" AXI model"):n?.info?.ip||n?.info?.kind||n?.module||"RTL boundary");
 const edgeType=e=>/config|csr|register|reset/i.test(e.from.instance+" "+e.to.instance+" "+e.name)?"config":"data";
 let current="chip",scope="",dims={w:1530,h:965},zoom=1,next=null;
 const elem=(t,attrs={},label)=>{const n=document.createElementNS(NS,t);Object.entries(attrs).forEach(([k,v])=>n.setAttribute(k,String(v)));if(label!==undefined)n.textContent=String(label);return n;};
@@ -60,7 +81,7 @@ function subBox(p,name,r){
   blocks.sort((a,b)=>{const i=kinds.indexOf(short(a.id)),j=kinds.indexOf(short(b.id));return(i<0?99:i)-(j<0?99:j)||a.id.localeCompare(b.id)});
   const top=r.y+65,netX=r.x+r.w*.55,netW=r.w*.4,blockX=r.x+17,blockW=r.w*.45;
   local.slice(0,2).forEach((net,i)=>netCard(content,net,netX,top+i*104,netW,78));
-  blocks.slice(0,5).forEach((n,i)=>card(content,blockX,top+i*59,blockW,50,short(n.id),role(n),C.ip,{title:n.id,kind:"RTL IP/boundary",source:n.info?.source,status:n.info?.status,instance:n.id}));
+  blocks.slice(0,5).forEach((n,i)=>card(content,blockX,top+i*59,blockW,50,short(n.id),role(n),C.ip,{title:n.id,kind:"RTL IP/boundary",source:n.info?.source,status:n.info?.status,instance:n.id,actor:actorFor(n)?.label||null,actor_status:actorFor(n)?.kind||"unregistered"}));
   g.edges.filter(e=>{
     const a=e.from.instance,b=e.to.instance;
     return (a.startsWith(name+".")&&networkOf(b)?.startsWith(name+"_"))||(b.startsWith(name+".")&&networkOf(a)?.startsWith(name+"_"));
@@ -267,8 +288,9 @@ plane.addEventListener("change",()=>navigate(current,scope));
 Object.keys(g.profiles).forEach(n=>{const o=document.createElement("option");o.value=n;o.textContent=n;profile.append(o)});
 profile.value=g.profiles["chip-dma"]?"chip-dma":Object.keys(g.profiles)[0];
 profile.addEventListener("change",()=>{
+  navigate(current,scope);
   const p=g.profiles[profile.value],count=Object.keys(p.actors||{}).length;
-  status.textContent="Test profile "+profile.value+" · "+(p.actor_catalog_status==="runtime_generated_not_available"?"actor metadata unavailable":count+" declared actors");
+  status.textContent="Test profile "+profile.value+" · "+(p.actor_catalog_status==="runtime_generated_not_available"?"runtime actor metadata not available":count+" declared actor roles");
 });
 const es=document.getElementById("ex-endpoint"),bs=document.getElementById("ex-bus"),fil=document.getElementById("ex-signal-filter"),tb=document.getElementById("ex-signal-rows"),lt=document.getElementById("ex-connection-rows");
 const sourceBase=(document.querySelector("footer a")?.href||"").replace("/tree/","/blob/").replace(/\/$/,"");
