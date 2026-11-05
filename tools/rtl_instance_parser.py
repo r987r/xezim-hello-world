@@ -218,10 +218,35 @@ def build(root=ROOT, *, slang="slang", sources=DEFAULT_SOURCES):
     top_instances = byname["soc_top"]["instances"]
     if not any(x["module"] == "soc_noc" for x in top_instances):
         raise ValueError("soc_top does not instantiate the parsed soc_noc")
+
+    # Validate each FlooGen network against a compiler-parsed RTL instance.
+    # Data and config networks are distinct, not a single display-only link.
+    manifest_file = root / "gen/noc/floonoc/manifest.json"
+    contract = {"expected_networks": [], "resolved_networks": [],
+                "missing_network_modules": [], "independent_planes": False}
+    if manifest_file.is_file():
+        manifest = json.loads(manifest_file.read_text())
+        expected = {name: record["top_module"]
+                    for name, record in manifest["networks"].items()}
+        found = {inst["module"] for inst in noc_instances}
+        contract["expected_networks"] = sorted(expected)
+        contract["resolved_networks"] = sorted(
+            name for name, typ in expected.items() if typ in found)
+        contract["missing_network_modules"] = sorted(
+            name for name, typ in expected.items() if typ not in found)
+        contract["independent_planes"] = (
+            all(any(n.endswith("_"+plane) for n in contract["resolved_networks"])
+                for plane in ("data", "config")))
+        if contract["missing_network_modules"]:
+            raise ValueError("FlooGen modules absent from parsed soc_noc: "
+                             + ", ".join(contract["missing_network_modules"]))
+        if not contract["independent_planes"]:
+            raise ValueError("data and configuration NoCs must be independent")
     return {"schema_version": 1, "producer": "slang",
             "evidence": "compiler_parsed_rtl_not_elaborated",
             "profile_specific_elaboration_proven": False,
             "source_sha256": checksums, "modules": modules,
+            "fabric_contract": contract,
             "summary": {"modules": len(modules),
                         "instances": sum(len(x["instances"]) for x in modules),
                         "noc_instances": len(noc_instances),
