@@ -30,14 +30,26 @@ const actorDisplay=n=>{
   const actor=actorFor(n);
   if(!actor)return null;
   const kind=actor.kind||"";
-  if(kind==="verification_bfm")return "TEST BFM (substituted)";
-  if(kind==="rtl_dma")return "REAL RTL DMA · ACTIVE";
-  if(kind==="rtl_cpu")return "REAL RTL CPU";
-  if(kind==="verification_target")return "VERIFICATION TARGET";
-  if(kind==="rtl_model")return "RTL MODEL";
+  if(kind==="verification_bfm")return "AXI verification BFM (test mode)";
+  if(kind==="rtl_dma")return "Real PULP iDMA RTL (DMA mode)";
+  if(kind==="rtl_cpu")return actor.short_label||"Real RTL CPU";
+  if(kind==="rtl_registers")return "Real RTL CSR/register bank";
+  if(kind==="reserved_idle")return "Reserved/disabled (this test mode)";
+  if(kind==="reserved_error")return "DECERR placeholder (this test mode)";
+  if(kind==="verification_target")return "Verification-only target";
+  if(kind==="rtl_model")return actor.short_label||"RTL memory/ROM model";
   return actor.short_label||actor.label||kind;
 };
-const role=n=>actorDisplay(n)||(n?.info?.model?((n?.info?.kind||"Memory").toUpperCase()+" AXI model"):n?.info?.ip||n?.info?.kind||n?.module||"RTL boundary");
+const role=n=>{
+  const mem=n?.info?.memory_integration;
+  if(mem){
+    const name=String(mem.kind||"memory").toUpperCase();
+    return mem.soc_backend==="axi_ram"
+      ?name+" · AXI RAM model in SoC"
+      :name+" · "+String(mem.soc_backend||"unresolved")+" SoC backend";
+  }
+  return actorDisplay(n)||(n?.info?.ip||n?.info?.kind||n?.module||"RTL boundary");
+};
 const edgeType=e=>{
   // Determine the plane from the *generated NoC membership*, never by
   // substrings in an endpoint name (e.g. reset registers are not NoCs).
@@ -262,6 +274,16 @@ function inspect(item,dest){
     element.textContent="slang CST: "+rtlMatch.module+" "+rtlMatch.name+" ("+rtlMatch.port_count+" ports)";
     facts.append(element);
   }
+  const sourceNode=nodes.get(item.instance||item.title);
+  const memContract=sourceNode?.info?.memory_integration;
+  if(memContract){
+    const label=document.createElement("p");
+    label.className="muted";
+    label.textContent="SoC implementation: "+memContract.soc_backend+
+       " · configured controller profile: "+(memContract.controller_profile||"none")+
+       " (configuration is not physical controller integration)";
+    facts.append(label);
+  }
   const ep=inventory.endpoints[item.instance||item.title];
   if(ep){const b=document.createElement("button");b.textContent="Inspect "+ep.signals.length+" RTL signal ports";b.addEventListener("click",()=>pickEndpoint(item.instance||item.title));document.getElementById("arch-inspect-links").append(b)}
   open.hidden=!next;
@@ -307,7 +329,7 @@ profile.value=g.profiles["chip-dma"]?"chip-dma":Object.keys(g.profiles)[0];
 profile.addEventListener("change",()=>{
   navigate(current,scope);
   const p=g.profiles[profile.value],count=Object.keys(p.actors||{}).length;
-  status.textContent="Test profile "+profile.value+" · "+(p.actor_catalog_status==="runtime_generated_not_available"?"runtime actor metadata not available":count+" declared actor roles");
+  status.textContent="Test profile "+profile.value+" · "+(p.actor_catalog_status==="runtime_generated_not_available"?"run-generated actor manifest unavailable; composition is not execution proof":count+" declared actor roles · no runtime activity claimed");
 });
 const es=document.getElementById("ex-endpoint"),bs=document.getElementById("ex-bus"),fil=document.getElementById("ex-signal-filter"),tb=document.getElementById("ex-signal-rows"),lt=document.getElementById("ex-connection-rows");
 const sourceBase=(document.querySelector("footer a")?.href||"").replace("/tree/","/blob/").replace(/\/$/,"");
