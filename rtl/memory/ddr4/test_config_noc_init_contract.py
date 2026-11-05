@@ -90,6 +90,28 @@ class DDRBConfigNoCContractTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "exceeds Config NoC"):
             self.run_contract()
 
+    def test_proposed_16k_window_is_explicit_and_not_marked_integrated(self):
+        report = compile_transport(self.soc, self.plan, self.csr,
+                                   proposed_window_bytes=0x4000)
+        self.assertEqual(report["configured_window_bytes"], 4096)
+        self.assertEqual(report["proposed_window_bytes"], 16384)
+        self.assertEqual(report["status"], "proposed_aperture_not_in_soc")
+        self.assertTrue(report["requires_config_change"])
+        self.assertFalse(report["ready_for_full_chip"])
+        self.assertTrue(report["requires_hardware_translator"])
+        self.assertEqual(report["actions"][0]["config_addr"], 0x40030000)
+
+    def test_proposed_window_must_not_overlap_other_config_regions(self):
+        self.soc["address_map"]["config"].append(
+            {"name": "next_peripheral.ctrl", "base": "0x40032000",
+             "size": "0x1000"})
+        with self.assertRaisesRegex(ValueError, "overlaps"):
+            compile_transport(self.soc, self.plan, self.csr,
+                              proposed_window_bytes=0x4000)
+        with self.assertRaisesRegex(ValueError, "enlarge"):
+            compile_transport(self.soc, self.plan, self.csr,
+                              proposed_window_bytes=0x1000)
+
     def test_explicit_translator_alignment_and_pin_width_checked(self):
         with self.assertRaisesRegex(ValueError, "not aligned"):
             compile_transport(self.soc, self.plan, self.csr,
