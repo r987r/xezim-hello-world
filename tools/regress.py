@@ -83,7 +83,7 @@ def load_config(path):
                 raise ValueError(f'{name}: invalid protocol report configuration for cocotb-verilator')
             if 'flow' in report:
                 flow = report['flow']
-                if not isinstance(flow, dict) or not {'required_steps'} <= set(flow) or set(flow)-{'required_steps','firmware_mmio'}:
+                if not isinstance(flow, dict) or not {'required_steps'} <= set(flow) or set(flow)-{'required_steps','firmware_mmio','required_origins'}:
                     raise ValueError(f'{name}: invalid test-flow configuration')
                 flow_required = flow['required_steps']
                 if (not isinstance(flow_required, dict) or set(flow_required) != {'init','run','check'} or
@@ -91,6 +91,15 @@ def load_config(path):
                             any(not isinstance(s, str) or not re.fullmatch(r'[a-z][a-z0-9_.-]*\.[a-z][a-z0-9_.-]*', s)
                                 for s in items) for items in flow_required.values())):
                     raise ValueError(f'{name}: invalid required test-flow steps')
+                if 'required_origins' in flow:
+                    from dv.common.test_flow import ORIGINS
+                    origins=flow['required_origins']
+                    if (not isinstance(origins,dict) or set(origins)-set(flow_required)
+                            or any(not isinstance(mapping,dict) or
+                                   any(item not in flow_required[phase] or origin not in ORIGINS
+                                       for item,origin in mapping.items())
+                                   for phase,mapping in origins.items())):
+                        raise ValueError(f'{name}: invalid required step provenance')
                 if 'firmware_mmio' in flow:
                     fw = flow['firmware_mmio']
                     if (not isinstance(fw,dict) or set(fw) != {'monitor','address','actors','steps'}
@@ -482,6 +491,11 @@ def run_target(name, test, resolver, options):
                 results.append({'name':'test-flow evidence','passed':False,
                                 'reason':'missing, failed, incomplete or undeclared INIT/RUN/CHECK steps'})
                 print(f'FAIL {name}/test-flow: {flow_result["issues"][:8]}',flush=True)
+        # The run artifact is finalized only after the step-flow gate:
+        # previously the AXI/protocol JSON embedded stale 'unmeasured'.
+        if 'flow' in test['report']:
+            import protocol_report
+            protocol_report.finalize_run(out, result)
         print(f'REPORT {name}: {summary["transactions"]} observations; {out.relative_to(ROOT)}/report.html',flush=True)
     (out/'result.json').write_text(json.dumps(result, indent=2) + '\n')
     return passed
