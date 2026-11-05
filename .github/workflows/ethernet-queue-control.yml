@@ -1,0 +1,35 @@
+name: Ethernet Queue Control RTL and ABI
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'rtl/io/ethernet0/ethernet_queue_ctrl.sv'
+      - 'dv/ethernet0/queue_ctrl_tb.sv'
+      - 'sw/ethernet/**'
+      - 'tests/test_eth_queue_abi.py'
+      - '.github/workflows/ethernet-queue-control.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ethernet-queue-control
+  cancel-in-progress: true
+jobs:
+  queue:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+      - name: Install Icarus
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y iverilog
+      - name: Compile queue driver
+        run: cc -std=c11 -Wall -Wextra -Werror -pedantic -Isw/ethernet -c sw/ethernet/eth_queue.c -o /tmp/eth_queue.o
+      - name: Check C and RTL ABI
+        run: python3 -m unittest tests.test_eth_queue_abi -v
+      - name: Run real queue-controller RTL test
+        run: |
+          iverilog -g2012 -Wall -s ethernet_queue_ctrl_tb -o /tmp/ethq rtl/io/ethernet0/ethernet_queue_ctrl.sv dv/ethernet0/queue_ctrl_tb.sv
+          vvp /tmp/ethq
