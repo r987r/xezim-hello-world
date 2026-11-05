@@ -60,27 +60,77 @@ module pcie_noc_tb (
  logic m_axi_rlast;
  logic m_axi_rvalid;
  logic m_axi_rready;
-  logic [1:0] sram_valid, sram_write;
-  logic [127:0] sram_addr, sram_data;
-  logic [15:0] sram_strb;
+
+  // One actual generated FlooNoC: use CPU0's 64-bit initiator NI strictly
+  // as a temporary PCIe endpoint source. This is not the future PCIe0 NoC.
+  floo_xezim_compute0_local_data_noc_pkg::axi_in_req_t pcie_req;
+  floo_xezim_compute0_local_data_noc_pkg::axi_in_rsp_t pcie_rsp;
+  floo_xezim_compute0_local_data_noc_pkg::axi_out_req_t sram_req;
+  floo_xezim_compute0_local_data_noc_pkg::axi_out_rsp_t sram_rsp;
+  logic mem_valid, mem_write;
+  logic [63:0] mem_addr, mem_data;
+  logic [7:0] mem_strb;
 
   always_ff @(posedge clk or posedge rst) begin
     if (rst) begin
-      sram_write_count <= '0;
-      sram_read_count <= '0;
-      sram_last_write_addr <= '0;
-      sram_last_read_addr <= '0;
-    end else begin
-      if (sram_valid[0] && sram_write[0]) begin
+      sram_write_count <= 0;
+      sram_read_count <= 0;
+      sram_last_write_addr <= 0;
+      sram_last_read_addr <= 0;
+    end else if (mem_valid) begin
+      if (mem_write) begin
         sram_write_count <= sram_write_count + 1;
-        sram_last_write_addr <= sram_addr[0 +: 64];
-      end
-      if (sram_valid[0] && !sram_write[0]) begin
+        sram_last_write_addr <= mem_addr;
+      end else begin
         sram_read_count <= sram_read_count + 1;
-        sram_last_read_addr <= sram_addr[0 +: 64];
+        sram_last_read_addr <= mem_addr;
       end
     end
   end
+
+  assign pcie_req.aw.id = m_axi_awid;
+  assign pcie_req.aw.addr = m_axi_awaddr;
+  assign pcie_req.aw.len = m_axi_awlen;
+  assign pcie_req.aw.size = m_axi_awsize;
+  assign pcie_req.aw.burst = m_axi_awburst;
+  assign pcie_req.aw.lock = m_axi_awlock;
+  assign pcie_req.aw.cache = m_axi_awcache;
+  assign pcie_req.aw.prot = m_axi_awprot;
+  assign pcie_req.w.data = m_axi_wdata;
+  assign pcie_req.w.strb = m_axi_wstrb;
+  assign pcie_req.w.last = m_axi_wlast;
+  assign pcie_req.ar.id = m_axi_arid;
+  assign pcie_req.ar.addr = m_axi_araddr;
+  assign pcie_req.ar.len = m_axi_arlen;
+  assign pcie_req.ar.size = m_axi_arsize;
+  assign pcie_req.ar.burst = m_axi_arburst;
+  assign pcie_req.ar.lock = m_axi_arlock;
+  assign pcie_req.ar.cache = m_axi_arcache;
+  assign pcie_req.ar.prot = m_axi_arprot;
+  assign pcie_req.aw.qos = '0;
+  assign pcie_req.aw.region = '0;
+  assign pcie_req.aw.user = '0;
+  assign pcie_req.ar.qos = '0;
+  assign pcie_req.ar.region = '0;
+  assign pcie_req.ar.user = '0;
+  assign pcie_req.aw.atop = '0;
+  assign pcie_req.w.user = '0;
+  assign pcie_req.aw_valid = m_axi_awvalid;
+  assign pcie_req.w_valid = m_axi_wvalid;
+  assign pcie_req.ar_valid = m_axi_arvalid;
+  assign pcie_req.b_ready = m_axi_bready;
+  assign pcie_req.r_ready = m_axi_rready;
+  assign m_axi_awready = pcie_rsp.aw_ready;
+  assign m_axi_wready = pcie_rsp.w_ready;
+  assign m_axi_arready = pcie_rsp.ar_ready;
+  assign m_axi_bvalid = pcie_rsp.b_valid;
+  assign m_axi_rvalid = pcie_rsp.r_valid;
+  assign m_axi_bid = pcie_rsp.b.id;
+  assign m_axi_bresp = pcie_rsp.b.resp;
+  assign m_axi_rid = pcie_rsp.r.id;
+  assign m_axi_rdata = pcie_rsp.r.data;
+  assign m_axi_rresp = pcie_rsp.r.resp;
+  assign m_axi_rlast = pcie_rsp.r.last;
 
   pcie_axi_master #(
     .TLP_DATA_WIDTH(64), .TLP_STRB_WIDTH(2), .TLP_HDR_WIDTH(128),
@@ -143,100 +193,30 @@ module pcie_noc_tb (
     .status_error_uncor(status_error_uncor)
   );
   // DmaTestMode exclusively connects the source to CPU0's real data NI.
-  // ProbeEnable=0 guarantees the disabled DMA NI remains inactive.
-  soc_top #(.ProbeEnable(1'b0), .DmaEnable(1'b0), .DmaTestMode(1'b1)) u_soc (
-    .clk_i(clk),
-    .rst_ni(~rst),
-    .hold_mask_i(2'b11),
-    .dma_irq_o(),
-    .dma_irq_pending_o(),
-    .released_o(),
-    .fetch_valid_o(),
-    .fetch_addr_o(),
-    .sram_valid_o(sram_valid),
-    .sram_write_o(sram_write),
-    .sram_addr_o(sram_addr),
-    .sram_data_o(sram_data),
-    .sram_strb_o(sram_strb),
-    .rom_reads_o(),
-    .flash_reads_o(),
-    .probe_awid(m_axi_awid),
-    .probe_awaddr(m_axi_awaddr),
-    .probe_awlen(m_axi_awlen),
-    .probe_awsize(m_axi_awsize),
-    .probe_awburst(m_axi_awburst),
-    .probe_awlock(m_axi_awlock),
-    .probe_awcache(m_axi_awcache),
-    .probe_awprot(m_axi_awprot),
-    .probe_awqos('0),
-    .probe_awregion('0),
-    .probe_awvalid(m_axi_awvalid),
-    .probe_awready(m_axi_awready),
-    .probe_wdata(m_axi_wdata),
-    .probe_wstrb(m_axi_wstrb),
-    .probe_wlast(m_axi_wlast),
-    .probe_wvalid(m_axi_wvalid),
-    .probe_wready(m_axi_wready),
-    .probe_bid(m_axi_bid),
-    .probe_bresp(m_axi_bresp),
-    .probe_bvalid(m_axi_bvalid),
-    .probe_bready(m_axi_bready),
-    .probe_arid(m_axi_arid),
-    .probe_araddr(m_axi_araddr),
-    .probe_arlen(m_axi_arlen),
-    .probe_arsize(m_axi_arsize),
-    .probe_arburst(m_axi_arburst),
-    .probe_arlock(m_axi_arlock),
-    .probe_arcache(m_axi_arcache),
-    .probe_arprot(m_axi_arprot),
-    .probe_arqos('0),
-    .probe_arregion('0),
-    .probe_arvalid(m_axi_arvalid),
-    .probe_arready(m_axi_arready),
-    .probe_rid(m_axi_rid),
-    .probe_rdata(m_axi_rdata),
-    .probe_rresp(m_axi_rresp),
-    .probe_rlast(m_axi_rlast),
-    .probe_rvalid(m_axi_rvalid),
-    .probe_rready(m_axi_rready),
-    .cfgprobe_awid('0),
-    .cfgprobe_awaddr('0),
-    .cfgprobe_awlen('0),
-    .cfgprobe_awsize('0),
-    .cfgprobe_awburst('0),
-    .cfgprobe_awlock('0),
-    .cfgprobe_awcache('0),
-    .cfgprobe_awprot('0),
-    .cfgprobe_awqos('0),
-    .cfgprobe_awregion('0),
-    .cfgprobe_awvalid('0),
-    .cfgprobe_awready(),
-    .cfgprobe_wdata('0),
-    .cfgprobe_wstrb('0),
-    .cfgprobe_wlast('0),
-    .cfgprobe_wvalid('0),
-    .cfgprobe_wready(),
-    .cfgprobe_bid(),
-    .cfgprobe_bresp(),
-    .cfgprobe_bvalid(),
-    .cfgprobe_bready('0),
-    .cfgprobe_arid('0),
-    .cfgprobe_araddr('0),
-    .cfgprobe_arlen('0),
-    .cfgprobe_arsize('0),
-    .cfgprobe_arburst('0),
-    .cfgprobe_arlock('0),
-    .cfgprobe_arcache('0),
-    .cfgprobe_arprot('0),
-    .cfgprobe_arqos('0),
-    .cfgprobe_arregion('0),
-    .cfgprobe_arvalid('0),
-    .cfgprobe_arready(),
-    .cfgprobe_rid(),
-    .cfgprobe_rdata(),
-    .cfgprobe_rresp(),
-    .cfgprobe_rlast(),
-    .cfgprobe_rvalid(),
-    .cfgprobe_rready('0)
+
+  floo_xezim_compute0_local_data_noc u_noc (
+    .clk_i(clk), .rst_ni(~rst), .test_enable_i(1'b0),
+    .cpu_axi_in_req_i(pcie_req), .cpu_axi_in_rsp_o(pcie_rsp),
+    .dma_axi_in_req_i('0), .dma_axi_in_rsp_o(),
+    .global_in_axi_in_req_i('0), .global_in_axi_in_rsp_o(),
+    .sram_axi_out_req_o(sram_req), .sram_axi_out_rsp_i(sram_rsp),
+    .global_out_axi_out_req_o(), .global_out_axi_out_rsp_i('0),
+    .boot_rom_axi_out_req_o(), .boot_rom_axi_out_rsp_i('0),
+    .boot_flash_axi_out_req_o(), .boot_flash_axi_out_rsp_i('0)
+  );
+
+  axi_sram_target #(
+    .req_t(floo_xezim_compute0_local_data_noc_pkg::axi_out_req_t),
+    .rsp_t(floo_xezim_compute0_local_data_noc_pkg::axi_out_rsp_t),
+    .IdWidth(5),
+    .Base(64'h0000000010000000),
+    .Bytes(16384),
+    .ReadOnly(1'b0)
+  ) u_sram (
+    .clk_i(clk), .rst_ni(~rst),
+    .req_i(sram_req), .rsp_o(sram_rsp),
+    .mon_valid_o(mem_valid), .mon_write_o(mem_write),
+    .mon_addr_o(mem_addr), .mon_data_o(mem_data),
+    .mon_strb_o(mem_strb)
   );
 endmodule
