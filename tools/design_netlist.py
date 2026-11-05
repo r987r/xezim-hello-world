@@ -42,7 +42,7 @@ def analyze(root: Path, profile: str, mode: str, output: Path,
     if mode == "netlist":
         args += ["--save-netlist", str(output)]
     else:
-        args += ["--" + mode, "--format", "json", "-o", str(output)]
+        args += ["--" + mode, "--format", "json"]
     run = subprocess.run(args, cwd=root, capture_output=True, text=True, timeout=600,
                          check=False)
     if run.returncode:
@@ -50,6 +50,8 @@ def analyze(root: Path, profile: str, mode: str, output: Path,
             output.unlink()
         raise ValueError(f"{mode} failed for {profile} (exit {run.returncode}):\n"
                          + (run.stderr + "\n" + run.stdout)[-6000:])
+    if mode != "netlist":
+        output.write_text(run.stdout)
     if not output.is_file() or not output.stat().st_size:
         raise ValueError(f"{mode} returned no nonempty output for {profile}")
     try:

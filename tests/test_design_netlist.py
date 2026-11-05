@@ -38,9 +38,8 @@ class ExternalAdapterTests(unittest.TestCase):
         def run(argv, **kwargs):
             self.assertEqual(argv[1:5], ["--top", "fake_tb", "-f",
                                            str(self.root / ".tools/regression/fake/sources.f")])
-            self.assertEqual(argv[-1], str(outfile))
-            outfile.write_text('[{"name":"fake_tb.clk","direction":"input"}]')
-            return subprocess.CompletedProcess(argv, 0, "", "")
+            self.assertEqual(argv[-3:], ["--ports", "--format", "json"])
+            return subprocess.CompletedProcess(argv, 0, '[{"name":"fake_tb.clk","direction":"input"}]', "")
         with patch("design_netlist.shutil.which", return_value="/mock/slang-report"), \
              patch("design_netlist.subprocess.run", side_effect=run):
             meta = design_netlist.analyze(self.root, "fake", "ports", outfile)

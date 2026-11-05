@@ -27,6 +27,87 @@
 .ex-selected.ex-edge{stroke:#d97706;stroke-width:4;opacity:1}
 @media(max-width:820px){.ex-layout{grid-template-columns:1fr}.ex-scroll{min-height:380px}.ex-detail{min-height:130px}#ex-detail{max-height:200px}}
 </style>
+<div class="ex-signal-detail">
+<h2>Signals and bus channels</h2>
+<p class="muted">Physical port names, widths and directions are read from generated SystemVerilog. Bus grouping is inferred from the names, but the wiring between blocks is NOT yet traced through slang-netlist.</p>
+<div class="filters">
+<label>Endpoint <select id="ex-endpoint"></select></label>
+<label>Bus group <select id="ex-bus"></select></label>
+<label>Filter <input id="ex-signal-filter" placeholder="Signal name / channel"></label>
+</div>
+<p class="muted" id="ex-signal-status"></p>
+<div class="scroll"><table><thead><tr><th>RTL signal</th><th>Channel</th><th>Width</th><th>Direction</th><th>Source</th></tr></thead><tbody id="ex-signal-rows"></tbody></table></div>
+<h3>Neighboring block-to-block links</h3><p class="muted">Declared architectural links, not independently proven per-field netlist connections.</p>
+<div class="scroll"><table><thead><tr><th>From</th><th>To</th><th>Declared bus</th><th>Integration status</th></tr></thead><tbody id="ex-connection-rows"></tbody></table></div>
+</div>
+<style>
+.ex-signal-detail{margin:16px 0;padding:10px 14px;border:1px solid var(--line);border-radius:12px}
+.ex-signal-detail h2{margin:6px 0 12px}
+#ex-signal-rows td{font-size:12px}
+#ex-signal-rows td:first-child{font-family:ui-monospace,monospace;overflow-wrap:anywhere;max-width:360px}
+@media(max-width:650px){.ex-signal-detail{padding:10px}.ex-signal-detail select{max-width:calc(100vw - 80px)}}
+</style>
+<script type="application/json" id="ex-embedded-signals">__SIGNAL_DATA__</script>
+<script>
+(function(){
+"use strict";
+var inventory=JSON.parse(document.getElementById("ex-embedded-signals").textContent);
+var sel=document.getElementById("ex-endpoint"),bus=document.getElementById("ex-bus");
+var filter=document.getElementById("ex-signal-filter"),rows=document.getElementById("ex-signal-rows");
+var status=document.getElementById("ex-signal-status"),linkRows=document.getElementById("ex-connection-rows"),sourceBase=(document.querySelector("footer a")||{}).href||"";
+sourceBase=sourceBase.replace("/tree/","/blob/").replace(/\/$/,"");
+function option(select,value,label){var o=document.createElement("option");o.value=value;o.textContent=label;select.append(o)}
+option(sel,"__top__","Top-level clocks / resets / unbound");
+Object.keys(inventory.endpoints).sort().forEach(function(key){option(sel,key,key)});
+function choices(){
+ var ep=inventory.endpoints[sel.value],groups=ep?ep.protocols:{};
+ bus.replaceChildren();option(bus,"all","All channels / signals");
+ Object.keys(groups).sort().forEach(function(key){option(bus,key,key)});
+ draw();
+}
+function cell(tr,value,href){
+ var td=document.createElement("td"),node=href?document.createElement("a"):document.createElement("span");
+ node.textContent=String(value);if(href)node.href=href;td.append(node);tr.append(td);
+}
+function draw(){
+ var ep=inventory.endpoints[sel.value],filtered=filter.value.toLowerCase(),group=bus.value;
+ var list=(ep?ep.signals:inventory.unbound_ports).filter(function(item){
+  return (group==="all"||(item.protocol+":"+item.interface)===group)
+   && (!filtered||(item.name+" "+item.channel+" "+item.protocol).toLowerCase().includes(filtered));
+ });
+ rows.replaceChildren();
+ list.forEach(function(item){
+  var tr=document.createElement("tr");
+  cell(tr,item.name);cell(tr,item.channel);cell(tr,item.width);cell(tr,item.direction);
+  var source=String(item.location||""),match=source.match(/^(.*):(\d+):(\d+)$/);
+  var href=match&&sourceBase?sourceBase+"/"+match[1]+"#L"+match[2]:"";
+  cell(tr,source,href);rows.append(tr);
+ });
+ if(!list.length){var tr=document.createElement("tr"),td=document.createElement("td");td.colSpan=5;td.textContent="No signals in this selection";tr.append(td);rows.append(tr)}
+ linkRows.replaceChildren();
+ var links=inventory.declared_connections.filter(function(link){
+  return link.from.instance===sel.value || link.to.instance===sel.value;
+ });
+ links.forEach(function(link){
+  var tr=document.createElement("tr");
+  cell(tr,link.from.instance+"."+link.from.port);
+  cell(tr,link.to.instance+"."+link.to.port);
+  cell(tr,(link.declared_signals||[]).map(function(x){return x.name+(x.width?" ["+x.width+"]":"")}).join(", ") || link.link_type);
+  cell(tr,link.status+" (declared only)");
+  linkRows.append(tr);
+ });
+ if(!links.length){var tr=document.createElement("tr"),td=document.createElement("td");td.colSpan=4;td.textContent="No declared links for this selection";tr.append(td);linkRows.append(tr)}
+ status.textContent=list.length+" actual RTL port declarations; grouping is inferred. Evidence: "+inventory.source+
+   ". Routing proof requires slang-netlist.";
+}
+sel.addEventListener("change",choices);bus.addEventListener("change",draw);filter.addEventListener("input",draw);
+window.addEventListener("soc-explorer-selection",function(evt){
+ var chosen=evt.detail||{};if(chosen.id&&inventory.endpoints[chosen.id]){sel.value=chosen.id;choices()}
+});
+choices();
+})();
+</script>
+
 <script type="application/json" id="ex-embedded-graph">__GRAPH_DATA__</script>
 <script>
 (function(){
@@ -34,7 +115,7 @@
 var ns="http://www.w3.org/2000/svg",s=document.getElementById("ex-scope"),p=document.getElementById("ex-profile"),svg=document.getElementById("ex-svg"),detail=document.getElementById("ex-detail"),status=document.getElementById("ex-status");
 var graph;
 function el(t,props,label){var e=document.createElementNS(ns,t);Object.keys(props||{}).forEach(function(k){e.setAttribute(k,props[k])});if(label!==undefined)e.textContent=String(label);return e}
-function selected(element,data){svg.querySelectorAll(".ex-selected").forEach(function(e){e.classList.remove("ex-selected")});element.classList.add("ex-selected");detail.textContent=JSON.stringify(data,null,2)}
+function selected(element,data){svg.querySelectorAll(".ex-selected").forEach(function(e){e.classList.remove("ex-selected")});element.classList.add("ex-selected");detail.textContent=JSON.stringify(data,null,2);window.dispatchEvent(new CustomEvent("soc-explorer-selection",{detail:data}))}
 function render(){
  if(!graph)return;
  var groupMap=new Map(graph.groups.map(function(g){return [g.name,g]})),memberOf=new Map;

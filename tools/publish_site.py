@@ -550,6 +550,9 @@ def build(output,evidence,repository,sha,config):
     from design_explorer import catalog as design_catalog
     design_graph = design_catalog(ROOT)
     dump(output/'data/design-graph.json', design_graph)
+    from signal_inventory import build as signal_inventory_build
+    signal_inventory = signal_inventory_build(ROOT)
+    dump(output/'data/signal-inventory.json', signal_inventory)
     dataset={'schema_version':1,'title':config['title'],'source_sha':sha,'repository':repository,
              'built_at':datetime.now(timezone.utc).isoformat(),'runs':runs,'entries':entries,
              'notes':notes,'documents':docs,'networks':noc['networks'],'chip':chip,
@@ -561,6 +564,8 @@ def build(output,evidence,repository,sha,config):
         if page=='explorer':
             graph_data = json.dumps(design_graph, separators=(',', ':')).replace('<','\\u003c')
             body = body.replace('__GRAPH_DATA__',graph_data)
+            signal_data = json.dumps(signal_inventory, separators=(',', ':')).replace('<','\\u003c')
+            body = body.replace('__SIGNAL_DATA__', signal_data)
         if page=='fabric':
             fabric_data=json.dumps(fabric,separators=(',',':')).replace('<','\\u003c')
             body=body.replace('__FABRIC_DATA__',fabric_data)

@@ -73,6 +73,39 @@ class ExplorerTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "unknown connectivity endpoint"):
                 design_explorer.catalog(root)
 
+    def test_missing_runtime_manifest_is_explicitly_unavailable(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "gen/diagrams").mkdir(parents=True)
+            (root / "config").mkdir()
+            (root / "gen/diagrams/noc-topology.json").write_text(
+                (ROOT / "gen/diagrams/noc-topology.json").read_text())
+            tests = {"schema_version": 1, "tests": {
+                "cpu-dma": {"engine": "cocotb-verilator", "top": "chip_tb",
+                            "report": {"axi": {
+                                "actors": ".tools/regression/cpu-dma/variant/manifest.json"}}}}}
+            (root / "config/regression.yaml").write_text(yaml.safe_dump(tests))
+            graph = design_explorer.catalog(root)
+            entry = graph["profiles"]["cpu-dma"]
+            self.assertEqual(entry["actor_catalog_status"],
+                             "runtime_generated_not_available")
+            self.assertEqual(entry["actors"], {})
+            self.assertEqual(entry["monitors"], [])
+
+    def test_missing_checked_in_actor_manifest_is_an_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "gen/diagrams").mkdir(parents=True)
+            (root / "config").mkdir()
+            (root / "gen/diagrams/noc-topology.json").write_text(
+                (ROOT / "gen/diagrams/noc-topology.json").read_text())
+            tests = {"schema_version": 1, "tests": {
+                "bad": {"engine": "cocotb-verilator", "top": "chip_tb",
+                        "report": {"axi": {"actors": "gen/chip/missing.json"}}}}}
+            (root / "config/regression.yaml").write_text(yaml.safe_dump(tests))
+            with self.assertRaisesRegex(ValueError, "missing source"):
+                design_explorer.catalog(root)
+
     def test_catches_bad_actor_mapping(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
