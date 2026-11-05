@@ -325,6 +325,8 @@ def run_target(name, test, resolver, options):
                    Path(filename).name in replacements else filename
                    for filename in sources]
     if test.get('firmware_mode') == 'pcie_host':
+        if str(ROOT) not in sys.path:
+            sys.path.insert(0, str(ROOT))
         # Same generated SoC and CPU firmware semantics; only variant wires
         # the real pinned PCIe bridge and CPU0<->host SRAM phase barriers.
         from full_chip_gen import emit as emit_chip
