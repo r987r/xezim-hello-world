@@ -43,12 +43,12 @@ def main():
                    node.dispatchEvent(new MouseEvent('dblclick',{bubbles:true}));""",label)
 
         dblclick_by_label("compute0")
-        wait.until(lambda d:"COMPUTE0  /  SUBSYSTEM" in d.find_element(By.ID,"arch-svg").text)
+        wait.until(lambda d:"compute0" in d.find_element(By.ID,"arch-crumbs").text.lower() and "SUBSYSTEM COMPOSITION" in d.find_element(By.ID,"arch-svg").text)
         assert "LOCAL FABRICS" in driver.find_element(By.ID,"arch-svg").text
         driver.save_screenshot(str(args.screenshots/"02-compute0-composition.png"))
 
         dblclick_by_label("compute0_local_data")
-        wait.until(lambda d:"FLOONOC ROUTERS" in d.find_element(By.ID,"arch-svg").text)
+        wait.until(lambda d:"compute0_local_data" in d.find_element(By.ID,"arch-crumbs").text and "FLOONOC ROUTERS" in d.find_element(By.ID,"arch-svg").text)
         mesh=driver.find_element(By.ID,"arch-svg").text
         assert "9 routers" in mesh
         assert len(driver.find_elements(By.XPATH,
