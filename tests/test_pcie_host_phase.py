@@ -26,7 +26,7 @@ class PcieHostPhaseTests(unittest.TestCase):
         self.assertFalse(any("0x12000800" in instruction for instruction in image))
 
     def test_cpu0_real_remote_sram_init_run_check_barriers(self):
-        fw = chip_bootgen.build(copy.deepcopy(self.cfg), pcie_host_phase=True)
+        fw = chip_bootgen.build(pcie_chip.host_variant_config(self.cfg), pcie_host_phase=True)
         code = [asm for _, asm in fw["images"]["compute0"]]
         self.assertTrue(any("wait_host_init" in asm for asm in code))
         self.assertTrue(any("wait_host_run" in asm for asm in code))
@@ -34,7 +34,7 @@ class PcieHostPhaseTests(unittest.TestCase):
         self.assertTrue(any("jal zero" in asm for asm in code))
         self.assertTrue(all("wait_host_" not in asm
                             for _, asm in fw["images"]["compute1"]))
-        self.assertLessEqual(len(code) * 4, self.cfg["boot"]["flash_slot_stride"])
+        self.assertLessEqual(len(code) * 4, pcie_chip.host_variant_config(self.cfg)["boot"]["flash_slot_stride"])
         self.assertEqual(fw["sram_bases"], [0x10000000, 0x11000000])
 
     def test_host_contract_rejects_missing_peripheral(self):
@@ -49,7 +49,7 @@ class PcieHostPhaseTests(unittest.TestCase):
         win = next(w for w in cfg["address_map"]["data"]
                    if w["name"] == "pcie0.sram")
         win["base"] = "0x13000000"
-        fw = chip_bootgen.build(cfg, pcie_host_phase=True)
+        fw = chip_bootgen.build(pcie_chip.host_variant_config(cfg), pcie_host_phase=True)
         cpu0 = "\n".join(asm for _, asm in fw["images"]["compute0"])
         self.assertIn("0x13000", cpu0)
         self.assertNotIn("0x12000", cpu0)

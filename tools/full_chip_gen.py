@@ -65,6 +65,8 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
         raise ValueError('CPU DMA mode requires a valid compiled C hook')
     if pcie_host_mode and cpu_dma_mode:
         raise ValueError('PCIe host phase and CPU C DMA are distinct opt-in scopes')
+    if pcie_host_mode:
+        cfg = pcie_chip.host_variant_config(cfg)
     fw, firmware = chip_bootgen.emit(cfg, out, cpu0_run_hook=cpu0_run_hook,
                                      pcie_host_phase=pcie_host_mode)
     nets = json.loads((noc_root/'manifest.json').read_text())['networks']
