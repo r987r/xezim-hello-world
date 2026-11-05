@@ -155,3 +155,49 @@ async def sustained_1gbe_rx_and_tx_without_width_bottleneck(dut):
     assert not any(errors.values()), f"MAC/FIFO errors on good sustained traffic: {errors}"
     assert axis_rx.empty() and sink.empty(), "duplicate or unconsumed Ethernet frames"
     dut._log.info("PASS sustained GMII RX/TX: 24 frames both directions, 64-bit logic + 8-bit GMII, error counters=%r", errors)
+
+
+@cocotb.test(timeout_time=3, timeout_unit="ms")
+async def rx_backpressure_drops_whole_frames_without_partial_delivery(dut):
+    """GMII has no ready; RX FIFO must drop complete frames under congestion."""
+    src, _sink, _axis_tx, axis_rx = await setup(dut)
+    axis_rx.pause = True
+    payloads = [bytes(((i * 19) + j * 5) & 0xff for j in range(1200))
+                for i in range(5)]
+    status = {"overflow": 0, "bad_frame": 0, "bad_fcs": 0}
+
+    async def watch_status():
+        while True:
+            await RisingEdge(dut.logic_clk)
+            status["overflow"] += int(dut.rx_fifo_overflow.value)
+
+    async def watch_fcs():
+        while True:
+            await RisingEdge(dut.gmii_rx_clk)
+            status["bad_fcs"] += int(dut.rx_error_bad_fcs.value)
+
+    monitors = [cocotb.start_soon(watch_status()), cocotb.start_soon(watch_fcs())]
+    for payload in payloads:
+        await src.send(GmiiFrame.from_payload(payload))
+    await with_timeout(src.wait(), 250, "us")
+    for _ in range(40):
+        await RisingEdge(dut.logic_clk)
+    assert axis_rx.empty(), "RX AXIS consumed data despite explicit backpressure"
+    axis_rx.pause = False
+    # Drain the FIFO before checking packet boundaries and error ownership.
+    received = [await bounded_recv(axis_rx, "first retained backpressured frame")]
+    for _ in range(200):
+        await RisingEdge(dut.logic_clk)
+    while not axis_rx.empty():
+        received.append(await bounded_recv(axis_rx, "remaining retained frame"))
+    assert 0 < len(received) < len(payloads), "expected bounded FIFO loss under RX stall"
+    # RX FIFO should preserve FIFO order, with only complete frames accepted.
+    for expected, frame in zip(payloads, received):
+        assert bytes(frame.tdata) == expected, "partial, corrupted or reordered RX frame"
+        assert frame.tuser == 0, "bad frame leaked into accepted RX data"
+    assert status["overflow"] > 0, "no FIFO overflow recorded despite forced congestion"
+    assert status["bad_fcs"] == 0, "valid test packets must retain good FCS"
+    for monitor in monitors:
+        monitor.kill()
+    dut._log.info("PASS Ethernet full-frame RX drop: retained=%d dropped=%d errors=%r",
+                  len(received), len(payloads)-len(received), status)
