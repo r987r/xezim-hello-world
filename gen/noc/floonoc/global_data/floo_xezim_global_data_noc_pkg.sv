@@ -20,12 +20,14 @@ package floo_xezim_global_data_noc_pkg;
     Compute0 = 0,
     Compute1 = 1,
     Pcie0 = 2,
-    Compute0Sram = 3,
-    Compute1Sram = 4,
-    Pcie0Sram = 5,
-    MemoryIngress0 = 6,
-    MemoryIngress1 = 7,
-    NumEndpoints = 8} ep_id_e;
+    Ethernet0 = 3,
+    Compute0Sram = 4,
+    Compute1Sram = 5,
+    Pcie0Sram = 6,
+    Ethernet0Sram = 7,
+    MemoryIngress0 = 8,
+    MemoryIngress1 = 9,
+    NumEndpoints = 10} ep_id_e;
 
 
 
@@ -33,8 +35,9 @@ package floo_xezim_global_data_noc_pkg;
     Compute0SramSamIdx = 0,
     Compute1SramSamIdx = 1,
     Pcie0SramSamIdx = 2,
-    MemoryIngress0SamIdx = 3,
-    MemoryIngress1SamIdx = 4} sam_idx_e;
+    Ethernet0SramSamIdx = 3,
+    MemoryIngress0SamIdx = 4,
+    MemoryIngress1SamIdx = 5} sam_idx_e;
 
 
 
@@ -57,7 +60,7 @@ typedef logic route_t;
     id_t end_addr;
   } route_map_rule_t;
 
-  localparam int unsigned SamNumRules = 5;
+  localparam int unsigned SamNumRules = 6;
 
 typedef struct packed {
     id_t idx;
@@ -72,6 +75,9 @@ localparam sam_rule_t[SamNumRules-1:0] Sam = '{
 '{    idx: '{x: 0, y: 2, port_id: 0},
     start_addr: 64'h0000000100000000,
     end_addr: 64'h0000000140000000},// MemoryIngress0
+'{    idx: '{x: 3, y: 1, port_id: 0},
+    start_addr: 64'h0000000013000000,
+    end_addr: 64'h0000000013100000},// Ethernet0Sram
 '{    idx: '{x: 2, y: 1, port_id: 0},
     start_addr: 64'h0000000012000000,
     end_addr: 64'h0000000012100000},// Pcie0Sram
@@ -91,7 +97,7 @@ localparam sam_rule_t[SamNumRules-1:0] Sam = '{
     XYAddrOffsetX: 33,
     XYAddrOffsetY: 35,
     IdAddrOffset: 0,
-    NumSamRules: 5,
+    NumSamRules: 6,
     NumRoutes: 0,
     CollectiveCfg: '{    OpCfg: '{    EnNarrowMulticast: 1'b0,
     EnWideMulticast: 1'b0,
