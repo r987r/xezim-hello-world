@@ -92,15 +92,12 @@ def calculate(events: list[dict], period_ps: int) -> dict:
     # WLAST/AWLEN. When AW arrives, reconcile in AW issue order.
     pre_aw_w = deque()
     records = []
-    w_seq = 0
 
     def accept_w(fields, cycle):
         if not pending_writes:
             raise ValueError("internal AXI W reconciliation lost its AW")
         entry = pending_writes[0]
         entry["beats_observed"] += 1
-        if entry["first_w_cycle"] is None:
-            entry["first_w_cycle"] = cycle
         if entry["beats_observed"] > entry["beats_expected"]:
             raise ValueError("write has more W beats than AWLEN")
         expected_last = entry["beats_observed"] == entry["beats_expected"]
@@ -108,7 +105,6 @@ def calculate(events: list[dict], period_ps: int) -> dict:
             raise ValueError("WLAST disagrees with AWLEN")
         if expected_last:
             entry["data_done"] = True
-            entry["last_w_cycle"] = cycle
             pending_writes.popleft()
 
     for event in events:
@@ -140,7 +136,6 @@ def calculate(events: list[dict], period_ps: int) -> dict:
                 "start_cycle": cycle, "phase": phase,
                 "beats_expected": fields["len"] + 1,
                 "beats_observed": 0, "data_done": False,
-                "first_w_cycle": None,
             }
             writes[fields["id"]].append(entry)
             pending_writes.append(entry)
@@ -154,7 +149,6 @@ def calculate(events: list[dict], period_ps: int) -> dict:
                 accept_w(fields, cycle)
             else:
                 pre_aw_w.append((fields, cycle))
-            w_seq += 1
         elif channel in ("r", "b"):
             queue = reads if channel == "r" else writes
             identity = fields["id"]
@@ -182,8 +176,6 @@ def calculate(events: list[dict], period_ps: int) -> dict:
             entry["latency_cycles"] = cycle - entry["start_cycle"]
             entry["latency_ps"] = entry["latency_cycles"] * period_ps
             entry.pop("data_done", None)
-            entry.pop("first_w_cycle", None)
-            entry.pop("last_w_cycle", None)
             records.append(entry)
         else:
             raise ValueError(f"unknown AXI channel {channel}")
