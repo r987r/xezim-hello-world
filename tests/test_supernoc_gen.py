@@ -48,13 +48,13 @@ class SuperNoCConnectivityTests(unittest.TestCase):
                  and e["to"]["instance"].split(".")[0] in networks
                  and e["from"]["instance"].split(".")[0] != e["to"]["instance"].split(".")[0]}
         self.assertEqual({(e["from"], e["to"]) for e in meta["connections"]}, edges)
-        self.assertEqual(len(edges), 15)
+        self.assertEqual(len(edges), 19)
 
     def test_every_window_resolves_to_leaf_including_boot_reads(self):
         meta = self.emit_profiles(self.soc)
         targets = {s["name"] for s in meta["slaves"]}
         routes = [r for m in meta["masters"] for r in m["regions"]]
-        self.assertEqual(len(routes), 40)
+        self.assertEqual(len(routes), 48)
         self.assertEqual({r["destination"] for r in routes}, targets)
         self.assertEqual(sum(r["access"] == "read" for r in routes), 4)
         self.assertTrue(any(len(r["networks"]) == 3 for r in routes))

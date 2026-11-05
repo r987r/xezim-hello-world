@@ -22,10 +22,10 @@ class FabricExplorerTests(unittest.TestCase):
 
     def test_inventory_traces_all_current_generated_meshed_boundaries(self):
         data=self.report
-        self.assertEqual(data['summary']['meshes'],10)
-        self.assertEqual(data['summary']['cross_mesh_links'],15)
-        self.assertEqual(data['summary']['initiators'],8)
-        self.assertEqual(data['summary']['targets'],12)
+        self.assertEqual(data['summary']['meshes'],12)
+        self.assertEqual(data['summary']['cross_mesh_links'],19)
+        self.assertEqual(data['summary']['initiators'],10)
+        self.assertEqual(data['summary']['targets'],14)
         self.assertEqual(len({i['name'] for i in data['interfaces']}),len(data['interfaces']))
         self.assertEqual(data['summary']['interfaces'],len(data['interfaces']))
         self.assertEqual(data['summary']['reachable_routes'],len(data['routes']))
@@ -46,7 +46,7 @@ class FabricExplorerTests(unittest.TestCase):
         self.assertEqual(len(report['rows']),len(self.report['matrix']))
         self.assertEqual(set(report['mesh_columns']),{'data','config'})
         self.assertEqual(report['mesh_columns']['data'],[
-            'compute0_local_data','compute1_local_data','global_data',
+            'compute0_local_data','compute1_local_data','ethernet0_local_data','global_data',
             'memory0_local_data','pcie0_local_data'])
         denied=next(r for r in report['rows']
                     if r['source']=='compute1_local_data.cpu'

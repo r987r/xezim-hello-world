@@ -23,8 +23,10 @@ class PeripheralFabricTest(unittest.TestCase):
         c = copy.deepcopy(self.cfg)
         socgen.validate(c)
         nets = floonoc_gen.profiles(c, self.knobs)
-        self.assertEqual(len(nets), 10)
+        self.assertEqual(len(nets), 12)
         self.assertIn("pcie0_local_data", nets)
+        self.assertIn("ethernet0_local_data", nets)
+        self.assertIn("ethernet0_local_config", nets)
         self.assertIn("pcie0_local_config", nets)
         def endpoints(name):
             return {x["name"]:x for x in nets[name]["config"]["endpoints"]}
@@ -38,6 +40,15 @@ class PeripheralFabricTest(unittest.TestCase):
         self.assertIn("pcie0_sram", endpoints("global_data"))
         self.assertIn("pcie0", endpoints("global_config"))
         self.assertIn("pcie0_regs", endpoints("global_config"))
+        eth_d, eth_c = endpoints("ethernet0_local_data"), endpoints("ethernet0_local_config")
+        self.assertEqual(set(eth_d), {"packet_dma", "global_in", "sram", "global_out"})
+        self.assertEqual(set(eth_c), {"management", "global_in", "controller_regs", "global_out"})
+        self.assertEqual(eth_d["sram"]["addr_range"]["base"], 0x13000000)
+        self.assertEqual(eth_c["controller_regs"]["addr_range"]["base"], 0x40050000)
+        self.assertIn("ethernet0", endpoints("global_data"))
+        self.assertIn("ethernet0_sram", endpoints("global_data"))
+        self.assertIn("ethernet0", endpoints("global_config"))
+        self.assertIn("ethernet0_regs", endpoints("global_config"))
 
     def test_peripheral_instance_name_independent_of_ip_and_global_path(self):
         c = copy.deepcopy(self.cfg)
@@ -48,7 +59,8 @@ class PeripheralFabricTest(unittest.TestCase):
                                  ("config", "pcie0.ctrl", "ethernet2.ctrl")):
             row = next(x for x in c["address_map"][plane] if x["name"] == old)
             row["name"] = new
-        c["networks"]["global_config"]["reachable_subsystems"][-1] = "ethernet2"
+        reachable = c["networks"]["global_config"]["reachable_subsystems"]
+        reachable[reachable.index("pcie0")] = "ethernet2"
         socgen.validate(c)
         nets = floonoc_gen.profiles(c, self.knobs)
         self.assertIn("ethernet2_local_data", nets)
@@ -91,6 +103,10 @@ class PeripheralFabricTest(unittest.TestCase):
             self.assertIn(("global_data.pcie0_sram", "pcie0_local_data.global_in"), edges)
             self.assertIn(("pcie0_local_config.global_out", "global_config.pcie0"), edges)
             self.assertIn(("global_config.pcie0_regs", "pcie0_local_config.global_in"), edges)
+            self.assertIn(("ethernet0_local_data.global_out", "global_data.ethernet0"), edges)
+            self.assertIn(("global_data.ethernet0_sram", "ethernet0_local_data.global_in"), edges)
+            self.assertIn(("ethernet0_local_config.global_out", "global_config.ethernet0"), edges)
+            self.assertIn(("global_config.ethernet0_regs", "ethernet0_local_config.global_in"), edges)
 
 if __name__=="__main__":
     unittest.main()

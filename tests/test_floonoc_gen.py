@@ -27,8 +27,9 @@ class FlooNoCProfilesTest(unittest.TestCase):
             "compute1_local_data", "compute1_local_config",
             "memory0_local_data", "memory0_local_config",
             "pcie0_local_data", "pcie0_local_config",
+            "ethernet0_local_data", "ethernet0_local_config",
             "global_data", "global_config"})
-        self.assertEqual(len({p["path"] for p in nocs.values()}), 10)
+        self.assertEqual(len({p["path"] for p in nocs.values()}), 12)
         for name, entry in nocs.items():
             cfg = entry["config"]
             self.assertEqual(cfg["network_type"], "axi")

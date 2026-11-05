@@ -28,7 +28,7 @@ class SocConfigTest(unittest.TestCase):
         self.assertEqual([x['base'] for x in m['targets']],[0x100000000,0x140000000])
         self.assertEqual([x['ip'] for x in m['cpu_instances']],['picorv32','serv'])
         self.assertEqual(m['common_dma'],'pulp_idma')
-        self.assertEqual(len(m['subsystems']),4)
+        self.assertEqual(len(m['subsystems']),5)
 
     def test_deterministic_generation_and_noc_ir(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -97,7 +97,7 @@ class SocConfigTest(unittest.TestCase):
         doc['subsystems'].append({'name':'compute2','type':'compute','cpu':{'ip':'serv','bus':'wishbone','adapter':'serv_wishbone'}})
         doc['networks']['global_config']['reachable_subsystems'].append('compute2')
         m=socgen.validate(doc)
-        self.assertEqual(len(m['subsystems']),5)
+        self.assertEqual(len(m['subsystems']),6)
         self.assertEqual(len(m['targets']),2)
 
     def test_missing_output_target_rejected(self):
