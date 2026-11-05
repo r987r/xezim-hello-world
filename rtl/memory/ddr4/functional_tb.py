@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+from itertools import cycle
 
 import cocotb
 from cocotb.clock import Clock
@@ -217,6 +218,53 @@ async def exercise_concurrent_axi_ids(master, dut, observer, monitor):
                   "128-byte independent readback and passive DFI capture")
 
 
+
+async def exercise_verified_backpressure(master, dut, observer, monitor):
+    """Throttle real R/B ready channels and prove VALID stalls in passive RTL capture.
+
+    Reuse the pinned upstream cocotbext-axi sink.pause_generator; neither
+    LiteDRAM RTL nor AXI monitor is disabled or modified. The periodic
+    READY stalls must actually be seen on output VALID, not inferred from
+    toggling the generator.
+    """
+    r_sink = master.read_if.r_channel
+    b_sink = master.write_if.b_channel
+    old_r, old_b = observer.stalled_cycles["r"], observer.stalled_cycles["b"]
+    r_sink.set_pause_generator(cycle([0] * 3 + [1] * 5))
+    b_sink.set_pause_generator(cycle([0] * 2 + [1] * 7))
+    addresses = [0x58000 + i * 0x1000 for i in range(8)]
+    data = [bytes(((i + 5) * 19 + j * 11) & 0xff for j in range(256))
+            for i in range(8)]
+    try:
+        writes = [cocotb.start_soon(master.write(addr, payload, awid=i % 16))
+                  for i, (addr, payload) in enumerate(zip(addresses, data))]
+        for index, task in enumerate(writes):
+            response = await with_timeout(task, 240, "us")
+            assert response.resp == AxiResp.OKAY, (
+                f"DDR4 backpressure B failure id={index}")
+        reads = [cocotb.start_soon(master.read(addr, len(payload), arid=i % 16))
+                 for i, (addr, payload) in enumerate(zip(addresses, data))]
+        for index, task in enumerate(reads):
+            response = await with_timeout(task, 240, "us")
+            assert response.resp == AxiResp.OKAY, (
+                f"DDR4 backpressure R failure id={index}")
+            assert response.data == data[index], (
+                f"DDR4 backpressure readback mismatch id={index}")
+        await tick(dut, 12)
+        observer.assert_health(monitor)
+        seen_r = observer.stalled_cycles["r"] - old_r
+        seen_b = observer.stalled_cycles["b"] - old_b
+        assert seen_r >= 5 and seen_b >= 1, (
+            f"Backpressure not actually observed on RTL pins: "
+            f"R={seen_r} B={seen_b}")
+        dut._log.info("PASS real LiteDRAM forced backpressure: "
+                      "8 x 256-byte AXI writes/reads, 8 IDs, "
+                      "VALID&&!READY R=%d B=%d clock cycles", seen_r, seen_b)
+    finally:
+        r_sink.clear_pause_generator()
+        b_sink.clear_pause_generator()
+
+
 @cocotb.test(timeout_time=3, timeout_unit="ms")
 async def ddr4_wishbone_init_axi_readwrite(dut):
     """One always-active passive observer from before clock start to teardown."""
@@ -318,6 +366,7 @@ async def ddr4_wishbone_init_axi_readwrite(dut):
 
         await exercise_controller_stress(master, dut, observer, monitor)
         await exercise_concurrent_axi_ids(master, dut, observer, monitor)
+        await exercise_verified_backpressure(master, dut, observer, monitor)
         observer.assert_health(monitor)
         observer.next_phase("post_traffic")
         await tick(dut, 5)
