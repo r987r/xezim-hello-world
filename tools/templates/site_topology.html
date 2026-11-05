@@ -1,7 +1,7 @@
 <div class="eyebrow">Generated from config/soc.yaml</div><h1>Topology and integration</h1>
 <p class="lede">One source of truth for local data, local configuration and global routing. The tables below link to the exact FlooGen inputs and structural RTL published with this snapshot.</p>
-<a href="gen/diagrams/noc-hierarchy.svg"><img class="topology" src="gen/diagrams/noc-hierarchy.svg" alt="Complete generated SoC and FlooNoC topology"></a>
-<div class="actions"><a href="gen/diagrams/noc-topology.json">Topology JSON</a><a href="gen/diagrams/noc-hierarchy.mmd">Mermaid source</a><a href="gen/supernoc/axi_monitors.json">AXI observation catalog</a><a href="config/soc.yaml">Architecture YAML</a></div>
+<div class="notice"><strong>Architecture view:</strong> <a href="explorer.html">Explore full chip → subsystems → actual FlooNoC router meshes</a>. Select a network to see exact routers, NIs and signal-level interfaces.</div>
+<div class="actions"><a href="gen/diagrams/noc-topology.json">Topology JSON</a><a href="gen/diagrams/noc-hierarchy.mmd">Legacy Mermaid overview</a><a href="gen/supernoc/axi_monitors.json">AXI observation catalog</a><a href="config/soc.yaml">Architecture YAML</a></div>
 <div class="notice">Real CPU, SRAM and reset attachments run in the chip boot configuration. DMA/CSR and physical HBM/DDR controller integration are pending. AXI monitors cover NoC boundary connections; router flits and downstream memory-crossbar ports are outside this capture scope.</div>
 <p><a href="fabric.html">Open Fabric Explorer: initiator-to-target reachability, budgets and exact XY router hops</a></p>
 <h2>Generated networks</h2><div class="scroll"><table><thead><tr><th>Network</th><th>Plane</th><th>Routers</th><th>Endpoints</th><th>FlooGen input</th><th>RTL</th><th>Outstanding budget / ID</th></tr></thead><tbody id="networks"></tbody></table></div>
