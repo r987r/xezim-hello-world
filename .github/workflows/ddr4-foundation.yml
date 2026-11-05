@@ -103,6 +103,27 @@ jobs:
           assert j['implementation']['modeled_size']==32*1024*1024
           print('DDR-B generated LiteDRAM pin/SoC contract PASS (not full-chip RTL)')
           PY
+      - name: Validate planned DDR-B Config NoC init mapping against actual generated LiteDRAM CSR
+        run: |
+          set -euo pipefail
+          python3 rtl/memory/ddr4/config_noc_init_contract.py \
+            --soc config/soc.yaml \
+            --plan .tools/ddr4/litedram_sim/ddr4_init_plan.json \
+            --csr .tools/ddr4/litedram_sim/csr.json \
+            --generated-verilog .tools/ddr4/litedram_sim/gateware/soc_ddr4_sim.v \
+            --output .tools/ddr4/litedram_sim/ddr4_config_noc_init_contract.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path(".tools/ddr4/litedram_sim/ddr4_config_noc_init_contract.json").read_text())
+          assert d["status"]=="contract_only_not_driven_in_full_chip"
+          assert d["requires_hardware_translator"] is True
+          assert d["config_base"]==0x40030000
+          assert d["actions"][-2]["csr"]=="ddrctrl_init_error"
+          assert d["actions"][-2]["expect_value"]==0
+          print("DDR-B Config NoC init address/CSR pin contract passed, hardware bridge unconnected")
+          PY
+
       - name: Install Verilator for isolated RTL check
         run: |
           sudo apt-get update -qq
