@@ -37,9 +37,33 @@ own. The follow-on full AXI bridge must use its allow/fault outputs and
 implement that handshake/response behavior. Keep bus-side AXI ID mapping
 in the bridge, not this independent combinational address decoder.
 
+## Actual AXI protocol bridge (standalone RTL)
+
+The memory-only `ddr_litedram_axi_bridge` in `soc_axi_bridge.sv`
+instantiates two copies of the verified aperture guard and implements real
+upstream AW/W/B and AR/R slave handshakes. Accepted in-range requests are
+address-translated to the **generated 25-bit LiteDRAM AXI local address**
+and forwarded with the original 4-bit ID, LEN/SIZE/BURST, data and WSTRB.
+Unsupported addresses/bursts/ATOP are not forwarded; the slave consumes
+their write beats, returns `BRESP=DECERR` after the final W beat, or returns
+the requested number of `RRESP=DECERR` beats with a correct final RLAST.
+Responses are retained under backpressure. The initial bridge allows one
+write burst and one read burst in flight independently; the SoC integration
+owner must verify the actual crossbar output ID width and arbitration.
+
+The bridge deliberately does **not** instantiate or initialize the
+controller and never fabricates memory read data for valid addresses. It
+blocks new AW/AR requests until `controller_ready_i` is asserted by a
+real DFII/Wishbone initialization service. `tb_soc_axi_bridge.sv` drives
+a real HDL test for successful pass-through and invalid-address DECERR,
+including B/R backpressure and ID preservation; the standalone pinned
+DDR4 controller/DFI test is still a separate functional test in the
+same CI job. This is stronger than a host-only contract, **but is not
+yet an end-to-end full-chip controller path**.
+
 ## Remaining DDR-B hardware and verification gates
 
-1. Extend the tested address/burst guard into an isolated memory-only full AXI-to-LiteDRAM responder with AW/W/B/AR/R handshakes, legal DECERR responses and ID preservation. Test independently with Verilator.
+1. Finish sign-off for the standalone AXI response adapter: verify exact-head Verilator bridge test, clock/reset readiness, malformed write bursts, extra AXI attributes and concurrency/ID constraints; preserve the existing DDR4 AXI/DFI functional test. The initial one-read + one-write implementation and DECERR handling are in soc_axi_bridge.sv.
 2. Add Wishbone init/status service on the independent Config NoC, with CPU-controlled init and failure timeouts.
 3. Hand bridge and Bender source closure to sole #38 generator owner; that track will edit config/soc.yaml, tools/full_chip_gen.py and generated RTL/diagrams. No parallel generator edits here.
 4. Add opt-in chip-ddr4-real with actual CPU/iDMA traffic through the generated Data NoC and controller, DFI monitoring, independent INIT/RUN/CHECK, negative aperture tests and comparison against axi_ram timing.
