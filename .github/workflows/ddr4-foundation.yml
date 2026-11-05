@@ -151,6 +151,13 @@ jobs:
           set -euo pipefail
           python3 rtl/memory/ddr4/run_functional.py
 
+      - name: Verify DDR4 standalone HTML report (measured vs unmeasured)
+        run: |
+          set -euo pipefail
+          python3 rtl/memory/ddr4/report_html.py --dir .tools/ddr4/litedram_sim
+          test -s .tools/ddr4/litedram_sim/ddr4-report.html
+          grep -q 'UNMEASURED' .tools/ddr4/litedram_sim/ddr4-report.html
+
       - name: Check all-simulation AXI/Wishbone monitor evidence
         run: |
           set -euo pipefail
