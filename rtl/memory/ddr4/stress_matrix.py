@@ -57,6 +57,28 @@ def build_matrix(*, aperture_bytes: int, data_bits: int = 64,
     return tuple(result)
 
 
+
+def enabled_lane_runs(strobe: int, beat_bytes: int) -> tuple[tuple[int, int], ...]:
+    """Minimal contiguous byte transfers that exercise real AXI WSTRB lanes.
+
+    The pinned cocotbext-axi master has no user-supplied sparse-strobe
+    argument. A byte-sized or contiguous unaligned write does generate real
+    hardware WSTRB; this does NOT claim arbitrary sparse WSTRB in one beat.
+    """
+    if not isinstance(strobe, int) or not 0 <= strobe < (1 << beat_bytes):
+        raise ValueError("strobe outside AXI beat width")
+    runs = []
+    first = None
+    for bit in range(beat_bytes + 1):
+        enabled = bit < beat_bytes and bool(strobe & (1 << bit))
+        if enabled and first is None:
+            first = bit
+        if not enabled and first is not None:
+            runs.append((first, bit))
+            first = None
+    return tuple(runs)
+
+
 def expected_write(previous: bytes, burst: Burst, beat_bytes: int) -> bytes:
     if burst.kind != "write" or burst.beats * beat_bytes != len(previous):
         raise ValueError("invalid write image")
