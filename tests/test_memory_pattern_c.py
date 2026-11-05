@@ -14,6 +14,11 @@ SOURCE = r"""
 #include <stddef.h>
 #include "memory_pattern.h"
 int main(void) {
+    if (!soc_mem_pattern_valid(SOC_PATTERN_COUNTER8) ||
+        !soc_mem_pattern_valid(SOC_PATTERN_CONSTANT) ||
+        !soc_mem_pattern_valid(SOC_PATTERN_ADDRESS_XOR) ||
+        soc_mem_pattern_valid((soc_pattern_kind_t)42))
+        return 4;
     uint8_t data[37];
     const uint64_t addr = 0x140000137ull;
     for (unsigned k = 1; k <= 3; ++k) {
