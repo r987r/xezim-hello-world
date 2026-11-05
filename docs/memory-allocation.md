@@ -87,9 +87,8 @@ bool ok = soc_mem_alloc(&hbm, 64, 64, &result);
 The address and modeled capacity must come from the configuration-generated
 platform contract, not a hardcoded value in reusable firmware. Real
 CPU-driven tests must use `boot_live` and retain the existing INIT/RUN/CHECK
-and passive NoC AXI monitoring. **Hosted allocator, Python plan and independent BFM tests are distinct
-from the opt-in real-CPU C DMA RTL gate; its completion must be verified
-from CI before claiming a pass.**
+and passive NoC AXI monitoring. **The real CPU C-DMA gate passed in PR #25;
+these faster memory-provider paths still require independent RTL validation.**
 
 ## Regression
 
@@ -105,27 +104,27 @@ and `dma.c` in one binary. Python tests cover mapped/modeled sizes,
 64-bit HBM/DDR addresses, relocation, overflow, alignment, reclaim,
 and disjoint boot/DMA memory regions.
 
-## Memory initialization/check backends and benchmarks (next increment)
+## Common memory initialization/checking policy
 
 **Same scenario and allocation handles, no separate test frameworks.**
 Initialization/verification is a distinct operation from allocation. Record
 a compact pattern recipe instead of creating a full DDR/HBM binary image:
 
-- \`init(region, offset, bytes, pattern, seed, policy)\` and
-  \`check(region, offset, bytes, pattern, seed, policy)\` are scenario-level
+- `init(region, offset, bytes, pattern, seed, policy)` and
+  `check(region, offset, bytes, pattern, seed, policy)` are scenario-level
   operations; C/CPU and Python BFMs consume the same recipe bytes.
-- \`strict\`: CPU/DMA or AXI frontdoor initializes/checks actual hardware.
+- `strict`: CPU/DMA or AXI frontdoor initializes/checks actual hardware.
   A mandatory small strict smoke catches missing routing/CPU behavior.
-- \`fast\`: validated direct host sparse-memory or simulator backdoor
+- `fast`: validated direct host sparse-memory or simulator backdoor
   initialize/check; **does not count as AXI traffic**.
-- \`hybrid\`: large payload via validated backdoor, CPU builds descriptors
+- `hybrid`: large payload via validated backdoor, CPU builds descriptors
   and submits real DMA; sampled frontdoor reads plus independent full
   backdoor compare. Prefer this for large routine regressions.
 - CPU mode may request acceleration through a simulation-service mailbox,
   but must wait for a simulator acknowledgement before consuming the data.
   In no-CPU mode Python calls the same provider directly.
 - Backdoor adapters are explicitly per backing type: cocotbext-axi
-  SparseMemoryRegion; PULP \`tc_sram\` RTL; DDR4 controller/DFI bank model;
+  SparseMemoryRegion; PULP `tc_sram` RTL; DDR4 controller/DFI bank model;
   and future HBM. Do not patch pinned IP or invent generic DPI paths.
   Validate every provider against frontdoor writes/readback first.
 - Cold boot ROM/flash initialization remains intentional, and writable
@@ -140,7 +139,7 @@ wall-clock seconds, cycles, transferred bytes, host peak RSS and speedup
 vs strict. Do not attribute faster backdoor writes to AXI bandwidth or
 latency. Report the access method and backing model in every run artifact.
 Minimum reference sweep: 64 B, 4 KiB, 64 KiB and the largest supported
-modeled size, with \`strict\`, \`hybrid\`, \`fast\`. Mark unsupported method/
+modeled size, with `strict`, `hybrid`, `fast`. Mark unsupported method/
 backing combinations explicitly instead of silently falling back.
 
 ## Common memory INIT/CHECK service (incremental)
@@ -191,8 +190,12 @@ with scratch restoration, then uses one 256-byte pattern through strict,
 fast and hybrid modes. The passive AXI report remains attached and must
 not count direct backdoor operations as AXI transactions.
 
-That test emits .tools/regression/supernoc/memory-provider-benchmark.json
-with real NoC test wall times and physical target identity, once CI passes.
+That test emits .tools/regression/supernoc/memory-operations.json
+with real NoC test wall times and physical target identity. The normal
+`tools/axi_report.py` validates the memory evidence against accepted AXI traffic,
+adds an INIT/CHECK section to the existing `report.html`, and marks the
+regression failed when required evidence is absent or malformed.
+`tools/publish_site.py` publishes this same report, not a second renderer.
 It does NOT represent actual DDR/HBM controller timing, tc_sram DPI access,
-or a CPU-executed mailbox. Do not claim that integration is proven until
-the exact head's real NoC workflow is green.
+or a CPU-executed mailbox. This integration is only proven for a particular
+commit after its exact-head real NoC and full-chip workflows pass.
