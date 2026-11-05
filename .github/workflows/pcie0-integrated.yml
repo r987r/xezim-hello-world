@@ -3,7 +3,7 @@ name: PCIe0 integrated real bridge and generated local FlooNoC
 on:
   pull_request:
     branches: [main]
-    paths: ['dv/pcie0/**', 'tests/test_pcie*', 'tests/test_protocol_report.py', 'tools/protocol_report.py', 'tools/pcie_latency_report.py', 'tools/axi_report.py', 'tools/regress.py', 'tools/full_chip_gen.py', 'tools/chip_bootgen.py', 'tools/pcie_chip.py', 'config/regression.yaml', 'sw/common/test_flow.h', 'sw/dma/tests/cpu_dma_run.c', 'tests/test_test_flow*', 'tools/test_flow*', '.github/workflows/pcie0-integrated.yml']
+    paths: ['dv/pcie0/**', 'tests/test_pcie*', 'tests/test_protocol_report.py', 'tools/protocol_report.py', 'tools/pcie_latency_report.py', 'tools/axi_report.py', 'tools/regress.py', 'tools/full_chip_gen.py', 'tools/chip_bootgen.py', 'tools/pcie_chip.py', 'tools/cpu_dma_firmware.py', 'config/regression.yaml', 'sw/common/test_flow.h', 'sw/dma/tests/cpu_dma_run.c', 'tests/test_test_flow*', 'tools/test_flow*', '.github/workflows/pcie0-integrated.yml']
   workflow_dispatch:
 
 permissions: {contents: read}
@@ -30,11 +30,12 @@ jobs:
       - name: Install pinned IP and verification dependencies
         run: |
           python3 -m pip install -r requirements.txt
-          python3 tools/ip_fetch.py floonoc picorv32 serv wb2axip verilog_axi
+          python3 -m pip install 'mako==1.3.10' 'hjson==3.1.0' 'peakrdl>=1.5.0' 'peakrdl-rawheader>=0.2.8' 'peakrdl-cheader>=1.1.0'
+          python3 tools/ip_fetch.py floonoc picorv32 serv wb2axip verilog_axi pulp_idma
           python3 -m pip install -e .tools/floonoc
           python3 -m pip install 'cocotb==1.9.2' 'cocotb-bus==0.2.1' 'cocotbext-pcie==0.2.14' 'cocotbext-axi==0.1.24'
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends verilator iverilog
+          sudo apt-get install -y --no-install-recommends verilator iverilog clang llvm lld
       - name: Validate real RTL pins, test contracts and generated endpoints
         run: |
           python3 dv/pcie0/run_rtl_smoke.py --check-pin
@@ -44,7 +45,7 @@ jobs:
           make check-generated
       - name: PCIe TLP -> PCIe0 FlooNoC -> real PULP SRAM
         run: python3 dv/pcie0/run_noc_smoke.py
-      - name: Joint CPU0 cold boot and modeled PCIe Root Complex phase handshake
+      - name: Real CPU iDMA DDR-model exchange with host PCIe BAR readback
         run: |
           python3 -m unittest tests.test_pcie_host_phase -v
           python3 tools/regress.py chip-pcie-host
