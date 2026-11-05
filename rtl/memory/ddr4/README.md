@@ -258,3 +258,34 @@ multiple or absent candidate commits. The positive smoke test fails unless
 all DFI WRITE events have unique modeled storage evidence and relevant
 read-model stages are measured. These remain behavioral model delays, not
 silicon DDR timing.
+
+## DDR-A stress traffic and provenance (PR #50)
+
+The real standalone `functional_tb.py` uses deterministic stress vectors from
+`stress_matrix.py` **after** completing real LiteDRAM DFII/Wishbone init and
+baseline controller/DFI readback. These are issued through the existing
+`cocotbext-axi` master and passively observed by the same continuous AXI,
+Wishbone, DFI and simulated bank monitors (not substitute memory responders).
+
+The stress phase exercises burst lengths 1/4/8/16, IDs 0 and 15, low/mid/high
+locations within the **32 MiB simulated model**, real byte strobes generated
+from unaligned contiguous writes, and independent whole-burst readback with
+untouched-byte checking. A sparse 0x55 strobe case is split into legal
+individual byte writes because the pinned upstream `AxiMaster.write()`
+does not provide a user-directed arbitrary WSTRB mask. Consequently we
+**do not claim** true single-beat arbitrarily sparse WSTRB coverage.
+
+[Exact-head CI run 42038475513](https://github.com/r987r/xezim-hello-world/actions/runs/42038475513)
+passed: 99 DDR4 Python tests, 7 monitoring-policy tests, real LiteDRAM
+controller/DFI model test 1/1, 121,795 sampled cycles and complete
+AR=16/AW=18/B=18/R=101/W=77 observations. Existing upstream generated
+warnings: CASEINCOMPLETE=84, WIDTHEXPAND=1709, WIDTHTRUNC=254, RTL
+compiler errors=0. No warnings were silently waived; the exact
+expected warning inventory remains a strict gate.
+
+Outstanding in DDR-A: multi-master concurrent ID stress, long forced stalls,
+bank/row conflict and forced refresh sequences, reset/reinitialization, and
+expanded timing distributions. Standalone DDR model does not constitute
+physical PHY or integrated SoC controller verification. DDR-B integration
+is separately tracked under #40; main's DDR0 backing stays AXI RAM until
+real controller is opt-in, generated, and end-to-end verified.
