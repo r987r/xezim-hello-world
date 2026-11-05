@@ -218,6 +218,10 @@ tests:
           run: [host0.wait_run_enable, host0.bar_roundtrip, host0.bar_write_0, host0.bar_read_0, host0.bar_write_1, host0.bar_read_1, host0.bar_write_2, host0.bar_read_2, host0.bar_write_3, host0.bar_read_3, host0.run_ack, cpu0.run_complete, cpu0.firmware_run]
           check: [host0.wait_check_enable, host0.check_ack, cpu0.check_complete, cpu0.firmware_check, host0.final_verify]
       axi: {scope: dut.u_noc, clock: clk, reset: rst_n, catalog: gen/supernoc/axi_monitors.json, actors: .tools/regression/chip-pcie-host/variant/manifest.json, max_events: 500000}
+      protocols:
+        sources:
+          pcie0.rx_req: {protocol: pcie, clock_domain: soc_single_clock, role: target, implementation: verilog_pcie_pcieifframe, modeling: rtl_bridge_with_modeled_root_complex}
+          pcie0.tx_cpl: {protocol: pcie, clock_domain: soc_single_clock, role: initiator, implementation: verilog_pcie_pcieifframe, modeling: rtl_bridge_with_modeled_root_complex}
 
 suites:
   xezim: [memory, memory-full, memory-sparse, memory-negative, sram, sram-synthesis, serv, boot, boot-relocated]
