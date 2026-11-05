@@ -108,6 +108,16 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y verilator
 
+      - name: Simulate isolated DDR-B physical-address aperture guard RTL
+        run: |
+          set -euo pipefail
+          verilator --binary --timing --assert -Wno-fatal \
+            --top-module tb_ddr_litedram_aperture_guard \
+            --Mdir .tools/ddr4/guard_sim \
+            rtl/memory/ddr4/soc_aperture_guard.sv \
+            rtl/memory/ddr4/tb_soc_aperture_guard.sv
+          .tools/ddr4/guard_sim/Vtb_ddr_litedram_aperture_guard
+
       - name: Lint actual generated DDR4 RTL
         run: python3 rtl/memory/ddr4/check_rtl.py --tool verilator --timeout 600
 
