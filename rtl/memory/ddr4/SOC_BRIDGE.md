@@ -83,9 +83,23 @@ to **planned** 32-bit AXI-Lite accesses inside
 `memory0.ctrl` (`0x40030000` window). It preserves the original
 LiteDRAM Wishbone byte/word address and records the required address
 translation; the generated `wb_ctrl_adr` pin width and actual `csr.json`
-are checked during DDR4 CI. It fails if the CSR aperture is insufficient,
-addresses alias, the control path is absent, a Wishbone address truncates,
-or the required init_done/init_error/control readbacks cannot be reached.
+are checked during DDR4 CI. **Actual generated-pin CI exposed a 4-KiB CSR aperture mismatch:**
+the pinned LiteX CSR handler allocates 2048-byte pages across DDR control,
+DDR PHY and SDRAM CSR banks. The currently configured `memory0.ctrl`
+window is **0x40030000–0x40030fff (4 KiB)** and cannot contain the
+required generated CSR map. CI now tests the real 4-KiB window as an
+**expected negative**, then separately validates an **opt-in proposed
+16-KiB window** at the same physical base using
+`--proposed-window-bytes 0x4000`. No checked-in SoC address-map change
+is made on this PR. #38 must review/emit the larger non-overlapping
+`memory0.ctrl` aperture plus a real address-translating AXI-Lite-to-Wishbone
+endpoint and update checked-in RTL/topology atomically. Both read and write
+control accesses must complete with verified AXI-Lite responses. A
+contract-only proposal is explicitly **not** proof of runtime INIT.
+
+It fails closed if the proposed aperture still cannot hold the generated
+CSR map, aliases other config regions, changes bus widths, truncates
+Wishbone addresses, or loses generated init_done/init_error/control readbacks.
 
 The result is `ddr4_config_noc_init_contract.json` in the **standalone
 DDR4 CI artifact** with `status=contract_only_not_driven_in_full_chip`.
