@@ -208,9 +208,9 @@ class SocConfigTest(unittest.TestCase):
             # Each new compute subsystem supplies its own mapped SRAM
             # and CSR apertures; FlooGen derives the NoC wires automatically.
             doc["address_map"]["data"].append({
-                "name": "compute2.sram", "base": "0x13000000", "size": "0x00100000"})
+                "name": "compute2.sram", "base": "0x14000000", "size": "0x00100000"})
             doc["address_map"]["config"].append({
-                "name": "compute2.dma", "base": "0x40050000", "size": "0x10000"})
+                "name": "compute2.dma", "base": "0x40060000", "size": "0x10000"})
             cfg_path.write_text(yaml.safe_dump(doc,sort_keys=False))
             self.assertEqual(generate.execute(cfg_path,out,readme),0)
             extra = out/"noc"/"floonoc"/"compute2"/"local_data"/"floogen.yaml"
