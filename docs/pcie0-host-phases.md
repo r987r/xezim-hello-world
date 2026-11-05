@@ -1,7 +1,7 @@
 # PCIe0: host participant in the existing INIT/RUN/CHECK framework
 
 This implementation is tracked in [draft PR #60](https://github.com/r987r/xezim-hello-world/pull/60),
-stacked on generator PR #53. It does **not** introduce another test runner,
+based directly on `main` (generator PR #53 already merged). It does **not** introduce another test runner,
 phase engine, TestML parser, or duplicate full-chip testbench.
 
 ## Verification layers and evidence
@@ -84,3 +84,42 @@ results, and the full step report.
 upstream endpoint register RTL, outbound DMA to host memory, MSI/MSI-X,
 and full multiple-outstanding-tag stress. A modeled host enumeration
 is not a physical-link signoff.
+
+## Minimal real DDR-model ↔ PCIe host integration (same regression)
+
+`chip-pcie-host` now uses firmware mode `pcie_dma_host`. This is the
+**smallest combined full-chip RTL**: real PicoRV32 CPU, real pinned PULP iDMA,
+real NoC/crossbar/PCIe SRAM, real `pcie_axi_master` bridge and a modeled
+Root Complex. DDR is still the named 64-KiB AXI-backed behavioral model,
+**not** the separate isolated LiteDRAM controller.
+
+INIT:
+- Host enumerates BAR0, waits for CPU firmware ready, writes and reads back
+  64 known bytes at PCIe SRAM +`0x500`, then acknowledges INIT.
+- CPU0 does not preload this SRAM and does not run the C DMA before host
+  acknowledgment.
+
+RUN:
+- CPU0 executes its **existing** C DMA allocation/DDR/HBM roundtrip and
+  descriptor/IRQ checks, then three more real DMA descriptors:
+  PCIe SRAM +`0x500` → modeled DDR +`0x800`;
+  existing DMA-populated DDR region → PCIe SRAM +`0x600`;
+  DDR +`0x800` → CPU-visible SRAM.
+- CPU0 checks the host's 64 bytes after the last descriptor, validates
+  descriptors and IRQ, then announces RUN to the host.
+- Host reads BAR0+`0x600`, independently checks every byte against the CPU
+  source pattern, runs the original four independent BAR vectors, and ACKs.
+
+CHECK:
+- The unchanged CPU/host CHECK handshake runs after both directions pass.
+  The passive AXI reporter validates accepted transfers/completions and the
+  shared TLP observer validates the inbound host TLP/completion stream.
+  The common `test-flow.json` adds `host0.seed_ddr_input`,
+  `cpu0.pcie_ddr_exchange`, and `host0.read_ddr_dma_output`.
+
+The host uses BAR readback (a **host pull**), not a device-initiated PCIe
+outbound memory-write TLP. Production host-memory DMA via upstream
+`dma_if_pcie`, actual Ethernet ingress/egress, real DDR/DFI qualification,
+multiple outstanding tags and backpressure/throughput are separate tracks.
+The generated `manifest.json` marks the PCIe bridge as live only in this
+opt-in variant; Ethernet remains reserved until actually attached.
