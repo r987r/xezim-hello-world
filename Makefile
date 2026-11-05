@@ -79,7 +79,7 @@ test: check-config check-generated
 	python3 tools/regress.py full
 
 dv-memory-service:
-	python3 -m unittest tests.test_memory_service tests.test_memory_pattern_c tests.test_memory_benchmark -v
+	python3 -m unittest tests.test_memory_service tests.test_memory_pattern_c tests.test_memory_benchmark tests.test_memory_report -v
 
 bench-memory:
 	python3 tools/memory_benchmark.py --out .tools/benchmarks/memory.json
