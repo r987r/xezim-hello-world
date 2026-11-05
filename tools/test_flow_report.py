@@ -130,8 +130,8 @@ def write_report(directory, plan):
                 events.append(json.loads(line))
             except (ValueError, TypeError):
                 issues.append(f"corrupt test-flow line {index}")
-    else:
-        issues.append("missing test-flow capture")
+    # A C-only or SV-only test does not need the Cocotb JSONL producer.
+    # summarize() rejects an actually empty combined evidence stream.
     # RTL firmware and SV checkers publish actual observed phase milestones.
     # They come from the simulator transcript, NEVER from Python action intent.
     from test_flow_codec import SV_RE
