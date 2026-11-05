@@ -3,8 +3,11 @@
 from pathlib import Path
 import os
 import subprocess
+import sys
 
 ROOT=Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0,str(ROOT))
 from dv.ethernet0.run_mac_gmii import fetch_pinned
 
 def main():
