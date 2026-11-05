@@ -11,6 +11,10 @@ from cocotbext.axi import (
     AddressSpace, AxiBus, AxiMaster, AxiResp, AxiSlave, SparseMemoryRegion,
 )
 from dv.common.axi_trace import attach_observers, expect_axi_response, trace_phase
+from tools.memory_plan import VirtualRegion
+from tools.memory_service import (
+    MemoryService, Pattern, AxiFrontdoor, HostSparseMemory, CombinedMemoryProvider,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 CONTRACT = json.loads((ROOT / "gen/supernoc/manifest.json").read_text())
@@ -187,6 +191,52 @@ async def routed_data_and_config_all_local_global_nocs(dut):
             finally:
                 sink.write_if.target = sink.read_if.target = memory[name]
     dut._log.info("PASS downstream errors: %d routed B/R SLVERR pairs", errors)
+
+    # Reuse the SAME upstream BFM and sparse backing as routed NoC traffic.
+    # This is the first actual RTL validation of strict/fast/hybrid providers,
+    # not a second testbench or a CPU cold-SRAM preload. Active AXI master
+    # ownership is already established by setup(); monitors remain passive.
+    trace_phase("Shared memory provider: reciprocal AXI/backdoor proof")
+    desc = next(m for m in CONTRACT["masters"]
+                if m["name"] == "m_compute0_local_data_cpu")
+    window = next(r for r in desc["regions"]
+                  if r["access"] == "read_write" and r["base"] >= 0x100000000)
+    address = window["base"] + 0x9000
+    target = expected_sink(desc, address, 256)
+    provider = CombinedMemoryProvider(
+        AxiFrontdoor(masters[desc["name"]]),
+        HostSparseMemory(memory[target], physical_base=0))
+    await provider.validate_backdoor(address, consumers_quiesced=True)
+    region = VirtualRegion("supernoc.memory_provider", "hbm",
+                           address, 512, False)
+    service = MemoryService({region.name: region}, chunk_bytes=64)
+    service.register(region.name, provider)
+    allocation = service.allocate(region.name, 256, 64,
+                                  owner="supernoc_verification", phase="run")
+    recipe = Pattern("address_xor", 0x5a71)
+    # Every method must check the same physical storage and same recipe.
+    await service.initialize(allocation, recipe, policy="strict")
+    await service.check(allocation, recipe, policy="strict")
+    await service.initialize(allocation, recipe, policy="fast")
+    await service.check(allocation, recipe, policy="fast")
+    await service.initialize(allocation, recipe, policy="hybrid")
+    await service.check(allocation, recipe, policy="hybrid")
+    service.release(allocation, consumers_quiesced=True)
+    plan_file = os.environ.get("SOC_RUN_PLAN")
+    if plan_file:
+        result = {
+            "schema_version": 1,
+            "source": "real_floonoc_axi_plus_host_sparse_backdoor",
+            "scope": "BFM-only NoC memory target (not CPU, DDR controller or DPI)",
+            "memory_target": target,
+            "bytes_per_operation": 256,
+            "clock_period_ps": 10000,
+            "events": [event.as_dict() for event in service.events],
+        }
+        (Path(plan_file).parent/"memory-provider-benchmark.json").write_text(
+            json.dumps(result, indent=2, sort_keys=True)+"\n")
+    trace_phase("Shared memory provider: AXI/backdoor strict fast hybrid OK")
+    dut._log.info("PASS memory provider: strict, fast, hybrid with real AXI/host sparse storage")
 
     # Opt-in negative run must fail on an actual routed corrupt readback.
     if os.getenv("SUPERNOC_NEGATIVE") == "1":
