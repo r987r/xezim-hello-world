@@ -71,6 +71,18 @@ report:
       check: [host0.check_ack, cpu0.firmware_check]
 ```
 
+Flow `required_origins` optionally binds each required `actor.step` to its
+expected provenance (`stimulus`, `observed`, `checker`, or
+`rtl_observed`). PCIe0 and CPU C/iDMA require origins explicitly; a Python
+stimulus event cannot masquerade as a firmware/RTL completion. A CHECK step
+observed before RUN, or RUN after CHECK, fails even when all steps eventually
+appear. Start and finish of a step must have the same origin.
+
+For the two real-CPU tests, `report.axi.required_complete: true` rejects
+outstanding AXI transactions at capture close, including the final firmware
+status store. The testbench allows a bounded drain interval, but no successful
+capture may omit an AXI B or final RLAST.
+
 The full PCIe0 definition lists every one of the four BAR writes and reads
 individually, not just `bar_roundtrip`. Missing an expected operation fails
 CI. The plan is validated before the HDL build. Test writers add the
@@ -152,3 +164,29 @@ Before claiming *all tests* have uniform step coverage, migrate:
 
 The flow reporter is a **reporting and acceptance layer**, not a new
 protocol VIP, new DMA engine, or alternate test coordinator.
+
+## PCIe, NoC, SRAM and host timing evidence
+
+`tools/pcie_latency_report.py` uses the **existing** PCIe TLP, AXI and
+SRAM monitor rows; it does not sample new pins or infer latency from RTL
+parameters. The `chip-pcie-host` test fails if the observed request/tag,
+completion, AXI initiator, SRAM target, payload or write strobes disagree.
+Unique local transactions are matched by address, sequence and captured
+timestamps, never by a fabricated global AXI ID across NoCs. Nonunique
+matches are an explicit error rather than a guessed path. The report
+`traffic-latency.json` is embedded as a stage summary and BAR test-vector
+table in the **existing** `protocols.html` explorer, linked from
+`report.html`. All latency values and clocks derive from the same
+simulation capture, and the final AXI/protocol report metadata records the
+actual INIT/RUN/CHECK status after cross-language checks, not the preliminary
+`unmeasured` placeholder.
+
+Stages for PCIe reads are: accepted TLP request EOP to bridge AXI AR,
+bridge AXI AR to SRAM AR, SRAM AR to RLAST, SRAM RLAST to bridge AXI RLAST,
+and bridge AXI RLAST to completion TLP EOP. The sum must equal TLP
+request-to-completion time. Write TLPs are posted, so report accepted
+TLP-to-AXI B time, **not** a nonexistent PCIe write completion. Separate
+`host0.bar_read_N` flow spans measure the modeled Root Complex API read
+callback, not real link/PHY/LTSSM or physical host latency. DDR/HBM timings
+belong to their actual memory-controller/DFI reports and are not silently
+ascribed to the PCIe SRAM target.
