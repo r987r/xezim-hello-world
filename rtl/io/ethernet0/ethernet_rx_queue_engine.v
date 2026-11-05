@@ -10,6 +10,9 @@ module ethernet_rx_queue_engine #(
  input wire [7:0] cfg_addr,input wire [31:0] cfg_wdata,
  input wire [3:0] cfg_wstrb,
  output wire cfg_ready,output wire [31:0] cfg_rdata,output wire cfg_error,
+ input wire tx_desc_ready_i, input wire tx_cpl_written_i,
+ output wire tx_desc_valid_o, output wire [63:0] tx_desc_addr_o,
+ output wire [63:0] rx_cq_slot_addr_o, tx_cq_slot_addr_o,
  input wire frame_valid,output wire frame_ready,
  input wire [15:0] frame_length,frame_ethertype,
  input wire frame_is_udp,input wire [15:0] frame_udp_dst_port,
@@ -20,6 +23,7 @@ module ethernet_rx_queue_engine #(
  output reg [3:0] write_result_error,
  output reg [15:0] write_result_length,
  output reg [31:0] write_result_cookie,
+ output reg [7:0] write_result_policy,
  output reg [7:0] write_result_tag,
  output reg frame_drop_pulse,
  input wire cpl_written_i,output wire irq,
@@ -52,6 +56,7 @@ module ethernet_rx_queue_engine #(
  wire route_valid,route_drop,route_ready;
  wire [0:0] route_q,rx_desc_q,tx_desc_q;
  wire [7:0] route_policy;
+ wire [7:0] queue_active_policy;
  wire rx_desc_valid,rx_desc_ready,tx_desc_valid;
  wire [63:0] rx_desc_addr,tx_desc_addr;
  wire fetch_ready,fetch_valid,fetch_ok;
@@ -64,6 +69,8 @@ module ethernet_rx_queue_engine #(
  wire [7:0] dma_tag;
  wire [15:0] dma_length;
  assign frame_ready=state==IDLE && route_ready;
+ assign tx_desc_valid_o=tx_desc_valid;
+ assign tx_desc_addr_o=tx_desc_addr;
  assign rx_axis_tready=state==STREAM ? dma_axis_ready : state==DROP;
  assign rx_desc_ready=state==FETCH && fetch_ready;
 
@@ -78,10 +85,13 @@ module ethernet_rx_queue_engine #(
   .rx_route_policy(route_policy),.rx_desc_valid(rx_desc_valid),
   .rx_desc_ready(rx_desc_ready),.rx_desc_addr(rx_desc_addr),
   .rx_desc_queue(rx_desc_q),.tx_desc_valid(tx_desc_valid),
-  .tx_desc_ready(1'b0),.tx_desc_addr(tx_desc_addr),
+  .tx_desc_ready(tx_desc_ready_i),.tx_desc_addr(tx_desc_addr),
+  .rx_cq_slot_addr(rx_cq_slot_addr_o),
+  .tx_cq_slot_addr(tx_cq_slot_addr_o),
+  .rx_active_policy_o(queue_active_policy),
   .tx_desc_queue(tx_desc_q),
   .rx_cpl_written(cpl_written_i && state==WAIT_CPL),
-  .tx_cpl_written(1'b0),.irq
+  .tx_cpl_written(tx_cpl_written_i),.irq
  );
  ethernet_rx_desc_fetch #(.AXI_ADDR_WIDTH(64),.AXI_ID_WIDTH(4),
   .RING_BASE(RING_BASE),.RING_BYTES(RING_BYTES),
@@ -132,6 +142,7 @@ module ethernet_rx_queue_engine #(
    write_result_valid<=0;write_result_ok<=0;
    write_result_error<=0;write_result_length<=0;
    write_result_cookie<=0;write_result_tag<=0;frame_drop_pulse<=0;
+   write_result_policy<=0;
   end else begin
    write_result_valid<=0;frame_drop_pulse<=0;
    case(state)
@@ -139,6 +150,7 @@ module ethernet_rx_queue_engine #(
      packet_length<=frame_length;owns_descriptor<=0;state<=ROUTE;
     end
     ROUTE: if(route_valid) begin
+     write_result_policy<=queue_active_policy;
      if(route_drop) begin frame_drop_pulse<=1;state<=DROP;end
      else state<=FETCH;
     end
