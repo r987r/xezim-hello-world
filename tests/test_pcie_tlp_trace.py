@@ -13,9 +13,16 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / ".tools/verilog_pcie/tb/pcie_axi_master"))
 sys.path.insert(0, str(ROOT / "tools"))
 
-from pcie_if import PcieIfFrame
-from cocotbext.pcie.core.tlp import Tlp, TlpType
-from cocotbext.pcie.core.utils import PcieId
+# Other CI jobs intentionally do not fetch or install the optional pinned
+# PCIe BFM. Keep test discovery importable, but require upstream for
+# the dedicated real-PCIe job rather than substituting a custom parser.
+HAS_UPSTREAM = (ROOT / ".tools/verilog_pcie/tb/pcie_axi_master/pcie_if.py").is_file()
+if HAS_UPSTREAM:
+    from pcie_if import PcieIfFrame
+    from cocotbext.pcie.core.tlp import Tlp, TlpType
+    from cocotbext.pcie.core.utils import PcieId
+else:
+    PcieIfFrame = Tlp = TlpType = PcieId = None
 from dv.common.protocol_trace import ProtocolTrace
 from dv.pcie0.tlp_trace import AcceptedTlpPackets, REQUEST, COMPLETION, SOURCES
 import protocol_report
@@ -35,6 +42,7 @@ def packets(sink, source, tlp, start_ps):
     return start_ps + (beats - 1) * 10000
 
 
+@unittest.skipUnless(HAS_UPSTREAM, "pinned PCIe test BFM is not installed in this CI job")
 class TestTlpCapture(unittest.TestCase):
     def setUp(self):
         self.tmp = TemporaryDirectory()
