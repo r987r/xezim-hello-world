@@ -110,7 +110,7 @@ def profile(name, plane, mgrs, targets, soc, knobs):
 
 
 def profiles(soc, knobs):
-    """Eight independently generated network profiles; do not add TB per bridge."""
+    """Config-derived network profiles; do not add TB per bridge."""
     regions_data = mapped_regions(soc, "data")
     regions_config = mapped_regions(soc, "config")
     computes = [x["name"] for x in soc["subsystems"] if x["type"] == "compute"]
@@ -208,7 +208,10 @@ def profiles(soc, knobs):
         "global_config", "global_config")
 
     for comp in computes:
-        other = [regions_data[c + ".sram"] for c in computes if c != comp]
+        # All reachable remote peripheral SRAMs belong on the local-global
+        # egress. Restricting this list to compute SRAMs made CPU0->PCIe0
+        # traffic raise FlooNoC DecodeError even though global_data knew it.
+        other = [regions_data[c + ".sram"] for c in compute_like if c != comp]
         own_sram = regions_data[comp + ".sram"]
         cpu_sinks = [("sram", [own_sram]),
                      ("global_out", other + hbm_ddr)]
