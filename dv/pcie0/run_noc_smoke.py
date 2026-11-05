@@ -33,7 +33,7 @@ def run():
         generated.append(str(ROOT / "gen/noc/floonoc" / entry["top"]))
     vendor = ROOT / ".tools/verilog_pcie"
     files = list(dict.fromkeys(
-        noc_files + chip_files + generated + [str(patched)]
+        noc_files + generated + chip_files + [str(patched)]
         + [str(vendor / p) for p in pin["rtl_modules"]
            if p != "rtl/pcie_axi_master.v"]
         + [str(ROOT / "dv/pcie0/pcie_noc_tb.sv")]
@@ -52,12 +52,23 @@ def run():
     output = ROOT / ".tools/pcie0/noc_build"
     output.mkdir(parents=True, exist_ok=True)
     simulator = get_runner("verilator")
-    simulator.build(
-        sources=files, includes=includes, defines=defs,
-        hdl_toplevel="pcie_noc_tb", build_dir=output,
-        build_args=["--timing", "--assert", "-Wno-fatal"],
-        always=True, waves=False, log_file=output / "build.log"
-    )
+    # The generated FlooNoC package types MUST precede soc_noc.sv/soc_top.sv
+    # in Verilator's ordered filelist. Preserve the Bender upstream order.
+    assert files.index(str(ROOT / "gen/noc/floonoc" / actual["package"])) < files.index(str(ROOT / "gen/supernoc/soc_noc.sv"))
+    try:
+        simulator.build(
+            sources=files, includes=includes, defines=defs,
+            hdl_toplevel="pcie_noc_tb", build_dir=output,
+            build_args=["--timing", "--assert", "-Wno-fatal"],
+            always=True, waves=False, log_file=output / "build.log"
+        )
+    except Exception:
+        diagnostic = output / "build.log"
+        if diagnostic.exists():
+            lines = diagnostic.read_text(errors="replace").splitlines()
+            errors = [line for line in lines if line.startswith(("%Error", "%Warning"))]
+            print("PCIe NoC build diagnostics:", *(errors[:60] or lines[-60:]), sep="\n", file=sys.stderr, flush=True)
+        raise
     result = simulator.test(
         hdl_toplevel="pcie_noc_tb", hdl_toplevel_lang="verilog",
         test_module="noc_smoke", test_dir=ROOT / "dv/pcie0",
