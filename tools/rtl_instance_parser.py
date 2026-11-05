@@ -103,12 +103,8 @@ def parse_instance(node, module_type, source, conditional):
     toks = flatten(node)
     # A HierarchicalInstance has a declarator and a connection list. Extract
     # its identifier from the first declarator rather than matching raw text.
-    declarator = next((x for x in walk(node)
-                       if x.get("kind") in ("Declarator", "VariableDeclarator",
-                                            "InstanceName", "HierarchyInstanceName")), None)
-    name = ""
-    if declarator:
-        name = atom(declarator.get("name") or declarator)
+    declarator = node.get("decl")
+    name = atom(declarator.get("name") or declarator) if isinstance(declarator, dict) else ""
     if not name:
         # Use first identifier before the parenthesized connection list.
         # This works for syntactically complete generated instantiations.
@@ -141,9 +137,9 @@ def parse_module(node, source):
             continue
         # The first identifier in the hierarchy instantiation is the module
         # type. Favor the typed field over raw token order.
-        module_type = atom(part.get("type") or part.get("typeName") or {})
+        module_type = atom(part.get("type") or "")
         if not module_type:
-            module_type = atom(part)
+            raise ValueError(f"{source}: HierarchyInstantiation has no module type")
         if not module_type:
             raise ValueError(f"{source}: unrecognized instantiated module type")
         enclosing_generate = False
@@ -153,6 +149,9 @@ def parse_module(node, source):
         for inst in descendants(part, "HierarchicalInstance"):
             instances.append(parse_instance(inst, module_type, source,
                                             enclosing_generate))
+    # A syntax-only parse does not evaluate conditional generate guards.
+    # Preserve instances from both branches; downstream can only present
+    # them as syntactic possibilities until profile elaboration succeeds.
     # Generate block modules can have instance names repeated under mutually
     # exclusive branches. Do not drop them silently, keep source order.
     return {"name": name, "source": source, "instances": instances,
