@@ -13,7 +13,12 @@ ROOT = Path(__file__).resolve().parents[2]
 UPSTREAM = ROOT / ".tools/verilog_pcie"
 LOCK = ROOT / "dv/pcie0/upstream.lock.json"
 OUTPUT = ROOT / ".tools/pcie0/normalized/pcie_axi_master.v"
-TIE_OFFS = ("in_tlp_strb", "in_tlp_bar_id", "in_tlp_func_num", "in_tlp_error")
+TIE_OFFS = {
+    "in_tlp_strb": "{TLP_STRB_WIDTH{1'b0}}",
+    "in_tlp_bar_id": "3'b000",
+    "in_tlp_func_num": "8'b00000000",
+    "in_tlp_error": "4'b0000",
+}
 
 
 def prepare_bridge_source():
@@ -23,11 +28,11 @@ def prepare_bridge_source():
         raise ValueError("refuse to patch unpinned PCIe upstream RTL")
     src = (UPSTREAM / "rtl/pcie_axi_master.v").read_text()
     patched = src
-    for port in TIE_OFFS:
+    for port, sized_zero in TIE_OFFS.items():
         anchor = f".{port}(0),"
         if patched.count(anchor) != 1:
             raise ValueError(f"pinned upstream changed width-tie anchor {anchor!r}")
-        patched = patched.replace(anchor, f".{port}('0),")
+        patched = patched.replace(anchor, f".{port}({sized_zero}),")
     assert patched != src
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     OUTPUT.write_text(patched)
