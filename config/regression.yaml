@@ -202,6 +202,11 @@ tests:
     pass: 'PASS pciehost: real CPU0/host handshake and PCIe0 SRAM data'
     report:
       context: 'Real CPU0 cold boot via immutable ROM, host RC enumeration via modeled PCIe link, pinned real TLP->AXI4 RTL, generated PCIe0 local and global NoCs. CPU0 and host handshake on PCIe0 SRAM through frontdoor; accepted AXI passive monitors check all hops, no memory preload or fake PHY.'
+      flow:
+        required_steps:
+          init: [host0.enumerate, host0.wait_device_ready, host0.init_ack, cpu0.init_complete]
+          run: [host0.wait_run_enable, host0.bar_roundtrip, host0.run_ack, cpu0.run_complete]
+          check: [host0.wait_check_enable, host0.check_ack, cpu0.check_complete]
       axi: {scope: dut.u_noc, clock: clk, reset: rst_n, catalog: gen/supernoc/axi_monitors.json, actors: .tools/regression/chip-pcie-host/variant/manifest.json, max_events: 500000}
 
 suites:

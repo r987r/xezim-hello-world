@@ -78,9 +78,19 @@ def load_config(path):
             required = {'scope','clock','reset','catalog'}
             if (test['engine'] != 'cocotb-verilator' or not isinstance(report, dict)
                 or not ({'axi','protocols'} & set(report))
-                or set(report) - {'axi','protocols','memory','context'}
+                or set(report) - {'axi','protocols','memory','context','flow'}
                 or ('context' in report and not isinstance(report['context'],str))):
                 raise ValueError(f'{name}: invalid protocol report configuration for cocotb-verilator')
+            if 'flow' in report:
+                flow = report['flow']
+                if not isinstance(flow, dict) or set(flow) != {'required_steps'}:
+                    raise ValueError(f'{name}: invalid test-flow configuration')
+                required = flow['required_steps']
+                if (not isinstance(required, dict) or set(required) != {'init','run','check'} or
+                        any(not isinstance(items, list) or not items or len(set(items)) != len(items) or
+                            any(not isinstance(s, str) or not re.fullmatch(r'[a-z][a-z0-9_.-]*\\.[a-z][a-z0-9_.-]*', s)
+                                for s in items) for items in required.values())):
+                    raise ValueError(f'{name}: invalid required test-flow steps')
             if 'memory' in report:
                 m = report['memory']
                 if ('axi' not in report or not isinstance(m,dict) or
@@ -442,6 +452,17 @@ def run_target(name, test, resolver, options):
             print(f'FAIL {name}/protocol capture: missing, incomplete or inconsistent evidence',flush=True)
             if 'axi' in test['report']:
                 write_report(out,plan,result)
+        if 'flow' in test['report']:
+            from test_flow_report import write_report as write_flow
+            flow_result = write_flow(out, plan)
+            result['test_flow'] = {'passed':flow_result['passed'],
+                                   'steps':len(flow_result['rows']),
+                                   'issues':len(flow_result['issues'])}
+            if not flow_result['passed']:
+                passed = result['passed'] = False
+                results.append({'name':'test-flow evidence','passed':False,
+                                'reason':'missing, failed, incomplete or undeclared INIT/RUN/CHECK steps'})
+                print(f'FAIL {name}/test-flow: {flow_result["issues"][:8]}',flush=True)
         print(f'REPORT {name}: {summary["transactions"]} observations; {out.relative_to(ROOT)}/report.html',flush=True)
     (out/'result.json').write_text(json.dumps(result, indent=2) + '\n')
     return passed
