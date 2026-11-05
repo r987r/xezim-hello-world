@@ -185,6 +185,11 @@ FABRIC_EXCLUDED_FILES = {
     'README.md', 'AGENTS.md', 'tools/publish_site.py',
     'tools/fabric_report.py', 'tools/templates/site.html',
     'tools/templates/run_report.html',
+    # Syntax-only architecture inspection is presentation evidence and is
+    # never imported by RTL generation, Bender or the simulator filelists.
+    # Adding the viewer in #33 must not invalidate previously measured AXI
+    # timing for an identical RTL/DV execution input tree.
+    'tools/rtl_instance_parser.py',
 }
 # CI execution jobs (tool versions and invocation) must also be identical.
 # Trigger/scheduling-only edits do not alter simulated timing and are ignored.
