@@ -112,6 +112,14 @@ module soc_top #(parameter bit ProbeEnable = 0, DmaEnable = 0, DmaTestMode = 0) 
   floo_xezim_compute1_local_data_noc_pkg::axi_in_rsp_t m_compute1_local_data_dma_rsp;
   assign m_compute1_local_data_dma_rsp.b.user = '0;
   assign m_compute1_local_data_dma_rsp.r.user = '0;
+  floo_xezim_ethernet0_local_config_noc_pkg::axi_in_req_t m_ethernet0_local_config_management_req;
+  floo_xezim_ethernet0_local_config_noc_pkg::axi_in_rsp_t m_ethernet0_local_config_management_rsp;
+  assign m_ethernet0_local_config_management_rsp.b.user = '0;
+  assign m_ethernet0_local_config_management_rsp.r.user = '0;
+  floo_xezim_ethernet0_local_data_noc_pkg::axi_in_req_t m_ethernet0_local_data_packet_dma_req;
+  floo_xezim_ethernet0_local_data_noc_pkg::axi_in_rsp_t m_ethernet0_local_data_packet_dma_rsp;
+  assign m_ethernet0_local_data_packet_dma_rsp.b.user = '0;
+  assign m_ethernet0_local_data_packet_dma_rsp.r.user = '0;
   floo_xezim_pcie0_local_config_noc_pkg::axi_in_req_t m_pcie0_local_config_management_req;
   floo_xezim_pcie0_local_config_noc_pkg::axi_in_rsp_t m_pcie0_local_config_management_rsp;
   assign m_pcie0_local_config_management_rsp.b.user = '0;
@@ -162,6 +170,18 @@ module soc_top #(parameter bit ProbeEnable = 0, DmaEnable = 0, DmaTestMode = 0) 
   assign s_compute1_local_data_sram_req.w.user = '0;
   assign s_compute1_local_data_sram_req.ar.user = '0;
   assign s_compute1_local_data_sram_req.aw.atop = '0;
+  floo_xezim_ethernet0_local_config_noc_pkg::axi_out_req_t s_ethernet0_local_config_controller_regs_req;
+  floo_xezim_ethernet0_local_config_noc_pkg::axi_out_rsp_t s_ethernet0_local_config_controller_regs_rsp;
+  assign s_ethernet0_local_config_controller_regs_req.aw.user = '0;
+  assign s_ethernet0_local_config_controller_regs_req.w.user = '0;
+  assign s_ethernet0_local_config_controller_regs_req.ar.user = '0;
+  assign s_ethernet0_local_config_controller_regs_req.aw.atop = '0;
+  floo_xezim_ethernet0_local_data_noc_pkg::axi_out_req_t s_ethernet0_local_data_sram_req;
+  floo_xezim_ethernet0_local_data_noc_pkg::axi_out_rsp_t s_ethernet0_local_data_sram_rsp;
+  assign s_ethernet0_local_data_sram_req.aw.user = '0;
+  assign s_ethernet0_local_data_sram_req.w.user = '0;
+  assign s_ethernet0_local_data_sram_req.ar.user = '0;
+  assign s_ethernet0_local_data_sram_req.aw.atop = '0;
   floo_xezim_memory0_local_config_noc_pkg::axi_out_req_t s_memory0_local_config_controller_regs_req;
   floo_xezim_memory0_local_config_noc_pkg::axi_out_rsp_t s_memory0_local_config_controller_regs_rsp;
   assign s_memory0_local_config_controller_regs_req.aw.user = '0;
@@ -423,6 +443,84 @@ module soc_top #(parameter bit ProbeEnable = 0, DmaEnable = 0, DmaTestMode = 0) 
     .m_compute1_local_data_dma_rlast(m_compute1_local_data_dma_rsp.r.last),
     .m_compute1_local_data_dma_rvalid(m_compute1_local_data_dma_rsp.r_valid),
     .m_compute1_local_data_dma_rready(m_compute1_local_data_dma_req.r_ready),
+    .m_ethernet0_local_config_management_awid(m_ethernet0_local_config_management_req.aw.id),
+    .m_ethernet0_local_config_management_awaddr(m_ethernet0_local_config_management_req.aw.addr),
+    .m_ethernet0_local_config_management_awlen(m_ethernet0_local_config_management_req.aw.len),
+    .m_ethernet0_local_config_management_awsize(m_ethernet0_local_config_management_req.aw.size),
+    .m_ethernet0_local_config_management_awburst(m_ethernet0_local_config_management_req.aw.burst),
+    .m_ethernet0_local_config_management_awlock(m_ethernet0_local_config_management_req.aw.lock),
+    .m_ethernet0_local_config_management_awcache(m_ethernet0_local_config_management_req.aw.cache),
+    .m_ethernet0_local_config_management_awprot(m_ethernet0_local_config_management_req.aw.prot),
+    .m_ethernet0_local_config_management_awqos(m_ethernet0_local_config_management_req.aw.qos),
+    .m_ethernet0_local_config_management_awregion(m_ethernet0_local_config_management_req.aw.region),
+    .m_ethernet0_local_config_management_awvalid(m_ethernet0_local_config_management_req.aw_valid),
+    .m_ethernet0_local_config_management_awready(m_ethernet0_local_config_management_rsp.aw_ready),
+    .m_ethernet0_local_config_management_wdata(m_ethernet0_local_config_management_req.w.data),
+    .m_ethernet0_local_config_management_wstrb(m_ethernet0_local_config_management_req.w.strb),
+    .m_ethernet0_local_config_management_wlast(m_ethernet0_local_config_management_req.w.last),
+    .m_ethernet0_local_config_management_wvalid(m_ethernet0_local_config_management_req.w_valid),
+    .m_ethernet0_local_config_management_wready(m_ethernet0_local_config_management_rsp.w_ready),
+    .m_ethernet0_local_config_management_bid(m_ethernet0_local_config_management_rsp.b.id),
+    .m_ethernet0_local_config_management_bresp(m_ethernet0_local_config_management_rsp.b.resp),
+    .m_ethernet0_local_config_management_bvalid(m_ethernet0_local_config_management_rsp.b_valid),
+    .m_ethernet0_local_config_management_bready(m_ethernet0_local_config_management_req.b_ready),
+    .m_ethernet0_local_config_management_arid(m_ethernet0_local_config_management_req.ar.id),
+    .m_ethernet0_local_config_management_araddr(m_ethernet0_local_config_management_req.ar.addr),
+    .m_ethernet0_local_config_management_arlen(m_ethernet0_local_config_management_req.ar.len),
+    .m_ethernet0_local_config_management_arsize(m_ethernet0_local_config_management_req.ar.size),
+    .m_ethernet0_local_config_management_arburst(m_ethernet0_local_config_management_req.ar.burst),
+    .m_ethernet0_local_config_management_arlock(m_ethernet0_local_config_management_req.ar.lock),
+    .m_ethernet0_local_config_management_arcache(m_ethernet0_local_config_management_req.ar.cache),
+    .m_ethernet0_local_config_management_arprot(m_ethernet0_local_config_management_req.ar.prot),
+    .m_ethernet0_local_config_management_arqos(m_ethernet0_local_config_management_req.ar.qos),
+    .m_ethernet0_local_config_management_arregion(m_ethernet0_local_config_management_req.ar.region),
+    .m_ethernet0_local_config_management_arvalid(m_ethernet0_local_config_management_req.ar_valid),
+    .m_ethernet0_local_config_management_arready(m_ethernet0_local_config_management_rsp.ar_ready),
+    .m_ethernet0_local_config_management_rid(m_ethernet0_local_config_management_rsp.r.id),
+    .m_ethernet0_local_config_management_rdata(m_ethernet0_local_config_management_rsp.r.data),
+    .m_ethernet0_local_config_management_rresp(m_ethernet0_local_config_management_rsp.r.resp),
+    .m_ethernet0_local_config_management_rlast(m_ethernet0_local_config_management_rsp.r.last),
+    .m_ethernet0_local_config_management_rvalid(m_ethernet0_local_config_management_rsp.r_valid),
+    .m_ethernet0_local_config_management_rready(m_ethernet0_local_config_management_req.r_ready),
+    .m_ethernet0_local_data_packet_dma_awid(m_ethernet0_local_data_packet_dma_req.aw.id),
+    .m_ethernet0_local_data_packet_dma_awaddr(m_ethernet0_local_data_packet_dma_req.aw.addr),
+    .m_ethernet0_local_data_packet_dma_awlen(m_ethernet0_local_data_packet_dma_req.aw.len),
+    .m_ethernet0_local_data_packet_dma_awsize(m_ethernet0_local_data_packet_dma_req.aw.size),
+    .m_ethernet0_local_data_packet_dma_awburst(m_ethernet0_local_data_packet_dma_req.aw.burst),
+    .m_ethernet0_local_data_packet_dma_awlock(m_ethernet0_local_data_packet_dma_req.aw.lock),
+    .m_ethernet0_local_data_packet_dma_awcache(m_ethernet0_local_data_packet_dma_req.aw.cache),
+    .m_ethernet0_local_data_packet_dma_awprot(m_ethernet0_local_data_packet_dma_req.aw.prot),
+    .m_ethernet0_local_data_packet_dma_awqos(m_ethernet0_local_data_packet_dma_req.aw.qos),
+    .m_ethernet0_local_data_packet_dma_awregion(m_ethernet0_local_data_packet_dma_req.aw.region),
+    .m_ethernet0_local_data_packet_dma_awvalid(m_ethernet0_local_data_packet_dma_req.aw_valid),
+    .m_ethernet0_local_data_packet_dma_awready(m_ethernet0_local_data_packet_dma_rsp.aw_ready),
+    .m_ethernet0_local_data_packet_dma_wdata(m_ethernet0_local_data_packet_dma_req.w.data),
+    .m_ethernet0_local_data_packet_dma_wstrb(m_ethernet0_local_data_packet_dma_req.w.strb),
+    .m_ethernet0_local_data_packet_dma_wlast(m_ethernet0_local_data_packet_dma_req.w.last),
+    .m_ethernet0_local_data_packet_dma_wvalid(m_ethernet0_local_data_packet_dma_req.w_valid),
+    .m_ethernet0_local_data_packet_dma_wready(m_ethernet0_local_data_packet_dma_rsp.w_ready),
+    .m_ethernet0_local_data_packet_dma_bid(m_ethernet0_local_data_packet_dma_rsp.b.id),
+    .m_ethernet0_local_data_packet_dma_bresp(m_ethernet0_local_data_packet_dma_rsp.b.resp),
+    .m_ethernet0_local_data_packet_dma_bvalid(m_ethernet0_local_data_packet_dma_rsp.b_valid),
+    .m_ethernet0_local_data_packet_dma_bready(m_ethernet0_local_data_packet_dma_req.b_ready),
+    .m_ethernet0_local_data_packet_dma_arid(m_ethernet0_local_data_packet_dma_req.ar.id),
+    .m_ethernet0_local_data_packet_dma_araddr(m_ethernet0_local_data_packet_dma_req.ar.addr),
+    .m_ethernet0_local_data_packet_dma_arlen(m_ethernet0_local_data_packet_dma_req.ar.len),
+    .m_ethernet0_local_data_packet_dma_arsize(m_ethernet0_local_data_packet_dma_req.ar.size),
+    .m_ethernet0_local_data_packet_dma_arburst(m_ethernet0_local_data_packet_dma_req.ar.burst),
+    .m_ethernet0_local_data_packet_dma_arlock(m_ethernet0_local_data_packet_dma_req.ar.lock),
+    .m_ethernet0_local_data_packet_dma_arcache(m_ethernet0_local_data_packet_dma_req.ar.cache),
+    .m_ethernet0_local_data_packet_dma_arprot(m_ethernet0_local_data_packet_dma_req.ar.prot),
+    .m_ethernet0_local_data_packet_dma_arqos(m_ethernet0_local_data_packet_dma_req.ar.qos),
+    .m_ethernet0_local_data_packet_dma_arregion(m_ethernet0_local_data_packet_dma_req.ar.region),
+    .m_ethernet0_local_data_packet_dma_arvalid(m_ethernet0_local_data_packet_dma_req.ar_valid),
+    .m_ethernet0_local_data_packet_dma_arready(m_ethernet0_local_data_packet_dma_rsp.ar_ready),
+    .m_ethernet0_local_data_packet_dma_rid(m_ethernet0_local_data_packet_dma_rsp.r.id),
+    .m_ethernet0_local_data_packet_dma_rdata(m_ethernet0_local_data_packet_dma_rsp.r.data),
+    .m_ethernet0_local_data_packet_dma_rresp(m_ethernet0_local_data_packet_dma_rsp.r.resp),
+    .m_ethernet0_local_data_packet_dma_rlast(m_ethernet0_local_data_packet_dma_rsp.r.last),
+    .m_ethernet0_local_data_packet_dma_rvalid(m_ethernet0_local_data_packet_dma_rsp.r_valid),
+    .m_ethernet0_local_data_packet_dma_rready(m_ethernet0_local_data_packet_dma_req.r_ready),
     .m_pcie0_local_config_management_awid(m_pcie0_local_config_management_req.aw.id),
     .m_pcie0_local_config_management_awaddr(m_pcie0_local_config_management_req.aw.addr),
     .m_pcie0_local_config_management_awlen(m_pcie0_local_config_management_req.aw.len),
@@ -774,6 +872,84 @@ module soc_top #(parameter bit ProbeEnable = 0, DmaEnable = 0, DmaTestMode = 0) 
     .s_compute1_local_data_sram_rlast(s_compute1_local_data_sram_rsp.r.last),
     .s_compute1_local_data_sram_rvalid(s_compute1_local_data_sram_rsp.r_valid),
     .s_compute1_local_data_sram_rready(s_compute1_local_data_sram_req.r_ready),
+    .s_ethernet0_local_config_controller_regs_awid(s_ethernet0_local_config_controller_regs_req.aw.id),
+    .s_ethernet0_local_config_controller_regs_awaddr(s_ethernet0_local_config_controller_regs_req.aw.addr),
+    .s_ethernet0_local_config_controller_regs_awlen(s_ethernet0_local_config_controller_regs_req.aw.len),
+    .s_ethernet0_local_config_controller_regs_awsize(s_ethernet0_local_config_controller_regs_req.aw.size),
+    .s_ethernet0_local_config_controller_regs_awburst(s_ethernet0_local_config_controller_regs_req.aw.burst),
+    .s_ethernet0_local_config_controller_regs_awlock(s_ethernet0_local_config_controller_regs_req.aw.lock),
+    .s_ethernet0_local_config_controller_regs_awcache(s_ethernet0_local_config_controller_regs_req.aw.cache),
+    .s_ethernet0_local_config_controller_regs_awprot(s_ethernet0_local_config_controller_regs_req.aw.prot),
+    .s_ethernet0_local_config_controller_regs_awqos(s_ethernet0_local_config_controller_regs_req.aw.qos),
+    .s_ethernet0_local_config_controller_regs_awregion(s_ethernet0_local_config_controller_regs_req.aw.region),
+    .s_ethernet0_local_config_controller_regs_awvalid(s_ethernet0_local_config_controller_regs_req.aw_valid),
+    .s_ethernet0_local_config_controller_regs_awready(s_ethernet0_local_config_controller_regs_rsp.aw_ready),
+    .s_ethernet0_local_config_controller_regs_wdata(s_ethernet0_local_config_controller_regs_req.w.data),
+    .s_ethernet0_local_config_controller_regs_wstrb(s_ethernet0_local_config_controller_regs_req.w.strb),
+    .s_ethernet0_local_config_controller_regs_wlast(s_ethernet0_local_config_controller_regs_req.w.last),
+    .s_ethernet0_local_config_controller_regs_wvalid(s_ethernet0_local_config_controller_regs_req.w_valid),
+    .s_ethernet0_local_config_controller_regs_wready(s_ethernet0_local_config_controller_regs_rsp.w_ready),
+    .s_ethernet0_local_config_controller_regs_bid(s_ethernet0_local_config_controller_regs_rsp.b.id),
+    .s_ethernet0_local_config_controller_regs_bresp(s_ethernet0_local_config_controller_regs_rsp.b.resp),
+    .s_ethernet0_local_config_controller_regs_bvalid(s_ethernet0_local_config_controller_regs_rsp.b_valid),
+    .s_ethernet0_local_config_controller_regs_bready(s_ethernet0_local_config_controller_regs_req.b_ready),
+    .s_ethernet0_local_config_controller_regs_arid(s_ethernet0_local_config_controller_regs_req.ar.id),
+    .s_ethernet0_local_config_controller_regs_araddr(s_ethernet0_local_config_controller_regs_req.ar.addr),
+    .s_ethernet0_local_config_controller_regs_arlen(s_ethernet0_local_config_controller_regs_req.ar.len),
+    .s_ethernet0_local_config_controller_regs_arsize(s_ethernet0_local_config_controller_regs_req.ar.size),
+    .s_ethernet0_local_config_controller_regs_arburst(s_ethernet0_local_config_controller_regs_req.ar.burst),
+    .s_ethernet0_local_config_controller_regs_arlock(s_ethernet0_local_config_controller_regs_req.ar.lock),
+    .s_ethernet0_local_config_controller_regs_arcache(s_ethernet0_local_config_controller_regs_req.ar.cache),
+    .s_ethernet0_local_config_controller_regs_arprot(s_ethernet0_local_config_controller_regs_req.ar.prot),
+    .s_ethernet0_local_config_controller_regs_arqos(s_ethernet0_local_config_controller_regs_req.ar.qos),
+    .s_ethernet0_local_config_controller_regs_arregion(s_ethernet0_local_config_controller_regs_req.ar.region),
+    .s_ethernet0_local_config_controller_regs_arvalid(s_ethernet0_local_config_controller_regs_req.ar_valid),
+    .s_ethernet0_local_config_controller_regs_arready(s_ethernet0_local_config_controller_regs_rsp.ar_ready),
+    .s_ethernet0_local_config_controller_regs_rid(s_ethernet0_local_config_controller_regs_rsp.r.id),
+    .s_ethernet0_local_config_controller_regs_rdata(s_ethernet0_local_config_controller_regs_rsp.r.data),
+    .s_ethernet0_local_config_controller_regs_rresp(s_ethernet0_local_config_controller_regs_rsp.r.resp),
+    .s_ethernet0_local_config_controller_regs_rlast(s_ethernet0_local_config_controller_regs_rsp.r.last),
+    .s_ethernet0_local_config_controller_regs_rvalid(s_ethernet0_local_config_controller_regs_rsp.r_valid),
+    .s_ethernet0_local_config_controller_regs_rready(s_ethernet0_local_config_controller_regs_req.r_ready),
+    .s_ethernet0_local_data_sram_awid(s_ethernet0_local_data_sram_req.aw.id),
+    .s_ethernet0_local_data_sram_awaddr(s_ethernet0_local_data_sram_req.aw.addr),
+    .s_ethernet0_local_data_sram_awlen(s_ethernet0_local_data_sram_req.aw.len),
+    .s_ethernet0_local_data_sram_awsize(s_ethernet0_local_data_sram_req.aw.size),
+    .s_ethernet0_local_data_sram_awburst(s_ethernet0_local_data_sram_req.aw.burst),
+    .s_ethernet0_local_data_sram_awlock(s_ethernet0_local_data_sram_req.aw.lock),
+    .s_ethernet0_local_data_sram_awcache(s_ethernet0_local_data_sram_req.aw.cache),
+    .s_ethernet0_local_data_sram_awprot(s_ethernet0_local_data_sram_req.aw.prot),
+    .s_ethernet0_local_data_sram_awqos(s_ethernet0_local_data_sram_req.aw.qos),
+    .s_ethernet0_local_data_sram_awregion(s_ethernet0_local_data_sram_req.aw.region),
+    .s_ethernet0_local_data_sram_awvalid(s_ethernet0_local_data_sram_req.aw_valid),
+    .s_ethernet0_local_data_sram_awready(s_ethernet0_local_data_sram_rsp.aw_ready),
+    .s_ethernet0_local_data_sram_wdata(s_ethernet0_local_data_sram_req.w.data),
+    .s_ethernet0_local_data_sram_wstrb(s_ethernet0_local_data_sram_req.w.strb),
+    .s_ethernet0_local_data_sram_wlast(s_ethernet0_local_data_sram_req.w.last),
+    .s_ethernet0_local_data_sram_wvalid(s_ethernet0_local_data_sram_req.w_valid),
+    .s_ethernet0_local_data_sram_wready(s_ethernet0_local_data_sram_rsp.w_ready),
+    .s_ethernet0_local_data_sram_bid(s_ethernet0_local_data_sram_rsp.b.id),
+    .s_ethernet0_local_data_sram_bresp(s_ethernet0_local_data_sram_rsp.b.resp),
+    .s_ethernet0_local_data_sram_bvalid(s_ethernet0_local_data_sram_rsp.b_valid),
+    .s_ethernet0_local_data_sram_bready(s_ethernet0_local_data_sram_req.b_ready),
+    .s_ethernet0_local_data_sram_arid(s_ethernet0_local_data_sram_req.ar.id),
+    .s_ethernet0_local_data_sram_araddr(s_ethernet0_local_data_sram_req.ar.addr),
+    .s_ethernet0_local_data_sram_arlen(s_ethernet0_local_data_sram_req.ar.len),
+    .s_ethernet0_local_data_sram_arsize(s_ethernet0_local_data_sram_req.ar.size),
+    .s_ethernet0_local_data_sram_arburst(s_ethernet0_local_data_sram_req.ar.burst),
+    .s_ethernet0_local_data_sram_arlock(s_ethernet0_local_data_sram_req.ar.lock),
+    .s_ethernet0_local_data_sram_arcache(s_ethernet0_local_data_sram_req.ar.cache),
+    .s_ethernet0_local_data_sram_arprot(s_ethernet0_local_data_sram_req.ar.prot),
+    .s_ethernet0_local_data_sram_arqos(s_ethernet0_local_data_sram_req.ar.qos),
+    .s_ethernet0_local_data_sram_arregion(s_ethernet0_local_data_sram_req.ar.region),
+    .s_ethernet0_local_data_sram_arvalid(s_ethernet0_local_data_sram_req.ar_valid),
+    .s_ethernet0_local_data_sram_arready(s_ethernet0_local_data_sram_rsp.ar_ready),
+    .s_ethernet0_local_data_sram_rid(s_ethernet0_local_data_sram_rsp.r.id),
+    .s_ethernet0_local_data_sram_rdata(s_ethernet0_local_data_sram_rsp.r.data),
+    .s_ethernet0_local_data_sram_rresp(s_ethernet0_local_data_sram_rsp.r.resp),
+    .s_ethernet0_local_data_sram_rlast(s_ethernet0_local_data_sram_rsp.r.last),
+    .s_ethernet0_local_data_sram_rvalid(s_ethernet0_local_data_sram_rsp.r_valid),
+    .s_ethernet0_local_data_sram_rready(s_ethernet0_local_data_sram_req.r_ready),
     .s_memory0_local_config_controller_regs_awid(s_memory0_local_config_controller_regs_req.aw.id),
     .s_memory0_local_config_controller_regs_awaddr(s_memory0_local_config_controller_regs_req.aw.addr),
     .s_memory0_local_config_controller_regs_awlen(s_memory0_local_config_controller_regs_req.aw.len),
@@ -1023,7 +1199,7 @@ module soc_top #(parameter bit ProbeEnable = 0, DmaEnable = 0, DmaTestMode = 0) 
     .cfg_req_t(floo_xezim_compute0_local_config_noc_pkg::axi_in_req_t),
     .cfg_rsp_t(floo_xezim_compute0_local_config_noc_pkg::axi_in_rsp_t),
     .ConfigBase(32'h40000000),
-    .ConfigEnd(32'h40050000)
+    .ConfigEnd(32'h40060000)
   ) u_edge_compute0 (
     .clk_i(clk_i),
     .rst_ni(rst_ni),
@@ -1226,7 +1402,7 @@ module soc_top #(parameter bit ProbeEnable = 0, DmaEnable = 0, DmaTestMode = 0) 
     .cfg_req_t(floo_xezim_compute1_local_config_noc_pkg::axi_in_req_t),
     .cfg_rsp_t(floo_xezim_compute1_local_config_noc_pkg::axi_in_rsp_t),
     .ConfigBase(32'h40000000),
-    .ConfigEnd(32'h40050000)
+    .ConfigEnd(32'h40060000)
   ) u_edge_compute1 (
     .clk_i(clk_i),
     .rst_ni(rst_ni),
@@ -1309,6 +1485,8 @@ module soc_top #(parameter bit ProbeEnable = 0, DmaEnable = 0, DmaTestMode = 0) 
   end
   assign m_pcie0_local_data_host_req = '0;
   assign m_pcie0_local_config_management_req = '0;
+  assign m_ethernet0_local_data_packet_dma_req = '0;
+  assign m_ethernet0_local_config_management_req = '0;
   if (DmaEnable) begin: gen_dma_csr_compute0
   soc_dma_regs #(
     .axi_req_t(floo_xezim_compute0_local_config_noc_pkg::axi_out_req_t),
@@ -1500,6 +1678,36 @@ module soc_top #(parameter bit ProbeEnable = 0, DmaEnable = 0, DmaTestMode = 0) 
     .mon_addr_o(sram_addr_o[1*64 +: 64]),
     .mon_data_o(sram_data_o[1*64 +: 64]),
     .mon_strb_o(sram_strb_o[1*8 +: 8])
+  );
+  axi_err_slv #(
+    .AxiIdWidth(1),
+    .axi_req_t(floo_xezim_ethernet0_local_config_noc_pkg::axi_out_req_t),
+    .axi_resp_t(floo_xezim_ethernet0_local_config_noc_pkg::axi_out_rsp_t),
+    .ATOPs(0)
+  ) u_reserved_s_ethernet0_local_config_controller_regs (
+    .clk_i(clk_i),
+    .rst_ni(rst_ni),
+    .slv_req_i(s_ethernet0_local_config_controller_regs_req),
+    .slv_resp_o(s_ethernet0_local_config_controller_regs_rsp)
+  );
+  axi_sram_target #(
+    .req_t(floo_xezim_ethernet0_local_data_noc_pkg::axi_out_req_t),
+    .rsp_t(floo_xezim_ethernet0_local_data_noc_pkg::axi_out_rsp_t),
+    .IdWidth(5),
+    .Base(64'h0000000013000000),
+    .Bytes(16384),
+    .ReadOnly(0),
+    .InitFile("")
+  ) u_s_ethernet0_local_data_sram (
+    .clk_i(clk_i),
+    .rst_ni(rst_ni),
+    .req_i(s_ethernet0_local_data_sram_req),
+    .rsp_o(s_ethernet0_local_data_sram_rsp),
+    .mon_valid_o(),
+    .mon_write_o(),
+    .mon_addr_o(),
+    .mon_data_o(),
+    .mon_strb_o()
   );
   axi_err_slv #(
     .AxiIdWidth(1),

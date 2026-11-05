@@ -22,7 +22,7 @@ The **single architecture diagram** below includes all local/global FlooNoCs, co
 
 [Full-size diagram](gen/diagrams/noc-hierarchy.svg) · [Editable Mermaid](gen/diagrams/noc-hierarchy.mmd) · [Machine-readable router/NI/link graph](gen/diagrams/noc-topology.json) · [Real generated FlooNoC RTL](gen/noc/floonoc/manifest.json)
 
-**Configured topology:** 2 compute subsystems, 10 independent FlooNoC instances, 57 total generated routers. Data: 64-bit AXI4; control: 32-bit AXI4 transport for AXI4-Lite endpoint bridges. CPU/reset adapters are attached in the boot configuration; the BFM scope uses AXI agents.
+**Configured topology:** 2 compute subsystems, 12 independent FlooNoC instances, 68 total generated routers. Data: 64-bit AXI4; control: 32-bit AXI4 transport for AXI4-Lite endpoint bridges. CPU/reset adapters are attached in the boot configuration; the BFM scope uses AXI agents.
 
 **Verification truth:** Xezim exercises separate CPU cold-boot/SRAM and Verilog-AXI memory testbenches. Both Xezim and Verilator have compiled the eight structural FlooNoCs. The unified `make dv-supernoc` regression connects all meshes to upstream AXI agents and checks destinations, data, bursts, concurrent IDs, stalls and downstream SLVERR. Xezim NoC traffic is not verified. The `make dv-chip` boot configuration runs the real CPUs through the shared NoCs with CPU0-coordinated init/run/check and AXI memory stand-ins. The `make dv-chip-cpu-dma` variant also runs compiled C on real CPU0 to submit DMA through the configuration NoC, roundtrip DDR/HBM data, and compare actual CPU allocations with the Python plan (verified in CI run 41933332567). `make dv-chip-dma` independently tests both real engines with CPUs held in reset and BFM-initialized DMA SRAM. See [chip boot scope](docs/full-chip-boot.md) and [DMA integration](docs/dma-bringup.md).
 
@@ -34,8 +34,10 @@ The **single architecture diagram** below includes all local/global FlooNoCs, co
 | `compute0_local_data` | 9 | [SystemVerilog](gen/noc/floonoc/compute0/local_data/floo_xezim_compute0_local_data_noc.sv) | [FlooGen YAML](gen/noc/floonoc/compute0/local_data/floogen.yaml) |
 | `compute1_local_config` | 4 | [SystemVerilog](gen/noc/floonoc/compute1/local_config/floo_xezim_compute1_local_config_noc.sv) | [FlooGen YAML](gen/noc/floonoc/compute1/local_config/floogen.yaml) |
 | `compute1_local_data` | 6 | [SystemVerilog](gen/noc/floonoc/compute1/local_data/floo_xezim_compute1_local_data_noc.sv) | [FlooGen YAML](gen/noc/floonoc/compute1/local_data/floogen.yaml) |
+| `ethernet0_local_config` | 4 | [SystemVerilog](gen/noc/floonoc/ethernet0/local_config/floo_xezim_ethernet0_local_config_noc.sv) | [FlooGen YAML](gen/noc/floonoc/ethernet0/local_config/floogen.yaml) |
+| `ethernet0_local_data` | 4 | [SystemVerilog](gen/noc/floonoc/ethernet0/local_data/floo_xezim_ethernet0_local_data_noc.sv) | [FlooGen YAML](gen/noc/floonoc/ethernet0/local_data/floogen.yaml) |
 | `global_config` | 9 | [SystemVerilog](gen/noc/floonoc/global_config/floo_xezim_global_config_noc.sv) | [FlooGen YAML](gen/noc/floonoc/global_config/floogen.yaml) |
-| `global_data` | 9 | [SystemVerilog](gen/noc/floonoc/global_data/floo_xezim_global_data_noc.sv) | [FlooGen YAML](gen/noc/floonoc/global_data/floogen.yaml) |
+| `global_data` | 12 | [SystemVerilog](gen/noc/floonoc/global_data/floo_xezim_global_data_noc.sv) | [FlooGen YAML](gen/noc/floonoc/global_data/floogen.yaml) |
 | `memory0_local_config` | 2 | [SystemVerilog](gen/noc/floonoc/memory0/local_config/floo_xezim_memory0_local_config_noc.sv) | [FlooGen YAML](gen/noc/floonoc/memory0/local_config/floogen.yaml) |
 | `memory0_local_data` | 4 | [SystemVerilog](gen/noc/floonoc/memory0/local_data/floo_xezim_memory0_local_data_noc.sv) | [FlooGen YAML](gen/noc/floonoc/memory0/local_data/floogen.yaml) |
 | `pcie0_local_config` | 4 | [SystemVerilog](gen/noc/floonoc/pcie0/local_config/floo_xezim_pcie0_local_config_noc.sv) | [FlooGen YAML](gen/noc/floonoc/pcie0/local_config/floogen.yaml) |

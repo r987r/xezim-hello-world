@@ -1,0 +1,81 @@
+name: xezim_ethernet0_local_data
+description: 'Xezim ethernet0_local_data: independent data FlooNoC from SoC config'
+network_type: axi
+routing:
+  route_algo: XY
+  use_id_table: true
+protocols:
+- name: axi_in
+  type: narrow
+  protocol: AXI4
+  data_width: 64
+  addr_width: 64
+  id_width: 4
+  user_width: 1
+  type_prefix: null
+- name: axi_out
+  type: narrow
+  protocol: AXI4
+  data_width: 64
+  addr_width: 64
+  id_width: 5
+  user_width: 1
+  type_prefix: null
+endpoints:
+- name: packet_dma
+  mgr_port_protocol:
+  - axi_in
+- name: global_in
+  mgr_port_protocol:
+  - axi_in
+- name: sram
+  sbr_port_protocol:
+  - axi_out
+  addr_range:
+    base: 318767104
+    size: 1048576
+- name: global_out
+  sbr_port_protocol:
+  - axi_out
+  addr_range:
+  - base: 268435456
+    size: 1048576
+  - base: 285212672
+    size: 1048576
+  - base: 301989888
+    size: 1048576
+  - base: 4294967296
+    size: 1073741824
+  - base: 5368709120
+    size: 1073741824
+routers:
+- name: router
+  array:
+  - 2
+  - 2
+  degree: 5
+connections:
+- src: packet_dma
+  dst: router
+  dst_idx:
+  - 0
+  - 0
+  dst_dir: Eject
+- src: global_in
+  dst: router
+  dst_idx:
+  - 1
+  - 0
+  dst_dir: Eject
+- src: sram
+  dst: router
+  dst_idx:
+  - 0
+  - 1
+  dst_dir: Eject
+- src: global_out
+  dst: router
+  dst_idx:
+  - 1
+  - 1
+  dst_dir: Eject

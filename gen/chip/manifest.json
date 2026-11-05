@@ -58,6 +58,14 @@
       "kind": "rtl_model",
       "label": "Upstream AXI SRAM/ROM model"
     },
+    "ethernet0_local_config.controller_regs": {
+      "kind": "reserved_error",
+      "label": "DECERR responder: controller/DMA registers not integrated"
+    },
+    "ethernet0_local_data.sram": {
+      "kind": "rtl_model",
+      "label": "Upstream AXI SRAM/ROM model"
+    },
     "memory0_local_config.controller_regs": {
       "kind": "reserved_error",
       "label": "DECERR responder: controller/DMA registers not integrated"
@@ -109,7 +117,7 @@
       "name": "memory0.ddr0"
     }
   ],
-  "networks": 10,
+  "networks": 12,
   "peripheral_subsystems": [
     {
       "csr_attachment": "explicit_axi_error",
@@ -117,6 +125,14 @@
       "local_config_noc": "pcie0_local_config",
       "local_data_noc": "pcie0_local_data",
       "name": "pcie0",
+      "rtl_attachment": "reserved_idle"
+    },
+    {
+      "csr_attachment": "explicit_axi_error",
+      "ip": "ethernet_queue_mac",
+      "local_config_noc": "ethernet0_local_config",
+      "local_data_noc": "ethernet0_local_data",
+      "name": "ethernet0",
       "rtl_attachment": "reserved_idle"
     }
   ],
