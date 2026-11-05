@@ -182,6 +182,41 @@ async def exercise_controller_stress(master, dut, observer, monitor):
                   "full-burst readback; DFI and AXI observers active")
 
 
+
+async def exercise_concurrent_axi_ids(master, dut, observer, monitor):
+    """Concurrent real RTL requests across independent DDR addresses and IDs.
+
+    Tasks start before any completion is awaited, so the cocotbext-axi
+    master can keep more than one request outstanding. Independent data
+    readback and the passive AW/W/B/AR/R/DFI observer remain mandatory.
+    This does not imply a measured minimum number of simultaneous
+    controller-internal outstanding transactions or forced backpressure.
+    """
+    addresses = (0x18000, 0x28000, 0x38000, 0x48000)
+    ids = (0, 5, 10, 15)
+    payloads = tuple(bytes(((i * 41 + j * 13 + 7) & 0xff)
+                           for j in range(128)) for i in range(4))
+    writes = [cocotb.start_soon(master.write(addr, data, awid=ident))
+              for addr, data, ident in zip(addresses, payloads, ids)]
+    for index, task in enumerate(writes):
+        response = await with_timeout(task, 120, "us")
+        assert response.resp == AxiResp.OKAY, (
+            f"concurrent DDR4 write {index} B response {response.resp}")
+    reads = [cocotb.start_soon(master.read(addr, len(data), arid=ident))
+             for addr, data, ident in zip(addresses, payloads, ids)]
+    for index, task in enumerate(reads):
+        response = await with_timeout(task, 120, "us")
+        assert response.resp == AxiResp.OKAY, (
+            f"concurrent DDR4 read {index} R response {response.resp}")
+        assert response.data == payloads[index], (
+            f"concurrent DDR4 data mismatch id={ids[index]} "
+            f"addr={addresses[index]:#x}")
+    observer.assert_health(monitor)
+    dut._log.info("PASS real LiteDRAM concurrent AXI: four queued "
+                  "writes + four queued reads, IDs 0/5/10/15, "
+                  "128-byte independent readback and passive DFI capture")
+
+
 @cocotb.test(timeout_time=3, timeout_unit="ms")
 async def ddr4_wishbone_init_axi_readwrite(dut):
     """One always-active passive observer from before clock start to teardown."""
@@ -282,6 +317,7 @@ async def ddr4_wishbone_init_axi_readwrite(dut):
         dut._log.info("PASS DDR4 modeled 32MiB low/mid/high address alias guard")
 
         await exercise_controller_stress(master, dut, observer, monitor)
+        await exercise_concurrent_axi_ids(master, dut, observer, monitor)
         observer.assert_health(monitor)
         observer.next_phase("post_traffic")
         await tick(dut, 5)
