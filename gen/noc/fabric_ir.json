@@ -15,7 +15,8 @@
     "compute0",
     "compute1",
     "memory0",
-    "pcie0"
+    "pcie0",
+    "ethernet0"
   ],
   "fabrics": {
     "global_config": {
@@ -105,6 +106,11 @@
     {
       "name": "pcie0.sram",
       "base": 301989888,
+      "size": 1048576
+    },
+    {
+      "name": "ethernet0.sram",
+      "base": 318767104,
       "size": 1048576
     },
     {
