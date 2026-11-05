@@ -51,14 +51,28 @@ def config_window(soc: dict) -> tuple[int, int]:
 def compile_transport(soc: dict, upstream_plan: dict, csr: dict, *,
                       delay_multiplier: int = 2,
                       generated_wb_base: int | None = None,
-                      generated_wb_adr_bits: int | None = None) -> dict:
+                      generated_wb_adr_bits: int | None = None,
+                      proposed_window_bytes: int | None = None) -> dict:
     """Produce explicit AXI-Lite-to-Wishbone address mappings, no side effects.
 
     The generated LiteX CSR addresses are authoritative. A physical write
     to config_base+offset must be translated back to the original Wishbone
     byte address, *not* passed as an unmodified global physical address.
     """
-    base, size = config_window(soc)
+    base, configured_size = config_window(soc)
+    size = configured_size
+    if proposed_window_bytes is not None:
+        size = integer(proposed_window_bytes)
+        if (size <= configured_size or size & (size - 1)
+                or base % size or base + size > 2**32):
+            raise ValueError("proposed Config NoC aperture must enlarge the configured aligned window")
+        for region in soc.get("address_map", {}).get("config", []):
+            if region.get("name") == TARGET:
+                continue
+            other_base = integer(region["base"])
+            other_end = other_base + integer(region["size"])
+            if base < other_end and other_base < base + size:
+                raise ValueError(f"proposed DDR control aperture overlaps {region['name']}")
     targets = [v for v in soc.get("memory_targets", [])
                if v.get("name") == DDR]
     if len(targets) != 1 or targets[0].get("controller") != "litedram":
@@ -137,7 +151,12 @@ def compile_transport(soc: dict, upstream_plan: dict, csr: dict, *,
         commands.append(read)
     return {
         "schema_version": 1,
-        "status": "contract_only_not_driven_in_full_chip",
+        "status": ("proposed_aperture_not_in_soc" if proposed_window_bytes is not None
+                   else "contract_only_not_driven_in_full_chip"),
+        "configured_window_bytes": configured_size,
+        "proposed_window_bytes": size if proposed_window_bytes is not None else None,
+        "ready_for_full_chip": False,
+        "requires_config_change": proposed_window_bytes is not None,
         "reuse": "init_plan.wishbone_script; standard INIT/RUN/CHECK host coordinator",
         "config_plane": "global_config -> memory0.local_config",
         "data_plane": "global_data -> memory0.local_data (independent)",
@@ -164,6 +183,8 @@ def main() -> int:
     parser.add_argument("--plan", type=Path, required=True)
     parser.add_argument("--csr", type=Path, required=True)
     parser.add_argument("--generated-verilog", type=Path)
+    parser.add_argument("--proposed-window-bytes", type=lambda x: int(x, 0),
+                        help="test proposed larger SoC CSR window WITHOUT changing config/soc.yaml")
     parser.add_argument("--output", type=Path)
     options = parser.parse_args()
     soc = yaml.safe_load(options.soc.read_text())
@@ -174,7 +195,8 @@ def main() -> int:
         from port_contract import emitted_port_widths
         wb_adr_bits = emitted_port_widths(options.generated_verilog.read_text())["wb_ctrl_adr"]
     result = compile_transport(soc, plan, csr,
-                               generated_wb_adr_bits=wb_adr_bits)
+                               generated_wb_adr_bits=wb_adr_bits,
+                               proposed_window_bytes=options.proposed_window_bytes)
     text = json.dumps(result, indent=2, sort_keys=True) + "\n"
     if options.output:
         options.output.parent.mkdir(parents=True, exist_ok=True)
