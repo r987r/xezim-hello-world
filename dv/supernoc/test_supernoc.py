@@ -7,6 +7,7 @@ from pathlib import Path
 import cocotb
 from cocotb.clock import Clock
 from cocotb.triggers import RisingEdge, Timer, with_timeout
+from cocotb.utils import get_sim_time
 from cocotbext.axi import (
     AddressSpace, AxiBus, AxiMaster, AxiResp, AxiSlave, SparseMemoryRegion,
 )
@@ -209,7 +210,10 @@ async def routed_data_and_config_all_local_global_nocs(dut):
     await provider.validate_backdoor(address, consumers_quiesced=True)
     region = VirtualRegion("supernoc.memory_provider", "hbm",
                            address, 512, False)
-    service = MemoryService({region.name: region}, chunk_bytes=64)
+    # This testbench's configured clock is 10 ns. Count actual simulator
+    # cycles alongside host wall time; no architectural frequency claim.
+    service = MemoryService({region.name: region}, chunk_bytes=64,
+                            cycle_counter=lambda: int(get_sim_time(units="ps")) // 10000)
     service.register(region.name, provider)
     allocation = service.allocate(region.name, 256, 64,
                                   owner="supernoc_verification", phase="run")
