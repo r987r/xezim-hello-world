@@ -510,6 +510,162 @@ module soc_noc (
   input logic s_compute1_local_data_sram_rlast,
   input logic s_compute1_local_data_sram_rvalid,
   output logic s_compute1_local_data_sram_rready,
+  output logic s_ethernet0_local_config_controller_regs_awid,
+  output logic [31:0] s_ethernet0_local_config_controller_regs_awaddr,
+  output logic [7:0] s_ethernet0_local_config_controller_regs_awlen,
+  output logic [2:0] s_ethernet0_local_config_controller_regs_awsize,
+  output logic [1:0] s_ethernet0_local_config_controller_regs_awburst,
+  output logic s_ethernet0_local_config_controller_regs_awlock,
+  output logic [3:0] s_ethernet0_local_config_controller_regs_awcache,
+  output logic [2:0] s_ethernet0_local_config_controller_regs_awprot,
+  output logic [3:0] s_ethernet0_local_config_controller_regs_awqos,
+  output logic [3:0] s_ethernet0_local_config_controller_regs_awregion,
+  output logic s_ethernet0_local_config_controller_regs_awvalid,
+  input logic s_ethernet0_local_config_controller_regs_awready,
+  output logic [31:0] s_ethernet0_local_config_controller_regs_wdata,
+  output logic [3:0] s_ethernet0_local_config_controller_regs_wstrb,
+  output logic s_ethernet0_local_config_controller_regs_wlast,
+  output logic s_ethernet0_local_config_controller_regs_wvalid,
+  input logic s_ethernet0_local_config_controller_regs_wready,
+  input logic s_ethernet0_local_config_controller_regs_bid,
+  input logic [1:0] s_ethernet0_local_config_controller_regs_bresp,
+  input logic s_ethernet0_local_config_controller_regs_bvalid,
+  output logic s_ethernet0_local_config_controller_regs_bready,
+  output logic s_ethernet0_local_config_controller_regs_arid,
+  output logic [31:0] s_ethernet0_local_config_controller_regs_araddr,
+  output logic [7:0] s_ethernet0_local_config_controller_regs_arlen,
+  output logic [2:0] s_ethernet0_local_config_controller_regs_arsize,
+  output logic [1:0] s_ethernet0_local_config_controller_regs_arburst,
+  output logic s_ethernet0_local_config_controller_regs_arlock,
+  output logic [3:0] s_ethernet0_local_config_controller_regs_arcache,
+  output logic [2:0] s_ethernet0_local_config_controller_regs_arprot,
+  output logic [3:0] s_ethernet0_local_config_controller_regs_arqos,
+  output logic [3:0] s_ethernet0_local_config_controller_regs_arregion,
+  output logic s_ethernet0_local_config_controller_regs_arvalid,
+  input logic s_ethernet0_local_config_controller_regs_arready,
+  input logic s_ethernet0_local_config_controller_regs_rid,
+  input logic [31:0] s_ethernet0_local_config_controller_regs_rdata,
+  input logic [1:0] s_ethernet0_local_config_controller_regs_rresp,
+  input logic s_ethernet0_local_config_controller_regs_rlast,
+  input logic s_ethernet0_local_config_controller_regs_rvalid,
+  output logic s_ethernet0_local_config_controller_regs_rready,
+  input logic m_ethernet0_local_config_management_awid,
+  input logic [31:0] m_ethernet0_local_config_management_awaddr,
+  input logic [7:0] m_ethernet0_local_config_management_awlen,
+  input logic [2:0] m_ethernet0_local_config_management_awsize,
+  input logic [1:0] m_ethernet0_local_config_management_awburst,
+  input logic m_ethernet0_local_config_management_awlock,
+  input logic [3:0] m_ethernet0_local_config_management_awcache,
+  input logic [2:0] m_ethernet0_local_config_management_awprot,
+  input logic [3:0] m_ethernet0_local_config_management_awqos,
+  input logic [3:0] m_ethernet0_local_config_management_awregion,
+  input logic m_ethernet0_local_config_management_awvalid,
+  output logic m_ethernet0_local_config_management_awready,
+  input logic [31:0] m_ethernet0_local_config_management_wdata,
+  input logic [3:0] m_ethernet0_local_config_management_wstrb,
+  input logic m_ethernet0_local_config_management_wlast,
+  input logic m_ethernet0_local_config_management_wvalid,
+  output logic m_ethernet0_local_config_management_wready,
+  output logic m_ethernet0_local_config_management_bid,
+  output logic [1:0] m_ethernet0_local_config_management_bresp,
+  output logic m_ethernet0_local_config_management_bvalid,
+  input logic m_ethernet0_local_config_management_bready,
+  input logic m_ethernet0_local_config_management_arid,
+  input logic [31:0] m_ethernet0_local_config_management_araddr,
+  input logic [7:0] m_ethernet0_local_config_management_arlen,
+  input logic [2:0] m_ethernet0_local_config_management_arsize,
+  input logic [1:0] m_ethernet0_local_config_management_arburst,
+  input logic m_ethernet0_local_config_management_arlock,
+  input logic [3:0] m_ethernet0_local_config_management_arcache,
+  input logic [2:0] m_ethernet0_local_config_management_arprot,
+  input logic [3:0] m_ethernet0_local_config_management_arqos,
+  input logic [3:0] m_ethernet0_local_config_management_arregion,
+  input logic m_ethernet0_local_config_management_arvalid,
+  output logic m_ethernet0_local_config_management_arready,
+  output logic m_ethernet0_local_config_management_rid,
+  output logic [31:0] m_ethernet0_local_config_management_rdata,
+  output logic [1:0] m_ethernet0_local_config_management_rresp,
+  output logic m_ethernet0_local_config_management_rlast,
+  output logic m_ethernet0_local_config_management_rvalid,
+  input logic m_ethernet0_local_config_management_rready,
+  input logic [3:0] m_ethernet0_local_data_packet_dma_awid,
+  input logic [63:0] m_ethernet0_local_data_packet_dma_awaddr,
+  input logic [7:0] m_ethernet0_local_data_packet_dma_awlen,
+  input logic [2:0] m_ethernet0_local_data_packet_dma_awsize,
+  input logic [1:0] m_ethernet0_local_data_packet_dma_awburst,
+  input logic m_ethernet0_local_data_packet_dma_awlock,
+  input logic [3:0] m_ethernet0_local_data_packet_dma_awcache,
+  input logic [2:0] m_ethernet0_local_data_packet_dma_awprot,
+  input logic [3:0] m_ethernet0_local_data_packet_dma_awqos,
+  input logic [3:0] m_ethernet0_local_data_packet_dma_awregion,
+  input logic m_ethernet0_local_data_packet_dma_awvalid,
+  output logic m_ethernet0_local_data_packet_dma_awready,
+  input logic [63:0] m_ethernet0_local_data_packet_dma_wdata,
+  input logic [7:0] m_ethernet0_local_data_packet_dma_wstrb,
+  input logic m_ethernet0_local_data_packet_dma_wlast,
+  input logic m_ethernet0_local_data_packet_dma_wvalid,
+  output logic m_ethernet0_local_data_packet_dma_wready,
+  output logic [3:0] m_ethernet0_local_data_packet_dma_bid,
+  output logic [1:0] m_ethernet0_local_data_packet_dma_bresp,
+  output logic m_ethernet0_local_data_packet_dma_bvalid,
+  input logic m_ethernet0_local_data_packet_dma_bready,
+  input logic [3:0] m_ethernet0_local_data_packet_dma_arid,
+  input logic [63:0] m_ethernet0_local_data_packet_dma_araddr,
+  input logic [7:0] m_ethernet0_local_data_packet_dma_arlen,
+  input logic [2:0] m_ethernet0_local_data_packet_dma_arsize,
+  input logic [1:0] m_ethernet0_local_data_packet_dma_arburst,
+  input logic m_ethernet0_local_data_packet_dma_arlock,
+  input logic [3:0] m_ethernet0_local_data_packet_dma_arcache,
+  input logic [2:0] m_ethernet0_local_data_packet_dma_arprot,
+  input logic [3:0] m_ethernet0_local_data_packet_dma_arqos,
+  input logic [3:0] m_ethernet0_local_data_packet_dma_arregion,
+  input logic m_ethernet0_local_data_packet_dma_arvalid,
+  output logic m_ethernet0_local_data_packet_dma_arready,
+  output logic [3:0] m_ethernet0_local_data_packet_dma_rid,
+  output logic [63:0] m_ethernet0_local_data_packet_dma_rdata,
+  output logic [1:0] m_ethernet0_local_data_packet_dma_rresp,
+  output logic m_ethernet0_local_data_packet_dma_rlast,
+  output logic m_ethernet0_local_data_packet_dma_rvalid,
+  input logic m_ethernet0_local_data_packet_dma_rready,
+  output logic [4:0] s_ethernet0_local_data_sram_awid,
+  output logic [63:0] s_ethernet0_local_data_sram_awaddr,
+  output logic [7:0] s_ethernet0_local_data_sram_awlen,
+  output logic [2:0] s_ethernet0_local_data_sram_awsize,
+  output logic [1:0] s_ethernet0_local_data_sram_awburst,
+  output logic s_ethernet0_local_data_sram_awlock,
+  output logic [3:0] s_ethernet0_local_data_sram_awcache,
+  output logic [2:0] s_ethernet0_local_data_sram_awprot,
+  output logic [3:0] s_ethernet0_local_data_sram_awqos,
+  output logic [3:0] s_ethernet0_local_data_sram_awregion,
+  output logic s_ethernet0_local_data_sram_awvalid,
+  input logic s_ethernet0_local_data_sram_awready,
+  output logic [63:0] s_ethernet0_local_data_sram_wdata,
+  output logic [7:0] s_ethernet0_local_data_sram_wstrb,
+  output logic s_ethernet0_local_data_sram_wlast,
+  output logic s_ethernet0_local_data_sram_wvalid,
+  input logic s_ethernet0_local_data_sram_wready,
+  input logic [4:0] s_ethernet0_local_data_sram_bid,
+  input logic [1:0] s_ethernet0_local_data_sram_bresp,
+  input logic s_ethernet0_local_data_sram_bvalid,
+  output logic s_ethernet0_local_data_sram_bready,
+  output logic [4:0] s_ethernet0_local_data_sram_arid,
+  output logic [63:0] s_ethernet0_local_data_sram_araddr,
+  output logic [7:0] s_ethernet0_local_data_sram_arlen,
+  output logic [2:0] s_ethernet0_local_data_sram_arsize,
+  output logic [1:0] s_ethernet0_local_data_sram_arburst,
+  output logic s_ethernet0_local_data_sram_arlock,
+  output logic [3:0] s_ethernet0_local_data_sram_arcache,
+  output logic [2:0] s_ethernet0_local_data_sram_arprot,
+  output logic [3:0] s_ethernet0_local_data_sram_arqos,
+  output logic [3:0] s_ethernet0_local_data_sram_arregion,
+  output logic s_ethernet0_local_data_sram_arvalid,
+  input logic s_ethernet0_local_data_sram_arready,
+  input logic [4:0] s_ethernet0_local_data_sram_rid,
+  input logic [63:0] s_ethernet0_local_data_sram_rdata,
+  input logic [1:0] s_ethernet0_local_data_sram_rresp,
+  input logic s_ethernet0_local_data_sram_rlast,
+  input logic s_ethernet0_local_data_sram_rvalid,
+  output logic s_ethernet0_local_data_sram_rready,
   output logic s_memory0_local_config_controller_regs_awid,
   output logic [31:0] s_memory0_local_config_controller_regs_awaddr,
   output logic [7:0] s_memory0_local_config_controller_regs_awlen,
@@ -849,6 +1005,48 @@ module soc_noc (
     .sram_axi_out_req_o(noc_compute1_local_data_sram_req),
     .sram_axi_out_rsp_i(noc_compute1_local_data_sram_rsp)
   );
+  floo_xezim_ethernet0_local_config_noc_pkg::axi_out_req_t noc_ethernet0_local_config_controller_regs_req;
+  floo_xezim_ethernet0_local_config_noc_pkg::axi_out_rsp_t noc_ethernet0_local_config_controller_regs_rsp;
+  floo_xezim_ethernet0_local_config_noc_pkg::axi_in_req_t noc_ethernet0_local_config_global_in_req;
+  floo_xezim_ethernet0_local_config_noc_pkg::axi_in_rsp_t noc_ethernet0_local_config_global_in_rsp;
+  floo_xezim_ethernet0_local_config_noc_pkg::axi_out_req_t noc_ethernet0_local_config_global_out_req;
+  floo_xezim_ethernet0_local_config_noc_pkg::axi_out_rsp_t noc_ethernet0_local_config_global_out_rsp;
+  floo_xezim_ethernet0_local_config_noc_pkg::axi_in_req_t noc_ethernet0_local_config_management_req;
+  floo_xezim_ethernet0_local_config_noc_pkg::axi_in_rsp_t noc_ethernet0_local_config_management_rsp;
+  floo_xezim_ethernet0_local_config_noc u_ethernet0_local_config (
+    .clk_i(clk_i),
+    .rst_ni(rst_ni),
+    .test_enable_i(1'b0),
+    .controller_regs_axi_out_req_o(noc_ethernet0_local_config_controller_regs_req),
+    .controller_regs_axi_out_rsp_i(noc_ethernet0_local_config_controller_regs_rsp),
+    .global_in_axi_in_req_i(noc_ethernet0_local_config_global_in_req),
+    .global_in_axi_in_rsp_o(noc_ethernet0_local_config_global_in_rsp),
+    .global_out_axi_out_req_o(noc_ethernet0_local_config_global_out_req),
+    .global_out_axi_out_rsp_i(noc_ethernet0_local_config_global_out_rsp),
+    .management_axi_in_req_i(noc_ethernet0_local_config_management_req),
+    .management_axi_in_rsp_o(noc_ethernet0_local_config_management_rsp)
+  );
+  floo_xezim_ethernet0_local_data_noc_pkg::axi_in_req_t noc_ethernet0_local_data_global_in_req;
+  floo_xezim_ethernet0_local_data_noc_pkg::axi_in_rsp_t noc_ethernet0_local_data_global_in_rsp;
+  floo_xezim_ethernet0_local_data_noc_pkg::axi_out_req_t noc_ethernet0_local_data_global_out_req;
+  floo_xezim_ethernet0_local_data_noc_pkg::axi_out_rsp_t noc_ethernet0_local_data_global_out_rsp;
+  floo_xezim_ethernet0_local_data_noc_pkg::axi_in_req_t noc_ethernet0_local_data_packet_dma_req;
+  floo_xezim_ethernet0_local_data_noc_pkg::axi_in_rsp_t noc_ethernet0_local_data_packet_dma_rsp;
+  floo_xezim_ethernet0_local_data_noc_pkg::axi_out_req_t noc_ethernet0_local_data_sram_req;
+  floo_xezim_ethernet0_local_data_noc_pkg::axi_out_rsp_t noc_ethernet0_local_data_sram_rsp;
+  floo_xezim_ethernet0_local_data_noc u_ethernet0_local_data (
+    .clk_i(clk_i),
+    .rst_ni(rst_ni),
+    .test_enable_i(1'b0),
+    .global_in_axi_in_req_i(noc_ethernet0_local_data_global_in_req),
+    .global_in_axi_in_rsp_o(noc_ethernet0_local_data_global_in_rsp),
+    .global_out_axi_out_req_o(noc_ethernet0_local_data_global_out_req),
+    .global_out_axi_out_rsp_i(noc_ethernet0_local_data_global_out_rsp),
+    .packet_dma_axi_in_req_i(noc_ethernet0_local_data_packet_dma_req),
+    .packet_dma_axi_in_rsp_o(noc_ethernet0_local_data_packet_dma_rsp),
+    .sram_axi_out_req_o(noc_ethernet0_local_data_sram_req),
+    .sram_axi_out_rsp_i(noc_ethernet0_local_data_sram_rsp)
+  );
   floo_xezim_global_config_noc_pkg::axi_in_req_t noc_global_config_compute0_req;
   floo_xezim_global_config_noc_pkg::axi_in_rsp_t noc_global_config_compute0_rsp;
   floo_xezim_global_config_noc_pkg::axi_out_req_t noc_global_config_compute0_regs_req;
@@ -857,6 +1055,10 @@ module soc_noc (
   floo_xezim_global_config_noc_pkg::axi_in_rsp_t noc_global_config_compute1_rsp;
   floo_xezim_global_config_noc_pkg::axi_out_req_t noc_global_config_compute1_regs_req;
   floo_xezim_global_config_noc_pkg::axi_out_rsp_t noc_global_config_compute1_regs_rsp;
+  floo_xezim_global_config_noc_pkg::axi_in_req_t noc_global_config_ethernet0_req;
+  floo_xezim_global_config_noc_pkg::axi_in_rsp_t noc_global_config_ethernet0_rsp;
+  floo_xezim_global_config_noc_pkg::axi_out_req_t noc_global_config_ethernet0_regs_req;
+  floo_xezim_global_config_noc_pkg::axi_out_rsp_t noc_global_config_ethernet0_regs_rsp;
   floo_xezim_global_config_noc_pkg::axi_out_req_t noc_global_config_memory0_regs_req;
   floo_xezim_global_config_noc_pkg::axi_out_rsp_t noc_global_config_memory0_regs_rsp;
   floo_xezim_global_config_noc_pkg::axi_in_req_t noc_global_config_pcie0_req;
@@ -875,6 +1077,10 @@ module soc_noc (
     .compute1_axi_in_rsp_o(noc_global_config_compute1_rsp),
     .compute1_regs_axi_out_req_o(noc_global_config_compute1_regs_req),
     .compute1_regs_axi_out_rsp_i(noc_global_config_compute1_regs_rsp),
+    .ethernet0_axi_in_req_i(noc_global_config_ethernet0_req),
+    .ethernet0_axi_in_rsp_o(noc_global_config_ethernet0_rsp),
+    .ethernet0_regs_axi_out_req_o(noc_global_config_ethernet0_regs_req),
+    .ethernet0_regs_axi_out_rsp_i(noc_global_config_ethernet0_regs_rsp),
     .memory0_regs_axi_out_req_o(noc_global_config_memory0_regs_req),
     .memory0_regs_axi_out_rsp_i(noc_global_config_memory0_regs_rsp),
     .pcie0_axi_in_req_i(noc_global_config_pcie0_req),
@@ -890,6 +1096,10 @@ module soc_noc (
   floo_xezim_global_data_noc_pkg::axi_in_rsp_t noc_global_data_compute1_rsp;
   floo_xezim_global_data_noc_pkg::axi_out_req_t noc_global_data_compute1_sram_req;
   floo_xezim_global_data_noc_pkg::axi_out_rsp_t noc_global_data_compute1_sram_rsp;
+  floo_xezim_global_data_noc_pkg::axi_in_req_t noc_global_data_ethernet0_req;
+  floo_xezim_global_data_noc_pkg::axi_in_rsp_t noc_global_data_ethernet0_rsp;
+  floo_xezim_global_data_noc_pkg::axi_out_req_t noc_global_data_ethernet0_sram_req;
+  floo_xezim_global_data_noc_pkg::axi_out_rsp_t noc_global_data_ethernet0_sram_rsp;
   floo_xezim_global_data_noc_pkg::axi_out_req_t noc_global_data_memory_ingress0_req;
   floo_xezim_global_data_noc_pkg::axi_out_rsp_t noc_global_data_memory_ingress0_rsp;
   floo_xezim_global_data_noc_pkg::axi_out_req_t noc_global_data_memory_ingress1_req;
@@ -910,6 +1120,10 @@ module soc_noc (
     .compute1_axi_in_rsp_o(noc_global_data_compute1_rsp),
     .compute1_sram_axi_out_req_o(noc_global_data_compute1_sram_req),
     .compute1_sram_axi_out_rsp_i(noc_global_data_compute1_sram_rsp),
+    .ethernet0_axi_in_req_i(noc_global_data_ethernet0_req),
+    .ethernet0_axi_in_rsp_o(noc_global_data_ethernet0_rsp),
+    .ethernet0_sram_axi_out_req_o(noc_global_data_ethernet0_sram_req),
+    .ethernet0_sram_axi_out_rsp_i(noc_global_data_ethernet0_sram_rsp),
     .memory_ingress0_axi_out_req_o(noc_global_data_memory_ingress0_req),
     .memory_ingress0_axi_out_rsp_i(noc_global_data_memory_ingress0_rsp),
     .memory_ingress1_axi_out_req_o(noc_global_data_memory_ingress1_req),
@@ -1015,6 +1229,14 @@ module soc_noc (
   assign noc_pcie0_local_config_global_out_rsp = noc_global_config_pcie0_rsp;
   assign noc_pcie0_local_config_global_in_req = noc_global_config_pcie0_regs_req;
   assign noc_global_config_pcie0_regs_rsp = noc_pcie0_local_config_global_in_rsp;
+  assign noc_global_data_ethernet0_req = noc_ethernet0_local_data_global_out_req;
+  assign noc_ethernet0_local_data_global_out_rsp = noc_global_data_ethernet0_rsp;
+  assign noc_ethernet0_local_data_global_in_req = noc_global_data_ethernet0_sram_req;
+  assign noc_global_data_ethernet0_sram_rsp = noc_ethernet0_local_data_global_in_rsp;
+  assign noc_global_config_ethernet0_req = noc_ethernet0_local_config_global_out_req;
+  assign noc_ethernet0_local_config_global_out_rsp = noc_global_config_ethernet0_rsp;
+  assign noc_ethernet0_local_config_global_in_req = noc_global_config_ethernet0_regs_req;
+  assign noc_global_config_ethernet0_regs_rsp = noc_ethernet0_local_config_global_in_rsp;
   assign noc_memory0_local_data_memory_ingress0_req = noc_global_data_memory_ingress0_req;
   assign noc_global_data_memory_ingress0_rsp = noc_memory0_local_data_memory_ingress0_rsp;
   assign noc_memory0_local_data_memory_ingress1_req = noc_global_data_memory_ingress1_req;
@@ -1566,6 +1788,174 @@ module soc_noc (
   assign s_compute1_local_data_sram_rready = noc_compute1_local_data_sram_req.r_ready;
   assign noc_compute1_local_data_sram_rsp.b.user = '0;
   assign noc_compute1_local_data_sram_rsp.r.user = '0;
+  assign s_ethernet0_local_config_controller_regs_awid = noc_ethernet0_local_config_controller_regs_req.aw.id;
+  assign s_ethernet0_local_config_controller_regs_awaddr = noc_ethernet0_local_config_controller_regs_req.aw.addr;
+  assign s_ethernet0_local_config_controller_regs_awlen = noc_ethernet0_local_config_controller_regs_req.aw.len;
+  assign s_ethernet0_local_config_controller_regs_awsize = noc_ethernet0_local_config_controller_regs_req.aw.size;
+  assign s_ethernet0_local_config_controller_regs_awburst = noc_ethernet0_local_config_controller_regs_req.aw.burst;
+  assign s_ethernet0_local_config_controller_regs_awlock = noc_ethernet0_local_config_controller_regs_req.aw.lock;
+  assign s_ethernet0_local_config_controller_regs_awcache = noc_ethernet0_local_config_controller_regs_req.aw.cache;
+  assign s_ethernet0_local_config_controller_regs_awprot = noc_ethernet0_local_config_controller_regs_req.aw.prot;
+  assign s_ethernet0_local_config_controller_regs_awqos = noc_ethernet0_local_config_controller_regs_req.aw.qos;
+  assign s_ethernet0_local_config_controller_regs_awregion = noc_ethernet0_local_config_controller_regs_req.aw.region;
+  assign s_ethernet0_local_config_controller_regs_awvalid = noc_ethernet0_local_config_controller_regs_req.aw_valid;
+  assign noc_ethernet0_local_config_controller_regs_rsp.aw_ready = s_ethernet0_local_config_controller_regs_awready;
+  assign s_ethernet0_local_config_controller_regs_wdata = noc_ethernet0_local_config_controller_regs_req.w.data;
+  assign s_ethernet0_local_config_controller_regs_wstrb = noc_ethernet0_local_config_controller_regs_req.w.strb;
+  assign s_ethernet0_local_config_controller_regs_wlast = noc_ethernet0_local_config_controller_regs_req.w.last;
+  assign s_ethernet0_local_config_controller_regs_wvalid = noc_ethernet0_local_config_controller_regs_req.w_valid;
+  assign noc_ethernet0_local_config_controller_regs_rsp.w_ready = s_ethernet0_local_config_controller_regs_wready;
+  assign noc_ethernet0_local_config_controller_regs_rsp.b.id = s_ethernet0_local_config_controller_regs_bid;
+  assign noc_ethernet0_local_config_controller_regs_rsp.b.resp = s_ethernet0_local_config_controller_regs_bresp;
+  assign noc_ethernet0_local_config_controller_regs_rsp.b_valid = s_ethernet0_local_config_controller_regs_bvalid;
+  assign s_ethernet0_local_config_controller_regs_bready = noc_ethernet0_local_config_controller_regs_req.b_ready;
+  assign s_ethernet0_local_config_controller_regs_arid = noc_ethernet0_local_config_controller_regs_req.ar.id;
+  assign s_ethernet0_local_config_controller_regs_araddr = noc_ethernet0_local_config_controller_regs_req.ar.addr;
+  assign s_ethernet0_local_config_controller_regs_arlen = noc_ethernet0_local_config_controller_regs_req.ar.len;
+  assign s_ethernet0_local_config_controller_regs_arsize = noc_ethernet0_local_config_controller_regs_req.ar.size;
+  assign s_ethernet0_local_config_controller_regs_arburst = noc_ethernet0_local_config_controller_regs_req.ar.burst;
+  assign s_ethernet0_local_config_controller_regs_arlock = noc_ethernet0_local_config_controller_regs_req.ar.lock;
+  assign s_ethernet0_local_config_controller_regs_arcache = noc_ethernet0_local_config_controller_regs_req.ar.cache;
+  assign s_ethernet0_local_config_controller_regs_arprot = noc_ethernet0_local_config_controller_regs_req.ar.prot;
+  assign s_ethernet0_local_config_controller_regs_arqos = noc_ethernet0_local_config_controller_regs_req.ar.qos;
+  assign s_ethernet0_local_config_controller_regs_arregion = noc_ethernet0_local_config_controller_regs_req.ar.region;
+  assign s_ethernet0_local_config_controller_regs_arvalid = noc_ethernet0_local_config_controller_regs_req.ar_valid;
+  assign noc_ethernet0_local_config_controller_regs_rsp.ar_ready = s_ethernet0_local_config_controller_regs_arready;
+  assign noc_ethernet0_local_config_controller_regs_rsp.r.id = s_ethernet0_local_config_controller_regs_rid;
+  assign noc_ethernet0_local_config_controller_regs_rsp.r.data = s_ethernet0_local_config_controller_regs_rdata;
+  assign noc_ethernet0_local_config_controller_regs_rsp.r.resp = s_ethernet0_local_config_controller_regs_rresp;
+  assign noc_ethernet0_local_config_controller_regs_rsp.r.last = s_ethernet0_local_config_controller_regs_rlast;
+  assign noc_ethernet0_local_config_controller_regs_rsp.r_valid = s_ethernet0_local_config_controller_regs_rvalid;
+  assign s_ethernet0_local_config_controller_regs_rready = noc_ethernet0_local_config_controller_regs_req.r_ready;
+  assign noc_ethernet0_local_config_controller_regs_rsp.b.user = '0;
+  assign noc_ethernet0_local_config_controller_regs_rsp.r.user = '0;
+  assign noc_ethernet0_local_config_management_req.aw.id = m_ethernet0_local_config_management_awid;
+  assign noc_ethernet0_local_config_management_req.aw.addr = m_ethernet0_local_config_management_awaddr;
+  assign noc_ethernet0_local_config_management_req.aw.len = m_ethernet0_local_config_management_awlen;
+  assign noc_ethernet0_local_config_management_req.aw.size = m_ethernet0_local_config_management_awsize;
+  assign noc_ethernet0_local_config_management_req.aw.burst = m_ethernet0_local_config_management_awburst;
+  assign noc_ethernet0_local_config_management_req.aw.lock = m_ethernet0_local_config_management_awlock;
+  assign noc_ethernet0_local_config_management_req.aw.cache = m_ethernet0_local_config_management_awcache;
+  assign noc_ethernet0_local_config_management_req.aw.prot = m_ethernet0_local_config_management_awprot;
+  assign noc_ethernet0_local_config_management_req.aw.qos = m_ethernet0_local_config_management_awqos;
+  assign noc_ethernet0_local_config_management_req.aw.region = m_ethernet0_local_config_management_awregion;
+  assign noc_ethernet0_local_config_management_req.aw_valid = m_ethernet0_local_config_management_awvalid;
+  assign m_ethernet0_local_config_management_awready = noc_ethernet0_local_config_management_rsp.aw_ready;
+  assign noc_ethernet0_local_config_management_req.w.data = m_ethernet0_local_config_management_wdata;
+  assign noc_ethernet0_local_config_management_req.w.strb = m_ethernet0_local_config_management_wstrb;
+  assign noc_ethernet0_local_config_management_req.w.last = m_ethernet0_local_config_management_wlast;
+  assign noc_ethernet0_local_config_management_req.w_valid = m_ethernet0_local_config_management_wvalid;
+  assign m_ethernet0_local_config_management_wready = noc_ethernet0_local_config_management_rsp.w_ready;
+  assign m_ethernet0_local_config_management_bid = noc_ethernet0_local_config_management_rsp.b.id;
+  assign m_ethernet0_local_config_management_bresp = noc_ethernet0_local_config_management_rsp.b.resp;
+  assign m_ethernet0_local_config_management_bvalid = noc_ethernet0_local_config_management_rsp.b_valid;
+  assign noc_ethernet0_local_config_management_req.b_ready = m_ethernet0_local_config_management_bready;
+  assign noc_ethernet0_local_config_management_req.ar.id = m_ethernet0_local_config_management_arid;
+  assign noc_ethernet0_local_config_management_req.ar.addr = m_ethernet0_local_config_management_araddr;
+  assign noc_ethernet0_local_config_management_req.ar.len = m_ethernet0_local_config_management_arlen;
+  assign noc_ethernet0_local_config_management_req.ar.size = m_ethernet0_local_config_management_arsize;
+  assign noc_ethernet0_local_config_management_req.ar.burst = m_ethernet0_local_config_management_arburst;
+  assign noc_ethernet0_local_config_management_req.ar.lock = m_ethernet0_local_config_management_arlock;
+  assign noc_ethernet0_local_config_management_req.ar.cache = m_ethernet0_local_config_management_arcache;
+  assign noc_ethernet0_local_config_management_req.ar.prot = m_ethernet0_local_config_management_arprot;
+  assign noc_ethernet0_local_config_management_req.ar.qos = m_ethernet0_local_config_management_arqos;
+  assign noc_ethernet0_local_config_management_req.ar.region = m_ethernet0_local_config_management_arregion;
+  assign noc_ethernet0_local_config_management_req.ar_valid = m_ethernet0_local_config_management_arvalid;
+  assign m_ethernet0_local_config_management_arready = noc_ethernet0_local_config_management_rsp.ar_ready;
+  assign m_ethernet0_local_config_management_rid = noc_ethernet0_local_config_management_rsp.r.id;
+  assign m_ethernet0_local_config_management_rdata = noc_ethernet0_local_config_management_rsp.r.data;
+  assign m_ethernet0_local_config_management_rresp = noc_ethernet0_local_config_management_rsp.r.resp;
+  assign m_ethernet0_local_config_management_rlast = noc_ethernet0_local_config_management_rsp.r.last;
+  assign m_ethernet0_local_config_management_rvalid = noc_ethernet0_local_config_management_rsp.r_valid;
+  assign noc_ethernet0_local_config_management_req.r_ready = m_ethernet0_local_config_management_rready;
+  assign noc_ethernet0_local_config_management_req.aw.user = '0;
+  assign noc_ethernet0_local_config_management_req.w.user = '0;
+  assign noc_ethernet0_local_config_management_req.ar.user = '0;
+  assign noc_ethernet0_local_config_management_req.aw.atop = '0;
+  assign noc_ethernet0_local_data_packet_dma_req.aw.id = m_ethernet0_local_data_packet_dma_awid;
+  assign noc_ethernet0_local_data_packet_dma_req.aw.addr = m_ethernet0_local_data_packet_dma_awaddr;
+  assign noc_ethernet0_local_data_packet_dma_req.aw.len = m_ethernet0_local_data_packet_dma_awlen;
+  assign noc_ethernet0_local_data_packet_dma_req.aw.size = m_ethernet0_local_data_packet_dma_awsize;
+  assign noc_ethernet0_local_data_packet_dma_req.aw.burst = m_ethernet0_local_data_packet_dma_awburst;
+  assign noc_ethernet0_local_data_packet_dma_req.aw.lock = m_ethernet0_local_data_packet_dma_awlock;
+  assign noc_ethernet0_local_data_packet_dma_req.aw.cache = m_ethernet0_local_data_packet_dma_awcache;
+  assign noc_ethernet0_local_data_packet_dma_req.aw.prot = m_ethernet0_local_data_packet_dma_awprot;
+  assign noc_ethernet0_local_data_packet_dma_req.aw.qos = m_ethernet0_local_data_packet_dma_awqos;
+  assign noc_ethernet0_local_data_packet_dma_req.aw.region = m_ethernet0_local_data_packet_dma_awregion;
+  assign noc_ethernet0_local_data_packet_dma_req.aw_valid = m_ethernet0_local_data_packet_dma_awvalid;
+  assign m_ethernet0_local_data_packet_dma_awready = noc_ethernet0_local_data_packet_dma_rsp.aw_ready;
+  assign noc_ethernet0_local_data_packet_dma_req.w.data = m_ethernet0_local_data_packet_dma_wdata;
+  assign noc_ethernet0_local_data_packet_dma_req.w.strb = m_ethernet0_local_data_packet_dma_wstrb;
+  assign noc_ethernet0_local_data_packet_dma_req.w.last = m_ethernet0_local_data_packet_dma_wlast;
+  assign noc_ethernet0_local_data_packet_dma_req.w_valid = m_ethernet0_local_data_packet_dma_wvalid;
+  assign m_ethernet0_local_data_packet_dma_wready = noc_ethernet0_local_data_packet_dma_rsp.w_ready;
+  assign m_ethernet0_local_data_packet_dma_bid = noc_ethernet0_local_data_packet_dma_rsp.b.id;
+  assign m_ethernet0_local_data_packet_dma_bresp = noc_ethernet0_local_data_packet_dma_rsp.b.resp;
+  assign m_ethernet0_local_data_packet_dma_bvalid = noc_ethernet0_local_data_packet_dma_rsp.b_valid;
+  assign noc_ethernet0_local_data_packet_dma_req.b_ready = m_ethernet0_local_data_packet_dma_bready;
+  assign noc_ethernet0_local_data_packet_dma_req.ar.id = m_ethernet0_local_data_packet_dma_arid;
+  assign noc_ethernet0_local_data_packet_dma_req.ar.addr = m_ethernet0_local_data_packet_dma_araddr;
+  assign noc_ethernet0_local_data_packet_dma_req.ar.len = m_ethernet0_local_data_packet_dma_arlen;
+  assign noc_ethernet0_local_data_packet_dma_req.ar.size = m_ethernet0_local_data_packet_dma_arsize;
+  assign noc_ethernet0_local_data_packet_dma_req.ar.burst = m_ethernet0_local_data_packet_dma_arburst;
+  assign noc_ethernet0_local_data_packet_dma_req.ar.lock = m_ethernet0_local_data_packet_dma_arlock;
+  assign noc_ethernet0_local_data_packet_dma_req.ar.cache = m_ethernet0_local_data_packet_dma_arcache;
+  assign noc_ethernet0_local_data_packet_dma_req.ar.prot = m_ethernet0_local_data_packet_dma_arprot;
+  assign noc_ethernet0_local_data_packet_dma_req.ar.qos = m_ethernet0_local_data_packet_dma_arqos;
+  assign noc_ethernet0_local_data_packet_dma_req.ar.region = m_ethernet0_local_data_packet_dma_arregion;
+  assign noc_ethernet0_local_data_packet_dma_req.ar_valid = m_ethernet0_local_data_packet_dma_arvalid;
+  assign m_ethernet0_local_data_packet_dma_arready = noc_ethernet0_local_data_packet_dma_rsp.ar_ready;
+  assign m_ethernet0_local_data_packet_dma_rid = noc_ethernet0_local_data_packet_dma_rsp.r.id;
+  assign m_ethernet0_local_data_packet_dma_rdata = noc_ethernet0_local_data_packet_dma_rsp.r.data;
+  assign m_ethernet0_local_data_packet_dma_rresp = noc_ethernet0_local_data_packet_dma_rsp.r.resp;
+  assign m_ethernet0_local_data_packet_dma_rlast = noc_ethernet0_local_data_packet_dma_rsp.r.last;
+  assign m_ethernet0_local_data_packet_dma_rvalid = noc_ethernet0_local_data_packet_dma_rsp.r_valid;
+  assign noc_ethernet0_local_data_packet_dma_req.r_ready = m_ethernet0_local_data_packet_dma_rready;
+  assign noc_ethernet0_local_data_packet_dma_req.aw.user = '0;
+  assign noc_ethernet0_local_data_packet_dma_req.w.user = '0;
+  assign noc_ethernet0_local_data_packet_dma_req.ar.user = '0;
+  assign noc_ethernet0_local_data_packet_dma_req.aw.atop = '0;
+  assign s_ethernet0_local_data_sram_awid = noc_ethernet0_local_data_sram_req.aw.id;
+  assign s_ethernet0_local_data_sram_awaddr = noc_ethernet0_local_data_sram_req.aw.addr;
+  assign s_ethernet0_local_data_sram_awlen = noc_ethernet0_local_data_sram_req.aw.len;
+  assign s_ethernet0_local_data_sram_awsize = noc_ethernet0_local_data_sram_req.aw.size;
+  assign s_ethernet0_local_data_sram_awburst = noc_ethernet0_local_data_sram_req.aw.burst;
+  assign s_ethernet0_local_data_sram_awlock = noc_ethernet0_local_data_sram_req.aw.lock;
+  assign s_ethernet0_local_data_sram_awcache = noc_ethernet0_local_data_sram_req.aw.cache;
+  assign s_ethernet0_local_data_sram_awprot = noc_ethernet0_local_data_sram_req.aw.prot;
+  assign s_ethernet0_local_data_sram_awqos = noc_ethernet0_local_data_sram_req.aw.qos;
+  assign s_ethernet0_local_data_sram_awregion = noc_ethernet0_local_data_sram_req.aw.region;
+  assign s_ethernet0_local_data_sram_awvalid = noc_ethernet0_local_data_sram_req.aw_valid;
+  assign noc_ethernet0_local_data_sram_rsp.aw_ready = s_ethernet0_local_data_sram_awready;
+  assign s_ethernet0_local_data_sram_wdata = noc_ethernet0_local_data_sram_req.w.data;
+  assign s_ethernet0_local_data_sram_wstrb = noc_ethernet0_local_data_sram_req.w.strb;
+  assign s_ethernet0_local_data_sram_wlast = noc_ethernet0_local_data_sram_req.w.last;
+  assign s_ethernet0_local_data_sram_wvalid = noc_ethernet0_local_data_sram_req.w_valid;
+  assign noc_ethernet0_local_data_sram_rsp.w_ready = s_ethernet0_local_data_sram_wready;
+  assign noc_ethernet0_local_data_sram_rsp.b.id = s_ethernet0_local_data_sram_bid;
+  assign noc_ethernet0_local_data_sram_rsp.b.resp = s_ethernet0_local_data_sram_bresp;
+  assign noc_ethernet0_local_data_sram_rsp.b_valid = s_ethernet0_local_data_sram_bvalid;
+  assign s_ethernet0_local_data_sram_bready = noc_ethernet0_local_data_sram_req.b_ready;
+  assign s_ethernet0_local_data_sram_arid = noc_ethernet0_local_data_sram_req.ar.id;
+  assign s_ethernet0_local_data_sram_araddr = noc_ethernet0_local_data_sram_req.ar.addr;
+  assign s_ethernet0_local_data_sram_arlen = noc_ethernet0_local_data_sram_req.ar.len;
+  assign s_ethernet0_local_data_sram_arsize = noc_ethernet0_local_data_sram_req.ar.size;
+  assign s_ethernet0_local_data_sram_arburst = noc_ethernet0_local_data_sram_req.ar.burst;
+  assign s_ethernet0_local_data_sram_arlock = noc_ethernet0_local_data_sram_req.ar.lock;
+  assign s_ethernet0_local_data_sram_arcache = noc_ethernet0_local_data_sram_req.ar.cache;
+  assign s_ethernet0_local_data_sram_arprot = noc_ethernet0_local_data_sram_req.ar.prot;
+  assign s_ethernet0_local_data_sram_arqos = noc_ethernet0_local_data_sram_req.ar.qos;
+  assign s_ethernet0_local_data_sram_arregion = noc_ethernet0_local_data_sram_req.ar.region;
+  assign s_ethernet0_local_data_sram_arvalid = noc_ethernet0_local_data_sram_req.ar_valid;
+  assign noc_ethernet0_local_data_sram_rsp.ar_ready = s_ethernet0_local_data_sram_arready;
+  assign noc_ethernet0_local_data_sram_rsp.r.id = s_ethernet0_local_data_sram_rid;
+  assign noc_ethernet0_local_data_sram_rsp.r.data = s_ethernet0_local_data_sram_rdata;
+  assign noc_ethernet0_local_data_sram_rsp.r.resp = s_ethernet0_local_data_sram_rresp;
+  assign noc_ethernet0_local_data_sram_rsp.r.last = s_ethernet0_local_data_sram_rlast;
+  assign noc_ethernet0_local_data_sram_rsp.r_valid = s_ethernet0_local_data_sram_rvalid;
+  assign s_ethernet0_local_data_sram_rready = noc_ethernet0_local_data_sram_req.r_ready;
+  assign noc_ethernet0_local_data_sram_rsp.b.user = '0;
+  assign noc_ethernet0_local_data_sram_rsp.r.user = '0;
   assign s_memory0_local_config_controller_regs_awid = noc_memory0_local_config_controller_regs_req.aw.id;
   assign s_memory0_local_config_controller_regs_awaddr = noc_memory0_local_config_controller_regs_req.aw.addr;
   assign s_memory0_local_config_controller_regs_awlen = noc_memory0_local_config_controller_regs_req.aw.len;
@@ -2389,6 +2779,182 @@ module soc_noc (
   wire tap_compute1_local_data__sram_ruser = noc_compute1_local_data_sram_rsp.r.user;
   wire tap_compute1_local_data__sram_rvalid = noc_compute1_local_data_sram_rsp.r_valid;
   wire tap_compute1_local_data__sram_rready = noc_compute1_local_data_sram_req.r_ready;
+  wire tap_ethernet0_local_config__controller_regs_awid = noc_ethernet0_local_config_controller_regs_req.aw.id;
+  wire [31:0] tap_ethernet0_local_config__controller_regs_awaddr = noc_ethernet0_local_config_controller_regs_req.aw.addr;
+  wire [7:0] tap_ethernet0_local_config__controller_regs_awlen = noc_ethernet0_local_config_controller_regs_req.aw.len;
+  wire [2:0] tap_ethernet0_local_config__controller_regs_awsize = noc_ethernet0_local_config_controller_regs_req.aw.size;
+  wire [1:0] tap_ethernet0_local_config__controller_regs_awburst = noc_ethernet0_local_config_controller_regs_req.aw.burst;
+  wire tap_ethernet0_local_config__controller_regs_awlock = noc_ethernet0_local_config_controller_regs_req.aw.lock;
+  wire [3:0] tap_ethernet0_local_config__controller_regs_awcache = noc_ethernet0_local_config_controller_regs_req.aw.cache;
+  wire [2:0] tap_ethernet0_local_config__controller_regs_awprot = noc_ethernet0_local_config_controller_regs_req.aw.prot;
+  wire [3:0] tap_ethernet0_local_config__controller_regs_awqos = noc_ethernet0_local_config_controller_regs_req.aw.qos;
+  wire [3:0] tap_ethernet0_local_config__controller_regs_awregion = noc_ethernet0_local_config_controller_regs_req.aw.region;
+  wire tap_ethernet0_local_config__controller_regs_awuser = noc_ethernet0_local_config_controller_regs_req.aw.user;
+  wire tap_ethernet0_local_config__controller_regs_awvalid = noc_ethernet0_local_config_controller_regs_req.aw_valid;
+  wire tap_ethernet0_local_config__controller_regs_awready = noc_ethernet0_local_config_controller_regs_rsp.aw_ready;
+  wire [31:0] tap_ethernet0_local_config__controller_regs_wdata = noc_ethernet0_local_config_controller_regs_req.w.data;
+  wire [3:0] tap_ethernet0_local_config__controller_regs_wstrb = noc_ethernet0_local_config_controller_regs_req.w.strb;
+  wire tap_ethernet0_local_config__controller_regs_wlast = noc_ethernet0_local_config_controller_regs_req.w.last;
+  wire tap_ethernet0_local_config__controller_regs_wuser = noc_ethernet0_local_config_controller_regs_req.w.user;
+  wire tap_ethernet0_local_config__controller_regs_wvalid = noc_ethernet0_local_config_controller_regs_req.w_valid;
+  wire tap_ethernet0_local_config__controller_regs_wready = noc_ethernet0_local_config_controller_regs_rsp.w_ready;
+  wire tap_ethernet0_local_config__controller_regs_bid = noc_ethernet0_local_config_controller_regs_rsp.b.id;
+  wire [1:0] tap_ethernet0_local_config__controller_regs_bresp = noc_ethernet0_local_config_controller_regs_rsp.b.resp;
+  wire tap_ethernet0_local_config__controller_regs_buser = noc_ethernet0_local_config_controller_regs_rsp.b.user;
+  wire tap_ethernet0_local_config__controller_regs_bvalid = noc_ethernet0_local_config_controller_regs_rsp.b_valid;
+  wire tap_ethernet0_local_config__controller_regs_bready = noc_ethernet0_local_config_controller_regs_req.b_ready;
+  wire tap_ethernet0_local_config__controller_regs_arid = noc_ethernet0_local_config_controller_regs_req.ar.id;
+  wire [31:0] tap_ethernet0_local_config__controller_regs_araddr = noc_ethernet0_local_config_controller_regs_req.ar.addr;
+  wire [7:0] tap_ethernet0_local_config__controller_regs_arlen = noc_ethernet0_local_config_controller_regs_req.ar.len;
+  wire [2:0] tap_ethernet0_local_config__controller_regs_arsize = noc_ethernet0_local_config_controller_regs_req.ar.size;
+  wire [1:0] tap_ethernet0_local_config__controller_regs_arburst = noc_ethernet0_local_config_controller_regs_req.ar.burst;
+  wire tap_ethernet0_local_config__controller_regs_arlock = noc_ethernet0_local_config_controller_regs_req.ar.lock;
+  wire [3:0] tap_ethernet0_local_config__controller_regs_arcache = noc_ethernet0_local_config_controller_regs_req.ar.cache;
+  wire [2:0] tap_ethernet0_local_config__controller_regs_arprot = noc_ethernet0_local_config_controller_regs_req.ar.prot;
+  wire [3:0] tap_ethernet0_local_config__controller_regs_arqos = noc_ethernet0_local_config_controller_regs_req.ar.qos;
+  wire [3:0] tap_ethernet0_local_config__controller_regs_arregion = noc_ethernet0_local_config_controller_regs_req.ar.region;
+  wire tap_ethernet0_local_config__controller_regs_aruser = noc_ethernet0_local_config_controller_regs_req.ar.user;
+  wire tap_ethernet0_local_config__controller_regs_arvalid = noc_ethernet0_local_config_controller_regs_req.ar_valid;
+  wire tap_ethernet0_local_config__controller_regs_arready = noc_ethernet0_local_config_controller_regs_rsp.ar_ready;
+  wire tap_ethernet0_local_config__controller_regs_rid = noc_ethernet0_local_config_controller_regs_rsp.r.id;
+  wire [31:0] tap_ethernet0_local_config__controller_regs_rdata = noc_ethernet0_local_config_controller_regs_rsp.r.data;
+  wire [1:0] tap_ethernet0_local_config__controller_regs_rresp = noc_ethernet0_local_config_controller_regs_rsp.r.resp;
+  wire tap_ethernet0_local_config__controller_regs_rlast = noc_ethernet0_local_config_controller_regs_rsp.r.last;
+  wire tap_ethernet0_local_config__controller_regs_ruser = noc_ethernet0_local_config_controller_regs_rsp.r.user;
+  wire tap_ethernet0_local_config__controller_regs_rvalid = noc_ethernet0_local_config_controller_regs_rsp.r_valid;
+  wire tap_ethernet0_local_config__controller_regs_rready = noc_ethernet0_local_config_controller_regs_req.r_ready;
+  wire tap_ethernet0_local_config__management_awid = noc_ethernet0_local_config_management_req.aw.id;
+  wire [31:0] tap_ethernet0_local_config__management_awaddr = noc_ethernet0_local_config_management_req.aw.addr;
+  wire [7:0] tap_ethernet0_local_config__management_awlen = noc_ethernet0_local_config_management_req.aw.len;
+  wire [2:0] tap_ethernet0_local_config__management_awsize = noc_ethernet0_local_config_management_req.aw.size;
+  wire [1:0] tap_ethernet0_local_config__management_awburst = noc_ethernet0_local_config_management_req.aw.burst;
+  wire tap_ethernet0_local_config__management_awlock = noc_ethernet0_local_config_management_req.aw.lock;
+  wire [3:0] tap_ethernet0_local_config__management_awcache = noc_ethernet0_local_config_management_req.aw.cache;
+  wire [2:0] tap_ethernet0_local_config__management_awprot = noc_ethernet0_local_config_management_req.aw.prot;
+  wire [3:0] tap_ethernet0_local_config__management_awqos = noc_ethernet0_local_config_management_req.aw.qos;
+  wire [3:0] tap_ethernet0_local_config__management_awregion = noc_ethernet0_local_config_management_req.aw.region;
+  wire tap_ethernet0_local_config__management_awuser = noc_ethernet0_local_config_management_req.aw.user;
+  wire tap_ethernet0_local_config__management_awvalid = noc_ethernet0_local_config_management_req.aw_valid;
+  wire tap_ethernet0_local_config__management_awready = noc_ethernet0_local_config_management_rsp.aw_ready;
+  wire [31:0] tap_ethernet0_local_config__management_wdata = noc_ethernet0_local_config_management_req.w.data;
+  wire [3:0] tap_ethernet0_local_config__management_wstrb = noc_ethernet0_local_config_management_req.w.strb;
+  wire tap_ethernet0_local_config__management_wlast = noc_ethernet0_local_config_management_req.w.last;
+  wire tap_ethernet0_local_config__management_wuser = noc_ethernet0_local_config_management_req.w.user;
+  wire tap_ethernet0_local_config__management_wvalid = noc_ethernet0_local_config_management_req.w_valid;
+  wire tap_ethernet0_local_config__management_wready = noc_ethernet0_local_config_management_rsp.w_ready;
+  wire tap_ethernet0_local_config__management_bid = noc_ethernet0_local_config_management_rsp.b.id;
+  wire [1:0] tap_ethernet0_local_config__management_bresp = noc_ethernet0_local_config_management_rsp.b.resp;
+  wire tap_ethernet0_local_config__management_buser = noc_ethernet0_local_config_management_rsp.b.user;
+  wire tap_ethernet0_local_config__management_bvalid = noc_ethernet0_local_config_management_rsp.b_valid;
+  wire tap_ethernet0_local_config__management_bready = noc_ethernet0_local_config_management_req.b_ready;
+  wire tap_ethernet0_local_config__management_arid = noc_ethernet0_local_config_management_req.ar.id;
+  wire [31:0] tap_ethernet0_local_config__management_araddr = noc_ethernet0_local_config_management_req.ar.addr;
+  wire [7:0] tap_ethernet0_local_config__management_arlen = noc_ethernet0_local_config_management_req.ar.len;
+  wire [2:0] tap_ethernet0_local_config__management_arsize = noc_ethernet0_local_config_management_req.ar.size;
+  wire [1:0] tap_ethernet0_local_config__management_arburst = noc_ethernet0_local_config_management_req.ar.burst;
+  wire tap_ethernet0_local_config__management_arlock = noc_ethernet0_local_config_management_req.ar.lock;
+  wire [3:0] tap_ethernet0_local_config__management_arcache = noc_ethernet0_local_config_management_req.ar.cache;
+  wire [2:0] tap_ethernet0_local_config__management_arprot = noc_ethernet0_local_config_management_req.ar.prot;
+  wire [3:0] tap_ethernet0_local_config__management_arqos = noc_ethernet0_local_config_management_req.ar.qos;
+  wire [3:0] tap_ethernet0_local_config__management_arregion = noc_ethernet0_local_config_management_req.ar.region;
+  wire tap_ethernet0_local_config__management_aruser = noc_ethernet0_local_config_management_req.ar.user;
+  wire tap_ethernet0_local_config__management_arvalid = noc_ethernet0_local_config_management_req.ar_valid;
+  wire tap_ethernet0_local_config__management_arready = noc_ethernet0_local_config_management_rsp.ar_ready;
+  wire tap_ethernet0_local_config__management_rid = noc_ethernet0_local_config_management_rsp.r.id;
+  wire [31:0] tap_ethernet0_local_config__management_rdata = noc_ethernet0_local_config_management_rsp.r.data;
+  wire [1:0] tap_ethernet0_local_config__management_rresp = noc_ethernet0_local_config_management_rsp.r.resp;
+  wire tap_ethernet0_local_config__management_rlast = noc_ethernet0_local_config_management_rsp.r.last;
+  wire tap_ethernet0_local_config__management_ruser = noc_ethernet0_local_config_management_rsp.r.user;
+  wire tap_ethernet0_local_config__management_rvalid = noc_ethernet0_local_config_management_rsp.r_valid;
+  wire tap_ethernet0_local_config__management_rready = noc_ethernet0_local_config_management_req.r_ready;
+  wire [3:0] tap_ethernet0_local_data__packet_dma_awid = noc_ethernet0_local_data_packet_dma_req.aw.id;
+  wire [63:0] tap_ethernet0_local_data__packet_dma_awaddr = noc_ethernet0_local_data_packet_dma_req.aw.addr;
+  wire [7:0] tap_ethernet0_local_data__packet_dma_awlen = noc_ethernet0_local_data_packet_dma_req.aw.len;
+  wire [2:0] tap_ethernet0_local_data__packet_dma_awsize = noc_ethernet0_local_data_packet_dma_req.aw.size;
+  wire [1:0] tap_ethernet0_local_data__packet_dma_awburst = noc_ethernet0_local_data_packet_dma_req.aw.burst;
+  wire tap_ethernet0_local_data__packet_dma_awlock = noc_ethernet0_local_data_packet_dma_req.aw.lock;
+  wire [3:0] tap_ethernet0_local_data__packet_dma_awcache = noc_ethernet0_local_data_packet_dma_req.aw.cache;
+  wire [2:0] tap_ethernet0_local_data__packet_dma_awprot = noc_ethernet0_local_data_packet_dma_req.aw.prot;
+  wire [3:0] tap_ethernet0_local_data__packet_dma_awqos = noc_ethernet0_local_data_packet_dma_req.aw.qos;
+  wire [3:0] tap_ethernet0_local_data__packet_dma_awregion = noc_ethernet0_local_data_packet_dma_req.aw.region;
+  wire tap_ethernet0_local_data__packet_dma_awuser = noc_ethernet0_local_data_packet_dma_req.aw.user;
+  wire tap_ethernet0_local_data__packet_dma_awvalid = noc_ethernet0_local_data_packet_dma_req.aw_valid;
+  wire tap_ethernet0_local_data__packet_dma_awready = noc_ethernet0_local_data_packet_dma_rsp.aw_ready;
+  wire [63:0] tap_ethernet0_local_data__packet_dma_wdata = noc_ethernet0_local_data_packet_dma_req.w.data;
+  wire [7:0] tap_ethernet0_local_data__packet_dma_wstrb = noc_ethernet0_local_data_packet_dma_req.w.strb;
+  wire tap_ethernet0_local_data__packet_dma_wlast = noc_ethernet0_local_data_packet_dma_req.w.last;
+  wire tap_ethernet0_local_data__packet_dma_wuser = noc_ethernet0_local_data_packet_dma_req.w.user;
+  wire tap_ethernet0_local_data__packet_dma_wvalid = noc_ethernet0_local_data_packet_dma_req.w_valid;
+  wire tap_ethernet0_local_data__packet_dma_wready = noc_ethernet0_local_data_packet_dma_rsp.w_ready;
+  wire [3:0] tap_ethernet0_local_data__packet_dma_bid = noc_ethernet0_local_data_packet_dma_rsp.b.id;
+  wire [1:0] tap_ethernet0_local_data__packet_dma_bresp = noc_ethernet0_local_data_packet_dma_rsp.b.resp;
+  wire tap_ethernet0_local_data__packet_dma_buser = noc_ethernet0_local_data_packet_dma_rsp.b.user;
+  wire tap_ethernet0_local_data__packet_dma_bvalid = noc_ethernet0_local_data_packet_dma_rsp.b_valid;
+  wire tap_ethernet0_local_data__packet_dma_bready = noc_ethernet0_local_data_packet_dma_req.b_ready;
+  wire [3:0] tap_ethernet0_local_data__packet_dma_arid = noc_ethernet0_local_data_packet_dma_req.ar.id;
+  wire [63:0] tap_ethernet0_local_data__packet_dma_araddr = noc_ethernet0_local_data_packet_dma_req.ar.addr;
+  wire [7:0] tap_ethernet0_local_data__packet_dma_arlen = noc_ethernet0_local_data_packet_dma_req.ar.len;
+  wire [2:0] tap_ethernet0_local_data__packet_dma_arsize = noc_ethernet0_local_data_packet_dma_req.ar.size;
+  wire [1:0] tap_ethernet0_local_data__packet_dma_arburst = noc_ethernet0_local_data_packet_dma_req.ar.burst;
+  wire tap_ethernet0_local_data__packet_dma_arlock = noc_ethernet0_local_data_packet_dma_req.ar.lock;
+  wire [3:0] tap_ethernet0_local_data__packet_dma_arcache = noc_ethernet0_local_data_packet_dma_req.ar.cache;
+  wire [2:0] tap_ethernet0_local_data__packet_dma_arprot = noc_ethernet0_local_data_packet_dma_req.ar.prot;
+  wire [3:0] tap_ethernet0_local_data__packet_dma_arqos = noc_ethernet0_local_data_packet_dma_req.ar.qos;
+  wire [3:0] tap_ethernet0_local_data__packet_dma_arregion = noc_ethernet0_local_data_packet_dma_req.ar.region;
+  wire tap_ethernet0_local_data__packet_dma_aruser = noc_ethernet0_local_data_packet_dma_req.ar.user;
+  wire tap_ethernet0_local_data__packet_dma_arvalid = noc_ethernet0_local_data_packet_dma_req.ar_valid;
+  wire tap_ethernet0_local_data__packet_dma_arready = noc_ethernet0_local_data_packet_dma_rsp.ar_ready;
+  wire [3:0] tap_ethernet0_local_data__packet_dma_rid = noc_ethernet0_local_data_packet_dma_rsp.r.id;
+  wire [63:0] tap_ethernet0_local_data__packet_dma_rdata = noc_ethernet0_local_data_packet_dma_rsp.r.data;
+  wire [1:0] tap_ethernet0_local_data__packet_dma_rresp = noc_ethernet0_local_data_packet_dma_rsp.r.resp;
+  wire tap_ethernet0_local_data__packet_dma_rlast = noc_ethernet0_local_data_packet_dma_rsp.r.last;
+  wire tap_ethernet0_local_data__packet_dma_ruser = noc_ethernet0_local_data_packet_dma_rsp.r.user;
+  wire tap_ethernet0_local_data__packet_dma_rvalid = noc_ethernet0_local_data_packet_dma_rsp.r_valid;
+  wire tap_ethernet0_local_data__packet_dma_rready = noc_ethernet0_local_data_packet_dma_req.r_ready;
+  wire [4:0] tap_ethernet0_local_data__sram_awid = noc_ethernet0_local_data_sram_req.aw.id;
+  wire [63:0] tap_ethernet0_local_data__sram_awaddr = noc_ethernet0_local_data_sram_req.aw.addr;
+  wire [7:0] tap_ethernet0_local_data__sram_awlen = noc_ethernet0_local_data_sram_req.aw.len;
+  wire [2:0] tap_ethernet0_local_data__sram_awsize = noc_ethernet0_local_data_sram_req.aw.size;
+  wire [1:0] tap_ethernet0_local_data__sram_awburst = noc_ethernet0_local_data_sram_req.aw.burst;
+  wire tap_ethernet0_local_data__sram_awlock = noc_ethernet0_local_data_sram_req.aw.lock;
+  wire [3:0] tap_ethernet0_local_data__sram_awcache = noc_ethernet0_local_data_sram_req.aw.cache;
+  wire [2:0] tap_ethernet0_local_data__sram_awprot = noc_ethernet0_local_data_sram_req.aw.prot;
+  wire [3:0] tap_ethernet0_local_data__sram_awqos = noc_ethernet0_local_data_sram_req.aw.qos;
+  wire [3:0] tap_ethernet0_local_data__sram_awregion = noc_ethernet0_local_data_sram_req.aw.region;
+  wire tap_ethernet0_local_data__sram_awuser = noc_ethernet0_local_data_sram_req.aw.user;
+  wire tap_ethernet0_local_data__sram_awvalid = noc_ethernet0_local_data_sram_req.aw_valid;
+  wire tap_ethernet0_local_data__sram_awready = noc_ethernet0_local_data_sram_rsp.aw_ready;
+  wire [63:0] tap_ethernet0_local_data__sram_wdata = noc_ethernet0_local_data_sram_req.w.data;
+  wire [7:0] tap_ethernet0_local_data__sram_wstrb = noc_ethernet0_local_data_sram_req.w.strb;
+  wire tap_ethernet0_local_data__sram_wlast = noc_ethernet0_local_data_sram_req.w.last;
+  wire tap_ethernet0_local_data__sram_wuser = noc_ethernet0_local_data_sram_req.w.user;
+  wire tap_ethernet0_local_data__sram_wvalid = noc_ethernet0_local_data_sram_req.w_valid;
+  wire tap_ethernet0_local_data__sram_wready = noc_ethernet0_local_data_sram_rsp.w_ready;
+  wire [4:0] tap_ethernet0_local_data__sram_bid = noc_ethernet0_local_data_sram_rsp.b.id;
+  wire [1:0] tap_ethernet0_local_data__sram_bresp = noc_ethernet0_local_data_sram_rsp.b.resp;
+  wire tap_ethernet0_local_data__sram_buser = noc_ethernet0_local_data_sram_rsp.b.user;
+  wire tap_ethernet0_local_data__sram_bvalid = noc_ethernet0_local_data_sram_rsp.b_valid;
+  wire tap_ethernet0_local_data__sram_bready = noc_ethernet0_local_data_sram_req.b_ready;
+  wire [4:0] tap_ethernet0_local_data__sram_arid = noc_ethernet0_local_data_sram_req.ar.id;
+  wire [63:0] tap_ethernet0_local_data__sram_araddr = noc_ethernet0_local_data_sram_req.ar.addr;
+  wire [7:0] tap_ethernet0_local_data__sram_arlen = noc_ethernet0_local_data_sram_req.ar.len;
+  wire [2:0] tap_ethernet0_local_data__sram_arsize = noc_ethernet0_local_data_sram_req.ar.size;
+  wire [1:0] tap_ethernet0_local_data__sram_arburst = noc_ethernet0_local_data_sram_req.ar.burst;
+  wire tap_ethernet0_local_data__sram_arlock = noc_ethernet0_local_data_sram_req.ar.lock;
+  wire [3:0] tap_ethernet0_local_data__sram_arcache = noc_ethernet0_local_data_sram_req.ar.cache;
+  wire [2:0] tap_ethernet0_local_data__sram_arprot = noc_ethernet0_local_data_sram_req.ar.prot;
+  wire [3:0] tap_ethernet0_local_data__sram_arqos = noc_ethernet0_local_data_sram_req.ar.qos;
+  wire [3:0] tap_ethernet0_local_data__sram_arregion = noc_ethernet0_local_data_sram_req.ar.region;
+  wire tap_ethernet0_local_data__sram_aruser = noc_ethernet0_local_data_sram_req.ar.user;
+  wire tap_ethernet0_local_data__sram_arvalid = noc_ethernet0_local_data_sram_req.ar_valid;
+  wire tap_ethernet0_local_data__sram_arready = noc_ethernet0_local_data_sram_rsp.ar_ready;
+  wire [4:0] tap_ethernet0_local_data__sram_rid = noc_ethernet0_local_data_sram_rsp.r.id;
+  wire [63:0] tap_ethernet0_local_data__sram_rdata = noc_ethernet0_local_data_sram_rsp.r.data;
+  wire [1:0] tap_ethernet0_local_data__sram_rresp = noc_ethernet0_local_data_sram_rsp.r.resp;
+  wire tap_ethernet0_local_data__sram_rlast = noc_ethernet0_local_data_sram_rsp.r.last;
+  wire tap_ethernet0_local_data__sram_ruser = noc_ethernet0_local_data_sram_rsp.r.user;
+  wire tap_ethernet0_local_data__sram_rvalid = noc_ethernet0_local_data_sram_rsp.r_valid;
+  wire tap_ethernet0_local_data__sram_rready = noc_ethernet0_local_data_sram_req.r_ready;
   wire tap_memory0_local_config__controller_regs_awid = noc_memory0_local_config_controller_regs_req.aw.id;
   wire [31:0] tap_memory0_local_config__controller_regs_awaddr = noc_memory0_local_config_controller_regs_req.aw.addr;
   wire [7:0] tap_memory0_local_config__controller_regs_awlen = noc_memory0_local_config_controller_regs_req.aw.len;
@@ -3181,6 +3747,182 @@ module soc_noc (
   wire tap_global_config__pcie0_regs_ruser = noc_global_config_pcie0_regs_rsp.r.user;
   wire tap_global_config__pcie0_regs_rvalid = noc_global_config_pcie0_regs_rsp.r_valid;
   wire tap_global_config__pcie0_regs_rready = noc_global_config_pcie0_regs_req.r_ready;
+  wire [4:0] tap_ethernet0_local_data__global_out_awid = noc_ethernet0_local_data_global_out_req.aw.id;
+  wire [63:0] tap_ethernet0_local_data__global_out_awaddr = noc_ethernet0_local_data_global_out_req.aw.addr;
+  wire [7:0] tap_ethernet0_local_data__global_out_awlen = noc_ethernet0_local_data_global_out_req.aw.len;
+  wire [2:0] tap_ethernet0_local_data__global_out_awsize = noc_ethernet0_local_data_global_out_req.aw.size;
+  wire [1:0] tap_ethernet0_local_data__global_out_awburst = noc_ethernet0_local_data_global_out_req.aw.burst;
+  wire tap_ethernet0_local_data__global_out_awlock = noc_ethernet0_local_data_global_out_req.aw.lock;
+  wire [3:0] tap_ethernet0_local_data__global_out_awcache = noc_ethernet0_local_data_global_out_req.aw.cache;
+  wire [2:0] tap_ethernet0_local_data__global_out_awprot = noc_ethernet0_local_data_global_out_req.aw.prot;
+  wire [3:0] tap_ethernet0_local_data__global_out_awqos = noc_ethernet0_local_data_global_out_req.aw.qos;
+  wire [3:0] tap_ethernet0_local_data__global_out_awregion = noc_ethernet0_local_data_global_out_req.aw.region;
+  wire tap_ethernet0_local_data__global_out_awuser = noc_ethernet0_local_data_global_out_req.aw.user;
+  wire tap_ethernet0_local_data__global_out_awvalid = noc_ethernet0_local_data_global_out_req.aw_valid;
+  wire tap_ethernet0_local_data__global_out_awready = noc_ethernet0_local_data_global_out_rsp.aw_ready;
+  wire [63:0] tap_ethernet0_local_data__global_out_wdata = noc_ethernet0_local_data_global_out_req.w.data;
+  wire [7:0] tap_ethernet0_local_data__global_out_wstrb = noc_ethernet0_local_data_global_out_req.w.strb;
+  wire tap_ethernet0_local_data__global_out_wlast = noc_ethernet0_local_data_global_out_req.w.last;
+  wire tap_ethernet0_local_data__global_out_wuser = noc_ethernet0_local_data_global_out_req.w.user;
+  wire tap_ethernet0_local_data__global_out_wvalid = noc_ethernet0_local_data_global_out_req.w_valid;
+  wire tap_ethernet0_local_data__global_out_wready = noc_ethernet0_local_data_global_out_rsp.w_ready;
+  wire [4:0] tap_ethernet0_local_data__global_out_bid = noc_ethernet0_local_data_global_out_rsp.b.id;
+  wire [1:0] tap_ethernet0_local_data__global_out_bresp = noc_ethernet0_local_data_global_out_rsp.b.resp;
+  wire tap_ethernet0_local_data__global_out_buser = noc_ethernet0_local_data_global_out_rsp.b.user;
+  wire tap_ethernet0_local_data__global_out_bvalid = noc_ethernet0_local_data_global_out_rsp.b_valid;
+  wire tap_ethernet0_local_data__global_out_bready = noc_ethernet0_local_data_global_out_req.b_ready;
+  wire [4:0] tap_ethernet0_local_data__global_out_arid = noc_ethernet0_local_data_global_out_req.ar.id;
+  wire [63:0] tap_ethernet0_local_data__global_out_araddr = noc_ethernet0_local_data_global_out_req.ar.addr;
+  wire [7:0] tap_ethernet0_local_data__global_out_arlen = noc_ethernet0_local_data_global_out_req.ar.len;
+  wire [2:0] tap_ethernet0_local_data__global_out_arsize = noc_ethernet0_local_data_global_out_req.ar.size;
+  wire [1:0] tap_ethernet0_local_data__global_out_arburst = noc_ethernet0_local_data_global_out_req.ar.burst;
+  wire tap_ethernet0_local_data__global_out_arlock = noc_ethernet0_local_data_global_out_req.ar.lock;
+  wire [3:0] tap_ethernet0_local_data__global_out_arcache = noc_ethernet0_local_data_global_out_req.ar.cache;
+  wire [2:0] tap_ethernet0_local_data__global_out_arprot = noc_ethernet0_local_data_global_out_req.ar.prot;
+  wire [3:0] tap_ethernet0_local_data__global_out_arqos = noc_ethernet0_local_data_global_out_req.ar.qos;
+  wire [3:0] tap_ethernet0_local_data__global_out_arregion = noc_ethernet0_local_data_global_out_req.ar.region;
+  wire tap_ethernet0_local_data__global_out_aruser = noc_ethernet0_local_data_global_out_req.ar.user;
+  wire tap_ethernet0_local_data__global_out_arvalid = noc_ethernet0_local_data_global_out_req.ar_valid;
+  wire tap_ethernet0_local_data__global_out_arready = noc_ethernet0_local_data_global_out_rsp.ar_ready;
+  wire [4:0] tap_ethernet0_local_data__global_out_rid = noc_ethernet0_local_data_global_out_rsp.r.id;
+  wire [63:0] tap_ethernet0_local_data__global_out_rdata = noc_ethernet0_local_data_global_out_rsp.r.data;
+  wire [1:0] tap_ethernet0_local_data__global_out_rresp = noc_ethernet0_local_data_global_out_rsp.r.resp;
+  wire tap_ethernet0_local_data__global_out_rlast = noc_ethernet0_local_data_global_out_rsp.r.last;
+  wire tap_ethernet0_local_data__global_out_ruser = noc_ethernet0_local_data_global_out_rsp.r.user;
+  wire tap_ethernet0_local_data__global_out_rvalid = noc_ethernet0_local_data_global_out_rsp.r_valid;
+  wire tap_ethernet0_local_data__global_out_rready = noc_ethernet0_local_data_global_out_req.r_ready;
+  wire [3:0] tap_global_data__ethernet0_sram_awid = noc_global_data_ethernet0_sram_req.aw.id;
+  wire [63:0] tap_global_data__ethernet0_sram_awaddr = noc_global_data_ethernet0_sram_req.aw.addr;
+  wire [7:0] tap_global_data__ethernet0_sram_awlen = noc_global_data_ethernet0_sram_req.aw.len;
+  wire [2:0] tap_global_data__ethernet0_sram_awsize = noc_global_data_ethernet0_sram_req.aw.size;
+  wire [1:0] tap_global_data__ethernet0_sram_awburst = noc_global_data_ethernet0_sram_req.aw.burst;
+  wire tap_global_data__ethernet0_sram_awlock = noc_global_data_ethernet0_sram_req.aw.lock;
+  wire [3:0] tap_global_data__ethernet0_sram_awcache = noc_global_data_ethernet0_sram_req.aw.cache;
+  wire [2:0] tap_global_data__ethernet0_sram_awprot = noc_global_data_ethernet0_sram_req.aw.prot;
+  wire [3:0] tap_global_data__ethernet0_sram_awqos = noc_global_data_ethernet0_sram_req.aw.qos;
+  wire [3:0] tap_global_data__ethernet0_sram_awregion = noc_global_data_ethernet0_sram_req.aw.region;
+  wire tap_global_data__ethernet0_sram_awuser = noc_global_data_ethernet0_sram_req.aw.user;
+  wire tap_global_data__ethernet0_sram_awvalid = noc_global_data_ethernet0_sram_req.aw_valid;
+  wire tap_global_data__ethernet0_sram_awready = noc_global_data_ethernet0_sram_rsp.aw_ready;
+  wire [63:0] tap_global_data__ethernet0_sram_wdata = noc_global_data_ethernet0_sram_req.w.data;
+  wire [7:0] tap_global_data__ethernet0_sram_wstrb = noc_global_data_ethernet0_sram_req.w.strb;
+  wire tap_global_data__ethernet0_sram_wlast = noc_global_data_ethernet0_sram_req.w.last;
+  wire tap_global_data__ethernet0_sram_wuser = noc_global_data_ethernet0_sram_req.w.user;
+  wire tap_global_data__ethernet0_sram_wvalid = noc_global_data_ethernet0_sram_req.w_valid;
+  wire tap_global_data__ethernet0_sram_wready = noc_global_data_ethernet0_sram_rsp.w_ready;
+  wire [3:0] tap_global_data__ethernet0_sram_bid = noc_global_data_ethernet0_sram_rsp.b.id;
+  wire [1:0] tap_global_data__ethernet0_sram_bresp = noc_global_data_ethernet0_sram_rsp.b.resp;
+  wire tap_global_data__ethernet0_sram_buser = noc_global_data_ethernet0_sram_rsp.b.user;
+  wire tap_global_data__ethernet0_sram_bvalid = noc_global_data_ethernet0_sram_rsp.b_valid;
+  wire tap_global_data__ethernet0_sram_bready = noc_global_data_ethernet0_sram_req.b_ready;
+  wire [3:0] tap_global_data__ethernet0_sram_arid = noc_global_data_ethernet0_sram_req.ar.id;
+  wire [63:0] tap_global_data__ethernet0_sram_araddr = noc_global_data_ethernet0_sram_req.ar.addr;
+  wire [7:0] tap_global_data__ethernet0_sram_arlen = noc_global_data_ethernet0_sram_req.ar.len;
+  wire [2:0] tap_global_data__ethernet0_sram_arsize = noc_global_data_ethernet0_sram_req.ar.size;
+  wire [1:0] tap_global_data__ethernet0_sram_arburst = noc_global_data_ethernet0_sram_req.ar.burst;
+  wire tap_global_data__ethernet0_sram_arlock = noc_global_data_ethernet0_sram_req.ar.lock;
+  wire [3:0] tap_global_data__ethernet0_sram_arcache = noc_global_data_ethernet0_sram_req.ar.cache;
+  wire [2:0] tap_global_data__ethernet0_sram_arprot = noc_global_data_ethernet0_sram_req.ar.prot;
+  wire [3:0] tap_global_data__ethernet0_sram_arqos = noc_global_data_ethernet0_sram_req.ar.qos;
+  wire [3:0] tap_global_data__ethernet0_sram_arregion = noc_global_data_ethernet0_sram_req.ar.region;
+  wire tap_global_data__ethernet0_sram_aruser = noc_global_data_ethernet0_sram_req.ar.user;
+  wire tap_global_data__ethernet0_sram_arvalid = noc_global_data_ethernet0_sram_req.ar_valid;
+  wire tap_global_data__ethernet0_sram_arready = noc_global_data_ethernet0_sram_rsp.ar_ready;
+  wire [3:0] tap_global_data__ethernet0_sram_rid = noc_global_data_ethernet0_sram_rsp.r.id;
+  wire [63:0] tap_global_data__ethernet0_sram_rdata = noc_global_data_ethernet0_sram_rsp.r.data;
+  wire [1:0] tap_global_data__ethernet0_sram_rresp = noc_global_data_ethernet0_sram_rsp.r.resp;
+  wire tap_global_data__ethernet0_sram_rlast = noc_global_data_ethernet0_sram_rsp.r.last;
+  wire tap_global_data__ethernet0_sram_ruser = noc_global_data_ethernet0_sram_rsp.r.user;
+  wire tap_global_data__ethernet0_sram_rvalid = noc_global_data_ethernet0_sram_rsp.r_valid;
+  wire tap_global_data__ethernet0_sram_rready = noc_global_data_ethernet0_sram_req.r_ready;
+  wire tap_ethernet0_local_config__global_out_awid = noc_ethernet0_local_config_global_out_req.aw.id;
+  wire [31:0] tap_ethernet0_local_config__global_out_awaddr = noc_ethernet0_local_config_global_out_req.aw.addr;
+  wire [7:0] tap_ethernet0_local_config__global_out_awlen = noc_ethernet0_local_config_global_out_req.aw.len;
+  wire [2:0] tap_ethernet0_local_config__global_out_awsize = noc_ethernet0_local_config_global_out_req.aw.size;
+  wire [1:0] tap_ethernet0_local_config__global_out_awburst = noc_ethernet0_local_config_global_out_req.aw.burst;
+  wire tap_ethernet0_local_config__global_out_awlock = noc_ethernet0_local_config_global_out_req.aw.lock;
+  wire [3:0] tap_ethernet0_local_config__global_out_awcache = noc_ethernet0_local_config_global_out_req.aw.cache;
+  wire [2:0] tap_ethernet0_local_config__global_out_awprot = noc_ethernet0_local_config_global_out_req.aw.prot;
+  wire [3:0] tap_ethernet0_local_config__global_out_awqos = noc_ethernet0_local_config_global_out_req.aw.qos;
+  wire [3:0] tap_ethernet0_local_config__global_out_awregion = noc_ethernet0_local_config_global_out_req.aw.region;
+  wire tap_ethernet0_local_config__global_out_awuser = noc_ethernet0_local_config_global_out_req.aw.user;
+  wire tap_ethernet0_local_config__global_out_awvalid = noc_ethernet0_local_config_global_out_req.aw_valid;
+  wire tap_ethernet0_local_config__global_out_awready = noc_ethernet0_local_config_global_out_rsp.aw_ready;
+  wire [31:0] tap_ethernet0_local_config__global_out_wdata = noc_ethernet0_local_config_global_out_req.w.data;
+  wire [3:0] tap_ethernet0_local_config__global_out_wstrb = noc_ethernet0_local_config_global_out_req.w.strb;
+  wire tap_ethernet0_local_config__global_out_wlast = noc_ethernet0_local_config_global_out_req.w.last;
+  wire tap_ethernet0_local_config__global_out_wuser = noc_ethernet0_local_config_global_out_req.w.user;
+  wire tap_ethernet0_local_config__global_out_wvalid = noc_ethernet0_local_config_global_out_req.w_valid;
+  wire tap_ethernet0_local_config__global_out_wready = noc_ethernet0_local_config_global_out_rsp.w_ready;
+  wire tap_ethernet0_local_config__global_out_bid = noc_ethernet0_local_config_global_out_rsp.b.id;
+  wire [1:0] tap_ethernet0_local_config__global_out_bresp = noc_ethernet0_local_config_global_out_rsp.b.resp;
+  wire tap_ethernet0_local_config__global_out_buser = noc_ethernet0_local_config_global_out_rsp.b.user;
+  wire tap_ethernet0_local_config__global_out_bvalid = noc_ethernet0_local_config_global_out_rsp.b_valid;
+  wire tap_ethernet0_local_config__global_out_bready = noc_ethernet0_local_config_global_out_req.b_ready;
+  wire tap_ethernet0_local_config__global_out_arid = noc_ethernet0_local_config_global_out_req.ar.id;
+  wire [31:0] tap_ethernet0_local_config__global_out_araddr = noc_ethernet0_local_config_global_out_req.ar.addr;
+  wire [7:0] tap_ethernet0_local_config__global_out_arlen = noc_ethernet0_local_config_global_out_req.ar.len;
+  wire [2:0] tap_ethernet0_local_config__global_out_arsize = noc_ethernet0_local_config_global_out_req.ar.size;
+  wire [1:0] tap_ethernet0_local_config__global_out_arburst = noc_ethernet0_local_config_global_out_req.ar.burst;
+  wire tap_ethernet0_local_config__global_out_arlock = noc_ethernet0_local_config_global_out_req.ar.lock;
+  wire [3:0] tap_ethernet0_local_config__global_out_arcache = noc_ethernet0_local_config_global_out_req.ar.cache;
+  wire [2:0] tap_ethernet0_local_config__global_out_arprot = noc_ethernet0_local_config_global_out_req.ar.prot;
+  wire [3:0] tap_ethernet0_local_config__global_out_arqos = noc_ethernet0_local_config_global_out_req.ar.qos;
+  wire [3:0] tap_ethernet0_local_config__global_out_arregion = noc_ethernet0_local_config_global_out_req.ar.region;
+  wire tap_ethernet0_local_config__global_out_aruser = noc_ethernet0_local_config_global_out_req.ar.user;
+  wire tap_ethernet0_local_config__global_out_arvalid = noc_ethernet0_local_config_global_out_req.ar_valid;
+  wire tap_ethernet0_local_config__global_out_arready = noc_ethernet0_local_config_global_out_rsp.ar_ready;
+  wire tap_ethernet0_local_config__global_out_rid = noc_ethernet0_local_config_global_out_rsp.r.id;
+  wire [31:0] tap_ethernet0_local_config__global_out_rdata = noc_ethernet0_local_config_global_out_rsp.r.data;
+  wire [1:0] tap_ethernet0_local_config__global_out_rresp = noc_ethernet0_local_config_global_out_rsp.r.resp;
+  wire tap_ethernet0_local_config__global_out_rlast = noc_ethernet0_local_config_global_out_rsp.r.last;
+  wire tap_ethernet0_local_config__global_out_ruser = noc_ethernet0_local_config_global_out_rsp.r.user;
+  wire tap_ethernet0_local_config__global_out_rvalid = noc_ethernet0_local_config_global_out_rsp.r_valid;
+  wire tap_ethernet0_local_config__global_out_rready = noc_ethernet0_local_config_global_out_req.r_ready;
+  wire tap_global_config__ethernet0_regs_awid = noc_global_config_ethernet0_regs_req.aw.id;
+  wire [31:0] tap_global_config__ethernet0_regs_awaddr = noc_global_config_ethernet0_regs_req.aw.addr;
+  wire [7:0] tap_global_config__ethernet0_regs_awlen = noc_global_config_ethernet0_regs_req.aw.len;
+  wire [2:0] tap_global_config__ethernet0_regs_awsize = noc_global_config_ethernet0_regs_req.aw.size;
+  wire [1:0] tap_global_config__ethernet0_regs_awburst = noc_global_config_ethernet0_regs_req.aw.burst;
+  wire tap_global_config__ethernet0_regs_awlock = noc_global_config_ethernet0_regs_req.aw.lock;
+  wire [3:0] tap_global_config__ethernet0_regs_awcache = noc_global_config_ethernet0_regs_req.aw.cache;
+  wire [2:0] tap_global_config__ethernet0_regs_awprot = noc_global_config_ethernet0_regs_req.aw.prot;
+  wire [3:0] tap_global_config__ethernet0_regs_awqos = noc_global_config_ethernet0_regs_req.aw.qos;
+  wire [3:0] tap_global_config__ethernet0_regs_awregion = noc_global_config_ethernet0_regs_req.aw.region;
+  wire tap_global_config__ethernet0_regs_awuser = noc_global_config_ethernet0_regs_req.aw.user;
+  wire tap_global_config__ethernet0_regs_awvalid = noc_global_config_ethernet0_regs_req.aw_valid;
+  wire tap_global_config__ethernet0_regs_awready = noc_global_config_ethernet0_regs_rsp.aw_ready;
+  wire [31:0] tap_global_config__ethernet0_regs_wdata = noc_global_config_ethernet0_regs_req.w.data;
+  wire [3:0] tap_global_config__ethernet0_regs_wstrb = noc_global_config_ethernet0_regs_req.w.strb;
+  wire tap_global_config__ethernet0_regs_wlast = noc_global_config_ethernet0_regs_req.w.last;
+  wire tap_global_config__ethernet0_regs_wuser = noc_global_config_ethernet0_regs_req.w.user;
+  wire tap_global_config__ethernet0_regs_wvalid = noc_global_config_ethernet0_regs_req.w_valid;
+  wire tap_global_config__ethernet0_regs_wready = noc_global_config_ethernet0_regs_rsp.w_ready;
+  wire tap_global_config__ethernet0_regs_bid = noc_global_config_ethernet0_regs_rsp.b.id;
+  wire [1:0] tap_global_config__ethernet0_regs_bresp = noc_global_config_ethernet0_regs_rsp.b.resp;
+  wire tap_global_config__ethernet0_regs_buser = noc_global_config_ethernet0_regs_rsp.b.user;
+  wire tap_global_config__ethernet0_regs_bvalid = noc_global_config_ethernet0_regs_rsp.b_valid;
+  wire tap_global_config__ethernet0_regs_bready = noc_global_config_ethernet0_regs_req.b_ready;
+  wire tap_global_config__ethernet0_regs_arid = noc_global_config_ethernet0_regs_req.ar.id;
+  wire [31:0] tap_global_config__ethernet0_regs_araddr = noc_global_config_ethernet0_regs_req.ar.addr;
+  wire [7:0] tap_global_config__ethernet0_regs_arlen = noc_global_config_ethernet0_regs_req.ar.len;
+  wire [2:0] tap_global_config__ethernet0_regs_arsize = noc_global_config_ethernet0_regs_req.ar.size;
+  wire [1:0] tap_global_config__ethernet0_regs_arburst = noc_global_config_ethernet0_regs_req.ar.burst;
+  wire tap_global_config__ethernet0_regs_arlock = noc_global_config_ethernet0_regs_req.ar.lock;
+  wire [3:0] tap_global_config__ethernet0_regs_arcache = noc_global_config_ethernet0_regs_req.ar.cache;
+  wire [2:0] tap_global_config__ethernet0_regs_arprot = noc_global_config_ethernet0_regs_req.ar.prot;
+  wire [3:0] tap_global_config__ethernet0_regs_arqos = noc_global_config_ethernet0_regs_req.ar.qos;
+  wire [3:0] tap_global_config__ethernet0_regs_arregion = noc_global_config_ethernet0_regs_req.ar.region;
+  wire tap_global_config__ethernet0_regs_aruser = noc_global_config_ethernet0_regs_req.ar.user;
+  wire tap_global_config__ethernet0_regs_arvalid = noc_global_config_ethernet0_regs_req.ar_valid;
+  wire tap_global_config__ethernet0_regs_arready = noc_global_config_ethernet0_regs_rsp.ar_ready;
+  wire tap_global_config__ethernet0_regs_rid = noc_global_config_ethernet0_regs_rsp.r.id;
+  wire [31:0] tap_global_config__ethernet0_regs_rdata = noc_global_config_ethernet0_regs_rsp.r.data;
+  wire [1:0] tap_global_config__ethernet0_regs_rresp = noc_global_config_ethernet0_regs_rsp.r.resp;
+  wire tap_global_config__ethernet0_regs_rlast = noc_global_config_ethernet0_regs_rsp.r.last;
+  wire tap_global_config__ethernet0_regs_ruser = noc_global_config_ethernet0_regs_rsp.r.user;
+  wire tap_global_config__ethernet0_regs_rvalid = noc_global_config_ethernet0_regs_rsp.r_valid;
+  wire tap_global_config__ethernet0_regs_rready = noc_global_config_ethernet0_regs_req.r_ready;
   wire [3:0] tap_global_data__memory_ingress0_awid = noc_global_data_memory_ingress0_req.aw.id;
   wire [63:0] tap_global_data__memory_ingress0_awaddr = noc_global_data_memory_ingress0_req.aw.addr;
   wire [7:0] tap_global_data__memory_ingress0_awlen = noc_global_data_memory_ingress0_req.aw.len;

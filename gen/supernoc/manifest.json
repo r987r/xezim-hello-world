@@ -58,6 +58,24 @@
       "kind": "verification_target",
       "label": "AXI verification target BFM"
     },
+    "ethernet0_local_config.controller_regs": {
+      "kind": "verification_target",
+      "label": "AXI verification target BFM"
+    },
+    "ethernet0_local_config.management": {
+      "kind": "verification_bfm",
+      "label": "AXI verification BFM (reserved management boundary)",
+      "short_label": "ethernet0_local_config.management BFM"
+    },
+    "ethernet0_local_data.packet_dma": {
+      "kind": "verification_bfm",
+      "label": "AXI verification BFM (reserved packet_dma boundary)",
+      "short_label": "ethernet0_local_data.packet_dma BFM"
+    },
+    "ethernet0_local_data.sram": {
+      "kind": "verification_target",
+      "label": "AXI verification target BFM"
+    },
     "memory0_local_config.controller_regs": {
       "kind": "verification_target",
       "label": "AXI verification target BFM"
@@ -135,6 +153,22 @@
       "to": "pcie0_local_config.global_in"
     },
     {
+      "from": "ethernet0_local_data.global_out",
+      "to": "global_data.ethernet0"
+    },
+    {
+      "from": "global_data.ethernet0_sram",
+      "to": "ethernet0_local_data.global_in"
+    },
+    {
+      "from": "ethernet0_local_config.global_out",
+      "to": "global_config.ethernet0"
+    },
+    {
+      "from": "global_config.ethernet0_regs",
+      "to": "ethernet0_local_config.global_in"
+    },
+    {
       "from": "global_data.memory_ingress0",
       "to": "memory0_local_data.memory_ingress0"
     },
@@ -147,7 +181,7 @@
       "to": "memory0_local_config.global_in"
     }
   ],
-  "links": 15,
+  "links": 19,
   "masters": [
     {
       "addr_width": 32,
@@ -208,6 +242,17 @@
             "pcie0_local_config"
           ],
           "size": 65536
+        },
+        {
+          "access": "read_write",
+          "base": 1074069504,
+          "destination": "s_ethernet0_local_config_controller_regs",
+          "networks": [
+            "compute0_local_config",
+            "global_config",
+            "ethernet0_local_config"
+          ],
+          "size": 65536
         }
       ]
     },
@@ -246,17 +291,6 @@
             "compute0_local_data",
             "global_data",
             "compute1_local_data"
-          ],
-          "size": 1048576
-        },
-        {
-          "access": "read_write",
-          "base": 301989888,
-          "destination": "s_pcie0_local_data_sram",
-          "networks": [
-            "compute0_local_data",
-            "global_data",
-            "pcie0_local_data"
           ],
           "size": 1048576
         },
@@ -328,17 +362,6 @@
             "compute0_local_data",
             "global_data",
             "compute1_local_data"
-          ],
-          "size": 1048576
-        },
-        {
-          "access": "read_write",
-          "base": 301989888,
-          "destination": "s_pcie0_local_data_sram",
-          "networks": [
-            "compute0_local_data",
-            "global_data",
-            "pcie0_local_data"
           ],
           "size": 1048576
         },
@@ -436,6 +459,17 @@
             "pcie0_local_config"
           ],
           "size": 65536
+        },
+        {
+          "access": "read_write",
+          "base": 1074069504,
+          "destination": "s_ethernet0_local_config_controller_regs",
+          "networks": [
+            "compute1_local_config",
+            "global_config",
+            "ethernet0_local_config"
+          ],
+          "size": 65536
         }
       ]
     },
@@ -465,17 +499,6 @@
           "destination": "s_compute1_local_data_sram",
           "networks": [
             "compute1_local_data"
-          ],
-          "size": 1048576
-        },
-        {
-          "access": "read_write",
-          "base": 301989888,
-          "destination": "s_pcie0_local_data_sram",
-          "networks": [
-            "compute1_local_data",
-            "global_data",
-            "pcie0_local_data"
           ],
           "size": 1048576
         },
@@ -534,17 +557,6 @@
         },
         {
           "access": "read_write",
-          "base": 301989888,
-          "destination": "s_pcie0_local_data_sram",
-          "networks": [
-            "compute1_local_data",
-            "global_data",
-            "pcie0_local_data"
-          ],
-          "size": 1048576
-        },
-        {
-          "access": "read_write",
           "base": 4294967296,
           "destination": "s_memory0_local_data_target_crossbar",
           "networks": [
@@ -560,6 +572,156 @@
           "destination": "s_memory0_local_data_target_crossbar",
           "networks": [
             "compute1_local_data",
+            "global_data",
+            "memory0_local_data"
+          ],
+          "size": 1073741824
+        }
+      ]
+    },
+    {
+      "addr_width": 32,
+      "data_width": 32,
+      "endpoint": "management",
+      "id_width": 1,
+      "name": "m_ethernet0_local_config_management",
+      "network": "ethernet0_local_config",
+      "plane": "config",
+      "regions": [
+        {
+          "access": "read_write",
+          "base": 1073741824,
+          "destination": "s_compute0_local_config_dma_regs",
+          "networks": [
+            "ethernet0_local_config",
+            "global_config",
+            "compute0_local_config"
+          ],
+          "size": 65536
+        },
+        {
+          "access": "read_write",
+          "base": 1073807360,
+          "destination": "s_compute1_local_config_dma_regs",
+          "networks": [
+            "ethernet0_local_config",
+            "global_config",
+            "compute1_local_config"
+          ],
+          "size": 65536
+        },
+        {
+          "access": "read_write",
+          "base": 1073872896,
+          "destination": "s_compute0_local_config_reset_ctrl",
+          "networks": [
+            "ethernet0_local_config",
+            "global_config",
+            "compute0_local_config"
+          ],
+          "size": 4096
+        },
+        {
+          "access": "read_write",
+          "base": 1073938432,
+          "destination": "s_memory0_local_config_controller_regs",
+          "networks": [
+            "ethernet0_local_config",
+            "global_config",
+            "memory0_local_config"
+          ],
+          "size": 4096
+        },
+        {
+          "access": "read_write",
+          "base": 1074003968,
+          "destination": "s_pcie0_local_config_controller_regs",
+          "networks": [
+            "ethernet0_local_config",
+            "global_config",
+            "pcie0_local_config"
+          ],
+          "size": 65536
+        },
+        {
+          "access": "read_write",
+          "base": 1074069504,
+          "destination": "s_ethernet0_local_config_controller_regs",
+          "networks": [
+            "ethernet0_local_config"
+          ],
+          "size": 65536
+        }
+      ]
+    },
+    {
+      "addr_width": 64,
+      "data_width": 64,
+      "endpoint": "packet_dma",
+      "id_width": 4,
+      "name": "m_ethernet0_local_data_packet_dma",
+      "network": "ethernet0_local_data",
+      "plane": "data",
+      "regions": [
+        {
+          "access": "read_write",
+          "base": 268435456,
+          "destination": "s_compute0_local_data_sram",
+          "networks": [
+            "ethernet0_local_data",
+            "global_data",
+            "compute0_local_data"
+          ],
+          "size": 1048576
+        },
+        {
+          "access": "read_write",
+          "base": 285212672,
+          "destination": "s_compute1_local_data_sram",
+          "networks": [
+            "ethernet0_local_data",
+            "global_data",
+            "compute1_local_data"
+          ],
+          "size": 1048576
+        },
+        {
+          "access": "read_write",
+          "base": 301989888,
+          "destination": "s_pcie0_local_data_sram",
+          "networks": [
+            "ethernet0_local_data",
+            "global_data",
+            "pcie0_local_data"
+          ],
+          "size": 1048576
+        },
+        {
+          "access": "read_write",
+          "base": 318767104,
+          "destination": "s_ethernet0_local_data_sram",
+          "networks": [
+            "ethernet0_local_data"
+          ],
+          "size": 1048576
+        },
+        {
+          "access": "read_write",
+          "base": 4294967296,
+          "destination": "s_memory0_local_data_target_crossbar",
+          "networks": [
+            "ethernet0_local_data",
+            "global_data",
+            "memory0_local_data"
+          ],
+          "size": 1073741824
+        },
+        {
+          "access": "read_write",
+          "base": 5368709120,
+          "destination": "s_memory0_local_data_target_crossbar",
+          "networks": [
+            "ethernet0_local_data",
             "global_data",
             "memory0_local_data"
           ],
@@ -628,6 +790,17 @@
             "pcie0_local_config"
           ],
           "size": 65536
+        },
+        {
+          "access": "read_write",
+          "base": 1074069504,
+          "destination": "s_ethernet0_local_config_controller_regs",
+          "networks": [
+            "pcie0_local_config",
+            "global_config",
+            "ethernet0_local_config"
+          ],
+          "size": 65536
         }
       ]
     },
@@ -673,6 +846,17 @@
         },
         {
           "access": "read_write",
+          "base": 318767104,
+          "destination": "s_ethernet0_local_data_sram",
+          "networks": [
+            "pcie0_local_data",
+            "global_data",
+            "ethernet0_local_data"
+          ],
+          "size": 1048576
+        },
+        {
+          "access": "read_write",
           "base": 4294967296,
           "destination": "s_memory0_local_data_target_crossbar",
           "networks": [
@@ -696,7 +880,7 @@
       ]
     }
   ],
-  "meshes": 10,
+  "meshes": 12,
   "slaves": [
     {
       "addr_width": 32,
@@ -799,6 +983,36 @@
       "regions": [
         {
           "base": 285212672,
+          "size": 1048576
+        }
+      ]
+    },
+    {
+      "addr_width": 32,
+      "data_width": 32,
+      "endpoint": "controller_regs",
+      "id_width": 1,
+      "name": "s_ethernet0_local_config_controller_regs",
+      "network": "ethernet0_local_config",
+      "plane": "config",
+      "regions": [
+        {
+          "base": 1074069504,
+          "size": 65536
+        }
+      ]
+    },
+    {
+      "addr_width": 64,
+      "data_width": 64,
+      "endpoint": "sram",
+      "id_width": 5,
+      "name": "s_ethernet0_local_data_sram",
+      "network": "ethernet0_local_data",
+      "plane": "data",
+      "regions": [
+        {
+          "base": 318767104,
           "size": 1048576
         }
       ]
