@@ -16,15 +16,17 @@ package floo_xezim_global_config_noc_pkg;
   //   Address Map   //
   /////////////////////
 
-  typedef enum logic[2:0] {
+  typedef enum logic[3:0] {
     Compute0 = 0,
     Compute1 = 1,
     Pcie0 = 2,
-    Compute0Regs = 3,
-    Compute1Regs = 4,
-    Pcie0Regs = 5,
-    Memory0Regs = 6,
-    NumEndpoints = 7} ep_id_e;
+    Ethernet0 = 3,
+    Compute0Regs = 4,
+    Compute1Regs = 5,
+    Pcie0Regs = 6,
+    Ethernet0Regs = 7,
+    Memory0Regs = 8,
+    NumEndpoints = 9} ep_id_e;
 
 
 
@@ -32,7 +34,8 @@ package floo_xezim_global_config_noc_pkg;
     Compute0RegsSamIdx = 1,
     Compute1RegsSamIdx = 2,
     Pcie0RegsSamIdx = 3,
-    Memory0RegsSamIdx = 4} sam_idx_e;
+    Ethernet0RegsSamIdx = 4,
+    Memory0RegsSamIdx = 5} sam_idx_e;
 
 
 
@@ -55,7 +58,7 @@ typedef logic route_t;
     id_t end_addr;
   } route_map_rule_t;
 
-  localparam int unsigned SamNumRules = 5;
+  localparam int unsigned SamNumRules = 6;
 
 typedef struct packed {
     id_t idx;
@@ -64,19 +67,22 @@ typedef struct packed {
 } sam_rule_t;
 
 localparam sam_rule_t[SamNumRules-1:0] Sam = '{
-'{    idx: '{x: 0, y: 2, port_id: 0},
+'{    idx: '{x: 2, y: 2, port_id: 0},
     start_addr: 32'h40030000,
     end_addr: 32'h40031000},// Memory0Regs
-'{    idx: '{x: 2, y: 1, port_id: 0},
+'{    idx: '{x: 1, y: 2, port_id: 0},
+    start_addr: 32'h40050000,
+    end_addr: 32'h40060000},// Ethernet0Regs
+'{    idx: '{x: 0, y: 2, port_id: 0},
     start_addr: 32'h40040000,
     end_addr: 32'h40050000},// Pcie0Regs
-'{    idx: '{x: 1, y: 1, port_id: 0},
+'{    idx: '{x: 2, y: 1, port_id: 0},
     start_addr: 32'h40010000,
     end_addr: 32'h40020000},// Compute1Regs
-'{    idx: '{x: 0, y: 1, port_id: 0},
+'{    idx: '{x: 1, y: 1, port_id: 0},
     start_addr: 32'h40000000,
     end_addr: 32'h40010000},// Compute0Regs
-'{    idx: '{x: 0, y: 1, port_id: 0},
+'{    idx: '{x: 1, y: 1, port_id: 0},
     start_addr: 32'h40020000,
     end_addr: 32'h40021000} // Compute0Regs
 
@@ -89,7 +95,7 @@ localparam sam_rule_t[SamNumRules-1:0] Sam = '{
     XYAddrOffsetX: 31,
     XYAddrOffsetY: 33,
     IdAddrOffset: 0,
-    NumSamRules: 5,
+    NumSamRules: 6,
     NumRoutes: 0,
     CollectiveCfg: '{    OpCfg: '{    EnNarrowMulticast: 1'b0,
     EnWideMulticast: 1'b0,

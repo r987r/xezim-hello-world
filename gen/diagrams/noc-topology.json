@@ -1022,7 +1022,7 @@
     },
     {
       "from": {
-        "instance": "global_config.router_0_0",
+        "instance": "ethernet0_local_config.router_0_0",
         "port": "E"
       },
       "id": "noc_link_0052",
@@ -1035,6 +1035,326 @@
       ],
       "status": "generated_structural",
       "to": {
+        "instance": "ethernet0_local_config.router_1_0",
+        "port": "W"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "ethernet0_local_config.router_0_0",
+        "port": "S"
+      },
+      "id": "noc_link_0053",
+      "name": "north/south FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "ethernet0_local_config.router_0_1",
+        "port": "N"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "ethernet0_local_config.router_0_1",
+        "port": "E"
+      },
+      "id": "noc_link_0054",
+      "name": "east/west FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "ethernet0_local_config.router_1_1",
+        "port": "W"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "ethernet0_local_config.router_1_0",
+        "port": "S"
+      },
+      "id": "noc_link_0055",
+      "name": "north/south FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "ethernet0_local_config.router_1_1",
+        "port": "N"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "ethernet0_local_config.management",
+        "port": "NoC"
+      },
+      "id": "noc_link_0056",
+      "name": "management NI Eject",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "ethernet0_local_config.router_0_0",
+        "port": "Eject"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "ethernet0_local_config.global_in",
+        "port": "NoC"
+      },
+      "id": "noc_link_0057",
+      "name": "global_in NI Eject",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "ethernet0_local_config.router_1_0",
+        "port": "Eject"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "ethernet0_local_config.controller_regs",
+        "port": "NoC"
+      },
+      "id": "noc_link_0058",
+      "name": "controller_regs NI Eject",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "ethernet0_local_config.router_0_1",
+        "port": "Eject"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "ethernet0_local_config.global_out",
+        "port": "NoC"
+      },
+      "id": "noc_link_0059",
+      "name": "global_out NI Eject",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "ethernet0_local_config.router_1_1",
+        "port": "Eject"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "ethernet0_local_data.router_0_0",
+        "port": "E"
+      },
+      "id": "noc_link_0060",
+      "name": "east/west FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "ethernet0_local_data.router_1_0",
+        "port": "W"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "ethernet0_local_data.router_0_0",
+        "port": "S"
+      },
+      "id": "noc_link_0061",
+      "name": "north/south FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "ethernet0_local_data.router_0_1",
+        "port": "N"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "ethernet0_local_data.router_0_1",
+        "port": "E"
+      },
+      "id": "noc_link_0062",
+      "name": "east/west FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "ethernet0_local_data.router_1_1",
+        "port": "W"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "ethernet0_local_data.router_1_0",
+        "port": "S"
+      },
+      "id": "noc_link_0063",
+      "name": "north/south FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "ethernet0_local_data.router_1_1",
+        "port": "N"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "ethernet0_local_data.packet_dma",
+        "port": "NoC"
+      },
+      "id": "noc_link_0064",
+      "name": "packet_dma NI Eject",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "ethernet0_local_data.router_0_0",
+        "port": "Eject"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "ethernet0_local_data.global_in",
+        "port": "NoC"
+      },
+      "id": "noc_link_0065",
+      "name": "global_in NI Eject",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "ethernet0_local_data.router_1_0",
+        "port": "Eject"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "ethernet0_local_data.sram",
+        "port": "NoC"
+      },
+      "id": "noc_link_0066",
+      "name": "sram NI Eject",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "ethernet0_local_data.router_0_1",
+        "port": "Eject"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "ethernet0_local_data.global_out",
+        "port": "NoC"
+      },
+      "id": "noc_link_0067",
+      "name": "global_out NI Eject",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "ethernet0_local_data.router_1_1",
+        "port": "Eject"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "global_config.router_0_0",
+        "port": "E"
+      },
+      "id": "noc_link_0068",
+      "name": "east/west FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
         "instance": "global_config.router_1_0",
         "port": "W"
       },
@@ -1045,7 +1365,7 @@
         "instance": "global_config.router_1_0",
         "port": "E"
       },
-      "id": "noc_link_0053",
+      "id": "noc_link_0069",
       "name": "east/west FlooNoC request+response links",
       "signals": [
         {
@@ -1065,7 +1385,7 @@
         "instance": "global_config.router_0_0",
         "port": "S"
       },
-      "id": "noc_link_0054",
+      "id": "noc_link_0070",
       "name": "north/south FlooNoC request+response links",
       "signals": [
         {
@@ -1085,7 +1405,7 @@
         "instance": "global_config.router_0_1",
         "port": "E"
       },
-      "id": "noc_link_0055",
+      "id": "noc_link_0071",
       "name": "east/west FlooNoC request+response links",
       "signals": [
         {
@@ -1105,7 +1425,7 @@
         "instance": "global_config.router_1_0",
         "port": "S"
       },
-      "id": "noc_link_0056",
+      "id": "noc_link_0072",
       "name": "north/south FlooNoC request+response links",
       "signals": [
         {
@@ -1125,7 +1445,7 @@
         "instance": "global_config.router_1_1",
         "port": "E"
       },
-      "id": "noc_link_0057",
+      "id": "noc_link_0073",
       "name": "east/west FlooNoC request+response links",
       "signals": [
         {
@@ -1145,7 +1465,7 @@
         "instance": "global_config.router_2_0",
         "port": "S"
       },
-      "id": "noc_link_0058",
+      "id": "noc_link_0074",
       "name": "north/south FlooNoC request+response links",
       "signals": [
         {
@@ -1165,7 +1485,7 @@
         "instance": "global_config.router_0_1",
         "port": "S"
       },
-      "id": "noc_link_0059",
+      "id": "noc_link_0075",
       "name": "north/south FlooNoC request+response links",
       "signals": [
         {
@@ -1185,7 +1505,7 @@
         "instance": "global_config.router_0_2",
         "port": "E"
       },
-      "id": "noc_link_0060",
+      "id": "noc_link_0076",
       "name": "east/west FlooNoC request+response links",
       "signals": [
         {
@@ -1205,7 +1525,7 @@
         "instance": "global_config.router_1_1",
         "port": "S"
       },
-      "id": "noc_link_0061",
+      "id": "noc_link_0077",
       "name": "north/south FlooNoC request+response links",
       "signals": [
         {
@@ -1225,7 +1545,7 @@
         "instance": "global_config.router_1_2",
         "port": "E"
       },
-      "id": "noc_link_0062",
+      "id": "noc_link_0078",
       "name": "east/west FlooNoC request+response links",
       "signals": [
         {
@@ -1245,7 +1565,7 @@
         "instance": "global_config.router_2_1",
         "port": "S"
       },
-      "id": "noc_link_0063",
+      "id": "noc_link_0079",
       "name": "north/south FlooNoC request+response links",
       "signals": [
         {
@@ -1265,7 +1585,7 @@
         "instance": "global_config.compute0",
         "port": "NoC"
       },
-      "id": "noc_link_0064",
+      "id": "noc_link_0080",
       "name": "compute0 NI Eject",
       "signals": [
         {
@@ -1285,7 +1605,7 @@
         "instance": "global_config.compute1",
         "port": "NoC"
       },
-      "id": "noc_link_0065",
+      "id": "noc_link_0081",
       "name": "compute1 NI Eject",
       "signals": [
         {
@@ -1305,7 +1625,7 @@
         "instance": "global_config.pcie0",
         "port": "NoC"
       },
-      "id": "noc_link_0066",
+      "id": "noc_link_0082",
       "name": "pcie0 NI Eject",
       "signals": [
         {
@@ -1322,11 +1642,11 @@
     },
     {
       "from": {
-        "instance": "global_config.compute0_regs",
+        "instance": "global_config.ethernet0",
         "port": "NoC"
       },
-      "id": "noc_link_0067",
-      "name": "compute0_regs NI Eject",
+      "id": "noc_link_0083",
+      "name": "ethernet0 NI Eject",
       "signals": [
         {
           "name": "floo_req_and_rsp",
@@ -1342,11 +1662,11 @@
     },
     {
       "from": {
-        "instance": "global_config.compute1_regs",
+        "instance": "global_config.compute0_regs",
         "port": "NoC"
       },
-      "id": "noc_link_0068",
-      "name": "compute1_regs NI Eject",
+      "id": "noc_link_0084",
+      "name": "compute0_regs NI Eject",
       "signals": [
         {
           "name": "floo_req_and_rsp",
@@ -1362,11 +1682,11 @@
     },
     {
       "from": {
-        "instance": "global_config.pcie0_regs",
+        "instance": "global_config.compute1_regs",
         "port": "NoC"
       },
-      "id": "noc_link_0069",
-      "name": "pcie0_regs NI Eject",
+      "id": "noc_link_0085",
+      "name": "compute1_regs NI Eject",
       "signals": [
         {
           "name": "floo_req_and_rsp",
@@ -1382,11 +1702,11 @@
     },
     {
       "from": {
-        "instance": "global_config.memory0_regs",
+        "instance": "global_config.pcie0_regs",
         "port": "NoC"
       },
-      "id": "noc_link_0070",
-      "name": "memory0_regs NI Eject",
+      "id": "noc_link_0086",
+      "name": "pcie0_regs NI Eject",
       "signals": [
         {
           "name": "floo_req_and_rsp",
@@ -1402,10 +1722,50 @@
     },
     {
       "from": {
+        "instance": "global_config.ethernet0_regs",
+        "port": "NoC"
+      },
+      "id": "noc_link_0087",
+      "name": "ethernet0_regs NI Eject",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "global_config.router_1_2",
+        "port": "Eject"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "global_config.memory0_regs",
+        "port": "NoC"
+      },
+      "id": "noc_link_0088",
+      "name": "memory0_regs NI Eject",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "global_config.router_2_2",
+        "port": "Eject"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
         "instance": "global_data.router_0_0",
         "port": "E"
       },
-      "id": "noc_link_0071",
+      "id": "noc_link_0089",
       "name": "east/west FlooNoC request+response links",
       "signals": [
         {
@@ -1425,7 +1785,7 @@
         "instance": "global_data.router_1_0",
         "port": "E"
       },
-      "id": "noc_link_0072",
+      "id": "noc_link_0090",
       "name": "east/west FlooNoC request+response links",
       "signals": [
         {
@@ -1442,10 +1802,30 @@
     },
     {
       "from": {
+        "instance": "global_data.router_2_0",
+        "port": "E"
+      },
+      "id": "noc_link_0091",
+      "name": "east/west FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "global_data.router_3_0",
+        "port": "W"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
         "instance": "global_data.router_0_0",
         "port": "S"
       },
-      "id": "noc_link_0073",
+      "id": "noc_link_0092",
       "name": "north/south FlooNoC request+response links",
       "signals": [
         {
@@ -1465,7 +1845,7 @@
         "instance": "global_data.router_0_1",
         "port": "E"
       },
-      "id": "noc_link_0074",
+      "id": "noc_link_0093",
       "name": "east/west FlooNoC request+response links",
       "signals": [
         {
@@ -1485,7 +1865,7 @@
         "instance": "global_data.router_1_0",
         "port": "S"
       },
-      "id": "noc_link_0075",
+      "id": "noc_link_0094",
       "name": "north/south FlooNoC request+response links",
       "signals": [
         {
@@ -1505,7 +1885,7 @@
         "instance": "global_data.router_1_1",
         "port": "E"
       },
-      "id": "noc_link_0076",
+      "id": "noc_link_0095",
       "name": "east/west FlooNoC request+response links",
       "signals": [
         {
@@ -1525,7 +1905,7 @@
         "instance": "global_data.router_2_0",
         "port": "S"
       },
-      "id": "noc_link_0077",
+      "id": "noc_link_0096",
       "name": "north/south FlooNoC request+response links",
       "signals": [
         {
@@ -1542,10 +1922,50 @@
     },
     {
       "from": {
+        "instance": "global_data.router_2_1",
+        "port": "E"
+      },
+      "id": "noc_link_0097",
+      "name": "east/west FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "global_data.router_3_1",
+        "port": "W"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "global_data.router_3_0",
+        "port": "S"
+      },
+      "id": "noc_link_0098",
+      "name": "north/south FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "global_data.router_3_1",
+        "port": "N"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
         "instance": "global_data.router_0_1",
         "port": "S"
       },
-      "id": "noc_link_0078",
+      "id": "noc_link_0099",
       "name": "north/south FlooNoC request+response links",
       "signals": [
         {
@@ -1565,7 +1985,7 @@
         "instance": "global_data.router_0_2",
         "port": "E"
       },
-      "id": "noc_link_0079",
+      "id": "noc_link_0100",
       "name": "east/west FlooNoC request+response links",
       "signals": [
         {
@@ -1585,7 +2005,7 @@
         "instance": "global_data.router_1_1",
         "port": "S"
       },
-      "id": "noc_link_0080",
+      "id": "noc_link_0101",
       "name": "north/south FlooNoC request+response links",
       "signals": [
         {
@@ -1605,7 +2025,7 @@
         "instance": "global_data.router_1_2",
         "port": "E"
       },
-      "id": "noc_link_0081",
+      "id": "noc_link_0102",
       "name": "east/west FlooNoC request+response links",
       "signals": [
         {
@@ -1625,7 +2045,7 @@
         "instance": "global_data.router_2_1",
         "port": "S"
       },
-      "id": "noc_link_0082",
+      "id": "noc_link_0103",
       "name": "north/south FlooNoC request+response links",
       "signals": [
         {
@@ -1636,6 +2056,46 @@
       "status": "generated_structural",
       "to": {
         "instance": "global_data.router_2_2",
+        "port": "N"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "global_data.router_2_2",
+        "port": "E"
+      },
+      "id": "noc_link_0104",
+      "name": "east/west FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "global_data.router_3_2",
+        "port": "W"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
+        "instance": "global_data.router_3_1",
+        "port": "S"
+      },
+      "id": "noc_link_0105",
+      "name": "north/south FlooNoC request+response links",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "global_data.router_3_2",
         "port": "N"
       },
       "type": "noc_link"
@@ -1645,7 +2105,7 @@
         "instance": "global_data.compute0",
         "port": "NoC"
       },
-      "id": "noc_link_0083",
+      "id": "noc_link_0106",
       "name": "compute0 NI Eject",
       "signals": [
         {
@@ -1665,7 +2125,7 @@
         "instance": "global_data.compute1",
         "port": "NoC"
       },
-      "id": "noc_link_0084",
+      "id": "noc_link_0107",
       "name": "compute1 NI Eject",
       "signals": [
         {
@@ -1685,7 +2145,7 @@
         "instance": "global_data.pcie0",
         "port": "NoC"
       },
-      "id": "noc_link_0085",
+      "id": "noc_link_0108",
       "name": "pcie0 NI Eject",
       "signals": [
         {
@@ -1702,10 +2162,30 @@
     },
     {
       "from": {
+        "instance": "global_data.ethernet0",
+        "port": "NoC"
+      },
+      "id": "noc_link_0109",
+      "name": "ethernet0 NI Eject",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "global_data.router_3_0",
+        "port": "Eject"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
         "instance": "global_data.compute0_sram",
         "port": "NoC"
       },
-      "id": "noc_link_0086",
+      "id": "noc_link_0110",
       "name": "compute0_sram NI Eject",
       "signals": [
         {
@@ -1725,7 +2205,7 @@
         "instance": "global_data.compute1_sram",
         "port": "NoC"
       },
-      "id": "noc_link_0087",
+      "id": "noc_link_0111",
       "name": "compute1_sram NI Eject",
       "signals": [
         {
@@ -1745,7 +2225,7 @@
         "instance": "global_data.pcie0_sram",
         "port": "NoC"
       },
-      "id": "noc_link_0088",
+      "id": "noc_link_0112",
       "name": "pcie0_sram NI Eject",
       "signals": [
         {
@@ -1762,10 +2242,30 @@
     },
     {
       "from": {
+        "instance": "global_data.ethernet0_sram",
+        "port": "NoC"
+      },
+      "id": "noc_link_0113",
+      "name": "ethernet0_sram NI Eject",
+      "signals": [
+        {
+          "name": "floo_req_and_rsp",
+          "width": null
+        }
+      ],
+      "status": "generated_structural",
+      "to": {
+        "instance": "global_data.router_3_1",
+        "port": "Eject"
+      },
+      "type": "noc_link"
+    },
+    {
+      "from": {
         "instance": "global_data.memory_ingress0",
         "port": "NoC"
       },
-      "id": "noc_link_0089",
+      "id": "noc_link_0114",
       "name": "memory_ingress0 NI Eject",
       "signals": [
         {
@@ -1785,7 +2285,7 @@
         "instance": "global_data.memory_ingress1",
         "port": "NoC"
       },
-      "id": "noc_link_0090",
+      "id": "noc_link_0115",
       "name": "memory_ingress1 NI Eject",
       "signals": [
         {
@@ -1805,7 +2305,7 @@
         "instance": "memory0_local_config.router_0_0",
         "port": "E"
       },
-      "id": "noc_link_0091",
+      "id": "noc_link_0116",
       "name": "east/west FlooNoC request+response links",
       "signals": [
         {
@@ -1825,7 +2325,7 @@
         "instance": "memory0_local_config.global_in",
         "port": "NoC"
       },
-      "id": "noc_link_0092",
+      "id": "noc_link_0117",
       "name": "global_in NI Eject",
       "signals": [
         {
@@ -1845,7 +2345,7 @@
         "instance": "memory0_local_config.controller_regs",
         "port": "NoC"
       },
-      "id": "noc_link_0093",
+      "id": "noc_link_0118",
       "name": "controller_regs NI Eject",
       "signals": [
         {
@@ -1865,7 +2365,7 @@
         "instance": "memory0_local_data.router_0_0",
         "port": "E"
       },
-      "id": "noc_link_0094",
+      "id": "noc_link_0119",
       "name": "east/west FlooNoC request+response links",
       "signals": [
         {
@@ -1885,7 +2385,7 @@
         "instance": "memory0_local_data.router_0_0",
         "port": "S"
       },
-      "id": "noc_link_0095",
+      "id": "noc_link_0120",
       "name": "north/south FlooNoC request+response links",
       "signals": [
         {
@@ -1905,7 +2405,7 @@
         "instance": "memory0_local_data.router_0_1",
         "port": "E"
       },
-      "id": "noc_link_0096",
+      "id": "noc_link_0121",
       "name": "east/west FlooNoC request+response links",
       "signals": [
         {
@@ -1925,7 +2425,7 @@
         "instance": "memory0_local_data.router_1_0",
         "port": "S"
       },
-      "id": "noc_link_0097",
+      "id": "noc_link_0122",
       "name": "north/south FlooNoC request+response links",
       "signals": [
         {
@@ -1945,7 +2445,7 @@
         "instance": "memory0_local_data.memory_ingress0",
         "port": "NoC"
       },
-      "id": "noc_link_0098",
+      "id": "noc_link_0123",
       "name": "memory_ingress0 NI Eject",
       "signals": [
         {
@@ -1965,7 +2465,7 @@
         "instance": "memory0_local_data.memory_ingress1",
         "port": "NoC"
       },
-      "id": "noc_link_0099",
+      "id": "noc_link_0124",
       "name": "memory_ingress1 NI Eject",
       "signals": [
         {
@@ -1985,7 +2485,7 @@
         "instance": "memory0_local_data.target_crossbar",
         "port": "NoC"
       },
-      "id": "noc_link_0100",
+      "id": "noc_link_0125",
       "name": "target_crossbar NI Eject",
       "signals": [
         {
@@ -2005,7 +2505,7 @@
         "instance": "pcie0_local_config.router_0_0",
         "port": "E"
       },
-      "id": "noc_link_0101",
+      "id": "noc_link_0126",
       "name": "east/west FlooNoC request+response links",
       "signals": [
         {
@@ -2025,7 +2525,7 @@
         "instance": "pcie0_local_config.router_0_0",
         "port": "S"
       },
-      "id": "noc_link_0102",
+      "id": "noc_link_0127",
       "name": "north/south FlooNoC request+response links",
       "signals": [
         {
@@ -2045,7 +2545,7 @@
         "instance": "pcie0_local_config.router_0_1",
         "port": "E"
       },
-      "id": "noc_link_0103",
+      "id": "noc_link_0128",
       "name": "east/west FlooNoC request+response links",
       "signals": [
         {
@@ -2065,7 +2565,7 @@
         "instance": "pcie0_local_config.router_1_0",
         "port": "S"
       },
-      "id": "noc_link_0104",
+      "id": "noc_link_0129",
       "name": "north/south FlooNoC request+response links",
       "signals": [
         {
@@ -2085,7 +2585,7 @@
         "instance": "pcie0_local_config.management",
         "port": "NoC"
       },
-      "id": "noc_link_0105",
+      "id": "noc_link_0130",
       "name": "management NI Eject",
       "signals": [
         {
@@ -2105,7 +2605,7 @@
         "instance": "pcie0_local_config.global_in",
         "port": "NoC"
       },
-      "id": "noc_link_0106",
+      "id": "noc_link_0131",
       "name": "global_in NI Eject",
       "signals": [
         {
@@ -2125,7 +2625,7 @@
         "instance": "pcie0_local_config.controller_regs",
         "port": "NoC"
       },
-      "id": "noc_link_0107",
+      "id": "noc_link_0132",
       "name": "controller_regs NI Eject",
       "signals": [
         {
@@ -2145,7 +2645,7 @@
         "instance": "pcie0_local_config.global_out",
         "port": "NoC"
       },
-      "id": "noc_link_0108",
+      "id": "noc_link_0133",
       "name": "global_out NI Eject",
       "signals": [
         {
@@ -2165,7 +2665,7 @@
         "instance": "pcie0_local_data.router_0_0",
         "port": "E"
       },
-      "id": "noc_link_0109",
+      "id": "noc_link_0134",
       "name": "east/west FlooNoC request+response links",
       "signals": [
         {
@@ -2185,7 +2685,7 @@
         "instance": "pcie0_local_data.router_0_0",
         "port": "S"
       },
-      "id": "noc_link_0110",
+      "id": "noc_link_0135",
       "name": "north/south FlooNoC request+response links",
       "signals": [
         {
@@ -2205,7 +2705,7 @@
         "instance": "pcie0_local_data.router_0_1",
         "port": "E"
       },
-      "id": "noc_link_0111",
+      "id": "noc_link_0136",
       "name": "east/west FlooNoC request+response links",
       "signals": [
         {
@@ -2225,7 +2725,7 @@
         "instance": "pcie0_local_data.router_1_0",
         "port": "S"
       },
-      "id": "noc_link_0112",
+      "id": "noc_link_0137",
       "name": "north/south FlooNoC request+response links",
       "signals": [
         {
@@ -2245,7 +2745,7 @@
         "instance": "pcie0_local_data.host",
         "port": "NoC"
       },
-      "id": "noc_link_0113",
+      "id": "noc_link_0138",
       "name": "host NI Eject",
       "signals": [
         {
@@ -2265,7 +2765,7 @@
         "instance": "pcie0_local_data.global_in",
         "port": "NoC"
       },
-      "id": "noc_link_0114",
+      "id": "noc_link_0139",
       "name": "global_in NI Eject",
       "signals": [
         {
@@ -2285,7 +2785,7 @@
         "instance": "pcie0_local_data.sram",
         "port": "NoC"
       },
-      "id": "noc_link_0115",
+      "id": "noc_link_0140",
       "name": "sram NI Eject",
       "signals": [
         {
@@ -2305,7 +2805,7 @@
         "instance": "pcie0_local_data.global_out",
         "port": "NoC"
       },
-      "id": "noc_link_0116",
+      "id": "noc_link_0141",
       "name": "global_out NI Eject",
       "signals": [
         {
@@ -2325,7 +2825,7 @@
         "instance": "compute0.cpu",
         "port": "out"
       },
-      "id": "noc_link_0117",
+      "id": "noc_link_0142",
       "name": "CPU adapter to local data",
       "signals": [
         {
@@ -2345,7 +2845,7 @@
         "instance": "compute0.cpu",
         "port": "out"
       },
-      "id": "noc_link_0118",
+      "id": "noc_link_0143",
       "name": "upstream protocol-to-AXI4-Lite adapter",
       "signals": [
         {
@@ -2365,7 +2865,7 @@
         "instance": "compute0.dma",
         "port": "out"
       },
-      "id": "noc_link_0119",
+      "id": "noc_link_0144",
       "name": "PULP iDMA AXI4 initiator (DmaEnable)",
       "signals": [
         {
@@ -2385,7 +2885,7 @@
         "instance": "compute0_local_data.sram",
         "port": "out"
       },
-      "id": "noc_link_0120",
+      "id": "noc_link_0145",
       "name": "local SRAM AXI destination",
       "signals": [
         {
@@ -2405,7 +2905,7 @@
         "instance": "compute0_local_config.dma_regs",
         "port": "out"
       },
-      "id": "noc_link_0121",
+      "id": "noc_link_0146",
       "name": "32-bit DMA head + APB doorbell (DmaEnable)",
       "signals": [
         {
@@ -2425,7 +2925,7 @@
         "instance": "compute0_local_config.reset_ctrl",
         "port": "out"
       },
-      "id": "noc_link_0122",
+      "id": "noc_link_0147",
       "name": "reset-control CSR",
       "signals": [
         {
@@ -2445,7 +2945,7 @@
         "instance": "compute1.cpu",
         "port": "out"
       },
-      "id": "noc_link_0123",
+      "id": "noc_link_0148",
       "name": "CPU adapter to local data",
       "signals": [
         {
@@ -2465,7 +2965,7 @@
         "instance": "compute1.cpu",
         "port": "out"
       },
-      "id": "noc_link_0124",
+      "id": "noc_link_0149",
       "name": "upstream protocol-to-AXI4-Lite adapter",
       "signals": [
         {
@@ -2485,7 +2985,7 @@
         "instance": "compute1.dma",
         "port": "out"
       },
-      "id": "noc_link_0125",
+      "id": "noc_link_0150",
       "name": "PULP iDMA AXI4 initiator (DmaEnable)",
       "signals": [
         {
@@ -2505,7 +3005,7 @@
         "instance": "compute1_local_data.sram",
         "port": "out"
       },
-      "id": "noc_link_0126",
+      "id": "noc_link_0151",
       "name": "local SRAM AXI destination",
       "signals": [
         {
@@ -2525,7 +3025,7 @@
         "instance": "compute1_local_config.dma_regs",
         "port": "out"
       },
-      "id": "noc_link_0127",
+      "id": "noc_link_0152",
       "name": "32-bit DMA head + APB doorbell (DmaEnable)",
       "signals": [
         {
@@ -2545,7 +3045,7 @@
         "instance": "pcie0.ip",
         "port": "out"
       },
-      "id": "noc_link_0128",
+      "id": "noc_link_0153",
       "name": "Device AXI data ingress (reserved)",
       "signals": [
         {
@@ -2565,7 +3065,7 @@
         "instance": "pcie0.ip",
         "port": "out"
       },
-      "id": "noc_link_0129",
+      "id": "noc_link_0154",
       "name": "Device config initiator (reserved)",
       "signals": [
         {
@@ -2585,7 +3085,7 @@
         "instance": "pcie0_local_data.sram",
         "port": "out"
       },
-      "id": "noc_link_0130",
+      "id": "noc_link_0155",
       "name": "Local SRAM RTL",
       "signals": [
         {
@@ -2605,7 +3105,7 @@
         "instance": "pcie0_local_config.controller_regs",
         "port": "out"
       },
-      "id": "noc_link_0131",
+      "id": "noc_link_0156",
       "name": "Reserved CSR AXI error",
       "signals": [
         {
@@ -2622,10 +3122,90 @@
     },
     {
       "from": {
+        "instance": "ethernet0.ip",
+        "port": "out"
+      },
+      "id": "noc_link_0157",
+      "name": "Device AXI data ingress (reserved)",
+      "signals": [
+        {
+          "name": "AXI4",
+          "width": 64
+        }
+      ],
+      "status": "planned_integration",
+      "to": {
+        "instance": "ethernet0_local_data.packet_dma",
+        "port": "in"
+      },
+      "type": "planned_interconnect"
+    },
+    {
+      "from": {
+        "instance": "ethernet0.ip",
+        "port": "out"
+      },
+      "id": "noc_link_0158",
+      "name": "Device config initiator (reserved)",
+      "signals": [
+        {
+          "name": "AXI4",
+          "width": 32
+        }
+      ],
+      "status": "planned_integration",
+      "to": {
+        "instance": "ethernet0_local_config.management",
+        "port": "in"
+      },
+      "type": "planned_interconnect"
+    },
+    {
+      "from": {
+        "instance": "ethernet0_local_data.sram",
+        "port": "out"
+      },
+      "id": "noc_link_0159",
+      "name": "Local SRAM RTL",
+      "signals": [
+        {
+          "name": "AXI4",
+          "width": 64
+        }
+      ],
+      "status": "wired_boot_configuration",
+      "to": {
+        "instance": "ethernet0.sram",
+        "port": "in"
+      },
+      "type": "axi_interconnect"
+    },
+    {
+      "from": {
+        "instance": "ethernet0_local_config.controller_regs",
+        "port": "out"
+      },
+      "id": "noc_link_0160",
+      "name": "Reserved CSR AXI error",
+      "signals": [
+        {
+          "name": "AXI4",
+          "width": 32
+        }
+      ],
+      "status": "wired_boot_configuration",
+      "to": {
+        "instance": "ethernet0.csr",
+        "port": "in"
+      },
+      "type": "axi_interconnect"
+    },
+    {
+      "from": {
         "instance": "compute0_local_data.global_out",
         "port": "out"
       },
-      "id": "noc_link_0132",
+      "id": "noc_link_0161",
       "name": "64b AXI4 uplink",
       "signals": [
         {
@@ -2645,7 +3225,7 @@
         "instance": "global_data.compute0_sram",
         "port": "out"
       },
-      "id": "noc_link_0133",
+      "id": "noc_link_0162",
       "name": "64b AXI4 remote SRAM return path",
       "signals": [
         {
@@ -2665,7 +3245,7 @@
         "instance": "compute0_local_config.global_out",
         "port": "out"
       },
-      "id": "noc_link_0134",
+      "id": "noc_link_0163",
       "name": "32b AXI4 control transport",
       "signals": [
         {
@@ -2685,7 +3265,7 @@
         "instance": "global_config.compute0_regs",
         "port": "out"
       },
-      "id": "noc_link_0135",
+      "id": "noc_link_0164",
       "name": "32b AXI4 control ingress",
       "signals": [
         {
@@ -2705,7 +3285,7 @@
         "instance": "compute1_local_data.global_out",
         "port": "out"
       },
-      "id": "noc_link_0136",
+      "id": "noc_link_0165",
       "name": "64b AXI4 uplink",
       "signals": [
         {
@@ -2725,7 +3305,7 @@
         "instance": "global_data.compute1_sram",
         "port": "out"
       },
-      "id": "noc_link_0137",
+      "id": "noc_link_0166",
       "name": "64b AXI4 remote SRAM return path",
       "signals": [
         {
@@ -2745,7 +3325,7 @@
         "instance": "compute1_local_config.global_out",
         "port": "out"
       },
-      "id": "noc_link_0138",
+      "id": "noc_link_0167",
       "name": "32b AXI4 control transport",
       "signals": [
         {
@@ -2765,7 +3345,7 @@
         "instance": "global_config.compute1_regs",
         "port": "out"
       },
-      "id": "noc_link_0139",
+      "id": "noc_link_0168",
       "name": "32b AXI4 control ingress",
       "signals": [
         {
@@ -2785,7 +3365,7 @@
         "instance": "pcie0_local_data.global_out",
         "port": "out"
       },
-      "id": "noc_link_0140",
+      "id": "noc_link_0169",
       "name": "64b AXI4 uplink",
       "signals": [
         {
@@ -2805,7 +3385,7 @@
         "instance": "global_data.pcie0_sram",
         "port": "out"
       },
-      "id": "noc_link_0141",
+      "id": "noc_link_0170",
       "name": "64b AXI4 remote SRAM return path",
       "signals": [
         {
@@ -2825,7 +3405,7 @@
         "instance": "pcie0_local_config.global_out",
         "port": "out"
       },
-      "id": "noc_link_0142",
+      "id": "noc_link_0171",
       "name": "32b AXI4 control transport",
       "signals": [
         {
@@ -2845,7 +3425,7 @@
         "instance": "global_config.pcie0_regs",
         "port": "out"
       },
-      "id": "noc_link_0143",
+      "id": "noc_link_0172",
       "name": "32b AXI4 control ingress",
       "signals": [
         {
@@ -2862,10 +3442,90 @@
     },
     {
       "from": {
+        "instance": "ethernet0_local_data.global_out",
+        "port": "out"
+      },
+      "id": "noc_link_0173",
+      "name": "64b AXI4 uplink",
+      "signals": [
+        {
+          "name": "AXI4",
+          "width": 64
+        }
+      ],
+      "status": "wired_boot_configuration",
+      "to": {
+        "instance": "global_data.ethernet0",
+        "port": "in"
+      },
+      "type": "axi_interconnect"
+    },
+    {
+      "from": {
+        "instance": "global_data.ethernet0_sram",
+        "port": "out"
+      },
+      "id": "noc_link_0174",
+      "name": "64b AXI4 remote SRAM return path",
+      "signals": [
+        {
+          "name": "AXI4",
+          "width": 64
+        }
+      ],
+      "status": "wired_boot_configuration",
+      "to": {
+        "instance": "ethernet0_local_data.global_in",
+        "port": "in"
+      },
+      "type": "axi_interconnect"
+    },
+    {
+      "from": {
+        "instance": "ethernet0_local_config.global_out",
+        "port": "out"
+      },
+      "id": "noc_link_0175",
+      "name": "32b AXI4 control transport",
+      "signals": [
+        {
+          "name": "AXI4",
+          "width": 32
+        }
+      ],
+      "status": "wired_boot_configuration",
+      "to": {
+        "instance": "global_config.ethernet0",
+        "port": "in"
+      },
+      "type": "axi_interconnect"
+    },
+    {
+      "from": {
+        "instance": "global_config.ethernet0_regs",
+        "port": "out"
+      },
+      "id": "noc_link_0176",
+      "name": "32b AXI4 control ingress",
+      "signals": [
+        {
+          "name": "AXI4",
+          "width": 32
+        }
+      ],
+      "status": "wired_boot_configuration",
+      "to": {
+        "instance": "ethernet0_local_config.global_in",
+        "port": "in"
+      },
+      "type": "axi_interconnect"
+    },
+    {
+      "from": {
         "instance": "global_data.memory_ingress0",
         "port": "out"
       },
-      "id": "noc_link_0144",
+      "id": "noc_link_0177",
       "name": "64b AXI4 memory ingress",
       "signals": [
         {
@@ -2885,7 +3545,7 @@
         "instance": "global_data.memory_ingress1",
         "port": "out"
       },
-      "id": "noc_link_0145",
+      "id": "noc_link_0178",
       "name": "64b AXI4 memory ingress",
       "signals": [
         {
@@ -2905,7 +3565,7 @@
         "instance": "global_config.memory0_regs",
         "port": "out"
       },
-      "id": "noc_link_0146",
+      "id": "noc_link_0179",
       "name": "32b AXI4 memory control",
       "signals": [
         {
@@ -2925,7 +3585,7 @@
         "instance": "memory0_local_data.target_crossbar",
         "port": "out"
       },
-      "id": "noc_link_0147",
+      "id": "noc_link_0180",
       "name": "memory0 local-to-crossbar link",
       "signals": [
         {
@@ -2945,7 +3605,7 @@
         "instance": "memory0_local_config.controller_regs",
         "port": "out"
       },
-      "id": "noc_link_0148",
+      "id": "noc_link_0181",
       "name": "reserved memory controller CSR",
       "signals": [
         {
@@ -2965,7 +3625,7 @@
         "instance": "memory0.internal_target_crossbar",
         "port": "out"
       },
-      "id": "noc_link_0149",
+      "id": "noc_link_0182",
       "name": "AXI slave memory model route",
       "signals": [
         {
@@ -2985,7 +3645,7 @@
         "instance": "memory0.internal_target_crossbar",
         "port": "out"
       },
-      "id": "noc_link_0150",
+      "id": "noc_link_0183",
       "name": "AXI slave memory model route",
       "signals": [
         {
@@ -3104,6 +3764,48 @@
       "color": "#8055B7",
       "info": {
         "plane": "config",
+        "router_count": 4,
+        "source": "ethernet0/local_config/floo_xezim_ethernet0_local_config_noc.sv",
+        "status": "generated_structural"
+      },
+      "instances": [
+        "ethernet0_local_config.router_0_0",
+        "ethernet0_local_config.router_1_0",
+        "ethernet0_local_config.router_0_1",
+        "ethernet0_local_config.router_1_1",
+        "ethernet0_local_config.management",
+        "ethernet0_local_config.global_in",
+        "ethernet0_local_config.controller_regs",
+        "ethernet0_local_config.global_out"
+      ],
+      "name": "ethernet0_local_config",
+      "padding": 2.0
+    },
+    {
+      "color": "#16845D",
+      "info": {
+        "plane": "data",
+        "router_count": 4,
+        "source": "ethernet0/local_data/floo_xezim_ethernet0_local_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "instances": [
+        "ethernet0_local_data.router_0_0",
+        "ethernet0_local_data.router_1_0",
+        "ethernet0_local_data.router_0_1",
+        "ethernet0_local_data.router_1_1",
+        "ethernet0_local_data.packet_dma",
+        "ethernet0_local_data.global_in",
+        "ethernet0_local_data.sram",
+        "ethernet0_local_data.global_out"
+      ],
+      "name": "ethernet0_local_data",
+      "padding": 2.0
+    },
+    {
+      "color": "#8055B7",
+      "info": {
+        "plane": "config",
         "router_count": 9,
         "source": "global_config/floo_xezim_global_config_noc.sv",
         "status": "generated_structural"
@@ -3121,9 +3823,11 @@
         "global_config.compute0",
         "global_config.compute1",
         "global_config.pcie0",
+        "global_config.ethernet0",
         "global_config.compute0_regs",
         "global_config.compute1_regs",
         "global_config.pcie0_regs",
+        "global_config.ethernet0_regs",
         "global_config.memory0_regs"
       ],
       "name": "global_config",
@@ -3133,7 +3837,7 @@
       "color": "#16845D",
       "info": {
         "plane": "data",
-        "router_count": 9,
+        "router_count": 12,
         "source": "global_data/floo_xezim_global_data_noc.sv",
         "status": "generated_structural"
       },
@@ -3141,18 +3845,23 @@
         "global_data.router_0_0",
         "global_data.router_1_0",
         "global_data.router_2_0",
+        "global_data.router_3_0",
         "global_data.router_0_1",
         "global_data.router_1_1",
         "global_data.router_2_1",
+        "global_data.router_3_1",
         "global_data.router_0_2",
         "global_data.router_1_2",
         "global_data.router_2_2",
+        "global_data.router_3_2",
         "global_data.compute0",
         "global_data.compute1",
         "global_data.pcie0",
+        "global_data.ethernet0",
         "global_data.compute0_sram",
         "global_data.compute1_sram",
         "global_data.pcie0_sram",
+        "global_data.ethernet0_sram",
         "global_data.memory_ingress0",
         "global_data.memory_ingress1"
       ],
@@ -3353,6 +4062,32 @@
         "pcie0.csr"
       ],
       "name": "pcie0_subsystem",
+      "padding": 4.0
+    },
+    {
+      "color": "#62758C",
+      "instances": [
+        "ethernet0_local_config.router_0_0",
+        "ethernet0_local_config.router_1_0",
+        "ethernet0_local_config.router_0_1",
+        "ethernet0_local_config.router_1_1",
+        "ethernet0_local_config.management",
+        "ethernet0_local_config.global_in",
+        "ethernet0_local_config.controller_regs",
+        "ethernet0_local_config.global_out",
+        "ethernet0_local_data.router_0_0",
+        "ethernet0_local_data.router_1_0",
+        "ethernet0_local_data.router_0_1",
+        "ethernet0_local_data.router_1_1",
+        "ethernet0_local_data.packet_dma",
+        "ethernet0_local_data.global_in",
+        "ethernet0_local_data.sram",
+        "ethernet0_local_data.global_out",
+        "ethernet0.ip",
+        "ethernet0.sram",
+        "ethernet0.csr"
+      ],
+      "name": "ethernet0_subsystem",
       "padding": 4.0
     }
   ],
@@ -3571,6 +4306,10 @@
           },
           {
             "base": 1074003968,
+            "size": 65536
+          },
+          {
+            "base": 1074069504,
             "size": 65536
           },
           {
@@ -3866,6 +4605,10 @@
             "size": 1048576
           },
           {
+            "base": 318767104,
+            "size": 1048576
+          },
+          {
             "base": 4294967296,
             "size": 1073741824
           },
@@ -4095,6 +4838,10 @@
           },
           {
             "base": 1074003968,
+            "size": 65536
+          },
+          {
+            "base": 1074069504,
             "size": 65536
           },
           {
@@ -4333,6 +5080,10 @@
             "size": 1048576
           },
           {
+            "base": 318767104,
+            "size": 1048576
+          },
+          {
             "base": 4294967296,
             "size": 1073741824
           },
@@ -4364,6 +5115,374 @@
           0,
           0
         ],
+        "network": "ethernet0_local_config",
+        "plane": "config",
+        "source": "ethernet0/local_config/floo_xezim_ethernet0_local_config_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "ethernet0_local_config.router_0_0",
+      "position": {
+        "x": 0,
+        "y": 32,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          1,
+          0
+        ],
+        "network": "ethernet0_local_config",
+        "plane": "config",
+        "source": "ethernet0/local_config/floo_xezim_ethernet0_local_config_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "ethernet0_local_config.router_1_0",
+      "position": {
+        "x": 4,
+        "y": 32,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          0,
+          1
+        ],
+        "network": "ethernet0_local_config",
+        "plane": "config",
+        "source": "ethernet0/local_config/floo_xezim_ethernet0_local_config_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "ethernet0_local_config.router_0_1",
+      "position": {
+        "x": 0,
+        "y": 36,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          1,
+          1
+        ],
+        "network": "ethernet0_local_config",
+        "plane": "config",
+        "source": "ethernet0/local_config/floo_xezim_ethernet0_local_config_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "ethernet0_local_config.router_1_1",
+      "position": {
+        "x": 4,
+        "y": 36,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "address_bits": 32,
+        "address_ranges": null,
+        "data_bits": 32,
+        "id_bits": 1,
+        "network": "ethernet0_local_config",
+        "plane": "config",
+        "protocol": "AXI4",
+        "role": "initiator",
+        "source": "ethernet0/local_config/floo_xezim_ethernet0_local_config_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_chimney",
+      "name": "ethernet0_local_config.management",
+      "position": {
+        "x": 0,
+        "y": 30.4,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "address_bits": 32,
+        "address_ranges": null,
+        "data_bits": 32,
+        "id_bits": 1,
+        "network": "ethernet0_local_config",
+        "plane": "config",
+        "protocol": "AXI4",
+        "role": "initiator",
+        "source": "ethernet0/local_config/floo_xezim_ethernet0_local_config_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_chimney",
+      "name": "ethernet0_local_config.global_in",
+      "position": {
+        "x": 4,
+        "y": 30.4,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "address_bits": 32,
+        "address_ranges": {
+          "base": 1074069504,
+          "size": 65536
+        },
+        "data_bits": 32,
+        "id_bits": 1,
+        "network": "ethernet0_local_config",
+        "plane": "config",
+        "protocol": "AXI4",
+        "role": "target",
+        "source": "ethernet0/local_config/floo_xezim_ethernet0_local_config_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_chimney",
+      "name": "ethernet0_local_config.controller_regs",
+      "position": {
+        "x": 0,
+        "y": 34.4,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "address_bits": 32,
+        "address_ranges": [
+          {
+            "base": 1073741824,
+            "size": 65536
+          },
+          {
+            "base": 1073872896,
+            "size": 4096
+          },
+          {
+            "base": 1073807360,
+            "size": 65536
+          },
+          {
+            "base": 1074003968,
+            "size": 65536
+          },
+          {
+            "base": 1073938432,
+            "size": 4096
+          }
+        ],
+        "data_bits": 32,
+        "id_bits": 1,
+        "network": "ethernet0_local_config",
+        "plane": "config",
+        "protocol": "AXI4",
+        "role": "target",
+        "source": "ethernet0/local_config/floo_xezim_ethernet0_local_config_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_chimney",
+      "name": "ethernet0_local_config.global_out",
+      "position": {
+        "x": 4,
+        "y": 34.4,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          0,
+          0
+        ],
+        "network": "ethernet0_local_data",
+        "plane": "data",
+        "source": "ethernet0/local_data/floo_xezim_ethernet0_local_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "ethernet0_local_data.router_0_0",
+      "position": {
+        "x": 16,
+        "y": 32,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          1,
+          0
+        ],
+        "network": "ethernet0_local_data",
+        "plane": "data",
+        "source": "ethernet0/local_data/floo_xezim_ethernet0_local_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "ethernet0_local_data.router_1_0",
+      "position": {
+        "x": 20,
+        "y": 32,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          0,
+          1
+        ],
+        "network": "ethernet0_local_data",
+        "plane": "data",
+        "source": "ethernet0/local_data/floo_xezim_ethernet0_local_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "ethernet0_local_data.router_0_1",
+      "position": {
+        "x": 16,
+        "y": 36,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          1,
+          1
+        ],
+        "network": "ethernet0_local_data",
+        "plane": "data",
+        "source": "ethernet0/local_data/floo_xezim_ethernet0_local_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "ethernet0_local_data.router_1_1",
+      "position": {
+        "x": 20,
+        "y": 36,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "address_bits": 64,
+        "address_ranges": null,
+        "data_bits": 64,
+        "id_bits": 4,
+        "network": "ethernet0_local_data",
+        "plane": "data",
+        "protocol": "AXI4",
+        "role": "initiator",
+        "source": "ethernet0/local_data/floo_xezim_ethernet0_local_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_chimney",
+      "name": "ethernet0_local_data.packet_dma",
+      "position": {
+        "x": 16,
+        "y": 30.4,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "address_bits": 64,
+        "address_ranges": null,
+        "data_bits": 64,
+        "id_bits": 4,
+        "network": "ethernet0_local_data",
+        "plane": "data",
+        "protocol": "AXI4",
+        "role": "initiator",
+        "source": "ethernet0/local_data/floo_xezim_ethernet0_local_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_chimney",
+      "name": "ethernet0_local_data.global_in",
+      "position": {
+        "x": 20,
+        "y": 30.4,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "address_bits": 64,
+        "address_ranges": {
+          "base": 318767104,
+          "size": 1048576
+        },
+        "data_bits": 64,
+        "id_bits": 5,
+        "network": "ethernet0_local_data",
+        "plane": "data",
+        "protocol": "AXI4",
+        "role": "target",
+        "source": "ethernet0/local_data/floo_xezim_ethernet0_local_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_chimney",
+      "name": "ethernet0_local_data.sram",
+      "position": {
+        "x": 16,
+        "y": 34.4,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "address_bits": 64,
+        "address_ranges": [
+          {
+            "base": 268435456,
+            "size": 1048576
+          },
+          {
+            "base": 285212672,
+            "size": 1048576
+          },
+          {
+            "base": 301989888,
+            "size": 1048576
+          },
+          {
+            "base": 4294967296,
+            "size": 1073741824
+          },
+          {
+            "base": 5368709120,
+            "size": 1073741824
+          }
+        ],
+        "data_bits": 64,
+        "id_bits": 5,
+        "network": "ethernet0_local_data",
+        "plane": "data",
+        "protocol": "AXI4",
+        "role": "target",
+        "source": "ethernet0/local_data/floo_xezim_ethernet0_local_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_chimney",
+      "name": "ethernet0_local_data.global_out",
+      "position": {
+        "x": 20,
+        "y": 34.4,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          0,
+          0
+        ],
         "network": "global_config",
         "plane": "config",
         "source": "global_config/floo_xezim_global_config_noc.sv",
@@ -4373,7 +5492,7 @@
       "name": "global_config.router_0_0",
       "position": {
         "x": 0,
-        "y": 32,
+        "y": 48,
         "z": 0
       }
     },
@@ -4392,7 +5511,7 @@
       "name": "global_config.router_1_0",
       "position": {
         "x": 4,
-        "y": 32,
+        "y": 48,
         "z": 0
       }
     },
@@ -4411,7 +5530,7 @@
       "name": "global_config.router_2_0",
       "position": {
         "x": 8,
-        "y": 32,
+        "y": 48,
         "z": 0
       }
     },
@@ -4430,7 +5549,7 @@
       "name": "global_config.router_0_1",
       "position": {
         "x": 0,
-        "y": 36,
+        "y": 52,
         "z": 0
       }
     },
@@ -4449,7 +5568,7 @@
       "name": "global_config.router_1_1",
       "position": {
         "x": 4,
-        "y": 36,
+        "y": 52,
         "z": 0
       }
     },
@@ -4468,7 +5587,7 @@
       "name": "global_config.router_2_1",
       "position": {
         "x": 8,
-        "y": 36,
+        "y": 52,
         "z": 0
       }
     },
@@ -4487,7 +5606,7 @@
       "name": "global_config.router_0_2",
       "position": {
         "x": 0,
-        "y": 40,
+        "y": 56,
         "z": 0
       }
     },
@@ -4506,7 +5625,7 @@
       "name": "global_config.router_1_2",
       "position": {
         "x": 4,
-        "y": 40,
+        "y": 56,
         "z": 0
       }
     },
@@ -4525,7 +5644,7 @@
       "name": "global_config.router_2_2",
       "position": {
         "x": 8,
-        "y": 40,
+        "y": 56,
         "z": 0
       }
     },
@@ -4546,7 +5665,7 @@
       "name": "global_config.compute0",
       "position": {
         "x": 0,
-        "y": 30.4,
+        "y": 46.4,
         "z": 0
       }
     },
@@ -4567,7 +5686,7 @@
       "name": "global_config.compute1",
       "position": {
         "x": 4,
-        "y": 30.4,
+        "y": 46.4,
         "z": 0
       }
     },
@@ -4588,7 +5707,28 @@
       "name": "global_config.pcie0",
       "position": {
         "x": 8,
-        "y": 30.4,
+        "y": 46.4,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "address_bits": 32,
+        "address_ranges": null,
+        "data_bits": 32,
+        "id_bits": 1,
+        "network": "global_config",
+        "plane": "config",
+        "protocol": "AXI4",
+        "role": "initiator",
+        "source": "global_config/floo_xezim_global_config_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_chimney",
+      "name": "global_config.ethernet0",
+      "position": {
+        "x": 0,
+        "y": 50.4,
         "z": 0
       }
     },
@@ -4617,8 +5757,8 @@
       "module": "floo_axi_chimney",
       "name": "global_config.compute0_regs",
       "position": {
-        "x": 0,
-        "y": 34.4,
+        "x": 4,
+        "y": 50.4,
         "z": 0
       }
     },
@@ -4641,8 +5781,8 @@
       "module": "floo_axi_chimney",
       "name": "global_config.compute1_regs",
       "position": {
-        "x": 4,
-        "y": 34.4,
+        "x": 8,
+        "y": 50.4,
         "z": 0
       }
     },
@@ -4665,8 +5805,32 @@
       "module": "floo_axi_chimney",
       "name": "global_config.pcie0_regs",
       "position": {
-        "x": 8,
-        "y": 34.4,
+        "x": 0,
+        "y": 54.4,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "address_bits": 32,
+        "address_ranges": {
+          "base": 1074069504,
+          "size": 65536
+        },
+        "data_bits": 32,
+        "id_bits": 1,
+        "network": "global_config",
+        "plane": "config",
+        "protocol": "AXI4",
+        "role": "target",
+        "source": "global_config/floo_xezim_global_config_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_chimney",
+      "name": "global_config.ethernet0_regs",
+      "position": {
+        "x": 4,
+        "y": 54.4,
         "z": 0
       }
     },
@@ -4689,8 +5853,8 @@
       "module": "floo_axi_chimney",
       "name": "global_config.memory0_regs",
       "position": {
-        "x": 0,
-        "y": 38.4,
+        "x": 8,
+        "y": 54.4,
         "z": 0
       }
     },
@@ -4709,7 +5873,7 @@
       "name": "global_data.router_0_0",
       "position": {
         "x": 16,
-        "y": 32,
+        "y": 48,
         "z": 0
       }
     },
@@ -4728,7 +5892,7 @@
       "name": "global_data.router_1_0",
       "position": {
         "x": 20,
-        "y": 32,
+        "y": 48,
         "z": 0
       }
     },
@@ -4747,7 +5911,26 @@
       "name": "global_data.router_2_0",
       "position": {
         "x": 24,
-        "y": 32,
+        "y": 48,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          3,
+          0
+        ],
+        "network": "global_data",
+        "plane": "data",
+        "source": "global_data/floo_xezim_global_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "global_data.router_3_0",
+      "position": {
+        "x": 28,
+        "y": 48,
         "z": 0
       }
     },
@@ -4766,7 +5949,7 @@
       "name": "global_data.router_0_1",
       "position": {
         "x": 16,
-        "y": 36,
+        "y": 52,
         "z": 0
       }
     },
@@ -4785,7 +5968,7 @@
       "name": "global_data.router_1_1",
       "position": {
         "x": 20,
-        "y": 36,
+        "y": 52,
         "z": 0
       }
     },
@@ -4804,7 +5987,26 @@
       "name": "global_data.router_2_1",
       "position": {
         "x": 24,
-        "y": 36,
+        "y": 52,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          3,
+          1
+        ],
+        "network": "global_data",
+        "plane": "data",
+        "source": "global_data/floo_xezim_global_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "global_data.router_3_1",
+      "position": {
+        "x": 28,
+        "y": 52,
         "z": 0
       }
     },
@@ -4823,7 +6025,7 @@
       "name": "global_data.router_0_2",
       "position": {
         "x": 16,
-        "y": 40,
+        "y": 56,
         "z": 0
       }
     },
@@ -4842,7 +6044,7 @@
       "name": "global_data.router_1_2",
       "position": {
         "x": 20,
-        "y": 40,
+        "y": 56,
         "z": 0
       }
     },
@@ -4861,7 +6063,26 @@
       "name": "global_data.router_2_2",
       "position": {
         "x": 24,
-        "y": 40,
+        "y": 56,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "grid": [
+          3,
+          2
+        ],
+        "network": "global_data",
+        "plane": "data",
+        "source": "global_data/floo_xezim_global_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_router",
+      "name": "global_data.router_3_2",
+      "position": {
+        "x": 28,
+        "y": 56,
         "z": 0
       }
     },
@@ -4882,7 +6103,7 @@
       "name": "global_data.compute0",
       "position": {
         "x": 16,
-        "y": 30.4,
+        "y": 46.4,
         "z": 0
       }
     },
@@ -4903,7 +6124,7 @@
       "name": "global_data.compute1",
       "position": {
         "x": 20,
-        "y": 30.4,
+        "y": 46.4,
         "z": 0
       }
     },
@@ -4924,7 +6145,28 @@
       "name": "global_data.pcie0",
       "position": {
         "x": 24,
-        "y": 30.4,
+        "y": 46.4,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "address_bits": 64,
+        "address_ranges": null,
+        "data_bits": 64,
+        "id_bits": 5,
+        "network": "global_data",
+        "plane": "data",
+        "protocol": "AXI4",
+        "role": "initiator",
+        "source": "global_data/floo_xezim_global_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_chimney",
+      "name": "global_data.ethernet0",
+      "position": {
+        "x": 28,
+        "y": 46.4,
         "z": 0
       }
     },
@@ -4948,7 +6190,7 @@
       "name": "global_data.compute0_sram",
       "position": {
         "x": 16,
-        "y": 34.4,
+        "y": 50.4,
         "z": 0
       }
     },
@@ -4972,7 +6214,7 @@
       "name": "global_data.compute1_sram",
       "position": {
         "x": 20,
-        "y": 34.4,
+        "y": 50.4,
         "z": 0
       }
     },
@@ -4996,7 +6238,31 @@
       "name": "global_data.pcie0_sram",
       "position": {
         "x": 24,
-        "y": 34.4,
+        "y": 50.4,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "address_bits": 64,
+        "address_ranges": {
+          "base": 318767104,
+          "size": 1048576
+        },
+        "data_bits": 64,
+        "id_bits": 4,
+        "network": "global_data",
+        "plane": "data",
+        "protocol": "AXI4",
+        "role": "target",
+        "source": "global_data/floo_xezim_global_data_noc.sv",
+        "status": "generated_structural"
+      },
+      "module": "floo_axi_chimney",
+      "name": "global_data.ethernet0_sram",
+      "position": {
+        "x": 28,
+        "y": 50.4,
         "z": 0
       }
     },
@@ -5020,7 +6286,7 @@
       "name": "global_data.memory_ingress0",
       "position": {
         "x": 16,
-        "y": 38.4,
+        "y": 54.4,
         "z": 0
       }
     },
@@ -5044,7 +6310,7 @@
       "name": "global_data.memory_ingress1",
       "position": {
         "x": 20,
-        "y": 38.4,
+        "y": 54.4,
         "z": 0
       }
     },
@@ -5063,7 +6329,7 @@
       "name": "memory0_local_config.router_0_0",
       "position": {
         "x": 0,
-        "y": 48,
+        "y": 64,
         "z": 0
       }
     },
@@ -5082,7 +6348,7 @@
       "name": "memory0_local_config.router_1_0",
       "position": {
         "x": 4,
-        "y": 48,
+        "y": 64,
         "z": 0
       }
     },
@@ -5103,7 +6369,7 @@
       "name": "memory0_local_config.global_in",
       "position": {
         "x": 0,
-        "y": 46.4,
+        "y": 62.4,
         "z": 0
       }
     },
@@ -5127,7 +6393,7 @@
       "name": "memory0_local_config.controller_regs",
       "position": {
         "x": 4,
-        "y": 46.4,
+        "y": 62.4,
         "z": 0
       }
     },
@@ -5146,7 +6412,7 @@
       "name": "memory0_local_data.router_0_0",
       "position": {
         "x": 16,
-        "y": 48,
+        "y": 64,
         "z": 0
       }
     },
@@ -5165,7 +6431,7 @@
       "name": "memory0_local_data.router_1_0",
       "position": {
         "x": 20,
-        "y": 48,
+        "y": 64,
         "z": 0
       }
     },
@@ -5184,7 +6450,7 @@
       "name": "memory0_local_data.router_0_1",
       "position": {
         "x": 16,
-        "y": 52,
+        "y": 68,
         "z": 0
       }
     },
@@ -5203,7 +6469,7 @@
       "name": "memory0_local_data.router_1_1",
       "position": {
         "x": 20,
-        "y": 52,
+        "y": 68,
         "z": 0
       }
     },
@@ -5224,7 +6490,7 @@
       "name": "memory0_local_data.memory_ingress0",
       "position": {
         "x": 16,
-        "y": 46.4,
+        "y": 62.4,
         "z": 0
       }
     },
@@ -5245,7 +6511,7 @@
       "name": "memory0_local_data.memory_ingress1",
       "position": {
         "x": 20,
-        "y": 46.4,
+        "y": 62.4,
         "z": 0
       }
     },
@@ -5275,7 +6541,7 @@
       "name": "memory0_local_data.target_crossbar",
       "position": {
         "x": 16,
-        "y": 50.4,
+        "y": 66.4,
         "z": 0
       }
     },
@@ -5294,7 +6560,7 @@
       "name": "pcie0_local_config.router_0_0",
       "position": {
         "x": 0,
-        "y": 64,
+        "y": 80,
         "z": 0
       }
     },
@@ -5313,7 +6579,7 @@
       "name": "pcie0_local_config.router_1_0",
       "position": {
         "x": 4,
-        "y": 64,
+        "y": 80,
         "z": 0
       }
     },
@@ -5332,7 +6598,7 @@
       "name": "pcie0_local_config.router_0_1",
       "position": {
         "x": 0,
-        "y": 68,
+        "y": 84,
         "z": 0
       }
     },
@@ -5351,7 +6617,7 @@
       "name": "pcie0_local_config.router_1_1",
       "position": {
         "x": 4,
-        "y": 68,
+        "y": 84,
         "z": 0
       }
     },
@@ -5372,7 +6638,7 @@
       "name": "pcie0_local_config.management",
       "position": {
         "x": 0,
-        "y": 62.4,
+        "y": 78.4,
         "z": 0
       }
     },
@@ -5393,7 +6659,7 @@
       "name": "pcie0_local_config.global_in",
       "position": {
         "x": 4,
-        "y": 62.4,
+        "y": 78.4,
         "z": 0
       }
     },
@@ -5417,7 +6683,7 @@
       "name": "pcie0_local_config.controller_regs",
       "position": {
         "x": 0,
-        "y": 66.4,
+        "y": 82.4,
         "z": 0
       }
     },
@@ -5438,6 +6704,10 @@
             "size": 65536
           },
           {
+            "base": 1074069504,
+            "size": 65536
+          },
+          {
             "base": 1073938432,
             "size": 4096
           }
@@ -5455,7 +6725,7 @@
       "name": "pcie0_local_config.global_out",
       "position": {
         "x": 4,
-        "y": 66.4,
+        "y": 82.4,
         "z": 0
       }
     },
@@ -5474,7 +6744,7 @@
       "name": "pcie0_local_data.router_0_0",
       "position": {
         "x": 16,
-        "y": 64,
+        "y": 80,
         "z": 0
       }
     },
@@ -5493,7 +6763,7 @@
       "name": "pcie0_local_data.router_1_0",
       "position": {
         "x": 20,
-        "y": 64,
+        "y": 80,
         "z": 0
       }
     },
@@ -5512,7 +6782,7 @@
       "name": "pcie0_local_data.router_0_1",
       "position": {
         "x": 16,
-        "y": 68,
+        "y": 84,
         "z": 0
       }
     },
@@ -5531,7 +6801,7 @@
       "name": "pcie0_local_data.router_1_1",
       "position": {
         "x": 20,
-        "y": 68,
+        "y": 84,
         "z": 0
       }
     },
@@ -5552,7 +6822,7 @@
       "name": "pcie0_local_data.host",
       "position": {
         "x": 16,
-        "y": 62.4,
+        "y": 78.4,
         "z": 0
       }
     },
@@ -5573,7 +6843,7 @@
       "name": "pcie0_local_data.global_in",
       "position": {
         "x": 20,
-        "y": 62.4,
+        "y": 78.4,
         "z": 0
       }
     },
@@ -5597,7 +6867,7 @@
       "name": "pcie0_local_data.sram",
       "position": {
         "x": 16,
-        "y": 66.4,
+        "y": 82.4,
         "z": 0
       }
     },
@@ -5611,6 +6881,10 @@
           },
           {
             "base": 285212672,
+            "size": 1048576
+          },
+          {
+            "base": 318767104,
             "size": 1048576
           },
           {
@@ -5635,7 +6909,7 @@
       "name": "pcie0_local_data.global_out",
       "position": {
         "x": 20,
-        "y": 66.4,
+        "y": 82.4,
         "z": 0
       }
     },
@@ -5648,7 +6922,7 @@
       "name": "compute0.cpu",
       "position": {
         "x": 20,
-        "y": 78,
+        "y": 75,
         "z": 0
       }
     },
@@ -5661,7 +6935,7 @@
       "name": "compute0.dma",
       "position": {
         "x": 20,
-        "y": 81,
+        "y": 78,
         "z": 0
       }
     },
@@ -5674,7 +6948,7 @@
       "name": "compute0.sram",
       "position": {
         "x": 20,
-        "y": 72,
+        "y": 81,
         "z": 0
       }
     },
@@ -5687,7 +6961,7 @@
       "name": "compute0.dma_csr",
       "position": {
         "x": 20,
-        "y": 75,
+        "y": 72,
         "z": 0
       }
     },
@@ -5712,7 +6986,7 @@
       "name": "compute1.cpu",
       "position": {
         "x": 32,
-        "y": 81,
+        "y": 78,
         "z": 0
       }
     },
@@ -5725,7 +6999,7 @@
       "name": "compute1.dma",
       "position": {
         "x": 32,
-        "y": 72,
+        "y": 81,
         "z": 0
       }
     },
@@ -5738,7 +7012,7 @@
       "name": "compute1.sram",
       "position": {
         "x": 32,
-        "y": 75,
+        "y": 72,
         "z": 0
       }
     },
@@ -5751,7 +7025,7 @@
       "name": "compute1.dma_csr",
       "position": {
         "x": 32,
-        "y": 78,
+        "y": 75,
         "z": 0
       }
     },
@@ -5796,6 +7070,45 @@
     },
     {
       "info": {
+        "ip": "ethernet_queue_mac",
+        "status": "reserved_pending_ip_bridge"
+      },
+      "module": "soc_boundary",
+      "name": "ethernet0.ip",
+      "position": {
+        "x": 32,
+        "y": 108,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "ip": "local_sram",
+        "status": "wired_boot_configuration"
+      },
+      "module": "soc_boundary",
+      "name": "ethernet0.sram",
+      "position": {
+        "x": 32,
+        "y": 108,
+        "z": 0
+      }
+    },
+    {
+      "info": {
+        "ip": "management",
+        "status": "reserved_axi_error"
+      },
+      "module": "soc_boundary",
+      "name": "ethernet0.csr",
+      "position": {
+        "x": 32,
+        "y": 108,
+        "z": 0
+      }
+    },
+    {
+      "info": {
         "source": "gen/chip/soc_top.sv",
         "standalone_test": "gen/memory/memory_tb.sv",
         "status": "wired_boot_configuration"
@@ -5830,7 +7143,7 @@
       "name": "memory0.hbm0",
       "position": {
         "x": 8,
-        "y": 85,
+        "y": 91,
         "z": 0
       }
     },
@@ -5844,7 +7157,7 @@
       "name": "memory0.ddr0",
       "position": {
         "x": 8,
-        "y": 88,
+        "y": 85,
         "z": 0
       }
     }
@@ -5900,18 +7213,32 @@
       "routers": 6,
       "top": "compute1/local_data/floo_xezim_compute1_local_data_noc.sv"
     },
+    "ethernet0_local_config": {
+      "config": "ethernet0/local_config/floogen.yaml",
+      "endpoints": 4,
+      "plane": "config",
+      "routers": 4,
+      "top": "ethernet0/local_config/floo_xezim_ethernet0_local_config_noc.sv"
+    },
+    "ethernet0_local_data": {
+      "config": "ethernet0/local_data/floogen.yaml",
+      "endpoints": 4,
+      "plane": "data",
+      "routers": 4,
+      "top": "ethernet0/local_data/floo_xezim_ethernet0_local_data_noc.sv"
+    },
     "global_config": {
       "config": "global_config/floogen.yaml",
-      "endpoints": 7,
+      "endpoints": 9,
       "plane": "config",
       "routers": 9,
       "top": "global_config/floo_xezim_global_config_noc.sv"
     },
     "global_data": {
       "config": "global_data/floogen.yaml",
-      "endpoints": 8,
+      "endpoints": 10,
       "plane": "data",
-      "routers": 9,
+      "routers": 12,
       "top": "global_data/floo_xezim_global_data_noc.sv"
     },
     "memory0_local_config": {

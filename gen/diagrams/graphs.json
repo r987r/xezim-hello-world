@@ -29,18 +29,32 @@
         "routers": 6,
         "top": "compute1/local_data/floo_xezim_compute1_local_data_noc.sv"
       },
+      "ethernet0_local_config": {
+        "config": "ethernet0/local_config/floogen.yaml",
+        "endpoints": 4,
+        "plane": "config",
+        "routers": 4,
+        "top": "ethernet0/local_config/floo_xezim_ethernet0_local_config_noc.sv"
+      },
+      "ethernet0_local_data": {
+        "config": "ethernet0/local_data/floogen.yaml",
+        "endpoints": 4,
+        "plane": "data",
+        "routers": 4,
+        "top": "ethernet0/local_data/floo_xezim_ethernet0_local_data_noc.sv"
+      },
       "global_config": {
         "config": "global_config/floogen.yaml",
-        "endpoints": 7,
+        "endpoints": 9,
         "plane": "config",
         "routers": 9,
         "top": "global_config/floo_xezim_global_config_noc.sv"
       },
       "global_data": {
         "config": "global_data/floogen.yaml",
-        "endpoints": 8,
+        "endpoints": 10,
         "plane": "data",
-        "routers": 9,
+        "routers": 12,
         "top": "global_data/floo_xezim_global_data_noc.sv"
       },
       "memory0_local_config": {

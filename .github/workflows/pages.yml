@@ -93,7 +93,8 @@ jobs:
           rtl = json.loads(parsed.group(1))
           assert rtl['producer']=='slang', 'actual rtl parser must be clang/slang'
           assert rtl['fabric_contract']['independent_planes'], 'data/config NoCs not separate'
-          assert len(rtl['fabric_contract']['resolved_networks'])==10, 'missing parsed RTL NoC modules'
+          expected_networks = len(json.loads(Path('gen/noc/floonoc/manifest.json').read_text())['networks'])
+          assert len(rtl['fabric_contract']['resolved_networks'])==expected_networks, 'missing parsed RTL NoC modules'
           assert rtl['summary']['named_port_bindings'] >= 100, 'missing compiled RTL port wiring'
           assert Path('.tools/pages-site/data/rtl-architecture.json').is_file()
           assert data['profiles']['chip-dma']['actors'], 'missing DMA testbench overlay'

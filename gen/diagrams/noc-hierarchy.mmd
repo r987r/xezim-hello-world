@@ -44,7 +44,20 @@ flowchart TB
   n_pcie0_local_config -->|reserved DECERR| n_pcie0_csr
   n_pcie0_local_data -->|AXI4 uplink| n_global_data
   n_pcie0_local_config -->|AXI4 control| n_global_config
-  n_global_data["global_data FlooNoC / 9 routers / 64b AXI4"]:::data
+  subgraph n_ethernet0_box["ethernet0 / ethernet_queue_mac subsystem"]
+  n_ethernet0_ip["ethernet_queue_mac bridge (reserved)"]:::model
+  n_ethernet0_sram["Local SRAM RTL"]:::model
+  n_ethernet0_csr["Reserved CSR (AXI error)"]:::model
+  n_ethernet0_local_data["Local DATA FlooNoC / 4 routers / AXI4"]:::data
+  n_ethernet0_local_config["Local CONFIG FlooNoC / 4 routers"]:::config
+  end
+  n_ethernet0_ip -.->|IP RTL connection pending| n_ethernet0_local_data
+  n_ethernet0_ip -.->|management RTL pending| n_ethernet0_local_config
+  n_ethernet0_local_data -->|local| n_ethernet0_sram
+  n_ethernet0_local_config -->|reserved DECERR| n_ethernet0_csr
+  n_ethernet0_local_data -->|AXI4 uplink| n_global_data
+  n_ethernet0_local_config -->|AXI4 control| n_global_config
+  n_global_data["global_data FlooNoC / 12 routers / 64b AXI4"]:::data
   n_global_config["global_config FlooNoC / 9 routers / 32b AXI4 via AXI-Lite bridges"]:::config
   subgraph n_memory0_box["memory0 / memory subsystem"]
   n_memory0_local_data["Local DATA FlooNoC / 4 routers"]:::data
@@ -59,6 +72,8 @@ flowchart TB
   n_global_config -->|CSR ingress| n_compute1_local_config
   n_global_data -->|remote SRAM ingress| n_pcie0_local_data
   n_global_config -->|CSR ingress| n_pcie0_local_config
+  n_global_data -->|remote SRAM ingress| n_ethernet0_local_data
+  n_global_config -->|CSR ingress| n_ethernet0_local_config
   n_global_data -->|memory_ingress0| n_memory0_local_data
   n_global_data -->|memory_ingress1| n_memory0_local_data
   n_global_config -->|control ingress| n_memory0_local_config

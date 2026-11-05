@@ -28,7 +28,7 @@ package floo_xezim_compute1_local_data_noc_pkg;
 
   typedef enum logic[2:0] {
     SramSamIdx = 0,
-    GlobalOutSamIdx = 4} sam_idx_e;
+    GlobalOutSamIdx = 5} sam_idx_e;
 
 
 
@@ -51,7 +51,7 @@ typedef logic route_t;
     id_t end_addr;
   } route_map_rule_t;
 
-  localparam int unsigned SamNumRules = 5;
+  localparam int unsigned SamNumRules = 6;
 
 typedef struct packed {
     id_t idx;
@@ -66,6 +66,9 @@ localparam sam_rule_t[SamNumRules-1:0] Sam = '{
 '{    idx: '{x: 1, y: 1, port_id: 0},
     start_addr: 64'h0000000012000000,
     end_addr: 64'h0000000012100000},// GlobalOut
+'{    idx: '{x: 1, y: 1, port_id: 0},
+    start_addr: 64'h0000000013000000,
+    end_addr: 64'h0000000013100000},// GlobalOut
 '{    idx: '{x: 1, y: 1, port_id: 0},
     start_addr: 64'h0000000100000000,
     end_addr: 64'h0000000140000000},// GlobalOut
@@ -85,7 +88,7 @@ localparam sam_rule_t[SamNumRules-1:0] Sam = '{
     XYAddrOffsetX: 33,
     XYAddrOffsetY: 35,
     IdAddrOffset: 0,
-    NumSamRules: 5,
+    NumSamRules: 6,
     NumRoutes: 0,
     CollectiveCfg: '{    OpCfg: '{    EnNarrowMulticast: 1'b0,
     EnWideMulticast: 1'b0,

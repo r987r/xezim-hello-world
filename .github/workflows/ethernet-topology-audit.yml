@@ -1,0 +1,36 @@
+name: Ethernet0 generated topology source-truth gate
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'config/soc.yaml'
+      - 'gen/noc/**'
+      - 'gen/chip/**'
+      - 'gen/diagrams/**'
+      - 'tools/ethernet_topology_audit.py'
+      - 'tests/test_ethernet_topology_audit.py'
+      - '.github/workflows/ethernet-topology-audit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ethernet-topology-truth-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  truth:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python3 -m pip install 'PyYAML==6.0.3'
+      - name: Reject source-stale, mislabeled or missing Ethernet0 connections
+        run: python3 tools/ethernet_topology_audit.py
+      - name: Prove the audit detects graph drift, false wires and missing links
+        run: python3 -m unittest tests.test_ethernet_topology_audit -v

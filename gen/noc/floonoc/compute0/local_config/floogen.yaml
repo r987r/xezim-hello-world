@@ -48,6 +48,8 @@ endpoints:
     size: 65536
   - base: 1074003968
     size: 65536
+  - base: 1074069504
+    size: 65536
   - base: 1073938432
     size: 4096
 routers:

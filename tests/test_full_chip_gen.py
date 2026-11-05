@@ -53,7 +53,7 @@ class FullChipTests(unittest.TestCase):
             chip = full_chip_gen.emit(self.cfg,meta,ROOT/'gen/noc/floonoc',root)
             top=(root/'soc_top.sv').read_text()
             self.assertEqual(chip['cores'],2)
-            self.assertEqual(chip['networks'],10)
+            self.assertEqual(chip['networks'],12)
             self.assertEqual(chip['memory_crossbar_inputs'],1)
             self.assertIn('soc_noc u_noc',top)
             self.assertIn('axi_crossbar #(',top)
