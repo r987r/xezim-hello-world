@@ -566,6 +566,8 @@ def build(output,evidence,repository,sha,config):
             body = body.replace('__GRAPH_DATA__',graph_data)
             signal_data = json.dumps(signal_inventory, separators=(',', ':')).replace('<','\\u003c')
             body = body.replace('__SIGNAL_DATA__', signal_data)
+            architecture_js = (ROOT/'tools/templates/site_arch_explorer.js').read_text()
+            body = body.replace('__ARCH_JS__', architecture_js)
         if page=='fabric':
             fabric_data=json.dumps(fabric,separators=(',',':')).replace('<','\\u003c')
             body=body.replace('__FABRIC_DATA__',fabric_data)
