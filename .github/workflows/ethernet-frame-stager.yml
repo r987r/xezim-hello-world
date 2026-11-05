@@ -1,0 +1,35 @@
+name: Ethernet real frame staging and header-tap RTL
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'rtl/io/ethernet0/**'
+      - 'dv/ethernet0/rx_frame_stager_tb.v'
+      - '.github/workflows/ethernet-frame-stager.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ethernet-stager-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  stager:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Icarus and Python YAML
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y iverilog
+          python3 -m pip install 'PyYAML==6.0.3'
+      - name: Fetch both exact pinned MAC/AXIS upstream RTL revisions
+        run: python3 -c 'from dv.ethernet0.run_mac_gmii import fetch_pinned; fetch_pinned()'
+      - name: Execute real packet buffering and non-destructive header parser
+        run: |
+          set -euo pipefail
+          iverilog -g2012 -Wall -s ethernet_rx_frame_stager_tb -o /tmp/eth_stage_tb \
+            rtl/io/ethernet0/ethernet_rx_frame_stager.v \
+            dv/ethernet0/rx_frame_stager_tb.v \
+            .tools/ethernet0/verilog_axis/rtl/axis_fifo.v
+          vvp /tmp/eth_stage_tb

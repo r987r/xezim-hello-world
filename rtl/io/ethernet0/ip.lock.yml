@@ -1,0 +1,23 @@
+# Standalone Ethernet0 source pins. Platform owner #38 will fold these into
+# the single config/ip.lock.yaml when this subsystem enters full-chip generation.
+schema_version: 1
+third_party:
+  verilog_ethernet:
+    git: https://github.com/alexforencich/verilog-ethernet.git
+    commit: 77320a9471d19c7dd383914bc049e02d9f4f1ffb
+    license: MIT
+    deprecated: true
+    modules:
+      - rtl/axis_gmii_rx.v
+      - rtl/axis_gmii_tx.v
+      - rtl/lfsr.v
+  verilog_axis:
+    git: https://github.com/alexforencich/verilog-axis.git
+    commit: 48ff7a7e2ef782cf778d47910cf85835c64b1bce
+    license: MIT
+    deprecated: true
+    modules:
+      - rtl/axis_async_fifo.v
+      - rtl/axis_async_fifo_adapter.v
+      - rtl/axis_adapter.v
+      - rtl/axis_fifo.v
