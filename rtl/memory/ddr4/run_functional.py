@@ -49,6 +49,11 @@ def main() -> int:
         # Stale summaries or traces from earlier local runs must never let a
         # new run pass if the observer was omitted or failed to initialize.
         clear_prior_capture(output)
+        report_html = output / "ddr4-report.html"
+        if report_html.exists():
+            if report_html.is_symlink() or not report_html.is_file():
+                raise ValueError("invalid stale DDR4 HTML report")
+            report_html.unlink()
         latency_file = output / 'ddr4_latency.json'
         if latency_file.exists():
             if latency_file.is_symlink() or not latency_file.is_file():
@@ -120,6 +125,8 @@ def main() -> int:
                                     "channels": capture["channels"]},
                         "warning": "Does not prove full-chip DDR or silicon DDR PHY"}, indent=2) + "\n"
         )
+        from report_html import load, render
+        (output / "ddr4-report.html").write_text(render(load(output)))
         print("PASS actual DDR4 standalone Wishbone initialization and AXI integrity")
         return 0
     except (ValueError, OSError, ImportError, RuntimeError, AssertionError) as exc:

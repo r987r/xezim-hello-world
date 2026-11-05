@@ -191,8 +191,36 @@ class InternalLatencyTests(unittest.TestCase):
              "id": 1, "address": 8},
         ]}
         result = calculate_internal(axi, [mk_event("dfi_read", 17)], 10000)
-        self.assertEqual(result["status"], "aggregate_only")
+        self.assertEqual(result["status"], "measured_model_events")
+        self.assertEqual(result["overlapping_axi_attribution"]["status"], "unmeasured")
+        self.assertEqual(result["overlapping_axi_attribution"]["ambiguous_transactions"], 2)
         self.assertEqual(result["internal_stages"]["controller_ar_to_dfi_read"]["status"], "unmeasured")
+        self.assertTrue(all(txn["status"] == "unmeasured_overlapping_axi_dfi"
+                            for txn in result["transactions"]))
+
+    def test_serial_measured_intervals_survive_later_overlapping_requests(self):
+        axi = {"transactions": [
+            {"operation": "read", "start_cycle": 10, "end_cycle": 20,
+             "id": 0, "address": 0x1000},
+            {"operation": "read", "start_cycle": 30, "end_cycle": 50,
+             "id": 1, "address": 0x2000},
+            {"operation": "read", "start_cycle": 34, "end_cycle": 49,
+             "id": 2, "address": 0x3000},
+        ]}
+        events = [
+            mk_event("dfi_read", 12, bank=0),
+            mk_event("bankmodel_read", 14, bank=0),
+            mk_event("dfi_rddata_valid", 16),
+            mk_event("dfi_read", 38, bank=1),
+            mk_event("dfi_rddata_valid", 43),
+        ]
+        result = calculate_internal(axi, events, 10000)
+        self.assertEqual(result["overlapping_axi_attribution"]["ambiguous_transactions"], 2)
+        self.assertEqual(result["internal_stages"]["controller_ar_to_dfi_read"]["samples"], 1)
+        self.assertEqual(result["internal_stages"]["controller_ar_to_dfi_read"]["avg_cycles"], 2)
+        self.assertEqual(result["transactions"][0]["status"], "first_command_measured")
+        self.assertEqual(result["transactions"][1]["status"], "unmeasured_overlapping_axi_dfi")
+        self.assertEqual(result["transactions"][2]["status"], "unmeasured_overlapping_axi_dfi")
 
     def test_missing_internal_command_does_not_fabricate(self):
         axi = {"transactions": [{"operation": "read", "start_cycle": 10,

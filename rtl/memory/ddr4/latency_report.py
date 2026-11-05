@@ -86,8 +86,27 @@ def calculate(events: list[dict], period_ps: int) -> dict:
     reads = defaultdict(deque)
     writes = defaultdict(deque)
     pending_writes = deque()
+    # AXI4 AW/W are independent channels. Verilator/Cocotb can legally
+    # accept W (even WLAST) before the matching AW address handshake.
+    # Retain those accepted bytes, never fabricate an AW or skip checking
+    # WLAST/AWLEN. When AW arrives, reconcile in AW issue order.
+    pre_aw_w = deque()
     records = []
-    w_seq = 0
+
+    def accept_w(fields, cycle):
+        if not pending_writes:
+            raise ValueError("internal AXI W reconciliation lost its AW")
+        entry = pending_writes[0]
+        entry["beats_observed"] += 1
+        if entry["beats_observed"] > entry["beats_expected"]:
+            raise ValueError("write has more W beats than AWLEN")
+        expected_last = entry["beats_observed"] == entry["beats_expected"]
+        if bool(fields["last"]) != expected_last:
+            raise ValueError("WLAST disagrees with AWLEN")
+        if expected_last:
+            entry["data_done"] = True
+            pending_writes.popleft()
+
     for event in events:
         if event.get("kind") != "axi_handshake":
             continue
@@ -117,27 +136,19 @@ def calculate(events: list[dict], period_ps: int) -> dict:
                 "start_cycle": cycle, "phase": phase,
                 "beats_expected": fields["len"] + 1,
                 "beats_observed": 0, "data_done": False,
-                "first_w_cycle": None,
             }
             writes[fields["id"]].append(entry)
             pending_writes.append(entry)
+            # Replay buffered accepted W handshakes. Stop at the AWLEN
+            # boundary even when the next burst also arrived before AW.
+            while pre_aw_w and pending_writes:
+                early_fields, early_cycle = pre_aw_w.popleft()
+                accept_w(early_fields, early_cycle)
         elif channel == "w":
-            if not pending_writes:
-                raise ValueError("W beat without matching AW in controlled test")
-            entry = pending_writes[0]
-            entry["beats_observed"] += 1
-            if entry["first_w_cycle"] is None:
-                entry["first_w_cycle"] = cycle
-            if entry["beats_observed"] > entry["beats_expected"]:
-                raise ValueError("write has more W beats than AWLEN")
-            expected_last = entry["beats_observed"] == entry["beats_expected"]
-            if bool(fields["last"]) != expected_last:
-                raise ValueError("WLAST disagrees with AWLEN")
-            if expected_last:
-                entry["data_done"] = True
-                entry["last_w_cycle"] = cycle
-                pending_writes.popleft()
-            w_seq += 1
+            if pending_writes:
+                accept_w(fields, cycle)
+            else:
+                pre_aw_w.append((fields, cycle))
         elif channel in ("r", "b"):
             queue = reads if channel == "r" else writes
             identity = fields["id"]
@@ -165,13 +176,13 @@ def calculate(events: list[dict], period_ps: int) -> dict:
             entry["latency_cycles"] = cycle - entry["start_cycle"]
             entry["latency_ps"] = entry["latency_cycles"] * period_ps
             entry.pop("data_done", None)
-            entry.pop("first_w_cycle", None)
-            entry.pop("last_w_cycle", None)
             records.append(entry)
         else:
             raise ValueError(f"unknown AXI channel {channel}")
     pending_reads = {str(k): [dict(r) for r in v] for k, v in reads.items() if v}
     pending_responses = {str(k): [dict(r) for r in v] for k, v in writes.items() if v}
+    if pre_aw_w:
+        raise ValueError(f"orphan W handshakes without accepted AW: {len(pre_aw_w)}")
     if pending_writes or pending_reads or pending_responses:
         raise ValueError(
             "incomplete AXI request or missing completion: "

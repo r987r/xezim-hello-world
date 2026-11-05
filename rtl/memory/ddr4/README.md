@@ -294,3 +294,42 @@ expanded timing distributions. Standalone DDR model does not constitute
 physical PHY or integrated SoC controller verification. DDR-B integration
 is separately tracked under #40; main's DDR0 backing stays AXI RAM until
 real controller is opt-in, generated, and end-to-end verified.
+
+
+## DDR-A concurrent AXI traffic and reviewable evidence (PR #65)
+
+The existing real LiteDRAM + SDRAMPHYModel/BankModel standalone test now
+also starts four independent 128-byte AXI writes without waiting for each
+completion, then starts four independently tagged reads (IDs 0/5/10/15).
+Each returns a checked B/R response with independent golden readback. All
+five AXI channels, Wishbone/DFII initialization and read-only DFI/bank probes
+remain under the same continuous passive capture, with no new bus monitors.
+This verifies simultaneous submission, **not a proven controller-internal
+outstanding depth**, and it does not force long backpressure, a refresh/bank
+collision or reset/reinit. Those gates remain open on #35.
+
+The isolated DDR4 CI now generates
+`.tools/ddr4/litedram_sim/ddr4-report.html` **only after** real RTL
+simulation, passive capture and AXI/DFI latency correlation succeed.
+The single HTML review report includes actual measured min/avg/max
+AR→last R / AW→B cycles and DFI/BankModel stage evidence. Ambiguous
+AXI AW→DFI WRITE attribution stays **UNMEASURED**, rather than being
+inferred from early B responses. Reports are uploaded alongside the
+controller RTL, pinned source manifest, raw AXI/DFI traces and the 2,047
+audited upstream width/case diagnostic baseline in the existing
+`ddr4-foundation-generated-rtl` workflow artifact. The Pages build
+for unrelated branches never publishes this as full-chip fabric latency.
+
+To inspect after the standalone CI completes: open its GitHub Actions run,
+download the `ddr4-foundation-generated-rtl` artifact, and open
+`litedram_sim/ddr4-report.html`. Local rerun:
+
+~~~sh
+python3 rtl/memory/ddr4/run_functional.py
+python3 rtl/memory/ddr4/report_html.py --dir .tools/ddr4/litedram_sim
+~~~
+
+Full-chip DDR-B integration remains separate: memory0.ddr0 uses AXI RAM
+until real controller RTL is connected via the generated Data NoC, Wishbone
+initialization through the independent Config NoC, and CPU/iDMA traffic
+with current-source regression evidence. See `SOC_BRIDGE.md`, #40/#38.
