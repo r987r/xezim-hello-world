@@ -2,6 +2,7 @@
 "use strict";
 const g=JSON.parse(document.getElementById("ex-embedded-graph").textContent);
 const inventory=JSON.parse(document.getElementById("ex-embedded-signals").textContent);
+const parsed=JSON.parse(document.getElementById("ex-embedded-rtl").textContent);
 const svg=document.getElementById("arch-svg"),vp=document.getElementById("arch-viewport"),status=document.getElementById("arch-status");
 const crumbs=document.getElementById("arch-crumbs"),profile=document.getElementById("arch-profile"),plane=document.getElementById("arch-plane");
 const facts=document.getElementById("arch-inspect-facts"),subtitle=document.getElementById("arch-inspect-subtitle"),title=document.getElementById("arch-inspect-title"),open=document.getElementById("arch-inspect-open");
@@ -13,7 +14,7 @@ const subName=q=>q.name.slice(0,-10);
 const memberOf=new Map;subs.forEach(q=>q.instances.forEach(n=>memberOf.set(n,subName(q))));
 const networkOf=id=>{for(const n of nets.keys())if(id.startsWith(n+"."))return n;return null};
 const networksOf=id=>[...nets.keys()].filter(n=>n.startsWith(id+"_"));
-const color=n=>n.includes("config")?C.config:C.data,clip=(s,n)=>String(s).length>n?String(s).slice(0,n-1)+"…":String(s);
+const color=n=>nets.get(n)?.info?.plane==="config"?C.config:C.data,clip=(s,n)=>String(s).length>n?String(s).slice(0,n-1)+"…":String(s);
 const short=id=>String(id).split(".").slice(-1)[0];
 const actorFor=n=>{
   const id=n?.id||"";
@@ -37,7 +38,14 @@ const actorDisplay=n=>{
   return actor.short_label||actor.label||kind;
 };
 const role=n=>actorDisplay(n)||(n?.info?.model?((n?.info?.kind||"Memory").toUpperCase()+" AXI model"):n?.info?.ip||n?.info?.kind||n?.module||"RTL boundary");
-const edgeType=e=>/config|csr|register|reset/i.test(e.from.instance+" "+e.to.instance+" "+e.name)?"config":"data";
+const edgeType=e=>{
+  // Determine the plane from the *generated NoC membership*, never by
+  // substrings in an endpoint name (e.g. reset registers are not NoCs).
+  const a=networkOf(e.from.instance),b=networkOf(e.to.instance);
+  const pa=nets.get(a)?.info?.plane,pb=nets.get(b)?.info?.plane;
+  if(pa&&pb&&pa!==pb)return "unclassified";
+  return pa||pb||"unclassified";
+};
 let current="chip",scope="",dims={w:1530,h:965},zoom=1,next=null;
 const elem=(t,attrs={},label)=>{const n=document.createElementNS(NS,t);Object.entries(attrs).forEach(([k,v])=>n.setAttribute(k,String(v)));if(label!==undefined)n.textContent=String(label);return n;};
 const add=(p,n)=>{p.append(n);return n;};
@@ -245,6 +253,15 @@ function inspect(item,dest){
     dd.textContent=typeof v==="object"?JSON.stringify(v):String(v);dl.append(dt,dd);
   }
   facts.append(dl);document.getElementById("arch-inspect-links").replaceChildren();
+  const id=item.instance||item.title;
+  const rtlMatch=rtlModules.flatMap(m=>(m.instances||[]).map(inst=>({parent:m.name,...inst})))
+     .find(inst=>inst.name===id||inst.module===id);
+  if(rtlMatch){
+    const element=document.createElement("div");
+    element.className="arch-chip";
+    element.textContent="slang CST: "+rtlMatch.module+" "+rtlMatch.name+" ("+rtlMatch.port_count+" ports)";
+    facts.append(element);
+  }
   const ep=inventory.endpoints[item.instance||item.title];
   if(ep){const b=document.createElement("button");b.textContent="Inspect "+ep.signals.length+" RTL signal ports";b.addEventListener("click",()=>pickEndpoint(item.instance||item.title));document.getElementById("arch-inspect-links").append(b)}
   open.hidden=!next;
@@ -323,5 +340,29 @@ function renderSignals(){
 }
 function pickEndpoint(id){if(!inventory.endpoints[id])return;es.value=id;busOptions();const details=document.getElementById("arch-signals");details.open=true;details.scrollIntoView({behavior:"smooth",block:"start"})}
 es.addEventListener("change",busOptions);bs.addEventListener("change",renderSignals);fil.addEventListener("input",renderSignals);
+// Compiler-derived instance and port bindings are a separate evidence
+// channel from the FlooGen topology; neither is silently substituted.
+const rtlRows=document.getElementById("arch-rtl-rows"),
+      rtlCount=document.getElementById("arch-rtl-count"),
+      rtlStatus=document.getElementById("arch-rtl-validation");
+const rtlModules=parsed.modules||[];
+rtlCount.textContent=parsed.evidence==="compiler_parse_not_run"
+  ?" · parser not run"
+  :" · "+(parsed.summary?.instances||0)+" RTL instances";
+const c=parsed.fabric_contract||{};
+rtlStatus.textContent=parsed.evidence==="compiler_parse_not_run"
+  ?"Compiler parse evidence not supplied in this local preview"
+  :(c.independent_planes
+    ?"slang CST: all "+(c.resolved_networks?.length||0)+" generated data/config NoCs found as separate RTL instances"
+    :"slang CST: independent NoC validation unavailable");
+for(const m of rtlModules){
+  for(const inst of m.instances||[]){
+    const tr=document.createElement("tr");
+    cell(tr,m.name);cell(tr,inst.name);cell(tr,inst.module);
+    const bindings=(inst.ports||[]).map(p=>p.port+" = "+p.expression).join("; ");
+    cell(tr,bindings||"(no named bindings)");
+    rtlRows.append(tr);
+  }
+}
 busOptions();navigate("chip","");
 })();
