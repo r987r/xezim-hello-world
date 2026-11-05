@@ -79,7 +79,7 @@ jobs:
           path: |
             .tools/regression/supernoc*/report.html
             .tools/regression/supernoc*/axi-*.json*
-            .tools/regression/supernoc*/memory-provider-benchmark.json
+            .tools/regression/supernoc*/memory-operations.json
           include-hidden-files: true
           if-no-files-found: warn
       - name: Download the checksum-verified pinned Xezim release

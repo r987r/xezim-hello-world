@@ -31,7 +31,7 @@ from protocol_report import render as render_protocol_report
 ROOT=Path(__file__).resolve().parents[1]
 FILES={'result.json','plan.json','sources.f','simulation.log','build.log','results.xml',
        'axi-transactions.json','axi-events.jsonl',
-       'protocol-transactions.json','protocol-events.jsonl'}
+       'protocol-transactions.json','protocol-events.jsonl','memory-operations.json'}
 
 
 def dump(path,data):
@@ -193,6 +193,7 @@ FABRIC_REQUIRED_INPUTS = frozenset({
     'config/soc.yaml', 'config/interface_contracts.yaml',
     'config/regression.yaml', 'config/ip.lock.yaml',
     'dv/supernoc/test_supernoc.py', 'dv/common/axi_trace.py',
+    'tools/memory_service.py', 'tools/memory_report.py',
     'tools/supernoc_gen.py', 'tools/floonoc_gen.py',
     'tools/axi_report.py', 'tools/regress.py', 'tools/sim_cocotb.py',
     'gen/supernoc/soc_noc.sv', 'gen/supernoc/axi_monitors.json',
