@@ -99,7 +99,9 @@ class DDRBConfigNoCContractTests(unittest.TestCase):
         self.assertTrue(report["requires_config_change"])
         self.assertFalse(report["ready_for_full_chip"])
         self.assertTrue(report["requires_hardware_translator"])
-        self.assertEqual(report["actions"][0]["config_addr"], 0x40030000)
+        # Synthetic generated CSR lives at Wishbone 0x2000; the proposed
+        # 16-KiB window keeps that nonzero offset instead of truncating it.
+        self.assertEqual(report["actions"][0]["config_addr"], 0x40030000 + 0x2000)
 
     def test_proposed_window_must_not_overlap_other_config_regions(self):
         self.soc["address_map"]["config"].append(
