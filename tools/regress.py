@@ -496,7 +496,13 @@ def run_target(name, test, resolver, options):
         # previously the AXI/protocol JSON embedded stale 'unmeasured'.
         if 'flow' in test['report']:
             import protocol_report
-            protocol_report.finalize_run(out, result)
+            latency_issues = protocol_report.finalize_run(out, result)
+            if latency_issues:
+                passed = result['passed'] = False
+                results.append({'name':'PCIe/AXI/SRAM latency and data correlation',
+                                'passed':False,'reason':'; '.join(latency_issues[:3])})
+                print(f'FAIL {name}/traffic correlation: {latency_issues[:8]}',flush=True)
+                protocol_report.finalize_run(out, result)
         print(f'REPORT {name}: {summary["transactions"]} observations; {out.relative_to(ROOT)}/report.html',flush=True)
     (out/'result.json').write_text(json.dumps(result, indent=2) + '\n')
     return passed
