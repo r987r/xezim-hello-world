@@ -85,11 +85,11 @@ def load_config(path):
                 flow = report['flow']
                 if not isinstance(flow, dict) or set(flow) != {'required_steps'}:
                     raise ValueError(f'{name}: invalid test-flow configuration')
-                required = flow['required_steps']
-                if (not isinstance(required, dict) or set(required) != {'init','run','check'} or
+                flow_required = flow['required_steps']
+                if (not isinstance(required, dict) or set(flow_required) != {'init','run','check'} or
                         any(not isinstance(items, list) or not items or len(set(items)) != len(items) or
                             any(not isinstance(s, str) or not re.fullmatch(r'[a-z][a-z0-9_.-]*\.[a-z][a-z0-9_.-]*', s)
-                                for s in items) for items in required.values())):
+                                for s in items) for items in flow_required.values())):
                     raise ValueError(f'{name}: invalid required test-flow steps')
             if 'memory' in report:
                 m = report['memory']

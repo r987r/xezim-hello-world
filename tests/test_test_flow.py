@@ -91,8 +91,12 @@ class TestFlowContract(unittest.TestCase):
     def test_invalid_schema_and_unsafe_values(self):
         with TemporaryDirectory() as tmp:
             p=Path(tmp)
-            with self.assertRaises(ValueError):
-                StepRecorder(p/"no",lambda:0).emit("setup","host0","phase","start","stimulus")
+            recorder=StepRecorder(p/"no",lambda:0)
+            try:
+                with self.assertRaises(ValueError):
+                    recorder.emit("setup","host0","phase","start","stimulus")
+            finally:
+                recorder.close()
             bad={"schema_version":1,"seq":0,"time_ps":0,"phase":"init",
                  "actor":"host0","step":"x","status":"pass","origin":"stimulus",
                  "details":{"bad":"<script>"}}
