@@ -86,7 +86,7 @@ def load_config(path):
                 if not isinstance(flow, dict) or set(flow) != {'required_steps'}:
                     raise ValueError(f'{name}: invalid test-flow configuration')
                 flow_required = flow['required_steps']
-                if (not isinstance(required, dict) or set(flow_required) != {'init','run','check'} or
+                if (not isinstance(flow_required, dict) or set(flow_required) != {'init','run','check'} or
                         any(not isinstance(items, list) or not items or len(set(items)) != len(items) or
                             any(not isinstance(s, str) or not re.fullmatch(r'[a-z][a-z0-9_.-]*\.[a-z][a-z0-9_.-]*', s)
                                 for s in items) for items in flow_required.values())):
