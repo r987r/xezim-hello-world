@@ -26,9 +26,20 @@ After the pinned controller top has been generated, additionally validate actual
 
 JSON is explicitly labeled integration_state=contract_only, never RTL tested.
 
+## Real RTL aperture checker (initial DDR-B hardware)
+The memory-only soc_aperture_guard.sv is a **synthesizable combinational
+physical-to-local address/burst guard**, tested with tb_soc_aperture_guard.sv
+under Verilator --binary --assert --timing in the DDR4 CI job. It rejects
+address aliasing into the 32 MiB modeled storage, unsupported AXI ATOP,
+burst type/size, and 4 KiB boundary crossing. It does not consume AW/W or
+AR traffic and therefore cannot synthesize a legal DECERR response on its
+own. The follow-on full AXI bridge must use its allow/fault outputs and
+implement that handshake/response behavior. Keep bus-side AXI ID mapping
+in the bridge, not this independent combinational address decoder.
+
 ## Remaining DDR-B hardware and verification gates
 
-1. Add an isolated memory-only AXI-to-LiteDRAM RTL bridge with real DECERR responses, bounded aperture translation and protocol/ID checking. Test independently with Verilator.
+1. Extend the tested address/burst guard into an isolated memory-only full AXI-to-LiteDRAM responder with AW/W/B/AR/R handshakes, legal DECERR responses and ID preservation. Test independently with Verilator.
 2. Add Wishbone init/status service on the independent Config NoC, with CPU-controlled init and failure timeouts.
 3. Hand bridge and Bender source closure to sole #38 generator owner; that track will edit config/soc.yaml, tools/full_chip_gen.py and generated RTL/diagrams. No parallel generator edits here.
 4. Add opt-in chip-ddr4-real with actual CPU/iDMA traffic through the generated Data NoC and controller, DFI monitoring, independent INIT/RUN/CHECK, negative aperture tests and comparison against axi_ram timing.
