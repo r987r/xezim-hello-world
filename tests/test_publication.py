@@ -59,7 +59,7 @@ class PublicationTests(unittest.TestCase):
             self.assertIn('chip-dma',dataset['tests'])
             self.assertTrue((output/'fabric.html').is_file())
             self.assertTrue((output/'data/fabric.json').is_file())
-            self.assertEqual(json.loads((output/'data/fabric.json').read_text())['summary']['meshes'],8)
+            self.assertEqual(json.loads((output/'data/fabric.json').read_text())['summary']['meshes'],10)
             self.assertNotIn('__FABRIC_DATA__',(output/'fabric.html').read_text())
             fabric=json.loads((output/'data/fabric.json').read_text())
             self.assertEqual(fabric['latency_table']['units'],
