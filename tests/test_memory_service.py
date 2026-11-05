@@ -152,6 +152,23 @@ class MemoryServiceTests(unittest.IsolatedAsyncioTestCase):
             await provider.validate_backdoor(self.base, consumers_quiesced=True)
         self.assertFalse(provider.validated_backdoor)
 
+    async def test_dma_destination_check_without_backdoor_preload(self):
+        p = Pattern("address_xor", 0x3412)
+        # Python allocation and expectation do not modify target memory.
+        with self.assertRaisesRegex(MemoryAccessError, "accepted AXI"):
+            self.svc.observe_completed_write(
+                self.a, producer="dma0", accepted_axi_evidence=False)
+        self.assertEqual(self.backend.calls, [])
+        # Mimic *actual* hardware-produced bytes, then require an independent
+        # accepted-AXI observation to authorize checking that allocation.
+        self.backend.storage[:self.a.size] = p.chunk(self.a.phys, self.a.size)
+        self.svc.observe_completed_write(
+            self.a, producer="dma0", accepted_axi_evidence=True)
+        self.assertEqual(self.backend.calls, [])
+        e = await self.svc.check(self.a, p, policy="strict")
+        self.assertEqual(e.method, "frontdoor")
+        self.assertEqual(self.svc.events[0].operation, "observed_write")
+
     async def test_sparse_provider_never_claims_frontdoor_without_agent(self):
         class FakeSparse:
             def __init__(self):
