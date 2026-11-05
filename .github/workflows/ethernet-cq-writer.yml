@@ -1,7 +1,7 @@
 name: Ethernet completion record real AXI DMA + SRAM
 on:
   pull_request:
-    branches: [main, 'agent/37-ethernet-queue-control-v1']
+    branches: [main]
     paths:
       - 'rtl/io/ethernet0/ethernet_cq_axi_writer.v'
       - 'dv/ethernet0/cq_writer_tb.v'
