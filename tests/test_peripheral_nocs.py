@@ -39,6 +39,23 @@ class PeripheralFabricTest(unittest.TestCase):
         self.assertIn("pcie0", endpoints("global_config"))
         self.assertIn("pcie0_regs", endpoints("global_config"))
 
+    def test_compute_data_nocs_reach_peripheral_sram_through_global_out(self):
+        nets = floonoc_gen.profiles(self.cfg, self.knobs)
+        peripheral = next(r for r in self.cfg["address_map"]["data"]
+                          if r["name"] == "pcie0.sram")
+        base = int(peripheral["base"], 0)
+        for name in ("compute0_local_data", "compute1_local_data"):
+            with self.subTest(network=name):
+                endpoints = {e["name"]:e for e in nets[name]["config"]["endpoints"]}
+                ranges = endpoints["global_out"]["addr_range"]
+                if isinstance(ranges, dict):
+                    ranges = [ranges]
+                self.assertTrue(any(r["base"] <= base < r["base"] + r["size"]
+                                    for r in ranges),
+                                "CPU -> peripheral SRAM decode missing from local fabric")
+                local = endpoints["sram"]["addr_range"]
+                self.assertFalse(local["base"] <= base < local["base"] + local["size"])
+
     def test_peripheral_instance_name_independent_of_ip_and_global_path(self):
         c = copy.deepcopy(self.cfg)
         sub = next(s for s in c["subsystems"] if s["type"] == "peripheral")
