@@ -118,6 +118,17 @@ jobs:
             rtl/memory/ddr4/tb_soc_aperture_guard.sv
           .tools/ddr4/guard_sim/Vtb_ddr_litedram_aperture_guard
 
+      - name: Simulate DDR-B bounded AXI bridge and response protocol
+        run: |
+          set -euo pipefail
+          verilator --binary --timing --assert -Wno-fatal \
+            --top-module tb_ddr_litedram_axi_bridge \
+            --Mdir .tools/ddr4/bridge_sim \
+            rtl/memory/ddr4/soc_aperture_guard.sv \
+            rtl/memory/ddr4/soc_axi_bridge.sv \
+            rtl/memory/ddr4/tb_soc_axi_bridge.sv
+          .tools/ddr4/bridge_sim/Vtb_ddr_litedram_axi_bridge
+
       - name: Lint actual generated DDR4 RTL
         run: python3 rtl/memory/ddr4/check_rtl.py --tool verilator --timeout 600
 
