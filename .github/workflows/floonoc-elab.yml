@@ -15,6 +15,7 @@ on:
       - 'tools/sim_cocotb.py'
       - 'tools/axi_report.py'
       - 'tools/memory_service.py'
+      - 'tools/memory_report.py'
       - 'tools/memory_plan.py'
       # Refresh RTL traffic evidence when its fabric reporting contract changes.
       - 'tools/fabric_report.py'
