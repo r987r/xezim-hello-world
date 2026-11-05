@@ -61,9 +61,22 @@ DDR4 controller/DFI test is still a separate functional test in the
 same CI job. This is stronger than a host-only contract, **but is not
 yet an end-to-end full-chip controller path**.
 
+## Verified standalone report and source provenance
+
+The actual modeled-controller run is [CI 42057781622](https://github.com/r987r/xezim-hello-world/actions/runs/42057781622)
+at merged PR head `dd3e9879cc87c2918a78c28931d5af3060029058`.
+Its `ddr4-foundation-generated-rtl` artifact includes measured
+`ddr4_latency.json`, `ddr4_internal_latency.json`,
+`ddr4_dfi_summary.json`, `ddr4_traffic_summary.json`, complete
+raw AXI/DFI JSONL, the actual generated `soc_ddr4_sim.v`, warning
+audit and pinned source manifest. Read-side AR→DFI/BankModel and
+AW→B boundary observations are distinct; **AW→DFI WRITE per-ID remains
+unmeasured**. This is standalone modeled controller timing, never a
+current-source NoC→DDR latency claim.
+
 ## Remaining DDR-B hardware and verification gates
 
-1. Finish sign-off for the standalone AXI response adapter: verify exact-head Verilator bridge test, clock/reset readiness, malformed write bursts, extra AXI attributes and concurrency/ID constraints; preserve the existing DDR4 AXI/DFI functional test. The initial one-read + one-write implementation and DECERR handling are in soc_axi_bridge.sv.
+1. The standalone bridge/guard protocol tests are **merged and passed** on [exact combined-head CI 42057781622](https://github.com/r987r/xezim-hello-world/actions/runs/42057781622): 106 Python tests, Verilator guard and bridge handshake/DECERR tests, actual LiteDRAM/DFI Cocotb 1/1 and 121,795 passive monitor cycles. Expand malformed write/reset recovery, extra AXI attribute rules, and concurrent requester arbitration/ID remapping before accepting production-level integration. The bridge permits one concurrent read and one write; do not infer wider out-of-order capability.
 2. Add Wishbone init/status service on the independent Config NoC, with CPU-controlled init and failure timeouts.
 3. Hand bridge and Bender source closure to sole #38 generator owner; that track will edit config/soc.yaml, tools/full_chip_gen.py and generated RTL/diagrams. No parallel generator edits here.
 4. Add opt-in chip-ddr4-real with actual CPU/iDMA traffic through the generated Data NoC and controller, DFI monitoring, independent INIT/RUN/CHECK, negative aperture tests and comparison against axi_ram timing.
