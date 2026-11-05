@@ -184,6 +184,26 @@ tests:
     timeout_s: 240
     pass: 'PASS fullchip:'
 
+  chip-pcie-host:
+    # The same generated soc_top/full_chip_tb and firmware phase protocol.
+    # Only this run owns the PCIe0 host initiator and external RC model.
+    engine: cocotb-verilator
+    sources: noc
+    bender_targets: [chip_boot]
+    ip: [picorv32, serv, wb2axip, verilog_axi]
+    firmware_mode: pcie_host
+    top: full_chip_tb
+    module: dv.pcie0.test_full_chip_host
+    seed: 1
+    test_dir: .
+    build: .tools/pcie0/full_chip_build
+    env: {MAKEFLAGS: '-j2', SOC_PCIE_HOST_MODE: '1'}
+    timeout_s: 1800
+    pass: 'PASS pciehost: real CPU0/host handshake and PCIe0 SRAM data'
+    report:
+      context: 'Real CPU0 cold boot via immutable ROM, host RC enumeration via modeled PCIe link, pinned real TLP->AXI4 RTL, generated PCIe0 local and global NoCs. CPU0 and host handshake on PCIe0 SRAM through frontdoor; accepted AXI passive monitors check all hops, no memory preload or fake PHY.'
+      axi: {scope: dut.u_noc, clock: clk, reset: rst_n, catalog: gen/supernoc/axi_monitors.json, actors: .tools/regression/chip-pcie-host/variant/manifest.json, max_events: 500000}
+
 suites:
   xezim: [memory, memory-full, memory-sparse, memory-negative, sram, sram-synthesis, serv, boot, boot-relocated]
   noc: [noc-verilator, supernoc, supernoc-negative]
@@ -196,4 +216,4 @@ suites:
   chip: [chip-cpu-dma, chip-dma, chip-boot, chip-boot-negative, chip-xezim-compile]
   # Every declared test is covered. Structural Xezim probes stay distinct
   # from the Verilator traffic gate; make test requires both toolchains.
-  full: [xezim, noc, compatibility, diagnostics, dma, chip]
+  full: [xezim, noc, compatibility, diagnostics, dma, chip, chip-pcie-host]

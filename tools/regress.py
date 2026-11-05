@@ -65,13 +65,14 @@ def load_config(path):
             raise ValueError(f'{name}: build reuse is only supported by cocotb-verilator')
         if test.get('mode', 'simulate') not in ('simulate', 'compile') or (test.get('mode') == 'compile' and test['engine'] != 'xezim'):
             raise ValueError(f'{name}: mode=compile requires the Xezim engine')
-        if test.get('firmware_mode') not in (None, 'cpu_dma'):
+        if test.get('firmware_mode') not in (None, 'cpu_dma', 'pcie_host'):
             raise ValueError(f'{name}: unknown compiled CPU firmware mode')
         if 'firmware_mode' in test and (
             test['engine'] != 'cocotb-verilator' or
             'chip_boot' not in test.get('bender_targets', []) or
-            'dma' not in test.get('bender_targets', [])):
-            raise ValueError(f'{name}: compiled CPU DMA requires real chip and iDMA RTL')
+            (test['firmware_mode'] == 'cpu_dma'
+             and 'dma' not in test.get('bender_targets', []))):
+            raise ValueError(f'{name}: selected test needs real chip RTL and specified active IP')
         if 'report' in test:
             report = test['report']
             required = {'scope','clock','reset','catalog'}
@@ -323,6 +324,29 @@ def run_target(name, test, resolver, options):
                    if Path(filename).parent == generated_root and
                    Path(filename).name in replacements else filename
                    for filename in sources]
+    if test.get('firmware_mode') == 'pcie_host':
+        # Same generated SoC and CPU firmware semantics; only variant wires
+        # the real pinned PCIe bridge and CPU0<->host SRAM phase barriers.
+        from full_chip_gen import emit as emit_chip
+        from dv.pcie0.run_rtl_smoke import source_contract
+        from dv.pcie0.prepare_rtl import assert_iverilog_clean
+        cfg = yaml.safe_load((ROOT/'config/soc.yaml').read_text())
+        noc_manifest = json.loads((ROOT/'gen/supernoc/manifest.json').read_text())
+        variant = out/'variant'
+        vendor_pin = source_contract()
+        bridge = assert_iverilog_clean()
+        emit_chip(cfg, noc_manifest, ROOT/'gen/noc/floonoc', variant,
+                  image_prefix=variant.relative_to(ROOT).as_posix(),
+                  pcie_host_mode=True)
+        generated_root = ROOT/'gen/chip'
+        replacements = {'soc_top.sv', 'full_chip_tb.sv'}
+        sources = [str(variant/Path(filename).name)
+                   if Path(filename).parent == generated_root and
+                   Path(filename).name in replacements else filename
+                   for filename in sources]
+        sources += [str(bridge)] + [
+            str(ROOT/'.tools/verilog_pcie'/item)
+            for item in vendor_pin['rtl_modules'] if item != 'rtl/pcie_axi_master.v']
     sources = list(dict.fromkeys(sources))
     includes = list(dict.fromkeys(includes))
     defines = list(dict.fromkeys(defines))
