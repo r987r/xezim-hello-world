@@ -1,9 +1,9 @@
 """PCIe RC BFM -> real verilog-pcie RTL -> real FlooNoC -> real tc_sram."""
-import logging
 
 import cocotb
 from cocotb.clock import Clock
 from cocotb.triggers import RisingEdge, with_timeout
+from discovery import enumerate_root_complex
 from cocotbext.pcie.core import RootComplex
 # Cocotb runner constructs its own PYTHONPATH. Make the locked upstream
 # PcieIfDevice utility import path explicit inside the simulation process.
@@ -14,18 +14,6 @@ if not (VENDOR_TESTS / "pcie_if.py").is_file():
     raise RuntimeError("pinned upstream PcieIfDevice simulation helper missing")
 sys.path.insert(0, str(VENDOR_TESTS))
 from pcie_if import PcieIfDevice, PcieIfRxBus, PcieIfTxBus
-
-
-class ExpectedDiscoveryMisses(logging.Filter):
-    def __init__(self):
-        super().__init__()
-        self.count = 0
-
-    def filter(self, record):
-        if record.levelno == logging.WARNING and "Failed to route config type 0 TLP" in record.getMessage():
-            self.count += 1
-            return False
-        return True
 
 
 @cocotb.test(timeout_time=500, timeout_unit="us")
@@ -55,14 +43,8 @@ async def host_to_real_floonoc_tc_sram(dut):
     dut.rst.value = 0
     for _ in range(8):
         await RisingEdge(dut.clk)
-    expected = ExpectedDiscoveryMisses()
-    logger = logging.getLogger("cocotb.pcie.RootComplex")
-    logger.addFilter(expected)
-    try:
-        await with_timeout(rc.enumerate(), 40, "us")
-    finally:
-        logger.removeFilter(expected)
-    dut._log.info("PCIE0_EXPECTED_DISCOVERY_MISSES=%d", expected.count)
+    missing_count = await enumerate_root_complex(rc, timeout_us=40)
+    dut._log.info("PCIE0_EXPECTED_DISCOVERY_MISSES=%d", missing_count)
     device = rc.find_device(dev.functions[0].pcie_id)
     assert device is not None, "missing PCIe Endpoint"
     await device.enable_device()

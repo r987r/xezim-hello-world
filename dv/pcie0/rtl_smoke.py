@@ -8,6 +8,7 @@ from cocotb.triggers import RisingEdge, Timer
 from cocotbext.pcie.core import RootComplex
 from cocotbext.axi import AxiBus, AxiRam
 from pcie_if import PcieIfDevice, PcieIfRxBus, PcieIfTxBus
+from discovery import enumerate_root_complex
 
 
 @cocotb.test()
@@ -36,7 +37,8 @@ async def pcie_host_bar_to_real_axi4_bridge(dut):
     await RisingEdge(dut.clk)
     await RisingEdge(dut.clk)
 
-    await host.enumerate()
+    missing_count = await enumerate_root_complex(host)
+    dut._log.info("PCIE0_EXPECTED_DISCOVERY_MISSES=%d", missing_count)
     device = host.find_device(endpoint.functions[0].pcie_id)
     assert device is not None, "Root Complex must enumerate modeled Endpoint"
     await device.enable_device()
