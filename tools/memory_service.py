@@ -62,10 +62,13 @@ class HostSparseMemory:
     This provider is marked validated only by the caller AFTER a separate
     AXI frontdoor consistency test proves that these offsets map correctly.
     """
-    def __init__(self, sparse_region, physical_base: int, *, validated=False):
+    def __init__(self, sparse_region, physical_base: int):
         self.memory = sparse_region
         self.base = physical_base
-        self.validated_backdoor = validated
+        # A newly registered backing is NEVER prevalidated just because
+        # it is host memory. Only CombinedMemoryProvider can establish the
+        # frontdoor/backdoor equivalence against actual routed AXI traffic.
+        self.validated_backdoor = False
         self.frontdoor_available = False
 
     async def backdoor_read(self, phys, length):
