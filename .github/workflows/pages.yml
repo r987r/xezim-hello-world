@@ -49,7 +49,7 @@ jobs:
           python-version: '3.12'
       - run: python3 -m pip install -r requirements.txt
       - name: Verify publication, CI trigger and report semantics
-        run: python3 -m unittest tests.test_ci_workflows tests.test_publication tests.test_merged_pr_evidence tests.test_axi_report tests.test_fabric_report tests.test_protocol_report tests.test_design_explorer tests.test_design_netlist tests.test_signal_inventory tests.test_signal_paths -v
+        run: python3 -m unittest tests.test_ci_workflows tests.test_publication tests.test_merged_pr_evidence tests.test_axi_report tests.test_fabric_report tests.test_protocol_report tests.test_design_explorer tests.test_design_netlist tests.test_signal_inventory tests.test_signal_paths tests.test_architecture_explorer -v
       - name: Build offline PR or manual branch preview
         if: (github.event_name == 'pull_request' && github.event.action != 'closed') || (github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main')
         run: python3 tools/publish_site.py
@@ -86,6 +86,19 @@ jobs:
           assert Path('.tools/pages-site/data/signal-inventory.json').is_file(), 'signal inventory download missing'
           print('PASS: self-contained 2D explorer, graph, signals and chip-DMA profile')
           PY
+      - name: Validate architecture JavaScript syntax
+        run: node --check tools/templates/site_arch_explorer.js
+      - name: Browser-render chip, subsystem and router-mesh diagrams
+        run: |
+          python3 -m pip install 'selenium==4.38.0'
+          python3 tests/smoke_architecture_browser.py
+      - name: Upload diagram screenshots for visual review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: architecture-diagram-screenshots-${{ github.run_id }}
+          path: .tools/architecture-screenshots/
+          if-no-files-found: ignore
       - uses: actions/upload-pages-artifact@v4
         with:
           path: .tools/pages-site
