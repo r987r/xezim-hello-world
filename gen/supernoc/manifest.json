@@ -250,6 +250,17 @@
           "size": 1048576
         },
         {
+          "access": "read_write",
+          "base": 301989888,
+          "destination": "s_pcie0_local_data_sram",
+          "networks": [
+            "compute0_local_data",
+            "global_data",
+            "pcie0_local_data"
+          ],
+          "size": 1048576
+        },
+        {
           "access": "read",
           "base": 536870912,
           "destination": "s_compute0_local_data_boot_flash",
@@ -317,6 +328,17 @@
             "compute0_local_data",
             "global_data",
             "compute1_local_data"
+          ],
+          "size": 1048576
+        },
+        {
+          "access": "read_write",
+          "base": 301989888,
+          "destination": "s_pcie0_local_data_sram",
+          "networks": [
+            "compute0_local_data",
+            "global_data",
+            "pcie0_local_data"
           ],
           "size": 1048576
         },
@@ -448,6 +470,17 @@
         },
         {
           "access": "read_write",
+          "base": 301989888,
+          "destination": "s_pcie0_local_data_sram",
+          "networks": [
+            "compute1_local_data",
+            "global_data",
+            "pcie0_local_data"
+          ],
+          "size": 1048576
+        },
+        {
+          "access": "read_write",
           "base": 4294967296,
           "destination": "s_memory0_local_data_target_crossbar",
           "networks": [
@@ -496,6 +529,17 @@
           "destination": "s_compute1_local_data_sram",
           "networks": [
             "compute1_local_data"
+          ],
+          "size": 1048576
+        },
+        {
+          "access": "read_write",
+          "base": 301989888,
+          "destination": "s_pcie0_local_data_sram",
+          "networks": [
+            "compute1_local_data",
+            "global_data",
+            "pcie0_local_data"
           ],
           "size": 1048576
         },
