@@ -94,7 +94,8 @@ class PublicationTests(unittest.TestCase):
             self.assertNotIn('id="fabric-matrix"',html)
             self.assertNotIn('renderMatrix()',html)
             self.assertFalse(dataset['entries'])
-            self.assertEqual(len(dataset['monitors']),34)
+            real_monitors=json.loads((ROOT/'gen/supernoc/axi_monitors.json').read_text())['monitors']
+            self.assertEqual(len(dataset['monitors']),len(real_monitors))
             for path in output.rglob('*.html'):
                 parser=Links();parser.feed(path.read_text())
                 for href in parser.links:
