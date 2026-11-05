@@ -11,6 +11,9 @@ on:
       - 'tests/test_memory_service.py'
       - 'tests/test_memory_pattern_c.py'
       - 'tests/test_memory_benchmark.py'
+      - 'tests/test_memory_report.py'
+      - 'tools/memory_report.py'
+      - 'tools/axi_report.py'
       - '.github/workflows/memory-service.yml'
       - 'Makefile'
   workflow_dispatch:
