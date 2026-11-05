@@ -48,8 +48,24 @@ jobs:
         with:
           python-version: '3.12'
       - run: python3 -m pip install -r requirements.txt
+      - name: Install checksum-pinned slang parser
+        shell: bash
+        run: |
+          set -euo pipefail
+          source toolchains/slang.env
+          mkdir -p .tools/slang .tools/bin
+          curl --fail --location --silent --show-error --retry 3 --output ".tools/slang/$SLANG_ARCHIVE" "$SLANG_URL"
+          printf '%s  %s\n' "$SLANG_SHA256" ".tools/slang/$SLANG_ARCHIVE" | sha256sum --check
+          tar -xzf ".tools/slang/$SLANG_ARCHIVE" -C .tools/slang
+          candidate="$(find .tools/slang -type f -name slang -print -quit)"
+          test -n "$candidate"
+          cp "$candidate" .tools/bin/slang
+          chmod +x .tools/bin/slang
+          .tools/bin/slang --version
+      - name: Extract RTL hierarchy and real named port bindings
+        run: python3 tools/rtl_instance_parser.py --slang .tools/bin/slang --output .tools/rtl-architecture.json
       - name: Verify publication, CI trigger and report semantics
-        run: python3 -m unittest tests.test_ci_workflows tests.test_publication tests.test_merged_pr_evidence tests.test_axi_report tests.test_fabric_report tests.test_protocol_report tests.test_design_explorer tests.test_design_netlist tests.test_signal_inventory tests.test_signal_paths -v
+        run: python3 -m unittest tests.test_ci_workflows tests.test_publication tests.test_merged_pr_evidence tests.test_axi_report tests.test_fabric_report tests.test_protocol_report tests.test_design_explorer tests.test_design_netlist tests.test_signal_inventory tests.test_signal_paths tests.test_architecture_explorer tests.test_rtl_instance_parser -v
       - name: Build offline PR or manual branch preview
         if: (github.event_name == 'pull_request' && github.event.action != 'closed') || (github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main')
         run: python3 tools/publish_site.py
@@ -71,6 +87,15 @@ jobs:
           data = json.loads(match.group(1))
           assert len(data['nodes']) >= 8, 'no diagram nodes'
           assert len(data['edges']) >= 8, 'no diagram connections'
+          parsed = re.search(r'<script type="application/json" id="ex-embedded-rtl">(.*?)</script>', html, re.S)
+          if not parsed:
+              raise SystemExit('no embedded compiler-parsed RTL instance evidence')
+          rtl = json.loads(parsed.group(1))
+          assert rtl['producer']=='slang', 'actual rtl parser must be clang/slang'
+          assert rtl['fabric_contract']['independent_planes'], 'data/config NoCs not separate'
+          assert len(rtl['fabric_contract']['resolved_networks'])==8, 'missing parsed RTL NoC modules'
+          assert rtl['summary']['named_port_bindings'] >= 100, 'missing compiled RTL port wiring'
+          assert Path('.tools/pages-site/data/rtl-architecture.json').is_file()
           assert data['profiles']['chip-dma']['actors'], 'missing DMA testbench overlay'
           assert 'fetch("data/design-graph.json")' not in html, 'preview still requires HTTP fetch'
           assert Path('.tools/pages-site/data/design-graph.json').is_file(), 'graph download missing'
@@ -86,6 +111,19 @@ jobs:
           assert Path('.tools/pages-site/data/signal-inventory.json').is_file(), 'signal inventory download missing'
           print('PASS: self-contained 2D explorer, graph, signals and chip-DMA profile')
           PY
+      - name: Validate architecture JavaScript syntax
+        run: node --check tools/templates/site_arch_explorer.js
+      - name: Browser-render chip, subsystem and router-mesh diagrams
+        run: |
+          python3 -m pip install 'selenium==4.38.0'
+          python3 tests/smoke_architecture_browser.py
+      - name: Upload diagram screenshots for visual review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: architecture-diagram-screenshots-${{ github.run_id }}
+          path: .tools/architecture-screenshots/
+          if-no-files-found: ignore
       - uses: actions/upload-pages-artifact@v4
         with:
           path: .tools/pages-site

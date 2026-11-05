@@ -96,10 +96,31 @@ still assume compute/memory templates and a single memory subsystem.
 Only after those are generalized can a new subsystem truly be created from
 config alone.
 
-The current viewer uses deterministic grid-based 2D layout. Port-aware ELK
-layout and bit-level, protocol-aware drilldown are follow-on work when real
-slang-netlist integration is validated. Do not create duplicate whole-chip
-architecture drawings or any 3D diagram infrastructure.
+The viewer now uses **hierarchical architectural 2D layouts**, not a flat
+node grid. The entry view composes every generated subsystem group and the
+shared global fabric; opening a subsystem presents its IP blocks and local
+data/config NoCs; opening a NoC uses the **exact FlooGen router XY coordinates**
+and the generator's real router-to-router and NI-to-router edges.
+
+The 2D hierarchy is data-driven: `*_subsystem` groups and `info.plane`
+network metadata, not manually listed module IDs. The current scene styles
+two standard local NoCs per existing subsystem, and additional submodules
+remain accessible through generated JSON; broader arbitrary-layout support
+will benefit from a port-aware ELK renderer.
+
+The signal inspector retains physical ports with bit widths, directions and
+RTL source links. Test profiles distinguish substituted BFMs from actual RTL
+DMA/CPU actors where the registered per-profile manifest provides that role.
+It does **not** silently assert that a test profile executed.
+
+The real chip/subsystem/NoC browser smoke tests assert all three hierarchy
+levels, the generated 9-router compute0 data mesh and signal inspector;
+three PNG screenshots are uploaded as PR artifacts for visual QA.
+The viewer remains 2D, without old Sv-test 3D or duplicate diagrams.
+
+Port-aware ELK layout of arbitrary nested compound modules and bit-level
+slang-netlist path validation remain follow-on work; the explorer does not
+claim those as delivered.
 
 ## Follow-on work
 
@@ -107,8 +128,9 @@ architecture drawings or any 3D diagram infrastructure.
    on resolved supernoc, chip-boot and chip-dma filelists.
 2. Add elaborated module-port and netlist dependencies as separately labeled
    graph evidence, with strict failure rules and source locations.
-3. Replace simple grid layout with port-aware ELK routing and AXI channel
-   expansion; render graph diffs directly in Pages.
+3. Extend port-aware ELK routing to arbitrary dynamically generated
+   compound subsystems, then show graph diffs and verified AXI-channel
+   driver paths directly in Pages.
 4. Add actual runtime verification topology export for future UVM tests
    and cocotb BFM registration checks for current test suites.
 
@@ -129,3 +151,32 @@ list fingerprint, tool invocation and evidence provenance. If the executable is
 missing, compilation fails or JSON is missing/invalid, there is no successful
 output. This does **not** make the external toolchain installed or validated
 by this PR; cross-profile functional RTL tests remain separate.
+
+## Compiler-parsed RTL composition (PR #48)
+
+The 2D architecture explorer now additionally consumes a source-hash-bound
+`slang --parse-only --cst-json --cst-json-mode simple-tokens` report for
+`gen/chip/soc_top.sv` and `gen/supernoc/soc_noc.sv`. It reads actual
+SystemVerilog module instantiation syntax and **named port binding expressions**,
+and validates that all eight expected FlooGen NoC modules have real
+instantiations. Data and configuration NoCs are separate module instances.
+
+The raw CST is not checked in. The normal GitHub Pages CI downloads the same
+SHA-verified slang binary as the existing RTL lint workflow, runs the parser,
+checks the source fingerprints, and publishes a compact
+`data/rtl-architecture.json`. The expandable **Compiler-parsed RTL hierarchy**
+section exposes module names, instance names and port connection expressions.
+
+Architectural subsystem grouping/placement continues to reuse generated SoC
+metadata. It is not sufficient proof of a simulated or elaborated design:
+syntax-only CST includes inactive generate branches. True active instance
+selection, driver tracing, and bit-level cross-hierarchy connection checks
+remain follow-up work with the pinned slang elaborator/slang-netlist. The
+viewer must never label a CST match as verified path reachability.
+
+You can regenerate independently with:
+
+~~~sh
+python3 tools/rtl_instance_parser.py --slang .tools/bin/slang --output .tools/rtl-architecture.json
+python3 -m unittest tests.test_rtl_instance_parser -v
+~~~

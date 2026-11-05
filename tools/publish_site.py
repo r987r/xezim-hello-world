@@ -483,7 +483,7 @@ def shell(title,body,relative,repository,sha):
     else:prefix+='/'
     template=(ROOT/'tools/templates/site.html').read_text()
     navigation=''.join(f'<a href="{prefix}{path}">{label}</a>' for path,label in
-                       [('index.html','Overview'),('topology.html','Topology'),('explorer.html','2D Explorer'),('fabric.html','Fabric Explorer'),('runs.html','Test runs'),('docs.html','Documentation'),('reference.html','Source data')])
+                       [('index.html','Overview'),('topology.html','Topology'),('explorer.html','Chip architecture'),('fabric.html','Fabric Explorer'),('runs.html','Test runs'),('docs.html','Documentation'),('reference.html','Source data')])
     return (template.replace('__TITLE__',escape(title)).replace('__NAV__',navigation).replace('__HOME__',prefix+'index.html')
             .replace('__CONTENT__',body).replace('__SOURCE__',escape(sha[:12]))
             .replace('__REPO__',f'https://github.com/{repository}/tree/{sha}'))
@@ -553,6 +553,26 @@ def build(output,evidence,repository,sha,config):
     from signal_inventory import build as signal_inventory_build
     signal_inventory = signal_inventory_build(ROOT)
     dump(output/'data/signal-inventory.json', signal_inventory)
+    # Optional compiler-parsed *actual* RTL instance/port evidence. The
+    # source fingerprints prevent stale output from another generated chip
+    # from being presented as current. Local docs previews can omit this.
+    rtl_source=ROOT/'.tools/rtl-architecture.json'
+    parsed_rtl={"schema_version":1,"producer":"slang",
+                "evidence":"compiler_parse_not_run",
+                "modules":[],"fabric_contract":{},
+                "summary":{"modules":0,"instances":0,"noc_instances":0}}
+    if rtl_source.is_file():
+        candidate=json.loads(rtl_source.read_text())
+        if candidate.get("producer")!="slang" or candidate.get("schema_version")!=1:
+            raise ValueError("invalid parsed RTL architecture schema")
+        for rel,digest in candidate.get("source_sha256",{}).items():
+            expected=hashlib.sha256((ROOT/rel).read_bytes()).hexdigest()
+            if expected!=digest:
+                raise ValueError("stale slang RTL architecture: "+rel)
+        if not candidate.get("fabric_contract",{}).get("independent_planes"):
+            raise ValueError("parsed RTL failed independent data/config fabric contract")
+        parsed_rtl=candidate
+    dump(output/'data/rtl-architecture.json', parsed_rtl)
     dataset={'schema_version':1,'title':config['title'],'source_sha':sha,'repository':repository,
              'built_at':datetime.now(timezone.utc).isoformat(),'runs':runs,'entries':entries,
              'notes':notes,'documents':docs,'networks':noc['networks'],'chip':chip,
@@ -566,6 +586,10 @@ def build(output,evidence,repository,sha,config):
             body = body.replace('__GRAPH_DATA__',graph_data)
             signal_data = json.dumps(signal_inventory, separators=(',', ':')).replace('<','\\u003c')
             body = body.replace('__SIGNAL_DATA__', signal_data)
+            parsed_data = json.dumps(parsed_rtl, separators=(',', ':')).replace('<','\\u003c')
+            body = body.replace('__RTL_PARSE_DATA__', parsed_data)
+            architecture_js = (ROOT/'tools/templates/site_arch_explorer.js').read_text()
+            body = body.replace('__ARCH_JS__', architecture_js)
         if page=='fabric':
             fabric_data=json.dumps(fabric,separators=(',',':')).replace('<','\\u003c')
             body=body.replace('__FABRIC_DATA__',fabric_data)

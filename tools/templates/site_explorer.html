@@ -1,176 +1,94 @@
-<div class="eyebrow">2D · generic topology · testbench overlays</div>
-<h1>Design &amp; verification explorer</h1>
-<p class="lede">Explore the existing generated SoC and switch between verification profiles. Source: generator topology and actor manifests, not proof of slang-elaborated wiring. Dashed edges represent planned integration.</p>
-<div class="actions">
-<label>Scope <select id="ex-scope"></select></label>
-<label>Test profile <select id="ex-profile"></select></label>
-<button type="button" id="ex-reset">Fit diagram</button>
-<a href="data/design-graph.json">Graph JSON</a>
+<div class="eyebrow">Architecture explorer · structural RTL</div>
+<h1>Chip composition &amp; connectivity</h1>
+<p class="lede">Follow the real design hierarchy: the full SoC contains subsystems; subsystems contain IP and local fabrics; fabrics contain the exact FlooGen router mesh and network interfaces. Click a block to drill down.</p>
+<div class="arch-toolbar" aria-label="Diagram controls">
+  <div id="arch-crumbs" class="arch-crumbs" aria-label="Hierarchy breadcrumb"></div>
+  <label>Test mode <select id="arch-profile"></select></label>
+  <label>Connections <select id="arch-plane"><option value="all">Data + config</option><option value="data">Data only</option><option value="config">Config only</option></select></label>
+  <button type="button" id="arch-zoom-out" title="Zoom out">−</button>
+  <button type="button" id="arch-fit">Fit</button>
+  <button type="button" id="arch-zoom-in" title="Zoom in">+</button>
+  <button type="button" id="arch-export" title="Download current drawing as SVG">Export SVG</button>
 </div>
-<p id="ex-status" class="muted">Loading graph…</p>
-<div class="ex-layout">
-<div class="ex-scroll"><svg id="ex-svg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="2D design graph"></svg></div>
-<div class="ex-detail"><h2>Selection</h2><pre id="ex-detail">Select a block or connection.</pre></div>
+<div class="arch-layout">
+  <section class="arch-stage">
+    <div id="arch-viewport" class="arch-viewport" tabindex="0" aria-label="Scrollable chip diagram. Select a block for details.">
+      <svg xmlns="http://www.w3.org/2000/svg" id="arch-svg" role="img" aria-label="Hierarchical 2D SoC diagram"></svg>
+    </div>
+    <div class="arch-bottom">
+      <span id="arch-status" aria-live="polite">Loading structural design…</span>
+      <div class="arch-legend"><span class="arch-key"><i class="arch-dot data"></i> AXI data</span><span class="arch-key"><i class="arch-dot config"></i> Config/control</span><span class="arch-key"><i class="arch-dot module"></i> IP / model</span><span class="arch-key"><i class="arch-dot planned"></i> Planned only</span></div>
+    </div>
+  </section>
+  <aside class="arch-inspector">
+    <div class="eyebrow">Inspector</div>
+    <h2 id="arch-inspect-title">Select a block or connection</h2>
+    <p id="arch-inspect-subtitle" class="muted">Click a subsystem to see its composition, or a NoC to see its routers and interfaces.</p>
+    <div id="arch-inspect-facts"></div>
+    <div id="arch-inspect-links"></div>
+    <button id="arch-inspect-open" type="button" hidden>Open this block</button>
+  </aside>
 </div>
-<style>
-.ex-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(230px,310px);gap:12px;margin:12px 0}
-.ex-scroll{max-width:100%;overflow:auto;border:1px solid #94a3b85c;border-radius:10px;min-height:500px}
-#ex-svg{min-width:760px;display:block;background:#f8fafc}
-.ex-detail{min-width:0;border:1px solid #94a3b85c;border-radius:10px;padding:10px}
-.ex-detail h2{font-size:1.1rem}
-#ex-detail{white-space:pre-wrap;overflow-wrap:anywhere;max-height:520px;overflow:auto;font-size:.8rem}
-.ex-node{cursor:pointer}.ex-node rect{fill:#e1ecf5;stroke:#59758c;stroke-width:1.4}
-.ex-node text{font:12px system-ui,sans-serif;fill:#17324d;pointer-events:none}
-.ex-edge{fill:none;stroke:#94a3b8;stroke-width:2;opacity:.55;cursor:pointer;pointer-events:stroke}
-.ex-edge.planned{stroke-dasharray:6 5}
-.ex-selected rect{stroke:#d97706;stroke-width:3}
-.ex-selected.ex-edge{stroke:#d97706;stroke-width:4;opacity:1}
-@media(max-width:820px){.ex-layout{grid-template-columns:1fr}.ex-scroll{min-height:380px}.ex-detail{min-height:130px}#ex-detail{max-height:200px}}
-</style>
-<div class="ex-signal-detail">
-<h2>Signals and bus channels</h2>
-<p class="muted">Physical port names, widths and directions are read from generated SystemVerilog. Bus grouping is inferred from the names, but the wiring between blocks is NOT yet traced through slang-netlist.</p>
-<div class="filters">
-<label>Endpoint <select id="ex-endpoint"></select></label>
-<label>Bus group <select id="ex-bus"></select></label>
-<label>Filter <input id="ex-signal-filter" placeholder="Signal name / channel"></label>
-</div>
-<p class="muted" id="ex-signal-status"></p>
-<div class="scroll"><table><thead><tr><th>RTL signal</th><th>Channel</th><th>Width</th><th>Direction</th><th>Source</th></tr></thead><tbody id="ex-signal-rows"></tbody></table></div>
-<h3>Neighboring block-to-block links</h3><p class="muted">Declared architectural links, not independently proven per-field netlist connections.</p>
-<div class="scroll"><table><thead><tr><th>From</th><th>To</th><th>Declared bus</th><th>Integration status</th></tr></thead><tbody id="ex-connection-rows"></tbody></table></div>
-</div>
-<style>
-.ex-signal-detail{margin:16px 0;padding:10px 14px;border:1px solid var(--line);border-radius:12px}
-.ex-signal-detail h2{margin:6px 0 12px}
-#ex-signal-rows td{font-size:12px}
-#ex-signal-rows td:first-child{font-family:ui-monospace,monospace;overflow-wrap:anywhere;max-width:360px}
-@media(max-width:650px){.ex-signal-detail{padding:10px}.ex-signal-detail select{max-width:calc(100vw - 80px)}}
-</style>
-<script type="application/json" id="ex-embedded-signals">__SIGNAL_DATA__</script>
-<script>
-(function(){
-"use strict";
-var inventory=JSON.parse(document.getElementById("ex-embedded-signals").textContent);
-var sel=document.getElementById("ex-endpoint"),bus=document.getElementById("ex-bus");
-var filter=document.getElementById("ex-signal-filter"),rows=document.getElementById("ex-signal-rows");
-var status=document.getElementById("ex-signal-status"),linkRows=document.getElementById("ex-connection-rows"),sourceBase=(document.querySelector("footer a")||{}).href||"";
-sourceBase=sourceBase.replace("/tree/","/blob/").replace(/\/$/,"");
-function option(select,value,label){var o=document.createElement("option");o.value=value;o.textContent=label;select.append(o)}
-option(sel,"__top__","Top-level clocks / resets / unbound");
-Object.keys(inventory.endpoints).sort().forEach(function(key){option(sel,key,key)});
-function choices(){
- var ep=inventory.endpoints[sel.value],groups=ep?ep.protocols:{};
- bus.replaceChildren();option(bus,"all","All channels / signals");
- Object.keys(groups).sort().forEach(function(key){option(bus,key,key)});
- draw();
-}
-function cell(tr,value,href){
- var td=document.createElement("td"),node=href?document.createElement("a"):document.createElement("span");
- node.textContent=String(value);if(href)node.href=href;td.append(node);tr.append(td);
-}
-function draw(){
- var ep=inventory.endpoints[sel.value],filtered=filter.value.toLowerCase(),group=bus.value;
- var list=(ep?ep.signals:inventory.unbound_ports).filter(function(item){
-  return (group==="all"||(item.protocol+":"+item.interface)===group)
-   && (!filtered||(item.name+" "+item.channel+" "+item.protocol).toLowerCase().includes(filtered));
- });
- rows.replaceChildren();
- list.forEach(function(item){
-  var tr=document.createElement("tr");
-  cell(tr,item.name);cell(tr,item.channel);cell(tr,item.width);cell(tr,item.direction);
-  var source=String(item.location||""),match=source.match(/^(.*):(\d+):(\d+)$/);
-  var href=match&&sourceBase?sourceBase+"/"+match[1]+"#L"+match[2]:"";
-  cell(tr,source,href);rows.append(tr);
- });
- if(!list.length){var tr=document.createElement("tr"),td=document.createElement("td");td.colSpan=5;td.textContent="No signals in this selection";tr.append(td);rows.append(tr)}
- linkRows.replaceChildren();
- var links=inventory.declared_connections.filter(function(link){
-  return link.from.instance===sel.value || link.to.instance===sel.value;
- });
- links.forEach(function(link){
-  var tr=document.createElement("tr");
-  cell(tr,link.from.instance+"."+link.from.port);
-  cell(tr,link.to.instance+"."+link.to.port);
-  cell(tr,(link.declared_signals||[]).map(function(x){return x.name+(x.width?" ["+x.width+"]":"")}).join(", ") || link.link_type);
-  cell(tr,link.status+" (declared only)");
-  linkRows.append(tr);
- });
- if(!links.length){var tr=document.createElement("tr"),td=document.createElement("td");td.colSpan=4;td.textContent="No declared links for this selection";tr.append(td);linkRows.append(tr)}
- status.textContent=list.length+" actual RTL port declarations; grouping is inferred. Evidence: "+inventory.source+
-   ". Routing proof requires slang-netlist.";
-}
-sel.addEventListener("change",choices);bus.addEventListener("change",draw);filter.addEventListener("input",draw);
-window.addEventListener("soc-explorer-selection",function(evt){
- var chosen=evt.detail||{};if(chosen.id&&inventory.endpoints[chosen.id]){sel.value=chosen.id;choices()}
-});
-choices();
-})();
-</script>
+<div class="arch-evidence">Source distinction: router coordinates and FlooNoC links are from generated structural topology; inter-subsystem links are generator-declared RTL integration. Signal widths/directions come from generated RTL port declarations. A drawn connection is not evidence of a successful AXI transfer or a slang-netlist path.</div>
+<details id="arch-signals" class="arch-signal-panel">
+  <summary>Signal and bus inspector <span id="arch-signals-count"></span></summary>
+  <div class="arch-signal-controls">
+    <label>RTL endpoint <select id="ex-endpoint"></select></label>
+    <label>Bus / interface <select id="ex-bus"></select></label>
+    <label>Signal filter <input type="search" id="ex-signal-filter" placeholder="awaddr, valid, clk…"></label>
+  </div>
+  <p id="ex-signal-status" class="muted"></p>
+  <div class="scroll"><table><thead><tr><th>Signal</th><th>Channel</th><th>Bits</th><th>Direction</th><th>RTL source</th></tr></thead><tbody id="ex-signal-rows"></tbody></table></div>
+  <h3>Declared neighboring connections</h3><p class="muted">Links below show configured endpoint connectivity, not verified bit-level driver traces.</p>
+  <div class="scroll"><table><thead><tr><th>Source</th><th>Destination</th><th>Bus</th><th>Status</th></tr></thead><tbody id="ex-connection-rows"></tbody></table></div>
+</details>
+<details id="arch-rtl-parse" class="arch-signal-panel">
+  <summary>Compiler-parsed RTL hierarchy <span id="arch-rtl-count"></span></summary>
+  <p class="muted">These are actual module instantiations and named-port expressions parsed by slang. Syntax parsing does not establish whether conditional generate blocks are active or prove a netlist driver path.</p>
+  <div id="arch-rtl-validation" class="muted"></div>
+  <div class="scroll"><table><thead><tr><th>Parent module</th><th>Instance</th><th>Instantiated RTL module</th><th>Named port bindings</th></tr></thead>
+    <tbody id="arch-rtl-rows"></tbody></table></div>
+</details>
+<div class="actions"><a href="data/rtl-architecture.json">Compiler-parsed RTL JSON</a><a href="data/design-graph.json">Design graph JSON</a><a href="data/signal-inventory.json">Physical signal inventory JSON</a><a href="topology.html">Generation sources and NoC tables</a></div>
 
+<style>
+.arch-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;border:1px solid var(--line);background:#101f31;padding:12px 14px;border-radius:12px;margin:20px 0 12px}
+.arch-toolbar label{display:flex;align-items:center;gap:6px}
+.arch-toolbar button{padding:7px 11px;font-size:13px}
+.arch-toolbar select{max-width:220px;padding:7px}
+.arch-crumbs{display:flex;align-items:center;flex:1 1 250px;flex-wrap:wrap;gap:5px}
+.arch-crumbs button{border:0;background:transparent;padding:3px 6px;color:#9dddec}
+.arch-crumbs button[aria-current="page"]{color:#f6fbff;font-weight:750}
+.arch-crumbs span{color:#7f95aa}
+.arch-layout{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;align-items:stretch}
+.arch-stage{min-width:0;min-height:530px;display:flex;flex-direction:column;border:1px solid #38506a;border-radius:14px;overflow:hidden;background:#081522}
+.arch-viewport{overflow:auto;max-width:100%;height:650px;overscroll-behavior:contain;scrollbar-color:#63819f #0e1c2b}
+#arch-svg{display:block;background:#081522;max-width:none;user-select:none}
+#arch-svg .arch-click{cursor:pointer;transition:filter .15s ease}
+#arch-svg .arch-click:hover{filter:brightness(1.25)}
+#arch-svg .arch-click:focus-visible{outline:none;filter:brightness(1.5)}
+.arch-bottom{display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;padding:9px 14px;border-top:1px solid #273e52;color:#a6b9cf;font-size:12px;line-height:1.5}
+.arch-legend{display:flex;gap:12px;flex-wrap:wrap}
+.arch-key{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.arch-dot{width:10px;height:10px;border-radius:3px;display:inline-block}
+.arch-dot.data{background:#28b8b3}.arch-dot.config{background:#a78bfa}.arch-dot.module{background:#55758f}.arch-dot.planned{border:1px dashed #e7a453}
+.arch-inspector{min-width:0;border:1px solid var(--line);padding:14px 18px;border-radius:12px;background:#111e30;display:block}
+.arch-inspector h2{font-size:19px;margin:6px 0}.arch-inspector p{font-size:13px}
+.arch-inspector dl{margin:8px 0;max-height:190px;overflow:auto}.arch-inspector dt{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#9db0c9;margin-top:12px}.arch-inspector dd{margin:2px 0 6px;color:#ecf3fa;font-size:13px;overflow-wrap:anywhere}
+.arch-inspector .arch-chip{display:inline-block;padding:2px 8px;border:1px solid #3d6b8a;border-radius:12px;background:#1a3043;font:11px ui-monospace,monospace;color:#a8e8f5}
+.arch-inspector button{margin-top:12px;display:block;max-width:100%;white-space:normal}.arch-inspector button[hidden]{display:none}
+.arch-evidence{font-size:12px;line-height:1.6;color:#abc4d4;margin:12px 2px 20px;padding:11px 14px;border-left:3px solid #4e97a9;background:#122235}
+.arch-signal-panel{border:1px solid var(--line);background:var(--panel);border-radius:12px;padding:12px 18px;margin:18px 0}
+.arch-signal-panel summary{font-size:16px;font-weight:700;cursor:pointer;color:#dff2ff}
+.arch-signal-panel summary span{font:12px ui-monospace,monospace;color:#8eb6d3;padding-left:6px}
+.arch-signal-controls{display:flex;gap:12px;flex-wrap:wrap;align-items:end;margin:14px 0}
+.arch-signal-controls label{display:flex;flex-direction:column;gap:5px;min-width:180px}
+.arch-signal-controls select,.arch-signal-controls input{max-width:290px}
+.arch-signal-panel td{font-size:12px}.arch-signal-panel td:first-child{overflow-wrap:anywhere;max-width:320px}
+@media(max-width:960px){.arch-layout{grid-template-columns:1fr}.arch-stage{min-height:440px}.arch-viewport{height:480px}.arch-inspector{padding:14px;display:block}.arch-crumbs{flex-basis:100%}}
+@media(max-width:650px){.arch-toolbar{gap:7px;padding:10px}.arch-toolbar label{font-size:11px}.arch-toolbar select{max-width:160px}.arch-viewport{height:450px}.arch-signal-panel{padding:12px}.arch-signal-controls label{min-width:140px;flex:1}.arch-signal-controls select{max-width:100%}}
+</style>
 <script type="application/json" id="ex-embedded-graph">__GRAPH_DATA__</script>
-<script>
-(function(){
-"use strict";
-var ns="http://www.w3.org/2000/svg",s=document.getElementById("ex-scope"),p=document.getElementById("ex-profile"),svg=document.getElementById("ex-svg"),detail=document.getElementById("ex-detail"),status=document.getElementById("ex-status");
-var graph;
-function el(t,props,label){var e=document.createElementNS(ns,t);Object.keys(props||{}).forEach(function(k){e.setAttribute(k,props[k])});if(label!==undefined)e.textContent=String(label);return e}
-function selected(element,data){svg.querySelectorAll(".ex-selected").forEach(function(e){e.classList.remove("ex-selected")});element.classList.add("ex-selected");detail.textContent=JSON.stringify(data,null,2);window.dispatchEvent(new CustomEvent("soc-explorer-selection",{detail:data}))}
-function render(){
- if(!graph)return;
- var groupMap=new Map(graph.groups.map(function(g){return [g.name,g]})),memberOf=new Map;
- graph.groups.forEach(function(g){g.instances.forEach(function(n){if(!memberOf.has(n))memberOf.set(n,g.name)})});
- var actor=(graph.profiles[p.value]||{}).actors||{},nodes=[],edges=[];
- if(s.value==="all"){
-  nodes=graph.groups.map(function(g){return {id:"group:"+g.name,label:g.name,sub:g.instances.length+" components",group:g}});
-  graph.nodes.forEach(function(n){if(!memberOf.has(n.id))nodes.push({id:n.id,label:n.id,source:n})});
-  var collapsed=new Map;
-  graph.edges.forEach(function(e){
-   var a=memberOf.has(e.from.instance)?"group:"+memberOf.get(e.from.instance):e.from.instance;
-   var b=memberOf.has(e.to.instance)?"group:"+memberOf.get(e.to.instance):e.to.instance;
-   if(a===b)return;
-   var k=a+" -> "+b;
-   if(!collapsed.has(k))collapsed.set(k,{id:k,a:a,b:b,count:0,planned:false});
-   var c=collapsed.get(k);c.count++;if(e.status==="planned_integration")c.planned=true;
-  });edges=Array.from(collapsed.values());
- }else{
-  var members=new Set(groupMap.get(s.value).instances),visible=new Set(members);
-  graph.edges.forEach(function(e){if(members.has(e.from.instance))visible.add(e.to.instance);if(members.has(e.to.instance))visible.add(e.from.instance)});
-  nodes=graph.nodes.filter(function(n){return visible.has(n.id)}).map(function(n){return {id:n.id,label:n.id,sub:(actor[n.id]||{}).kind||n.module,source:n,external:!members.has(n.id)}});
-  edges=graph.edges.filter(function(e){return visible.has(e.from.instance)&&visible.has(e.to.instance)&&(members.has(e.from.instance)||members.has(e.to.instance))}).map(function(e){return {id:e.id,a:e.from.instance,b:e.to.instance,count:1,planned:e.status==="planned_integration",raw:e}});
- }
- var columns=s.value==="all"?3:Math.min(5,Math.ceil(Math.sqrt(nodes.length))),w=195,h=62,dx=53,dy=60;
- var places=new Map;
- nodes.forEach(function(n,i){places.set(n.id,{x:32+(i%columns)*(w+dx),y:35+Math.floor(i/columns)*(h+dy)})});
- var aw=Math.max(760,columns*(w+dx)+45),ah=Math.max(390,Math.ceil(nodes.length/columns)*(h+dy)+45);
- svg.replaceChildren();svg.setAttribute("viewBox","0 0 "+aw+" "+ah);svg.setAttribute("width",aw);svg.setAttribute("height",ah);
- edges.forEach(function(e){
-  var a=places.get(e.a),b=places.get(e.b);if(!a||!b)return;
-  var x=a.x+w/2,y=a.y+h/2,tx=b.x+w/2,ty=b.y+h/2;
-  var path=el("path",{d:"M "+x+" "+y+" C "+(x+40)+" "+y+" "+(tx-40)+" "+ty+" "+tx+" "+ty,class:"ex-edge"+(e.planned?" planned":"")});
-  path.addEventListener("click",function(){selected(path,{...e,evidence:"generated_declared_topology_not_elaboration"})});svg.append(path);
- });
- nodes.forEach(function(n){
-  var q=places.get(n.id),g=el("g",{class:"ex-node"});
-  g.append(el("rect",{x:q.x,y:q.y,width:w,height:h,rx:8}));
-  var label=n.label.length>27?n.label.slice(0,24)+"…":n.label;
-  g.append(el("text",{x:q.x+9,y:q.y+23},label));
-  var sub=n.sub||"boundary",small=sub.length>29?sub.slice(0,26)+"…":sub;
-  g.append(el("text",{x:q.x+9,y:q.y+42},small));
-  g.addEventListener("click",function(){selected(g,{...n,profile:p.value,actor:actor[n.id]||null,evidence:"generated_declared_not_runtime_verified"})});
-  if(n.group)g.addEventListener("dblclick",function(){s.value=n.group.name;render()});
-  svg.append(g);
- });
- status.textContent=nodes.length+" blocks, "+edges.length+" links; "+p.value+" test profile. Double-click a subsystem to drill down.";
- detail.textContent=JSON.stringify({scope:s.value,profile:p.value,source:graph.source,notice:"Generated topology is not proof of elaborated RTL connectivity."},null,2);
-}
-document.getElementById("ex-reset").addEventListener("click",function(){s.value="all";render()});
-s.addEventListener("change",render);p.addEventListener("change",render);
-Promise.resolve(JSON.parse(document.getElementById("ex-embedded-graph").textContent)).then(function(data){
- graph=data;
- [["all","Whole SoC"]].concat(data.groups.map(function(g){return [g.name,g.name]})).forEach(function(pair){var o=document.createElement("option");o.value=pair[0];o.textContent=pair[1];s.append(o)});
- Object.keys(data.profiles).forEach(function(k){var o=document.createElement("option");o.value=k;o.textContent=k;p.append(o)});
- p.value=data.profiles["chip-dma"]?"chip-dma":Object.keys(data.profiles)[0];render();
-}).catch(function(err){status.textContent="Explorer unavailable: "+err.message});
-})();
-</script>
+<script type="application/json" id="ex-embedded-rtl">__RTL_PARSE_DATA__</script>
+<script type="application/json" id="ex-embedded-signals">__SIGNAL_DATA__</script>
+<script>__ARCH_JS__</script>
