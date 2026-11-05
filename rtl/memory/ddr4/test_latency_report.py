@@ -60,6 +60,41 @@ class DDR4LatencyContractTests(unittest.TestCase):
         self.assertEqual(result["measured"]["read"]["avg_cycles"], 12)
         self.assertEqual(result["measured"]["write"]["avg_cycles"], 10)
 
+    def test_real_axi_w_channel_may_complete_before_address_handshake(self):
+        # AXI4 has no AW/W lockstep handshake requirement. A pipelined
+        # master can finish the W burst before the target accepts AW.
+        events = complete()[:3] + [
+            ev("w", 25, last=0),
+            ev("w", 26, last=1),
+            ev("aw", 30, id=2, addr=0x8000, len=1),
+            ev("b", 40, id=2, resp=0),
+        ]
+        report = calculate(events, 10000)
+        self.assertEqual(report["measured"]["write"]["samples"], 1)
+        self.assertEqual(report["measured"]["write"]["avg_cycles"], 10)
+
+    def test_multiple_early_w_bursts_remain_in_aw_order(self):
+        events = complete()[:3] + [
+            ev("w", 25, last=0),
+            ev("w", 26, last=1),
+            ev("w", 27, last=1),
+            ev("aw", 30, id=2, addr=0x8000, len=1),
+            ev("aw", 31, id=3, addr=0x9000, len=0),
+            ev("b", 40, id=2, resp=0),
+            ev("b", 41, id=3, resp=0),
+        ]
+        report = calculate(events, 10000)
+        self.assertEqual(report["measured"]["write"]["samples"], 2)
+        self.assertEqual([x["id"] for x in report["transactions"]
+                          if x["operation"] == "write"], [2, 3])
+
+    def test_unpaired_early_w_still_fails(self):
+        events = [ev("w", 20, last=1)] + complete()
+        with self.assertRaisesRegex(ValueError, "WLAST"):
+            calculate(events, 10000)
+        with self.assertRaisesRegex(ValueError, "orphan W"):
+            calculate(complete() + [ev("w", 45, last=1)], 10000)
+
     def test_reject_uninitialized_axi_request(self):
         events = complete()
         events[0]["phase"] = "initialization"
