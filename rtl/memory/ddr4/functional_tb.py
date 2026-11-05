@@ -16,6 +16,7 @@ from init_plan import wishbone_script
 from latency_report import configured_clock_period_ps
 from dfi_probe import DFIProbe, observe_dfi
 from traffic_observer import TrafficObserver, observe_forever
+from stress_matrix import Burst, build_matrix, enabled_lane_runs, expected_write, pattern_byte
 
 OUTPUT = Path(os.environ["DDR4_GENERATED_DIR"])
 PLAN = json.loads((OUTPUT / "ddr4_init_plan.json").read_text())
@@ -122,6 +123,65 @@ async def transfer(master, dut, address, data, ident):
                   address, len(data), ident)
 
 
+
+async def exercise_controller_stress(master, dut, observer, monitor):
+    """Real LiteDRAM AXI+DFI stress, not a pure-Python oracle pass.
+
+    The existing passive AXI/Wishbone and 72-net DFI monitors stay active.
+    cocotbext-axi 0.1.28 produces a WSTRB mask for unaligned contiguous
+    byte writes; sparse masks are decomposed into separate legal writes.
+    No external BFM or fake memory backend is substituted.
+    """
+    cases = build_matrix(aperture_bytes=32 * 1024 * 1024, data_bits=64,
+                         id_bits=4, seed=0x2d41)
+    writes = [case for case in cases if case.kind == "write"]
+    reads = [case for case in cases if case.kind == "read"]
+    assert len(writes) == len(reads) == 4
+    completed = 0
+    for case, rd_case in zip(writes, reads):
+        assert (case.address, case.beats, case.id) == (
+            rd_case.address, rd_case.beats, rd_case.id)
+        size = case.beats * 8
+        initial = bytes([0x5a] * size)
+        resp = await with_timeout(master.write(case.address, initial,
+                                                awid=case.id), 80, "us")
+        assert resp.resp == AxiResp.OKAY, f"DDR4 stress init B error {case}"
+        # First confirm the long burst is intact. A previously passing
+        # functional smoke does not cover 1/4/8/16-beat transfers.
+        base = await with_timeout(master.read(case.address, size, arid=case.id),
+                                  80, "us")
+        assert base.resp == AxiResp.OKAY and base.data == initial, (
+            f"DDR4 stress baseline mismatch @{case.address:#x}")
+        # Exercise one selected AXI beat's actual hardware strobe lanes.
+        # The untouched beats make an independent protection guard.
+        selected = case.beats - 1
+        beat_addr = case.address + selected * 8
+        change = Burst(beat_addr, 1, case.id, case.strobe, case.pattern, "write")
+        expected_beat = expected_write(initial[selected * 8:selected * 8 + 8],
+                                       change, 8)
+        for first, end in enabled_lane_runs(case.strobe, 8):
+            payload = bytes(pattern_byte(beat_addr + lane, case.pattern)
+                            for lane in range(first, end))
+            result = await with_timeout(
+                master.write(beat_addr + first, payload, awid=case.id),
+                80, "us")
+            assert result.resp == AxiResp.OKAY, (
+                f"DDR4 stress masked B error @{beat_addr + first:#x}")
+        expected = (initial[:selected * 8] + expected_beat +
+                    initial[(selected + 1) * 8:])
+        final = await with_timeout(master.read(case.address, size, arid=case.id),
+                                   80, "us")
+        assert final.resp == AxiResp.OKAY and final.data == expected, (
+            f"DDR4 stress masked data/alias mismatch @{case.address:#x}: "
+            f"{final.data.hex()} != {expected.hex()}")
+        observer.assert_health(monitor)
+        completed += 1
+    assert completed == 4, "DDR4 stress cases were skipped"
+    dut._log.info("PASS real LiteDRAM stress: 4 address regions, "
+                  "1/4/8/16 AXI beats, IDs 0/15, actual byte strobes and "
+                  "full-burst readback; DFI and AXI observers active")
+
+
 @cocotb.test(timeout_time=3, timeout_unit="ms")
 async def ddr4_wishbone_init_axi_readwrite(dut):
     """One always-active passive observer from before clock start to teardown."""
@@ -221,6 +281,7 @@ async def ddr4_wishbone_init_axi_readwrite(dut):
                 f"{read_result.data.hex()} != {payload.hex()}")
         dut._log.info("PASS DDR4 modeled 32MiB low/mid/high address alias guard")
 
+        await exercise_controller_stress(master, dut, observer, monitor)
         observer.assert_health(monitor)
         observer.next_phase("post_traffic")
         await tick(dut, 5)
