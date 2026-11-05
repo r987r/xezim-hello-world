@@ -49,7 +49,7 @@ class PcieLatencyTests(unittest.TestCase):
                 "operation":"read","address":hex(addr),
                 "start_ps":start,"end_ps":end,"status":"complete",
                 "response":"0x0","request":{"size":"0x3"},
-                "beats":[{"data":"0xddccbbaa"}],
+                "beats":[{"data":hex(0xddccbbaa << (8 * (addr & 7)))}],
             })
         self.steps.append({"actor":"host0","step":f"bar_read_{i}",
                            "start_ps":t0-10000,"time_ps":t0+140000,
