@@ -42,7 +42,14 @@
   <h3>Declared neighboring connections</h3><p class="muted">Links below show configured endpoint connectivity, not verified bit-level driver traces.</p>
   <div class="scroll"><table><thead><tr><th>Source</th><th>Destination</th><th>Bus</th><th>Status</th></tr></thead><tbody id="ex-connection-rows"></tbody></table></div>
 </details>
-<div class="actions"><a href="data/design-graph.json">Design graph JSON</a><a href="data/signal-inventory.json">Physical signal inventory JSON</a><a href="topology.html">Generation sources and NoC tables</a></div>
+<details id="arch-rtl-parse" class="arch-signal-panel">
+  <summary>Compiler-parsed RTL hierarchy <span id="arch-rtl-count"></span></summary>
+  <p class="muted">These are actual module instantiations and named-port expressions parsed by slang. Syntax parsing does not establish whether conditional generate blocks are active or prove a netlist driver path.</p>
+  <div id="arch-rtl-validation" class="muted"></div>
+  <div class="scroll"><table><thead><tr><th>Parent module</th><th>Instance</th><th>Instantiated RTL module</th><th>Named port bindings</th></tr></thead>
+    <tbody id="arch-rtl-rows"></tbody></table></div>
+</details>
+<div class="actions"><a href="data/rtl-architecture.json">Compiler-parsed RTL JSON</a><a href="data/design-graph.json">Design graph JSON</a><a href="data/signal-inventory.json">Physical signal inventory JSON</a><a href="topology.html">Generation sources and NoC tables</a></div>
 
 <style>
 .arch-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;border:1px solid var(--line);background:#101f31;padding:12px 14px;border-radius:12px;margin:20px 0 12px}
@@ -82,5 +89,6 @@
 @media(max-width:650px){.arch-toolbar{gap:7px;padding:10px}.arch-toolbar label{font-size:11px}.arch-toolbar select{max-width:160px}.arch-viewport{height:450px}.arch-signal-panel{padding:12px}.arch-signal-controls label{min-width:140px;flex:1}.arch-signal-controls select{max-width:100%}}
 </style>
 <script type="application/json" id="ex-embedded-graph">__GRAPH_DATA__</script>
+<script type="application/json" id="ex-embedded-rtl">__RTL_PARSE_DATA__</script>
 <script type="application/json" id="ex-embedded-signals">__SIGNAL_DATA__</script>
 <script>__ARCH_JS__</script>
