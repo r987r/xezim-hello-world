@@ -95,33 +95,37 @@ def calculate_internal(axi: dict, events: list[dict], period_ps: int) -> dict:
         pair["latency_ps"] for pair in write_pairs
         if pair["status"] == "measured"
     ]
-    # These are serial smoke tests, with no overlapping AXI requests.
-    # If overlap exists, matching DFI commands to AXI IDs by time is unsafe.
+    # Preserve measured boundaries for the earlier serialized requests.
+    # Concurrent AXI transactions *cannot* be mapped to DFI commands by ID.
+    # Explicitly mark only the overlapping intervals unmeasured, including
+    # their coincident neighbors. Do not throw away genuine prior serial
+    # measurements or attribute the first command to an arbitrary request.
     intervals = []
     for txn in transactions:
         a, b = txn["start_cycle"] * period_ps, txn["end_cycle"] * period_ps
         if b < a:
             raise ValueError("AXI end predates start")
-        if intervals and a < intervals[-1][1]:
-            return {
-                "status": "aggregate_only",
-                "reason": "overlapping AXI requests; DFI has no AXI IDs",
-                "internal_stages": {
-                    k: {"status": "unmeasured", "reason": "ambiguous transaction attribution"}
-                    for k in stages
-                },
-                "events": {k: len(v) for k, v in groups.items()},
-                "transactions": [],
-            }
         intervals.append((a, b))
+    ambiguous = set()
+    for i, (a, b) in enumerate(intervals):
+        for j in range(i):
+            c, d = intervals[j]
+            if a < d and c < b:
+                ambiguous.add(i)
+                ambiguous.add(j)
     # DFI and BankModel events correspond to the *real* model, but in
     # a pipelined controller a transaction can require multiple commands.
     # Report first-access latency only, NOT all-bank service duration.
-    for txn, (start, stop) in zip(transactions, intervals):
+    for index, (txn, (start, stop)) in enumerate(zip(transactions, intervals)):
         op = txn["operation"]
         sample = {"operation": op, "axi_id": txn["id"],
                   "address": txn["address"],
                   "axi_start_ps": start, "axi_end_ps": stop}
+        if index in ambiguous:
+            sample["status"] = "unmeasured_overlapping_axi_dfi"
+            sample["reason"] = "overlapping AXI windows; DFI command has no AXI ID"
+            details.append(sample)
+            continue
         if op == "write":
             # AXI B is a controller/frontend completion, not DRAM commit.
             # As seen in real CI, deferred DFI writes frequently fall after
@@ -182,6 +186,11 @@ def calculate_internal(axi: dict, events: list[dict], period_ps: int) -> dict:
         "dfi_write_model_pairs": write_pairs,
         "events": {k: len(v) for k, v in groups.items()},
         "transactions": details,
+        "overlapping_axi_attribution": {
+            "status": "unmeasured" if ambiguous else "no_overlap",
+            "ambiguous_transactions": len(ambiguous),
+            "reason": "DFI has no AXI IDs; overlapping requests cannot be individually attributed",
+        },
         "limitations": [
             "first modeled access per serialized AXI request, not full burst service",
             "no DFI AXI ID tagging; overlaps are not attributed to transactions",
