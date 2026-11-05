@@ -60,8 +60,8 @@ tests:
     # Same cold-boot bench, all movable windows changed together. The ROM
     # reset PC remains zero; bootgen explicitly rejects unsupported policies.
     boot_relocate:
-      compute0.sram: '0x12000000'
-      compute1.sram: '0x13000000'
+      compute0.sram: '0x13000000'
+      compute1.sram: '0x14000000'
       boot.flash: '0x21000000'
       boot.reset_ctrl: '0x41020000'
   cpu-fetch:

@@ -21,7 +21,7 @@ class RealNetworkDiagrams(unittest.TestCase):
         cls.networks = noc_diagrams.read_generated_nocs(cls.root)
 
     def test_every_generated_mesh_uses_real_endpoint_coordinates(self):
-        self.assertEqual(len(self.networks), 8)
+        self.assertEqual(len(self.networks), 10)
         for name, n in self.networks.items():
             self.assertEqual(n["entry"]["routers"], n["width"] * n["height"])
             self.assertEqual(set(n["endpoints"]), set(n["positions"]), name)
@@ -49,7 +49,7 @@ class RealNetworkDiagrams(unittest.TestCase):
         self.assertTrue(any(l["from"]["instance"] == "compute0.cpu" for l in wired))
         self.assertTrue(any(l["to"]["instance"] == "memory0.ctrl" for l in planned))
         self.assertIn("groups", graph)
-        self.assertEqual(len([g for g in graph["groups"] if g["name"] in self.networks]), 8)
+        self.assertEqual(len([g for g in graph["groups"] if g["name"] in self.networks]), 10)
 
     def test_render_diagrams_and_xml(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -62,7 +62,7 @@ class RealNetworkDiagrams(unittest.TestCase):
             self.assertIn("global_config", diagrams["noc-hierarchy"])
             self.assertIn("CPU boot and optional real DMA/CSR wiring", diagrams["noc-hierarchy"])
             self.assertTrue((out/"noc-topology.json").exists())
-            self.assertEqual(len(json.loads((out/"noc-topology.json").read_text())["networks"]), 8)
+            self.assertEqual(len(json.loads((out/"noc-topology.json").read_text())["networks"]), 10)
             self.assertFalse((out / "noc").exists())
             self.assertFalse((out / "architecture.svg").exists())
             for name in diagrams:

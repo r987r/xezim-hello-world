@@ -38,12 +38,12 @@ class FullChipTests(unittest.TestCase):
 
     def test_relocated_map_changes_firmware_without_a_preload(self):
         for region in self.cfg['address_map']['data']:
-            if region['name']=='compute0.sram': region['base']='0x12000000'
-            if region['name']=='compute1.sram': region['base']='0x13000000'
+            if region['name']=='compute0.sram': region['base']='0x13000000'
+            if region['name']=='compute1.sram': region['base']='0x14000000'
         with tempfile.TemporaryDirectory() as tmp:
             _, meta = chip_bootgen.emit(self.cfg, Path(tmp))
             self.assertEqual(meta['mailbox'],0x12000400)
-            self.assertEqual([c['sram_base'] for c in meta['cores']],[0x12000000,0x13000000])
+            self.assertEqual([c['sram_base'] for c in meta['cores']],[0x13000000,0x14000000])
             self.assertIn('none:',meta['sram_initialization'])
 
     def test_chip_and_bfm_share_one_real_noc_assembly(self):
@@ -53,7 +53,7 @@ class FullChipTests(unittest.TestCase):
             chip = full_chip_gen.emit(self.cfg,meta,ROOT/'gen/noc/floonoc',root)
             top=(root/'soc_top.sv').read_text()
             self.assertEqual(chip['cores'],2)
-            self.assertEqual(chip['networks'],8)
+            self.assertEqual(chip['networks'],10)
             self.assertEqual(chip['memory_crossbar_inputs'],1)
             self.assertIn('soc_noc u_noc',top)
             self.assertIn('axi_crossbar #(',top)

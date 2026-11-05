@@ -28,7 +28,7 @@ class SocConfigTest(unittest.TestCase):
         self.assertEqual([x['base'] for x in m['targets']],[0x100000000,0x140000000])
         self.assertEqual([x['ip'] for x in m['cpu_instances']],['picorv32','serv'])
         self.assertEqual(m['common_dma'],'pulp_idma')
-        self.assertEqual(len(m['subsystems']),3)
+        self.assertEqual(len(m['subsystems']),4)
 
     def test_deterministic_generation_and_noc_ir(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -97,7 +97,7 @@ class SocConfigTest(unittest.TestCase):
         doc['subsystems'].append({'name':'compute2','type':'compute','cpu':{'ip':'serv','bus':'wishbone','adapter':'serv_wishbone'}})
         doc['networks']['global_config']['reachable_subsystems'].append('compute2')
         m=socgen.validate(doc)
-        self.assertEqual(len(m['subsystems']),4)
+        self.assertEqual(len(m['subsystems']),5)
         self.assertEqual(len(m['targets']),2)
 
     def test_missing_output_target_rejected(self):
@@ -208,9 +208,9 @@ class SocConfigTest(unittest.TestCase):
             # Each new compute subsystem supplies its own mapped SRAM
             # and CSR apertures; FlooGen derives the NoC wires automatically.
             doc["address_map"]["data"].append({
-                "name": "compute2.sram", "base": "0x12000000", "size": "0x00100000"})
+                "name": "compute2.sram", "base": "0x13000000", "size": "0x00100000"})
             doc["address_map"]["config"].append({
-                "name": "compute2.dma", "base": "0x40040000", "size": "0x10000"})
+                "name": "compute2.dma", "base": "0x40050000", "size": "0x10000"})
             cfg_path.write_text(yaml.safe_dump(doc,sort_keys=False))
             self.assertEqual(generate.execute(cfg_path,out,readme),0)
             extra = out/"noc"/"floonoc"/"compute2"/"local_data"/"floogen.yaml"
