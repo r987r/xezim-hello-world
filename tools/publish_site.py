@@ -27,11 +27,13 @@ import yaml
 
 from axi_report import render_report
 from protocol_report import render as render_protocol_report
+from test_flow_report import render_summary as render_test_flow
 
 ROOT=Path(__file__).resolve().parents[1]
 FILES={'result.json','plan.json','sources.f','simulation.log','build.log','results.xml',
        'axi-transactions.json','axi-events.jsonl',
-       'protocol-transactions.json','protocol-events.jsonl','memory-operations.json'}
+       'protocol-transactions.json','protocol-events.jsonl','memory-operations.json',
+       'test-flow.json','test-flow-events.jsonl','traffic-latency.json'}
 
 
 def dump(path,data):
@@ -399,6 +401,24 @@ def evidence_index(evidence,output,repository):
             trace=json.loads(trace_path.read_text()) if trace_path.exists() else None
             protocol_path=source_dir/'protocol-transactions.json'
             protocol_data=json.loads(protocol_path.read_text()) if protocol_path.exists() else None
+            flow_path=source_dir/'test-flow.json'
+            flow_data=json.loads(flow_path.read_text()) if flow_path.exists() else None
+            latency_path=source_dir/'traffic-latency.json'
+            latency_data=json.loads(latency_path.read_text()) if latency_path.exists() else None
+            if flow_data is not None:
+                planned=plan.get('report',{}).get('flow',{}).get('required_steps')
+                status=result.get('test_flow',{})
+                if (flow_data.get('schema_version')!=1 or
+                        flow_data.get('expected_steps')!=planned or
+                        flow_data.get('passed') is not status.get('passed') or
+                        len(flow_data.get('rows',[])) != status.get('steps')):
+                    raise ValueError('test-flow JSON disagrees with verified regression plan/result')
+                render_test_flow(flow_data,destination/'test-flow.html')
+            if latency_data is not None and (
+                    not protocol_data or protocol_data.get('latency')!=latency_data):
+                raise ValueError('published PCIe latency summary differs from verified protocol report')
+            if protocol_data and protocol_data.get('latency') and latency_data is None:
+                raise ValueError('PCIe latency evidence file missing')
             entry={'target':target,'engine':plan.get('engine','unknown'),'passed':result.get('passed') is True,
                    'expected_failure':plan.get('expect_failure'),'stage':result.get('stage'),
                    'run_id':run['id'],'attempt':run.get('run_attempt',1),'source_sha':run['tested_sha'],
@@ -408,6 +428,8 @@ def evidence_index(evidence,output,repository):
                    'axi':trace is not None,
                    'protocols':sorted({r['protocol'] for r in protocol_data.get('records',[])}) if protocol_data else [],
                    'protocol_observations':len(protocol_data['records']) if protocol_data else 0,
+                   'flow_steps':len(flow_data['rows']) if flow_data else 0,
+                   'pcie_latency_measured':bool(latency_data and latency_data.get('passed')),
                    'result':result}
             if protocol_data:
                 protocol_run=protocol_data.get('run',{})
@@ -454,7 +476,9 @@ def evidence_index(evidence,output,repository):
                 nav+='<details><summary>Original evidence: raw events, transactions, logs, plan and filelists</summary><ul>'
                 nav+=''.join(f'<li><a href="{escape(name)}">{escape(name)}</a></li>' for name in sorted(assets))+'</ul></details>'
                 if protocol_data:
-                    nav+='<p><a href="protocols.html">Unified protocol explorer</a></p>'
+                    nav+='<p><a href="protocols.html">Unified protocol explorer / PCIe latency</a></p>'
+                if flow_data:
+                    nav+='<p><a href="test-flow.html">INIT/RUN/CHECK verified steps</a></p>'
                 (destination/'report.html').write_text(html.replace('<main>','<main>'+nav,1))
                 transactions=trace['sections']['axi']['transactions']
                 entry['observations']=len(transactions)
