@@ -5,6 +5,7 @@ Real pinned verilog-pcie TLP->AXI RTL, generated PCIe0 NoC, real PULP SRAM.
 PHY/LTSSM and RootComplex/Endpoint are behaviorally modeled.
 """
 from pathlib import Path
+import os
 import sys
 from cocotb.triggers import Timer, with_timeout
 from cocotbext.pcie.core import RootComplex
@@ -38,6 +39,8 @@ class PcieHostParticipant:
             raise ValueError("missing shared CPU0 firmware host ABI")
         self.flow=flow
         self.ext=ext
+        self.dma_exchange=os.environ.get('SOC_PCIE_DMA_HOST_MODE')=='1'
+        self.source_sram=manifest['cores'][0]['sram_base']
         self.base=ext["mailbox_base"]
         self.sram_base=self.base-0x800
         self.magic=ext["magic"]
@@ -75,6 +78,15 @@ class PcieHostParticipant:
             with self.flow.step(stage,"host0","wait_device_ready",origin="observed"):
                 await with_timeout(poll_bar(self.bar,0x800,self.magic["device_init_ready"]),1000,"us")
                 assert int(self.dut.init_mask.value)==3, "CPU INIT not complete when host ready"
+            if self.dma_exchange:
+                # Host -> real PCIe bridge -> SRAM first; CPU0 iDMA later
+                # copies these bytes into modeled DDR and proves via readback.
+                input_payload=bytes((0x63+13*i)&255 for i in range(64))
+                with self.flow.step(stage,"host0","seed_ddr_input",origin="checker",
+                                    details={"address":hex(self.sram_base+0x500),"bytes":64}):
+                    await with_timeout(self.bar.write(0x500,input_payload),100,"us")
+                    got=await with_timeout(self.bar.read(0x500,64),100,"us")
+                    assert bytes(got)==input_payload,"PCIe DDR seed readback mismatch"
             with self.flow.step(stage,"host0","init_ack",origin="stimulus"):
                 await with_timeout(self.bar.write(0x804,self.magic["host_init_ack"].to_bytes(4,"little")),100,"us")
             trace_phase("PCIe host INIT acknowledged through real BAR")
@@ -97,6 +109,13 @@ class PcieHostParticipant:
                 assert int(self.dut.pcie_sram_read_count.value)>self.before_read, "no real SRAM read"
                 assert not int(self.dut.status_error_cor.value), "PCIe correctable status set"
                 assert not int(self.dut.status_error_uncor.value), "PCIe uncorrectable status set"
+            if self.dma_exchange:
+                # DDR -> PULP iDMA -> PCIe SRAM, then actual host BAR read.
+                expected=bytes((self.source_sram+0x2000+i+0x35)&255 for i in range(64))
+                with self.flow.step(stage,"host0","read_ddr_dma_output",origin="checker",
+                                    details={"address":hex(self.sram_base+0x600),"bytes":64}):
+                    got=await with_timeout(self.bar.read(0x600,64),100,"us")
+                    assert bytes(got)==expected,"DDR to PCIe host data mismatch"
             with self.flow.step(stage,"host0","run_ack",origin="stimulus"):
                 await with_timeout(self.bar.write(0x80c,self.magic["host_run_ack"].to_bytes(4,"little")),100,"us")
             trace_phase("PCIe host RUN verified four actual BAR roundtrips")
