@@ -105,7 +105,7 @@ async def execute_cold_boot(dut, *, external=None):
     assert int(dut.hello_mask.value) == mask
     assert int(dut.check_mask.value) == mask
     assert int(dut.app_fetch.value) == mask
-    if host is not None:
+    if host is not None and not cpu_dma_mode:
         assert probe is None, "PCIe mode must not instantiate active CPU0 AXI BFM"
         host.finish()
         tlp_counts = tlp_capture.finish()
@@ -167,6 +167,15 @@ async def execute_cold_boot(dut, *, external=None):
         trace_phase("CPU compiled C DMA complete: monitored DDR+HBM roundtrips")
         dut._log.info("PASS fullchip: CPU-executed compiled C DMA, shared INIT/RUN/CHECK, "
                       "DDR+HBM roundtrip, SRAM allocator and passive AXI monitors")
+        if host is None:
+            return
+        # Both external host and C-DMA now run in ONE real RTL configuration;
+        # no second coordinator, and the host PASS is issued only after the
+        # independent CPU DMA checks above have succeeded.
+        host.finish()
+        tlp_counts = tlp_capture.finish()
+        dut._log.info("PCIE0_ACCEPTED_TLP_REPORT_COUNTS=%s", tlp_counts)
+        close_active()
         return
     # Only a verification manager occupies the not-yet-integrated DMA port.
     # It never drives SRAM/boot mailboxes. Distinct values detect model aliasing.
