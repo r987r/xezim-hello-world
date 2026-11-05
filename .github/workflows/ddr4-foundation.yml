@@ -86,6 +86,23 @@ jobs:
           test -s .tools/ddr4/litedram_sim/ddr4_init_plan.json
           ls -lh .tools/ddr4/litedram_sim/gateware/
 
+      - name: Check real generated LiteDRAM AXI pins against DDR-B SoC contract
+        run: |
+          set -euo pipefail
+          python3 rtl/memory/ddr4/soc_bridge_contract.py \
+            --generated-verilog .tools/ddr4/litedram_sim/gateware/soc_ddr4_sim.v \
+            --output .tools/ddr4/ddr_soc_bridge_contract.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('.tools/ddr4/ddr_soc_bridge_contract.json')
+          j=json.loads(p.read_text())
+          assert j['integration_state']=='contract_only'
+          assert j['implementation']['controller_data_bits']==64
+          assert j['implementation']['fabric_addr_bits']==64
+          assert j['implementation']['modeled_size']==32*1024*1024
+          print('DDR-B generated LiteDRAM pin/SoC contract PASS (not full-chip RTL)')
+          PY
       - name: Install Verilator for isolated RTL check
         run: |
           sudo apt-get update -qq
