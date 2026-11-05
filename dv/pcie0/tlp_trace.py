@@ -1,9 +1,9 @@
-"""Passive, accepted-beat PCIe TLP capture for the real verilog-pcie bridge.
+"""Passive bridge-interface TLP reporting, using pinned upstream TLP models.
 
-The existing ProtocolTrace owns the JSONL ABI and unified run explorer.
-This adapter samples ONLY valid && ready on the 64-bit/one-segment TLP
-interface. It neither generates requests nor replaces cocotbext-pcie.
-Header bit positions are those of pinned verilog-pcie pcie_axi_master_{rd,wr}.
+Reuse verilog-pcie's PcieIfFrame.to_tlp() and cocotbext-pcie Tlp rather than
+inventing PCIe header parsing. Only the minimal valid/ready beat observation
+is local, because PcieIfSink would drive READY and conflict with the DUT.
+All storage, validation, HTML and AXI/TLP merging use ProtocolTrace.
 """
 from __future__ import annotations
 
@@ -11,161 +11,142 @@ from collections import Counter
 from pathlib import Path
 import os
 
-from dv.common.protocol_trace import ProtocolTrace, open_from_plan
+from dv.common.protocol_trace import open_from_plan
 
 REQUEST = "pcie0.rx_req"
 COMPLETION = "pcie0.tx_cpl"
 SOURCES = {
     REQUEST: {"protocol": "pcie", "clock_domain": "soc_single_clock",
-              "role": "target", "implementation": "verilog_pcie_tlp_handshake",
+              "role": "target", "implementation": "verilog_pcie_pcieifframe",
               "modeling": "rtl_bridge_with_modeled_root_complex"},
     COMPLETION: {"protocol": "pcie", "clock_domain": "soc_single_clock",
-                 "role": "initiator", "implementation": "verilog_pcie_tlp_handshake",
+                 "role": "initiator", "implementation": "verilog_pcie_pcieifframe",
                  "modeling": "rtl_bridge_with_modeled_root_complex"},
 }
 
 
-def field(value, shift, bits):
-    return (value >> shift) & ((1 << bits) - 1)
-
-
-def decode_header(header):
-    """Decode upstream's normalized 128-bit PCIe header, not an AXI address."""
-    fmt, kind = field(header, 125, 3), field(header, 120, 5)
-    length = field(header, 96, 10) or 1024  # PCIe 0 means 1024 DWORDs
-    tag = field(header, 72, 8) | (field(header, 115, 1) << 8) | (field(header, 119, 1) << 9)
-    result = {
-        "header_hex": f"0x{header:032x}", "fmt": fmt, "type": kind,
-        "length_dw": length, "length_bytes": length * 4,
-        "traffic_class": field(header, 116, 3),
-        "tag": hex(tag),
+def describe(tlp, raw_header, *, source, data):
+    """Fields come from upstream's parsed Tlp object; keep raw bytes too."""
+    from cocotbext.pcie.core.tlp import TlpType
+    kinds = {
+        TlpType.MEM_READ: "mem_read",
+        TlpType.MEM_READ_64: "mem_read",
+        TlpType.MEM_WRITE: "mem_write",
+        TlpType.MEM_WRITE_64: "mem_write",
+        TlpType.CPL: "completion",
+        TlpType.CPL_DATA: "completion",
     }
-    if kind == 0:  # PCIe memory read or memory write, 3DW or 4DW
-        operation = "mem_write" if fmt & 2 else "mem_read"
-        addr = ((field(header, 2, 62) if fmt & 1 else field(header, 34, 30)) << 2)
-        rid = field(header, 80, 16)
-        first_be, last_be = field(header, 64, 4), field(header, 68, 4)
-        byte_count = (first_be.bit_count() if length == 1 else
-                      (length - 2) * 4 + first_be.bit_count() + last_be.bit_count())
-        result.update(address=hex(addr), requester_id=hex(rid),
-                      first_be=hex(first_be), last_be=hex(last_be),
-                      requested_bytes=byte_count)
-    elif kind == 0x0a:  # PCIe completion, possibly with data
-        operation = "completion"
-        rid = field(header, 48, 16)
-        result.update(requester_id=hex(rid),
-                      completer_id=hex(field(header, 80, 16)),
-                      completion_status=field(header, 77, 3),
-                      completion_byte_count=field(header, 64, 12) or 4096,
-                      lower_address=field(header, 32, 7))
-    else:
-        operation = "tlp_type_" + format(kind, "02x")
-        rid = field(header, 80, 16)
-        result["requester_id"] = hex(rid)
-    result["request_tag"] = f"{rid:04x}:{tag:03x}"
-    return operation, result
+    operation = kinds.get(tlp.fmt_type, "other_tlp")
+    requester_id = str(tlp.requester_id)
+    tag = int(tlp.tag)
+    fields = {
+        "direction": "host_to_bridge" if source == REQUEST else "bridge_to_host",
+        "fmt_type": str(tlp.fmt_type),
+        "requester_id": requester_id,
+        "tag": hex(tag),
+        "header_hex": f"0x{raw_header:032x}",
+        "payload_hex": data.hex(),
+        "payload_bytes": len(data),
+        "length_dw": int(tlp.length),
+        "traffic_class": str(tlp.tc),
+    }
+    if operation in ("mem_read", "mem_write"):
+        fields.update(address=hex(int(tlp.address)), first_be=hex(int(tlp.first_be)),
+                      last_be=hex(int(tlp.last_be)),
+                      requested_bytes=int(tlp.get_be_byte_count()))
+    if operation == "completion":
+        fields.update(completer_id=str(tlp.completer_id),
+                      completion_status=str(tlp.status),
+                      byte_count=int(tlp.byte_count),
+                      lower_address=int(tlp.lower_address))
+    return operation, fields, requester_id + ":" + str(tag)
 
 
 class AcceptedTlpPackets:
-    """Reassemble accepted SOP/EOP, track outstanding non-posted reads."""
-    def __init__(self, trace):
-        self.trace = trace
+    """No bus drivers: rebuild upstream PcieIfFrame from accepted beats."""
+    def __init__(self, trace, frame_type):
+        self.trace, self.frame_type = trace, frame_type
         self.active = {REQUEST: None, COMPLETION: None}
-        self.stalls = Counter()
         self.counts = Counter()
-        self.pending_reads = {}
-        self.packet_count = 0
+        self.pending = {}
         self.max_beats = 1024
 
     def beat(self, source, time_ps, *, valid, ready, sop=0, eop=0,
              header=0, data=0, strobe=None):
         if source not in self.active:
-            raise ValueError("uncataloged TLP lane")
-        if not valid:
+            raise ValueError("unknown TLP monitor")
+        if not (valid and ready):
             return
-        if not ready:
-            self.stalls[source] += 1
-            return
-        current = self.active[source]
+        packet = self.active[source]
         if sop:
-            if current is not None:
-                raise AssertionError("TLP SOP before prior EOP: " + source)
-            current = {"start_ps": time_ps, "header": header,
-                       "beats": [], "strobes": [], "stalls": self.stalls[source]}
-            self.stalls[source] = 0
-            self.active[source] = current
-        elif current is None:
-            raise AssertionError("accepted TLP beat without SOP: " + source)
-        if len(current["beats"]) >= self.max_beats:
-            raise AssertionError("TLP exceeded maximum captured beats")
-        current["beats"].append(int(data).to_bytes(8, "little").hex())
-        current["strobes"].append(None if strobe is None else int(strobe))
+            if packet is not None:
+                raise AssertionError("overlapping TLP SOP")
+            packet = {"start_ps": time_ps, "frame": self.frame_type(), "beats": 0}
+            packet["frame"].hdr = int(header)
+            self.active[source] = packet
+        elif packet is None:
+            raise AssertionError("accepted TLP beat without SOP")
+        packet["beats"] += 1
+        if packet["beats"] > self.max_beats:
+            raise AssertionError("TLP exceeded capture bound")
+        # Header bit 126 (fmt[1]) is upstream's payload-present flag.
+        if (packet["frame"].hdr >> 126) & 1:
+            remaining = ((packet["frame"].hdr >> 96) & 0x3ff) or 1024
+            remaining -= len(packet["frame"].data)
+            for lane in range(min(2, remaining)):
+                if strobe is not None and not ((strobe >> lane) & 1):
+                    raise AssertionError("PCIe completion missing active DWORD strobe")
+                packet["frame"].data.append((int(data) >> (32 * lane)) & 0xffffffff)
         if eop:
-            self._commit(source, time_ps, current)
+            self._commit(source, time_ps, packet)
             self.active[source] = None
 
-    def _commit(self, source, end_ps, packet):
-        operation, info = decode_header(packet["header"])
+    def _commit(self, source, time_ps, packet):
+        frame = packet["frame"]
+        tlp = frame.to_tlp()  # Pinned verilog-pcie + cocotbext-pcie parser
+        data = tlp.get_data()
+        operation, fields, key = describe(tlp, frame.hdr, source=source, data=data)
         if source == COMPLETION and operation != "completion":
-            raise AssertionError("non-completion TLP on bridge completion output")
+            raise AssertionError("expected bridge completion output")
         if source == REQUEST and operation == "completion":
-            raise AssertionError("unexpected completion on bridge request input")
-        info.update(direction="ingress_request" if source == REQUEST else "egress_completion",
-                    accepted_beats=len(packet["beats"]),
-                    stall_cycles=packet["stalls"],
-                    raw_beat_data_hex="".join(packet["beats"]),
-                    raw_beat_strobes=("".join(f"{value:02x}" for value in packet["strobes"])
-                                      if packet["strobes"][0] is not None else "unavailable"))
-        key = info["request_tag"]
+            raise AssertionError("unexpected bridge ingress completion")
+        fields["accepted_beats"] = packet["beats"]
         if source == REQUEST and operation == "mem_read":
-            if key in self.pending_reads:
-                raise AssertionError("duplicate outstanding PCIe requester/tag: " + key)
-            self.pending_reads[key] = {
-                "start_ps": packet["start_ps"], "address": info["address"],
-                "remaining": info["requested_bytes"], "fragments": 0,
-            }
+            if key in self.pending:
+                raise AssertionError("duplicate outstanding PCIe tag " + key)
+            self.pending[key] = {"time_ps": packet["start_ps"],
+                                 "address": fields["address"],
+                                 "remaining": fields["requested_bytes"]}
         if source == COMPLETION:
-            request = self.pending_reads.get(key)
-            if request is None:
-                raise AssertionError("unmatched PCIe completion: " + key)
-            if info["completion_status"] != 0:
-                raise AssertionError("non-success PCIe completion: " + key)
-            info["matched_request_address"] = request["address"]
-            info["request_to_completion_ps"] = end_ps - request["start_ps"]
-            request["fragments"] += 1
-            info["completion_fragment"] = request["fragments"]
-            # Strb enumerates valid DWORDs. The lower-address offset can
-            # contain leading bytes outside the requested byte range.
-            valid_dw = sum(mask.bit_count() for mask in packet["strobes"])
-            valid_bytes = max(0, valid_dw * 4 - (info["lower_address"] & 3))
-            if valid_bytes <= 0:
-                raise AssertionError("PCIe completion has no valid payload")
-            info["valid_data_bytes"] = valid_dw * 4
-            request["remaining"] -= min(request["remaining"], valid_bytes)
-            info["request_remaining_bytes"] = request["remaining"]
-            if request["remaining"] == 0:
-                del self.pending_reads[key]
-        self.trace.transaction(source, operation, packet["start_ps"], end_ps,
-                               identifier=key, fields=info)
+            req = self.pending.get(key)
+            if req is None:
+                raise AssertionError("unmatched PCIe completion " + key)
+            from cocotbext.pcie.core.tlp import CplStatus
+            if tlp.status != CplStatus.SC:
+                raise AssertionError("PCIe completion status not successful")
+            fields["matched_request_address"] = req["address"]
+            fields["request_to_completion_ps"] = time_ps - req["time_ps"]
+            if len(data) == 0:
+                raise AssertionError("PCIe completion with no payload")
+            req["remaining"] -= min(req["remaining"], max(0, len(data) - (int(tlp.lower_address) & 3)))
+            if req["remaining"] <= 0:
+                del self.pending[key]
+            fields["request_remaining_bytes"] = max(0, req["remaining"])
+        self.trace.transaction(source, operation, packet["start_ps"], time_ps,
+                               identifier=key, fields=fields)
         self.counts[(source, operation)] += 1
-        self.packet_count += 1
 
     def finish(self):
-        """Strict acceptance: at least one write/read/completion, no dangling tags."""
         try:
-            for source, packet in self.active.items():
-                if packet is not None:
-                    self.trace.transaction(source, "unfinished_tlp", packet["start_ps"],
-                                           status="incomplete",
-                                           fields={"accepted_beats": len(packet["beats"])})
-                    raise AssertionError("TLP capture ended without EOP: " + source)
-            if self.pending_reads:
-                raise AssertionError("TLP reads without completed responses: " +
-                                     ", ".join(sorted(self.pending_reads)))
-            for source, operation in ((REQUEST, "mem_read"), (REQUEST, "mem_write"),
-                                      (COMPLETION, "completion")):
-                if self.counts[(source, operation)] < 1:
-                    raise AssertionError(f"missing accepted PCIe TLP {source}/{operation}")
+            if any(v is not None for v in self.active.values()):
+                raise AssertionError("TLP capture ended with partial packet")
+            if self.pending:
+                raise AssertionError("TLP capture has dangling requester/tag " +
+                                     ", ".join(sorted(self.pending)))
+            for key in ((REQUEST, "mem_write"), (REQUEST, "mem_read"),
+                        (COMPLETION, "completion")):
+                if not self.counts[key]:
+                    raise AssertionError(f"PCIe TLP evidence missing {key}")
         except BaseException as exc:
             self.trace.close("fail", exc)
             raise
@@ -173,29 +154,26 @@ class AcceptedTlpPackets:
 
 
 class LiveTlpCapture:
-    """Cocotb task samples RTL ports passively; no activity is inferred."""
-    def __init__(self, dut, plan_path=None):
+    def __init__(self, dut, *, frame_type, plan_path=None):
         import cocotb
         self.dut = dut
-        plan_path = Path(plan_path or os.environ["SOC_RUN_PLAN"])
-        self.trace = open_from_plan(plan_path)
-        if self.trace is None or set(self.trace.sources) != set(SOURCES):
-            raise ValueError("PCIe0 TLP catalog must declare both bridge directions")
+        self.trace = open_from_plan(Path(plan_path or os.environ["SOC_RUN_PLAN"]))
+        if self.trace is None or self.trace.sources != SOURCES:
+            raise ValueError("PCIe TLP catalog mismatch")
         for source in SOURCES:
             prefix = "rx_req_tlp" if source == REQUEST else "tx_cpl_tlp"
-            for field_name in ("data", "hdr", "valid", "sop", "eop", "ready"):
-                getattr(dut, prefix + "_" + field_name)  # Missing real signal fails closed.
+            for field in ("data", "hdr", "valid", "sop", "eop", "ready"):
+                getattr(dut, prefix + "_" + field)
             if source == COMPLETION:
                 getattr(dut, prefix + "_strb")
-        self.packets = AcceptedTlpPackets(self.trace)
+        self.packets = AcceptedTlpPackets(self.trace, frame_type)
         self.task = cocotb.start_soon(self.run())
 
     async def run(self):
-        from cocotb.triggers import RisingEdge, ReadOnly
+        from cocotb.triggers import RisingEdge
         from cocotb.utils import get_sim_time
         while True:
             await RisingEdge(self.dut.clk)
-            await ReadOnly()
             if not int(self.dut.rst_n.value):
                 continue
             now = int(get_sim_time(units="ps"))
@@ -207,11 +185,10 @@ class LiveTlpCapture:
                     source, now, valid=signal("valid"), ready=signal("ready"),
                     sop=signal("sop"), eop=signal("eop"),
                     header=signal("hdr"), data=signal("data"),
-                    strobe=signal("strb") if source == COMPLETION else None,
-                )
+                    strobe=signal("strb") if source == COMPLETION else None)
 
     def finish(self):
         self.task.kill()
         self.packets.finish()
-        return dict((f"{source}/{operation}", count)
-                    for (source, operation), count in self.packets.counts.items())
+        return {f"{source}/{operation}": count
+                for (source, operation), count in self.packets.counts.items()}
