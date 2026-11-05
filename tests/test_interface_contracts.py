@@ -27,6 +27,7 @@ class InterfaceSizingTests(unittest.TestCase):
             "compute0.local_data", "compute0.local_config",
             "compute1.local_data", "compute1.local_config",
             "memory0.memory_data", "memory0.local_data", "memory0.local_config",
+            "pcie0.local_data", "pcie0.local_config",
             "global_data", "global_config"})
         self.assertEqual(graph["ports"]["compute0.local_data.global_out"]["id_bits"], 5)
         self.assertEqual(graph["ports"]["global_data.compute0_in"]["id_bits"], 5)
@@ -100,15 +101,15 @@ class InterfaceSizingTests(unittest.TestCase):
         # Adding a compute instance requires explicit non-overlapping
         # SRAM and DMA-CSR address windows. The RTL generator must not invent them.
         soc["address_map"]["data"].append(
-            {"name": "compute2.sram", "base": "0x12000000", "size": "0x00100000"})
+            {"name": "compute2.sram", "base": "0x13000000", "size": "0x00100000"})
         soc["address_map"]["config"].append(
-            {"name": "compute2.dma", "base": "0x40040000", "size": "0x10000"})
+            {"name": "compute2.dma", "base": "0x40050000", "size": "0x10000"})
         floo = copy.deepcopy(self.floo)
         floo = floonoc_gen.profiles(soc, self.knobs)["global_data"]["config"]
         graph = self.validate(soc=soc, floo=floo)
         self.assertIn("compute2.local_data", graph["fabrics"])
         self.assertIn("global_data.compute2_in", graph["ports"])
-        self.assertEqual(graph["fabrics"]["global_data"]["n_sources"], 3)
+        self.assertEqual(graph["fabrics"]["global_data"]["n_sources"], 4)
 
 if __name__ == "__main__":
     unittest.main()

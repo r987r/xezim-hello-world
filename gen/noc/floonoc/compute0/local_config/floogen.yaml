@@ -46,6 +46,8 @@ endpoints:
   addr_range:
   - base: 1073807360
     size: 65536
+  - base: 1074003968
+    size: 65536
   - base: 1073938432
     size: 4096
 routers:

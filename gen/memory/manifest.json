@@ -49,6 +49,24 @@
     {
       "name": "memory0",
       "type": "memory"
+    },
+    {
+      "name": "pcie0",
+      "type": "peripheral",
+      "ip": "verilog_pcie",
+      "data_initiator": "host",
+      "config_initiator": "management",
+      "clock_domain": "soc"
+    }
+  ],
+  "peripheral_instances": [
+    {
+      "name": "pcie0",
+      "type": "peripheral",
+      "ip": "verilog_pcie",
+      "data_initiator": "host",
+      "config_initiator": "management",
+      "clock_domain": "soc"
     }
   ],
   "cpu_instances": [
@@ -124,6 +142,11 @@
       "size": 1048576
     },
     {
+      "name": "pcie0.sram",
+      "base": 301989888,
+      "size": 1048576
+    },
+    {
       "name": "memory0.hbm0",
       "base": 4294967296,
       "size": 1073741824
@@ -154,6 +177,11 @@
       "name": "memory0.ctrl",
       "base": 1073938432,
       "size": 4096
+    },
+    {
+      "name": "pcie0.ctrl",
+      "base": 1074003968,
+      "size": 65536
     }
   ],
   "target_count": 2

@@ -19,24 +19,27 @@ package floo_xezim_global_config_noc_pkg;
   typedef enum logic[2:0] {
     Compute0 = 0,
     Compute1 = 1,
-    Compute0Regs = 2,
-    Compute1Regs = 3,
-    Memory0Regs = 4,
-    NumEndpoints = 5} ep_id_e;
+    Pcie0 = 2,
+    Compute0Regs = 3,
+    Compute1Regs = 4,
+    Pcie0Regs = 5,
+    Memory0Regs = 6,
+    NumEndpoints = 7} ep_id_e;
 
 
 
-  typedef enum logic[1:0] {
+  typedef enum logic[2:0] {
     Compute0RegsSamIdx = 1,
     Compute1RegsSamIdx = 2,
-    Memory0RegsSamIdx = 3} sam_idx_e;
+    Pcie0RegsSamIdx = 3,
+    Memory0RegsSamIdx = 4} sam_idx_e;
 
 
 
   typedef logic[0:0] rob_idx_t;
 typedef logic[0:0] port_id_t;
 typedef logic[1:0] x_bits_t;
-typedef logic[0:0] y_bits_t;
+typedef logic[1:0] y_bits_t;
 typedef struct packed {
     x_bits_t x;
     y_bits_t y;
@@ -52,7 +55,7 @@ typedef logic route_t;
     id_t end_addr;
   } route_map_rule_t;
 
-  localparam int unsigned SamNumRules = 4;
+  localparam int unsigned SamNumRules = 5;
 
 typedef struct packed {
     id_t idx;
@@ -61,16 +64,19 @@ typedef struct packed {
 } sam_rule_t;
 
 localparam sam_rule_t[SamNumRules-1:0] Sam = '{
-'{    idx: '{x: 1, y: 1, port_id: 0},
+'{    idx: '{x: 0, y: 2, port_id: 0},
     start_addr: 32'h40030000,
     end_addr: 32'h40031000},// Memory0Regs
-'{    idx: '{x: 0, y: 1, port_id: 0},
+'{    idx: '{x: 2, y: 1, port_id: 0},
+    start_addr: 32'h40040000,
+    end_addr: 32'h40050000},// Pcie0Regs
+'{    idx: '{x: 1, y: 1, port_id: 0},
     start_addr: 32'h40010000,
     end_addr: 32'h40020000},// Compute1Regs
-'{    idx: '{x: 2, y: 0, port_id: 0},
+'{    idx: '{x: 0, y: 1, port_id: 0},
     start_addr: 32'h40000000,
     end_addr: 32'h40010000},// Compute0Regs
-'{    idx: '{x: 2, y: 0, port_id: 0},
+'{    idx: '{x: 0, y: 1, port_id: 0},
     start_addr: 32'h40020000,
     end_addr: 32'h40021000} // Compute0Regs
 
@@ -83,7 +89,7 @@ localparam sam_rule_t[SamNumRules-1:0] Sam = '{
     XYAddrOffsetX: 31,
     XYAddrOffsetY: 33,
     IdAddrOffset: 0,
-    NumSamRules: 4,
+    NumSamRules: 5,
     NumRoutes: 0,
     CollectiveCfg: '{    OpCfg: '{    EnNarrowMulticast: 1'b0,
     EnWideMulticast: 1'b0,

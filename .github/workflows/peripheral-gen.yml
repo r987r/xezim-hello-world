@@ -1,0 +1,78 @@
+name: Generate and validate PCIe0 peripheral FlooNoCs
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'config/soc.yaml'
+      - 'tools/subsystem_fabric.py'
+      - 'tools/subsystem_plugin_contract.py'
+      - 'tools/socgen.py'
+      - 'tools/floonoc_gen.py'
+      - 'tools/supernoc_gen.py'
+      - 'tools/full_chip_gen.py'
+      - 'tools/interface_contracts.py'
+      - 'tools/noc_diagrams.py'
+      - 'tests/test_peripheral_nocs.py'
+      - '.github/workflows/peripheral-gen.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: peripheral-gen-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  generate:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'agent/38-subsystem-registry-bringup'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: ./.github/actions/setup-bender
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Install pinned FlooGen and SoC generator packages
+        run: |
+          python3 -m pip install -r requirements.txt
+          python3 tools/ip_fetch.py floonoc
+          python3 -m pip install -e .tools/floonoc
+      - name: Check generic peripheral contract and negative cases before generation
+        run: |
+          python3 -m unittest tests.test_subsystem_plugin_contract tests.test_peripheral_nocs -v
+      - name: Materialize actual FlooGen RTL and verify all generated source hashes
+        run: |
+          make gen
+          make check-generated
+          python3 tools/regress.py --check-noc
+      - name: Commit only canonical generated files to owned feature branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git add gen/ README.md
+          if ! git diff --cached --quiet; then
+            git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'chore(gen): regenerate PCIe0 data/config NoC RTL and topology'
+            git push origin HEAD:refs/heads/agent/38-subsystem-registry-bringup
+          fi
+      - name: Retain generation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: peripheral-generated-noc-${{ github.run_id }}
+          path: |
+            gen/noc/floonoc/manifest.json
+            gen/noc/floonoc/pcie0/
+            gen/supernoc/
+            gen/chip/
+            gen/diagrams/
+          include-hidden-files: true
+          if-no-files-found: warn

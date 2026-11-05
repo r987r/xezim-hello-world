@@ -116,6 +116,7 @@ def build(soc, contract, floogen=None):
     if len(names) != len(set(names)):
         raise InterfaceError("duplicate subsystem instance")
     computes = [s for s in instances if s["type"] == "compute"]
+    peripheral = [s for s in instances if s["type"] == "peripheral"]
     memories = [s for s in instances if s["type"] == "memory"]
     if len(memories) != 1:
         raise InterfaceError("current memory RTL contract requires exactly one memory subsystem")
@@ -278,6 +279,36 @@ def build(soc, contract, floogen=None):
         link(name + ".local_config.global_out", "global_config." + name + "_in", "config")
         link("global_config." + name + "_out", name + ".local_config.global_in", "config")
 
+    # Peripheral contracts are real generated FlooNoC data/config endpoints,
+    # but their device-facing IP remains reserved until its plugin is attached.
+    for sub in peripheral:
+        name = sub["name"]
+        out_id = iw + 1  # one local initiator plus global ingress, matching compute
+        fabrics[name + ".local_data"] = {
+            "backend": soc["fabrics"]["local_data"]["backend"],
+            "rtl_status": "floogen_structural_rtl_reservation",
+            "input_id_bits": iw, "output_id_bits": out_id,
+            "parameters": deepcopy(params["local_data"])}
+        fabrics[name + ".local_config"] = {
+            "backend": soc["fabrics"]["local_config"]["backend"],
+            "rtl_status": "floogen_structural_rtl_reservation",
+            "parameters": deepcopy(params["local_config"])}
+        for suffix in ("data_in", "global_in"):
+            port(name + ".local_data." + suffix, "axi4", iw,
+                 subsystem=name, fabric="local_data")
+        for suffix in ("sram_out", "global_out"):
+            port(name + ".local_data." + suffix, "axi4", out_id,
+                 subsystem=name, fabric="local_data")
+        for suffix in ("config_in", "global_in", "controller_regs_out", "global_out"):
+            port(name + ".local_config." + suffix, "axi4_lite",
+                 subsystem=name, fabric="local_config")
+        port("global_data." + name + "_in", "axi4", out_id)
+        port("global_config." + name + "_in", "axi4_lite")
+        port("global_config." + name + "_out", "axi4_lite")
+        link(name + ".local_data.global_out", "global_data." + name + "_in", "data")
+        link(name + ".local_config.global_out", "global_config." + name + "_in", "config")
+        link("global_config." + name + "_out", name + ".local_config.global_in", "config")
+
     m_id = iw + (ingress - 1).bit_length()
     fabrics[memory + ".local_data"] = {
         "backend": soc["fabrics"]["memory_local_data"]["backend"],
@@ -314,7 +345,7 @@ def build(soc, contract, floogen=None):
         "backend": soc["fabrics"]["global_data"]["backend"],
         "topology": soc["fabrics"]["global_data"]["topology"],
         "rtl_status": "floogen_structural_rtl_with_bfm_and_cpu_boot_scopes",
-        "n_sources": len(computes), "n_targets": len(outs),
+        "n_sources": len(computes) + len(peripheral), "n_targets": len(outs),
         "input_id_bits": iw + 1, "output_id_bits": iw,
         "parameters": deepcopy(params["global_data"]),
     }
@@ -324,7 +355,7 @@ def build(soc, contract, floogen=None):
     fabrics["global_config"] = {
         "backend": soc["fabrics"]["global_config"]["backend"],
         "module": "floo_axi_router", "rtl_status": "planned",
-        "n_sources": len(computes),
+        "n_sources": len(computes) + len(peripheral),
         "n_targets": len(soc["networks"]["global_config"]["reachable_subsystems"]),
         "parameters": deepcopy(params["global_config"]),
     }
@@ -348,17 +379,17 @@ def build(soc, contract, floogen=None):
             if any(actual.get(k) != v for k, v in expected.items()):
                 raise InterfaceError(f"FlooGen {role} must match {expected}")
         f_endpoints = {ep["name"]: ep for ep in floogen["endpoints"]}
-        expected_ep = (set(s["name"] for s in computes)
-                       | set(s["name"] + "_sram" for s in computes)
+        expected_ep = (set(s["name"] for s in computes + peripheral)
+                       | set(s["name"] + "_sram" for s in computes + peripheral)
                        | set(o["name"] for o in outs))
         if set(f_endpoints) != expected_ep:
             raise InterfaceError(f"FlooGen endpoints mismatch: need {sorted(expected_ep)}")
-        for comp in computes:
+        for comp in computes + peripheral:
             ep = f_endpoints[comp["name"]]
             if ep.get("mgr_port_protocol") != ["axi_in"]:
                 raise InterfaceError(f"FlooGen {comp['name']} missing AXI4 manager interface")
         region = {r["name"]: r for r in soc["address_map"]["data"]}
-        for comp in computes:
+        for comp in computes + peripheral:
             name = comp["name"]
             addr = f"{name}_sram"
             exp = region[f"{name}.sram"]

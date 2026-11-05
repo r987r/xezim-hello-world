@@ -96,7 +96,7 @@
     },
     "global_config": {
       "config": "global_config/floogen.yaml",
-      "endpoint_count": 5,
+      "endpoint_count": 7,
       "native_parameters": {
         "AtopSupport": false,
         "BRoBSize": 2,
@@ -108,10 +108,10 @@
         "RRoBSize": 2,
         "RRoBType": "NoRoB"
       },
-      "network_interfaces_with_native_knobs": 5,
+      "network_interfaces_with_native_knobs": 7,
       "package": "global_config/floo_xezim_global_config_noc_pkg.sv",
       "plane": "config",
-      "routers": 6,
+      "routers": 9,
       "status": "real_upstream_structural_RTL",
       "subdirectory": "global_config",
       "top": "global_config/floo_xezim_global_config_noc.sv",
@@ -119,7 +119,7 @@
     },
     "global_data": {
       "config": "global_data/floogen.yaml",
-      "endpoint_count": 6,
+      "endpoint_count": 8,
       "native_parameters": {
         "AtopSupport": false,
         "BRoBSize": 8,
@@ -131,10 +131,10 @@
         "RRoBSize": 8,
         "RRoBType": "NormalRoB"
       },
-      "network_interfaces_with_native_knobs": 6,
+      "network_interfaces_with_native_knobs": 8,
       "package": "global_data/floo_xezim_global_data_noc_pkg.sv",
       "plane": "data",
-      "routers": 6,
+      "routers": 9,
       "status": "real_upstream_structural_RTL",
       "subdirectory": "global_data",
       "top": "global_data/floo_xezim_global_data_noc.sv",
@@ -185,6 +185,52 @@
       "subdirectory": "memory0/local_data",
       "top": "memory0/local_data/floo_xezim_memory0_local_data_noc.sv",
       "top_module": "floo_xezim_memory0_local_data_noc"
+    },
+    "pcie0_local_config": {
+      "config": "pcie0/local_config/floogen.yaml",
+      "endpoint_count": 4,
+      "native_parameters": {
+        "AtopSupport": false,
+        "BRoBSize": 2,
+        "BRoBType": "NoRoB",
+        "MaxAtomicTxns": 0,
+        "MaxTxns": 2,
+        "MaxTxnsPerId": 3,
+        "MaxUniqueIds": 2,
+        "RRoBSize": 2,
+        "RRoBType": "NoRoB"
+      },
+      "network_interfaces_with_native_knobs": 4,
+      "package": "pcie0/local_config/floo_xezim_pcie0_local_config_noc_pkg.sv",
+      "plane": "config",
+      "routers": 4,
+      "status": "real_upstream_structural_RTL",
+      "subdirectory": "pcie0/local_config",
+      "top": "pcie0/local_config/floo_xezim_pcie0_local_config_noc.sv",
+      "top_module": "floo_xezim_pcie0_local_config_noc"
+    },
+    "pcie0_local_data": {
+      "config": "pcie0/local_data/floogen.yaml",
+      "endpoint_count": 4,
+      "native_parameters": {
+        "AtopSupport": false,
+        "BRoBSize": 8,
+        "BRoBType": "NormalRoB",
+        "MaxAtomicTxns": 0,
+        "MaxTxns": 8,
+        "MaxTxnsPerId": 9,
+        "MaxUniqueIds": 4,
+        "RRoBSize": 8,
+        "RRoBType": "NormalRoB"
+      },
+      "network_interfaces_with_native_knobs": 4,
+      "package": "pcie0/local_data/floo_xezim_pcie0_local_data_noc_pkg.sv",
+      "plane": "data",
+      "routers": 4,
+      "status": "real_upstream_structural_RTL",
+      "subdirectory": "pcie0/local_data",
+      "top": "pcie0/local_data/floo_xezim_pcie0_local_data_noc.sv",
+      "top_module": "floo_xezim_pcie0_local_data_noc"
     }
   },
   "verification": {

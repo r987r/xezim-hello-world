@@ -16,29 +16,32 @@ package floo_xezim_global_data_noc_pkg;
   //   Address Map   //
   /////////////////////
 
-  typedef enum logic[2:0] {
+  typedef enum logic[3:0] {
     Compute0 = 0,
     Compute1 = 1,
-    Compute0Sram = 2,
-    Compute1Sram = 3,
-    MemoryIngress0 = 4,
-    MemoryIngress1 = 5,
-    NumEndpoints = 6} ep_id_e;
+    Pcie0 = 2,
+    Compute0Sram = 3,
+    Compute1Sram = 4,
+    Pcie0Sram = 5,
+    MemoryIngress0 = 6,
+    MemoryIngress1 = 7,
+    NumEndpoints = 8} ep_id_e;
 
 
 
-  typedef enum logic[1:0] {
+  typedef enum logic[2:0] {
     Compute0SramSamIdx = 0,
     Compute1SramSamIdx = 1,
-    MemoryIngress0SamIdx = 2,
-    MemoryIngress1SamIdx = 3} sam_idx_e;
+    Pcie0SramSamIdx = 2,
+    MemoryIngress0SamIdx = 3,
+    MemoryIngress1SamIdx = 4} sam_idx_e;
 
 
 
   typedef logic[0:0] rob_idx_t;
 typedef logic[0:0] port_id_t;
 typedef logic[1:0] x_bits_t;
-typedef logic[0:0] y_bits_t;
+typedef logic[1:0] y_bits_t;
 typedef struct packed {
     x_bits_t x;
     y_bits_t y;
@@ -54,7 +57,7 @@ typedef logic route_t;
     id_t end_addr;
   } route_map_rule_t;
 
-  localparam int unsigned SamNumRules = 4;
+  localparam int unsigned SamNumRules = 5;
 
 typedef struct packed {
     id_t idx;
@@ -63,16 +66,19 @@ typedef struct packed {
 } sam_rule_t;
 
 localparam sam_rule_t[SamNumRules-1:0] Sam = '{
-'{    idx: '{x: 2, y: 1, port_id: 0},
+'{    idx: '{x: 1, y: 2, port_id: 0},
     start_addr: 64'h0000000140000000,
     end_addr: 64'h0000000180000000},// MemoryIngress1
-'{    idx: '{x: 1, y: 1, port_id: 0},
+'{    idx: '{x: 0, y: 2, port_id: 0},
     start_addr: 64'h0000000100000000,
     end_addr: 64'h0000000140000000},// MemoryIngress0
-'{    idx: '{x: 0, y: 1, port_id: 0},
+'{    idx: '{x: 2, y: 1, port_id: 0},
+    start_addr: 64'h0000000012000000,
+    end_addr: 64'h0000000012100000},// Pcie0Sram
+'{    idx: '{x: 1, y: 1, port_id: 0},
     start_addr: 64'h0000000011000000,
     end_addr: 64'h0000000011100000},// Compute1Sram
-'{    idx: '{x: 2, y: 0, port_id: 0},
+'{    idx: '{x: 0, y: 1, port_id: 0},
     start_addr: 64'h0000000010000000,
     end_addr: 64'h0000000010100000} // Compute0Sram
 
@@ -85,7 +91,7 @@ localparam sam_rule_t[SamNumRules-1:0] Sam = '{
     XYAddrOffsetX: 33,
     XYAddrOffsetY: 35,
     IdAddrOffset: 0,
-    NumSamRules: 4,
+    NumSamRules: 5,
     NumRoutes: 0,
     CollectiveCfg: '{    OpCfg: '{    EnNarrowMulticast: 1'b0,
     EnWideMulticast: 1'b0,

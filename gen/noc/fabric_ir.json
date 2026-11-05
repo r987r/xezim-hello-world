@@ -14,7 +14,8 @@
   "subsystems": [
     "compute0",
     "compute1",
-    "memory0"
+    "memory0",
+    "pcie0"
   ],
   "fabrics": {
     "global_config": {
@@ -99,6 +100,11 @@
     {
       "name": "compute1.sram",
       "base": 285212672,
+      "size": 1048576
+    },
+    {
+      "name": "pcie0.sram",
+      "base": 301989888,
       "size": 1048576
     },
     {

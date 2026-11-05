@@ -237,6 +237,12 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
         else:
             lines += [f"    assign {req(dma)} = '0;"]
         lines += [f"    assign dma_irq_o[{i}] = 1'b0;", '  end']
+    # Peripheral ingress ports are reserved until their own IP plugin is attached.
+    for sub in (s for s in cfg["subsystems"] if s["type"] == "peripheral"):
+        for plane, endpoint in (("data", sub["data_initiator"]),
+                                ("config", sub["config_initiator"])):
+            port = all_ports[f"m_{sub['name']}_local_{plane}_{endpoint}"]
+            lines += [f"  assign {req(port)} = '0;"]
     # Leaf attachments: SRAM/ROM/flash use only upstream memory/IP modules.
     for p in noc_manifest['slaves']:
         ep = p['endpoint']
@@ -249,14 +255,24 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
                 mon = {f'mon_{k}_o':f'{ep}_{k}' for k in ('valid','write','addr','data','strb')}
                 lines += [f'  logic {ep}_valid, {ep}_write;',f'  logic [63:0] {ep}_addr, {ep}_data;',f'  logic [7:0] {ep}_strb;']
             else:
-                i = next(i for i,c in enumerate(cores) if p['network'] == c['name']+'_local_data')
+                core = next((i for i,c in enumerate(cores)
+                             if p['network'] == c['name']+'_local_data'), None)
                 size = cfg['boot']['simulation_sram_bytes']
                 image = ''
-                mon = monitor(i)
+                mon = monitor(core) if core is not None else {
+                    f'mon_{k}_o': '' for k in ('valid','write','addr','data','strb')}
             lines += [module('axi_sram_target', 'u_'+p['name'], {'req_t':dtype(p,'req'),'rsp_t':dtype(p,'rsp'),
                 'IdWidth':p['id_width'],'Base':f"64'h{region['base']:016x}",'Bytes':size,
                 'ReadOnly':int(is_rom),'InitFile':f'"{image_prefix}/{image}"' if image else '""'},
                 {'clk_i':'clk_i','rst_ni':'rst_ni','req_i':req(p),'rsp_o':rsp(p),**mon})]
+        elif ep == 'controller_regs' and any(
+                p['network'] == sub['name']+'_local_config'
+                for sub in cfg['subsystems'] if sub['type']=='peripheral'):
+            lines += [module('axi_err_slv','u_reserved_'+p['name'],{
+                'AxiIdWidth':p['id_width'],'axi_req_t':dtype(p,'req'),
+                'axi_resp_t':dtype(p,'rsp'),'ATOPs':0}, {
+                'clk_i':'clk_i','rst_ni':'rst_ni',
+                'slv_req_i':req(p),'slv_resp_o':rsp(p)})]
         elif ep == 'dma_regs':
             core = next((i for i,c in enumerate(cores) if p['network'] == c['name']+'_local_config'), None)
             if core is None:
@@ -338,6 +354,13 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
                 'memory_crossbar_inputs':1,
                 'memory_crossbar_outputs':len(cfg['memory_targets']),
                 'memory_controllers':'AXI slave SRAM models only; no physical HBM/DDR RTL',
+                'peripheral_subsystems':[{
+                    'name':s['name'],'ip':s['ip'],
+                    'local_data_noc':s['name']+'_local_data',
+                    'local_config_noc':s['name']+'_local_config',
+                    'rtl_attachment':'reserved_idle',
+                    'csr_attachment':'explicit_axi_error'}
+                    for s in cfg['subsystems'] if s['type']=='peripheral'],
                 'dma':'PULP iDMA engines generated for each compute, enabled by DmaEnable=1; data ports route via local FlooNoCs and 32-bit CSRs via local/global config FlooNoCs; old boot defaults to disabled.',
                 'firmware':'firmware.json','reset_register_bytes':reg_bytes,
                 'memory_models':[{'name':t['name'], 'base':int(next(r['base'] for r in cfg['address_map']['data'] if r['name']==t['name']),0),
