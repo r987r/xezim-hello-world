@@ -2,6 +2,7 @@
 import itertools
 import json
 import os
+import resource
 from pathlib import Path
 
 import cocotb
@@ -208,6 +209,7 @@ async def routed_data_and_config_all_local_global_nocs(dut):
         AxiFrontdoor(masters[desc["name"]]),
         HostSparseMemory(memory[target], physical_base=0))
     await provider.validate_backdoor(address, consumers_quiesced=True)
+    rss_at_start = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     region = VirtualRegion("supernoc.memory_provider", "hbm",
                            address, 512, False)
     # This testbench's configured clock is 10 ns. Count actual simulator
@@ -235,6 +237,9 @@ async def routed_data_and_config_all_local_global_nocs(dut):
             "memory_target": target,
             "bytes_per_operation": 256,
             "clock_period_ps": 10000,
+            "host_peak_rss_kib": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
+            "host_peak_rss_delta_kib": max(
+                0, resource.getrusage(resource.RUSAGE_SELF).ru_maxrss - rss_at_start),
             "events": [event.as_dict() for event in service.events],
         }
         (Path(plan_file).parent/"memory-provider-benchmark.json").write_text(
