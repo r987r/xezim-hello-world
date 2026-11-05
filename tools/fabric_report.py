@@ -265,7 +265,7 @@ def build(soc, knobs, noc_manifest, networks, super_manifest, chip_manifest, por
                 real_name = ("boot." + final.split(".")[-1][5:] if final.endswith((".boot_rom", ".boot_flash"))
                              else final.split("_local_")[0] + "." + final.split(".")[-1])
                 aliases = {"boot_rom": "boot.rom", "boot_flash": "boot.flash",
-                           "controller_regs": "memory0.ctrl", "dma_regs": label,
+                           "controller_regs": final.split("_local_")[0] + ".ctrl", "dma_regs": label,
                            "reset_ctrl": "boot.reset_ctrl"}
                 real_name = aliases.get(final.split(".")[-1], real_name)
                 if real_name != label:
