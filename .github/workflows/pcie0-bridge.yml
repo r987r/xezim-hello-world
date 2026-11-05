@@ -6,6 +6,7 @@ on:
     paths:
       - 'dv/pcie0/**'
       - 'tests/test_pcie_bar_contract.py'
+      - 'tests/test_pcie_diagnostic_contract.py'
       - '.github/workflows/pcie0-bridge.yml'
   workflow_dispatch:
 
@@ -45,3 +46,47 @@ jobs:
         env:
           SIM: icarus
         run: python dv/pcie0/run_rtl_smoke.py
+
+  noc-sram:
+    name: PCIe bridge -> real generated FlooNoC -> PULP tc_sram
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: alexforencich/verilog-pcie
+          ref: 25156a9a162c41c60f11f41590c7d006d015ae5a
+          path: .tools/verilog_pcie
+          persist-credentials: false
+      - uses: ./.github/actions/setup-bender
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned NoC and PCIe simulator dependencies
+        run: |
+          python3 -m pip install -r requirements.txt
+          python3 tools/ip_fetch.py floonoc picorv32 serv wb2axip verilog_axi
+          python3 -m pip install -e .tools/floonoc
+          python3 -m pip install 'cocotb==1.9.2' 'cocotb-bus==0.2.1' 'cocotbext-pcie==0.2.14' 'cocotbext-axi==0.1.24'
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends verilator iverilog
+      - name: Fail closed on Icarus widths, named ports and checked generated NoCs
+        run: |
+          python3 -m unittest tests.test_pcie_diagnostic_contract -v
+          python3 dv/pcie0/prepare_rtl.py
+          python3 tools/regress.py --check-noc
+          make check-generated
+      - name: Exercise real PCIe RTL -> full-chip data NoC -> SRAM
+        run: python3 dv/pcie0/run_noc_smoke.py
+      - name: Retain NoC build and assertion evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pcie0-real-noc-sram-rtl-${{ github.run_id }}
+          path: |
+            .tools/pcie0/noc_build/
+          include-hidden-files: true
+          if-no-files-found: warn
