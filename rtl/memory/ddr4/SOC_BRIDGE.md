@@ -105,8 +105,8 @@ architectural 1-GiB DDR window is unchanged; only the low 32 MiB has
 behavioral DFI/BankModel backing. Invalid bursts and addresses must
 return DECERR, not wrap into the backing store. The bridge's standalone
 invalid-aperture negative passed; the **full-chip routed**
-negative now also **passed** at `d65147b` in
-[DDR-B CI 42234769827](https://github.com/r987r/xezim-hello-world/actions/runs/42234769827).
+negative also **passed** at final PR head `026cd1f` in
+[DDR-B CI 42246102337](https://github.com/r987r/xezim-hello-world/actions/runs/42246102337).
 After CPU/iDMA CHECK and drained AXI responses, a simulation-only
 master exclusively takes over the existing compute0 DMA NoC manager.
 Its `0x142001000` off-model write and read return `DECERR`;
@@ -116,8 +116,8 @@ aliased. The default behavioral targets are unchanged.
 
 ## Verified status and remaining gates
 
-- **Exact-head DDR-B PASS at `d65147b`:**
-  [CI #42234769827](https://github.com/r987r/xezim-hello-world/actions/runs/42234769827).
+- **Final-PR-head DDR-B PASS at `026cd1f`:**
+  [CI #42246102337](https://github.com/r987r/xezim-hello-world/actions/runs/42246102337).
   Genuine CPU0/PULP iDMA SRAM→DDR→SRAM bytes, complete INIT/RUN/CHECK,
   real controller AW/B and AR/RLAST equality, DFI R/W, bank-model writes,
   passive AXI reports, and source-observed routed negative all passed.
@@ -125,14 +125,13 @@ aliased. The default behavioral targets are unchanged.
   remains historical evidence.
 - **Preserved:** standalone LiteDRAM/DFI plus bridge/DECERR tests,
   fast default AXI RAM, independent HBM model and merged NoC response-ordering fix.
-- **Common boot evidence:** [CI 42234770010](https://github.com/r987r/xezim-hello-world/actions/runs/42234770010)
-  logged all five `dv-chip` targets PASS, but was labelled **cancelled**
-  when its 45-minute job limit expired during artifact/report finalization.
-  The budget is corrected to 65 minutes; final-head green CI is still required.
-- **Remaining DDR-B merge gate:** reconcile latest `main`, including
-  published test-run browser improvements, and obtain source-matched
-  DDR, common boot and affected CI results. Do not confuse implemented
-  RTL and previously passing code with final merge acceptance.
+- **Common boot PASS:** [CI 42246102437](https://github.com/r987r/xezim-hello-world/actions/runs/42246102437)
+  passed all five `dv-chip` targets and report/artifact finalization under the
+  corrected 65-minute budget.
+- **Merged milestone:** [PR #74](https://github.com/r987r/xezim-hello-world/pull/74)
+  merged into `main` as [`d6f9612`](https://github.com/r987r/xezim-hello-world/commit/d6f9612a1a391593630ba49ba5384c3866faaf1a);
+  [issue #40](https://github.com/r987r/xezim-hello-world/issues/40) closed.
+  Later publication and protocol-neutral traffic viewer work remains preserved.
 - **Outside DDR-B scope:** physical DDR PHY, JEDEC/silicon timing,
   long forced backpressure/refresh/reset stress (DDR-A #35),
   and joint Ethernet/PCIe-to-*real-controller* traffic (epic #34).

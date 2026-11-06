@@ -143,11 +143,11 @@ also passed routed post-CHECK DDR read/write DECERR with no real
 controller forwarding and unchanged in-range data. This is simulation-controller
 integration, **not** a physical DDR PHY or a combined Ethernet/PCIe DDR test.
 
-The [common boot CI #42234770010](https://github.com/r987r/xezim-hello-world/actions/runs/42234770010)
-logged PASS for all five `dv-chip` targets (CPU-DMA, dual DMA,
-boot, boot-negative, Xezim structural compile) but was marked cancelled
-at its previous 45-minute job limit before artifact finalization.
-The workflow has a 65-minute budget for a completed exact-head rerun.
+The final [full-chip CI #42246102437](https://github.com/r987r/xezim-hello-world/actions/runs/42246102437)
+**passed all five** `dv-chip` targets (CPU-DMA, dual DMA,
+boot, boot-negative, Xezim structural compile) and final artifacts
+under the corrected 65-minute job budget. This is the acceptance run
+for merged [DDR-B PR #74](https://github.com/r987r/xezim-hello-world/pull/74).
 
 ## Commands and acceptance
 

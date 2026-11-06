@@ -1,6 +1,6 @@
 # PCIe0: host participant in the existing INIT/RUN/CHECK framework
 
-This implementation is tracked in [draft PR #60](https://github.com/r987r/xezim-hello-world/pull/60),
+This implementation was merged in [PR #60](https://github.com/r987r/xezim-hello-world/pull/60),
 based directly on `main` (generator PR #53 already merged). It does **not** introduce another test runner,
 phase engine, TestML parser, or duplicate full-chip testbench.
 

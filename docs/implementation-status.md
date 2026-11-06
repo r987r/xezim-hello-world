@@ -30,24 +30,23 @@ CPU C-DMA execution is verified, including the opt-in LiteDRAM controller with b
 ## DDR-B integration signoff status (November 6, 2026)
 
 [DDR-B PR #74](https://github.com/r987r/xezim-hello-world/pull/74)
-now has an **exact-head passing real-controller and routed negative test**
-at `d65147b`: [CI #42234769827](https://github.com/r987r/xezim-hello-world/actions/runs/42234769827).
+is **merged and complete for initial full-chip controller integration**
+([merge `d6f9612`](https://github.com/r987r/xezim-hello-world/commit/d6f9612a1a391593630ba49ba5384c3866faaf1a), [issue #40](https://github.com/r987r/xezim-hello-world/issues/40)).
+The final exact-PR-head DDR + routed-negative [CI #42246102337](https://github.com/r987r/xezim-hello-world/actions/runs/42246102337) passed at `026cd1f`.
 This includes real compiled CPU0/PULP iDMA SRAM→DDR→SRAM and
 controller AXI/behavioral DFI plus required post-CHECK routed
 `BRESP/RRESP=DECERR` for an off-model address, no controller AW/AR
 forwarding and nonalias readback. The opt-in DDR source does not
 replace default modeled DDR/HBM, and neither run models a physical PHY.
 
-The [common boot workflow](https://github.com/r987r/xezim-hello-world/actions/runs/42234770010)
-logged PASS for CPU C-DMA, dual-engine DMA, cold boot, named negative
-and Xezim compile, then reached its 45-minute job timeout during
-post-run reporting; GitHub records **cancelled**, not success.
-The job budget is being raised to 65 minutes and a final-head
-green run is still required. [PCIe integration](https://github.com/r987r/xezim-hello-world/actions/runs/42234769914),
+The [final common boot workflow](https://github.com/r987r/xezim-hello-world/actions/runs/42246102437)
+**passed** CPU C-DMA, dual-engine DMA, cold boot, named negative,
+Xezim compile and report/artifact processing within the corrected 65-minute
+budget. [PCIe integration](https://github.com/r987r/xezim-hello-world/actions/runs/42246102409),
 FlooNoC, iDMA, Ethernet topology, DDR foundation, memory contracts,
-generation and lint passed on `d65147b`. The latest main test-discovery,
-RTL drilldown and published run-browser changes are preserved in the
-next branch reconciliation. Real Ethernet/PCIe packets to LiteDRAM
+generation and lint also passed at `026cd1f`. Current main includes
+protocol-neutral traffic inspection, TLP drilldown, automatic test
+discovery, RTL drilldown and published run-browser enhancements. Real Ethernet/PCIe packets to LiteDRAM
 and electrical PHY/timing remain separate projects.
 
 ## Independent global NoC concurrency regression
