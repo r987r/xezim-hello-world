@@ -1,0 +1,56 @@
+name: CSR and unified address-map contracts
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'csr/**'
+      - 'tools/csrgen.py'
+      - 'tools/csr_backdoor.py'
+      - 'tools/address_map.py'
+      - 'tests/test_csr_backdoor.py'
+      - 'tests/test_address_map.py'
+      - 'tools/axi_report.py'
+      - 'tools/templates/run_report.html'
+      - '.github/workflows/csr.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  csr-architectural:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install repository and pinned CSR toolchains
+        run: |
+          python3 -m pip install -r requirements.txt -r csr/requirements.txt
+      - name: Verify SystemRDL, CSR backdoor and physical address-map contracts
+        run: |
+          python3 -m unittest tests.test_csr_backdoor tests.test_address_map -v
+      - name: Generate and deterministically re-check CSR artifacts
+        run: |
+          python3 tools/csrgen.py --out .tools/csr-verified --variant cold_boot
+          python3 tools/csrgen.py --out .tools/csr-verified --variant cold_boot --check
+      - name: Compose full SoC address map with RDL CSR subset
+        run: |
+          python3 tools/address_map.py --csr-map .tools/csr-verified/csr-map.json --variant cold_boot --out .tools/soc-address-map.json --rdl-out .tools/soc-data-memories.rdl
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          from systemrdl import RDLCompiler
+          result=json.loads(Path('.tools/soc-address-map.json').read_text())
+          assert len(result['regions']) == 14
+          assert len([r for r in result['regions'] if r['registers']]) == 1
+          assert result['regions'][-1]['plane'] == 'config'
+          c=RDLCompiler()
+          c.compile_file('.tools/soc-data-memories.rdl')
+          root=c.elaborate(top_def_name='soc_data_memory_view')
+          assert len(list(root.top.memories())) == 8
+          print('PASS: RDL external data memories and unified CSR subset')
+          PY
