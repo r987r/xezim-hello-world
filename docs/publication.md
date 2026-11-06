@@ -190,37 +190,13 @@ Pages deployment path.
 
 ## Current CSR / DDR register-reference release gate (2026-11-06)
 
-The **merged** Pages Address Map is a useful *human-readable aperture and
-partial-register inventory*: search by region/address, filter the data/config
-planes, select a known register, and inspect its source-defined metadata. It
-is **not yet a completed per-IP field datasheet for all subsystems**: the
-existing Inspect details use JSON, and unsourced register fields or resets
-must remain absent. The [CSR ownership matrix](csr-generation.md) lists
-which register sources and generated firmware integrations are qualified.
+**Merged:** native LiteDRAM CSR catalog and exact-variant selector [#100](https://github.com/r987r/xezim-hello-world/pull/100), readable IP → register → field browser [#115](https://github.com/r987r/xezim-hello-world/pull/115), and automatic source-backed DMA shim/Ethernet queue reference discovery with missing-IP checks [#118](https://github.com/r987r/xezim-hello-world/pull/118). Main commit `38b38a152a0e25db78a9b865b15a0a0334329d9a` contains all three.
 
-The real LiteDRAM DDR-B controller was integrated via merged PR #74, but
-the **native controller CSR register view** is a distinct, still-draft
-integration in [PR #100](https://github.com/r987r/xezim-hello-world/pull/100).
-It imports vendor-generated `csr.json`, checks the translated 16-KiB
-`memory0.ctrl` register window, and prepares a variant selector for this
-same Address Map. The *default* build continues to show the 4-KiB
-reserved controller window and fast AXI-RAM backing, never a fabricated
-active controller. Successful CSR and Pages **PR preview** jobs do not
-publish that native DDR view. The real-DDR CSR full-chip evidence has now **passed** in
-[workflow 42267019604](https://github.com/r987r/xezim-hello-world/actions/runs/42267019604),
-including the 16-KiB native register catalog and accepted Config-NoC CSR reads/writes.
-It still requires conflict reconciliation, exact-final-head CI, merge to main,
-and a successful main Pages deployment before the DDR variant can be considered live.
+The Address Map shows the **selected-variant** SystemRDL boot/reset definitions, separately labeled **source-only C/RTL-crosschecked** DMA/Ethernet references, and an independently qualified real-DDR controller variant when source-valid run evidence is available. Its Config-NoC aperture inventory comes from `config/soc.yaml`, rather than a hardcoded subsystem list. Unregistered new CSR sources and omitted required known apertures fail the CSR/Pages tests. An unmapped hardware source remains explicitly unavailable, never filled with invented registers.
 
-**Verified publication status at this review:** the main [Pages workflow
-42265803416](https://github.com/r987r/xezim-hello-world/actions/runs/42265803416)
-successfully built site artifacts, but its deployment was left queued and
-failed with `Deployment failed, try again later`. Subsequently,
-[main workflow 42271755340](https://github.com/r987r/xezim-hello-world/actions/runs/42271755340)
-completed **both build and deployment successfully** for its own tested commit. Do not claim the latest main source is live solely
-because its build succeeded, nor promise an old Pages release shows later
-CSR changes. A new main-ref release must independently complete its deploy
-job and the actual published route must be checked before declaring release.
+**Known limits:** the default memory model is fast AXI RAM; `memory0.ctrl` is reserved there (4 KiB), while real LiteDRAM has a distinct 16-KiB control aperture in the qualified opt-in variant. Upstream PULP iDMA native internal CSR registers are **not** the SoC DMA shim registers. PCIe management CSR RTL is not implemented/qualified, and no HBM controller CSR catalog exists. Their status is not a coverage pass. Adding an IP's register source is not proof of synthesized RTL, functional NoC attachment, or observed AXI requests; these require separate qualification.
+
+**Release evidence:** [CSR source CI 42300896953](https://github.com/r987r/xezim-hello-world/actions/runs/42300896953), [Pages/browser preview 42300897124](https://github.com/r987r/xezim-hello-world/actions/runs/42300897124), and [planned-test CI 42300896991](https://github.com/r987r/xezim-hello-world/actions/runs/42300896991) passed at PR #118's exact head. The post-merge [main-ref Pages run 42301109627](https://github.com/r987r/xezim-hello-world/actions/runs/42301109627) has a successful build and uploaded Pages artifact containing `address-map.html`, `data/csr-source-coverage.json`, `data/ddr-csr-verified-runs.json` and per-test real-DDR native-CSR evidence. At this documentation checkpoint its **deployment job was still in progress**, so a successful production deploy and public-route check were **not yet independently confirmed**. The [real DDR exact-head full-chip CI 42287564597](https://github.com/r987r/xezim-hello-world/actions/runs/42287564597) passed source-derived register and Config-NoC CSR checks. [#98](https://github.com/r987r/xezim-hello-world/issues/98) tracks completion of production DDR publication; [#82](https://github.com/r987r/xezim-hello-world/issues/82) tracks broader firmware, RTL and backdoor CSR work.
 
 **Provenance distinction:** a declared register is metadata, an
 exact-variant RTL attachment is implementation evidence, and completed
