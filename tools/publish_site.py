@@ -288,21 +288,43 @@ def verified_fabric_execution_equivalent(client, run, tested_sha, site_sha, cach
 
 
 
+TEST_WORKFLOW_COMMAND=re.compile(
+    r"\b(?:pytest|unittest|iverilog|verilator|cocotb|regress\.py)\b|\bmake\s+(?:dv-|test|check-)",
+    re.IGNORECASE)
+
+
 def discover_test_workflows(root=ROOT):
-    """Auto-discover checked-in CI workflows publishing regression evidence."""
+    """Auto-discover CI checks and their canonical regression artifacts.
+
+    Test workflows with no canonical results are still included in workflow
+    history (status-only). Only workflows explicitly uploading regression
+    paths can contribute per-target reports; no invented result.json files.
+    """
     producers={}
-    for file in sorted((root/'.github/workflows').glob('*.yml')):
+    for file in sorted((root/".github/workflows").glob("*.yml")):
         workflow=yaml.safe_load(file.read_text()) or {}
+        if not isinstance(workflow, dict):
+            continue
         artifacts=[]
-        for job in (workflow.get('jobs') or {}).values():
-            for step in job.get('steps',[]):
-                if not str(step.get('uses','')).startswith('actions/upload-artifact@'):
+        is_test=False
+        for job in (workflow.get("jobs") or {}).values():
+            if not isinstance(job, dict):
+                continue
+            for step in job.get("steps", []) or []:
+                if not isinstance(step, dict):
                     continue
-                opts=step.get('with') or {}
-                if '.tools/regression/' in str(opts.get('path','')):
-                    artifacts.append(str(opts.get('name','')))
-        if artifacts:
-            producers[file.name]={'file':file.name,'label':str(workflow.get('name') or file.stem),'artifacts':artifacts}
+                command=str(step.get("run", ""))
+                if TEST_WORKFLOW_COMMAND.search(command):
+                    is_test=True
+                if not str(step.get("uses", "")).startswith("actions/upload-artifact@"):
+                    continue
+                opts=step.get("with") or {}
+                if ".tools/regression/" in str(opts.get("path", "")):
+                    artifacts.append(str(opts.get("name", "")))
+        if artifacts or is_test:
+            producers[file.name]={"file":file.name,
+                                  "label":str(workflow.get("name") or file.stem),
+                                  "artifacts":artifacts}
     return producers
 
 def select_workflow_runs(client, producers, merged_heads, history, *, max_pages=10):
