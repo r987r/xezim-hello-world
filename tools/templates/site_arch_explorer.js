@@ -3,6 +3,7 @@
 const g=JSON.parse(document.getElementById("ex-embedded-graph").textContent);
 const inventory=JSON.parse(document.getElementById("ex-embedded-signals").textContent);
 const parsed=JSON.parse(document.getElementById("ex-embedded-rtl").textContent);
+const linkRuns=JSON.parse(document.getElementById("arch-embedded-protocol-links").textContent);
 const svg=document.getElementById("arch-svg"),vp=document.getElementById("arch-viewport"),status=document.getElementById("arch-status");
 const crumbs=document.getElementById("arch-crumbs"),profile=document.getElementById("arch-profile"),plane=document.getElementById("arch-plane");
 const facts=document.getElementById("arch-inspect-facts"),subtitle=document.getElementById("arch-inspect-subtitle"),title=document.getElementById("arch-inspect-title"),open=document.getElementById("arch-inspect-open");
@@ -235,6 +236,9 @@ function ipView(id){
   text(root,38,47,id.toUpperCase()+" / IP COMPOSITION",17,C.text,760);
   text(root,38,79,(selected?.info?.ip||"RTL boundary")+" · "+(selected?.info?.status||"status not specified"),13,C.muted);
   text(root,38,108,"Selected profile "+profile.value+" · custom RTL hierarchy is a syntax parse, not proof this variant elaborates it",12,C.planned);
+  if(trafficSourcesFor(id).length){
+    text(root,40,137,"Verified protocol observations: select this IP to inspect run-specific link traffic",12,C.data,650);
+  }
   if(!m){
     card(root,40,153,1050,82,id,"No parsed implementation in the canonical checked-in RTL source",C.ip,{title:id,kind:"opaque / reserved IP boundary"});
     text(root,42,276,"Pinned upstream IP or opt-in variant may be external. No internal wiring is inferred.",12,C.muted);
@@ -324,6 +328,105 @@ function network(name){
   text(root,40,dims.h-29,edges.length+" real generated structural edges · select a link to inspect source/destination router ports.",12,C.muted);
   return {label:name,count:router.size+" routers · "+(group.instances.length-router.size)+" interfaces"};
 }
+
+const trafficHost=document.getElementById("arch-link-traffic");
+const trafficRun=document.getElementById("arch-traffic-run");
+const trafficSource=document.getElementById("arch-traffic-source");
+const trafficRows=document.getElementById("arch-traffic-rows");
+const trafficActions=document.getElementById("arch-traffic-actions");
+const trafficCount=document.getElementById("arch-traffic-count");
+const trafficContext=document.getElementById("arch-traffic-context");
+
+// Source-to-IP ownership is structural/name-based, not a claim of active
+// electrical connectivity. Unknown source IDs remain accessible through
+// test-run reports rather than being attached to an invented diagram node.
+function trafficOwner(source){
+  if(nodes.has(source))return source;
+  const base=String(source).split(".")[0];
+  if(nodes.has(base+".ip"))return base+".ip";
+  if(nodes.has(base))return base;
+  return null;
+}
+const trafficSourcesFor=owner=>linkRuns.flatMap(run=>(run.links?.sources||[])
+  .filter(source=>trafficOwner(source.source)===owner));
+function trafficRunsFor(owner){
+  return linkRuns.filter(run=>(run.links?.sources||[])
+    .some(source=>trafficOwner(source.source)===owner));
+}
+function trafficOption(select,value,label){
+  const o=document.createElement("option");o.value=value;o.textContent=label;select.append(o);
+}
+function trafficCell(tr,value){
+  const td=document.createElement("td");
+  td.textContent=String(value??"—");tr.append(td);
+}
+function trafficLink(label,url){
+  const a=document.createElement("a");a.textContent=label;
+  a.href=url;a.rel="noopener";return a;
+}
+function trafficRender(){
+  const owner=trafficHost.dataset.owner;
+  const runs=trafficRunsFor(owner);
+  const run=runs.find(x=>String(x.run_id)+"-"+String(x.attempt)===trafficRun.value)||runs[0];
+  trafficSource.replaceChildren();trafficRows.replaceChildren();trafficActions.replaceChildren();
+  if(!run)return;
+  const sources=run.links.sources.filter(s=>trafficOwner(s.source)===owner);
+  for(const s of sources)trafficOption(trafficSource,s.source,s.source+" · "+s.protocol+" · "+s.count+" observations");
+  trafficSource.value=sources.some(s=>s.source===trafficSource.dataset.preferred)
+    ?trafficSource.dataset.preferred:(sources[0]?.source||"");
+  trafficDisplaySource(run);
+}
+function trafficDisplaySource(run){
+  const owner=trafficHost.dataset.owner;
+  const source=run.links.sources.find(s=>s.source===trafficSource.value&&trafficOwner(s.source)===owner);
+  trafficRows.replaceChildren();trafficActions.replaceChildren();
+  if(!source)return;
+  trafficSource.dataset.preferred=source.source;
+  trafficCount.textContent=source.count+" observed "+source.protocol+" records · "+
+    Object.entries(source.operations).map(([k,v])=>k+": "+v).join(" · ") +
+    (run.links.capture_complete?" · capture complete":" · incomplete capture");
+  trafficContext.textContent="Source-verified "+run.target+" · "+run.workflow+" #"+run.run_id+
+    " · tested "+run.source_sha.slice(0,12)+
+    " · "+source.implementation+" · "+source.clock_domain;
+  for(const record of source.preview){
+    const tr=document.createElement("tr");
+    const fmt=record.fields||{};
+    const ns=record.end_ps??record.start_ps;
+    trafficCell(tr,typeof ns==="number"?(ns/1000).toFixed(3):"—");
+    trafficCell(tr,source.source);
+    trafficCell(tr,record.operation);
+    trafficCell(tr,record.id||fmt.tag||"—");
+    trafficCell(tr,JSON.stringify(fmt));
+    trafficRows.append(tr);
+  }
+  if(!source.preview.length){
+    const tr=document.createElement("tr");
+    const td=document.createElement("td");td.colSpan=5;
+    td.textContent="No preview records in this monitor";tr.append(td);trafficRows.append(tr);
+  }
+  const query=new URLSearchParams({protocol:source.protocol,source:source.source});
+  trafficActions.append(
+    trafficLink("Open full filtered protocol timeline / details",run.report_path+"?"+query.toString()),
+    trafficLink("Raw verified capture JSON",run.raw_path),
+    trafficLink("AXI / NoC correlated report",run.axi_report_path)
+  );
+}
+function inspectTraffic(item){
+  const owner=item.traffic_owner||item.instance||item.title;
+  const runs=trafficRunsFor(owner);
+  trafficHost.hidden=!runs.length;
+  if(!runs.length)return;
+  trafficHost.dataset.owner=owner;
+  trafficRun.replaceChildren();
+  for(const run of runs)trafficOption(trafficRun,String(run.run_id)+"-"+String(run.attempt),
+    run.target+" · "+run.recorded_at+" · "+run.source_sha.slice(0,10));
+  trafficRun.onchange=()=>{trafficSource.dataset.preferred="";trafficRender()};
+  trafficSource.onchange=()=>trafficDisplaySource(
+    runs.find(x=>String(x.run_id)+"-"+String(x.attempt)===trafficRun.value)||runs[0]);
+  trafficSource.dataset.preferred="";
+  trafficRender();
+}
+
 function inspect(item,dest){
   next=dest||null;title.textContent=item.title||"Selected";subtitle.textContent=item.description||item.kind||"";
   facts.replaceChildren();const dl=document.createElement("dl");
@@ -354,6 +457,7 @@ function inspect(item,dest){
   }
   const ep=inventory.endpoints[item.instance||item.title];
   if(ep){const b=document.createElement("button");b.textContent="Inspect "+ep.signals.length+" RTL signal ports";b.addEventListener("click",()=>pickEndpoint(item.instance||item.title));document.getElementById("arch-inspect-links").append(b)}
+  inspectTraffic(item);
   open.hidden=!next;
   if(next)open.textContent="Open "+(next.mode==="sub"?"subsystem":next.mode==="noc"?"NoC":"RTL module")+" ›";
 }
@@ -385,7 +489,7 @@ function navigate(kind,name){
     btn.addEventListener("click",()=>navigate(type,id));crumbs.append(btn);
   });
   const summary=kind==="noc"?network(name):kind==="sub"?subsystem(name):kind==="ip"?ipView(name):kind==="module"?moduleView(name):fullChip();
-  inspect({title:summary.label,kind:kind==="chip"?"System overview":kind==="sub"?"Subsystem view":kind==="noc"?"Generated NoC mesh":"Compiler-parsed RTL composition",description:summary.count});
+  inspect({title:summary.label,kind:kind==="chip"?"System overview":kind==="sub"?"Subsystem view":kind==="noc"?"Generated NoC mesh":"Compiler-parsed RTL composition",description:summary.count,...(kind==="ip"?{instance:name,traffic_owner:name}:{})});
   status.textContent=summary.count+" · "+(kind==="noc"?"Generated router topology":"Subsystem hierarchy");
   requestAnimationFrame(()=>{fit();vp.scrollTo(0,0)});
 }
