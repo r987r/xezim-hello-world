@@ -269,4 +269,4 @@ suites:
   chip: [chip-cpu-dma, chip-dma, chip-boot, chip-boot-negative, chip-xezim-compile]
   # Every declared test is covered. Structural Xezim probes stay distinct
   # from the Verilator traffic gate; make test requires both toolchains.
-  full: [xezim, noc, compatibility, diagnostics, dma, chip, chip-pcie-host]
+  full: [xezim, noc, compatibility, diagnostics, dma, chip, chip-pcie-host, chip-ethernet]
