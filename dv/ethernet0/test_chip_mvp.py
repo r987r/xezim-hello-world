@@ -14,6 +14,7 @@ from cocotbext.axi import AxiBus,AxiMaster
 from cocotbext.eth import GmiiSource,GmiiSink,GmiiFrame
 from dv.ethernet0.frame_contract import Packet,encode
 from dv.ethernet0.gmii_trace import GmiiEvidence,RX,TX
+from dv.common.protocol_trace import open_from_plan
 from dv.common.axi_trace import attach_observers,trace_phase
 from dv.full_chip.test_dma import bounded,check_ok,write_word,read_word
 
@@ -88,7 +89,8 @@ async def gmii_rx_tx_through_real_eth_local_and_global_nocs(dut):
     dut.gmii_rx_dv.value=0
     dut.gmii_rx_er.value=0
     attach_observers(dut)
-    gmii_evidence=GmiiEvidence()
+    protocol_trace=open_from_plan()
+    gmii_evidence=GmiiEvidence(protocol_trace)
     cocotb.start_soon(Clock(dut.clk_i,10,units='ns').start())
     cocotb.start_soon(Clock(dut.gmii_rx_clk,8,units='ns').start())
     cocotb.start_soon(Clock(dut.gmii_tx_clk,8,units='ns').start())
@@ -182,4 +184,5 @@ async def gmii_rx_tx_through_real_eth_local_and_global_nocs(dut):
     trace_phase('CHECK ETH_UNPOSTED_RX_NEGATIVE')
     assert int(dut.eth_tx_failed.value)==0,'unexpected TX CQ error'
     gmii_evidence.finish()
+    protocol_trace.close("pass")
     dut._log.info('PASS chip-ethernet: real GMII RX SRAM+DDR and TX SRAM+DDR through generated Ethernet0 Data/Config FlooNoCs with exact CQ AXI B and BFM observability')
