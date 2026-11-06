@@ -3,6 +3,13 @@
 <p class="lede">All configured tests and discovered CI test workflows appear here automatically. Select a suite to see recorded results, actual workflow status, and which test targets have not yet published evidence.</p>
 <div class="notice">A recorded PASS means the target's acceptance rule passed at its tested commit. A successful CI workflow without a target result is shown only as CI status. It is not proof that every configured test ran.</div>
 
+<section id="test-flow-plan" class="card" aria-label="Selected test intended flow">
+<h2>Test flow · INIT → RUN → CHECK</h2>
+<p class="muted">Select any configured test to see its source-defined phases and stimulus, even if it has never run. These are intended actions, not proof of execution. If detailed steps are undeclared, that is shown explicitly. Evidence links are optional debugging aids.</p>
+<div class="filters"><label>Test <select id="flow-target" aria-label="Select test to view planned phases"></select></label>
+<span id="flow-status" class="muted"></span></div>
+<div id="flow-contents" aria-live="polite"></div>
+</section>
 <h2>Suites and evidence coverage</h2>
 <p class="muted">Counts distinguish configured targets, targets with a result artifact, and workflow executions. New tests are discovered from the regression YAML and CI without editing this page.</p>
 <div id="suite-summary" class="grid" aria-label="Filter tests by suite"></div>
@@ -117,6 +124,66 @@ const filter=byId("family");
 for(const name of groups){
   const o=document.createElement("option");o.value=name;o.textContent=name;filter.append(o);
 }
+const intentMap=D.test_intents||{};
+const flowSelect=byId("flow-target");
+const flowNames=Object.keys(D.tests).sort();
+for(const name of flowNames){
+  const option=document.createElement("option");
+  option.value=name;option.textContent=name;flowSelect.append(option);
+}
+const markFlow=target=>{
+  if(!Object.prototype.hasOwnProperty.call(intentMap,target))return;
+  flowSelect.value=target;renderFlow();byId("test-flow-plan").scrollIntoView({block:"start",behavior:"smooth"});
+};
+function renderFlow(){
+  const name=flowSelect.value,source=intentMap[name],host=byId("flow-contents");
+  host.replaceChildren();
+  if(!source){host.append(text("p","No configured intent for this test.","muted"));return;}
+  const detailed=source.declared_actions||0;
+  byId("flow-status").textContent=detailed?detailed+" declared actions/milestones":"Detailed phase actions not declared";
+  if(source.context)host.append(text("p",source.context,"muted"));
+  if(source.scenario_id)host.append(text("p","Scenario definition: "+source.scenario_id+
+    " · configuration seed "+(source.seed??"not specified"),"muted"));
+  const phases=source.phases||{};
+  for(const key of ["init","run","check"]){
+    const section=document.createElement("details");section.open=true;
+    section.append(text("summary",key.toUpperCase()+" · "+(phases[key]||[]).length+" declared"));
+    const actions=phases[key]||[];
+    if(!actions.length)section.append(text("p","Detailed "+key.toUpperCase()+
+      " actions are not declared in this test definition.","muted"));
+    else {
+      const ol=document.createElement("ol");
+      for(const item of actions){
+        const li=document.createElement("li");
+        const label=(item.actor?item.actor+".":"")+item.label;
+        li.append(text("strong",label));
+        li.append(text("span"," · "+(item.kind==="required_milestone"?"phase milestone":item.kind)+" · "+item.source,"muted"));
+        if(item.depends_on?.length)li.append(text("div","After: "+item.depends_on.join(", "),"muted"));
+        const args=item.args||{};
+        if(Object.keys(args).length){
+          const detail=document.createElement("details");
+          detail.append(text("summary","Configured stimulus parameters"));
+          detail.append(text("pre",JSON.stringify(args,null,2)));
+          li.append(detail);
+        }
+        ol.append(li);
+      }
+      section.append(ol);
+    }
+    host.append(section);
+  }
+  host.append(text("p","Runner acceptance: "+(source.acceptance||"No explicit PASS token configured"),"muted"));
+  host.append(text("p","Test entry: "+(source.module||source.top||"generated build/check")+
+    ". Displayed flow is a definition, not an observed PASS.","muted"));
+  const recent=latestTarget.get(name);
+  if(recent){
+    const p=document.createElement("p");
+    p.append(link("Open last recorded test report",recent.path));
+    if(recent.flow_steps)p.append(document.createTextNode(" · "+recent.flow_steps+" measured flow steps"));
+    host.append(p);
+  }else host.append(text("p","No recorded result yet. Planned flow remains available.","muted"));
+}
+flowSelect.addEventListener("change",renderFlow);
 const latestTarget=new Map();
 for(const e of D.entries){
   if(!latestTarget.has(e.target))latestTarget.set(e.target,e);
@@ -173,7 +240,10 @@ function render(){
     inspect.style.marginTop="7px";inspect.style.fontSize="12px";
     inspect.disabled=!(e.protocols?.length||e.protocol_links?.sources?.length);
     inspect.onclick=()=>window.openRunTraffic?.(e);
-    td(tr,testLink,inspect);
+    const openFlow=document.createElement("button");openFlow.type="button";
+    openFlow.textContent="View intended flow";openFlow.style.display="block";
+    openFlow.onclick=()=>markFlow(e.target);
+    td(tr,testLink,inspect,openFlow);
     td(tr,suite(e.target,e.workflow));
     td(tr,text("span",e.passed?"PASS":"FAIL",e.passed?"good":"bad"),
       text("div",e.expected_failure?"Required negative check":"Positive / compile gate","muted"));
@@ -230,7 +300,10 @@ function render(){
        !(recorded?.protocols||[]).includes(protocolFilter.value))continue;
     if(!matchesQuery([name,t.engine,t.top,t.sources,t.pass],q))continue;
     const tr=document.createElement("tr"),e=latestTarget.get(name);
-    td(tr,name);td(tr,suite(name));
+    const flowBtn=document.createElement("button");
+    flowBtn.type="button";flowBtn.textContent="View flow";
+    flowBtn.onclick=()=>markFlow(name);
+    td(tr,name,flowBtn);td(tr,suite(name));
     if(e)td(tr,link(e.passed?"PASS · run #"+e.run_id:"FAIL · run #"+e.run_id,e.path));
     else td(tr,text("span","No recorded result","muted"));
     td(tr,t.engine);
@@ -242,6 +315,8 @@ function render(){
 for(const id of ["family","search","outcome","kind","history","recorded-protocol"]){
   byId(id).addEventListener(id==="search"?"input":"change",render);
 }
+flowSelect.value=flowNames.includes("chip-cpu-scenario")?"chip-cpu-scenario":flowNames[0]||"";
+renderFlow();
 render();
 })();
 </script>
