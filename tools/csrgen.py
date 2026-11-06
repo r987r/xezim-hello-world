@@ -111,6 +111,7 @@ def register_layout(root, aperture_size: int) -> list[dict]:
                 "msb": msb,
                 "mask": f"0x{mask:08x}",
                 "access": sw,
+                "backdoor_policy": field.get_property("csr_backdoor_policy", default="frontdoor_only"),
                 "reset": f"0x{int(field.get_property('reset', default=0)):x}",
                 "description": field.get_property("desc", default="") or "",
             })
