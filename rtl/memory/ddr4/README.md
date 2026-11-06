@@ -157,6 +157,37 @@ initialization path and added full-chip tests using the existing monitors;
 standalone timing instrumentation itself did not modify shared generators
 or canonical diagrams.
 
+## Unified DDR command explorer (source-verified standalone DFI)
+
+The isolated real LiteDRAM controller already emits continuous, read-only
+`ddr4_dfi_events.jsonl`. The shared exporter
+`rtl/memory/ddr4/dfi_to_protocol.py` now converts that **existing observed**
+stream into `protocol-transactions.json`, using the same protocol-neutral
+schema as PCIe TLPs, Ethernet GMII, and AXI. No new DDR controller, VIP,
+signal sampler, or vendor RTL patch is introduced.
+
+The DDR4 foundation CI publishes a compact canonical
+`ddr4-standalone` regression artifact. After GitHub verifies its exact
+tested SHA and workflow run, the central **Test Runs → DDR → DFI**
+explorer can filter, timeline and expand the actual DFI command events:
+
+- `act` (ACTIVATE), `pre` (PRECHARGE), `rd` (READ),
+  `wr` (WRITE), `ref` (REFRESH)
+- `rddata_en`, `rddata_valid`, `wrdata_en` and observed
+  behavioral `bankmodel` read/storage-write events
+- Source-clock simulation timestamp, DFI phase, bank and command address
+  where the original pins provide them, plus the test phase
+
+Events remain labeled **observed command/enable**, never completed AXI
+transactions. DFI commands do not carry AXI IDs; overlapping AXI
+operations cannot be individually correlated to DRAM commands based on
+timestamps alone. The observed BankModel memory is a simulation model, not
+a physical DDR4 device. This standalone run is separate from the
+full-chip `chip-ddr4-real` variant: the latter already provides
+CPU/iDMA-to-LiteDRAM AXI capture and DFI read/write aggregate counters
+but **does not yet export every full-chip ACT/PRE/RD/WR/REF command**.
+The viewer must not mistake standalone DFI traffic for full-chip activity.
+
 ## Captured internal DFI and BankModel probes (merged #26)
 
 The merged 100 MHz latency report measures accepted AXI AR to last R
