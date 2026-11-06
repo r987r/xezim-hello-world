@@ -423,7 +423,6 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
                 'memory_crossbar_inputs':1,
                 'memory_crossbar_outputs':len(cfg['memory_targets']),
                 'memory_controllers':('Pinned LiteDRAM RTL + modeled DFI for DDR; HBM SRAM model' if real_ddr_mode else 'AXI slave SRAM models only; no physical HBM/DDR RTL'),
-                 'real_ddr_controller':real_ddr_mode,
                 'peripheral_subsystems':[{
                     'name':s['name'],'ip':s['ip'],
                     'local_data_noc':s['name']+'_local_data',
@@ -480,6 +479,8 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
             key = sub['name'] + '_local_data.' + sub['data_initiator']
             actors[key] = {'kind':'rtl_pcie_bridge',
                            'label':'Pinned real PCIe TLP-AXI bridge; modeled Root Complex'}
+    if real_ddr_mode:
+        manifest['real_ddr_controller'] = True
     manifest['dma_parameters_by_compute'] = {
         core['name']: dma_params_for(cfg, core) for core in cores}
     manifest['axi_actors']=actors
