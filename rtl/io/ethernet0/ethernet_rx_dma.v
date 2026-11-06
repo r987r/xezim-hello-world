@@ -18,7 +18,10 @@ module ethernet_rx_dma #(
     parameter integer AXI_ID_WIDTH = 4,
     parameter integer LEN_WIDTH = 16,
     parameter [AXI_ADDR_WIDTH-1:0] REGION_BASE = 0,
-    parameter [AXI_ADDR_WIDTH-1:0] REGION_BYTES = 65536
+    parameter [AXI_ADDR_WIDTH-1:0] REGION_BYTES = 65536,
+    // Optional second DMA aperture; must match descriptor fetch region #1.
+    parameter [AXI_ADDR_WIDTH-1:0] ALT_REGION_BASE = 0,
+    parameter [AXI_ADDR_WIDTH-1:0] ALT_REGION_BYTES = 0
 ) (
     input  wire clk,
     input  wire rst,
@@ -79,13 +82,16 @@ module ethernet_rx_dma #(
     wire dma_data_ready;
     wire dma_desc_valid;
 
-    wire valid_range =
-        (desc_length != 0) && (desc_length <= desc_capacity) &&
-        (desc_dst_addr >= REGION_BASE) &&
+    wire primary_range = (desc_dst_addr >= REGION_BASE) &&
         (REGION_BYTES >= desc_length) &&
-        (desc_dst_addr - REGION_BASE <= REGION_BYTES - desc_length) &&
-        // Explicitly require AXI word alignment for the pinned non-SG,
-        // non-unaligned DMA profile. No memory aperture wrap permitted.
+        (desc_dst_addr - REGION_BASE <= REGION_BYTES - desc_length);
+    wire alt_range = ALT_REGION_BYTES != 0 &&
+        desc_dst_addr >= ALT_REGION_BASE &&
+        ALT_REGION_BYTES >= desc_length &&
+        (desc_dst_addr - ALT_REGION_BASE <= ALT_REGION_BYTES - desc_length);
+    wire valid_range = (desc_length != 0) &&
+        (desc_length <= desc_capacity) && (primary_range || alt_range) &&
+        // Upstream verilog-axi is configured for word-aligned addresses.
         ((desc_dst_addr & (AXI_DATA_WIDTH/8-1)) == 0);
     assign desc_ready = state == IDLE && (valid_range ? dma_desc_ready : 1'b1);
     assign dma_desc_valid = desc_valid && state == IDLE && valid_range;
