@@ -170,6 +170,59 @@ tests:
           actors: {'1': cpu0}
           steps: {'101': alloc_phys, '102': dma_roundtrip, '103': verify_memory}
       axi: {scope: dut.u_noc, clock: clk, reset: rst_n, catalog: gen/supernoc/axi_monitors.json, actors: .tools/regression/chip-cpu-dma/variant/manifest.json, max_events: 500000, required_complete: true}
+  chip-cpu-scenario:
+    # Same generated soc_top and full_chip_tb checker, but real PicoRV32 runs
+    # compiled RV32I C DMA firmware during the existing INIT/RUN/CHECK phases.
+    # No AXI BFM assumes the CPU role and SRAM remains cold.
+    engine: cocotb-verilator
+    sources: noc
+    bender_targets: [chip_boot, dma]
+    ip: [picorv32, serv, wb2axip, verilog_axi, pulp_idma]
+    firmware_mode: cpu_dma_scenario
+    top: full_chip_tb
+    module: dv.full_chip.test_boot
+    seed: 1
+    test_dir: .
+    build: .tools/chip-cpu-scenario-obj
+    env: {MAKEFLAGS: '-j2', SOC_CPU_DMA_MODE: '1'}
+    timeout_s: 1800
+    pass: 'PASS scenario-cpu:'
+    report:
+      address_map: {config: config/soc.yaml, variant: architecture}
+      context: 'SCN-2: real PicoRV32 CPU C executes the exact shared source-neutral DDR scenario contract; no BFM on CPU buses or cold SRAM preload. The real PicoRV32 CPU calls compiled C in the shared cold-boot INIT/RUN/CHECK test, allocates SRAM/DDR/HBM physical regions, and programs the true PULP iDMA through its configuration NoC. No CPU BFM or preloaded SRAM. Check CPU-produced result and read/write AXI handshakes.'
+      flow:
+        required_steps:
+          init: [cpu0.firmware_init]
+          run: [cpu0.firmware_run, cpu0.alloc_phys, cpu0.dma_roundtrip, cpu0.verify_memory]
+          check: [cpu0.firmware_check]
+        required_origins:
+          init: {cpu0.firmware_init: rtl_observed}
+          run: {cpu0.firmware_run: rtl_observed, cpu0.alloc_phys: rtl_observed, cpu0.dma_roundtrip: rtl_observed, cpu0.verify_memory: rtl_observed}
+          check: {cpu0.firmware_check: rtl_observed}
+        firmware_mmio:
+          monitor: compute0_local_data.cpu
+          address: '0x1000045c'
+          actors: {'1': cpu0}
+          steps: {'101': alloc_phys, '102': dma_roundtrip, '103': verify_memory}
+      axi: {scope: dut.u_noc, clock: clk, reset: rst_n, catalog: gen/supernoc/axi_monitors.json, actors: .tools/regression/chip-cpu-scenario/variant/manifest.json, max_events: 500000, required_complete: true}
+  chip-dma-scenario:
+    engine: cocotb-verilator
+    sources: noc
+    bender_targets: [chip_boot, dma, chip_dma]
+    ip: [picorv32, serv, wb2axip, verilog_axi, pulp_idma]
+    top: full_chip_dma_tb
+    module: dv.full_chip.test_dma
+    seed: 1
+    test_dir: .
+    firmware_mode: scenario_bfm
+    build: .tools/chip-dma-scenario-obj
+    env: {MAKEFLAGS: '-j2'}
+    timeout_s: 900
+    pass: 'PASS chipdma: scenario BFM real full-NoC DDR roundtrip'
+    report:
+      address_map: {config: config/soc.yaml, variant: architecture}
+      context: 'SCN-2: reset-isolated CPU0 authorized AXI BFMs execute the same resolved DDR intent as real PicoRV32 C, through actual generated NoCs; confirms readback and DMA passive AXI; existing chip-dma stress stays unchanged. True iDMA0/iDMA1 instances drive configured local/global FlooNoC data traffic. CPU0 AXI BFM (data) and CPU0 AXI BFM (config) temporarily drive their original CPU0 ports for descriptor/payload SRAM loading and DMA doorbells (simulation only, no PCIe); CPUs stay in reset, so this is NOT a cold-boot pass. Real descriptor fetch, writeback, SSRAM, HBM, DDR and config NoCs are exercised.'
+      axi: {scope: dut.u_noc, clock: clk_i, reset: rst_ni, catalog: gen/supernoc/axi_monitors.json, actors: gen/chip/dma_actors.json, max_events: 500000}
   chip-ddr4-real:
     opt_in: true
     # Same generated soc_top and full_chip_tb checker, but real PicoRV32 runs
@@ -353,7 +406,8 @@ suites:
   # do not pay for the known-good BFM/boot/Xezim builds if CPU mode fails.
   # Every scope still runs when CPU mode succeeds.
   chip: [chip-cpu-dma, chip-dma, chip-boot, chip-boot-negative, chip-xezim-compile]
+  scenario: [chip-cpu-scenario, chip-dma-scenario]
   # Every declared test is covered. Structural Xezim probes stay distinct
   # from the Verilator traffic gate; make test requires both toolchains.
   ddr-real: [chip-ddr4-real]
-  full: [xezim, noc, compatibility, diagnostics, dma, chip, chip-pcie-host, chip-ethernet, chip-ethernet-cpu]
+  full: [xezim, noc, compatibility, diagnostics, dma, chip, scenario, chip-pcie-host, chip-ethernet, chip-ethernet-cpu]

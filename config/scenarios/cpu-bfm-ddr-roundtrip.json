@@ -1,0 +1,134 @@
+{
+  "schema_version": 1,
+  "scenario_id": "cpu_bfm_ddr_roundtrip",
+  "seed": 79,
+  "variant": "boot_live",
+  "actors": [
+    "cpu0",
+    "dma0",
+    "checker0"
+  ],
+  "actions": [
+    {
+      "action_instance_id": "alloc_source",
+      "kind": "memory.allocate",
+      "actor": "cpu0",
+      "phase": "run",
+      "args": {
+        "buffer": "src",
+        "region": "compute0.sram.payload",
+        "size": 64,
+        "alignment": 64
+      }
+    },
+    {
+      "action_instance_id": "alloc_ddr",
+      "kind": "memory.allocate",
+      "actor": "cpu0",
+      "phase": "run",
+      "args": {
+        "buffer": "ddr",
+        "region": "memory0.ddr0",
+        "size": 64,
+        "alignment": 64
+      }
+    },
+    {
+      "action_instance_id": "alloc_return",
+      "kind": "memory.allocate",
+      "actor": "cpu0",
+      "phase": "run",
+      "depends_on": [
+        "alloc_source"
+      ],
+      "args": {
+        "buffer": "return",
+        "region": "compute0.sram.payload",
+        "size": 64,
+        "alignment": 64
+      }
+    },
+    {
+      "action_instance_id": "init_source",
+      "kind": "memory.initialize",
+      "actor": "cpu0",
+      "phase": "run",
+      "depends_on": [
+        "alloc_source"
+      ],
+      "args": {
+        "buffer": "src",
+        "length": 64,
+        "pattern": {
+          "kind": "constant",
+          "seed": 90
+        },
+        "policy": "strict"
+      }
+    },
+    {
+      "action_instance_id": "copy_out",
+      "kind": "dma.copy",
+      "actor": "dma0",
+      "phase": "run",
+      "depends_on": [
+        "init_source",
+        "alloc_ddr"
+      ],
+      "args": {
+        "engine": "compute0.dma",
+        "src": "src",
+        "dst": "ddr",
+        "length": 64
+      }
+    },
+    {
+      "action_instance_id": "copy_back",
+      "kind": "dma.copy",
+      "actor": "dma0",
+      "phase": "run",
+      "depends_on": [
+        "copy_out",
+        "alloc_return"
+      ],
+      "args": {
+        "engine": "compute0.dma",
+        "src": "ddr",
+        "dst": "return",
+        "length": 64
+      }
+    },
+    {
+      "action_instance_id": "wait_idle",
+      "kind": "dma.wait_idle",
+      "actor": "cpu0",
+      "phase": "run",
+      "depends_on": [
+        "copy_back"
+      ],
+      "args": {
+        "engine": "compute0.dma"
+      }
+    },
+    {
+      "action_instance_id": "check_return",
+      "kind": "memory.check",
+      "actor": "checker0",
+      "phase": "check",
+      "depends_on": [
+        "wait_idle",
+        "init_source"
+      ],
+      "args": {
+        "buffer": "return",
+        "length": 64,
+        "pattern": {
+          "kind": "constant",
+          "seed": 90
+        },
+        "policy": "strict",
+        "expected_from": "src"
+      }
+    }
+  ]
+}

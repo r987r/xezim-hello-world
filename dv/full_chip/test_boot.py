@@ -160,6 +160,60 @@ async def execute_cold_boot(dut, *, external=None):
         assert plan, "missing shared AXI capture configuration"
         events_file = Path(plan).parent / "axi-events.jsonl"
         assert events_file.is_file(), "missing passive NoC AXI events"
+        scenario_path = os.environ.get("SOC_SCENARIO_PLAN")
+        if scenario_path:
+            # SCN-2: actual CPU0 executes the C variant compiled from the
+            # same immutable scenario as the authorized reset-isolated BFM.
+            # No active AxiMaster may attach to CPU/DMA mirrored buses.
+            from dv.common.scenario_dma import load_contract_from_plan
+            from tools.axi_report import read_events
+            contract = load_contract_from_plan(Path(scenario_path))
+            assert int(dut.cpu_dma_address_seen.value) == 0x3f, (
+                "SCN-2 missing CPU0 actual allocation mailbox stores")
+            packed = int(dut.cpu_dma_addresses.value)
+            words = [(packed >> (32 * k)) & 0xffffffff for k in range(6)]
+            observed = (words[0], words[1], words[2] | (words[3] << 32))
+            expected = (contract["source_phys"], contract["return_phys"],
+                        contract["ddr_phys"])
+            assert observed == expected, (
+                f"SCN-2 CPU allocations {observed} differ from resolved plan {expected}")
+            events, bad = read_events(events_file)
+            assert not bad, f"SCN-2 invalid real passive AXI events: {bad[:3]}"
+            counts = {"src_ar": 0, "ddr_aw": 0, "ddr_ar": 0, "return_aw": 0}
+            for event in events:
+                if event.get("monitor") != "compute0_local_data.dma" or event.get("channel") not in ("ar", "aw"):
+                    continue
+                phys = int(event["fields"]["addr"], 0)
+                if (event["channel"] == "ar" and
+                        contract["source_phys"] <= phys < contract["source_phys"] + contract["length"]):
+                    counts["src_ar"] += 1
+                if (event["channel"] == "aw" and
+                        contract["ddr_phys"] <= phys < contract["ddr_phys"] + contract["length"]):
+                    counts["ddr_aw"] += 1
+                if (event["channel"] == "ar" and
+                        contract["ddr_phys"] <= phys < contract["ddr_phys"] + contract["length"]):
+                    counts["ddr_ar"] += 1
+                if (event["channel"] == "aw" and
+                        contract["return_phys"] <= phys < contract["return_phys"] + contract["length"]):
+                    counts["return_aw"] += 1
+            assert all(counts.values()), (
+                f"SCN-2 accepted DMA traffic incomplete (not a real RTL pass): {counts}")
+            # Firmware checked exact source pattern and descriptor writebacks
+            # before asserting the actual cpu_dma_success pass signal.
+            evidence = {"scenario_id": contract["scenario_id"],
+                        "plan_sha256": contract["plan_sha256"],
+                        "profile": "real_cpu0_compiled_c",
+                        "execution_state": "rtl_observed",
+                        "observed_cpu_allocations": list(observed),
+                        "observed_dma_axi_counts": counts,
+                        "cpu_result_checked": True,
+                        "intent_is_not_evidence": True}
+            (Path(plan).parent / "scenario-execution.json").write_text(
+                json.dumps(evidence, indent=2, sort_keys=True) + "\n")
+            trace_phase("SCN-2 CPU C real NoC DDR roundtrip: " +
+                        contract["scenario_id"])
+            dut._log.info("PASS scenario-cpu: CPU0 C + iDMA real DDR modeled AXI, %s", counts)
+            return
         regions = configured_regions(yaml.safe_load(
             (ROOT/"config/soc.yaml").read_text()))
         from tools.memory_plan import validate_cpu_allocation

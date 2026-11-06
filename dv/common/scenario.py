@@ -316,12 +316,13 @@ def _validate_memory(ordered: list[dict], ancestors: dict[str, set[str]],
         elif kind in ("memory.initialize", "memory.check"):
             if (kind == "memory.initialize" and phase == "check") or (kind == "memory.check" and phase != "check"):
                 raise ScenarioError(f"{aid}: invalid phase for {kind}")
-            _fields(args, {"buffer", "length", "pattern", "policy"}, {"offset"}, aid)
+            _fields(args, {"buffer", "length", "pattern", "policy"},
+                    {"offset", "expected_from"} if kind == "memory.check" else {"offset"}, aid)
             buffer = args["buffer"]
             data = buffers.get(buffer)
             if data is None:
                 raise ScenarioError(f"{aid}: unknown buffer {buffer!r}")
-            start, end = _range(args, allowed={"offset", "length", "pattern", "policy"},
+            start, end = _range(args, allowed={"offset", "length", "pattern", "policy", "expected_from"},
                                 label=aid, capacity=data["size"])
             pat = _fields(args["pattern"], {"kind", "seed"}, set(), aid + ".pattern")
             if pat["kind"] not in PATTERNS:
@@ -331,6 +332,27 @@ def _validate_memory(ordered: list[dict], ancestors: dict[str, set[str]],
                 raise ScenarioError(f"{aid}: invalid memory policy")
             if a["actor"].startswith("cpu") and not regions[data["region"]].cpu_visible:
                 raise ScenarioError(f"{aid}: 32-bit CPU cannot directly initialize/check DDR or HBM")
+            # For moved DMA payloads the recipe is based on the ORIGINAL
+            # source address, not the destination address. This is an
+            # immutable golden reference, not another hardware read.
+            if kind == "memory.check" and "expected_from" in args:
+                reference = args["expected_from"]
+                if reference not in buffers:
+                    raise ScenarioError(f"{aid}: unknown expected_from buffer {reference!r}")
+                source = buffers[reference]
+                if source["allocated_by"] not in ancestors[aid] or end > source["size"]:
+                    raise ScenarioError(f"{aid}: expected_from allocation/range not causally available")
+                initialized = [
+                    (int(item["args"].get("offset", 0)),
+                     int(item["args"].get("offset", 0)) + item["args"]["length"])
+                    for item in ordered
+                    if item["kind"] == "memory.initialize"
+                    and item["args"].get("buffer") == reference
+                    and item["args"].get("pattern") == args["pattern"]
+                    and item["action_instance_id"] in ancestors[aid]
+                ]
+                if not _covered((start, end), initialized):
+                    raise ScenarioError(f"{aid}: expected_from recipe has no matching causal initialization")
             use(buffer, aid, offset=start, length=end - start,
                 write=kind == "memory.initialize", read=kind == "memory.check")
         elif kind == "dma.configure":

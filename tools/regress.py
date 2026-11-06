@@ -71,12 +71,12 @@ def load_config(path):
             raise ValueError(f'{name}: mode=compile requires the Xezim engine')
         if 'opt_in' in test and type(test['opt_in']) is not bool:
             raise ValueError(f'{name}: opt_in must be boolean')
-        if test.get('firmware_mode') not in (None, 'cpu_dma', 'pcie_host', 'pcie_dma_host', 'ethernet_mvp', 'ethernet_cpu', 'ddr_cpu_dma'):
+        if test.get('firmware_mode') not in (None, 'cpu_dma', 'pcie_host', 'pcie_dma_host', 'ethernet_mvp', 'ethernet_cpu', 'ddr_cpu_dma', 'cpu_dma_scenario', 'scenario_bfm'):
             raise ValueError(f'{name}: unknown compiled CPU firmware mode')
         if 'firmware_mode' in test and (
             test['engine'] != 'cocotb-verilator' or
             'chip_boot' not in test.get('bender_targets', []) or
-            (test['firmware_mode'] in ('cpu_dma','pcie_dma_host','ethernet_mvp','ethernet_cpu','ddr_cpu_dma')
+            (test['firmware_mode'] in ('cpu_dma','pcie_dma_host','ethernet_mvp','ethernet_cpu','ddr_cpu_dma','cpu_dma_scenario','scenario_bfm')
              and 'dma' not in test.get('bender_targets', []))):
             raise ValueError(f'{name}: selected test needs real chip RTL and specified active IP')
         if 'report' in test:
@@ -360,7 +360,7 @@ def run_target(name, test, resolver, options):
         sources += extra
         includes += inc
         defines += defs
-    if test.get('firmware_mode') == 'cpu_dma':
+    if test.get('firmware_mode') in ('cpu_dma', 'cpu_dma_scenario'):
         # Compile real C firmware into an alternate immutable FLASH image;
         # change only this run's generated top/checker, not tracked gen/.
         # Script invocation from tools/ otherwise omits the repository root
@@ -371,7 +371,8 @@ def run_target(name, test, resolver, options):
         cfg = yaml.safe_load((ROOT/'config/soc.yaml').read_text())
         noc_manifest = json.loads((ROOT/'gen/supernoc/manifest.json').read_text())
         variant = out/'variant'
-        prepare_cpu_dma(cfg, noc_manifest, ROOT/'gen/noc/floonoc', variant)
+        prepare_cpu_dma(cfg, noc_manifest, ROOT/'gen/noc/floonoc', variant,
+                        scenario_mode=test['firmware_mode']=='cpu_dma_scenario')
         generated_root = ROOT/'gen/chip'
         replacements = {'soc_top.sv', 'full_chip_tb.sv', 'full_chip_dma_tb.sv'}
         sources = [str(variant/Path(filename).name)
@@ -463,6 +464,10 @@ def run_target(name, test, resolver, options):
                    and Path(filename).name in replacements else filename
                    for filename in sources]
         sources = ddr_chip.source_closure(sources, info)
+    if test.get('firmware_mode') == 'scenario_bfm':
+        from dv.common.scenario_dma import materialize
+        cfg = yaml.safe_load((ROOT/'config/soc.yaml').read_text())
+        materialize(cfg, out)
     sources = list(dict.fromkeys(sources))
     includes = list(dict.fromkeys(includes))
     defines = list(dict.fromkeys(defines))
@@ -503,6 +508,13 @@ def run_target(name, test, resolver, options):
     plan_file.write_text(json.dumps(plan, indent=2) + '\n')
     env = dict(os.environ)
     env['SOC_RUN_PLAN'] = str(plan_file)
+    if test.get('firmware_mode') in ('scenario_bfm', 'cpu_dma_scenario'):
+        location = out/('variant' if test['firmware_mode']=='cpu_dma_scenario' else '')/'scenario-plan.json'
+        if not location.is_file():
+            raise ValueError('SCN-2 scenario plan missing before execution')
+        env['SOC_SCENARIO_PLAN'] = str(location)
+    else:
+        env.pop('SOC_SCENARIO_PLAN', None)
     env['PYTHONPATH'] = str(ROOT) + os.pathsep + env.get('PYTHONPATH', '')
     env.pop('SUPERNOC_NEGATIVE', None)
     env.update(test.get('env', {}))
