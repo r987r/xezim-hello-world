@@ -31,6 +31,10 @@ AGENT_SCOPES = {
         "allowed": {"AxiSlave"},
         "reason": "DMA RTL drives AXI output, host sparse memory owns slave response",
     },
+    "dv/pcie0/rtl_smoke.py": {
+        "allowed": {"AxiRam"},
+        "reason": "Isolated PCIe TLP-to-AXI bridge has no CPU or NoC; upstream AxiRam is the sole memory responder",
+    },
     "rtl/memory/ddr4/functional_tb.py": {
         "allowed": {"AxiMaster"},
         "reason": "External AXI master accesses isolated real DDR controller",
@@ -66,7 +70,7 @@ class AgentOwnershipTests(unittest.TestCase):
         tree = ast.parse(src)
         boot = next(node for node in tree.body
                     if isinstance(node, ast.AsyncFunctionDef)
-                    and node.name == "coordinated_cold_boot")
+                    and node.name == "execute_cold_boot")
         masters = [node for node in ast.walk(boot)
                    if isinstance(node, ast.Call)
                    and isinstance(node.func, ast.Name)
@@ -74,10 +78,9 @@ class AgentOwnershipTests(unittest.TestCase):
         self.assertEqual(len(masters), 1)
         guards = [node for node in ast.walk(boot)
                   if isinstance(node, ast.If)
-                  and isinstance(node.test, ast.UnaryOp)
-                  and isinstance(node.test.op, ast.Not)
-                  and isinstance(node.test.operand, ast.Name)
-                  and node.test.operand.id == "cpu_dma_mode"]
+                  and isinstance(node.test, ast.BoolOp)
+                  and isinstance(node.test.op, ast.And)
+                  and ast.unparse(node.test) == "not cpu_dma_mode and host is None"]
         self.assertEqual(len(guards), 1)
         self.assertIn(masters[0], list(ast.walk(guards[0])))
         self.assertIn("assert probe is None", src)

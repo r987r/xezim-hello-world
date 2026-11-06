@@ -5,6 +5,7 @@
 #include "../dma.h"
 #include "../../common/memory_pool.h"
 #include "../../common/memory_pattern.h"
+#include "../../common/test_flow.h"
 #include <stdint.h>
 #include <stddef.h>
 
@@ -36,12 +37,19 @@
 #define PAYLOAD_BYTES 64u
 #define PAYLOAD_PATTERN_SEED 0x35u
 #define STATUS_OFFSET 0x40u
+#define TESTFLOW_OFFSET 0x5cu /* reserved final word of 2-CPU mailbox */
 
 __attribute__((used, noinline))
 int cpu_dma_run(void) {
     volatile uint32_t * const evidence =
         (volatile uint32_t *)(uintptr_t)(SOC_MAILBOX + STATUS_OFFSET);
     *evidence = 0xd0000000u;
+    /* One writer, one physical MMIO trace word, separate from runtime
+     * allocator telemetry and the CPU0 DONE state. Real AXI monitor is
+     * authoritative; these markers alone do not prove DMA completion. */
+    volatile uint32_t * const flow =
+        (volatile uint32_t *)(uintptr_t)(SOC_MAILBOX + TESTFLOW_OFFSET);
+    soc_flow_emit(flow,SOC_FLOW_RUN,SOC_FLOW_START,1,101); /* alloc_phys */
     soc_mem_region_t source, peer, ddr, hbm;
     soc_mem_allocation_t src={0}, peer_dst={0}, ddr_dst={0}, hbm_dst={0};
     soc_dma_arena_t desc;
@@ -80,6 +88,76 @@ int cpu_dma_run(void) {
     allocation_report[3] = (uint32_t)(ddr_dst.phys >> 32);
     allocation_report[4] = (uint32_t)hbm_dst.phys;
     allocation_report[5] = (uint32_t)(hbm_dst.phys >> 32);
+    soc_flow_emit(flow,SOC_FLOW_RUN,SOC_FLOW_PASS,1,101); /* alloc_phys */
+
+#ifdef SOC_PCIE_SRAM
+    /* Quick cross-subsystem proof only. Keep the complete HBM/DDR/peer
+     * iDMA performance regression in the separate chip-cpu-dma test.
+     * The two independent transfers per submission never depend on
+     * ordering between in-flight DMA descriptors.
+     */
+    {
+        soc_flow_emit(flow,SOC_FLOW_RUN,SOC_FLOW_START,1,104);
+        soc_mem_fill_pattern(src.cpu_ptr,src.phys,PAYLOAD_BYTES,
+                             PAYLOAD_PATTERN_SEED,SOC_PATTERN_COUNTER8);
+        soc_mem_allocation_t from_host={0};
+        if (!soc_mem_alloc(&peer,PAYLOAD_BYTES,64,&from_host)) {
+            *evidence=0xd000000fu; return 15;
+        }
+        volatile uint8_t *readback=(volatile uint8_t *)(uintptr_t)from_host.phys;
+        for(unsigned i=0;i<PAYLOAD_BYTES;++i) readback[i]=0;
+        volatile uint32_t *csr=(volatile uint32_t *)(uintptr_t)SOC_DMA0_CSR;
+        soc_dma_chain_t transfer={0};
+        soc_dma_copy_t inbound[2]={
+            {(uint64_t)SOC_PCIE_SRAM+0x500u,(uint64_t)SOC_DDR_BASE+0x800u,PAYLOAD_BYTES},
+            {src.phys,ddr_dst.phys,PAYLOAD_BYTES}
+        };
+        if (!soc_dma_chain_build(&desc,inbound,2,true,&transfer) ||
+            !soc_dma_mmio_submit(csr,transfer.head_phys)) {
+            *evidence=0xd0000010u; return 16;
+        }
+        uint32_t status=0;
+        if (!soc_dma_mmio_wait_irq(csr,200000u,&status)) {
+            *evidence=0xd0000011u; return 17;
+        }
+        for(unsigned i=0;i<2;++i) {
+            volatile const uint64_t *done=
+                (volatile const uint64_t *)(const void *)&transfer.cpu_descs[i];
+            if(*done!=UINT64_MAX) {*evidence=0xd0000012u;return 18;}
+        }
+        soc_dma_mmio_ack_irq(csr);
+        uint32_t clear=0;
+        unsigned attempts=0;
+        for(;attempts<10000u;++attempts) {
+            clear=csr[SOC_DMA_REG_STATUS/4u];
+            if((clear & (SOC_DMA_STATUS_IRQ|SOC_DMA_STATUS_APB_BUSY))==0)break;
+        }
+        soc_dma_copy_t outbound[2]={
+            {ddr_dst.phys,(uint64_t)SOC_PCIE_SRAM+0x600u,PAYLOAD_BYTES},
+            {(uint64_t)SOC_DDR_BASE+0x800u,from_host.phys,PAYLOAD_BYTES}
+        };
+        if(attempts==10000u ||
+            !soc_dma_chain_build(&desc,outbound,2,true,&transfer) ||
+            !soc_dma_mmio_submit(csr,transfer.head_phys) ||
+            !soc_dma_mmio_wait_irq(csr,200000u,&status)) {
+            *evidence=0xd0000013u;return 19;
+        }
+        for(unsigned i=0;i<2;++i) {
+            volatile const uint64_t *done=
+                (volatile const uint64_t *)(const void *)&transfer.cpu_descs[i];
+            if(*done!=UINT64_MAX) {*evidence=0xd0000014u;return 20;}
+        }
+        for(unsigned i=0;i<PAYLOAD_BYTES;++i) {
+            if(readback[i]!=(uint8_t)(0x63u+13u*i)) {
+                *evidence=0xd0000015u;return 21;
+            }
+        }
+        soc_dma_mmio_ack_irq(csr);
+        soc_flow_emit(flow,SOC_FLOW_RUN,SOC_FLOW_PASS,1,104);
+        *evidence=0x600dc0deu;
+        return 0;
+    }
+#endif
     volatile uint8_t * const dst =
         (volatile uint8_t *)(uintptr_t)peer_dst.phys;
     uint8_t * const src_bytes = (uint8_t *)src.cpu_ptr;
@@ -100,6 +178,7 @@ int cpu_dma_run(void) {
     }
     volatile uint32_t *csr=(volatile uint32_t *)(uintptr_t)SOC_DMA0_CSR;
     *evidence = 0xd0000004u;
+    soc_flow_emit(flow,SOC_FLOW_RUN,SOC_FLOW_START,1,102); /* dma_roundtrip */
     if (!soc_dma_mmio_submit(csr, chain.head_phys)) {
         *evidence = 0xd0000005u; return 5;
     }
@@ -115,6 +194,7 @@ int cpu_dma_run(void) {
             *evidence = 0xd0000007u; return 7;
         }
     }
+    soc_flow_emit(flow,SOC_FLOW_RUN,SOC_FLOW_START,1,103); /* verify_memory */
     if (soc_mem_check_pattern((const void *)(uintptr_t)peer_dst.phys,
                               src.phys, PAYLOAD_BYTES,
                               PAYLOAD_PATTERN_SEED, SOC_PATTERN_COUNTER8) !=
@@ -172,9 +252,12 @@ int cpu_dma_run(void) {
         *evidence=0xd000000eu; return 14;
     }
     soc_dma_mmio_ack_irq(csr);
+
     /* Retain descriptors and all physical buffers to simulation end;
      * interrupt/writebacks alone do not prove backend globally idle.
      */
+    soc_flow_emit(flow,SOC_FLOW_RUN,SOC_FLOW_PASS,1,103);
+    soc_flow_emit(flow,SOC_FLOW_RUN,SOC_FLOW_PASS,1,102);
     *evidence = 0x600dc0deu;
     return 0;
 }

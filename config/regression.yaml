@@ -152,7 +152,21 @@ tests:
     pass: 'PASS fullchip:'
     report:
       context: 'The real PicoRV32 CPU calls compiled C in the shared cold-boot INIT/RUN/CHECK test, allocates SRAM/DDR/HBM physical regions, and programs the true PULP iDMA through its configuration NoC. No CPU BFM or preloaded SRAM. Check CPU-produced result and read/write AXI handshakes.'
-      axi: {scope: dut.u_noc, clock: clk, reset: rst_n, catalog: gen/supernoc/axi_monitors.json, actors: .tools/regression/chip-cpu-dma/variant/manifest.json, max_events: 500000}
+      flow:
+        required_steps:
+          init: [cpu0.firmware_init]
+          run: [cpu0.firmware_run, cpu0.alloc_phys, cpu0.dma_roundtrip, cpu0.verify_memory]
+          check: [cpu0.firmware_check]
+        required_origins:
+          init: {cpu0.firmware_init: rtl_observed}
+          run: {cpu0.firmware_run: rtl_observed, cpu0.alloc_phys: rtl_observed, cpu0.dma_roundtrip: rtl_observed, cpu0.verify_memory: rtl_observed}
+          check: {cpu0.firmware_check: rtl_observed}
+        firmware_mmio:
+          monitor: compute0_local_data.cpu
+          address: '0x1000045c'
+          actors: {'1': cpu0}
+          steps: {'101': alloc_phys, '102': dma_roundtrip, '103': verify_memory}
+      axi: {scope: dut.u_noc, clock: clk, reset: rst_n, catalog: gen/supernoc/axi_monitors.json, actors: .tools/regression/chip-cpu-dma/variant/manifest.json, max_events: 500000, required_complete: true}
   chip-boot: &chip
     engine: cocotb-verilator
     sources: noc
@@ -184,6 +198,44 @@ tests:
     timeout_s: 240
     pass: 'PASS fullchip:'
 
+  chip-pcie-host:
+    # The same generated soc_top/full_chip_tb and firmware phase protocol.
+    # Only this run owns the PCIe0 host initiator and external RC model.
+    engine: cocotb-verilator
+    sources: noc
+    bender_targets: [chip_boot, dma]
+    ip: [picorv32, serv, wb2axip, verilog_axi, pulp_idma]
+    firmware_mode: pcie_dma_host
+    top: full_chip_tb
+    module: dv.pcie0.test_full_chip_host
+    seed: 1
+    test_dir: .
+    build: .tools/pcie0/full_chip_build
+    env: {MAKEFLAGS: '-j2', SOC_PCIE_HOST_MODE: '1', SOC_CPU_DMA_MODE: '1', SOC_PCIE_DMA_HOST_MODE: '1'}
+    timeout_s: 1800
+    pass: 'PASS pciehost: real CPU0/host handshake and PCIe0 SRAM data'
+    report:
+      context: 'Real CPU0 cold boot via immutable ROM, host RC enumeration via modeled PCIe link, pinned real TLP->AXI4 RTL and PULP iDMA. Real CPU C copies host-seeded PCIe SRAM into modeled DDR and existing DDR bytes to PCIe SRAM; host verifies through BAR0. All transfers are accepted AXI transactions on generated NoCs, without memory preload or fake PHY.'
+      flow:
+        required_steps:
+          init: [host0.enumerate, host0.wait_device_ready, host0.seed_ddr_input, host0.init_ack, cpu0.init_complete, cpu0.firmware_init]
+          run: [host0.wait_run_enable, host0.bar_roundtrip, host0.bar_write_0, host0.bar_read_0, host0.bar_write_1, host0.bar_read_1, host0.bar_write_2, host0.bar_read_2, host0.bar_write_3, host0.bar_read_3, host0.run_ack, cpu0.run_complete, cpu0.firmware_run, cpu0.alloc_phys, cpu0.pcie_ddr_exchange, host0.read_ddr_dma_output]
+          check: [host0.wait_check_enable, host0.check_ack, cpu0.check_complete, cpu0.firmware_check, host0.final_verify]
+        required_origins:
+          init: {host0.enumerate: stimulus, host0.wait_device_ready: observed, host0.seed_ddr_input: checker, host0.init_ack: stimulus, cpu0.init_complete: checker, cpu0.firmware_init: rtl_observed}
+          run: {host0.wait_run_enable: observed, host0.bar_roundtrip: checker, host0.bar_write_0: stimulus, host0.bar_read_0: checker, host0.bar_write_1: stimulus, host0.bar_read_1: checker, host0.bar_write_2: stimulus, host0.bar_read_2: checker, host0.bar_write_3: stimulus, host0.bar_read_3: checker, host0.run_ack: stimulus, cpu0.run_complete: checker, cpu0.firmware_run: rtl_observed, cpu0.alloc_phys: rtl_observed, cpu0.pcie_ddr_exchange: rtl_observed, host0.read_ddr_dma_output: checker}
+          check: {host0.wait_check_enable: observed, host0.check_ack: stimulus, cpu0.check_complete: checker, cpu0.firmware_check: rtl_observed, host0.final_verify: checker}
+        firmware_mmio:
+          monitor: compute0_local_data.cpu
+          address: '0x1000045c'
+          actors: {'1': cpu0}
+          steps: {'101': alloc_phys, '104': pcie_ddr_exchange}
+      axi: {scope: dut.u_noc, clock: clk, reset: rst_n, catalog: gen/supernoc/axi_monitors.json, actors: .tools/regression/chip-pcie-host/variant/manifest.json, max_events: 500000, required_complete: true}
+      protocols:
+        sources:
+          pcie0.rx_req: {protocol: pcie, clock_domain: soc_single_clock, role: target, implementation: verilog_pcie_pcieifframe, modeling: rtl_bridge_with_modeled_root_complex}
+          pcie0.tx_cpl: {protocol: pcie, clock_domain: soc_single_clock, role: initiator, implementation: verilog_pcie_pcieifframe, modeling: rtl_bridge_with_modeled_root_complex}
+
 suites:
   xezim: [memory, memory-full, memory-sparse, memory-negative, sram, sram-synthesis, serv, boot, boot-relocated]
   noc: [noc-verilator, supernoc, supernoc-negative]
@@ -196,4 +248,4 @@ suites:
   chip: [chip-cpu-dma, chip-dma, chip-boot, chip-boot-negative, chip-xezim-compile]
   # Every declared test is covered. Structural Xezim probes stay distinct
   # from the Verilator traffic gate; make test requires both toolchains.
-  full: [xezim, noc, compatibility, diagnostics, dma, chip]
+  full: [xezim, noc, compatibility, diagnostics, dma, chip, chip-pcie-host]

@@ -16,6 +16,21 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class CpuDmaFirmwareTests(unittest.TestCase):
+    def test_combined_cpu_dma_pcie_c_image_links(self):
+        # The same real C, SRAM allocator and iDMA driver; the PCIe/DDR
+        # transfer only compiles into the opt-in PCIe host variant.
+        if not all(shutil.which(t) for t in ("clang", "ld.lld", "llvm-objcopy")):
+            self.skipTest("LLVM cross toolchain unavailable")
+        cfg=yaml.safe_load((ROOT/"config/soc.yaml").read_text())
+        pcie=int(next(r["base"] for r in cfg["address_map"]["data"]
+                      if r["name"]=="pcie0.sram"),0)
+        with tempfile.TemporaryDirectory() as tmp:
+            image=compile_firmware(cfg,Path(tmp),pcie_host_mode=True)
+            self.assertEqual(image["defines"]["SOC_PCIE_SRAM"],pcie)
+            self.assertGreater(len(image["data"]),0)
+            self.assertLess(len(image["data"]),image["flash_limit"]-0x1000)
+            self.assertTrue((Path(tmp)/"cpu_dma.elf").is_file())
+
     def test_full_c_image_links_at_real_boot_hook(self):
         if not all(shutil.which(t) for t in ("clang", "ld.lld", "llvm-objcopy")):
             self.skipTest("LLVM cross toolchain unavailable")

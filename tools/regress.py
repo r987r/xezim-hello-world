@@ -43,6 +43,10 @@ def expand(config, names, stack=()):
 
 
 def load_config(path):
+    # Direct `python tools/regress.py` starts with tools/ on sys.path; the
+    # shared DV evidence ABI lives under repository root, not tools/.
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
     config = yaml.safe_load(path.read_text())
     if set(config) != {'schema_version', 'defaults', 'upstream_noc', 'tests', 'suites'} or config['schema_version'] != 1:
         raise ValueError('unsupported regression schema')
@@ -65,21 +69,58 @@ def load_config(path):
             raise ValueError(f'{name}: build reuse is only supported by cocotb-verilator')
         if test.get('mode', 'simulate') not in ('simulate', 'compile') or (test.get('mode') == 'compile' and test['engine'] != 'xezim'):
             raise ValueError(f'{name}: mode=compile requires the Xezim engine')
-        if test.get('firmware_mode') not in (None, 'cpu_dma'):
+        if test.get('firmware_mode') not in (None, 'cpu_dma', 'pcie_host', 'pcie_dma_host'):
             raise ValueError(f'{name}: unknown compiled CPU firmware mode')
         if 'firmware_mode' in test and (
             test['engine'] != 'cocotb-verilator' or
             'chip_boot' not in test.get('bender_targets', []) or
-            'dma' not in test.get('bender_targets', [])):
-            raise ValueError(f'{name}: compiled CPU DMA requires real chip and iDMA RTL')
+            (test['firmware_mode'] in ('cpu_dma','pcie_dma_host')
+             and 'dma' not in test.get('bender_targets', []))):
+            raise ValueError(f'{name}: selected test needs real chip RTL and specified active IP')
         if 'report' in test:
             report = test['report']
             required = {'scope','clock','reset','catalog'}
             if (test['engine'] != 'cocotb-verilator' or not isinstance(report, dict)
                 or not ({'axi','protocols'} & set(report))
-                or set(report) - {'axi','protocols','memory','context'}
+                or set(report) - {'axi','protocols','memory','context','flow'}
                 or ('context' in report and not isinstance(report['context'],str))):
                 raise ValueError(f'{name}: invalid protocol report configuration for cocotb-verilator')
+            if 'flow' in report:
+                flow = report['flow']
+                if not isinstance(flow, dict) or not {'required_steps'} <= set(flow) or set(flow)-{'required_steps','firmware_mmio','required_origins'}:
+                    raise ValueError(f'{name}: invalid test-flow configuration')
+                flow_required = flow['required_steps']
+                if (not isinstance(flow_required, dict) or set(flow_required) != {'init','run','check'} or
+                        any(not isinstance(items, list) or not items or len(set(items)) != len(items) or
+                            any(not isinstance(s, str) or not re.fullmatch(r'[a-z][a-z0-9_.-]*\.[a-z][a-z0-9_.-]*', s)
+                                for s in items) for items in flow_required.values())):
+                    raise ValueError(f'{name}: invalid required test-flow steps')
+                if 'required_origins' in flow:
+                    from dv.common.test_flow import ORIGINS
+                    origins=flow['required_origins']
+                    if (not isinstance(origins,dict) or set(origins)-set(flow_required)
+                            or any(not isinstance(mapping,dict) or
+                                   any(item not in flow_required[phase] or origin not in ORIGINS
+                                       for item,origin in mapping.items())
+                                   for phase,mapping in origins.items())):
+                        raise ValueError(f'{name}: invalid required step provenance')
+                if 'firmware_mmio' in flow:
+                    fw = flow['firmware_mmio']
+                    if (not isinstance(fw,dict) or set(fw) != {'monitor','address','actors','steps'}
+                            or not isinstance(fw['monitor'],str)
+                            or not isinstance(fw['address'],str)
+                            or not isinstance(fw['actors'],dict)
+                            or not isinstance(fw['steps'],dict)):
+                        raise ValueError(f'{name}: invalid firmware test-flow adapter')
+                    try:
+                        int(fw['address'],0)
+                        assert fw['actors'] and fw['steps']
+                        for table in (fw['actors'],fw['steps']):
+                            for num,label in table.items():
+                                assert str(int(num))==num
+                                assert isinstance(label,str) and re.fullmatch(r'[a-z][a-z0-9_.-]*',label)
+                    except (ValueError,AssertionError,TypeError) as exc:
+                        raise ValueError(f'{name}: invalid firmware codebook') from exc
             if 'memory' in report:
                 m = report['memory']
                 if ('axi' not in report or not isinstance(m,dict) or
@@ -90,8 +131,9 @@ def load_config(path):
                 axi = report['axi']
                 if (not isinstance(axi, dict)
                     or not required <= set(axi)
-                    or set(axi) - required - {'max_events','actors'}
+                    or set(axi) - required - {'max_events','actors','required_complete'}
                     or ('actors' in axi and not isinstance(axi['actors'],str))
+                    or ('required_complete' in axi and type(axi['required_complete']) is not bool)
                     or any(not isinstance(axi[k],str) or not axi[k] for k in required)
                     or type(axi.get('max_events',500000)) is not int
                     or axi.get('max_events',500000) <= 0):
@@ -323,6 +365,36 @@ def run_target(name, test, resolver, options):
                    if Path(filename).parent == generated_root and
                    Path(filename).name in replacements else filename
                    for filename in sources]
+    if test.get('firmware_mode') in ('pcie_host', 'pcie_dma_host'):
+        if str(ROOT) not in sys.path:
+            sys.path.insert(0, str(ROOT))
+        # Same generated SoC and CPU firmware semantics; only variant wires
+        # the real pinned PCIe bridge and CPU0<->host SRAM phase barriers.
+        from full_chip_gen import emit as emit_chip
+        from dv.pcie0.run_rtl_smoke import source_contract
+        from dv.pcie0.prepare_rtl import assert_iverilog_clean
+        cfg = yaml.safe_load((ROOT/'config/soc.yaml').read_text())
+        noc_manifest = json.loads((ROOT/'gen/supernoc/manifest.json').read_text())
+        variant = out/'variant'
+        vendor_pin = source_contract()
+        bridge = assert_iverilog_clean()
+        if test['firmware_mode'] == 'pcie_dma_host':
+            from cpu_dma_firmware import prepare as prepare_cpu_dma
+            prepare_cpu_dma(cfg, noc_manifest, ROOT/'gen/noc/floonoc', variant,
+                            pcie_host_mode=True)
+        else:
+            emit_chip(cfg, noc_manifest, ROOT/'gen/noc/floonoc', variant,
+                      image_prefix=variant.relative_to(ROOT).as_posix(),
+                      pcie_host_mode=True)
+        generated_root = ROOT/'gen/chip'
+        replacements = {'soc_top.sv', 'full_chip_tb.sv'}
+        sources = [str(variant/Path(filename).name)
+                   if Path(filename).parent == generated_root and
+                   Path(filename).name in replacements else filename
+                   for filename in sources]
+        sources += [str(bridge)] + [
+            str(ROOT/'.tools/verilog_pcie'/item)
+            for item in vendor_pin['rtl_modules'] if item != 'rtl/pcie_axi_master.v']
     sources = list(dict.fromkeys(sources))
     includes = list(dict.fromkeys(includes))
     defines = list(dict.fromkeys(defines))
@@ -385,7 +457,8 @@ def run_target(name, test, resolver, options):
             print('\n'.join(text.splitlines()[-30:]), flush=True)
     passed = all(r['passed'] for r in results)
     result = {'target': name, 'passed': passed, 'stage': options.stage,
-              'elapsed_s': round(time.monotonic()-started, 3), 'results': results}
+              'elapsed_s': round(time.monotonic()-started, 3), 'results': results,
+              'test_flow': {'status':'unmeasured','steps':0,'issues':0}}
     if test.get('report') and options.stage in ('all','run'):
         # The existing AXI report remains byte-for-byte compatible.
         # Other upstream VIPs feed a separate protocol-neutral capture.
@@ -416,6 +489,29 @@ def run_target(name, test, resolver, options):
             print(f'FAIL {name}/protocol capture: missing, incomplete or inconsistent evidence',flush=True)
             if 'axi' in test['report']:
                 write_report(out,plan,result)
+        if 'flow' in test['report']:
+            from test_flow_report import write_report as write_flow
+            flow_result = write_flow(out, plan)
+            result['test_flow'] = {'status':'complete' if flow_result['passed'] else 'incomplete',
+                                   'passed':flow_result['passed'],
+                                   'steps':len(flow_result['rows']),
+                                   'issues':len(flow_result['issues'])}
+            if not flow_result['passed']:
+                passed = result['passed'] = False
+                results.append({'name':'test-flow evidence','passed':False,
+                                'reason':'missing, failed, incomplete or undeclared INIT/RUN/CHECK steps'})
+                print(f'FAIL {name}/test-flow: {flow_result["issues"][:8]}',flush=True)
+        # The run artifact is finalized only after the step-flow gate:
+        # previously the AXI/protocol JSON embedded stale 'unmeasured'.
+        if 'flow' in test['report']:
+            import protocol_report
+            latency_issues = protocol_report.finalize_run(out, result)
+            if latency_issues:
+                passed = result['passed'] = False
+                results.append({'name':'PCIe/AXI/SRAM latency and data correlation',
+                                'passed':False,'reason':'; '.join(latency_issues[:3])})
+                print(f'FAIL {name}/traffic correlation: {latency_issues[:8]}',flush=True)
+                protocol_report.finalize_run(out, result)
         print(f'REPORT {name}: {summary["transactions"]} observations; {out.relative_to(ROOT)}/report.html',flush=True)
     (out/'result.json').write_text(json.dumps(result, indent=2) + '\n')
     return passed

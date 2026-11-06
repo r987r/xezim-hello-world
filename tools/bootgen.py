@@ -65,7 +65,7 @@ def _lui_base(address: int) -> int:
     return address
 
 
-def build(cfg: dict) -> dict:
+def build(cfg: dict, *, allow_extended_flash_slot=False) -> dict:
     boot = cfg["boot"]
     supported = {
         "strategy": "rom_copy",
@@ -98,8 +98,9 @@ def build(cfg: dict) -> dict:
         raise ValueError('boot ROM is expected at reset PC 0x00000000')
     stride = int(boot['flash_slot_stride'], 0) if isinstance(boot['flash_slot_stride'], str) else boot['flash_slot_stride']
     words = boot['program_words']
-    if words != 4 or stride != 256 or boot.get('simulation_sram_bytes') != 16384:
-        raise ValueError('current executable boot test supports 4-word images, 256-byte flash slots, 16-KiB explicit model SRAM')
+    if (words != 4 or (stride != 256 and not (allow_extended_flash_slot and stride == 512))
+            or boot.get('simulation_sram_bytes') != 16384):
+        raise ValueError('executable boot requires 4-word images and 16-KiB SRAM; flash slot 256 (or explicit host variant 512)')
     if (flash_base + stride > 0xffffffff) or (sram1 + 0x100 > 0xffffffff):
         raise ValueError('boot mappings exceed 32-bit CPU address space')
     instructions: list[tuple[int, str]] = []
