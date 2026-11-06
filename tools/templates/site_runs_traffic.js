@@ -201,8 +201,12 @@ function draw(){
   ctx.setTransform(px,0,0,px,0,0);ctx.clearRect(0,0,width,height);
   ctx.font="11px system-ui";ctx.textAlign="right";
   const sample=current.filtered.filter(r=>Number.isFinite(r.end_ps??r.start_ps));
-  const first=sample.length?Math.min(...sample.slice(0,100000).map(r=>r.start_ps??0)):0;
-  const last=sample.length?Math.max(...sample.slice(0,100000).map(r=>r.end_ps??r.start_ps)):1000;
+  let first=Infinity,last=-Infinity;
+  for(const r of sample){
+    first=Math.min(first,r.start_ps??r.end_ps??0);
+    last=Math.max(last,r.end_ps??r.start_ps??0);
+  }
+  if(!Number.isFinite(first)){first=0;last=1000;}
   const range=Math.max(1,last-first),left=Math.min(260,Math.max(130,width*.31));
   const span=Math.max(100,width-left-18);
   monitors.forEach((name,i)=>{
