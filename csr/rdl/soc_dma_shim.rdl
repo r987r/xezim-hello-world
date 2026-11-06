@@ -1,0 +1,28 @@
+// Register contract for the *existing* handwritten PULP iDMA submission shim.
+// Software/JSON metadata only. Never replace soc_dma_regs.sv from this source.
+addrmap soc_dma_shim {
+    reg {
+        regwidth = 32;
+        desc = "Staged low 32 bits of 64-bit descriptor head";
+        field { sw = rw; hw = r; reset = 0; } value[31:0];
+    } head_lo @0x00;
+    reg {
+        regwidth = 32;
+        desc = "Staged high 32 bits of 64-bit descriptor head";
+        field { sw = rw; hw = r; reset = 0; } value[31:0];
+    } head_hi @0x04;
+    reg {
+        regwidth = 32;
+        desc = "One-shot submission and IRQ acknowledgement; side-effectful frontdoor only";
+        field { sw = rw; hw = r; reset = 0; } submit[0:0];
+        field { sw = rw; hw = r; reset = 0; } irq_ack[1:1];
+    } command @0x08;
+    reg {
+        regwidth = 32;
+        desc = "Live/bounded RTL shim state, not writable software storage";
+        field { sw = r; hw = w; reset = 0; } apb_busy[0:0];
+        field { sw = r; hw = w; reset = 0; } irq[1:1];
+        field { sw = r; hw = w; reset = 0; } apb_error[2:2];
+        field { sw = r; hw = w; reset = 0; } raw_irq[3:3];
+    } status @0x0c;
+};
