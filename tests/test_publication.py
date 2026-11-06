@@ -74,6 +74,16 @@ class PublicationTests(unittest.TestCase):
             self.assertIn("new-ip.yml",result)
             self.assertEqual(result["new-ip.yml"]["label"],"New protocol")
 
+    def test_standalone_test_without_artifact_is_visible_as_workflow_only(self):
+        with tempfile.TemporaryDirectory() as temp:
+            directory=Path(temp)/".github/workflows"
+            directory.mkdir(parents=True)
+            (directory/"standalone.yml").write_text(
+                "name: Standalone Ethernet sanity\njobs:\n  test:\n    steps:\n"
+                "      - run: python3 -m unittest tests.test_ethernet_queue_api -v\n")
+            workflows=site.discover_test_workflows(Path(temp))
+            self.assertIn("standalone.yml",workflows)
+            self.assertEqual(workflows["standalone.yml"]["artifacts"],[])
     def test_workflow_scoped_history_cannot_be_starved_by_other_ci(self):
         from unittest.mock import Mock
         from datetime import datetime
