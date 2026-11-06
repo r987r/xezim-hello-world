@@ -15,6 +15,7 @@ from cocotb.utils import get_sim_time
 from cocotbext.eth import GmiiSource,GmiiSink,GmiiFrame
 
 from dv.ethernet0.frame_contract import Packet,encode
+from dv.ethernet0.gmii_trace import GmiiEvidence,RX,TX
 from dv.common.axi_trace import attach_observers,trace_phase
 from dv.full_chip.test_boot import phase
 
@@ -93,6 +94,7 @@ async def cpu0_c_programs_real_rx_tx_queue_and_checks_cq(dut):
     dut.gmii_rx_dv.value=0
     dut.gmii_rx_er.value=0
     attach_observers(dut)
+    gmii_evidence=GmiiEvidence()
     cocotb.start_soon(Clock(dut.clk,10,units='ns').start())
     cocotb.start_soon(Clock(dut.gmii_rx_clk,8,units='ns').start())
     cocotb.start_soon(Clock(dut.gmii_tx_clk,8,units='ns').start())
@@ -113,10 +115,12 @@ async def cpu0_c_programs_real_rx_tx_queue_and_checks_cq(dut):
     assert len(frame)==85
     await gmii_src.send(GmiiFrame.from_payload(frame))
     await gmii_src.wait()
+    gmii_evidence.packet(RX,frame)
     observed=await with_timeout(gmii_sink.recv(),5,'ms')
     assert bytes(observed.get_payload())==frame,'CPU0 C TX descriptor produced wrong GMII bytes'
     assert observed.check_fcs(),'TX physical GMII missing correct FCS'
     assert observed.error is None,'GMII TX error indication'
+    gmii_evidence.packet(TX,observed.get_payload(),fcs_valid=observed.check_fcs(),error=observed.error)
     trace_phase('CHECK: external GMII received exact CPU-owned TX payload and FCS')
     await wait_cpu_marker(dut,PASS)
     await phase(dut,dut.run_complete,'run')
@@ -131,4 +135,5 @@ async def cpu0_c_programs_real_rx_tx_queue_and_checks_cq(dut):
     assert int(dut.app_fetch.value)==3,'both CPUs must fetch real SRAM firmware'
     counts=verify_accepted_axi(os.environ['SOC_RUN_PLAN'])
     dut._log.info('CPU_ETHERNET_ACCEPTED_AXI=%s',counts)
+    gmii_evidence.finish()
     dut._log.info('PASS ethernet-cpu: real CPU0 C queue and CQ; GMII RX/TX, SRAM bytes, IRQ ack, B-gated CQ and shared cold boot')
