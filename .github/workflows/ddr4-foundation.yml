@@ -203,6 +203,34 @@ jobs:
           set -euo pipefail
           python3 rtl/memory/ddr4/run_functional.py
 
+      - name: Export observed DDR4 DFI commands into unified Test Runs protocol evidence
+        run: |
+          set -euo pipefail
+          python3 rtl/memory/ddr4/dfi_to_protocol.py \
+            --input .tools/ddr4/litedram_sim \
+            --output .tools/regression/ddr4-standalone
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path(".tools/regression/ddr4-standalone")
+          d=json.loads((p/"protocol-transactions.json").read_text())
+          assert d["capture_complete"] and d["schema_version"]==1
+          commands={r["operation"] for r in d["records"]}
+          assert {"act","rd","wr"} <= commands
+          assert all(r["protocol"]=="dfi" for r in d["records"])
+          assert not any(r["kind"]=="transaction" for r in d["records"])
+          print("PASS real DFI command stream for unified test run:",len(d["records"]))
+          PY
+
+      - name: Upload compact source-verified DDR4 DFI protocol report for main test explorer
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ddr4-standalone-dfi-protocol-${{ github.run_id }}
+          path: .tools/regression/ddr4-standalone/
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Verify DDR4 standalone HTML report (measured vs unmeasured)
         run: |
           set -euo pipefail
