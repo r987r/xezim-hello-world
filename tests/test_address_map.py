@@ -65,7 +65,8 @@ class AddressMapTests(unittest.TestCase):
             c = RDLCompiler()
             c.compile_file(str(rdl))
             top = c.elaborate(top_def_name="soc_data_memory_view")
-            self.assertEqual(len(list(top.top.memories())), 8)
+            from systemrdl.node import MemNode
+            self.assertEqual(sum(isinstance(n, MemNode) for n in top.top.children()), 8)
 
     def fixture(self, *, variant="cold_boot"):
         config = ROOT / "config/soc.yaml"
