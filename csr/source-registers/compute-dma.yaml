@@ -9,3 +9,4 @@ rtl_register_source: comment_table
 field_macro_groups:
   COMMAND: SOC_DMA_CMD_
   STATUS: SOC_DMA_STATUS_
+one_shot_registers: [COMMAND]
