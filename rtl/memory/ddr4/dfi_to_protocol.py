@@ -97,7 +97,15 @@ def convert(input_dir:Path,output_dir:Path):
                  "scope":"standalone_litedram_behavioral_dfi",
                  "protocol_observations":len(protocol["records"]),
                  "sampled_cycles":summary["sampled_cycles"],
-                 "physical_phy":"not_modeled"}
+                 "physical_phy":"not_modeled",
+                 "dfi_command_counts":{
+                     command:counts.get(event,0) for event,command in
+                     (("dfi_activate","act"),("dfi_precharge","pre"),
+                      ("dfi_read","rd"),("dfi_write","wr"),
+                      ("dfi_refresh","ref"))
+                 },
+                 "dfi_act_coverage":"observed" if counts.get("dfi_activate",0)
+                     else "not_observed"}
     (output_dir/"result.json").write_text(json.dumps(result_data,indent=2)+"\n")
     return protocol
 
