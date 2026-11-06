@@ -22,9 +22,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Snapshot exact branch source for local integration audit
-        run: tar -czf eth-source.tgz --exclude=.git --exclude=.tools --exclude=eth-source.tgz .
+        run: tar -czf "$RUNNER_TEMP/eth-source.tgz" --exclude=.git --exclude=.tools .
       - uses: actions/upload-artifact@v4
         with:
           name: ethernet-mvp-source-${{ github.run_id }}
-          path: eth-source.tgz
+          path: ${{ runner.temp }}/eth-source.tgz
           retention-days: 1
