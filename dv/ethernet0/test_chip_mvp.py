@@ -13,6 +13,7 @@ from cocotb.triggers import FallingEdge,RisingEdge,with_timeout
 from cocotbext.axi import AxiBus,AxiMaster
 from cocotbext.eth import GmiiSource,GmiiSink,GmiiFrame
 from dv.ethernet0.frame_contract import Packet,encode
+from dv.ethernet0.gmii_trace import GmiiEvidence,RX,TX
 from dv.common.axi_trace import attach_observers,trace_phase
 from dv.full_chip.test_dma import bounded,check_ok,write_word,read_word
 
@@ -87,6 +88,7 @@ async def gmii_rx_tx_through_real_eth_local_and_global_nocs(dut):
     dut.gmii_rx_dv.value=0
     dut.gmii_rx_er.value=0
     attach_observers(dut)
+    gmii_evidence=GmiiEvidence()
     cocotb.start_soon(Clock(dut.clk_i,10,units='ns').start())
     cocotb.start_soon(Clock(dut.gmii_rx_clk,8,units='ns').start())
     cocotb.start_soon(Clock(dut.gmii_tx_clk,8,units='ns').start())
@@ -122,6 +124,8 @@ async def gmii_rx_tx_through_real_eth_local_and_global_nocs(dut):
     await descriptor(data,RX_RING,DATA_BUF,2048,0xc0febabe)
     await write_word(cfg,ETH_CTRL+0x28,1)
     await gmii_src.send(GmiiFrame.from_payload(frame))
+    await gmii_src.wait()
+    gmii_evidence.packet(RX,frame)
     await poll(cfg,dut.clk_i,0x38,1,'RX to SRAM completion')
     trace_phase('CHECK ETH_RX_SRAM')
     got=await d_read(data,DATA_BUF,len(frame),'independent AXI SRAM readback')
@@ -135,6 +139,8 @@ async def gmii_rx_tx_through_real_eth_local_and_global_nocs(dut):
     await descriptor(data,RX_RING+32,ddr_target,2048,0xdd00dd00,region=1)
     await write_word(cfg,ETH_CTRL+0x28,2)
     await gmii_src.send(GmiiFrame.from_payload(frame))
+    await gmii_src.wait()
+    gmii_evidence.packet(RX,frame)
     await poll(cfg,dut.clk_i,0x38,2,'RX to modeled DDR completion')
     trace_phase('CHECK ETH_RX_MODELED_DDR')
     got=await d_read(data,ddr_target,len(frame),'DDR readback through full NoC')
@@ -148,6 +154,7 @@ async def gmii_rx_tx_through_real_eth_local_and_global_nocs(dut):
     tx=await with_timeout(gmii_dst.recv(),250,'us')
     assert bytes(tx.get_payload())==frame,'TX SRAM to GMII byte mismatch'
     assert tx.check_fcs() and tx.error is None,'TX SRAM GMII FCS/error'
+    gmii_evidence.packet(TX,tx.get_payload(),fcs_valid=tx.check_fcs(),error=tx.error)
     await poll(cfg,dut.clk_i,0x58,1,'TX SRAM completion')
     trace_phase('CHECK ETH_TX_SRAM_GMII')
     await cq_check(data,TX_CQ,0xfeedcafe,len(frame),1,'TX SRAM')
@@ -157,6 +164,7 @@ async def gmii_rx_tx_through_real_eth_local_and_global_nocs(dut):
     await write_word(cfg,ETH_CTRL+0x48,2)
     tx=await with_timeout(gmii_dst.recv(),250,'us')
     assert bytes(tx.get_payload())==frame,'TX DDR to GMII mismatch'
+    gmii_evidence.packet(TX,tx.get_payload(),fcs_valid=tx.check_fcs(),error=tx.error)
     assert tx.check_fcs() and tx.error is None,'TX DDR GMII FCS/error'
     await poll(cfg,dut.clk_i,0x58,2,'TX DDR completion')
     trace_phase('CHECK ETH_TX_DDR_GMII')
@@ -167,9 +175,11 @@ async def gmii_rx_tx_through_real_eth_local_and_global_nocs(dut):
     trace_phase('RUN ETH_UNPOSTED_RX_NEGATIVE')
     await gmii_src.send(GmiiFrame.from_payload(frame))
     await gmii_src.wait()
+    gmii_evidence.packet(RX,frame)
     for _ in range(150):
         await RisingEdge(dut.clk_i)
     assert await read_word(cfg,ETH_CTRL+0x38)==2,'unposted RX generated CQ'
     trace_phase('CHECK ETH_UNPOSTED_RX_NEGATIVE')
     assert int(dut.eth_tx_failed.value)==0,'unexpected TX CQ error'
+    gmii_evidence.finish()
     dut._log.info('PASS chip-ethernet: real GMII RX SRAM+DDR and TX SRAM+DDR through generated Ethernet0 Data/Config FlooNoCs with exact CQ AXI B and BFM observability')
