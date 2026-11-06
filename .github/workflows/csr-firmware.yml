@@ -9,6 +9,7 @@ on:
       - 'sw/generated/soc_dma_shim_regs.h'
       - 'sw/dma/**'
       - 'tools/csr_dma_header.py'
+      - 'tests/test_csr_dma_generated.py'
       - 'tools/cpu_dma_firmware.py'
       - '.github/workflows/csr-firmware.yml'
   workflow_dispatch:
@@ -32,7 +33,7 @@ jobs:
       - name: Check generated C offsets, masks and exact RTL ABI
         run: |
           python3 tools/csr_dma_header.py --check
-          python3 -m unittest tests.test_dma_sw tests.test_cpu_dma_firmware tests.test_rv32i_runtime -v
+          python3 -m unittest tests.test_csr_dma_generated tests.test_dma_sw tests.test_cpu_dma_firmware tests.test_rv32i_runtime -v
       - name: Compile actual C runtime driver with generated header
         run: |
           clang --target=riscv32-unknown-elf -march=rv32i -mabi=ilp32 -std=c11 -Wall -Wextra -Werror -Oz -ffreestanding -ffunction-sections -fdata-sections -c sw/dma/dma.c -o /tmp/soc_dma_generated.o
