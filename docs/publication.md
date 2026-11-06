@@ -107,8 +107,21 @@ Unmerged branch artifacts are never published. Deployed code always comes from
 Artifacts retain their original workflow and attempt. Available SHA-256 archive
 digests are checked; unsafe ZIP paths and symlinks are rejected. AXI report
 commit, clean-worktree flag and workflow ID/attempt must match their CI run.
-Only the explicit evidence file types are republished, not compiler object
-directories. Pages history is rebuilt from still-available Actions artifacts;
+Only explicitly allowed result, trace, plan, log and filelist types are
+extracted and republished; compiler object and precompiled-header files
+are never imported from CI artifacts. The collector verifies full ZIP digests
+and checks **every** member for unsafe paths/symlinks before selecting evidence.
+A capped legacy ZIP allowance accommodates historical PCIe regression archives
+that included huge reproducible Verilator build products. Future PCIe CI
+archives upload only the canonical regression target directory. Expanded
+limits are checked against selected files, without loosening source-SHA or
+protocol provenance validation.
+
+The Test Runs page shows every configured target in its catalog regardless of
+whether a recorded result exists. A dynamically populated suite filter exposes
+PCIe, Ethernet, memory, NoC, CPU/DMA and additional test families; clicking a
+suite narrows recorded evidence and workflow history. A successful workflow
+without a target result is workflow-only evidence, not an invented target PASS. Pages history is rebuilt from still-available Actions artifacts;
 it is **bounded history, not permanent archival storage**. Increase artifact
 retention/history limits deliberately if long-term evidence is needed.
 
