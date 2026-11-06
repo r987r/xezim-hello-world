@@ -23,6 +23,11 @@ def check(driver):
     assert "secondary_release" in csr_browser.text, "source-defined field not visible in CSR hierarchy"
     assert "0x40020000" in csr_browser.text, "absolute CSR address missing"
     assert "memory0.ctrl" in csr_browser.text, "unavailable controller aperture is not visible"
+    driver.execute_script("""
+      for(const ip of document.querySelectorAll('#am-csr-browser .am-csr-ip')){
+        if(ip.querySelector('summary').textContent.startsWith('memory0.ctrl')) ip.open=true;
+      }
+    """)
     assert "No CSR definitions imported" in csr_browser.text, "missing map must be explicit"
     assert driver.find_element(By.ID, "am-csr-count").text
     assert "16 KiB" in content and "64 KiB" in content
