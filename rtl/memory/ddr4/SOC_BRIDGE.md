@@ -104,30 +104,35 @@ through the Memory0 crossbar to the verified 64→25-bit guarded
 architectural 1-GiB DDR window is unchanged; only the low 32 MiB has
 behavioral DFI/BankModel backing. Invalid bursts and addresses must
 return DECERR, not wrap into the backing store. The bridge's standalone
-invalid-aperture negative passed; a matching **full-chip routed**
-negative test is now **implemented** using the real NoC after CPU/iDMA
-CHECK: the existing compute0 DMA manager port is multiplexed to a
-verification-only AXI master only after CHECK and controller drain.
-It checks read/write DECERR for an address 32 MiB above valid modeled
-storage, no forwarded controller AW/AR, and unchanged valid readback.
-A completed source-fresh RTL run is still needed before signoff.
+invalid-aperture negative passed; the **full-chip routed**
+negative now also **passed** at `d65147b` in
+[DDR-B CI 42234769827](https://github.com/r987r/xezim-hello-world/actions/runs/42234769827).
+After CPU/iDMA CHECK and drained AXI responses, a simulation-only
+master exclusively takes over the existing compute0 DMA NoC manager.
+Its `0x142001000` off-model write and read return `DECERR`;
+the controller sees no corresponding AW/AR forwarding, and a
+subsequent read at `0x140001000` proves that valid data was not
+aliased. The default behavioral targets are unchanged.
 
 ## Verified status and remaining gates
 
-- **Passed on exact head `a8cd8bb9`:** [CI #42217902632](https://github.com/r987r/xezim-hello-world/actions/runs/42217902632),
-  real compiled CPU0/PULP iDMA SRAM→DDR→SRAM content verification,
-  complete INIT/RUN/CHECK, controller AW/B and AR/RLAST equality,
-  nonzero DFI read/write and BankModel writes, 48,144 passive AXI
-  observations, and full-chip report source provenance.
-- **Preserved:** standalone LiteDRAM/DFI + bridge/DECERR tests,
-  fast AXI RAM default, independent HBM model, and upstream NoC
-  ordering (merged PR #78).
-- **Remaining for DDR-B merge/close:** actual source-fresh RTL acceptance
-  of the newly implemented routed invalid-aperture negative, full default
-  boot/CPU DMA and affected regression suites, and final main merge checks.
-  Ethernet, CSR and stimulus framework changes were reconciled in
-  `2220f43`; automatic test discovery/IP drilldown from main PR #85
-  also needs to be preserved during the latest main synchronization.
+- **Exact-head DDR-B PASS at `d65147b`:**
+  [CI #42234769827](https://github.com/r987r/xezim-hello-world/actions/runs/42234769827).
+  Genuine CPU0/PULP iDMA SRAM→DDR→SRAM bytes, complete INIT/RUN/CHECK,
+  real controller AW/B and AR/RLAST equality, DFI R/W, bank-model writes,
+  passive AXI reports, and source-observed routed negative all passed.
+  Earlier positive-only [CI 42217902632](https://github.com/r987r/xezim-hello-world/actions/runs/42217902632)
+  remains historical evidence.
+- **Preserved:** standalone LiteDRAM/DFI plus bridge/DECERR tests,
+  fast default AXI RAM, independent HBM model and merged NoC response-ordering fix.
+- **Common boot evidence:** [CI 42234770010](https://github.com/r987r/xezim-hello-world/actions/runs/42234770010)
+  logged all five `dv-chip` targets PASS, but was labelled **cancelled**
+  when its 45-minute job limit expired during artifact/report finalization.
+  The budget is corrected to 65 minutes; final-head green CI is still required.
+- **Remaining DDR-B merge gate:** reconcile latest `main`, including
+  published test-run browser improvements, and obtain source-matched
+  DDR, common boot and affected CI results. Do not confuse implemented
+  RTL and previously passing code with final merge acceptance.
 - **Outside DDR-B scope:** physical DDR PHY, JEDEC/silicon timing,
   long forced backpressure/refresh/reset stress (DDR-A #35),
   and joint Ethernet/PCIe-to-*real-controller* traffic (epic #34).

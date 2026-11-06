@@ -17,7 +17,7 @@ A passing BFM test does not by itself establish CPU/iDMA/controller integration.
 | Ethernet0 connected one-MAC RX/TX IP | [PR #73](https://github.com/r987r/xezim-hello-world/pull/73), [exact-head CI 42162107273](https://github.com/r987r/xezim-hello-world/actions/runs/42162107273) **4/4 Ethernet jobs PASS**: one pinned 1G MAC, GMII RX/TX and FCS, descriptor/packet DMA, 32-byte B-gated CQs, SRAM/model-DDR readback, Config/Data FlooNoCs. Real PicoRV32 C executes cold boot, programs RX/TX queue CSRs/policy, checks RX bytes, CQ/IRQ and acknowledgments; no CPU0 AXI BFM. | **Ethernet #64 MVP satisfied.** After merge, full PCIe RC reading Ethernet-produced bytes/CQ and five combined StepRecorder gates are owned by #34. Physical DDR/PCIe PHY and stress/performance remain deferred. |
 | Ethernet0 local Data/Config FlooNoCs | `ethernet_mode=True` physically wires six-source PULP mux to Ethernet Data NoC and queue CSR AXI4-to-Lite through Config NoC; both BFM and real CPU0 C tests pass [CI #42162107273](https://github.com/r987r/xezim-hello-world/actions/runs/42162107273). | Default canonical `gen/chip` stays reserved and must not be misrepresented; combined variant host-route diagram/latency audit belongs to #34. |
 | PCIe0 minimal host/CPU DMA path | Merged [#60](https://github.com/r987r/xezim-hello-world/pull/60), [CI 42134213227](https://github.com/r987r/xezim-hello-world/actions/runs/42134213227) passed real TLP/AXI host BAR to PCIe SRAM with CPU C/iDMA transfer to modeled DDR and return readback | No actual PCIe-host read of an Ethernet-generated packet/CQ in the same simulation yet; no physical PCIe link/PHY or outbound host-memory DMA (#76). |
-| HBM/DDR controllers and PHYs | **Opt-in `chip-ddr4-real`: real pinned LiteDRAM controller RTL, 16-KiB Config NoC CSR init, real PicoRV32/PULP iDMA SRAM↔DDR and matched AXI/DFI/BankModel evidence** ([CI](https://github.com/r987r/xezim-hello-world/actions/runs/42217902632), [artifact](https://github.com/r987r/xezim-hello-world/actions/runs/42217902632/artifacts/13503312198)) | Default chip/PCIe/Ethernet modes still use AXI RAM; LiteDRAM DFI PHY and bank are behavioral; HBM controller/physical PHY, real-controller interoperability and full-chip negative-aperture closure remain outstanding |
+| HBM/DDR controllers and PHYs | **Opt-in `chip-ddr4-real`: real pinned LiteDRAM controller RTL, 16-KiB Config NoC CSR init, real PicoRV32/PULP iDMA SRAM↔DDR and matched AXI/DFI/BankModel evidence** ([CI](https://github.com/r987r/xezim-hello-world/actions/runs/42217902632), [artifact](https://github.com/r987r/xezim-hello-world/actions/runs/42217902632/artifacts/13503312198)) | Default chip/PCIe/Ethernet modes still use AXI RAM; LiteDRAM DFI PHY and bank are behavioral; HBM controller/physical PHY, real-controller interoperability and joint Ethernet/PCIe-to-real-controller interoperability remain separate |
 | Chip boot `soc_top` | `make dv-chip`: real CPUs cold-boot and coordinate INIT/RUN/CHECK; `chip-cpu-dma` runs compiled C on PicoRV32 and validates SRAM/DDR/HBM roundtrips through iDMA ([CI 41933332567](https://github.com/r987r/xezim-hello-world/actions/runs/41933332567)) | CPU ISR, mixed-engine concurrent firmware and physical controller/PHY integration remain pending |
 
 See [super-NoC verification](supernoc-verification.md) for the exact traffic
@@ -30,17 +30,25 @@ CPU C-DMA execution is verified, including the opt-in LiteDRAM controller with b
 ## DDR-B integration signoff status (November 6, 2026)
 
 [DDR-B PR #74](https://github.com/r987r/xezim-hello-world/pull/74)
-has a passing earlier CPU/iDMA-to-real LiteDRAM controller test,
-[CI 42217902632](https://github.com/r987r/xezim-hello-world/actions/runs/42217902632).
-The **post-CHECK routed negative** (read/write DECERR beyond the 32-MiB
-model, no controller request forwarding and unchanged valid bytes) has
-been implemented but **must pass new exact-head CI before issue #40 closes**.
-The DDR integration remains opt-in; normal generated SoC memory models and
-single canonical topology are unchanged. Newer main PR #85 adds automatic
-regression discovery and deeper IP RTL drilldown; DDR integration must
-preserve those shared publication/viewer features. Exact-head full-chip
-DDR, boot, PCIe and fabric verification are separate release gates.
-No electrical PHY or cross-protocol-to-real-controller signoff is implied.
+now has an **exact-head passing real-controller and routed negative test**
+at `d65147b`: [CI #42234769827](https://github.com/r987r/xezim-hello-world/actions/runs/42234769827).
+This includes real compiled CPU0/PULP iDMA SRAM→DDR→SRAM and
+controller AXI/behavioral DFI plus required post-CHECK routed
+`BRESP/RRESP=DECERR` for an off-model address, no controller AW/AR
+forwarding and nonalias readback. The opt-in DDR source does not
+replace default modeled DDR/HBM, and neither run models a physical PHY.
+
+The [common boot workflow](https://github.com/r987r/xezim-hello-world/actions/runs/42234770010)
+logged PASS for CPU C-DMA, dual-engine DMA, cold boot, named negative
+and Xezim compile, then reached its 45-minute job timeout during
+post-run reporting; GitHub records **cancelled**, not success.
+The job budget is being raised to 65 minutes and a final-head
+green run is still required. [PCIe integration](https://github.com/r987r/xezim-hello-world/actions/runs/42234769914),
+FlooNoC, iDMA, Ethernet topology, DDR foundation, memory contracts,
+generation and lint passed on `d65147b`. The latest main test-discovery,
+RTL drilldown and published run-browser changes are preserved in the
+next branch reconciliation. Real Ethernet/PCIe packets to LiteDRAM
+and electrical PHY/timing remain separate projects.
 
 ## Independent global NoC concurrency regression
 

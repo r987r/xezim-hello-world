@@ -1,10 +1,183 @@
-<div class="eyebrow">Actual GitHub Actions artifacts</div><h1>Test runs and traffic</h1><p class="lede">Open a test to inspect its result, build/run logs and filelist. Reported scopes offer a unified protocol timeline for AXI and future VIPs, with filterable observations and original protocol-specific evidence.</p>
-<div class="notice">PASS means the regression's acceptance rule passed. For an expected-failure case, that includes observing its exact required failure. A compiler probe is structural evidence; it does not establish working AXI traffic.</div>
-<div class="filters"><label>Search<input id="search" type="search" placeholder="Target, commit or workflow"></label><label>Outcome<select id="outcome"><option value="">All outcomes</option><option value="pass">PASS</option><option value="fail">FAIL</option></select></label><label>Evidence<select id="kind"><option value="">All scopes</option><option value="axi">AXI reports</option><option value="protocol">Protocol reports</option><option value="negative">Expected-failure checks</option></select></label><label>History<select id="history"><option value="latest">Latest recorded per target</option><option value="all">All retained runs</option></select></label><span id="count" class="muted" aria-live="polite"></span></div>
-<div class="scroll"><table><thead><tr><th>Test target</th><th>Acceptance</th><th>Scope / engine</th><th>Traffic observations</th><th>Tested commit</th><th>Workflow / time (UTC)</th></tr></thead><tbody id="results"></tbody></table></div>
-<h2>Workflow history</h2><p class="muted">A workflow may fail before it produces a per-target result. Those runs remain visible here. Artifacts are collected from main and GitHub-verified merged PRs into main; unmerged branches are excluded. Up to four recent runs per configured workflow are retained.</p><ul id="workflow-history" class="list"></ul><ul id="notes" class="muted"></ul>
-<h2>Configured test catalog</h2><p class="muted">Configuration describes what can be run; only recorded results above are evidence of execution.</p><div class="scroll"><table><thead><tr><th>Target</th><th>Engine</th><th>Top / source scope</th><th>Acceptance rule</th></tr></thead><tbody id="catalog"></tbody></table></div>
-<script type="application/json" id="site-data">__SITE_DATA__</script><script>
-const D=JSON.parse(document.getElementById('site-data').textContent);function el(tag,text,cls){const n=document.createElement(tag);n.textContent=text;if(cls)n.className=cls;return n}function link(text,href){const a=el('a',text);a.href=href;return a}function td(tr,...items){const c=el('td','');for(const v of items)c.append(typeof v==='string'?document.createTextNode(v):v);tr.append(c)}function render(){const out=document.getElementById('results');out.replaceChildren();const seen=new Set;let count=0;for(const e of D.entries){if(document.getElementById('history').value==='latest'&&seen.has(e.target))continue;seen.add(e.target);const q=document.getElementById('search').value.toLowerCase();if(![e.target,e.workflow,e.source_sha,e.engine].join(' ').toLowerCase().includes(q))continue;const outcome=document.getElementById('outcome').value,kind=document.getElementById('kind').value;if(outcome&&(outcome==='pass')!==e.passed)continue;if(kind==='axi'&&!e.axi||kind==='protocol'&&!(e.protocols||[]).length||kind==='negative'&&!e.expected_failure)continue;const tr=el('tr','');td(tr,link(e.target,e.path));td(tr,el('span',e.passed?'PASS':'FAIL',e.passed?'good':'bad'),el('div',e.expected_failure?'Required negative check':'Positive / compile gate','muted'));td(tr,e.engine);td(tr,(e.protocols||[]).length?String(e.protocol_observations)+' '+e.protocols.join(', ')+' observations':e.axi?String(e.observations)+' observations':'No protocol collector',el('div',e.axi?(e.annotations?e.expected_errors+' declared errors · '+e.undeclared_errors+' undeclared':'Historical capture: intent not recorded'):(e.protocols||[]).length?'Generic protocol events': 'Result, plan, filelist and logs','muted'));td(tr,link(e.source_sha.slice(0,12),'https://github.com/'+D.repository+'/commit/'+e.source_sha));td(tr,link(e.workflow+' #'+e.run_id,e.workflow_url),el('div',e.recorded_at,'muted'));out.append(tr);count++}if(!count){const tr=el('tr','');const c=el('td','No recorded test evidence matches this view.','empty');c.colSpan=6;tr.append(c);out.append(tr)}document.getElementById('count').textContent=count+' results'}for(const id of['search','outcome','kind','history'])document.getElementById(id).addEventListener('input',render);render();for(const r of D.runs){const li=el('li','');li.append(link(r.label+' #'+r.id,r.html_url),' · '+(r.conclusion||r.status)+' · '+r.head_sha.slice(0,12)+' · '+r.created_at+(r.merged_pr?' · merged PR #'+r.merged_pr+(r.tested_sha!==r.head_sha?' · tested merge '+r.tested_sha.slice(0,12):''):''));
-document.getElementById('workflow-history').append(li)}for(const n of D.notes)document.getElementById('notes').append(el('li',n));for(const [name,t]of Object.entries(D.tests)){const tr=el('tr','');td(tr,name);td(tr,t.engine);td(tr,t.top||t.sources||'Generated scope');td(tr,t.expect_failure?'Required failure: '+t.expect_failure:t.pass||'Runner acceptance / diagnostics');document.getElementById('catalog').append(tr)}
+<div class="eyebrow">Source-verified regression evidence</div>
+<h1>Test runs and traffic</h1>
+<p class="lede">All configured tests and discovered CI test workflows appear here automatically. Select a suite to see recorded results, actual workflow status, and which test targets have not yet published evidence.</p>
+<div class="notice">A recorded PASS means the target's acceptance rule passed at its tested commit. A successful CI workflow without a target result is shown only as CI status. It is not proof that every configured test ran.</div>
+
+<h2>Suites and evidence coverage</h2>
+<p class="muted">Counts distinguish configured targets, targets with a result artifact, and workflow executions. New tests are discovered from the regression YAML and CI without editing this page.</p>
+<div id="suite-summary" class="grid" aria-label="Filter tests by suite"></div>
+
+<h2>Recorded test results</h2>
+<div class="filters">
+  <label>Suite<select id="family"><option value="">All suites</option></select></label>
+  <label>Search<input id="search" type="search" placeholder="Target, commit, workflow or protocol"></label>
+  <label>Outcome<select id="outcome"><option value="">All outcomes</option><option value="pass">PASS</option><option value="fail">FAIL</option></select></label>
+  <label>Evidence<select id="kind"><option value="">All scopes</option><option value="axi">AXI reports</option><option value="protocol">Protocol reports</option><option value="negative">Expected-failure checks</option></select></label>
+  <label>History<select id="history"><option value="latest">Latest per test / workflow</option><option value="all">All retained runs</option></select></label>
+  <span id="count" class="muted" aria-live="polite"></span>
+</div>
+<div class="scroll"><table><thead><tr><th>Test target</th><th>Suite</th><th>Acceptance</th><th>Scope / engine</th><th>Traffic observations</th><th>Tested commit</th><th>Workflow / time (UTC)</th></tr></thead><tbody id="results"></tbody></table></div>
+
+<h2>Workflow history</h2>
+<p class="muted">Includes stand-alone test workflows with no canonical per-target report. Only main and exact GitHub-verified merged PR runs are shown. CI-only success is not a per-test PASS.</p>
+<ul id="workflow-history" class="list"></ul>
+<ul id="notes" class="muted"></ul>
+
+<h2>Configured test catalog</h2>
+<p class="muted">These targets are automatically read from config/regression.yaml. Missing evidence is labeled "No recorded result", not FAIL.</p>
+<div class="scroll"><table><thead><tr><th>Target</th><th>Suite</th><th>Recorded result</th><th>Engine</th><th>Top / source scope</th><th>Acceptance rule</th></tr></thead><tbody id="catalog"></tbody></table></div>
+
+<script type="application/json" id="site-data">__SITE_DATA__</script>
+<script>
+(() => {
+"use strict";
+const D=JSON.parse(document.getElementById("site-data").textContent);
+const byId=id=>document.getElementById(id);
+const text=(tag,value,cls)=>{
+  const n=document.createElement(tag);
+  n.textContent=String(value);
+  if(cls)n.className=cls;
+  return n;
+};
+const link=(name,url)=>{
+  const a=text("a",name);a.href=url;return a;
+};
+const td=(row,...items)=>{
+  const c=document.createElement("td");
+  for(const v of items)c.append(typeof v==="string"?document.createTextNode(v):v);
+  row.append(c);
+};
+const suite=(target,workflow)=>{
+  const s=(String(target||"")+" "+String(workflow||"")).toLowerCase();
+  if(/pcie|pci-express/.test(s))return "PCIe";
+  if(/ethernet|gmii|\bmac\b/.test(s))return "Ethernet";
+  if(/ddr|hbm|litedram|dfi/.test(s))return "DDR / HBM";
+  if(/noc|floogen|floonoc|mesh/.test(s))return "NoC";
+  if(/dma|cpu|boot|serv|pico/.test(s))return "CPU / DMA";
+  if(/sram|memory/.test(s))return "Memory";
+  return "Other";
+};
+const priority=["PCIe","Ethernet","DDR / HBM","CPU / DMA","NoC","Memory","Other"];
+const groups=[...new Set([
+  ...Object.keys(D.tests).map(n=>suite(n)),
+  ...D.entries.map(e=>suite(e.target,e.workflow)),
+  ...D.runs.map(r=>suite("",r.label))
+])].sort((a,b)=>priority.indexOf(a)-priority.indexOf(b));
+const filter=byId("family");
+for(const name of groups){
+  const o=document.createElement("option");o.value=name;o.textContent=name;filter.append(o);
+}
+const latestTarget=new Map();
+for(const e of D.entries){
+  if(!latestTarget.has(e.target))latestTarget.set(e.target,e);
+}
+function summary(){
+  const host=byId("suite-summary");host.replaceChildren();
+  const selected=filter.value;
+  for(const name of groups){
+    const targetCount=Object.keys(D.tests).filter(n=>suite(n)===name).length;
+    const recorded=new Set(D.entries.filter(e=>suite(e.target,e.workflow)===name).map(e=>e.target)).size;
+    const workflowCount=D.runs.filter(r=>suite("",r.label)===name).length;
+    const btn=document.createElement("button");
+    btn.type="button";btn.className="card";
+    btn.style.textAlign="left";btn.style.width="100%";
+    btn.style.cursor="pointer";
+    btn.setAttribute("aria-pressed",String(selected===name));
+    btn.style.borderColor=selected===name?"var(--accent)":"var(--line)";
+    btn.append(text("strong",name));
+    const details=text("div",targetCount+" configured · "+recorded+" recorded · "+workflowCount+" CI runs","muted");
+    details.style.marginTop="8px";btn.append(details);
+    btn.addEventListener("click",()=>{
+      filter.value=filter.value===name?"":name;render();
+    });
+    host.append(btn);
+  }
+}
+function matchesQuery(parts,q){
+  return !q||parts.map(x=>String(x||"")).join(" ").toLowerCase().includes(q);
+}
+function render(){
+  const fam=filter.value,q=byId("search").value.trim().toLowerCase();
+  const outcome=byId("outcome").value,kind=byId("kind").value;
+  const latest=byId("history").value==="latest";
+  summary();
+  const results=byId("results");results.replaceChildren();
+  const seen=new Set();let count=0;
+  for(const e of D.entries){
+    if(fam&&suite(e.target,e.workflow)!==fam)continue;
+    if(!matchesQuery([e.target,e.workflow,e.source_sha,e.engine,(e.protocols||[]).join(" ")],q))continue;
+    if(outcome&&(outcome==="pass")!==e.passed)continue;
+    if(kind==="axi"&&!e.axi)continue;
+    if(kind==="protocol"&&!(e.protocols||[]).length)continue;
+    if(kind==="negative"&&!e.expected_failure)continue;
+    // The same target can run in multiple CI workflows. Never hide a PCIe
+    // host scope just because a normal CPU/DMA workflow used that name.
+    const key=e.target+"|"+e.workflow;
+    if(latest&&seen.has(key))continue;
+    seen.add(key);
+    const tr=document.createElement("tr");
+    td(tr,link(e.target,e.path));
+    td(tr,suite(e.target,e.workflow));
+    td(tr,text("span",e.passed?"PASS":"FAIL",e.passed?"good":"bad"),
+      text("div",e.expected_failure?"Required negative check":"Positive / compile gate","muted"));
+    td(tr,e.engine);
+    const protocols=e.protocols||[];
+    td(tr,protocols.length?
+      String(e.protocol_observations)+" "+protocols.join(", ")+" observations":
+      e.axi?String(e.observations)+" AXI observations":"No protocol collector",
+      text("div",e.axi?(e.annotations?
+        e.expected_errors+" declared errors · "+e.undeclared_errors+" undeclared":
+        "Historical capture: intent not recorded"):
+        protocols.length?"Protocol event capture":"Result, logs and filelists","muted"));
+    td(tr,link(e.source_sha.slice(0,12),"https://github.com/"+D.repository+"/commit/"+e.source_sha));
+    td(tr,link(e.workflow+" #"+e.run_id,e.workflow_url),text("div",e.recorded_at,"muted"));
+    results.append(tr);count++;
+  }
+  if(!count){
+    const tr=document.createElement("tr");
+    const cell=text("td","No recorded test evidence matches these filters. Check the configured catalog and workflow history below.","empty");
+    cell.colSpan=7;tr.append(cell);results.append(tr);
+  }
+  byId("count").textContent=count+" recorded results shown";
+
+  const history=byId("workflow-history");history.replaceChildren();
+  let runsShown=0;
+  for(const r of D.runs){
+    if(fam&&suite("",r.label)!==fam)continue;
+    if(!matchesQuery([r.label,r.head_sha,r.conclusion,r.status],q))continue;
+    const li=document.createElement("li");
+    li.append(link(r.label+" #"+r.id,r.html_url));
+    li.append(document.createTextNode(" · "+(r.conclusion||r.status)+
+      " · "+r.head_sha.slice(0,12)+" · "+r.created_at+
+      (r.merged_pr?" · merged PR #"+r.merged_pr:"")));
+    history.append(li);runsShown++;
+  }
+  if(!runsShown)history.append(text("li","No workflow runs match this suite/search.","empty"));
+
+  const problems=byId("notes");problems.replaceChildren();
+  for(const note of D.notes){
+    if(!fam&&q&&!note.toLowerCase().includes(q))continue;
+    // Keep artifact failures visible even when a suite filter is selected,
+    // since the note may refer to a rejected PCIe/Ethernet artifact by run ID.
+    problems.append(text("li",note));
+  }
+  const catalog=byId("catalog");catalog.replaceChildren();
+  for(const [name,t] of Object.entries(D.tests)){
+    if(fam&&suite(name)!==fam)continue;
+    if(!matchesQuery([name,t.engine,t.top,t.sources,t.pass],q))continue;
+    const tr=document.createElement("tr"),e=latestTarget.get(name);
+    td(tr,name);td(tr,suite(name));
+    if(e)td(tr,link(e.passed?"PASS · run #"+e.run_id:"FAIL · run #"+e.run_id,e.path));
+    else td(tr,text("span","No recorded result","muted"));
+    td(tr,t.engine);
+    td(tr,t.top||t.sources||"Generated scope");
+    td(tr,t.expect_failure?"Required failure: "+t.expect_failure:t.pass||"Runner acceptance / diagnostics");
+    catalog.append(tr);
+  }
+}
+for(const id of ["family","search","outcome","kind","history"]){
+  byId(id).addEventListener(id==="search"?"input":"change",render);
+}
+render();
+})();
 </script>

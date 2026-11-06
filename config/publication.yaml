@@ -1,7 +1,9 @@
 schema_version: 1
 title: SoC verification hub
 history_per_workflow: 4
-max_archive_mib: 50
+max_archive_mib: 150
 max_expanded_mib: 250
 # Regression producers are discovered from checked-in Actions workflows.
 # No manual workflow or protocol allowlist is maintained.
+# Large legacy PCIe ZIPs are admitted only for selective, size-checked
+# extraction of canonical result/trace files; compiler outputs stay excluded.

@@ -305,6 +305,62 @@ class PublicationTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'provenance'):
                 site.evidence_index(root/'evidence',root/'out','r987r/xezim-hello-world')
 
+    def test_archive_selective_evidence_retains_pcie_result_without_build_products(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            buf=io.BytesIO()
+            with zipfile.ZipFile(buf,"w",compression=zipfile.ZIP_DEFLATED) as archive:
+                archive.writestr("pcie0/full_chip_build/huge.bin","X"*2000000)
+                archive.writestr("regression/chip-pcie-host/result.json",
+                                 '{"target":"chip-pcie-host","passed":true}')
+                archive.writestr("regression/chip-pcie-host/plan.json",
+                                 '{"engine":"cocotb-verilator"}')
+                archive.writestr("regression/chip-pcie-host/protocol-transactions.json",
+                                 '{"schema_version":1,"run":{},"records":[]}')
+                archive.writestr("regression/chip-pcie-host/axi-transactions.json",
+                                 '{"schema_version":2,"run":{}}')
+                archive.writestr("regression/chip-pcie-host/simulation.log","observed link")
+                archive.writestr("regression/chip-pcie-host/report.html",
+                                 "<script>untrusted()</script>")
+            payload=buf.getvalue()
+            cfg={**CONFIG,"max_expanded_mib":1}
+            digest="sha256:"+hashlib.sha256(payload).hexdigest()
+            site.extract_archive(payload,Path(tmp),cfg,digest,evidence_only=True)
+            folder=Path(tmp)/"regression/chip-pcie-host"
+            self.assertEqual(json.loads((folder/"result.json").read_text())["target"],
+                             "chip-pcie-host")
+            self.assertTrue((folder/"protocol-transactions.json").is_file())
+            self.assertTrue((folder/"axi-transactions.json").is_file())
+            self.assertTrue((folder/"simulation.log").is_file())
+            self.assertFalse((folder/"report.html").exists())
+            self.assertFalse((Path(tmp)/"pcie0/full_chip_build/huge.bin").exists())
+
+    def test_selective_evidence_rejects_oversized_selected_file_and_bad_zip(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            buf=io.BytesIO()
+            with zipfile.ZipFile(buf,"w") as archive:
+                archive.writestr("regression/chip-pcie-host/axi-transactions.json",
+                                 "Y"*(2*1024*1024))
+            with self.assertRaisesRegex(ValueError,"expanded CI archive"):
+                site.extract_archive(buf.getvalue(),Path(tmp),
+                                     {**CONFIG,"max_expanded_mib":1},evidence_only=True)
+            buf=io.BytesIO()
+            with zipfile.ZipFile(buf,"w") as archive:
+                archive.writestr("../pcie0/full_chip_build/not-evidence.o","X")
+            with self.assertRaisesRegex(ValueError,"unsafe"):
+                site.extract_archive(buf.getvalue(),Path(tmp),
+                                     CONFIG,evidence_only=True)
+
+    def test_pcie_compact_ci_artifact_and_suite_navigation_present(self):
+        workflow=(ROOT/".github/workflows/pcie0-integrated.yml").read_text()
+        self.assertIn("path: .tools/regression/chip-pcie-host/",workflow)
+        self.assertNotIn("            .tools/pcie0/full_chip_build/",workflow)
+        self.assertGreaterEqual(CONFIG["max_archive_mib"],130)
+        site_html=(ROOT/"tools/templates/site_runs.html").read_text()
+        self.assertIn('id="suite-summary"',site_html)
+        self.assertIn('id="family"',site_html)
+        self.assertIn('No recorded result',site_html)
+        self.assertIn('e.target+"|"+e.workflow',site_html)
+
     def test_archive_digest_and_traversal_are_checked(self):
         for name in ('../escape','/absolute','dir/../../escape','dir\\escape'):
             with self.subTest(name=name),tempfile.TemporaryDirectory() as tmp:

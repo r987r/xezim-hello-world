@@ -138,8 +138,16 @@ Wishbone/DFII initialization path, and holds CPU0 in reset until real
 DDR init completes. The same compiled CPU0 C/iDMA INIT/RUN/CHECK software
 copies SRAM→DDR→SRAM and verifies byte contents. The real-controller
 [CI #42217902632](https://github.com/r987r/xezim-hello-world/actions/runs/42217902632) passed with DFI/model-bank and
-AXI completion evidence. This is simulation-controller integration,
-**not** a physical DDR PHY or a combined Ethernet/PCIe DDR test.
+AXI completion evidence. The follow-up [source-matched DDR-B run #42234769827](https://github.com/r987r/xezim-hello-world/actions/runs/42234769827)
+also passed routed post-CHECK DDR read/write DECERR with no real
+controller forwarding and unchanged in-range data. This is simulation-controller
+integration, **not** a physical DDR PHY or a combined Ethernet/PCIe DDR test.
+
+The [common boot CI #42234770010](https://github.com/r987r/xezim-hello-world/actions/runs/42234770010)
+logged PASS for all five `dv-chip` targets (CPU-DMA, dual DMA,
+boot, boot-negative, Xezim structural compile) but was marked cancelled
+at its previous 45-minute job limit before artifact finalization.
+The workflow has a 65-minute budget for a completed exact-head rerun.
 
 ## Commands and acceptance
 
