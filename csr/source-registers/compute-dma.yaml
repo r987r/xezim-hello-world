@@ -1,0 +1,11 @@
+schema_version: 1
+# Future compute subsystems with <name>.dma inherit this source automatically.
+subsystem_type: compute
+aperture_suffix: dma
+header: sw/dma/dma.h
+register_macro_prefix: SOC_DMA_REG_
+rtl: rtl/adapters/soc_dma_regs.sv
+rtl_register_source: comment_table
+field_macro_groups:
+  COMMAND: SOC_DMA_CMD_
+  STATUS: SOC_DMA_STATUS_
