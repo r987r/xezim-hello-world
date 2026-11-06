@@ -4,7 +4,7 @@
 
 **Ethernet0 standalone functional MVP is complete at tested RTL SHA `2ae83f279f96ced2f3393dede9e34f3d174e26f5`.** [Full exact-head Ethernet CI 42162107273](https://github.com/r987r/xezim-hello-world/actions/runs/42162107273) passed all four jobs: real PicoRV32 C program using queue Config NoC CSR and SRAM descriptors/CQ/IRQ; actual GMII RX/TX; generated Data/Config FlooNoCs to SRAM and modeled DDR; and six-source upstream PULP AXI mux elaboration. Real CPU0 owns its AXI ports in the CPU acceptance test; no CPU0 BFM is substituted.
 
-**Closure criterion met:** the existing compiled RV32I C-hook cold-boot and shared INIT/RUN/CHECK executed with real CPU0, drove queue/policy/descriptor CSRs through Config NoC and SRAM through Data NoC, observed GMII RX and TX, checked 85-byte RX SRAM bytes and both B-gated 32-byte CQ records/producer/consumer/IRQ acknowledgment. The testbench supplies/sinks GMII only; a separate CPU0 AXI BFM is not used. Retain `chip-ethernet-cpu`, `chip-ethernet` and the focused RX/TX regressions for subsequent changes. This is ready to merge/close #64 subject to GitHub's merge gate.
+**Closure criterion met:** the existing compiled RV32I C-hook cold-boot and shared INIT/RUN/CHECK executed with real CPU0, drove queue/policy/descriptor CSRs through Config NoC and SRAM through Data NoC, observed GMII RX and TX, checked 85-byte RX SRAM bytes and both B-gated 32-byte CQ records/producer/consumer/IRQ acknowledgment. The testbench supplies/sinks GMII only; a separate CPU0 AXI BFM is not used. Retain `chip-ethernet-cpu`, `chip-ethernet` and the focused RX/TX regressions for subsequent changes. This was merged in PR #73 and issue #64 is closed for the scoped Ethernet MVP.
 
 **Not required to close #64:** PCIe Root Complex visibility of Ethernet data, five combined protocol StepRecorder steps, endpoint-initiated PCIe DMA, real DDR controller/PHY, arbitrary outstanding-ID stress, saturation/performance or full network-stack features. These are separately tracked under [multiprotocol epic #34](https://github.com/r987r/xezim-hello-world/issues/34) (and #40/#75/#76/#78 where appropriate).
 
@@ -17,7 +17,7 @@
 - **Source truth:** `ethernet_mode=True` generates live optional RTL and manifests; default canonical generated RTL and diagram correctly continue to say Ethernet packet/queue attachments are *reserved*. Generator variant unit tests and `make check-generated` passed. Do not relabel default topology as a measured variant.
 - **NoC bug resolved on this base:** [PR #78](https://github.com/r987r/xezim-hello-world/pull/78) merged into `main` as `b91e3d3` and into #73 as `ec236eb`. Its positive/corruption-negative SuperNoC regressions passed. Historical [#75](https://github.com/r987r/xezim-hello-world/issues/75) is tracked separately; its older failure logs must not be mistaken for a current Ethernet failure. [Exact-head Ethernet CI](https://github.com/r987r/xezim-hello-world/actions/runs/42162107273) is green; physical PHY and stress/performance remain unqualified.
 
-**Decision:** standalone Ethernet MVP passes its agreed acceptance gate. Merge #73 and close #64, then launch the PCIe-host/DDR/CPU/iDMA combined five-stage test owned by #34; do not impose that combined test on #64.
+**Decision:** standalone Ethernet MVP passes its agreed acceptance gate; PR #73 is merged and #64 is closed. The PCIe-host/DDR/CPU/iDMA combined five-stage test remains owned by #34, not #64.
 
 
 ## Ethernet #64 remaining acceptance checklist
