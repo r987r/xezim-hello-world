@@ -365,5 +365,6 @@ suites:
   chip: [chip-cpu-dma, chip-dma, chip-boot, chip-boot-negative, chip-xezim-compile]
   # Every declared test is covered. Structural Xezim probes stay distinct
   # from the Verilator traffic gate; make test requires both toolchains.
+  csr-rtl: [chip-peakrdl-reset]
   ddr-real: [chip-ddr4-real]
   full: [xezim, noc, compatibility, diagnostics, dma, chip, chip-pcie-host, chip-ethernet, chip-ethernet-cpu]
