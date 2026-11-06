@@ -84,6 +84,28 @@ class SourceCsrTests(unittest.TestCase):
             self.assertEqual(len(region["source_registers"]), 4)
             self.assertEqual(coverage["unacknowledged"], [])
 
+    def test_new_ethernet_inherits_queue_source(self):
+        for model, cfg in self._extend("ethernet1", "peripheral",
+                                       ip="ethernet_queue_mac"):
+            report = attach_sources(model, config_path=cfg)
+            region = next(x for x in model["regions"] if x["name"] == "ethernet1.ctrl")
+            self.assertGreaterEqual(len(region["source_registers"]), 25)
+            self.assertEqual(region["source_status"],
+                             "source_only_attachment_not_qualified")
+            self.assertFalse(report["unacknowledged"])
+
+    def test_registered_subsystem_without_csr_aperture_fails(self):
+        config = yaml.safe_load((ROOT / "config/soc.yaml").read_text())
+        config["subsystems"].append({"name": "compute2", "type": "compute"})
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "soc.yaml"
+            path.write_text(yaml.safe_dump(config))
+            model = address_map.build()
+            model["config_sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
+            with self.assertRaisesRegex(SourceCatalogError,
+                                        "lacks aperture: compute2.dma"):
+                attach_sources(model, config_path=path)
+
     def test_new_unregistered_subsystem_fails_coverage_gate(self):
         for model, cfg in self._extend("mystery0", "peripheral", ip="new_unknown_ip"):
             with self.assertRaisesRegex(SourceCatalogError, "mystery0.ctrl"):
