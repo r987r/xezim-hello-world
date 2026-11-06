@@ -198,6 +198,40 @@ tests:
     timeout_s: 240
     pass: 'PASS fullchip:'
 
+  chip-ethernet-cpu:
+    # Real PicoRV32 executes compiled C via cold-boot ROM, no AXI CPU BFM.
+    # Its on-chip queue CSR/descriptor/CQ accesses share the physical NoCs
+    # with the pinned Ethernet RX/TX packet DMA and real GMII frontend.
+    engine: cocotb-verilator
+    sources: noc
+    bender_targets: [chip_boot, dma]
+    ip: [picorv32, serv, wb2axip, verilog_axi, pulp_idma]
+    firmware_mode: ethernet_cpu
+    top: full_chip_tb
+    module: dv.ethernet0.test_cpu_mvp
+    seed: 1
+    test_dir: .
+    build: .tools/chip-ethernet-cpu-obj
+    env: {MAKEFLAGS: '-j2', SOC_CPU_DMA_MODE: '1', SOC_ETHERNET_CPU_MODE: '1'}
+    timeout_s: 1800
+    pass: 'PASS ethernet-cpu: real CPU0 C queue and CQ'
+    report:
+      context: 'Real PicoRV32 cold boot and compiled C configure the physical Ethernet0 queues, memory-resident descriptors and CQ/IRQ through Config/Data NoCs. External GMII source/sink drives only the line. No CPU AXI BFM or memory backdoor.'
+      flow:
+        required_steps:
+          init: [cpu0.firmware_init]
+          run: [cpu0.firmware_run, cpu0.eth_queue, cpu0.eth_rx, cpu0.eth_tx]
+          check: [cpu0.firmware_check]
+        required_origins:
+          init: {cpu0.firmware_init: rtl_observed}
+          run: {cpu0.firmware_run: rtl_observed, cpu0.eth_queue: rtl_observed, cpu0.eth_rx: rtl_observed, cpu0.eth_tx: rtl_observed}
+          check: {cpu0.firmware_check: rtl_observed}
+        firmware_mmio:
+          monitor: compute0_local_data.cpu
+          address: '0x1000045c'
+          actors: {'1': cpu0}
+          steps: {'201': eth_queue, '202': eth_rx, '203': eth_tx}
+      axi: {scope: dut.u_noc, clock: clk, reset: rst_n, catalog: gen/supernoc/axi_monitors.json, actors: .tools/regression/chip-ethernet-cpu/variant/manifest.json, max_events: 500000, required_complete: true}
   chip-ethernet:
     # Real 1-GMII-MAC RX/TX queue/DMA/CQ via six-source PULP AXI mux,
     # Ethernet0 local/global data and separate configuration FlooNoCs.
@@ -269,4 +303,4 @@ suites:
   chip: [chip-cpu-dma, chip-dma, chip-boot, chip-boot-negative, chip-xezim-compile]
   # Every declared test is covered. Structural Xezim probes stay distinct
   # from the Verilator traffic gate; make test requires both toolchains.
-  full: [xezim, noc, compatibility, diagnostics, dma, chip, chip-pcie-host, chip-ethernet]
+  full: [xezim, noc, compatibility, diagnostics, dma, chip, chip-pcie-host, chip-ethernet, chip-ethernet-cpu]
