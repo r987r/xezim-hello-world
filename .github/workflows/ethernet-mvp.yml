@@ -142,3 +142,39 @@ jobs:
           name: ethernet-axi-mux-sources-${{ github.run_id }}
           path: .tools/regression/chip-boot/sources.f
           if-no-files-found: warn
+  chip-real-noc:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-bender
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned Ethernet/CPU/AXI/FlooNoC tools and VIPs
+        run: |
+          set -euo pipefail
+          python3 -m pip install -r requirements.txt
+          python3 -m pip install 'mako==1.3.10' 'hjson==3.1.0' 'peakrdl>=1.5.0' 'peakrdl-rawheader>=0.2.8' 'peakrdl-cheader>=1.1.0'
+          python3 -m pip install 'cocotb==1.9.2' 'cocotb-bus==0.2.1' 'cocotbext-axi==0.1.28' 'cocotbext-eth==0.1.28' 'cocotb-test==0.2.6'
+          python3 tools/ip_fetch.py floonoc pulp_idma verilog_axi picorv32 serv wb2axip
+          python3 -m pip install -e .tools/floonoc
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends verilator iverilog clang llvm lld
+      - name: Validate default and opt-in generated RTL contracts
+        run: |
+          set -euo pipefail
+          python3 -m unittest tests.test_ethernet_chip_variant -v
+          make check-generated
+      - name: Run real generated chip Ethernet GMII to SRAM and modeled DDR
+        run: python3 tools/regress.py chip-ethernet
+      - name: Preserve full-chip real AXI, GMII and CQ report provenance
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ethernet-chip-data-config-noc-${{ github.run_id }}
+          path: .tools/regression/chip-ethernet/
+          include-hidden-files: true
+          if-no-files-found: warn
