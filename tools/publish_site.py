@@ -759,6 +759,12 @@ def build(output,evidence,repository,sha,config):
     address_catalog=address_map.build(ROOT/'config/soc.yaml',
         csr_path=csr_path if csr_ready else None,
         variant='cold_boot' if csr_ready else 'architecture')
+    # All config IPs are discovered from SoC composition. C/RTL crosschecked
+    # register references are a distinct layer from actually qualified CSRs.
+    # Unknown future subsystem/CSR sources fail CI unless explicitly explained.
+    from csr_source_references import attach_sources
+    source_coverage=attach_sources(address_catalog)
+    dump(output/'data/csr-source-coverage.json',source_coverage)
     dump(output/'data/soc-address-map.json',address_catalog)
     ddr_views = ddr_csr_views(entries, output)
     dump(output/'data/ddr-csr-verified-runs.json', ddr_views)
