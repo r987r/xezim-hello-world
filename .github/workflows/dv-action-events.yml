@@ -1,0 +1,34 @@
+name: DV action-instance evidence v2
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'dv/common/action_events.py'
+      - 'tools/action_evidence.py'
+      - 'tests/test_action_events.py'
+      - 'docs/action-instance-evidence.md'
+      - '.github/workflows/dv-action-events.yml'
+      - 'dv/common/scenario.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dv-action-events-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  action-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install canonical scenario configuration parser
+        run: python3 -m pip install 'PyYAML==6.0.3'
+      - name: Fail-closed 1200-instance and evidence provenance tests
+        run: python3 -m unittest tests.test_action_events tests.test_scenario_plan tests.test_test_flow tests.test_axi_report tests.test_protocol_report -v
