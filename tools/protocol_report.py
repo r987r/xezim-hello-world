@@ -249,4 +249,64 @@ def render(data, path):
     # Never let the JSON embedded in HTML terminate the script tag.
     template=(Path(__file__).resolve().parent/"templates/protocol_report.html").read_text()
     value=json.dumps(data,separators=(",",":")).replace("<","\\u003c")
-    Path(path).write_text(template.replace("__PROTOCOL_DATA__",value))
+    html=template.replace("__PROTOCOL_DATA__",value)
+    latency=data.get("latency")
+    if latency:
+        from pcie_latency_report import render_panel
+        marker='<div class="card"><h2>Observed event/transaction completion timeline</h2>'
+        if marker not in html:
+            raise ValueError("protocol explorer timeline insertion point missing")
+        html=html.replace(marker, render_panel(latency)+marker,1)
+    Path(path).write_text(html)
+
+
+def finalize_run(directory, result):
+    """Reconcile AXI/protocol HTML with *final* INIT/RUN/CHECK and TLP checks.
+
+    Initial raw capture is emitted before the cross-language step reporter.
+    Rewrite just run metadata and re-render the SAME explorers after all
+    post-simulation gates. This avoids stale 'unmeasured' result metadata.
+    """
+    directory=Path(directory)
+    axi_path=directory/"axi-transactions.json"
+    protocol_path=directory/REPORT_NAME
+    issues=[]
+    axi=None
+    if axi_path.is_file():
+        from axi_report import render_report
+        axi=json.loads(axi_path.read_text())
+        axi["run"]["result"]=result
+        axi_path.write_text(json.dumps(axi,indent=2)+"\n")
+        render_report(axi,directory/"report.html")
+    if protocol_path.is_file():
+        data=json.loads(protocol_path.read_text())
+        data["run"]["result"]=result
+        if any(s["protocol"]=="pcie" for s in data.get("sources",[])):
+            try:
+                from pcie_latency_report import analyze
+                # The correlator reads captured payloads; never reconstructs
+                # or changes the upstream TLP or AXI monitor streams.
+                latency=analyze(directory)
+                if latency:
+                    data["latency"]=latency
+                    if latency["issues"]:
+                        issues.extend(latency["issues"])
+            except (ValueError,KeyError,TypeError) as exc:
+                issues.append("PCIe path correlation failed: "+str(exc))
+        if issues:
+            data["capture_complete"]=False
+            data["issues"]=list(dict.fromkeys(data.get("issues",[])+issues))
+        protocol_path.write_text(json.dumps(data,indent=2)+"\n")
+        render(data,directory/"protocols.html")
+    index=directory/"report.html"
+    if index.is_file():
+        html=index.read_text()
+        links=[]
+        if (directory/"protocols.html").is_file():
+            links.append('<p><a href="protocols.html">Unified AXI / PCIe / protocol explorer and latency</a></p>')
+        if (directory/"test-flow.html").is_file():
+            links.append('<p><a href="test-flow.html">INIT/RUN/CHECK step flow</a></p>')
+        if links:
+            html=html.replace("<main>","<main>"+"".join(links),1)
+            index.write_text(html)
+    return issues

@@ -32,7 +32,7 @@ def require_tool(name):
     return found
 
 
-def compile_firmware(cfg, directory: Path):
+def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False):
     directory.mkdir(parents=True, exist_ok=True)
     mapping = {r["name"]: int(r["base"], 0)
                for r in cfg["address_map"]["data"] + cfg["address_map"]["config"]}
@@ -60,6 +60,8 @@ def compile_firmware(cfg, directory: Path):
         "SOC_MODEL_BYTES": model_bytes,
         "SOC_MAILBOX": memory_plan.build_sram_layout(cfg, "compute0").mailbox.start,
     }
+    if pcie_host_mode:
+        macros["SOC_PCIE_SRAM"] = mapping["pcie0.sram"]
     linker = directory / "cpu_dma.ld"
     linker.write_text(
         "ENTRY(cpu_dma_run)\nSECTIONS {\n"
@@ -106,14 +108,18 @@ def compile_firmware(cfg, directory: Path):
                 defines=macros, flash_limit=flash_size)
 
 
-def prepare(cfg, noc_manifest, noc_root, output: Path):
+def prepare(cfg, noc_manifest, noc_root, output: Path, *, pcie_host_mode=False):
     from tools import full_chip_gen
-    fw = compile_firmware(cfg, output)
+    if pcie_host_mode:
+        from tools.pcie_chip import host_variant_config
+        cfg = host_variant_config(cfg)
+    fw = compile_firmware(cfg, output, pcie_host_mode=pcie_host_mode)
     image_prefix = output.relative_to(ROOT).as_posix()
     # Normal generated gen/chip outputs remain byte-for-byte unchanged.
     manifest = full_chip_gen.emit(cfg, noc_manifest, noc_root, output,
                                   cpu0_run_hook=fw["hook"],
-                                  image_prefix=image_prefix, cpu_dma_mode=True)
+                                  image_prefix=image_prefix, cpu_dma_mode=True,
+                                  pcie_host_mode=pcie_host_mode)
     image = output / "flash.hex"
     additional = [f"@{HOOK_OFFSET // 8:x}"]
     blob = fw["data"]
