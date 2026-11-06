@@ -276,10 +276,74 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
             '  logic [63:0] pcie_sram_addr, pcie_sram_data;',
             '  logic [7:0] pcie_sram_strb;',
         ]
+    if ethernet_mode:
+        eth = ethernet[0]
+        packet = all_ports[f"m_{eth['name']}_local_data_{eth['data_initiator']}"]
+        region = next(r for r in cfg['address_map']['data']
+                      if r['name']==eth['name']+'.sram')
+        base = int(region['base'],0)
+        bytes_available = cfg['boot']['simulation_sram_bytes']
+        if bytes_available < 0x4000:
+            raise ValueError('Ethernet needs at least 16 KiB of modeled SRAM')
+        ddr = next(r for r in cfg['address_map']['data']
+                   if r['name']=='memory0.ddr0')
+        ddr_base = int(ddr['base'],0)
+        model_bytes = 1 << cfg['verification']['memory']['model_address_bits']
+        if model_bytes > int(ddr['size'],0):
+            raise ValueError('modeled DDR backing exceeds configured DDR window')
+        lines += [
+            '  logic ethq_cfg_valid, ethq_cfg_write, ethq_cfg_ready, ethq_cfg_error;',
+            '  logic [7:0] ethq_cfg_addr;',
+            '  logic [31:0] ethq_cfg_wdata, ethq_cfg_rdata;',
+            '  logic [3:0] ethq_cfg_wstrb;',
+        ]
+        eth_ports = {
+            'logic_clk':'clk_i','logic_rst':'~rst_ni',
+            'gmii_rx_clk':'gmii_rx_clk','gmii_rx_rst':'gmii_rx_rst',
+            'gmii_tx_clk':'gmii_tx_clk','gmii_tx_rst':'gmii_tx_rst',
+            'gmii_rxd':'gmii_rxd','gmii_rx_dv':'gmii_rx_dv',
+            'gmii_rx_er':'gmii_rx_er','gmii_txd':'gmii_txd',
+            'gmii_tx_en':'gmii_tx_en','gmii_tx_er':'gmii_tx_er',
+            'irq_o':'eth_irq_o','frame_drop_o':'eth_drop_o',
+            'rx_error_bad_fcs_o':'eth_bad_fcs_o',
+            'tx_failed_o':'eth_tx_failed_o',
+            'cfg_valid':'ethq_cfg_valid','cfg_write':'ethq_cfg_write',
+            'cfg_addr':'ethq_cfg_addr','cfg_wdata':'ethq_cfg_wdata',
+            'cfg_wstrb':'ethq_cfg_wstrb','cfg_ready':'ethq_cfg_ready',
+            'cfg_rdata':'ethq_cfg_rdata','cfg_error':'ethq_cfg_error',
+        }
+        for channel, members in CHANNELS.items():
+            for member in [*members.values(), 'valid', 'ready']:
+                if member in ('qos','region'):
+                    continue
+                source = req(packet) if request_field(channel,member) else rsp(packet)
+                eth_ports[f'axi_{channel}{member}'] = field(source,channel,member)
+        eth_params = {
+            'RX_RING_BASE':f"64'h{base+0x1000:016x}",
+            'RX_RING_BYTES':"64'h200",
+            'TX_RING_BASE':f"64'h{base+0x1400:016x}",
+            'TX_RING_BYTES':"64'h200",
+            'RX_CQ_BASE':f"64'h{base+0x1200:016x}",
+            'TX_CQ_BASE':f"64'h{base+0x1600:016x}",
+            'CQ_WINDOW_BYTES':"64'h200",
+            'BUFFER_BASE':f"64'h{base+0x2000:016x}",
+            'BUFFER_BYTES':f"64'h{bytes_available-0x2000:x}",
+            'ALT_BUFFER_BASE':f"64'h{ddr_base:016x}",
+            'ALT_BUFFER_BYTES':f"64'h{model_bytes:x}",
+        }
+        lines += [module('ethernet0_axi_mvp','u_ethernet_mvp',
+                         eth_params,eth_ports)]
+        for ch in ('aw','ar'):
+            for member in ('qos','region','user'):
+                lines += [f"  assign {req(packet)}.{ch}.{member} = '0;"]
+        lines += [f"  assign {req(packet)}.aw.atop = '0;",
+                  f"  assign {req(packet)}.w.user = '0;"]
     for sub in (s for s in cfg["subsystems"] if s["type"] == "peripheral"):
         for plane, endpoint in (("data", sub["data_initiator"]),
                                 ("config", sub["config_initiator"])):
             if pcie_host_mode and sub is pcie[0] and plane == "data":
+                continue
+            if ethernet_mode and sub is ethernet[0] and plane == "data":
                 continue
             port = all_ports[f"m_{sub['name']}_local_{plane}_{endpoint}"]
             lines += [f"  assign {req(port)} = '0;"]
