@@ -34,7 +34,7 @@ These names must be present in the shared INIT/RUN/CHECK report. Every CHECK mus
 
 ## Integration with other tracks (not a claim of three-way completion)
 
-- [PCIe draft PR #60](https://github.com/r987r/xezim-hello-world/pull/60) has passed `chip-pcie-host` with real host TLP and CPU iDMA **staging through PCIe SRAM to modeled DDR**, with readback. Its separate `supernoc` stress/negative CI fails an upstream FlooNoC `NoBResponseIdQueue` assertion around 227.52 µs, and full integrated review is not complete. Do not merge or silently suppress this assertion.
+- [Merged PCIe PR #60](https://github.com/r987r/xezim-hello-world/pull/60) provides initial host TLP + CPU iDMA **staging through PCIe SRAM to modeled DDR**, with verified return data and 27 complete flow steps. Its independent generic SuperNoC stress/negative CI fails `NoBResponseIdQueue` around 227.52 µs; [issue #75](https://github.com/r987r/xezim-hello-world/issues/75) owns reproduction/repair. #41 closed for PCIe MVP; [#76](https://github.com/r987r/xezim-hello-world/issues/76) covers outbound DMA/PHY/stress. Do not suppress this assertion.
 - [DDR-B draft PR #74](https://github.com/r987r/xezim-hello-world/pull/74) has an independently checked AXI-to-Wishbone control target, **not** a full-chip real LiteDRAM Data/Config NoC attachment. The fast AXI RAM model is sufficient for initial Ethernet/PCIe communication; real controller qualification remains #40.
 - For initial combined functional integration, use the existing `memory0.ddr0` modeled window and PCIe BAR↔PCIe SRAM↔iDMA↔modeled DDR, never advertise direct host-visible DDR BAR or a PCIe link PHY. Follow the [multiprotocol integration gate](multiprotocol-integration-readiness.md).
 
