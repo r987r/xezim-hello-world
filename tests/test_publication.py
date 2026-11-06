@@ -50,6 +50,30 @@ class Links(HTMLParser):
 
 
 class PublicationTests(unittest.TestCase):
+    def test_ci_producer_discovery_includes_new_protocol_workflows(self):
+        workflows=site.discover_test_workflows(ROOT)
+        self.assertIn("ethernet-mvp.yml",workflows)
+        self.assertIn("ethernet-standalone.yml",workflows)
+        self.assertIn("pcie0-integrated.yml",workflows)
+        self.assertIn("full-chip.yml",workflows)
+        self.assertNotIn("pages.yml",workflows)
+        self.assertNotIn("publish-xezim.yml",workflows)
+        self.assertTrue(any("ethernet-chip-data-config" in a for a in workflows["ethernet-mvp.yml"]["artifacts"]))
+        self.assertTrue(any("pcie0-dedicated-noc" in a for a in workflows["pcie0-integrated.yml"]["artifacts"]))
+
+    def test_future_workflow_is_discovered_without_yaml_registration(self):
+        with tempfile.TemporaryDirectory() as temp:
+            directory=Path(temp)/".github/workflows"
+            directory.mkdir(parents=True)
+            (directory/"new-ip.yml").write_text(
+                "name: New protocol\njobs:\n  test:\n    steps:\n"
+                "      - uses: actions/upload-artifact@v4\n"
+                "        with:\n          name: custom-${{ github.run_id }}\n"
+                "          path: .tools/regression/chip-new-ip/\n")
+            result=site.discover_test_workflows(Path(temp))
+            self.assertIn("new-ip.yml",result)
+            self.assertEqual(result["new-ip.yml"]["label"],"New protocol")
+
     def test_complete_offline_site_links_are_relative_and_exist(self):
         with tempfile.TemporaryDirectory() as tmp:
             output=Path(tmp)/'site';dataset=site.build(output,Path(tmp)/'empty','r987r/xezim-hello-world',SHA,CONFIG)
