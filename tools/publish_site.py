@@ -463,39 +463,43 @@ def collect(client,config,destination):
 
 
 
-def pcie_link_catalog(protocol_data, *, preview_limit=16):
-    """Read actual accepted PCIe RTL TLP transactions; never infer link traffic.
+def protocol_link_catalog(protocol_data, *, preview_per_source=12):
+    """Build a bounded protocol-neutral index from verified monitor records.
 
-    The configured Root Complex is behavioral. These records represent the
-    bridge's accepted rx_req/tx_cpl TLP interfaces, not PHY/link-layer traffic.
+    Protocol-specific fields remain opaque data owned by the VIP adapter.
+    Bindings are source IDs, not inferred PHY wires or elaborated connectivity.
     """
-    records = [r for r in (protocol_data or {}).get('records', [])
-               if r.get('protocol') == 'pcie' and r.get('kind') == 'transaction'
-               and r.get('source') in ('pcie0.rx_req', 'pcie0.tx_cpl')]
-    if not records:
+    if not protocol_data:
         return None
-    counts = {}
-    for row in records:
-        operation = row.get('operation', 'other')
-        counts[operation] = counts.get(operation, 0) + 1
-    permitted = ('direction', 'requester_id', 'tag', 'address', 'length_dw',
-                 'payload_bytes', 'completion_status', 'byte_count',
-                 'matched_request_address', 'request_to_completion_ps',
-                 'header_hex', 'first_be', 'last_be')
-    preview = []
-    for row in sorted(records, key=lambda r: (r.get('start_ps') or 0,
-                                              r.get('end_ps') or 0))[:preview_limit]:
-        fields = row.get('fields') or {}
-        preview.append({
-            'source': row['source'], 'operation': row['operation'],
-            'id': row.get('id'), 'start_ps': row.get('start_ps'),
-            'end_ps': row.get('end_ps'), 'status': row.get('status'),
-            'fields': {key: fields[key] for key in permitted if key in fields}
+    sources = {item['id']: item for item in protocol_data.get('sources', [])
+               if isinstance(item, dict) and isinstance(item.get('id'), str)}
+    indexed = {}
+    for row in protocol_data.get('records', []):
+        source = row.get('source')
+        if source not in sources or row.get('kind') not in ('transaction', 'event'):
+            continue
+        group = indexed.setdefault(source, {
+            'source': source, 'protocol': sources[source]['protocol'],
+            'role': sources[source].get('role', 'unknown'),
+            'clock_domain': sources[source].get('clock_domain', 'unknown'),
+            'implementation': sources[source].get('implementation', 'unrecorded'),
+            'count': 0, 'operations': {}, 'preview': []
         })
-    return {'boundary': 'accepted RTL PCIe TLP (modeled Root Complex)',
-            'sources': ['pcie0.rx_req', 'pcie0.tx_cpl'],
-            'total': len(records), 'operations': counts, 'preview': preview,
-            'capture_complete': protocol_data.get('capture_complete') is True}
+        group['count'] += 1
+        operation = row.get('operation', 'unknown')
+        group['operations'][operation] = group['operations'].get(operation, 0) + 1
+        if len(group['preview']) < preview_per_source:
+            group['preview'].append({
+                'kind': row['kind'], 'operation': operation,
+                'id': row.get('id'), 'start_ps': row.get('start_ps'),
+                'end_ps': row.get('end_ps'), 'status': row.get('status'),
+                # Bounded rows only; preserve native, protocol-specific fields
+                # (PCIe tags/headers/bytes, Ethernet EtherType, APB regs,
+                # AXI5 transaction attributes) without parsing or inference.
+                'fields': row.get('fields', {})
+            })
+    return {'capture_complete': protocol_data.get('capture_complete') is True,
+            'sources': list(indexed.values())} if indexed else None
 
 
 def evidence_index(evidence,output,repository):
@@ -577,9 +581,9 @@ def evidence_index(evidence,output,repository):
                 if protocol_data.get('schema_version')!=1:
                     raise ValueError('unsupported protocol publication schema')
                 entry['source_sha']=protocol_sha
-                link_catalog = pcie_link_catalog(protocol_data)
+                link_catalog = protocol_link_catalog(protocol_data)
                 if link_catalog:
-                    entry['pcie_link'] = link_catalog
+                    entry['protocol_links'] = link_catalog
                 # Do not publish artifact-supplied HTML. Re-render the trusted
                 # JSON through the site source's audited escaping/textContent UI.
                 render_protocol_report(protocol_data, destination/'protocols.html')
@@ -767,21 +771,22 @@ def build(output,evidence,repository,sha,config):
             body = body.replace('__SIGNAL_DATA__', signal_data)
             parsed_data = json.dumps(parsed_rtl, separators=(',', ':')).replace('<','\\u003c')
             body = body.replace('__RTL_PARSE_DATA__', parsed_data)
-            # Bind the architectural PCIe TLP link only to verified CI run
-            # records.  This is a short index, not a fabricated live PHY link.
-            pcie_runs = [
+            # Every protocol monitor with verified evidence is discoverable:
+            # source ID, protocol and role come from the audited VIP capture,
+            # not manually registered workflow names or guessed hardware.
+            link_runs = [
                 {'run_id': e['run_id'], 'attempt': e['attempt'],
                  'target': e['target'], 'recorded_at': e['recorded_at'],
                  'source_sha': e['source_sha'], 'passed': e['passed'],
-                 'workflow': e['workflow'], 'report_path':
-                     e['path'].rsplit('/',1)[0] + '/protocols.html?protocol=pcie',
+                 'workflow': e['workflow'],
+                 'report_path': e['path'].rsplit('/',1)[0] + '/protocols.html',
                  'axi_report_path': e['path'],
                  'raw_path': e['path'].rsplit('/',1)[0] + '/protocol-transactions.json',
-                 'link': e['pcie_link']}
-                for e in entries if e.get('pcie_link')
+                 'links': e['protocol_links']}
+                for e in entries if e.get('protocol_links')
             ]
-            pcie_json=json.dumps(pcie_runs,separators=(',',':')).replace('<','\\u003c')
-            body=body.replace('__PCIE_LINK_DATA__',pcie_json)
+            protocol_links_json=json.dumps(link_runs,separators=(',',':')).replace('<','\\u003c')
+            body=body.replace('__PROTOCOL_LINK_DATA__',protocol_links_json)
             architecture_js = (ROOT/'tools/templates/site_arch_explorer.js').read_text()
             body = body.replace('__ARCH_JS__', architecture_js)
         if page=='address-map':
