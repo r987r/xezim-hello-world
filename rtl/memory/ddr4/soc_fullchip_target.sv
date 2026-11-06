@@ -35,6 +35,7 @@ module ddr_litedram_fullchip_target #(
   // Passive read-only evidence from the actual generated pinned DDR4 RTL.
   // Signal names are contract-checked by dfi_probe_contract.py at generation.
   logic [31:0] dfi_read_count, dfi_write_count, bank_storage_write_count;
+  logic [31:0] controller_axi_aw_count, controller_axi_ar_count, controller_axi_b_count, controller_axi_rlast_count;
   wire dfi_rd_en = u_controller.soc_ddrphy_dfi_p0_rddata_en |
                    u_controller.soc_ddrphy_dfi_p1_rddata_en |
                    u_controller.soc_ddrphy_dfi_p2_rddata_en |
@@ -65,10 +66,18 @@ module ddr_litedram_fullchip_target #(
       dfi_read_count <= '0;
       dfi_write_count <= '0;
       bank_storage_write_count <= '0;
+      controller_axi_aw_count <= '0;
+      controller_axi_ar_count <= '0;
+      controller_axi_b_count <= '0;
+      controller_axi_rlast_count <= '0;
     end else if (ddr_init_done_o && !ddr_init_error_o) begin
       if (dfi_rd_en) dfi_read_count <= dfi_read_count + 1'b1;
       if (dfi_wr_en) dfi_write_count <= dfi_write_count + 1'b1;
       if (bank_storage_we) bank_storage_write_count <= bank_storage_write_count + 1'b1;
+      if (m_awvalid && m_awready) controller_axi_aw_count <= controller_axi_aw_count + 1'b1;
+      if (m_arvalid && m_arready) controller_axi_ar_count <= controller_axi_ar_count + 1'b1;
+      if (m_bvalid && m_bready) controller_axi_b_count <= controller_axi_b_count + 1'b1;
+      if (m_rvalid && m_rready && m_rlast) controller_axi_rlast_count <= controller_axi_rlast_count + 1'b1;
     end
   end
   // Data crossbar targets have local AXI ID width 4; reject reconfiguration.
