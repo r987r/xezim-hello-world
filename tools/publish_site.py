@@ -302,6 +302,8 @@ def discover_test_workflows(root=ROOT):
     """
     producers={}
     for file in sorted((root/".github/workflows").glob("*.yml")):
+        if file.name in ("pages.yml", "publish-xezim.yml"):
+            continue  # Site publishing and simulator release are not test suites.
         workflow=yaml.safe_load(file.read_text()) or {}
         if not isinstance(workflow, dict):
             continue
