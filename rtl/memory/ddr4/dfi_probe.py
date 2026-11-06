@@ -152,7 +152,8 @@ async def observe_dfi(dut, observer: DFIProbe, axi_observer, period_ps: int,
     while True:
         await RisingEdge(dut.clk)
         await ReadOnly()
-        phases,banks=get_internal_pins(pins_dut or dut,
+        # Cocotb handles can be falsey even when valid; never use `or`.
+        phases,banks=get_internal_pins(pins_dut if pins_dut is not None else dut,
                                       fullchip_aliases=fullchip_aliases)
         observer.record(int(get_sim_time(units="ps")),phases,banks,
                         axi_observer.phase,period_ps)
