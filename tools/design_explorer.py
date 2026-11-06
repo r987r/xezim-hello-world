@@ -144,22 +144,35 @@ def catalog(root: Path = ROOT, *, verification_reports: dict[str, Path] | None =
                     raise ValueError(f"{name}: actors are not in generated topology: {sorted(missing)}")
                 actor_catalog_status = "loaded_checked_in" if not generated_runtime else "loaded_runtime_generated"
         monitors = []
+        monitor_catalog_status = "not_declared"
         if axi.get("catalog"):
-            data = read_json(safe_source(root, axi["catalog"]))
-            if not isinstance(data.get("monitors"), list):
-                raise ValueError(f"{name}: monitor catalog lacks monitors")
-            for monitor in data["monitors"]:
-                if any(endpoint in actors for endpoint in monitor.get("endpoints", [])):
-                    monitors.append({"id": monitor["id"], "role": monitor.get("role"),
-                                     "endpoints": monitor.get("endpoints", []),
-                                     "plane": monitor.get("plane"),
-                                     "data_width": monitor.get("data_width")})
+            candidate = (root / axi["catalog"]).resolve()
+            generated_runtime = (candidate.is_relative_to((root / ".tools/regression").resolve())
+                                 and candidate.is_relative_to(root.resolve()))
+            if not candidate.is_file() and generated_runtime and test.get("opt_in") is True:
+                # The DDR real-controller variant regenerates this catalog only
+                # while its selected simulation runs. Main Pages must not
+                # pretend it exists or require a slow DDR4 build.
+                monitor_catalog_status = "opt_in_runtime_generated_not_available"
+            else:
+                data = read_json(safe_source(root, axi["catalog"]))
+                if not isinstance(data.get("monitors"), list):
+                    raise ValueError(f"{name}: monitor catalog lacks monitors")
+                monitor_catalog_status = ("loaded_runtime_generated"
+                                          if generated_runtime else "loaded_checked_in")
+                for monitor in data["monitors"]:
+                    if any(endpoint in actors for endpoint in monitor.get("endpoints", [])):
+                        monitors.append({"id": monitor["id"], "role": monitor.get("role"),
+                                         "endpoints": monitor.get("endpoints", []),
+                                         "plane": monitor.get("plane"),
+                                         "data_width": monitor.get("data_width")})
         item = {"top": test.get("top"), "engine": test["engine"],
                 "test_module": test.get("module"), "test_dir": test.get("test_dir"),
                 "context": report.get("context", ""),
                 "actors": actors, "monitors": monitors,
                 "actor_catalog_path": actors_file,
                 "actor_catalog_status": actor_catalog_status,
+                "monitor_catalog_status": monitor_catalog_status,
                 "evidence": "declared_test_profile",
                 "verification_observability": ("declared_axi_monitors" if monitors else
                                                "no_axi_monitor_catalog")}
