@@ -221,6 +221,13 @@ function render(){
   const catalog=byId("catalog");catalog.replaceChildren();
   for(const [name,t] of Object.entries(D.tests)){
     if(fam&&suite(name)!==fam)continue;
+    const plannedProtocols=[
+      ...(t.report?.axi?["axi4"]:[]),
+      ...Object.values(t.report?.protocols?.sources||{}).map(s=>s.protocol).filter(Boolean)
+    ];
+    const recorded=latestTarget.get(name);
+    if(protocolFilter.value&&!plannedProtocols.includes(protocolFilter.value)&&
+       !(recorded?.protocols||[]).includes(protocolFilter.value))continue;
     if(!matchesQuery([name,t.engine,t.top,t.sources,t.pass],q))continue;
     const tr=document.createElement("tr"),e=latestTarget.get(name);
     td(tr,name);td(tr,suite(name));
