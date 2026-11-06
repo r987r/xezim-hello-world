@@ -33,8 +33,11 @@ fabric_parameters:
     # capacity without consuming a destination ID for atomic reservations.
     AtopSupport: false
     MaxAtomicTxns: 0
-    RRoBType: NormalRoB
-    BRoBType: NormalRoB
+    # Keep each initiator ID on one destination across the first split.
+    # Same AWID=1 local-SRAM error then global-DDR OKAY triggered orphan BID=0.
+    # Pinned upstream NoRoB stalls only same-ID cross-destination requests.
+    RRoBType: NoRoB
+    BRoBType: NoRoB
     RRoBSize: 8
     BRoBSize: 8
   local_config: &config_floo
@@ -65,7 +68,8 @@ fabric_parameters:
     # capacity without consuming a destination ID for atomic reservations.
     AtopSupport: false
     MaxAtomicTxns: 0
-    RRoBType: NormalRoB
+    # Remote read responses must also preserve per-ID destination ordering.
+    RRoBType: NoRoB
     # Mitigate observed response-ID underflow at inter-NoC boundary:
     # concurrent AWID=1 writes to Ethernet SRAM and Memory0 returned
     # completions out of order; a B arrived as ID=0 with no ID=0 AW pending.

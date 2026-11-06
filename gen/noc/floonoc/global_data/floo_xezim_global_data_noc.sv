@@ -42,7 +42,7 @@ module floo_xezim_global_data_noc
     c.MaxTxnsPerId = 9;
     c.BRoBType = NoRoB;
     c.BRoBSize = 8;
-    c.RRoBType = NormalRoB;
+    c.RRoBType = NoRoB;
     c.RRoBSize = 8;
     return c;
   endfunction

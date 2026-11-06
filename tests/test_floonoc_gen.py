@@ -107,21 +107,22 @@ class FlooNoCProfilesTest(unittest.TestCase):
         with self.assertRaisesRegex(floonoc_gen.NoCGenerationError, "ATOPs unsupported"):
             floonoc_gen.profiles(self.soc, knobs)
 
-    def test_global_data_b_responses_serialize_same_id_cross_dest(self):
-        # Native pinned floo_rob_wrapper.NoRoB uses per-ID destination
-        # counters; unrelated IDs may remain outstanding concurrently.
-        params = self.knobs["fabric_parameters"]["global_data"]
-        self.assertEqual(params["BRoBType"], "NoRoB")
-        self.assertEqual(params["RRoBType"], "NormalRoB")
-        self.assertGreaterEqual(params["MaxTxnsPerId"], params["MaxTxns"])
-        minimal = ("module global_data(input logic clk);\n"
-                   "floo_axi_chimney #(\n"
-                   "  .ChimneyCfg(set_ports(ChimneyDefaultCfg, 1'b0, 1'b1))\n"
-                   ") compute0_ni();\nendmodule\n")
-        generated, count = floonoc_gen.native_bindings(minimal, params)
-        self.assertEqual(count, 1)
-        self.assertIn("c.BRoBType = NoRoB;", generated)
-        self.assertIn("c.RRoBType = NormalRoB;", generated)
+    def test_data_noc_enforces_per_id_destination_order_at_every_split(self):
+        # At every Data-NoC source NI, protect both B and R response order.
+        # Distinct IDs/independent initiators are not globally serialized.
+        for name in ("local_data", "memory_local_data", "global_data"):
+            params = self.knobs["fabric_parameters"][name]
+            self.assertEqual(params["BRoBType"], "NoRoB", name)
+            self.assertEqual(params["RRoBType"], "NoRoB", name)
+            self.assertGreaterEqual(params["MaxTxnsPerId"], params["MaxTxns"])
+            minimal = ("module example(input logic clk);\n"
+                       "floo_axi_chimney #(\n"
+                       "  .ChimneyCfg(set_ports(ChimneyDefaultCfg, 1'b0, 1'b1))\n"
+                       ") source_ni();\nendmodule\n")
+            generated, count = floonoc_gen.native_bindings(minimal, params)
+            self.assertEqual(count, 1)
+            self.assertIn("c.BRoBType = NoRoB;", generated)
+            self.assertIn("c.RRoBType = NoRoB;", generated)
 
     def test_native_upstream_chimney_knobs_are_applied(self):
         # Simulates the exact anchor emitted by pinned upstream FlooGen.
@@ -141,7 +142,7 @@ class FlooNoCProfilesTest(unittest.TestCase):
         with self.assertRaisesRegex(floonoc_gen.NoCGenerationError, "anchor"):
             floonoc_gen.native_bindings("module empty; endmodule", params)
 
-    def test_target_only_ni_requires_no_rob_but_preserves_manager_rob(self):
+    def test_target_only_ni_requires_no_rob_and_preserves_manager_ordering(self):
         # This models both roles actually emitted by pinned FlooGen.
         # Upstream floo_axi_chimney NoMgrPortRobType asserts at time zero
         # if a target-only chimney is given NormalRoB.
@@ -158,10 +159,8 @@ class FlooNoCProfilesTest(unittest.TestCase):
         source, count = floonoc_gen.native_bindings(
             mini, self.knobs["fabric_parameters"]["memory_local_data"])
         self.assertEqual(count, 2)
-        self.assertIn("c.BRoBType = NormalRoB;", source)
-        self.assertIn("c.RRoBType = NormalRoB;", source)
-        self.assertIn("c.BRoBType = NoRoB;", source)
-        self.assertIn("c.RRoBType = NoRoB;", source)
+        self.assertEqual(source.count("c.BRoBType = NoRoB;"), 2)
+        self.assertEqual(source.count("c.RRoBType = NoRoB;"), 2)
         self.assertIn(
             ".ChimneyCfg(set_ports(xezim_chimney_cfg_no_mgr(), 1'b1, 1'b0))",
             source)

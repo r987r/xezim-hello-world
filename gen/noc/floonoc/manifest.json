@@ -31,13 +31,13 @@
       "native_parameters": {
         "AtopSupport": false,
         "BRoBSize": 8,
-        "BRoBType": "NormalRoB",
+        "BRoBType": "NoRoB",
         "MaxAtomicTxns": 0,
         "MaxTxns": 8,
         "MaxTxnsPerId": 9,
         "MaxUniqueIds": 4,
         "RRoBSize": 8,
-        "RRoBType": "NormalRoB"
+        "RRoBType": "NoRoB"
       },
       "network_interfaces_with_native_knobs": 7,
       "package": "compute0/local_data/floo_xezim_compute0_local_data_noc_pkg.sv",
@@ -77,13 +77,13 @@
       "native_parameters": {
         "AtopSupport": false,
         "BRoBSize": 8,
-        "BRoBType": "NormalRoB",
+        "BRoBType": "NoRoB",
         "MaxAtomicTxns": 0,
         "MaxTxns": 8,
         "MaxTxnsPerId": 9,
         "MaxUniqueIds": 4,
         "RRoBSize": 8,
-        "RRoBType": "NormalRoB"
+        "RRoBType": "NoRoB"
       },
       "network_interfaces_with_native_knobs": 5,
       "package": "compute1/local_data/floo_xezim_compute1_local_data_noc_pkg.sv",
@@ -123,13 +123,13 @@
       "native_parameters": {
         "AtopSupport": false,
         "BRoBSize": 8,
-        "BRoBType": "NormalRoB",
+        "BRoBType": "NoRoB",
         "MaxAtomicTxns": 0,
         "MaxTxns": 8,
         "MaxTxnsPerId": 9,
         "MaxUniqueIds": 4,
         "RRoBSize": 8,
-        "RRoBType": "NormalRoB"
+        "RRoBType": "NoRoB"
       },
       "network_interfaces_with_native_knobs": 4,
       "package": "ethernet0/local_data/floo_xezim_ethernet0_local_data_noc_pkg.sv",
@@ -175,7 +175,7 @@
         "MaxTxnsPerId": 9,
         "MaxUniqueIds": 4,
         "RRoBSize": 8,
-        "RRoBType": "NormalRoB"
+        "RRoBType": "NoRoB"
       },
       "network_interfaces_with_native_knobs": 10,
       "package": "global_data/floo_xezim_global_data_noc_pkg.sv",
@@ -215,13 +215,13 @@
       "native_parameters": {
         "AtopSupport": false,
         "BRoBSize": 8,
-        "BRoBType": "NormalRoB",
+        "BRoBType": "NoRoB",
         "MaxAtomicTxns": 0,
         "MaxTxns": 8,
         "MaxTxnsPerId": 9,
         "MaxUniqueIds": 4,
         "RRoBSize": 8,
-        "RRoBType": "NormalRoB"
+        "RRoBType": "NoRoB"
       },
       "network_interfaces_with_native_knobs": 3,
       "package": "memory0/local_data/floo_xezim_memory0_local_data_noc_pkg.sv",
@@ -261,13 +261,13 @@
       "native_parameters": {
         "AtopSupport": false,
         "BRoBSize": 8,
-        "BRoBType": "NormalRoB",
+        "BRoBType": "NoRoB",
         "MaxAtomicTxns": 0,
         "MaxTxns": 8,
         "MaxTxnsPerId": 9,
         "MaxUniqueIds": 4,
         "RRoBSize": 8,
-        "RRoBType": "NormalRoB"
+        "RRoBType": "NoRoB"
       },
       "network_interfaces_with_native_knobs": 4,
       "package": "pcie0/local_data/floo_xezim_pcie0_local_data_noc_pkg.sv",
