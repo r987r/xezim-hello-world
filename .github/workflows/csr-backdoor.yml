@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - 'tools/csr_runtime.py'
+      - 'tools/run_csr_runtime_probe.py'
+      - 'dv/csr_runtime/**'
       - 'tools/csr_backdoor.py'
       - 'tests/test_csr_runtime.py'
       - 'tests/test_csr_backdoor.py'
@@ -26,3 +28,10 @@ jobs:
         run: python3 -m unittest tests.test_csr_backdoor tests.test_csr_runtime -v
       - name: Syntax-check simulator-neutral Python adapters
         run: python3 -m py_compile tools/csr_backdoor.py tools/csr_runtime.py
+      - name: Install real Verilator/Cocotb runtime
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y verilator
+          python3 -m pip install 'cocotb==1.9.2'
+      - name: Resolve and read actual elaborated RTL storage without deposits
+        run: python3 tools/run_csr_runtime_probe.py
