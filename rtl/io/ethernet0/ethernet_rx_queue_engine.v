@@ -5,7 +5,8 @@
 module ethernet_rx_queue_engine #(
  parameter [63:0] RING_BASE=64'h100, RING_BYTES=64'h1000,
  parameter [63:0] BUFFER_BASE=64'h2000, BUFFER_BYTES=64'h8000,
- parameter [63:0] ALT_BUFFER_BASE=0, ALT_BUFFER_BYTES=0
+ parameter [63:0] ALT_BUFFER_BASE=0, ALT_BUFFER_BYTES=0,
+ parameter integer AXI_ID_WIDTH=4
 )(
  input wire clk,rst,cfg_valid,cfg_write,
  input wire [7:0] cfg_addr,input wire [31:0] cfg_wdata,
@@ -28,22 +29,22 @@ module ethernet_rx_queue_engine #(
  output reg [7:0] write_result_tag,
  output reg frame_drop_pulse,
  input wire cpl_written_i,output wire irq,
- output wire [3:0] rd_arid,output wire [63:0] rd_araddr,
+ output wire [AXI_ID_WIDTH-1:0] rd_arid,output wire [63:0] rd_araddr,
  output wire [7:0] rd_arlen,output wire [2:0] rd_arsize,
  output wire [1:0] rd_arburst,output wire rd_arlock,
  output wire [3:0] rd_arcache,output wire [2:0] rd_arprot,
  output wire rd_arvalid,input wire rd_arready,
- input wire [3:0] rd_rid,input wire [63:0] rd_rdata,
+ input wire [AXI_ID_WIDTH-1:0] rd_rid,input wire [63:0] rd_rdata,
  input wire [1:0] rd_rresp,input wire rd_rlast,rd_rvalid,
  output wire rd_rready,
- output wire [3:0] wr_awid,output wire [63:0] wr_awaddr,
+ output wire [AXI_ID_WIDTH-1:0] wr_awid,output wire [63:0] wr_awaddr,
  output wire [7:0] wr_awlen,output wire [2:0] wr_awsize,
  output wire [1:0] wr_awburst,output wire wr_awlock,
  output wire [3:0] wr_awcache,output wire [2:0] wr_awprot,
  output wire wr_awvalid,input wire wr_awready,
  output wire [63:0] wr_wdata,output wire [7:0] wr_wstrb,
  output wire wr_wlast,wr_wvalid,input wire wr_wready,
- input wire [3:0] wr_bid,input wire [1:0] wr_bresp,
+ input wire [AXI_ID_WIDTH-1:0] wr_bid,input wire [1:0] wr_bresp,
  input wire wr_bvalid,output wire wr_bready
 );
  localparam [2:0] IDLE=0,ROUTE=1,FETCH=2,WAIT_DESC=3,
@@ -94,7 +95,7 @@ module ethernet_rx_queue_engine #(
   .rx_cpl_written(cpl_written_i && state==WAIT_CPL),
   .tx_cpl_written(tx_cpl_written_i),.irq
  );
- ethernet_rx_desc_fetch #(.AXI_ADDR_WIDTH(64),.AXI_ID_WIDTH(4),
+ ethernet_rx_desc_fetch #(.AXI_ADDR_WIDTH(64),.AXI_ID_WIDTH(AXI_ID_WIDTH),
   .RING_BASE(RING_BASE),.RING_BYTES(RING_BYTES),
   .BUFFER_BASE(BUFFER_BASE),.BUFFER_BYTES(BUFFER_BYTES),
   .ALT_BUFFER_BASE(ALT_BUFFER_BASE),.ALT_BUFFER_BYTES(ALT_BUFFER_BYTES)) u_fetch (
@@ -115,7 +116,7 @@ module ethernet_rx_queue_engine #(
   .m_axi_rvalid(rd_rvalid),.m_axi_rready(rd_rready)
  );
  ethernet_rx_dma #(.AXI_ADDR_WIDTH(64),.AXI_DATA_WIDTH(64),
-  .AXI_ID_WIDTH(4),.LEN_WIDTH(16),
+  .AXI_ID_WIDTH(AXI_ID_WIDTH),.LEN_WIDTH(16),
   .REGION_BASE(BUFFER_BASE),.REGION_BYTES(BUFFER_BYTES),
   .ALT_REGION_BASE(ALT_BUFFER_BASE),.ALT_REGION_BYTES(ALT_BUFFER_BYTES)) u_write (
   .clk,.rst,.desc_valid(state==ISSUE),.desc_ready(dma_ready),
