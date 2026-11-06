@@ -48,6 +48,7 @@
   <label>Suite<select id="family"><option value="">All suites</option></select></label>
   <label>Search<input id="search" type="search" placeholder="Target, commit, workflow or protocol"></label>
   <label>Outcome<select id="outcome"><option value="">All outcomes</option><option value="pass">PASS</option><option value="fail">FAIL</option></select></label>
+  <label>Protocol<select id="recorded-protocol"><option value="">All protocols</option></select></label>
   <label>Evidence<select id="kind"><option value="">All scopes</option><option value="axi">AXI reports</option><option value="protocol">Protocol reports</option><option value="negative">Expected-failure checks</option></select></label>
   <label>History<select id="history"><option value="latest">Latest per test / workflow</option><option value="all">All retained runs</option></select></label>
   <span id="count" class="muted" aria-live="polite"></span>
@@ -100,6 +101,18 @@ const groups=[...new Set([
   ...D.entries.map(e=>suite(e.target,e.workflow)),
   ...D.runs.map(r=>suite("",r.label))
 ])].sort((a,b)=>priority.indexOf(a)-priority.indexOf(b));
+const protocolFilter=byId("recorded-protocol");
+const knownProtocols=[...new Set([
+  ...D.entries.flatMap(e=>e.protocols||[]),
+  ...Object.values(D.tests).flatMap(t=>[
+    ...(t.report?.axi?["axi4"]:[]),
+    ...Object.values(t.report?.protocols?.sources||{}).map(s=>s.protocol).filter(Boolean)
+  ])
+])].filter(Boolean).sort();
+for(const name of knownProtocols){
+  const o=document.createElement("option");o.value=name;o.textContent=name;
+  protocolFilter.append(o);
+}
 const filter=byId("family");
 for(const name of groups){
   const o=document.createElement("option");o.value=name;o.textContent=name;filter.append(o);
@@ -142,6 +155,7 @@ function render(){
   const seen=new Set();let count=0;
   for(const e of D.entries){
     if(fam&&suite(e.target,e.workflow)!==fam)continue;
+    if(protocolFilter.value&&!(e.protocols||[]).includes(protocolFilter.value))continue;
     if(!matchesQuery([e.target,e.workflow,e.source_sha,e.engine,(e.protocols||[]).join(" ")],q))continue;
     if(outcome&&(outcome==="pass")!==e.passed)continue;
     if(kind==="axi"&&!e.axi)continue;
@@ -218,7 +232,7 @@ function render(){
     catalog.append(tr);
   }
 }
-for(const id of ["family","search","outcome","kind","history"]){
+for(const id of ["family","search","outcome","kind","history","recorded-protocol"]){
   byId(id).addEventListener(id==="search"?"input":"change",render);
 }
 render();
