@@ -56,6 +56,13 @@ void soc_dma_publish(void);  /* cache clean required on noncoherent CPUs */
  * APB_BUSY covers only head submission, never full descriptor retirement.
  * Keep descriptors/source SRAM allocated until IRQ, writebacks and idle.
  */
+/* Opt-in migration: compiler uses SystemRDL-generated definitions
+ * when the selected firmware build owns a verified generated header.
+ * Legacy builds remain source-compatible until all target variants migrate.
+ */
+#ifdef SOC_USE_GENERATED_DMA_CSR
+#include "soc_dma_shim_regs.h"
+#else
 #define SOC_DMA_REG_HEAD_LO       0x00u
 #define SOC_DMA_REG_HEAD_HI       0x04u
 #define SOC_DMA_REG_COMMAND       0x08u
@@ -66,6 +73,7 @@ void soc_dma_publish(void);  /* cache clean required on noncoherent CPUs */
 #define SOC_DMA_STATUS_IRQ        (1u << 1)
 #define SOC_DMA_STATUS_APB_ERROR  (1u << 2)
 #define SOC_DMA_STATUS_RAW_IRQ    (1u << 3)
+#endif
 
 /* Reject invalid, unaligned and busy/pending/error CSR submissions. A
  * release fence precedes the doorbell; noncoherent CPUs need cache clean.
