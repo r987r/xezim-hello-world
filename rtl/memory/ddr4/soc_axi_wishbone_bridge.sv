@@ -61,6 +61,7 @@ module ddr_litedram_axi_wishbone_bridge #(
   logic [31:0] write_data, read_data;
   logic [3:0] write_strobe;
   logic bad_request;
+  logic [8:0] remaining_beats;
   logic [31:0] timeout_count;
 
   function automatic logic valid_access(
@@ -115,6 +116,7 @@ module ddr_litedram_axi_wishbone_bridge #(
       write_data <= 0;
       write_strobe <= 0;
       bad_request <= 0;
+      remaining_beats <= 0;
       timeout_count <= 0;
     end else begin
       case (state)
@@ -125,6 +127,7 @@ module ddr_litedram_axi_wishbone_bridge #(
             is_write <= 1;
             txn_id <= s_awid;
             bad_request <= !valid_access(s_awaddr, s_awlen, s_awsize, s_awburst);
+            remaining_beats <= {1'b0, s_awlen} + 9'd1;
             word_addr <= WB_ADR_BITS'((WB_BASE + (s_awaddr - CFG_BASE)) >> 2);
             state <= W_DATA;
           end else if (s_arvalid && s_arready) begin
@@ -145,12 +148,17 @@ module ddr_litedram_axi_wishbone_bridge #(
         W_DATA: if (s_wvalid && s_wready) begin
           write_data <= s_wdata;
           write_strobe <= s_wstrb;
-          if (!s_wlast || bad_request) begin
-            // This endpoint is deliberately single beat; do not forward a
-            // malformed burst to Wishbone or silently alias later data.
-            response <= 2'b11;
-            state <= B_RESP;
-          end else state <= WB;
+          if (s_wlast != (remaining_beats == 9'd1)) begin
+            // Reject mismatched WLAST; it is a malformed upstream master.
+            $fatal(1, "DDR CSR AXI WLAST mismatch");
+          end
+          remaining_beats <= remaining_beats - 9'd1;
+          if (remaining_beats == 9'd1) begin
+            if (bad_request) begin
+              response <= 2'b11;
+              state <= B_RESP;
+            end else state <= WB;
+          end
         end
         WB: begin
           if (wb_ctrl_ack || wb_ctrl_err) begin
