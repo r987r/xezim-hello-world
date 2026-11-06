@@ -110,7 +110,7 @@ def main():
             start=original.index(marker)+len(marker)
             end=original.index('</script>',start)
             copied=Path(scratch)/'explorer.html'
-                        synthetic_ddr={
+            synthetic_ddr={
                 'run_id':67890,'attempt':1,'target':'ddr4-standalone',
                 'source_sha':'c'*40,'recorded_at':'2026-11-06T00:01:00Z',
                 'passed':True,'workflow':'DDR4 verified foundation',
