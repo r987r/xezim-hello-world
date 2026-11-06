@@ -89,8 +89,14 @@ def header(entries):
 
 def catalog(entries, config=SOC, rdl=RDL):
     cfg = yaml.safe_load(Path(config).read_text())
-    from tools.socgen import validate
-    validate(cfg)
+    # The existing socgen module imports sibling tools as top-level modules.
+    # Make that import resolution explicit rather than relying on CLI cwd.
+    import sys
+    tool_root = str(ROOT / 'tools')
+    if tool_root not in sys.path:
+        sys.path.insert(0, tool_root)
+    import socgen
+    socgen.validate(cfg)
     config_apertures = {r["name"]: r for r in cfg["address_map"]["config"]}
     instances = []
     for core in cfg["subsystems"]:
