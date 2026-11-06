@@ -54,6 +54,16 @@ header{display:flex;justify-content:space-between;align-items:center;gap:18px}h1
  <div class="bottom"><small id="page-label"></small><div class="actions"><button id="previous">Previous</button><button id="next">Next</button></div></div>
  <div class="details"><strong id="detail-title">Select a transaction to inspect every beat, strobe, sideband and timestamp.</strong><pre id="detail"></pre></div>
 </section>
+<section class="card" id="address-map-section" hidden>
+ <div class="toolbar"><div><h2>Physical Address Map · CSR subset</h2><p id="address-map-summary"></p></div></div>
+ <div class="range-controls">
+  <label>Find region, register or address<input type="search" id="address-map-search" placeholder="e.g. memory0.ddr0, cpu_release, 0x40020000"></label>
+  <label>Memory/CSR plane<select id="address-map-plane"><option value="">All mapped planes</option><option value="data">Data</option><option value="config">Config / CSR</option></select></label>
+ </div>
+ <small>Static architecture is not RTL proof. DDR/HBM windows may be much larger than modeled backing. Counts are independent accepted AXI initiator transactions, not inferred from CSR declarations or backdoor accesses. Select an entry to inspect its metadata and filter the existing AXI table.</small>
+ <div class="table-wrap"><table><thead><tr><th>Plane</th><th>Region / CSR</th><th>Base / Address</th><th>Span / Width</th><th>Type / Backing</th><th>Observed AXI</th><th>Access</th></tr></thead><tbody id="address-map-rows"></tbody></table></div>
+ <div class="details"><strong>Selected address-map entry</strong><pre id="address-map-details">Select an entry above for definition, backing model and evidence details.</pre></div>
+</section>
 <section class="card" id="memory-section" hidden><h2>Memory INIT / CHECK</h2><p id="memory-context"></p><div class="table-wrap"><table><thead><tr><th>Operation</th><th>Method</th><th>Bytes</th><th>Wall ms</th><th>Sim cycles</th></tr></thead><tbody id="memory-rows"></tbody></table></div><p id="memory-note"></p></section>
 <section class="card"><h2>Capture coverage and diagnostics</h2><p id="coverage-summary"></p><div class="coverage" id="coverage"></div><pre id="diagnostics"></pre></section>
 <p style="margin-top:20px">Self-contained run report · passive cocotbext-axi channel capture · no external assets or server required</p>
@@ -65,6 +75,58 @@ header{display:flex;justify-content:space-between;align-items:center;gap:18px}h1
 const report=JSON.parse(document.getElementById('run-data').textContent), run=report.run, axi=report.sections.axi;
 const $=id=>document.getElementById(id), rows=axi.transactions, size=100;
 const memory=report.sections.memory;
+const addressMap=report.sections.address_map;
+if(addressMap){
+ $('address-map-section').hidden=false;
+ const allMapEntries=[];
+ for(const region of addressMap.regions){
+  allMapEntries.push({kind:'region',region,detail:region});
+  for(const reg of (region.registers||[]))allMapEntries.push({kind:'register',region,reg,detail:reg});
+ }
+ $('address-map-summary').textContent=addressMap.regions.length+' configured apertures across '+addressMap.planes.length+' separate address planes · '+allMapEntries.filter(e=>e.kind==='register').length+' RDL registers · variant '+addressMap.variant+' · architecture only where RTL not qualified';
+ function showMap(){
+  const target=$('address-map-rows');
+  target.replaceChildren();
+  const query=$('address-map-search').value.toLowerCase().trim();
+  const requestedPlane=$('address-map-plane').value;
+  for(const item of allMapEntries){
+   const region=item.region, reg=item.reg;
+   const search=[region.name,region.base,region.kind,reg?.name,reg?.address,
+     ...(reg?.fields||[]).map(f=>f.name)].filter(Boolean).join(' ').toLowerCase();
+   if(requestedPlane&&region.plane!==requestedPlane||query&&!search.includes(query))continue;
+   const tr=document.createElement('tr');
+   const span=reg?reg.size_bytes:region.size;
+   const address=reg?reg.address:region.base;
+   const model=region.modeled_capacity_bytes!=null?
+     (' · modeled '+region.modeled_capacity_bytes+' bytes'):'';
+   const obs=(reg?reg.observations:region.observations)||{};
+   const counts=reg?
+     ((obs.completed||0)+' complete · '+(obs.errors_or_incomplete||0)+' errors/pending'):
+     ((obs.reads_ok||0)+' R / '+(obs.writes_ok||0)+' W · '+(obs.errors||0)+' errors');
+   const cells=[
+     region.plane,reg?(region.name+' / '+reg.name):region.name,
+     address,reg?(reg.width_bits+' bits'):(region.size+' bytes'),
+     reg?(reg.access||'defined CSR'):(region.kind+model),
+     (obs.status||obs.observation_status||'unmeasured')+' · '+counts];
+   for(const value of cells){const td=document.createElement('td');td.textContent=String(value);tr.append(td);}
+   const td=document.createElement('td'), action=document.createElement('button');
+   action.textContent='Inspect / AXI';
+   action.onclick=()=>{
+     $('address-map-details').textContent=JSON.stringify(item.detail,null,2);
+     $('plane').value=region.plane;
+     $('address-from').value=address;
+     $('address-to').value='0x'+(BigInt(address)+BigInt(span)-1n).toString(16);
+     $('boundary').value='';$('region').value='';$('search').value='';
+     apply();
+   };
+   td.append(action);tr.append(td);target.append(tr);
+  }
+ }
+ $('address-map-search').addEventListener('input',showMap);
+ $('address-map-plane').addEventListener('change',showMap);
+ showMap();
+}
+
 if(memory){
  $('memory-section').hidden=false;
  $('memory-context').textContent=memory.route_initiator+' to '+memory.memory_target+

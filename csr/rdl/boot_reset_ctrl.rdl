@@ -1,0 +1,27 @@
+// CSR-1 source model for the project-owned SoC boot reset-control MMIO.
+// Existing live RTL remains PULP axi_lite_regs until a separately verified
+// generated-RTL migration. CPU0 is never software-reset; bit n controls CPU(n+1).
+// Field width follows the selected SoC's secondary-core count (1..15).
+// Semantic policy is portable RDL metadata, not a hard-coded DUT hierarchy.
+property csr_backdoor_policy {
+    type = string;
+    component = field;
+    default = "frontdoor_only";
+};
+
+addrmap boot_reset_ctrl #(
+    longint SECONDARY_COUNT = 1
+) {
+    desc = "Boot secondary-core release register; CPU0 remains primary";
+    reg {
+        desc = "Bit i releases secondary CPU i+1; reset value holds secondaries";
+        regwidth = 32;
+        field {
+            desc = "Secondary CPU release enables (one bit per secondary)";
+            sw = rw;
+            hw = r;
+            reset = 0;
+            csr_backdoor_policy = "frontdoor_only";
+        } secondary_release[SECONDARY_COUNT - 1:0];
+    } cpu_release @0x0;
+};

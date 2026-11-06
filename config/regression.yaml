@@ -97,6 +97,7 @@ tests:
     timeout_s: 1800
     pass: 'PASS supernoc:'
     report:
+      address_map: {config: config/soc.yaml, variant: architecture}
       context: 'AXI verification BFMs drive all initiators and model every leaf target. Mapped-route and burst/stall checks are followed by deliberate target-fault tests expecting 24 read/write SLVERR pairs. No CPUs or iDMA engines are instantiated in this BFM scope.'
       axi: {scope: u_noc, clock: clk_i, reset: rst_ni, catalog: gen/supernoc/axi_monitors.json, actors: gen/supernoc/manifest.json, max_events: 500000}
       memory: {required: true, policies: [strict, fast, hybrid]}
@@ -131,6 +132,7 @@ tests:
     timeout_s: 900
     pass: 'PASS chipdma: both compute DMA engines'
     report:
+      address_map: {config: config/soc.yaml, variant: architecture}
       context: 'True iDMA0/iDMA1 instances drive configured local/global FlooNoC data traffic. CPU0 AXI BFM (data) and CPU0 AXI BFM (config) temporarily drive their original CPU0 ports for descriptor/payload SRAM loading and DMA doorbells (simulation only, no PCIe); CPUs stay in reset, so this is NOT a cold-boot pass. Real descriptor fetch, writeback, SSRAM, HBM, DDR and config NoCs are exercised.'
       axi: {scope: dut.u_noc, clock: clk_i, reset: rst_ni, catalog: gen/supernoc/axi_monitors.json, actors: gen/chip/dma_actors.json, max_events: 500000}
   chip-cpu-dma:
@@ -151,6 +153,7 @@ tests:
     timeout_s: 1800
     pass: 'PASS fullchip:'
     report:
+      address_map: {config: config/soc.yaml, variant: architecture}
       context: 'The real PicoRV32 CPU calls compiled C in the shared cold-boot INIT/RUN/CHECK test, allocates SRAM/DDR/HBM physical regions, and programs the true PULP iDMA through its configuration NoC. No CPU BFM or preloaded SRAM. Check CPU-produced result and read/write AXI handshakes.'
       flow:
         required_steps:
@@ -181,6 +184,7 @@ tests:
     timeout_s: 1800
     pass: 'PASS fullchip:'
     report:
+      address_map: {config: config/soc.yaml, variant: architecture}
       context: 'Real PicoRV32/SERV CPUs coordinate boot phases with OKAY responses. Afterwards a verification AXI BFM at the reserved compute0 DMA port tests two 64-KiB SRAM stand-ins, including four intentional out-of-capacity SLVERR transactions. No DMA engine or physical HBM/DDR controller is instantiated.'
       axi: {scope: dut.u_noc, clock: clk, reset: rst_n, catalog: gen/supernoc/axi_monitors.json, actors: gen/chip/manifest.json, max_events: 500000}
   chip-boot-negative:
@@ -216,6 +220,7 @@ tests:
     timeout_s: 1800
     pass: 'PASS ethernet-cpu: real CPU0 C queue and CQ'
     report:
+      address_map: {config: config/soc.yaml, variant: architecture}
       context: 'Real PicoRV32 cold boot and compiled C configure the physical Ethernet0 queues, memory-resident descriptors and CQ/IRQ through Config/Data NoCs. External GMII source/sink drives only the line. No CPU AXI BFM or memory backdoor.'
       flow:
         required_steps:
@@ -251,6 +256,7 @@ tests:
     timeout_s: 1800
     pass: 'PASS chip-ethernet:'
     report:
+      address_map: {config: config/soc.yaml, variant: architecture}
       context: 'Real GMII through actual Ethernet0 local/global Data NoC to SRAM and modeled DDR, with AXI CQ completions and Config NoC BFM queue CSR. Real PULP AXI mux; CPU0 C firmware and PCIe host remain separate gates.'
       axi: {scope: dut.u_noc, clock: clk_i, reset: rst_ni, catalog: gen/supernoc/axi_monitors.json, actors: .tools/regression/chip-ethernet/variant/manifest.json, max_events: 500000, required_complete: true}
   chip-pcie-host:
@@ -270,6 +276,7 @@ tests:
     timeout_s: 1800
     pass: 'PASS pciehost: real CPU0/host handshake and PCIe0 SRAM data'
     report:
+      address_map: {config: config/soc.yaml, variant: architecture}
       context: 'Real CPU0 cold boot via immutable ROM, host RC enumeration via modeled PCIe link, pinned real TLP->AXI4 RTL and PULP iDMA. Real CPU C copies host-seeded PCIe SRAM into modeled DDR and existing DDR bytes to PCIe SRAM; host verifies through BAR0. All transfers are accepted AXI transactions on generated NoCs, without memory preload or fake PHY.'
       flow:
         required_steps:

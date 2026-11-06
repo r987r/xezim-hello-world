@@ -58,6 +58,23 @@ class PublicationTests(unittest.TestCase):
             self.assertIn('dma-rtl',dataset['tests'])
             self.assertIn('chip-dma',dataset['tests'])
             self.assertTrue((output/'fabric.html').is_file())
+            self.assertTrue((output/'address-map.html').is_file())
+            addr=json.loads((output/'data/soc-address-map.json').read_text())
+            self.assertEqual(addr['schema_version'],1)
+            self.assertEqual(len(addr['regions']),14)
+            self.assertEqual(sum(r['plane']=='data' for r in addr['regions']),8)
+            self.assertEqual(sum(r['plane']=='config' for r in addr['regions']),6)
+            self.assertEqual(addr['config_sha256'],
+                hashlib.sha256((ROOT/'config/soc.yaml').read_bytes()).hexdigest())
+            self.assertEqual(next(r for r in addr['regions']
+                if r['name']=='memory0.ddr0')['modeled_capacity_bytes'],65536)
+            self.assertIn('external mem',(output/'data/soc-data-memories.rdl').read_text())
+            map_html=(output/'address-map.html').read_text()
+            self.assertIn('id="address-map-data"',map_html)
+            self.assertIn('register definitions are not RTL test coverage',map_html)
+            self.assertNotIn('__ADDRESS_MAP_DATA__',map_html)
+            self.assertIn('href="address-map.html"',(output/'index.html').read_text())
+            self.assertIn('href="address-map.html"',(output/'reference.html').read_text())
             self.assertTrue((output/'data/fabric.json').is_file())
             expected_networks=json.loads((ROOT/'gen/noc/floonoc/manifest.json').read_text())['networks']
             self.assertEqual(json.loads((output/'data/fabric.json').read_text())['summary']['meshes'],len(expected_networks))
