@@ -68,15 +68,9 @@ def validate_config(cfg: dict) -> tuple[list[dict], list[str]]:
 
 def compile_rdl(path: Path, n_secondary: int):
     from systemrdl import RDLCompiler
-    from peakrdl_regblock.udps import ALL_UDPS
-
     compiler = RDLCompiler()
-    for udp in ALL_UDPS:
-        compiler.register_udp(udp)
     compiler.compile_file(str(path))
-    root = compiler.elaborate(
-        top_def_name="boot_reset_ctrl", parameters={"SECONDARY_COUNT": n_secondary}
-    )
+    root = compiler.elaborate(top_def_name="boot_reset_ctrl")
     return root
 
 
@@ -189,6 +183,7 @@ def generate(config: Path, rdl: Path, out: Path, variant: str) -> None:
     (out / "soc_boot_reset_ctrl_regs.h").write_text(header(regs))
     (out / "soc_csr_bases.h").write_text(bases_header(apertures))
     CHeaderExporter().export(node=root, path=str(out / "boot_reset_ctrl_types.h"))
+    (out / "rtl").mkdir(parents=True, exist_ok=True)
     RegblockExporter().export(
         root, str(out / "rtl"), cpuif_cls=AXI4Lite_Cpuif_flattened,
         module_name="soc_boot_reset_ctrl_regblock",
