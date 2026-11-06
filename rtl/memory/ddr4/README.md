@@ -166,10 +166,14 @@ stream into `protocol-transactions.json`, using the same protocol-neutral
 schema as PCIe TLPs, Ethernet GMII, and AXI. No new DDR controller, VIP,
 signal sampler, or vendor RTL patch is introduced.
 
-The current source-verified standalone CI trace from #42273220046
-contains **201 DFI/bank events**: RD 26, WR 27, PRE 14, REF 2 and
-**ACT 0**. The ACT decoder is implemented but no ACT was observed. This is
-a command-coverage gap to investigate, not a simulated event we can invent.
+The original source-verified standalone CI trace from #42273220046
+contained **201 DFI/bank events**: RD 26, WR 27, PRE 14, REF 2 and
+**ACT 0 as decoded by the old monitor**. Inspection of the actual generated
+LiteDRAM `soc_ddr4_sim.v` revealed that its SDRAMPHYModel activates banks
+using `!CS_n && !RAS_n && CAS_n && WE_n`. The original probe used only
+`!ACT_n`, missing that observed legacy DFI encoding. The corrected probe
+accepts both recognized encodings and tags each ACT with its decode basis;
+new run counts must come from real CI, not retroactive edits to old traces.
 DDR controller simulation and AXI readback passed; the first exporter CI
 gate failed because it incorrectly required ACT even though the original
 probe contract only required observed RD, WR, and modeled storage.
