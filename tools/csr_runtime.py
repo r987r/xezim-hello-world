@@ -68,9 +68,9 @@ def discover(dut, *, variant: str, build_sha256: str, simulator: str,
         raise BindingError("unsupported simulator backend")
     objects = []
     handles = {}
-    for path in requested_paths:
-        if path in handles:
-            raise BindingError("duplicate requested physical handle")
+    # Multiple disjoint CSR fields commonly share the same physical HDL
+    # storage word. Resolve it once, then let bind() reject overlapping bits.
+    for path in dict.fromkeys(requested_paths):
         try:
             obj = resolve_handle(dut, path)
             width = width_of(obj)
