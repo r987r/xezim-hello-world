@@ -48,3 +48,75 @@ Observation status: `not_accessed`, `observed_complete`, `incomplete_or_error`, 
 4. **CSR-4** migrate remaining custom Ethernet and PCIe banks after owners' integration PRs merge; import native iDMA/DDR maps without rewriting vendor RTL.
 
 Coordination: #82 is exclusive owner of CSR data structures, generated C register naming and CSR-specific report panel. #34 owns generic report/event ABI, #79 scenario execution, #39 memory backing/fast-vs-strict providers. Resolve edits of common report/generator files with those owners before making them.
+
+
+## Register-model composition and simulator back-door binding
+
+**Decision:** keep *logical* CSR names, field semantics, and optional back-door
+**access policy** in SystemRDL, but do **not** put absolute DUT hierarchy paths
+(`tb.dut.gen_compute0...`) into portable `.rdl` definitions. The same block
+can be instantiated many times, and generated SV paths change with a
+parameterized SoC, simulator optimization and implementation variant.
+
+The full-chip composition process combines:
+1. **Per-IP RDL** declarations (relative offsets/fields, reset and SW/HW
+   access, side effects and `backdoor_policy` metadata where necessary).
+2. **SoC composition** from `config/soc.yaml` / generated endpoint manifests:
+   repeated instance names, parent instance relationships, base addresses,
+   implementation type (real RTL, behavioral model, reserved), and clock/reset
+   domain. It must build a stable *logical* path such as
+   `compute1.dma.status.irq_pending`, never duplicate hand-maintained maps.
+3. **Elaboration inventory** for the exact full-chip HDL build: only real,
+   accessible hierarchical paths discovered or confirmed against that
+   simulator's compiled instance/net/array inventory. A simulator adapter may
+   resolve a path template from generated RTL metadata, but must compare
+   existence, width, direction and storage type with the elaborated design.
+   Record the tested source/config/topology hashes and simulator version.
+4. **Bound back-door map** (`csr-backdoor-map.json`) with logical path,
+   elaborated instance, object kind, field bit range, read/write capabilities,
+   side-effect safety, clock domain, backing model and provenance. Validate
+   `reg/field -> RTL storage` uniqueness unless intentional aliasing is
+   explicit. Missing/optimized-out paths remain `unavailable`, not silently
+   redirected to a similar instance or treated as coverage.
+
+Do **not** assume a generated PeakRDL field always has a directly writable
+SV variable. Its hardware interface and flop storage may be split; an
+interface signal can represent a combinational value, not the authoritative
+state. Generated RTL integration must expose a stable, selectively visible
+adapter hook only when necessary, without editing upstream IP.
+
+**Policy classes:** `frontdoor_only`, `backdoor_read_only`,
+`quiescent_raw_storage_rw`, `behavioral_hook_required`, `unavailable`.
+Default to frontdoor-only (or unavailable for external IP). Raw back-door writes
+must never pretend to execute MMIO strobes, W1C/RC clearing, doorbells, IRQ
+acknowledgement, FIFO pops, or other side effects. For these use real AXI
+front-door transactions or a separately verified semantic injection hook.
+Register write side effects are *not* reproduced by depositing a value into a
+hierarchical signal.
+
+The verification API should address `logical_instance.register.field`
+using the generated catalog, not hardcoded simulator paths. It chooses a
+policy and simulator binding, gates direct access on quiescence, and
+corroborates using real independent frontdoor readback where supported.
+SystemRDL metadata describes intent; actual bound paths describe physical
+implementation, not register coverage or successful bus transactions.
+Read-only backdoor comparisons can accelerate CHECK but never prove routing,
+AXI response correctness or CPU firmware accesses.
+
+**Backends:** Verilator cocotb/VPI with selective exposure; Xezim VPI/DPI
+using documented array and signal APIs; future UVM RAL backdoor path binding.
+Do not enable broad global public-VPI visibility merely for convenience:
+protect compilation speed, footprint and intended scope. If an RTL field
+cannot be exposed by the compiled simulator, explicitly mark it unavailable
+and retain frontdoor access. DDR/HBM **bulk memory backdoor** stays owned
+by #39; CSR hierarchy binding is owned by #82. #79 consumes the *logical*
+register APIs and may label accesses; it does not own low-level path
+resolution. #34 handles visualization/correlation.
+
+**Completion tests:** generate one and two compute-instance variants from
+the identical IP RDL and verify distinct logical/physical names, offsets and
+base addresses. Use exact elaborated RTL metadata to ensure no dangling,
+ambiguous, stale or cross-variant paths. Test reset, W1C, IRQ, doorbell,
+write-strobe, read-only register behavior and missing-net cases in both
+simulators where supported. Backdoor-to-frontdoor equivalence must be
+bidirectional only for *safe ordinary storage*, not for side-effectful fields.
