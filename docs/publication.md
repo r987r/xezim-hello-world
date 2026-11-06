@@ -86,8 +86,10 @@ checkout. Manual dispatch on `main` publishes as well; a manual feature-branch
 dispatch builds a preview without deployment. No automatic branch push or
 CI-completion triggers remain.
 
-The collector discovers regression-producing workflows from their checked-in
-GitHub Actions YAML and independently paginates each workflow's run history,
+The collector discovers regression-producing workflows and standalone CI test
+jobs from their checked-in GitHub Actions YAML. Tests without canonical
+regression artifacts are represented as workflow-only evidence rather than
+fabricated per-target PASS results. It independently paginates each workflow's run history,
 retaining up to four trusted runs per producer by default. An explicit page
 limit prevents unbounded history scans and reports any truncation; bursty
 activity in other workflows cannot crowd out Ethernet, PCIe or DDR evidence. It accepts main-branch results and completed PR results
