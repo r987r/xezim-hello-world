@@ -106,11 +106,31 @@ def main():
                                  'status':'complete',
                                  'fields':{'tag':'0x3','address':'0x4000',
                                            'length_dw':1,'header_hex':'0x123'}}]}]}}
+            # DDR4 standalone real-controller DFI events use the same
+            # generic IP/link inspector, never the PCIe-specific implementation.
+            ddr={
+                'run_id':56789,'attempt':1,'target':'ddr4-standalone',
+                'source_sha':'c'*40,'recorded_at':'2026-11-06T00:00:00Z',
+                'passed':True,'workflow':'DDR4 verified generation foundation',
+                'report_path':'runs/56789/ddr4-standalone/protocols.html',
+                'axi_report_path':'runs/56789/ddr4-standalone/report.html',
+                'raw_path':'runs/56789/ddr4-standalone/protocol-transactions.json',
+                'links':{'capture_complete':True,'sources':[{
+                    'source':'memory0.ddr0.dfi.phase0','protocol':'dfi',
+                    'role':'link','clock_domain':'ddr_standalone_100mhz',
+                    'implementation':'generated_litedram_controller',
+                    'count':2,'operations':{'act':1,'rd':1},
+                    'preview':[{'kind':'event','operation':'act','id':None,
+                                'start_ps':10000,'end_ps':10000,
+                                'status':'observed','fields':{'bank':2,'address':55}},
+                               {'kind':'event','operation':'rd','id':None,
+                                'start_ps':20000,'end_ps':20000,
+                                'status':'observed','fields':{'bank':2,'address':7}}]}]}}
             marker='<script type="application/json" id="arch-embedded-protocol-links">'
             start=original.index(marker)+len(marker)
             end=original.index('</script>',start)
             copied=Path(scratch)/'explorer.html'
-            copied.write_text(original[:start]+json.dumps([synthetic])+
+            copied.write_text(original[:start]+json.dumps([synthetic,ddr])+
                               original[end:])
             driver.get(copied.as_uri())
             wait.until(lambda d:"SYSTEM-ON-CHIP" in d.find_element(By.ID,"arch-svg").text)
@@ -126,6 +146,21 @@ def main():
                 "#arch-traffic-actions a").get_attribute("href")
             assert "protocol=pcie" in detail and "source=pcie0.rx_req" in detail
             driver.save_screenshot(str(args.screenshots/"04-pcie-verified-tlp-link.png"))
+            driver.get(copied.as_uri())
+            wait.until(lambda d:"SYSTEM-ON-CHIP" in d.find_element(By.ID,"arch-svg").text)
+            dblclick_by_label("memory0")
+            wait.until(lambda d:"SUBSYSTEM COMPOSITION" in d.find_element(By.ID,"arch-svg").text)
+            dblclick_by_label("memory0.ddr0")
+            wait.until(lambda d:"IP COMPOSITION" in d.find_element(By.ID,"arch-svg").text)
+            assert driver.find_element(By.ID,"arch-link-traffic").is_displayed()
+            assert "act" in driver.find_element(By.ID,"arch-traffic-rows").text
+            assert "rd" in driver.find_element(By.ID,"arch-traffic-rows").text
+            assert "standalone" in driver.find_element(By.ID,"arch-traffic-context").text
+            detail=driver.find_element(By.CSS_SELECTOR,
+                "#arch-traffic-actions a").get_attribute("href")
+            assert "protocol=dfi" in detail and "memory0.ddr0.dfi.phase0" in detail
+            driver.save_screenshot(str(args.screenshots/"05-ddr-dfi-observed-commands.png"))
+
         print("PASS: architecture RTL drilldown, PCIe monitor link and bounded real-evidence UI")
 
 
