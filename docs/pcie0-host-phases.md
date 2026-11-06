@@ -30,7 +30,7 @@ phase engine, TestML parser, or duplicate full-chip testbench.
 | Stage | CPU coordinator and other CPUs | PCIe0 host participant | Independent checker |
 | --- | --- | --- | --- |
 | INIT | CPU0 uses ROM/flash to start CPUs; CPU1 writes its ready mailbox; CPU0 emits `DEVICE_INIT_READY` to real remote PCIe0 SRAM over **Compute0 local → global data → PCIe0 local** | Root Complex enumerates and enables BAR0; observes ready by real BAR read, then writes host init acknowledgment | SV checker requires all CPU ready/config registers and emits actual RTL phase steps |
-| RUN | CPU0 waits for host acknowledgment before publishing RUN. CPU1 participates in normal hello/peer checks | Read RUN permission; four distinct BAR writes and four independent readbacks with address-based golden patterns; records every operation; write host RUN acknowledgment | PULP SRAM accepted-read/write counters, AXI monitor and independent data comparison |
+| RUN | CPU0 executes real C/iDMA copies between PCIe SRAM and modeled DDR before notifying host; CPU1 participates in hello/peer checks | Wait for RUN permission, read 64 DMA-returned bytes at BAR0+0x600 and verify; also check four distinct BAR write/read vectors; ACK RUN | CPU iDMA descriptors/IRQ, completed AXI/DDR-model writes, TLP completion data and independent payload checks |
 | CHECK | CPU0 waits for host check acknowledgment and final CPU peer checks | Waits for CHECK permission, writes acknowledgment through BAR, validates clean completion | CPU checker PASS, exact CPU masks, host markers, real SRAM path, and required-step report |
 
 Handshake addresses and constants are derived from the generated variant
@@ -57,7 +57,7 @@ from the existing AXI `report.html`. Each step is declared under
 `report.flow.required_steps` in **the same test YAML**.
 Missing, unregistered, duplicate, corrupt, or failed expected steps fail CI.
 
-The CPU C/iDMA test now uses the same ABI via
+The combined PCIe-host and separate CPU C/iDMA tests use the same ABI via
 `sw/common/test_flow.h`, an isolated CPU0 mailbox marker word, and
 the same AXI reporter. C statements are not considered RTL evidence
 unless the AXI monitor observes completed OKAY writes.
@@ -85,40 +85,70 @@ upstream endpoint register RTL, outbound DMA to host memory, MSI/MSI-X,
 and full multiple-outstanding-tag stress. A modeled host enumeration
 is not a physical-link signoff.
 
-## Minimal real DDR-model ↔ PCIe host integration (same regression)
+## Minimum DDR-model ↔ PCIe host functional integration — VERIFIED RTL
 
-`chip-pcie-host` now uses firmware mode `pcie_dma_host`. This is the
-**smallest combined full-chip RTL**: real PicoRV32 CPU, real pinned PULP iDMA,
-real NoC/crossbar/PCIe SRAM, real `pcie_axi_master` bridge and a modeled
-Root Complex. DDR is still the named 64-KiB AXI-backed behavioral model,
-**not** the separate isolated LiteDRAM controller.
+The **single** `chip-pcie-host` test selects firmware mode
+`pcie_dma_host`. The actual connected path uses PicoRV32 CPU0 executing
+RV32I C, upstream PULP iDMA, independent generated data/config FlooNoCs,
+a real `pcie_axi_master` TLP-to-AXI bridge, PULP SRAM, and a modeled
+`cocotbext-pcie` Root Complex/link. The configured DDR window is a
+**64-KiB behavioral AXI memory model, not a LiteDRAM controller or physical
+DDR PHY**. The normal CPU/DMA and full-chip boot profiles remain separate.
 
-INIT:
-- Host enumerates BAR0, waits for CPU firmware ready, writes and reads back
-  64 known bytes at PCIe SRAM +`0x500`, then acknowledges INIT.
-- CPU0 does not preload this SRAM and does not run the C DMA before host
-  acknowledgment.
+[Exact-head PCIe CI run 42134213227](https://github.com/r987r/xezim-hello-world/actions/runs/42134213227)
+passed both jobs. The `chip-pcie-host` simulation completed 27
+INIT/RUN/CHECK steps with zero flow issues, 47,864 complete AXI transactions
+and no outstanding transactions, and independently correlated 3,741 PCIe
+read TLPs to 3,741 completion TLPs, plus 8 accepted posted writes.
+The generated `traffic-latency.json` reports no mismatches and a measured
+TLP request-to-completion mean of **130.083 ns**, min 130 ns, max 200 ns,
+at the recorded 10 ns clock. The four explicit host BAR read callbacks
+measured 170/220/310/260 ns. Those host API spans use a *modeled*
+Root Complex; physical PCIe link/host latency is not measured.
+Source run SHA in the artifact is a GitHub PR merge-test commit
+(`2b10ba60912190ff705e2a39cc186c583cce7dd7`),
+descended from PR head `1559c3348d5196984b9eeb5d73f9a36c2563b8e1`.
 
-RUN:
-- CPU0 executes its **existing** C DMA allocation/DDR/HBM roundtrip and
-  descriptor/IRQ checks, then three more real DMA descriptors:
-  PCIe SRAM +`0x500` → modeled DDR +`0x800`;
-  existing DMA-populated DDR region → PCIe SRAM +`0x600`;
-  DDR +`0x800` → CPU-visible SRAM. The comprehensive DDR/HBM\n  five-descriptor test still runs independently as `chip-cpu-dma`.
-- CPU0 checks the host's 64 bytes after the last descriptor, validates
-  descriptors and IRQ, then announces RUN to the host.
-- Host reads BAR0+`0x600`, independently checks every byte against the CPU
-  source pattern, runs the original four independent BAR vectors, and ACKs.
+### Data movement and checks
 
-CHECK:
-- The unchanged CPU/host CHECK handshake runs after both directions pass.
-  The passive AXI reporter validates accepted transfers/completions and the
-  shared TLP observer validates the inbound host TLP/completion stream.
-  The common `test-flow.json` adds `host0.seed_ddr_input`,\n  `cpu0.pcie_ddr_exchange`, and `host0.read_ddr_dma_output`.
+| Phase | Real hardware actions | Independent evidence |
+| --- | --- | --- |
+| INIT | Host writes 64 known bytes through BAR0 to PCIe SRAM `+0x500`, reads them back, then ACKs CPU0 | Actual accepted ingress TLPs, bridge AXI completions and SRAM byte comparison |
+| RUN: host → DDR | CPU0 programs real iDMA: PCIe SRAM `+0x500` → modeled DDR `+0x800`. A second DMA submission later copies DDR `+0x800` → CPU-visible SRAM | Completed DMA AXI read/write, DDR model target writes/reads, C verification of all 64 host bytes |
+| RUN: DDR → host | CPU0 initializes SRAM bytes and iDMA writes a separate DDR buffer, then iDMA copies DDR → PCIe SRAM `+0x600`; host reads BAR0 `+0x600` | Actual DMA AXI read/write, SRAM target response, PCIe completion TLP, host comparison of all 64 bytes |
+| CHECK | Host/CPU acknowledgements, CPU peer checks and final PASS | One shared `test-flow.json` and full AXI/TLP transaction report |
 
-The host uses BAR readback (a **host pull**), not a device-initiated PCIe
-outbound memory-write TLP. Production host-memory DMA via upstream
-`dma_if_pcie`, actual Ethernet ingress/egress, real DDR/DFI qualification,
-multiple outstanding tags and backpressure/throughput are separate tracks.
-The generated `manifest.json` marks the PCIe bridge as live only in this
-opt-in variant; Ethernet remains reserved until actually attached.
+This is **two short real iDMA submissions, two independent descriptors
+each**. The comprehensive DDR/HBM and dual-engine/interrupt tests remain
+in their own regressions; no duplicate DMA engine, PCIe VIP, or test runner
+was added. `test-flow.json` includes `host0.seed_ddr_input`,
+`cpu0.pcie_ddr_exchange`, and `host0.read_ddr_dma_output`.
+
+### Not part of initial PCIe closure
+
+- The host **pulls** DDR data by BAR read; there is **no** endpoint-initiated
+  outbound PCIe write into Root Complex host RAM. This requires an outbound
+  PCIe requester path and its own test.
+- Actual Ethernet MAC/queue/GMII-to-NoC attachment remains the Ethernet
+  integration track; it is not proven by PCIe+DDR smoke alone.
+- Physical PCIe PHY/PIPE/LTSSM, MSI/MSI-X, independent PCIe CSR
+  implementation, multiple outstanding tags, backpressure, error/recovery,
+  performance/stress and real DDR4/DFI qualification remain separate.
+- In opt-in generated `manifest.json`, PCIe RTL is marked live;
+  unconnected Ethernet endpoints are labeled reserved, not promoted
+  based on this simulation.
+
+### Reproduction and results
+
+Run `python3 tools/regress.py chip-pcie-host` (requires pinned PCIe/iDMA
+dependencies and the RV32I compiler) or use the
+[PCIe0 integrated workflow](../.github/workflows/pcie0-integrated.yml).
+Inspect `result.json`, `test-flow.json`, `axi-transactions.json`,
+`protocol-transactions.json`, `traffic-latency.json`,
+`report.html`, `protocols.html` and `test-flow.html` in the
+[successful CI artifact](https://github.com/r987r/xezim-hello-world/actions/runs/42134213227).
+
+The *independent* SuperNoC structure/traffic test is a distinct CI job.
+A later NoBResponseIdQueue assertion there must not be relabeled as a
+PCIe traffic mismatch; follow that gate separately before claiming a
+completely green repository-wide integration.
