@@ -68,7 +68,12 @@ def validate_config(cfg: dict) -> tuple[list[dict], list[str]]:
 
 def compile_rdl(path: Path, n_secondary: int):
     from systemrdl import RDLCompiler
+    from peakrdl_regblock.udps import ALL_UDPS
     compiler = RDLCompiler()
+    # The regblock scanner requires its registered RDL extension properties
+    # even for registers that do not exercise write/read buffering.
+    for udp in ALL_UDPS:
+        compiler.register_udp(udp)
     compiler.compile_file(str(path))
     root = compiler.elaborate(top_def_name="boot_reset_ctrl")
     return root
