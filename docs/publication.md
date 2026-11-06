@@ -86,8 +86,11 @@ checkout. Manual dispatch on `main` publishes as well; a manual feature-branch
 dispatch builds a preview without deployment. No automatic branch push or
 CI-completion triggers remain.
 
-The collector searches the latest 500 Actions runs and keeps up to four runs
-per configured producer. It accepts main-branch results and completed PR results
+The collector discovers regression-producing workflows from their checked-in
+GitHub Actions YAML and independently paginates each workflow's run history,
+retaining up to four trusted runs per producer by default. An explicit page
+limit prevents unbounded history scans and reports any truncation; bursty
+activity in other workflows cannot crowd out Ethernet, PCIe or DDR evidence. It accepts main-branch results and completed PR results
 only when GitHub's merged-PR metadata matches **the exact tested source head SHA
 and source branch**. GitHub may clear a workflow run's PR association after merge,
 so the source SHA is checked against the merged PR directly. PR builds run on
