@@ -1,0 +1,105 @@
+name: DDR-B real controller full-chip CPU and DMA
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'rtl/memory/ddr4/**'
+      - 'dv/full_chip/**'
+      - 'config/regression.yaml'
+      - 'tools/ddr_chip.py'
+      - 'tools/full_chip_gen.py'
+      - 'tools/cpu_dma_firmware.py'
+      - 'tools/regress.py'
+      - 'Bender.yml'
+      - '.github/workflows/ddr4-fullchip.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ddr-b-fullchip-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  cpu-idma-ddr:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: ./.github/actions/setup-bender
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Install pinned CPU/DMA/NoC and DDR generator dependencies
+        run: |
+          set -euo pipefail
+          python3 -m pip install -r requirements.txt
+          python3 -m pip install 'mako==1.3.10' 'hjson==3.1.0' 'peakrdl>=1.5.0' 'peakrdl-rawheader>=0.2.8' 'peakrdl-cheader>=1.1.0'
+          python3 -m pip install 'cocotb==1.9.2' 'cocotbext-axi==0.1.28' 'cocotb-test==0.2.6'
+          python3 tools/ip_fetch.py floonoc pulp_idma litedram
+          python3 -m pip install -e .tools/floonoc
+          python3 - <<'PY'
+          import pathlib, re, subprocess, yaml
+          pin = yaml.safe_load(pathlib.Path("rtl/memory/ddr4/toolchain.lock.yml").read_text())["litex"]
+          assert re.fullmatch(r"[0-9a-f]{40}", pin["commit"])
+          dest = pathlib.Path(".tools/litex")
+          dest.parent.mkdir(parents=True, exist_ok=True)
+          subprocess.run(["git", "init", "-q", str(dest)], check=True)
+          subprocess.run(["git", "-C", str(dest), "remote", "add", "origin", pin["git"]], check=True)
+          subprocess.run(["git", "-C", str(dest), "fetch", "-q", "--depth", "1", "origin", pin["commit"]], check=True)
+          subprocess.run(["git", "-C", str(dest), "checkout", "-q", "--detach", pin["commit"]], check=True)
+          assert subprocess.check_output(["git", "-C", str(dest), "rev-parse", "HEAD"], text=True).strip() == pin["commit"]
+          PY
+          python3 -m pip install -e .tools/litex
+          python3 -m pip install --no-deps -e .tools/litedram
+          python3 -m pip install 'pythondata-misc-tapcfg==0.0.post517'
+          sudo apt-get update -qq
+          sudo apt-get install -y verilator clang llvm lld
+      - name: Verify baseline generator and CPU/DDR implementation Python syntax
+        run: |
+          set -euo pipefail
+          python3 -m py_compile tools/ddr_chip.py tools/full_chip_gen.py tools/regress.py tools/cpu_dma_firmware.py dv/full_chip/ddr_init.py dv/full_chip/test_ddr_real.py dv/full_chip/test_boot.py
+          python3 -m unittest tests.test_regression tests.test_full_chip_gen -v
+          make check-generated
+      - name: Generate actual pinned LiteDRAM and upstream-derived DFII commands
+        run: |
+          set -euo pipefail
+          python3 rtl/memory/ddr4/bringup.py generate
+          python3 -m unittest discover -s rtl/memory/ddr4 -p 'test_*.py'
+      - name: Run real CPU/iDMA to real LiteDRAM through generated Data and Config NoCs
+        timeout-minutes: 30
+        run: |
+          set -euo pipefail
+          python3 tools/regress.py chip-ddr4-real --fail-fast
+          test -s .tools/regression/chip-ddr4-real/ddr4_fullchip_evidence.json
+          test -s .tools/regression/chip-ddr4-real/report.html
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('.tools/regression/chip-ddr4-real')
+          evidence=json.loads((p/'ddr4_fullchip_evidence.json').read_text())
+          assert evidence['status']=='pass'
+          assert evidence['init_done']==1 and evidence['init_error']==0
+          assert all(evidence[key]>0 for key in ('axi_aw','axi_b','axi_ar','axi_rlast','dfi_read','dfi_write','bank_storage_write'))
+          assert evidence['axi_aw']==evidence['axi_b'] and evidence['axi_ar']==evidence['axi_rlast']
+          report=json.loads((p/'result.json').read_text())
+          assert report['passed'], report
+          print('PASS DDR-B full-chip real-controller source/capture contract')
+          PY
+      - name: Upload exact-head RTL, NoC files, CPU DMA reports and DFI evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ddr4-fullchip-cpu-dma-evidence
+          path: |
+            .tools/ddr4/litedram_sim/ddr4_manifest.json
+            .tools/ddr4/litedram_sim/csr.json
+            .tools/ddr4/litedram_sim/ddr4_init_plan.json
+            .tools/regression/chip-ddr4-real/
+          if-no-files-found: warn
+          include-hidden-files: true
+          retention-days: 14
