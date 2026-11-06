@@ -53,7 +53,11 @@ module ethernet_queue_ctrl #(
     // No completion ring DMA is implemented inside this module.
     input  wire                  rx_cpl_written,
     input  wire                  tx_cpl_written,
-    output wire                  irq
+    output wire                  irq,
+    // Queue-owned completion slots; never derive these in the DMA shim.
+    output wire [63:0]           rx_cq_slot_addr,
+    output wire [63:0]           tx_cq_slot_addr,
+    output wire [7:0]            rx_active_policy_o
 );
     localparam integer RING_DEPTH = 1 << RING_LOG2;
     localparam integer DESC_BYTES = 32;
@@ -113,6 +117,11 @@ module ethernet_queue_ctrl #(
 
     assign cfg_ready = 1'b1;
     assign irq = |(irq_status[1:0]);
+    assign rx_cq_slot_addr = rx_cq_base[rx_active_q] +
+        ({32'd0, (rx_cq_prod[rx_active_q] & RING_MASK)} * DESC_BYTES);
+    assign tx_cq_slot_addr = tx_cq_base[tx_active_q] +
+        ({32'd0, (tx_cq_prod[tx_active_q] & RING_MASK)} * DESC_BYTES);
+    assign rx_active_policy_o = rx_active_policy;
     assign rx_meta_ready = enabled[0] && !rx_fetch && !rx_busy;
     assign rx_desc_valid = rx_fetch;
     assign rx_desc_queue = rx_active_q;

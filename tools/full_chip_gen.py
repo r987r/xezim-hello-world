@@ -60,12 +60,19 @@ def dma_params_for(cfg, core):
 
 
 def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
-         image_prefix='gen/chip', cpu_dma_mode=False, pcie_host_mode=False):
-    """Emit standard chip, or opt-in CPU DMA firmware variant (same RTL/checker)."""
+         image_prefix='gen/chip', cpu_dma_mode=False, pcie_host_mode=False,
+         ethernet_mode=False, ethernet_cpu_mode=False):
+    """Emit normal or opt-in compiled CPU Ethernet/PCIe/DMA firmware."""
+    if ethernet_cpu_mode and not (ethernet_mode and cpu_dma_mode):
+        raise ValueError('real Ethernet CPU test requires active Ethernet and C-hook')
     if cpu_dma_mode != (cpu0_run_hook is not None):
         raise ValueError('CPU DMA mode requires a valid compiled C hook')
     if pcie_host_mode:
         cfg = pcie_chip.host_variant_config(cfg)
+    ethernet = [s for s in cfg['subsystems'] if s['type']=='peripheral' and
+                s.get('ip')=='ethernet_queue_mac']
+    if ethernet_mode and len(ethernet)!=1:
+        raise ValueError('Ethernet mode requires one configured Ethernet queue MAC')
     fw, firmware = chip_bootgen.emit(cfg, out, cpu0_run_hook=cpu0_run_hook,
                                      pcie_host_phase=pcie_host_mode)
     nets = json.loads((noc_root/'manifest.json').read_text())['networks']
@@ -103,6 +110,15 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
         lines += [
             '  output logic [31:0] pcie_sram_write_count, pcie_sram_read_count,',
             '  output logic [63:0] pcie_sram_last_write_addr, pcie_sram_last_read_addr,'
+        ]
+    if ethernet_mode:
+        lines += [
+            '  input logic gmii_rx_clk, gmii_rx_rst, gmii_tx_clk, gmii_tx_rst,',
+            '  input logic [7:0] gmii_rxd,',
+            '  input logic gmii_rx_dv, gmii_rx_er,',
+            '  output logic [7:0] gmii_txd,',
+            '  output logic gmii_tx_en, gmii_tx_er, eth_irq_o, eth_drop_o,',
+            '  output logic eth_bad_fcs_o, eth_tx_failed_o,',
         ]
     lines[-1] = lines[-1].rstrip(',')
     lines += [');', '  import chip_types_pkg::*;']
@@ -262,10 +278,74 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
             '  logic [63:0] pcie_sram_addr, pcie_sram_data;',
             '  logic [7:0] pcie_sram_strb;',
         ]
+    if ethernet_mode:
+        eth = ethernet[0]
+        packet = all_ports[f"m_{eth['name']}_local_data_{eth['data_initiator']}"]
+        region = next(r for r in cfg['address_map']['data']
+                      if r['name']==eth['name']+'.sram')
+        base = int(region['base'],0)
+        bytes_available = cfg['boot']['simulation_sram_bytes']
+        if bytes_available < 0x4000:
+            raise ValueError('Ethernet needs at least 16 KiB of modeled SRAM')
+        ddr = next(r for r in cfg['address_map']['data']
+                   if r['name']=='memory0.ddr0')
+        ddr_base = int(ddr['base'],0)
+        model_bytes = 1 << cfg['verification']['memory']['model_address_bits']
+        if model_bytes > int(ddr['size'],0):
+            raise ValueError('modeled DDR backing exceeds configured DDR window')
+        lines += [
+            '  logic ethq_cfg_valid, ethq_cfg_write, ethq_cfg_ready, ethq_cfg_error;',
+            '  logic [7:0] ethq_cfg_addr;',
+            '  logic [31:0] ethq_cfg_wdata, ethq_cfg_rdata;',
+            '  logic [3:0] ethq_cfg_wstrb;',
+        ]
+        eth_ports = {
+            'logic_clk':'clk_i','logic_rst':'~rst_ni',
+            'gmii_rx_clk':'gmii_rx_clk','gmii_rx_rst':'gmii_rx_rst',
+            'gmii_tx_clk':'gmii_tx_clk','gmii_tx_rst':'gmii_tx_rst',
+            'gmii_rxd':'gmii_rxd','gmii_rx_dv':'gmii_rx_dv',
+            'gmii_rx_er':'gmii_rx_er','gmii_txd':'gmii_txd',
+            'gmii_tx_en':'gmii_tx_en','gmii_tx_er':'gmii_tx_er',
+            'irq_o':'eth_irq_o','frame_drop_o':'eth_drop_o',
+            'rx_error_bad_fcs_o':'eth_bad_fcs_o',
+            'tx_failed_o':'eth_tx_failed_o',
+            'cfg_valid':'ethq_cfg_valid','cfg_write':'ethq_cfg_write',
+            'cfg_addr':'ethq_cfg_addr','cfg_wdata':'ethq_cfg_wdata',
+            'cfg_wstrb':'ethq_cfg_wstrb','cfg_ready':'ethq_cfg_ready',
+            'cfg_rdata':'ethq_cfg_rdata','cfg_error':'ethq_cfg_error',
+        }
+        for channel, members in CHANNELS.items():
+            for member in [*members.values(), 'valid', 'ready']:
+                if member in ('qos','region'):
+                    continue
+                source = req(packet) if request_field(channel,member) else rsp(packet)
+                eth_ports[f'axi_{channel}{member}'] = field(source,channel,member)
+        eth_params = {
+            'RX_RING_BASE':f"64'h{base+0x1000:016x}",
+            'RX_RING_BYTES':"64'h200",
+            'TX_RING_BASE':f"64'h{base+0x1400:016x}",
+            'TX_RING_BYTES':"64'h200",
+            'RX_CQ_BASE':f"64'h{base+0x1200:016x}",
+            'TX_CQ_BASE':f"64'h{base+0x1600:016x}",
+            'CQ_WINDOW_BYTES':"64'h200",
+            'BUFFER_BASE':f"64'h{base+0x2000:016x}",
+            'BUFFER_BYTES':f"64'h{bytes_available-0x2000:x}",
+            'ALT_BUFFER_BASE':f"64'h{ddr_base:016x}",
+            'ALT_BUFFER_BYTES':f"64'h{model_bytes:x}",
+        }
+        lines += [module('ethernet0_axi_mvp','u_ethernet_mvp',
+                         eth_params,eth_ports)]
+        for ch in ('aw','ar'):
+            for member in ('qos','region','user'):
+                lines += [f"  assign {req(packet)}.{ch}.{member} = '0;"]
+        lines += [f"  assign {req(packet)}.aw.atop = '0;",
+                  f"  assign {req(packet)}.w.user = '0;"]
     for sub in (s for s in cfg["subsystems"] if s["type"] == "peripheral"):
         for plane, endpoint in (("data", sub["data_initiator"]),
                                 ("config", sub["config_initiator"])):
             if pcie_host_mode and sub is pcie[0] and plane == "data":
+                continue
+            if ethernet_mode and sub is ethernet[0] and plane == "data":
                 continue
             port = all_ports[f"m_{sub['name']}_local_{plane}_{endpoint}"]
             lines += [f"  assign {req(port)} = '0;"]
@@ -293,6 +373,21 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
                 'IdWidth':p['id_width'],'Base':f"64'h{region['base']:016x}",'Bytes':size,
                 'ReadOnly':int(is_rom),'InitFile':f'"{image_prefix}/{image}"' if image else '""'},
                 {'clk_i':'clk_i','rst_ni':'rst_ni','req_i':req(p),'rsp_o':rsp(p),**mon})]
+        elif ethernet_mode and ep == 'controller_regs' and p['network'] == ethernet[0]['name']+'_local_config':
+            ctrl_region = next(r for r in cfg['address_map']['config']
+                               if r['name'] == ethernet[0]['name']+'.ctrl')
+            lines += [module('ethernet_queue_axi_regs','u_ethernet_queue_regs',{
+                'axi_req_t':dtype(p,'req'),'axi_rsp_t':dtype(p,'rsp'),
+                'lite_req_t':'lite_req_t','lite_rsp_t':'lite_resp_t',
+                'AxiIdWidth':p['id_width'],
+                'CsrBase':f"32'h{int(ctrl_region['base'],0):08x}"},{
+                'clk_i':'clk_i','rst_ni':'rst_ni',
+                'cfg_req_i':req(p),'cfg_rsp_o':rsp(p),
+                'queue_valid_o':'ethq_cfg_valid','queue_write_o':'ethq_cfg_write',
+                'queue_addr_o':'ethq_cfg_addr','queue_wdata_o':'ethq_cfg_wdata',
+                'queue_wstrb_o':'ethq_cfg_wstrb',
+                'queue_ready_i':'ethq_cfg_ready','queue_rdata_i':'ethq_cfg_rdata',
+                'queue_error_i':'ethq_cfg_error'})]
         elif ep == 'controller_regs' and any(
                 p['network'] == sub['name']+'_local_config'
                 for sub in cfg['subsystems'] if sub['type']=='peripheral'):
@@ -387,8 +482,9 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
               '    end', 'endmodule']
     (out/'soc_top.sv').write_text('\n'.join(lines)+'\n')
     emit_tb(cfg, fw, out, image_prefix=image_prefix,
-            cpu_dma_mode=cpu_dma_mode, pcie_host_mode=pcie_host_mode)
-    emit_dma_tb(cfg, fw, out)
+            cpu_dma_mode=cpu_dma_mode, pcie_host_mode=pcie_host_mode,
+            ethernet_mode=ethernet_mode, ethernet_cpu_mode=ethernet_cpu_mode)
+    emit_dma_tb(cfg, fw, out, ethernet_mode=ethernet_mode)
     manifest = {'top':'soc_top','testbench':'full_chip_tb','dma_testbench':'full_chip_dma_tb',
                 'cores':count,'networks':len(nets),
                 'fabric_core':'gen/supernoc/soc_noc.sv','dma_engines_instantiated':count,
@@ -401,8 +497,11 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
                     'local_data_noc':s['name']+'_local_data',
                     'local_config_noc':s['name']+'_local_config',
                     'rtl_attachment':('live_pcie_tlp_axi_bridge' if pcie_host_mode and
-                                      s.get('ip') == 'verilog_pcie' else 'reserved_idle'),
-                    'csr_attachment':'explicit_axi_error'}
+                                      s.get('ip') == 'verilog_pcie' else
+                                      'live_ethernet_gmii_queue_axi_mvp' if ethernet_mode and
+                                      s.get('ip') == 'ethernet_queue_mac' else 'reserved_idle'),
+                    'csr_attachment':('live_ethernet_queue_axi4_lite' if ethernet_mode and
+                                      s.get('ip') == 'ethernet_queue_mac' else 'explicit_axi_error')}
                     for s in cfg['subsystems'] if s['type']=='peripheral'],
                 'dma':'PULP iDMA engines generated for each compute, enabled by DmaEnable=1; data ports route via local FlooNoCs and 32-bit CSRs via local/global config FlooNoCs; old boot defaults to disabled.',
                 'firmware':'firmware.json','reset_register_bytes':reg_bytes,
@@ -448,6 +547,21 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
             key = sub['name'] + '_local_data.' + sub['data_initiator']
             actors[key] = {'kind':'rtl_pcie_bridge',
                            'label':'Pinned real PCIe TLP-AXI bridge; modeled Root Complex'}
+    if ethernet_mode:
+        manifest['ethernet0'] = {
+            'mode':'opt_in_1g_gmii_mac_rx_tx_queue_dma_cq',
+            'data_attachment':'single_pulp_axi_mux_six_sources_into_ethernet_local_data',
+            'config_attachment':'pulp_axi_to_axi_lite_into_queue_csrs',
+            'memory':'local_ethernet_sram_and_bounded_modeled_ddr',
+            'gmii_test_proven':False,
+            'completion_test_proven':False,
+            'note':'Attachment is generated; exact-chip RTL traffic NOT yet measured',
+        }
+        actors[ethernet[0]['name']+'_local_data.'+
+               ethernet[0]['data_initiator']] = {
+            'kind':'rtl_ethernet_dma',
+            'label':'Pinned GMII MAC and PULP AXI-muxed Ethernet RX/TX; requires GMII test'
+        }
     manifest['dma_parameters_by_compute'] = {
         core['name']: dma_params_for(cfg, core) for core in cores}
     manifest['axi_actors']=actors
@@ -479,7 +593,7 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
     return manifest
 
 
-def emit_dma_tb(cfg, fw, out):
+def emit_dma_tb(cfg, fw, out, *, ethernet_mode=False):
     """Dedicated reset-isolated DMA-through-NoC test (no firmware preload)."""
     probe = probe_ports('cpu0_data_bfm')
     cfgprobe = probe_ports('cpu0_config_bfm', addr_bits=32, data_bits=32, id_bits=1)
@@ -489,6 +603,15 @@ def emit_dma_tb(cfg, fw, out):
              '  input logic clk_i, rst_ni,',
              f'  output logic [{len(fw["cores"])-1}:0] dma_irq_o, dma_irq_pending_o,',
              *[p[1] for p in probe], *[p[1] for p in cfgprobe]]
+    if ethernet_mode:
+        lines += [
+            '  input logic gmii_rx_clk, gmii_rx_rst, gmii_tx_clk, gmii_tx_rst,',
+            '  input logic [7:0] gmii_rxd,',
+            '  input logic gmii_rx_dv, gmii_rx_er,',
+            '  output logic [7:0] gmii_txd,',
+            '  output logic gmii_tx_en, gmii_tx_er, eth_irq, eth_drop,',
+            '  output logic eth_bad_fcs, eth_tx_failed,',
+        ]
     lines[-1] = lines[-1].rstrip(',')
     lines += [');',
              "  soc_top #(.ProbeEnable(1'b1), .DmaEnable(1'b1), .DmaTestMode(1'b1)) dut (",
@@ -497,6 +620,12 @@ def emit_dma_tb(cfg, fw, out):
              '    .sram_valid_o(), .sram_write_o(), .sram_addr_o(),',
              '    .sram_data_o(), .sram_strb_o(), .rom_reads_o(), .flash_reads_o(),',
              '    .dma_irq_o(dma_irq_o), .dma_irq_pending_o(dma_irq_pending_o),',
+             *(['    .gmii_rx_clk, .gmii_rx_rst, .gmii_tx_clk, .gmii_tx_rst,',
+                 '    .gmii_rxd, .gmii_rx_dv, .gmii_rx_er,',
+                 '    .gmii_txd, .gmii_tx_en, .gmii_tx_er,',
+                 '    .eth_irq_o(eth_irq), .eth_drop_o(eth_drop),',
+                 '    .eth_bad_fcs_o(eth_bad_fcs), .eth_tx_failed_o(eth_tx_failed),']
+               if ethernet_mode else []),
              '    '+',\n    '.join(
                  f'.{("probe_" if p[0].startswith("cpu0_data_bfm_") else "cfgprobe_") + p[0].split("_bfm_",1)[1]}({p[0]})'
                  for p in [*probe,*cfgprobe])+');',
@@ -505,7 +634,7 @@ def emit_dma_tb(cfg, fw, out):
 
 
 def emit_tb(cfg, fw, out, *, image_prefix='gen/chip', cpu_dma_mode=False,
-            pcie_host_mode=False):
+            pcie_host_mode=False, ethernet_mode=False, ethernet_cpu_mode=False):
     n = len(fw['cores'])
     words = [len(fw['images'][c['name']]) for c in fw['cores']]
     max_words = max(words)
@@ -531,6 +660,13 @@ def emit_tb(cfg, fw, out, *, image_prefix='gen/chip', cpu_dma_mode=False,
         f'  localparam [N*32-1:0] BASES = {bases};', f'  localparam [N*32-1:0] WORDS = {counts};',
         f"  localparam [31:0] MAILBOX = 32'h{fw['mailbox']:08x};", f'  localparam integer DONE_OFFSET = {fw["done_offset"]};',
         '  reg clk = 0, rst_n = 0;',
+        *(['  reg gmii_rx_clk = 0, gmii_tx_clk = 0;',
+           '  reg gmii_rx_rst = 1, gmii_tx_rst = 1;',
+           '  reg [7:0] gmii_rxd = 0;',
+           '  reg gmii_rx_dv = 0, gmii_rx_er = 0;',
+           '  wire [7:0] gmii_txd;',
+           '  wire gmii_tx_en, gmii_tx_er, eth_irq, eth_drop, eth_bad_fcs, eth_tx_failed;']
+          if ethernet_mode else []),
         *(['  wire rst = ~rst_n;'] if pcie_host_mode else []),
         '`ifndef COCOTB_SIM', '  always #5 clk = ~clk;',
         '  initial begin repeat (10) @(negedge clk); rst_n = 1; end', '`endif',
@@ -555,6 +691,14 @@ def emit_tb(cfg, fw, out, *, image_prefix='gen/chip', cpu_dma_mode=False,
                            *(f'.{p[0]}(\'0)' if request_field(p[2],p[3]) else f'.{p[0]}()'
                              for p in cfgprobe),
                              *(pcie_chip.instance_ports() if pcie_host_mode else []),
+                             *(['.gmii_rx_clk', '.gmii_rx_rst',
+                                '.gmii_tx_clk', '.gmii_tx_rst',
+                                '.gmii_rxd', '.gmii_rx_dv', '.gmii_rx_er',
+                                '.gmii_txd', '.gmii_tx_en', '.gmii_tx_er',
+                                '.eth_irq_o(eth_irq)', '.eth_drop_o(eth_drop)',
+                                '.eth_bad_fcs_o(eth_bad_fcs)',
+                                '.eth_tx_failed_o(eth_tx_failed)']
+                               if ethernet_mode else []),
                              *(['.pcie_sram_write_count(pcie_sram_write_count)',
                                 '.pcie_sram_read_count(pcie_sram_read_count)',
                                 '.pcie_sram_last_write_addr(pcie_sram_last_write_addr)',
@@ -600,7 +744,8 @@ def emit_tb(cfg, fw, out, *, image_prefix='gen/chip', cpu_dma_mode=False,
             '            end'] if cpu_dma_mode else []),
         *(['            if (i==0 && address==MAILBOX+64) begin',
             '              cpu_dma_evidence <= value;',
-            "              if (value==32'h600dc0de) cpu_dma_success <= 1;",
+            ("              if (value==32'he700600d) cpu_dma_success <= 1;" if ethernet_cpu_mode else
+             "              if (value==32'h600dc0de) cpu_dma_success <= 1;"),
             '              $display("CPU C DMA evidence 0x%08x",value);',
             '            end'] if cpu_dma_mode else []),
         '            if (i==0 && address >= MAILBOX && address <= MAILBOX + DONE_OFFSET) begin',
@@ -632,8 +777,9 @@ def emit_tb(cfg, fw, out, *, image_prefix='gen/chip', cpu_dma_mode=False,
         "              if (off==DONE_OFFSET && value==32'h600d) begin",
         '                if (&check_mask !== 1\'b1 || &app_fetch !== 1\'b1 || !copied_all || rom_reads==0 || flash_reads==0)',
         '                  $fatal(1, "FAIL fullchip incomplete CPU execution/coordination");',
-        *(['                if (!cpu_dma_success) $fatal(1, "FAIL fullchip CPU DMA C evidence missing");',
-            "                if (cpu_dma_address_seen != 6'h3f) $fatal(1, \"FAIL fullchip CPU DMA physical allocation addresses missing\");"]
+        *(['                if (!cpu_dma_success) $fatal(1, "FAIL fullchip CPU C hook evidence missing");',
+            *([] if ethernet_cpu_mode else
+              ["                if (cpu_dma_address_seen != 6'h3f) $fatal(1, \"FAIL fullchip CPU DMA physical allocation addresses missing\");"])]
            if cpu_dma_mode else []),
         '                check_complete <= 1;', '                pass_flag <= 1;',
          *(['                '+sv_event('check','cpu0','firmware_check','pass')]

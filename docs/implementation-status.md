@@ -10,19 +10,26 @@ A passing BFM test does not by itself establish CPU/iDMA/controller integration.
 | Local SRAM | `make dv-sram` and YAML `sram-synthesis`, read/write ports and byte strobes | Legacy custom test SRAM; no silicon macro integration |
 | SERV | `make dv-serv`, real instruction execution | Standalone core test |
 | Dual-CPU cold boot | `make dv-boot`, PicoRV32 ROM/flash reads, stores into uninitialized SRAM, MMIO release of SERV, both signatures | Separate boot memory/bus scope |
-| Eight local/global FlooNoCs | `make dv-supernoc`, all real meshes connected by 11 AXI4 links, six upstream managers and nine mapped sparse targets | AXI BFMs at CPU/DMA/CSR/SRAM/memory-crossbar boundaries |
-| Xezim FlooNoC compatibility | `python3 tools/regress.py compatibility`, all eight structural compilations | Data-mesh width warnings remain; no Xezim NoC traffic proof |
+| Twelve configured local/global FlooNoCs | Generated `gen/noc/floonoc/manifest.json` and `gen/supernoc/manifest.json` currently record 12 meshes, 19 structural cross-network links, 10 masters and 13 slaves; independent routed BFM and CPU/DMA proof must be scoped to its exact test SHA | Generated topology is not proof of an attached Ethernet/PCIe packet engine; endpoint/data-path coverage differs by test |
+| Xezim FlooNoC compatibility | Historical Xezim structural NoC compilations; verify twelve-mesh exact-head run separately | Data-mesh width warnings remain; no claim of Xezim NoC routed-traffic proof |
 | AXI-Lite endpoint adapters | Upstream converters/mux/demux and reset register bank attached in the chip boot scope | The independent NoC BFM wrapper still uses AXI agents |
 | PULP iDMA | Isolated `make dv-dma` verified RTL descriptors ([CI](https://github.com/r987r/xezim-hello-world/actions/runs/41860245485)). Generated `DmaEnable=1` instances attach to each compute data NoC and `dma_regs` config NoC; `make dv-chip-dma` **passed** the real dual-engine full-chip RTL traffic test ([CI](https://github.com/r987r/xezim-hello-world/actions/runs/41885417960), 1,902 AXI observations). | CPU0 C-side submission/polling is verified ([full-chip CPU DMA CI](https://github.com/r987r/xezim-hello-world/actions/runs/41933332567), 39,150 AXI observations); CPU ISR/service, simultaneous CPU-launched dual-DMA and physical HBM/DDR remain pending |
+| Ethernet0 connected one-MAC RX/TX IP | [PR #73](https://github.com/r987r/xezim-hello-world/pull/73), [exact-head CI 42162107273](https://github.com/r987r/xezim-hello-world/actions/runs/42162107273) **4/4 Ethernet jobs PASS**: one pinned 1G MAC, GMII RX/TX and FCS, descriptor/packet DMA, 32-byte B-gated CQs, SRAM/model-DDR readback, Config/Data FlooNoCs. Real PicoRV32 C executes cold boot, programs RX/TX queue CSRs/policy, checks RX bytes, CQ/IRQ and acknowledgments; no CPU0 AXI BFM. | **Ethernet #64 MVP satisfied.** After merge, full PCIe RC reading Ethernet-produced bytes/CQ and five combined StepRecorder gates are owned by #34. Physical DDR/PCIe PHY and stress/performance remain deferred. |
+| Ethernet0 local Data/Config FlooNoCs | `ethernet_mode=True` physically wires six-source PULP mux to Ethernet Data NoC and queue CSR AXI4-to-Lite through Config NoC; both BFM and real CPU0 C tests pass [CI #42162107273](https://github.com/r987r/xezim-hello-world/actions/runs/42162107273). | Default canonical `gen/chip` stays reserved and must not be misrepresented; combined variant host-route diagram/latency audit belongs to #34. |
+| PCIe0 minimal host/CPU DMA path | Merged [#60](https://github.com/r987r/xezim-hello-world/pull/60), [CI 42134213227](https://github.com/r987r/xezim-hello-world/actions/runs/42134213227) passed real TLP/AXI host BAR to PCIe SRAM with CPU C/iDMA transfer to modeled DDR and return readback | No actual PCIe-host read of an Ethernet-generated packet/CQ in the same simulation yet; no physical PCIe link/PHY or outbound host-memory DMA (#76). |
 | HBM/DDR controllers and PHYs | No executable physical path | All current targets are behavioral AXI models |
 | Chip boot `soc_top` | `make dv-chip`: real CPUs cold-boot and coordinate INIT/RUN/CHECK; `chip-cpu-dma` runs compiled C on PicoRV32 and validates SRAM/DDR/HBM roundtrips through iDMA ([CI 41933332567](https://github.com/r987r/xezim-hello-world/actions/runs/41933332567)) | CPU ISR, mixed-engine concurrent firmware and physical controller/PHY integration remain pending |
 
 See [super-NoC verification](supernoc-verification.md) for the exact traffic
 checks, local evidence, test commands and known limitations. See
 [simulator compatibility](simulator-compatibility.md) for diagnostics.
-The generic FlooNoC backend registry remains non-executable because it does
-not emit a general complete SoC. Shared NoC, BFM and CPU boot-configuration
+The generic FlooNoC backend registry remains non-executable as a universal
+arbitrary-SoC plugin; dedicated generated chip and BFM emitters exist. Shared NoC, BFM and CPU boot-configuration
 emitters exist; optional real iDMA wiring is emitted and passed full-chip RTL traffic regression ([CI run 41885417960](https://github.com/r987r/xezim-hello-world/actions/runs/41885417960)); CPU C-DMA integration has been verified; interrupt-service firmware and physical controllers remain pending.
+
+## Independent global NoC concurrency regression
+
+The historical upstream `NoBResponseIdQueue` assertion at 227.52 µs (CI #42145885829) was fixed and regression-tested in [merged PR #78](https://github.com/r987r/xezim-hello-world/pull/78) on `main` `b91e3d3`. Ethernet PR #73 includes that fix and [exact-head CI 42162107273](https://github.com/r987r/xezim-hello-world/actions/runs/42162107273) is all green. Generic stress/performance limits still require their own qualification.
 
 ## Single architecture diagram
 

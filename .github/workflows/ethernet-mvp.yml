@@ -1,0 +1,227 @@
+name: Ethernet MVP connected RX RTL and AXI CQ gate
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'rtl/io/ethernet0/**'
+      - 'dv/ethernet0/**'
+      - '.github/workflows/ethernet-mvp.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ethernet-mvp-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  connected-rx:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install pinned Ethernet and AXI simulation dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends iverilog
+          python3 -m pip install 'PyYAML==6.0.3' 'cocotb==1.9.2' \
+            'cocotbext-axi==0.1.28' 'cocotbext-eth==0.1.28' 'cocotb-test==0.2.6'
+          python3 tools/ip_fetch.py verilog_axi
+          python3 -m unittest tests.test_ethernet_chip_variant -v
+      - name: Elaborate actual GMII MAC to CQ writer connectivity
+        run: |
+          python3 - <<'PY'
+          from dv.ethernet0.run_mac_gmii import fetch_pinned
+          from pathlib import Path
+          import subprocess
+          root=Path.cwd()
+          sources=[root/"rtl/io/ethernet0"/name for name in (
+              "ethernet0_rx_mvp.v","ethernet0_rx_gmii_stager.v",
+              "ethernet0_mac_gmii.v","ethernet_rx_frame_stager.v",
+              "ethernet_rx_queue_engine.v","ethernet_queue_ctrl.sv",
+              "ethernet_rx_desc_fetch.v","ethernet_rx_dma.v",
+              "ethernet_cq_axi_writer.v","ethernet_tx_dma.v",
+              "ethernet0_tx_mvp.v","ethernet0_mvp.v",
+          )]
+          for directory,meta in fetch_pinned().values():
+              sources.extend(directory/path for path in meta["modules"])
+          sources.extend(root/".tools/verilog_axi/rtl"/name for name in (
+              "axi_dma_rd.v","axi_dma_wr.v",
+          ))
+          subprocess.run(["iverilog","-g2012","-Wall",
+                          "-s","ethernet0_rx_mvp","-t","null",
+                          *(str(p) for p in sources)],check=True)
+          subprocess.run(["iverilog","-g2012","-Wall",
+                          "-s","ethernet0_tx_mvp","-t","null",
+                          *(str(p) for p in sources)],check=True)
+          print("PASS TX descriptor, upstream AXI DMA, MAC wire-completion and CQ RTL elaboration")
+          subprocess.run(["iverilog","-g2012","-Wall",
+                          "-s","ethernet0_mvp","-t","null",
+                          *(str(p) for p in sources)],check=True)
+          print("PASS one-MAC RX/TX Ethernet MVP IP elaborates with six upstream AXI masters")
+          print("PASS connected Ethernet GMII RX -> complete-frame -> queue -> AXI DMA and real CQ writer RTL elaboration")
+          sources.extend((
+              root/".tools/verilog_axi/rtl/axi_ram.v",
+              root/"dv/ethernet0/ethernet0_rx_mvp_tb.v",
+          ))
+          from cocotb_test.simulator import run
+          run(simulator="icarus",verilog_sources=[str(p) for p in sources],
+              toplevel="ethernet0_rx_mvp_tb",
+              module="dv.ethernet0.tb_rx_mvp",
+              python_search=[str(root)],
+              sim_build=str(root/".tools/regression/ethernet-mvp/sim_build"),
+              timescale="1ns/1ps",waves=False)
+          print("PASS real GMII RX -> SRAM packet -> 32-byte CQ AXI B and independent readback")
+          sources.append(root/"dv/ethernet0/ethernet0_tx_mvp_tb.v")
+          run(simulator="icarus",verilog_sources=[str(p) for p in sources],
+              toplevel="ethernet0_tx_mvp_tb",
+              module="dv.ethernet0.tb_tx_mvp",
+              python_search=[str(root)],
+              sim_build=str(root/".tools/regression/ethernet-mvp/tx_sim_build"),
+              timescale="1ns/1ps",waves=False)
+          print("PASS real SRAM TX descriptor -> GMII wire frame/FCS -> B-gated TX CQ")
+          PY
+      - name: Archive structural source list
+        if: always()
+        run: |
+          mkdir -p .tools/regression/ethernet-mvp
+          git rev-parse HEAD > .tools/regression/ethernet-mvp/source-head.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ethernet-mvp-structural-${{ github.run_id }}
+          path: .tools/regression/ethernet-mvp/
+          if-no-files-found: warn
+  noc-axi-mux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-bender
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Fetch pinned PULP AXI and FlooNoC RTL
+        run: |
+          python3 -m pip install -r requirements.txt
+          python3 -m pip install 'mako==1.3.10' 'hjson==3.1.0' 'peakrdl>=1.5.0' 'peakrdl-rawheader>=0.2.8' 'peakrdl-cheader>=1.1.0'
+          python3 tools/ip_fetch.py floonoc pulp_idma verilog_axi
+          python3 -m pip install -e .tools/floonoc
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends verilator clang llvm lld
+      - name: Resolve source-true chip Bender filelist and compile six-source AXI mux
+        run: |
+          set -euo pipefail
+          python3 tools/regress.py chip-boot --stage files
+          test -f .tools/regression/chip-boot/sources.f
+          python3 - <<'PY'
+          from dv.ethernet0.run_mac_gmii import fetch_pinned
+          with open('.tools/regression/ethernet-pinned.f','w') as out:
+              for directory,spec in fetch_pinned().values():
+                  for module in spec['modules']:
+                      print(directory/module,file=out)
+          PY
+          verilator --lint-only --timing -Wno-fatal \
+            --top-module ethernet0_axi_mvp \
+            -f .tools/regression/chip-boot/sources.f \
+            -f .tools/regression/ethernet-pinned.f \
+            rtl/io/ethernet0/ethernet0_axi_mvp.sv \
+            rtl/io/ethernet0/ethernet0_mvp.v \
+            rtl/io/ethernet0/ethernet0_rx_mvp.v \
+            rtl/io/ethernet0/ethernet0_tx_mvp.v \
+            rtl/io/ethernet0/ethernet0_rx_gmii_stager.v \
+            rtl/io/ethernet0/ethernet0_mac_gmii.v \
+            rtl/io/ethernet0/ethernet_rx_frame_stager.v \
+            rtl/io/ethernet0/ethernet_rx_queue_engine.v \
+            rtl/io/ethernet0/ethernet_queue_ctrl.sv \
+            rtl/io/ethernet0/ethernet_rx_desc_fetch.v \
+            rtl/io/ethernet0/ethernet_rx_dma.v \
+            rtl/io/ethernet0/ethernet_tx_dma.v \
+            rtl/io/ethernet0/ethernet_cq_axi_writer.v \
+            .tools/verilog_axi/rtl/axi_dma_rd.v \
+            .tools/verilog_axi/rtl/axi_dma_wr.v
+          echo "PASS Ethernet0 six-initiator PULP AXI mux source elaboration"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ethernet-axi-mux-sources-${{ github.run_id }}
+          path: .tools/regression/chip-boot/sources.f
+          if-no-files-found: warn
+  chip-real-noc:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-bender
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned Ethernet/CPU/AXI/FlooNoC tools and VIPs
+        run: |
+          set -euo pipefail
+          python3 -m pip install -r requirements.txt
+          python3 -m pip install 'mako==1.3.10' 'hjson==3.1.0' 'peakrdl>=1.5.0' 'peakrdl-rawheader>=0.2.8' 'peakrdl-cheader>=1.1.0'
+          python3 -m pip install 'cocotb==1.9.2' 'cocotb-bus==0.2.1' 'cocotbext-axi==0.1.28' 'cocotbext-eth==0.1.28' 'cocotb-test==0.2.6'
+          python3 tools/ip_fetch.py floonoc pulp_idma verilog_axi picorv32 serv wb2axip
+          python3 -m pip install -e .tools/floonoc
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends verilator iverilog clang llvm lld
+      - name: Validate default and opt-in generated RTL contracts
+        run: |
+          set -euo pipefail
+          python3 -m unittest tests.test_ethernet_chip_variant -v
+          make check-generated
+      - name: Run real generated chip Ethernet GMII to SRAM and modeled DDR
+        run: python3 tools/regress.py chip-ethernet
+      - name: Preserve full-chip real AXI, GMII and CQ report provenance
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ethernet-chip-data-config-noc-${{ github.run_id }}
+          path: .tools/regression/chip-ethernet/
+          include-hidden-files: true
+          if-no-files-found: warn
+  chip-cpu-ethernet:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-bender
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned RTL, simulation VIP and LLVM RV32I toolchain
+        run: |
+          set -euo pipefail
+          python3 -m pip install -r requirements.txt
+          python3 -m pip install 'mako==1.3.10' 'hjson==3.1.0' 'peakrdl>=1.5.0' 'peakrdl-rawheader>=0.2.8' 'peakrdl-cheader>=1.1.0'
+          python3 -m pip install 'cocotb==1.9.2' 'cocotb-bus==0.2.1' 'cocotbext-axi==0.1.28' 'cocotbext-eth==0.1.28' 'cocotb-test==0.2.6'
+          python3 tools/ip_fetch.py floonoc pulp_idma verilog_axi picorv32 serv wb2axip
+          python3 -m pip install -e .tools/floonoc
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends verilator clang llvm lld
+      - name: Verify RV32I CPU0 C flash image and Ethernet opt-in source truth
+        run: |
+          set -euo pipefail
+          python3 -m unittest tests.test_ethernet_chip_variant -v
+          make check-generated
+          python3 tools/regress.py chip-ethernet-cpu --stage files
+          test -f .tools/regression/chip-ethernet-cpu/variant/cpu_dma.elf
+          test -f .tools/regression/chip-ethernet-cpu/variant/flash.hex
+          test -f .tools/regression/chip-ethernet-cpu/sources.f
+      - name: Run actual PicoRV32 C queue CSR, GMII and B-gated CQ regression
+        run: python3 tools/regress.py chip-ethernet-cpu
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ethernet-cpu0-c-queue-cq-${{ github.run_id }}
+          path: .tools/regression/chip-ethernet-cpu/
+          include-hidden-files: true
+          if-no-files-found: warn

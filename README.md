@@ -24,10 +24,16 @@ boundary. See [full evidence and limits](docs/pcie0-host-phases.md).
 
 The PCIe path is currently **host-BAR pull, not endpoint-initiated DMA into
 host DRAM**. The DDR aperture is an AXI SRAM-backed model, not a real
-DDR4 controller. Ethernet end-to-end, outbound host DMA, physical PHY,
+DDR4 controller. Combined Ethernet+CPU+PCIe host end-to-end, outbound host DMA, physical PHY,
 backpressure and performance qualification remain separate tracks.
 Generated topology diagrams and RTL continue to be governed by `make gen`;
 this status section does not override the source-true variant manifest.
+
+## Ethernet0 minimal viable IP: generated-chip GMII RX/TX now passing
+
+[Draft PR #73](https://github.com/r987r/xezim-hello-world/pull/73) contains a single real 1G GMII MAC, RX and TX queues, descriptor and packet AXI DMA, B-gated completion records, one six-initiator upstream PULP AXI mux into Ethernet local Data NoC and an independent Config NoC AXI4-to-Lite queue CSR target. [CI #42145885849](https://github.com/r987r/xezim-hello-world/actions/runs/42145885849) passed the opt-in generated-chip RX into SRAM and **modeled** DDR plus TX from both memories, with exact bytes/FCS and CQ frontdoor readback. The test uses CPU0 AXI BFMs with the real CPUs held reset.
+
+**Ethernet standalone MVP is verified.** [Exact-head CI #42162107273](https://github.com/r987r/xezim-hello-world/actions/runs/42162107273) passed four dedicated jobs, including a **real PicoRV32 CPU0 C** program that configures Ethernet RX/TX queue CSR/policy through Config NoC, writes SRAM descriptors/data, validates 85 received bytes, B-gated RX/TX CQ records and IRQ acknowledgement, while a physical GMII test peer transmits and receives byte-perfect frames. CPU0 is not replaced by an AXI BFM in that test. Merged NoC fix [#78](https://github.com/r987r/xezim-hello-world/pull/78) resolves the earlier same-ID response assertion. The default generated chip and canonical architecture diagram intentionally keep Ethernet reserved; only `ethernet_mode=True` instantiates live Ethernet. See [Ethernet #64 closure](docs/ethernet0-closure-gate.md) and [full integration #34](docs/multiprotocol-integration-readiness.md): cross-protocol PCIe host visibility and five combined `StepRecorder` steps are **not** Ethernet MVP merge blockers.
 
 ## Architecture, real RTL connectivity, and verification
 

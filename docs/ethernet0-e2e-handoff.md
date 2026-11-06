@@ -1,57 +1,39 @@
 # Ethernet0 end-to-end integration handoff
 
-## What has real RTL today
+## Verified Ethernet IP MVP
 
-- MAC + GMII RX/TX, FCS, 64-bit AXI-Stream/CDC and frame staging:
-  merged #52.
-- Programmable one-RX/one-TX queue model (scalable counts), strict
-  EtherType/UDP policy, descriptor fetch and upstream DMA reads/writes
-  against actual upstream AXI SRAM: merged #61.
-- A separate upstream AXI completion-record writer tested with real
-  AXI write responses and frontdoor SRAM readback: merged #68.
-- A generic peripheral emitter and the generated Ethernet0 local
-  Data/Config FlooNoCs with four global structural links: merged
-  #53 and topology consolidation PR #70.
+Ethernet issue [#64](https://github.com/r987r/xezim-hello-world/issues/64) now has a **functional bidirectional opt-in RTL variant** in [draft PR #73](https://github.com/r987r/xezim-hello-world/pull/73). The dedicated [Ethernet run #42145885849](https://github.com/r987r/xezim-hello-world/actions/runs/42145885849) at RTL SHA `3dcf2c2ef2e3480f5a4abd78dea49f2ad57a5c22` passed all three jobs: connected GMII regression, upstream six-source AXI mux elaboration, and full-chip Ethernet RX/TX through the actual generated local/global Data and independent Config FlooNoCs.
 
-## What is reserved, **not** functional packet routing
+The full-chip test drives real GMII frames to Ethernet SRAM and bounded modeled DDR, reads back the same 85 bytes using independent frontdoor AXI, validates 32-byte CQ records/producer positions, and sends SRAM- and modeled-DDR-sourced frames out the real MAC with valid FCS. It also checks a no-posted-buffer negative. Focused [RX](https://github.com/r987r/xezim-hello-world/actions/runs/42143412383) and [TX](https://github.com/r987r/xezim-hello-world/actions/runs/42143915021) tests independently prove stalled completion B response ordering and bad-FCS rejection.
 
-The canonical generated full-chip manifest marks Ethernet0
-`rtl_attachment: reserved_idle` and
-`csr_attachment: explicit_axi_error`.
-The diagrams must show the packet ingress and queue register attachment as
-**planned**, not wired. No CPU-driven GMII→local SRAM route may be reported as
-measured until actual packet traffic has completed through the generated NoC.
+The reusable RTL is `rtl/io/ethernet0/ethernet0_mvp.v` (one pinned MAC, one RX and one TX queue), with `ethernet0_axi_mvp.sv` using the pinned PULP AXI mux for six upstream descriptor/payload/CQ masters and `ethernet_queue_axi_regs.sv` using a real AXI4-to-AXI-Lite Config NoC bridge. No in-house replacement MAC, AXI arbitration, DMA or VIP was added.
 
-## One future end-to-end integration change: issue #64
+## Important variant boundary
 
-The single future PR should wire actual RX packet staging, header metadata,
-queue policy, descriptor fetch, upstream AXI DMA and SRAM. Reuse the
-verified completion-writer module, and only advance the queue's completion
-producer pointer after the corresponding packet **and** CQ AXI B responses
-are successful. TX must read the selected memory source and confirm GMII
-transmission, not just DMA read completion.
+The *default* committed `gen/chip/soc_top.sv` and architecture diagram still reserve Ethernet packet/CSR attachments. They are **not contradictory** to the measured opt-in variant: `tools/full_chip_gen.py::emit(..., ethernet_mode=True)` generates the live Ethernet instance. Its manifest labels the live attachment but does not mark unmeasured physical DDR controller/PHY or PCIe host as observed. Two opt-in/default source-generation tests and `make check-generated` have passed. A separate exact-variant diagram/parsed-port audit remains on the final checklist.
 
-Wire the existing queue CSR/doorbell MMIO through Ethernet0's generated
-Config FlooNoC. Reuse CPU0 cold boot and common INIT/RUN/CHECK; C and Python
-must read the same versioned descriptor ABI. Preserve the existing
-source-derived `config/soc.yaml` → `gen/noc/`, `gen/chip/`,
-`gen/diagrams/` chain.
+## Completed Ethernet #64 closure gate
 
-### Required exact-head proof before promoting to wired
+The real PicoRV32 C program `sw/ethernet/tests/eth_cpu_run.c` executes through the existing cold-boot hook, programs actual Ethernet Config NoC CSR/policy, posts one RX and one TX descriptor and doorbell, and independently checks RX SRAM bytes, both 32-byte CQ records and producer/consumer/IRQ acknowledge. The physical GMII source/sink remains a line-level testbench peripheral, while **CPU0 uses its real AXI master**, not BFMs or memory backdoors. The companion `dv/ethernet0/test_cpu_mvp.py` requires passive accepted Data/Config NoC AXI events and the existing INIT/RUN/CHECK phases. [CI #42162107273](https://github.com/r987r/xezim-hello-world/actions/runs/42162107273) **PASS, four of four jobs**, including `chip-ethernet-cpu` against tested RTL SHA `2ae83f279f96ced2f3393dede9e34f3d174e26f5`.
 
-1. Real Icarus/Verilator elaboration using pinned upstream MAC, FIFO,
-   AXI DMA and SRAM modules; all mandatory AXI/AXIS/CSR ports bound, clock
-   crossing reviewed.
-2. Unsolicited external GMII RX → queue-owned posted descriptor →
-   AXI SRAM write → independent SRAM readback → completion record AXI
-   write/readback → CPU queue consumer acknowledgment; no CPU intervention
-   per packet.
-3. Symmetric SRAM→TX AXI DMA→MAC→GMII verification, exact bytes and FCS.
-4. Negative tests: bad FCS, multiple rules, no buffer, CQ full,
-   descriptor crossing region, AXI SLVERR, reset mid-packet, stream backpressure.
-5. Passive AXI/packet correlations in common per-test reports; source SHA
-   and all generated manifests/diagrams regenerated from the same head.
-   Unobserved and not-yet-wired routes remain `UNMEASURED`.
+**Ethernet MVP criterion is met.** Merge [PR #73](https://github.com/r987r/xezim-hello-world/pull/73) and close #64 when GitHub accepts the final head. Keep dedicated `chip-ethernet-cpu` and BFM `chip-ethernet` tests, focused RX/TX tests, and actual opt-in generated-source checks as continuing regressions. The committed default `gen/chip` intentionally remains reserved.
 
-This is an architecture handoff, not a claim that the end-to-end path
-is currently wired. Continue under [issue #64](https://github.com/r987r/xezim-hello-world/issues/64).
+## Moved to #34 multiprotocol integration (not blockers for Ethernet closure)
+
+1. Modeled PCIe Root Complex reads **Ethernet-produced** payload and CQ via real TLPs and independently checks correct host bytes and completion records. Merged PCIe #60 is a reusable foundation, not proof of this join.
+2. The five original named `ETH_RX_SRAM`, `ETH_RX_MODELED_DDR`, `ETH_TX_SRAM_GMII`, `ETH_HOST_PCIe_VISIBILITY`, `ETH_CPU_CQ_AUDIT` steps must run together under the shared `StepRecorder` with passive AXI/TLP/GMII correlation and source-true topology/latencies. Do not treat `trace_phase` as complete step records.
+3. Broader fabric concurrency assertions, real LiteDRAM, PCIe PHY/outbound DMA and stress/performance remain their independent tracks; they are not Ethernet first-MVP requirements.
+
+## Resolved NoC ordering issue and remaining fabric scope
+
+The historical generic concurrent `supernoc` failure (`NoBResponseIdQueue` at 227.52 µs in CI #42145885829) was repaired by [merged PR #78](https://github.com/r987r/xezim-hello-world/pull/78), which passed its dedicated same-ID positive and negative scenarios and is incorporated in Ethernet PR #73. [Issue #75](https://github.com/r987r/xezim-hello-world/issues/75) tracks that history. This is a functional SoC test vehicle; large-scale simultaneous traffic and performance remain further qualification, not implied by the fix.
+
+## Reproduce and hand off
+
+- `python3 tools/regress.py chip-ethernet-cpu`: **real CPU0 C** cold boot + RX/TX queue/CQ/IRQ, GMII line, passive accepted AXI and flow events (required Ethernet #64 gate).
+- `python3 tools/regress.py chip-ethernet`: generated-chip RX/TX SRAM and modeled-DDR smoke, Config NoC CSR via CPU0 BFM, passive AXI report.
+- `.github/workflows/ethernet-mvp.yml`: pinned vendor source elaboration, connected component simulation and full-chip optional variant CI.
+- `docs/ethernet0-closure-gate.md`: the scoped **CPU0 C Ethernet closure** and deferred full-system five-step checklist.
+- `docs/multiprotocol-integration-readiness.md`: the combined CPU/PCIe/Ethernet bring-up and dependencies.
+
+**Decision:** Ethernet #64 is complete at the test level and ready to merge/close once GitHub accepts the head. Full PCIe/DDR/Ethernet cross-protocol host visibility and five-step closure remain with #34.
