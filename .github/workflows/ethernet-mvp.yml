@@ -28,6 +28,7 @@ jobs:
           python3 -m pip install 'PyYAML==6.0.3' 'cocotb==1.9.2' \
             'cocotbext-axi==0.1.28' 'cocotbext-eth==0.1.28' 'cocotb-test==0.2.6'
           python3 tools/ip_fetch.py verilog_axi
+          python3 -m unittest tests.test_ethernet_chip_variant -v
       - name: Elaborate actual GMII MAC to CQ writer connectivity
         run: |
           python3 - <<'PY'
