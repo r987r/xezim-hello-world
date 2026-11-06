@@ -147,3 +147,21 @@ artifact when that regression actually executes. This is NOT evidence of
 physical DDR/HBM controller integration (the separate `chip-cpu-dma` gate verifies CPU0-launched C DMA with passive AXI evidence).
 
 Successful [isolated](https://github.com/r987r/xezim-hello-world/actions/runs/41860245485) and [full-chip](https://github.com/r987r/xezim-hello-world/actions/runs/41885417960) DMA CI evidence is associated with its tested Git SHA. The Pages collector must verify a merged PR/source before treating either as current main evidence; the prior runs do not alone validate a new merged tree.
+
+## Address-map page and generated CSR artifacts
+
+The verification hub has one dedicated, mobile-friendly `Address Map`
+navigation page using `config/soc.yaml` for every architectural data and
+configuration aperture. `data/soc-address-map.json` is the complete source
+catalog; `data/soc-data-memories.rdl` is an external-memory SystemRDL view,
+not memory RTL. Unassigned holes are not backed storage.
+
+GitHub Pages CI pins SystemRDL/PeakRDL and emits the reset-control RDL
+register contract and per-IP C headers, which are published as downloads.
+If pinned generation fails, Pages build fails, rather than silently
+publishing stale register definitions. Local preview without generation
+is explicitly aperture-only. These are *definitions*, not proof that the
+compiled RTL storage or frontdoor/backdoor paths match the catalog.
+Individual AXI run reports remain the source for real accepted transactions.
+PR preview builds do not deploy; merge-to-main dispatch is the only
+Pages deployment path.

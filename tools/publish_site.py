@@ -516,7 +516,7 @@ def shell(title,body,relative,repository,sha):
     else:prefix+='/'
     template=(ROOT/'tools/templates/site.html').read_text()
     navigation=''.join(f'<a href="{prefix}{path}">{label}</a>' for path,label in
-                       [('index.html','Overview'),('topology.html','Topology'),('explorer.html','Chip architecture'),('fabric.html','Fabric Explorer'),('runs.html','Test runs'),('docs.html','Documentation'),('reference.html','Source data')])
+                       [('index.html','Overview'),('topology.html','Topology'),('explorer.html','Chip architecture'),('fabric.html','Fabric Explorer'),('address-map.html','Address Map'),('runs.html','Test runs'),('docs.html','Documentation'),('reference.html','Source data')])
     return (template.replace('__TITLE__',escape(title)).replace('__NAV__',navigation).replace('__HOME__',prefix+'index.html')
             .replace('__CONTENT__',body).replace('__SOURCE__',escape(sha[:12]))
             .replace('__REPO__',f'https://github.com/{repository}/tree/{sha}'))
@@ -580,6 +580,22 @@ def build(output,evidence,repository,sha,config):
     monitors=json.loads((ROOT/'gen/supernoc/axi_monitors.json').read_text())
     fabric_report.attach_one_beat_observations(fabric, entries, output, sha)
     dump(output/'data/fabric.json',fabric)
+    # Config is authoritative for addresses. Optional pinned RDL output adds
+    # register definitions, but never asserts active RTL or observed traffic.
+    import address_map
+    csr_path=ROOT/'.tools/csr-verified/csr-map.json'
+    csr_ready=csr_path.is_file()
+    address_catalog=address_map.build(ROOT/'config/soc.yaml',
+        csr_path=csr_path if csr_ready else None,
+        variant='cold_boot' if csr_ready else 'architecture')
+    dump(output/'data/soc-address-map.json',address_catalog)
+    (output/'data/soc-data-memories.rdl').write_text(address_map.memory_rdl_view(address_catalog))
+    if csr_ready:
+        for filename in ('csr-map.json','soc_csr_bases.h','soc_boot_reset_ctrl_regs.h','boot_reset_ctrl_types.h'):
+            file=csr_path.parent/filename
+            if not file.is_file():
+                raise ValueError('incomplete PeakRDL catalog: '+filename)
+            shutil.copyfile(file,output/'data'/filename)
     from design_explorer import catalog as design_catalog
     design_graph = design_catalog(ROOT)
     dump(output/'data/design-graph.json', design_graph)
@@ -612,7 +628,7 @@ def build(output,evidence,repository,sha,config):
              'monitors':monitors['monitors'],'fabric':fabric['summary'],'tests':catalog['tests']}
     dump(output/'data/site.json',dataset)
     data=json.dumps(dataset,separators=(',',':')).replace('<','\\u003c')
-    for page in ('index','topology','explorer','fabric','runs','docs','reference'):
+    for page in ('index','topology','explorer','fabric','address-map','runs','docs','reference'):
         body=(ROOT/('tools/templates/site_'+page+'.html')).read_text().replace('__SITE_DATA__',data)
         if page=='explorer':
             graph_data = json.dumps(design_graph, separators=(',', ':')).replace('<','\\u003c')
@@ -623,6 +639,18 @@ def build(output,evidence,repository,sha,config):
             body = body.replace('__RTL_PARSE_DATA__', parsed_data)
             architecture_js = (ROOT/'tools/templates/site_arch_explorer.js').read_text()
             body = body.replace('__ARCH_JS__', architecture_js)
+        if page=='address-map':
+            map_json=json.dumps(address_catalog,separators=(',',':')).replace('<','\\u003c')
+            body=body.replace('__ADDRESS_MAP_DATA__',map_json)
+            details=('<a href="data/csr-map.json">Generated CSR metadata</a> · '
+                     '<a href="data/soc_boot_reset_ctrl_regs.h">Register C header</a> · '
+                     '<a href="data/soc_csr_bases.h">Instance-base C header</a>') if csr_ready else (
+                     'RDL register details unavailable in this local preview')
+            body=body.replace('__CSR_SOURCE_LINKS__',details)
+        if page=='reference':
+            body=body.replace('__CSR_SOURCE_LINKS__',
+                '<li><a href="data/csr-map.json">Generated CSR metadata</a></li>'
+                if csr_ready else '')
         if page=='fabric':
             fabric_data=json.dumps(fabric,separators=(',',':')).replace('<','\\u003c')
             body=body.replace('__FABRIC_DATA__',fabric_data)
