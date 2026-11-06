@@ -6,7 +6,7 @@ The [README](../README.md) embeds **one canonical whole-chip diagram**. Detailed
 
 ## Boot and SRAM loading
 
-CPU0 (PicoRV32) is the primary boot core. CPU1 (SERV) stays in reset until CPU0 has copied both firmware images from the read-only flash model into blank SRAM, then writes the reset-control MMIO register. The older standalone boot scope remains independent. The new chip boot configuration runs the same ROM-copy policy through real local/global NoCs; the flash transport is still a model. Read [boot.md](boot.md) for the exact address map, bus transactions, limitations and next steps. A controller configuration aperture at 0x40030000 is reserved in the generated global/local config NoCs; real controller CSR RTL remains absent.
+CPU0 (PicoRV32) is the primary boot core. CPU1 (SERV) stays in reset until CPU0 has copied both firmware images from the read-only flash model into blank SRAM, then writes the reset-control MMIO register. The older standalone boot scope remains independent. The new chip boot configuration runs the same ROM-copy policy through real local/global NoCs; the flash transport is still a model. Read [boot.md](boot.md) for the exact address map, bus transactions, limitations and next steps. The default generated variant reserves the memory controller aperture, while the opt-in `chip-ddr4-real` variant attaches real pinned LiteDRAM RTL and source-qualified native controller CSRs through the independent Config NoC. Do not infer that this controller is attached in the default modeled-memory variant.
 
 ## Structure
 
@@ -25,10 +25,12 @@ The generator first validates an abstract graph of **initiators, targets, bounda
 | Compute0 local data + config | `floonoc` | BFM scope plus CPU/SRAM/reset boot-configuration wiring; real iDMA/CSRs generated behind DmaEnable (new full-chip regression) |
 | Compute1 local data + config | `floonoc` | BFM scope plus CPU/SRAM/reset boot-configuration wiring; real iDMA/CSRs generated behind DmaEnable (new full-chip regression) |
 | Memory0 local data + config | `floonoc` | BFM scope plus attached chip target crossbar/AXI memory stand-ins |
-| Global data | `floonoc` | Six-router XY mesh; routed SRAM/memory-window traffic passes in the connected BFM scope |
+| Global data | `floonoc` | Twelve-router XY mesh in the current generated profile; routed SRAM/memory-window traffic passes in the connected BFM scope |
 | Global config | `floonoc` | BFM scope plus upstream CPU/reset AXI-Lite adapters in chip boot |
+| PCIe0 local data + config | `floonoc` | Both generated structurally; live PCIe host bridge and SRAM are exercised in opt-in `chip-pcie-host`, while default chip marks the packet/CSR endpoints reserved |
+| Ethernet0 local data + config | `floonoc` | Both generated structurally; real GMII MAC, packet DMA, SRAM and queue CSRs are exercised in opt-in `chip-ethernet*`, while default chip marks packet/CSR endpoints reserved |
 
-All eight structural tops/packages, generated upstream FlooGen YAML inputs,
+All twelve structural tops/packages, generated upstream FlooGen YAML inputs,
 and native MaxTxns/MaxUniqueIds/read/write RoB bindings are tracked in
 [the NoC manifest](../gen/noc/floonoc/manifest.json). For AXI-Lite
 control traffic follow [the no-custom-bridge upstream reuse guide](axi-lite-over-floonoc.md).
