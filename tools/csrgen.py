@@ -75,7 +75,7 @@ def compile_rdl(path: Path, n_secondary: int):
     for udp in ALL_UDPS:
         compiler.register_udp(udp)
     compiler.compile_file(str(path))
-    root = compiler.elaborate(top_def_name="boot_reset_ctrl")
+    root = compiler.elaborate(top_def_name="boot_reset_ctrl", parameters={"SECONDARY_COUNT": n_secondary})
     return root
 
 
