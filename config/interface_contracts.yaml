@@ -66,7 +66,12 @@ fabric_parameters:
     AtopSupport: false
     MaxAtomicTxns: 0
     RRoBType: NormalRoB
-    BRoBType: NormalRoB
+    # Mitigate observed response-ID underflow at inter-NoC boundary:
+    # concurrent AWID=1 writes to Ethernet SRAM and Memory0 returned
+    # completions out of order; a B arrived as ID=0 with no ID=0 AW pending.
+    # Pinned upstream NoRoB permits parallel different IDs but holds a
+    # given ID to one destination until its prior responses complete.
+    BRoBType: NoRoB
     RRoBSize: 8
     BRoBSize: 8
   memory_local_data: *local_data_floo

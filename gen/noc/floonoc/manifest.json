@@ -169,7 +169,7 @@
       "native_parameters": {
         "AtopSupport": false,
         "BRoBSize": 8,
-        "BRoBType": "NormalRoB",
+        "BRoBType": "NoRoB",
         "MaxAtomicTxns": 0,
         "MaxTxns": 8,
         "MaxTxnsPerId": 9,

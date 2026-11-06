@@ -107,6 +107,22 @@ class FlooNoCProfilesTest(unittest.TestCase):
         with self.assertRaisesRegex(floonoc_gen.NoCGenerationError, "ATOPs unsupported"):
             floonoc_gen.profiles(self.soc, knobs)
 
+    def test_global_data_b_responses_serialize_same_id_cross_dest(self):
+        # Native pinned floo_rob_wrapper.NoRoB uses per-ID destination
+        # counters; unrelated IDs may remain outstanding concurrently.
+        params = self.knobs["fabric_parameters"]["global_data"]
+        self.assertEqual(params["BRoBType"], "NoRoB")
+        self.assertEqual(params["RRoBType"], "NormalRoB")
+        self.assertGreaterEqual(params["MaxTxnsPerId"], params["MaxTxns"])
+        minimal = ("module global_data(input logic clk);\n"
+                   "floo_axi_chimney #(\n"
+                   "  .ChimneyCfg(set_ports(ChimneyDefaultCfg, 1'b0, 1'b1))\n"
+                   ") compute0_ni();\nendmodule\n")
+        generated, count = floonoc_gen.native_bindings(minimal, params)
+        self.assertEqual(count, 1)
+        self.assertIn("c.BRoBType = NoRoB;", generated)
+        self.assertIn("c.RRoBType = NormalRoB;", generated)
+
     def test_native_upstream_chimney_knobs_are_applied(self):
         # Simulates the exact anchor emitted by pinned upstream FlooGen.
         minimal = ("module floo_example(input logic clk);\n"
