@@ -7,11 +7,48 @@
 <p class="muted">Counts distinguish configured targets, targets with a result artifact, and workflow executions. New tests are discovered from the regression YAML and CI without editing this page.</p>
 <div id="suite-summary" class="grid" aria-label="Filter tests by suite"></div>
 
+<section id="unified-traffic" aria-label="Unified protocol traffic">
+<h2>Protocol traffic · all tests</h2>
+<p class="muted">One viewer for PCIe TLPs, Ethernet GMII frames, AXI4/AXI5, APB, DFI and future recorded protocols. Select a verified run and filter its actual observations. Incomplete or absent capture is not a test PASS.</p>
+<div class="filters">
+  <label>Test / CI run <select id="traffic-run" aria-label="Traffic test run"></select></label>
+  <label>Protocol <select id="traffic-protocol"><option value="">All protocols</option></select></label>
+  <label>Monitor <select id="traffic-source"><option value="">All monitors</option></select></label>
+  <label>Operation <select id="traffic-operation"><option value="">All operations</option></select></label>
+  <label>Capture status <select id="traffic-state"><option value="">All states</option><option value="complete">Complete</option><option value="observed">Observed event</option><option value="error">Error</option><option value="incomplete">Incomplete</option><option value="reset_aborted">Reset aborted</option></select></label>
+  <label>Search <input type="search" id="traffic-query" placeholder="MAC, TLP tag, address, payload, source..."></label>
+</div>
+<p id="traffic-provenance" class="muted"></p>
+<p id="traffic-notice" class="muted"></p>
+<div class="card"><h3>Observed completion timeline</h3>
+<div class="scroll" style="padding:8px"><canvas id="traffic-timeline" height="180" aria-label="Monitor observations against simulation time" role="img" style="display:block;max-width:100%;width:100%"></canvas></div></div>
+<div class="filters">
+ <span id="traffic-total" class="muted" aria-live="polite"></span>
+ <button type="button" id="traffic-csv">Export filtered CSV</button>
+ <button type="button" id="traffic-json">Export filtered JSON</button>
+ <button type="button" id="traffic-open-raw">Open raw capture</button>
+</div>
+<div class="scroll"><table id="traffic-table"><thead id="traffic-head"></thead><tbody id="traffic-rows"></tbody></table></div>
+<button type="button" id="traffic-prev">Previous</button> <button type="button" id="traffic-next">Next</button>
+<details open><summary>Selected transaction / packet — full source-native fields</summary><pre id="traffic-detail" style="max-height:380px;overflow:auto">Select a row to view all captured header, frame, address, payload, and timing fields.</pre></details>
+</section>
+<style>
+#unified-traffic{scroll-margin-top:18px}
+#unified-traffic .card{margin:14px 0}
+#unified-traffic .filters{margin:15px 0}
+#unified-traffic .filters label{min-width:145px;flex:1}
+#unified-traffic select,#unified-traffic input{width:100%;max-width:350px}
+#unified-traffic .scroll{max-height:520px}
+#unified-traffic td{font-size:12px;max-width:230px;overflow-wrap:anywhere}
+#unified-traffic tr:focus,#unified-traffic tbody tr:hover{background:#223750;cursor:pointer}
+</style>
+
 <h2>Recorded test results</h2>
 <div class="filters">
   <label>Suite<select id="family"><option value="">All suites</option></select></label>
   <label>Search<input id="search" type="search" placeholder="Target, commit, workflow or protocol"></label>
   <label>Outcome<select id="outcome"><option value="">All outcomes</option><option value="pass">PASS</option><option value="fail">FAIL</option></select></label>
+  <label>Protocol<select id="recorded-protocol"><option value="">All protocols</option></select></label>
   <label>Evidence<select id="kind"><option value="">All scopes</option><option value="axi">AXI reports</option><option value="protocol">Protocol reports</option><option value="negative">Expected-failure checks</option></select></label>
   <label>History<select id="history"><option value="latest">Latest per test / workflow</option><option value="all">All retained runs</option></select></label>
   <span id="count" class="muted" aria-live="polite"></span>
@@ -28,6 +65,7 @@
 <div class="scroll"><table><thead><tr><th>Target</th><th>Suite</th><th>Recorded result</th><th>Engine</th><th>Top / source scope</th><th>Acceptance rule</th></tr></thead><tbody id="catalog"></tbody></table></div>
 
 <script type="application/json" id="site-data">__SITE_DATA__</script>
+<script>__RUN_TRAFFIC_JS__</script>
 <script>
 (() => {
 "use strict";
@@ -63,6 +101,18 @@ const groups=[...new Set([
   ...D.entries.map(e=>suite(e.target,e.workflow)),
   ...D.runs.map(r=>suite("",r.label))
 ])].sort((a,b)=>priority.indexOf(a)-priority.indexOf(b));
+const protocolFilter=byId("recorded-protocol");
+const knownProtocols=[...new Set([
+  ...D.entries.flatMap(e=>e.protocols||[]),
+  ...Object.values(D.tests).flatMap(t=>[
+    ...(t.report?.axi?["axi4"]:[]),
+    ...Object.values(t.report?.protocols?.sources||{}).map(s=>s.protocol).filter(Boolean)
+  ])
+])].filter(Boolean).sort();
+for(const name of knownProtocols){
+  const o=document.createElement("option");o.value=name;o.textContent=name;
+  protocolFilter.append(o);
+}
 const filter=byId("family");
 for(const name of groups){
   const o=document.createElement("option");o.value=name;o.textContent=name;filter.append(o);
@@ -105,6 +155,7 @@ function render(){
   const seen=new Set();let count=0;
   for(const e of D.entries){
     if(fam&&suite(e.target,e.workflow)!==fam)continue;
+    if(protocolFilter.value&&!(e.protocols||[]).includes(protocolFilter.value))continue;
     if(!matchesQuery([e.target,e.workflow,e.source_sha,e.engine,(e.protocols||[]).join(" ")],q))continue;
     if(outcome&&(outcome==="pass")!==e.passed)continue;
     if(kind==="axi"&&!e.axi)continue;
@@ -116,7 +167,13 @@ function render(){
     if(latest&&seen.has(key))continue;
     seen.add(key);
     const tr=document.createElement("tr");
-    td(tr,link(e.target,e.path));
+    const testLink=link(e.target,e.path);
+    const inspect=document.createElement("button");inspect.type="button";
+    inspect.textContent="Inspect traffic";inspect.style.display="block";
+    inspect.style.marginTop="7px";inspect.style.fontSize="12px";
+    inspect.disabled=!(e.protocols?.length||e.protocol_links?.sources?.length);
+    inspect.onclick=()=>window.openRunTraffic?.(e);
+    td(tr,testLink,inspect);
     td(tr,suite(e.target,e.workflow));
     td(tr,text("span",e.passed?"PASS":"FAIL",e.passed?"good":"bad"),
       text("div",e.expected_failure?"Required negative check":"Positive / compile gate","muted"));
@@ -164,6 +221,13 @@ function render(){
   const catalog=byId("catalog");catalog.replaceChildren();
   for(const [name,t] of Object.entries(D.tests)){
     if(fam&&suite(name)!==fam)continue;
+    const plannedProtocols=[
+      ...(t.report?.axi?["axi4"]:[]),
+      ...Object.values(t.report?.protocols?.sources||{}).map(s=>s.protocol).filter(Boolean)
+    ];
+    const recorded=latestTarget.get(name);
+    if(protocolFilter.value&&!plannedProtocols.includes(protocolFilter.value)&&
+       !(recorded?.protocols||[]).includes(protocolFilter.value))continue;
     if(!matchesQuery([name,t.engine,t.top,t.sources,t.pass],q))continue;
     const tr=document.createElement("tr"),e=latestTarget.get(name);
     td(tr,name);td(tr,suite(name));
@@ -175,7 +239,7 @@ function render(){
     catalog.append(tr);
   }
 }
-for(const id of ["family","search","outcome","kind","history"]){
+for(const id of ["family","search","outcome","kind","history","recorded-protocol"]){
   byId(id).addEventListener(id==="search"?"input":"change",render);
 }
 render();

@@ -90,6 +90,37 @@ time/monitor chart and filterable table.
 - Raw JSONL and versioned JSON remain downloadable; historical AXI report
   files are not rewritten in-place.
 
+## Unified Test Runs traffic explorer
+
+The primary UI is **Test Runs → Protocol traffic · all tests**. It offers
+an all-runs bounded preview, a single verified CI run selector, and protocol,
+monitor, operation, status, and payload/text filters. The page renders an
+observed-completion timeline and decoded source-native fields inline. Clicking
+a row expands the complete JSON record; CSV/JSON export uses the filtered
+selection. Choosing one run loads its full provenance-checked
+protocol-transactions.json, not only a summary.
+
+All reported protocols belong on this same page: PCIe, Ethernet, AXI4/AXI5,
+APB, DFI and new monitored buses need no new traffic-viewer implementation.
+The configured test catalog and CI-only checks remain separate from actual
+per-run traffic evidence. Independent per-run report.html/protocols.html
+artifacts are optional deep diagnostics and source exports, not mandatory
+navigation destinations. The architecture IP link inspector opens this
+unified page with the matching run, protocol, and source selected.
+
+### Ethernet GMII source/observer capture
+
+For chip-ethernet and chip-ethernet-cpu, the pinned cocotbext-eth GMII
+source/sink adapters publish two source-native monitor names:
+ethernet0.gmii_rx (VIP-injected frames after source.wait) and
+ethernet0.gmii_tx (RTL frames returned by the VIP sink). Their protocol
+metadata distinguish injected input from independently observed output.
+Fields include MAC addresses, EtherType, IPv4/UDP addresses/ports where
+present, original packet bytes, length, FCS status when checked and
+simulation time. These are **not physical Ethernet PHY** observations.
+AXI DDR/SRAM/CQ traffic still comes from the existing passive AXI
+correlator; no new MAC, BFM, decoder, or inferred DMA correlation was added.
+
 ## Architecture link traffic explorer (all protocols)
 
 The architecture inspector is a **read-only evidence consumer**. Each published

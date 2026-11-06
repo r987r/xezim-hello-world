@@ -801,6 +801,10 @@ def build(output,evidence,repository,sha,config):
             body=body.replace('__CSR_SOURCE_LINKS__',
                 '<li><a href="data/csr-map.json">Generated CSR metadata</a></li>'
                 if csr_ready else '')
+        if page=='runs':
+            # Trusted static JavaScript, not CI-supplied executable HTML.
+            traffic_js=(ROOT/'tools/templates/site_runs_traffic.js').read_text()
+            body=body.replace('__RUN_TRAFFIC_JS__',traffic_js)
         if page=='fabric':
             fabric_data=json.dumps(fabric,separators=(',',':')).replace('<','\\u003c')
             body=body.replace('__FABRIC_DATA__',fabric_data)

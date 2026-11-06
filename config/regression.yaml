@@ -272,6 +272,11 @@ tests:
           actors: {'1': cpu0}
           steps: {'201': eth_queue, '202': eth_rx, '203': eth_tx}
       axi: {scope: dut.u_noc, clock: clk, reset: rst_n, catalog: gen/supernoc/axi_monitors.json, actors: .tools/regression/chip-ethernet-cpu/variant/manifest.json, max_events: 500000, required_complete: true}
+      protocols:
+        max_events: 1000
+        sources:
+          ethernet0.gmii_rx: {protocol: ethernet, clock_domain: gmii_rx_clock, role: stimulus, implementation: cocotbext_eth, modeling: vip_injected_to_rtl_mac}
+          ethernet0.gmii_tx: {protocol: ethernet, clock_domain: gmii_tx_clock, role: target, implementation: cocotbext_eth, modeling: rtl_output_observed_by_vip}
   chip-ethernet:
     # Real 1-GMII-MAC RX/TX queue/DMA/CQ via six-source PULP AXI mux,
     # Ethernet0 local/global data and separate configuration FlooNoCs.
@@ -294,6 +299,11 @@ tests:
       address_map: {config: config/soc.yaml, variant: architecture}
       context: 'Real GMII through actual Ethernet0 local/global Data NoC to SRAM and modeled DDR, with AXI CQ completions and Config NoC BFM queue CSR. Real PULP AXI mux; CPU0 C firmware and PCIe host remain separate gates.'
       axi: {scope: dut.u_noc, clock: clk_i, reset: rst_ni, catalog: gen/supernoc/axi_monitors.json, actors: .tools/regression/chip-ethernet/variant/manifest.json, max_events: 500000, required_complete: true}
+      protocols:
+        max_events: 1000
+        sources:
+          ethernet0.gmii_rx: {protocol: ethernet, clock_domain: gmii_rx_clock, role: stimulus, implementation: cocotbext_eth, modeling: vip_injected_to_rtl_mac}
+          ethernet0.gmii_tx: {protocol: ethernet, clock_domain: gmii_tx_clock, role: target, implementation: cocotbext_eth, modeling: rtl_output_observed_by_vip}
   chip-pcie-host:
     # The same generated soc_top/full_chip_tb and firmware phase protocol.
     # Only this run owns the PCIe0 host initiator and external RC model.
