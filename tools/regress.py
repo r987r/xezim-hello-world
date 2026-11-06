@@ -82,9 +82,16 @@ def load_config(path):
             required = {'scope','clock','reset','catalog'}
             if (test['engine'] != 'cocotb-verilator' or not isinstance(report, dict)
                 or not ({'axi','protocols'} & set(report))
-                or set(report) - {'axi','protocols','memory','context','flow'}
+                or set(report) - {'axi','protocols','memory','context','flow','address_map'}
                 or ('context' in report and not isinstance(report['context'],str))):
                 raise ValueError(f'{name}: invalid protocol report configuration for cocotb-verilator')
+            if 'address_map' in report:
+                amap = report['address_map']
+                if (not isinstance(amap, dict) or not {'config','variant'} <= set(amap)
+                        or set(amap)-{'config','variant','csr_map'}
+                        or any(not isinstance(amap[k],str) or not amap[k]
+                               for k in amap)):
+                    raise ValueError(f'{name}: invalid variant-bound address map report configuration')
             if 'flow' in report:
                 flow = report['flow']
                 if not isinstance(flow, dict) or not {'required_steps'} <= set(flow) or set(flow)-{'required_steps','firmware_mmio','required_origins'}:
