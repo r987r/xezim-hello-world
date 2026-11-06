@@ -7,6 +7,34 @@
 <p class="muted">Counts distinguish configured targets, targets with a result artifact, and workflow executions. New tests are discovered from the regression YAML and CI without editing this page.</p>
 <div id="suite-summary" class="grid" aria-label="Filter tests by suite"></div>
 
+<section id="planned-flow-panel" aria-label="Declared test execution flow">
+<h2>Test plan · INIT → RUN → CHECK</h2>
+<p class="muted">What this test is configured to do, before simulation. Expected milestones and stimulus actions are shown separately; monitor evidence is optional debugging detail.</p>
+<div class="filters">
+  <label>Test target<select id="flow-target"></select></label>
+  <label>Declaration / recorded run<select id="flow-source"></select></label>
+</div>
+<p id="flow-summary" class="muted" aria-live="polite"></p>
+<div id="flow-phases" class="flow-phase-grid"></div>
+<details><summary>Test entrypoint, acceptance and plan provenance</summary><pre id="flow-metadata" class="flow-metadata"></pre></details>
+</section>
+<style>
+#planned-flow-panel{scroll-margin-top:20px;margin:16px 0 30px}
+#planned-flow-panel .filters{margin:12px 0}
+#planned-flow-panel select{width:100%;max-width:520px}
+.flow-phase-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px;margin:14px 0}
+.flow-stage{padding:16px;background:var(--panel,#182332);border:1px solid var(--line,#536177);border-radius:10px;min-width:0}
+.flow-stage h3{margin:0 0 10px}
+.flow-stage .muted{font-size:12px}
+.flow-stage ul{padding-left:18px;overflow-wrap:anywhere}
+.flow-stage li{margin:8px 0}
+.flow-stage details{margin-top:8px}
+.flow-stage summary{cursor:pointer}
+.flow-stage pre,.flow-metadata{white-space:pre-wrap;overflow-wrap:anywhere;max-height:300px;overflow-y:auto;font-size:12px}
+.flow-stage code{white-space:normal;overflow-wrap:anywhere}
+@media(max-width:850px){.flow-phase-grid{grid-template-columns:1fr}}
+</style>
+
 <section id="unified-traffic" aria-label="Unified protocol traffic">
 <h2>Protocol traffic · all tests</h2>
 <p class="muted">One viewer for PCIe TLPs, Ethernet GMII frames, AXI4/AXI5, APB, DFI and future recorded protocols. Select a verified run and filter its actual observations. Incomplete or absent capture is not a test PASS.</p>
@@ -118,9 +146,107 @@ for(const name of groups){
   const o=document.createElement("option");o.value=name;o.textContent=name;filter.append(o);
 }
 const latestTarget=new Map();
+const flowTarget=byId("flow-target"),flowSource=byId("flow-source");
+for(const target of Object.keys(D.test_flows||{}).sort()){
+  const option=document.createElement("option");option.value=target;option.textContent=target;
+  flowTarget.append(option);
+}
+
 for(const e of D.entries){
   if(!latestTarget.has(e.target))latestTarget.set(e.target,e);
 }
+function refreshFlowRuns(preferred){
+  const target=flowTarget.value;flowSource.replaceChildren();
+  const curr=document.createElement("option");curr.value="current";
+  curr.textContent="Current configured flow (no run needed)";flowSource.append(curr);
+  for(const [index,entry] of D.entries.entries()){
+    if(entry.target!==target||!entry.planned_flow)continue;
+    const option=document.createElement("option");option.value=String(index);
+    option.textContent="CI #"+entry.run_id+" · "+entry.source_sha.slice(0,9)+
+      " · "+(entry.planned_flow.source==="archived_runner_plan"?"milestones only":"captured plan");
+    flowSource.append(option);
+  }
+  if(preferred!=null&&[...flowSource.options].some(o=>o.value===String(preferred)))
+    flowSource.value=String(preferred);
+}
+function showFlow(target,entry){
+  if(!Object.hasOwn(D.test_flows||{},target))return;
+  flowTarget.value=target;
+  refreshFlowRuns(entry?D.entries.indexOf(entry):null);
+  renderFlow();
+  byId("planned-flow-panel").scrollIntoView({behavior:"smooth",block:"start"});
+}
+function renderFlow(){
+  const target=flowTarget.value,choice=flowSource.value;
+  const entry=choice==="current"?null:D.entries[Number(choice)];
+  const plan=(entry&&entry.target===target?entry.planned_flow:null)||
+             D.test_flows?.[target];
+  const host=byId("flow-phases");host.replaceChildren();
+  if(!plan){byId("flow-summary").textContent="No declared flow available";return;}
+  const scenario=plan.scenario;
+  byId("flow-summary").textContent=
+    (entry?"Captured CI #"+entry.run_id+" · ":"Current config · ")+
+    (scenario?"Scenario "+scenario.scenario_id+" · seed "+scenario.seed+" · ":"")+
+    (plan.phase_detail==="runner_outline"?
+      "Only a runner outline is declared; internal stimulus is not yet specified.":
+      plan.phase_detail==="expected_milestones_only"?
+      "Required phase milestones declared; detailed stimulus is not yet specified.":
+      "Resolved stimulus actions and required milestones are declared.")+
+    " This is PLAN ONLY, not a PASS or protocol observation.";
+  for(const phase of ["init","run","check"]){
+    const data=plan.phases?.[phase];if(!data)continue;
+    const card=document.createElement("article");card.className="flow-stage";
+    card.append(text("h3",phase.toUpperCase()));
+    card.append(text("p",data.milestones.length+" expected steps · "+
+      data.actions.length+" stimulus actions","muted"));
+    if(data.milestones.length){
+      card.append(text("strong","Expected milestones"));
+      const ul=document.createElement("ul");
+      for(const step of data.milestones){
+        const li=document.createElement("li");
+        li.append(text("code",step.id));
+        if(step.expected_origin)li.append(text("span"," · expected "+step.expected_origin,"muted"));
+        ul.append(li);
+      }
+      card.append(ul);
+    }
+    if(data.actions.length){
+      card.append(text("strong","Scenario stimulus"));
+      for(const action of data.actions){
+        const row=document.createElement("details");
+        const title=document.createElement("summary");
+        title.append(text("strong",action.id));
+        title.append(text("span"," · "+action.actor+" · "+action.kind));
+        row.append(title);
+        row.append(text("p","After: "+(action.depends_on.join(", ")||"no dependencies"),"muted"));
+        if(action.expected_result_id)
+          row.append(text("p","Expected result: "+action.expected_result_id,"muted"));
+        const pre=document.createElement("pre");pre.textContent=JSON.stringify(action.args,null,2);
+        row.append(pre);
+        if(action.allocation){
+          const allocation=document.createElement("pre");
+          allocation.textContent="Predicted buffer allocation (not observed):\n"+
+            JSON.stringify(action.allocation,null,2);
+          row.append(allocation);
+        }
+        card.append(row);
+      }
+    }else if(data.runner_outline){
+      card.append(text("p",data.runner_outline,"muted"));
+    }else{
+      card.append(text("p","No additional typed stimulus actions declared for this phase.","muted"));
+    }
+    host.append(card);
+  }
+  byId("flow-metadata").textContent=JSON.stringify({
+    target:plan.target,source:plan.source,engine:plan.engine,
+    top:plan.top,module:plan.module,context:plan.context,
+    acceptance:plan.acceptance,scenario:plan.scenario,intent_only:true,
+    observed_evidence:"See the run's separate phase/traffic report when available"
+  },null,2);
+}
+flowTarget.addEventListener("change",()=>{refreshFlowRuns();renderFlow();});
+flowSource.addEventListener("change",renderFlow);
 function summary(){
   const host=byId("suite-summary");host.replaceChildren();
   const selected=filter.value;
@@ -173,7 +299,11 @@ function render(){
     inspect.style.marginTop="7px";inspect.style.fontSize="12px";
     inspect.disabled=!(e.protocols?.length||e.protocol_links?.sources?.length);
     inspect.onclick=()=>window.openRunTraffic?.(e);
-    td(tr,testLink,inspect);
+    const flowButton=document.createElement("button");flowButton.type="button";
+    flowButton.textContent="View planned flow";flowButton.style.display="block";
+    flowButton.style.fontSize="12px";flowButton.style.marginTop="6px";
+    flowButton.onclick=()=>showFlow(e.target,e);
+    td(tr,testLink,flowButton,inspect);
     td(tr,suite(e.target,e.workflow));
     td(tr,text("span",e.passed?"PASS":"FAIL",e.passed?"good":"bad"),
       text("div",e.expected_failure?"Required negative check":"Positive / compile gate","muted"));
@@ -230,7 +360,10 @@ function render(){
        !(recorded?.protocols||[]).includes(protocolFilter.value))continue;
     if(!matchesQuery([name,t.engine,t.top,t.sources,t.pass],q))continue;
     const tr=document.createElement("tr"),e=latestTarget.get(name);
-    td(tr,name);td(tr,suite(name));
+    const plannedLink=document.createElement("button");plannedLink.type="button";
+    plannedLink.textContent="View planned flow";plannedLink.style.fontSize="12px";
+    plannedLink.onclick=()=>showFlow(name);
+    td(tr,name,plannedLink);td(tr,suite(name));
     if(e)td(tr,link(e.passed?"PASS · run #"+e.run_id:"FAIL · run #"+e.run_id,e.path));
     else td(tr,text("span","No recorded result","muted"));
     td(tr,t.engine);
@@ -242,6 +375,7 @@ function render(){
 for(const id of ["family","search","outcome","kind","history","recorded-protocol"]){
   byId(id).addEventListener(id==="search"?"input":"change",render);
 }
+refreshFlowRuns();renderFlow();
 render();
 })();
 </script>
