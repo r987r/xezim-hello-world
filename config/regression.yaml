@@ -222,6 +222,26 @@ tests:
       address_map: {config: config/soc.yaml, variant: architecture}
       context: 'Real PicoRV32/SERV CPUs coordinate boot phases with OKAY responses. Afterwards a verification AXI BFM at the reserved compute0 DMA port tests two 64-KiB SRAM stand-ins, including four intentional out-of-capacity SLVERR transactions. No DMA engine or physical HBM/DDR controller is instantiated.'
       axi: {scope: dut.u_noc, clock: clk, reset: rst_n, catalog: gen/supernoc/axi_monitors.json, actors: gen/chip/manifest.json, max_events: 500000}
+  chip-peakrdl-reset:
+    opt_in: true
+    # Opt-in generated reset CSR over the real full-chip Config NoC.
+    engine: cocotb-verilator
+    sources: noc
+    bender_targets: [chip_boot]
+    ip: [picorv32, serv, wb2axip, verilog_axi]
+    firmware_mode: peakrdl_reset
+    top: full_chip_tb
+    module: dv.full_chip.test_boot
+    seed: 1
+    test_dir: .
+    build: .tools/chip-peakrdl-reset-obj
+    env: {MAKEFLAGS: '-j2'}
+    timeout_s: 1800
+    pass: 'PASS fullchip:'
+    report:
+      address_map: {config: config/soc.yaml, variant: cold_boot, csr_map: .tools/regression/chip-peakrdl-reset/csr/csr-map.json}
+      context: 'PeakRDL-generated reset register over the real Config NoC, with CPU0 and CPU1 executing real cold-boot ROM/SRAM; HBM and DDR remain bounded AXI RAM stand-ins.'
+      axi: {scope: dut.u_noc, clock: clk, reset: rst_n, catalog: gen/supernoc/axi_monitors.json, actors: gen/chip/manifest.json, max_events: 500000, required_complete: true}
   chip-boot-negative:
     <<: *chip
     reuse_build: true

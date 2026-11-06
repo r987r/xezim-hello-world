@@ -62,6 +62,35 @@ class FullChipTests(unittest.TestCase):
             self.assertEqual(len(chip['memory_models']),2)
             self.assertNotIn('$readmemh',top)  # SRAM initialization cannot be hidden in top wiring
 
+    def test_peakrdl_reset_is_isolated_and_keeps_real_cpu_noc(self):
+        meta = json.loads((ROOT/'gen/supernoc/manifest.json').read_text())
+        with tempfile.TemporaryDirectory() as tmp:
+            base=Path(tmp)
+            old_dir=base/'original'
+            new_dir=base/'peakrdl'
+            baseline=full_chip_gen.emit(self.cfg,meta,ROOT/'gen/noc/floonoc',old_dir)
+            candidate=full_chip_gen.emit(self.cfg,meta,ROOT/'gen/noc/floonoc',
+                                         new_dir,peakrdl_reset=True)
+            old=(old_dir/'soc_top.sv').read_text()
+            rtl=(new_dir/'soc_top.sv').read_text()
+            self.assertIn('axi_lite_regs #(',old)
+            self.assertIn('soc_boot_reset_ctrl_regblock u_reset_regs',rtl)
+            self.assertIn('.hwif_out(reset_hwif_out)',rtl)
+            self.assertIn('soc_noc u_noc',rtl)
+            self.assertIn('picorv32_cpu_adapter u_cpu_compute0',rtl)
+            self.assertIn('serv_cpu_adapter',rtl)
+            self.assertNotIn('axi_lite_regs #(',rtl)
+            self.assertIn('PeakRDL',candidate['reset_register_provider'])
+            self.assertNotIn('reset_register_provider',baseline)
+            self.assertEqual((old_dir/'bootrom.hex').read_bytes(),
+                             (new_dir/'bootrom.hex').read_bytes())
+            expanded=copy.deepcopy(self.cfg)
+            expanded['subsystems'].append({'name':'compute2', 'type':'compute',
+                'cpu':{'ip':'serv','bus':'wishbone','adapter':'serv_wishbone'}})
+            with self.assertRaisesRegex(ValueError,'two-core'):
+                full_chip_gen.emit(expanded,meta,ROOT/'gen/noc/floonoc',
+                                   base/'unsupported',peakrdl_reset=True)
+
     def test_dma_wiring_is_generated_for_every_compute_and_real_config_target(self):
         meta = json.loads((ROOT/'gen/supernoc/manifest.json').read_text())
         with tempfile.TemporaryDirectory() as tmp:

@@ -62,7 +62,7 @@ def dma_params_for(cfg, core):
 def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
          image_prefix='gen/chip', cpu_dma_mode=False, pcie_host_mode=False,
          ethernet_mode=False, ethernet_cpu_mode=False,
-         real_ddr_mode=False, ddr_wb_base=0, ddr_wb_adr_bits=30):
+         real_ddr_mode=False, ddr_wb_base=0, ddr_wb_adr_bits=30, peakrdl_reset=False):
     """Emit normal or opt-in compiled CPU Ethernet/PCIe/DMA firmware."""
     if ethernet_cpu_mode and not (ethernet_mode and cpu_dma_mode):
         raise ValueError('real Ethernet CPU test requires active Ethernet and C-hook')
@@ -78,6 +78,8 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
                 s.get('ip')=='ethernet_queue_mac']
     if ethernet_mode and len(ethernet)!=1:
         raise ValueError('Ethernet mode requires one configured Ethernet queue MAC')
+    if peakrdl_reset and len([s for s in cfg['subsystems'] if s['type']=='compute']) != 2:
+        raise ValueError('CSR-2 PeakRDL reset is qualified only for the two-core full-chip variant')
     fw, firmware = chip_bootgen.emit(cfg, out, cpu0_run_hook=cpu0_run_hook,
                                      pcie_host_phase=pcie_host_mode)
     nets = json.loads((noc_root/'manifest.json').read_text())['networks']
@@ -154,6 +156,11 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
             raise ValueError('CPU config address classification overlaps a data aperture')
     reg_bytes = 1 << max(2, (4*count-1).bit_length())
     lines += [f'  logic [{reg_bytes-1}:0][7:0] reset_regs;', f'  logic [{count-1}:0] cpu_reset_n;']
+    if peakrdl_reset:
+        lines += [
+            '  soc_boot_reset_ctrl_regblock_pkg::boot_reset_ctrl__out_t reset_hwif_out;',
+            "  assign reset_regs = {{%d{1'b0}}, reset_hwif_out.cpu_release.secondary_release.value};" % (reg_bytes*8-(count-1)),
+        ]
     first = cores[0]['name']
     cfg_port = all_ports[f'm_{first}_local_config_cpu']
     lines += [f'  {dtype(cfg_port,"req")} cfgprobe_req;']
@@ -460,10 +467,33 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
                 'lite_req_t':'lite_req_t','lite_resp_t':'lite_resp_t'},
                 {'clk_i':'clk_i','rst_ni':'rst_ni','slv_req_i':req(p),'slv_resp_o':rsp(p),
                  'mst_req_o':'reset_req','mst_resp_i':'reset_rsp'}),
+                (module('soc_boot_reset_ctrl_regblock', 'u_reset_regs', {}, {
+                    'clk':'clk_i', 'rst_n':'rst_ni',
+                    's_axil_awvalid':'reset_req.aw_valid',
+                    's_axil_awready':'reset_rsp.aw_ready',
+                    's_axil_awaddr':'reset_req.aw.addr[11:0]',
+                    's_axil_awprot':'reset_req.aw.prot',
+                    's_axil_wvalid':'reset_req.w_valid',
+                    's_axil_wready':'reset_rsp.w_ready',
+                    's_axil_wdata':'reset_req.w.data',
+                    's_axil_wstrb':'reset_req.w.strb',
+                    's_axil_bready':'reset_req.b_ready',
+                    's_axil_bvalid':'reset_rsp.b_valid',
+                    's_axil_bresp':'reset_rsp.b.resp',
+                    's_axil_arvalid':'reset_req.ar_valid',
+                    's_axil_arready':'reset_rsp.ar_ready',
+                    's_axil_araddr':'reset_req.ar.addr[11:0]',
+                    's_axil_arprot':'reset_req.ar.prot',
+                    's_axil_rready':'reset_req.r_ready',
+                    's_axil_rvalid':'reset_rsp.r_valid',
+                    's_axil_rdata':'reset_rsp.r.data',
+                    's_axil_rresp':'reset_rsp.r.resp',
+                    'hwif_out':'reset_hwif_out',
+                }) if peakrdl_reset else
                 module('axi_lite_regs','u_reset_regs',{'RegNumBytes':reg_bytes,'AxiAddrWidth':32,'AxiDataWidth':32,
                 'req_lite_t':'lite_req_t','resp_lite_t':'lite_resp_t'}, {'clk_i':'clk_i','rst_ni':'rst_ni',
                 'axi_req_i':'reset_req','axi_resp_o':'reset_rsp','reg_d_i':"'0",'reg_load_i':"'0",'reg_q_o':'reset_regs',
-                'wr_active_o':'','rd_active_o':''})]
+                'wr_active_o':'','rd_active_o':''}))]
         elif ep == 'target_crossbar':
             targets = cfg['memory_targets']
             window = {r['name']:r for r in cfg['address_map']['data']}
@@ -557,6 +587,8 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
                                  for t in cfg['memory_targets']],
                 'verification_probe':'In DMA-only simulation, CPU0 AXI BFMs temporarily drive CPU0 data/config NoC ports with CPUs in reset; no PCIe/external host. Cold boot retains its separate legacy DMA-port probe.',
                 'upstream':['PicoRV32','SERV','FlooNoC','PULP AXI','tech_cells_generic tc_sram','ZipCPU wbm2axilite','verilog-axi crossbar']}
+    if peakrdl_reset:
+        manifest['reset_register_provider'] = 'PeakRDL SystemRDL-generated RTL (opt-in, CPU/Config-NoC bound)'
     actors = {}
     for i, core in enumerate(cores):
         name=core['name']
