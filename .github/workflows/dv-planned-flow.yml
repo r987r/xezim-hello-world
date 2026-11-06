@@ -34,8 +34,9 @@ jobs:
           from pathlib import Path
           import re
           page=Path('tools/templates/site_runs.html').read_text()
-          match=re.findall(r'<script>(.*?)</script>',page,re.S)
-          assert len(match)==1, 'expected one trusted inline Test Runs script'
+          blocks=re.findall(r'<script>(.*?)</script>',page,re.S)
+          match=[block for block in blocks if 'function renderFlow()' in block]
+          assert len(match)==1, 'expected exactly one planned-flow renderer'
           Path('.tools').mkdir(exist_ok=True)
           Path('.tools/site_runs_inline.js').write_text(match[0])
           for marker in ('id="flow-target"', 'id="flow-phases"',
