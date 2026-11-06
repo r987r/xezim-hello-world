@@ -17,6 +17,19 @@ def check(driver):
     content = driver.find_element(By.ID, "am-rows").text
     assert "memory0.ddr0" in content and "memory0.hbm0" in content
     assert "boot.reset_ctrl / cpu_release" in content, "pinned RDL CSR fields not published"
+    csr_browser = driver.find_element(By.ID, "am-csr-browser")
+    assert "boot.reset_ctrl" in csr_browser.text, "CSR IP hierarchy not visible"
+    assert "cpu_release" in csr_browser.text, "register name not visible in CSR hierarchy"
+    assert "secondary_release" in csr_browser.text, "source-defined field not visible in CSR hierarchy"
+    assert "0x40020000" in csr_browser.text, "absolute CSR address missing"
+    assert "memory0.ctrl" in csr_browser.text, "unavailable controller aperture is not visible"
+    driver.execute_script("""
+      for(const ip of document.querySelectorAll('#am-csr-browser .am-csr-ip')){
+        if(ip.querySelector('summary').textContent.startsWith('memory0.ctrl')) ip.open=true;
+      }
+    """)
+    assert "No CSR definitions imported" in csr_browser.text, "missing map must be explicit"
+    assert driver.find_element(By.ID, "am-csr-count").text
     assert "16 KiB" in content and "64 KiB" in content
     # Physical 64-bit HBM address cannot be truncated to 32-bit signed JS.
     assert "0x140000000" in content, "DDR address exceeds 32-bit range"
@@ -54,6 +67,8 @@ def main():
         assert driver.execute_script("return getComputedStyle(document.getElementById('am-mobile')).display") != "none"
         assert driver.execute_script("return getComputedStyle(document.querySelector('.am-table')).display") == "none"
         assert "memory0.ddr0" in driver.find_element(By.ID, "am-mobile").text
+        mobile_csr = driver.find_element(By.ID, "am-csr-browser")
+        assert "cpu_release" in mobile_csr.text and "secondary_release" in mobile_csr.text
         driver.save_screenshot(str(out / "05-address-map-mobile.png"))
     print("PASS: address map browser desktop/mobile, filter, CSR detail and 64-bit addresses")
 

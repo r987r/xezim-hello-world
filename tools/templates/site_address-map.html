@@ -1,7 +1,7 @@
 <div class="eyebrow">Source-defined architecture · data and config planes</div>
-<h1>Physical address map</h1>
+<h1>SoC address map &amp; CSR register definitions</h1>
 <p class="lede">ROM, SRAM, flash, DDR, HBM and control windows from the configured SoC. SystemRDL-owned and upstream LiteDRAM/LiteX native registers are subsets of the physical apertures. Choose the exact SoC build below.</p>
-<div class="actions"><a href="data/soc-address-map.json">Download address-map JSON</a><a href="data/soc-data-memories.rdl">External memory RDL view</a><a href="runs.html">Inspect measured run evidence</a></div>
+<div class="actions"><a href="#csr-definitions">Browse registers &amp; bitfields</a><a href="data/soc-address-map.json">Download address-map JSON</a><a href="data/soc-data-memories.rdl">External memory RDL view</a><a href="runs.html">Inspect measured run evidence</a></div>
 <p class="muted">__CSR_SOURCE_LINKS__</p>
 <div class="grid" id="am-summary"></div>
 <p class="notice">Mapped apertures and register definitions are not RTL test coverage. Memory-model backing may be far smaller than the declared DDR/HBM windows. Unassigned holes are not backed storage; read/write evidence belongs to each run's passive AXI trace.</p>
@@ -13,11 +13,12 @@
 </div>
 <p class="muted" id="am-variant-evidence">The default chip uses modeled AXI RAM; real DDR registers appear only in independently verified DDR CI variants.</p>
 <p class="muted" id="am-count" aria-live="polite"></p>
+<section class="card am-csr" id="csr-definitions" aria-labelledby="am-csr-title"><h2 id="am-csr-title">CSR register definitions by IP</h2><p class="muted">Expand an IP, then a register to inspect absolute address, offset, access and source-defined bitfields. These are source definitions, not proof of live RTL or successful MMIO.</p><p id="am-csr-count" aria-live="polite"></p><div id="am-csr-browser"></div></section>
 <div class="scroll am-table"><table><thead><tr><th>Plane</th><th>Region / register</th><th>Address</th><th>End inclusive</th><th>Size</th><th>Modeled backing</th><th>Status</th><th>Details</th></tr></thead><tbody id="am-rows"></tbody></table></div>
 <div class="am-mobile" id="am-mobile"></div>
-<section class="card"><h2 id="am-detail-title">Address metadata</h2><pre id="am-detail">Select an entry to inspect its mapped address and fields.</pre></section>
+<section class="card"><details id="am-raw-panel"><summary>Advanced: raw aperture / CSR metadata</summary><h2 id="am-detail-title">Address metadata</h2><pre id="am-detail">Select a physical-address row to inspect the source JSON.</pre></details></section>
 <style>
-.am-mobile{display:none}.am-mobile .card{margin:12px 0}.am-mobile p{margin:4px 0;font-size:13px}.am-register{border-left:3px solid var(--accent)}.am-table td{overflow-wrap:anywhere;max-width:340px}.am-table button{font-size:12px}@media(max-width:820px){.am-table{display:none}.am-mobile{display:block}}
+.am-csr{margin:16px 0}.am-csr h2{margin-top:0}.am-csr-ip{border-top:1px solid var(--border,#ddd);padding:10px 0}.am-csr-ip summary,.am-csr-register summary{cursor:pointer;font-weight:600;overflow-wrap:anywhere}.am-csr-ip .am-csr-register{margin:8px 0 8px 12px;padding:9px 12px;border-left:3px solid var(--accent,#777);background:var(--surface,#fafafa);border-radius:6px}.am-csr-facts{display:flex;flex-wrap:wrap;gap:8px 18px;margin:8px 0;font-size:13px}.am-csr-facts span{overflow-wrap:anywhere}.am-csr-table{overflow-x:auto}.am-csr-table table{width:100%;font-size:13px}.am-csr-table th,.am-csr-table td{padding:6px 8px;text-align:left;vertical-align:top;overflow-wrap:anywhere}.am-csr-empty{margin:10px 0 4px 12px;color:var(--muted,#666);font-size:13px}.am-csr-source{margin:6px 0 0 12px;font-size:12px}.am-mobile{display:none}.am-mobile .card{margin:12px 0}.am-mobile p{margin:4px 0;font-size:13px}.am-register{border-left:3px solid var(--accent)}.am-table td{overflow-wrap:anywhere;max-width:340px}.am-table button{font-size:12px}@media(max-width:820px){.am-table{display:none}.am-mobile{display:block}}
 </style>
 <script type="application/json" id="address-map-data">__ADDRESS_MAP_DATA__</script>
 <script type="application/json" id="ddr-csr-variants-data">__DDR_CSR_VARIANTS__</script>
@@ -35,10 +36,74 @@
  variants.forEach((v,i)=>{const o=append(menu,'option',v.label);o.value=String(i);});
  let entries=[];
  const inspect=(r,reg)=>{
+  e('am-raw-panel').open=true;
   e('am-detail-title').textContent=r.name+(reg?' / '+reg.name:'');
   e('am-detail').textContent=JSON.stringify(reg?{absolute_address:reg.address,relative_offset:reg.offset,register:reg,aperture:r}:r,null,2);
   e('am-detail-title').scrollIntoView({block:'nearest'});
  };
+
+ const specified=v=>v===null||v===undefined||v===''?'Not supplied':String(v);
+ const definitionSource=reg=>reg.definition_status==='native_LiteDRAM_generated_CSR_not_bus_coverage'
+  ?'Native LiteDRAM/LiteX csr.json (no unsourced bitfields or resets)'
+  :'SystemRDL-generated definition (not independent RTL coverage)';
+ const drawCsr=()=>{
+  const holder=e('am-csr-browser');holder.replaceChildren();
+  const query=e('am-search').value.toLowerCase().trim(),plane=e('am-plane').value,kind=e('am-kind').value;
+  let shown=0,defined=0,missing=0,firstExpanded=false;
+  const regions=d.regions.filter(r=>r.plane==='config'&&(!plane||plane==='config')&&(!kind||r.kind===kind));
+  for(const r of regions){
+   const regionMatch=[r.name,r.owner,r.base].filter(Boolean).some(x=>String(x).toLowerCase().includes(query));
+   const regs=(r.registers||[]).filter(reg=>regionMatch||[
+    reg.name,reg.address,reg.offset,reg.description,reg.access,
+    ...(reg.fields||[]).flatMap(f=>[f.name,f.description,f.mask])
+   ].filter(Boolean).some(x=>String(x).toLowerCase().includes(query)));
+   if(query&&!regionMatch&&!regs.length)continue;
+   shown++;defined+=regs.length;if(!r.registers?.length)missing++;
+   const card=append(holder,'details','','am-csr-ip');
+   if((regs.length&&!firstExpanded)||Boolean(query))card.open=true;
+   if(regs.length)firstExpanded=true;
+   append(card,'summary',r.name+' · '+r.base+' · '+(r.registers||[]).length+' sourced register(s)');
+   append(card,'p','CSR aperture '+size(r.size)+' · '+(r.registers?.length?'Register source available; RTL evidence is separate':'No source-qualified register map for this build'),'am-csr-source');
+   if(!regs.length){
+    append(card,'p',r.registers?.length
+     ?'No registers in this IP match the current search.'
+     :'No CSR definitions imported for this IP in the selected build; an aperture alone does not establish registers or their values.','am-csr-empty');
+    continue;
+   }
+   let firstReg=true;
+   for(const reg of regs){
+    const item=append(card,'details','','am-csr-register');
+    if((query||firstReg)&&card.open)item.open=true;
+    firstReg=false;
+    append(item,'summary',reg.name+' · '+reg.address+' · '+specified(reg.width_bits)+' bits · '+specified(reg.access).toUpperCase());
+    const facts=append(item,'div','','am-csr-facts');
+    for(const [k,v] of [['Absolute',reg.address],['Offset',reg.offset],['Width',reg.width_bits==null?null:reg.width_bits+' bits'],['Access',reg.access],['Reset',reg.reset],['Source',definitionSource(reg)]]){
+     const cell=append(facts,'span','');
+     append(cell,'strong',k+': ');append(cell,'span',specified(v));
+    }
+    if(reg.description)append(item,'p',reg.description);
+    if(reg.fields?.length){
+     const wrap=append(item,'div','','am-csr-table');
+     const table=append(wrap,'table','');
+     const head=append(table,'thead',''),hrow=append(head,'tr','');
+     for(const name of ['Bits','Field','Access','Reset','Mask','Description / back-door'])append(hrow,'th',name);
+     const body=append(table,'tbody','');
+     for(const f of reg.fields){
+      const tr=append(body,'tr','','am-csr-field');
+      const bits=f.lsb===undefined||f.msb===undefined?'Not supplied':f.msb===f.lsb?String(f.lsb):f.msb+':'+f.lsb;
+      for(const v of [bits,f.name,specified(f.access).toUpperCase(),specified(f.reset),specified(f.mask),
+        [f.description,f.backdoor_policy?'Back-door: '+f.backdoor_policy:''].filter(Boolean).join(' · ')||'Not supplied'])
+       append(tr,'td',specified(v));
+     }
+    }else{
+     append(item,'p','Bitfield definitions were not provided by this source; no fields, resets, or side effects are inferred.','am-csr-empty');
+    }
+   }
+  }
+  e('am-csr-count').textContent=defined+' sourced register(s) in '+shown+' visible config IP(s) · '+missing+' IP(s) without an imported map. '+(d.variant==='ddr_real'?'Real DDR variant selected.':'Default SoC variant selected.');
+  if(!shown)append(holder,'p','No CSR IPs match the selected filters. Choose Config / CSR plane or clear the search.','am-csr-empty');
+ };
+
  const draw=()=>{
   e('am-rows').replaceChildren();e('am-mobile').replaceChildren();let visible=0;
   const query=e('am-search').value.toLowerCase().trim(),plane=e('am-plane').value,kind=e('am-kind').value;
@@ -61,6 +126,7 @@
    const b=append(card,'button','Inspect metadata');b.addEventListener('click',()=>inspect(r,reg));
   }
   e('am-count').textContent=visible+' entries · catalog '+d.variant+' · config SHA '+d.config_sha256.slice(0,12);
+  drawCsr();
  };
  const selectVariant=()=>{
   const selected=variants[Number(menu.value)||0];
