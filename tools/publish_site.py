@@ -28,6 +28,7 @@ import yaml
 from axi_report import render_report
 from protocol_report import render as render_protocol_report
 from test_flow_report import render_summary as render_test_flow
+from test_intent import catalog as intended_flow_catalog, plan as intended_flow_plan, render as render_intended_flow
 
 ROOT=Path(__file__).resolve().parents[1]
 FILES={'result.json','plan.json','sources.f','simulation.log','build.log','results.xml',
@@ -554,6 +555,16 @@ def evidence_index(evidence,output,repository):
                         len(flow_data.get('rows',[])) != status.get('steps')):
                     raise ValueError('test-flow JSON disagrees with verified regression plan/result')
                 render_test_flow(flow_data,destination/'test-flow.html')
+            # Intent flow is always present, even without a simulation log,
+            # step marker, protocol monitor or passing test outcome.
+            intended = intended_flow_plan(target, plan)
+            if target in ('chip-cpu-scenario','chip-dma-scenario'):
+                scenario_source=ROOT/'config/scenarios/cpu-bfm-ddr-roundtrip.json'
+                # Run-specific plan may have a different source revision;
+                # display current configured intent, never fake execution.
+                if scenario_source.is_file():
+                    intended=intended_flow_plan(target,plan,scenario=json.loads(scenario_source.read_text()))
+            dump(destination/'test-intent.json',intended)
             if latency_data is not None and (
                     not protocol_data or protocol_data.get('latency')!=latency_data):
                 raise ValueError('published PCIe latency summary differs from verified protocol report')
@@ -639,6 +650,13 @@ def evidence_index(evidence,output,repository):
                 body+='<pre>'+escape(json.dumps(result,indent=2))+'</pre>'
                 body+='<ul>'+''.join(f'<li><a href="{escape(name)}">{escape(name)}</a></li>' for name in assets)+'</ul>'
                 (destination/'report.html').write_text(shell(target,body,relative/'report.html',repository,run['head_sha']))
+            # Original report now has a definition-only flow independently of
+            # the optional validated test-flow evidence overlay.
+            report_html=destination/'report.html'
+            if report_html.is_file():
+                html=report_html.read_text()
+                if '<main>' in html:
+                    report_html.write_text(html.replace('<main>','<main>'+render_intended_flow(intended),1))
             entries.append(entry)
     runs.sort(key=lambda r:r['created_at'],reverse=True)
     entries.sort(key=lambda r:r['recorded_at'],reverse=True)
@@ -746,6 +764,8 @@ def build(output,evidence,repository,sha,config):
     import fabric_report
     fabric = fabric_report.load(ROOT)
     catalog=yaml.safe_load((ROOT/'config/regression.yaml').read_text())
+    source_scenario=json.loads((ROOT/'config/scenarios/cpu-bfm-ddr-roundtrip.json').read_text())
+    flow_intents=intended_flow_catalog(catalog,scenario=source_scenario)
     noc=json.loads((ROOT/'gen/noc/floonoc/manifest.json').read_text())
     chip=json.loads((ROOT/'gen/chip/manifest.json').read_text())
     monitors=json.loads((ROOT/'gen/supernoc/axi_monitors.json').read_text())
@@ -760,6 +780,7 @@ def build(output,evidence,repository,sha,config):
         csr_path=csr_path if csr_ready else None,
         variant='cold_boot' if csr_ready else 'architecture')
     dump(output/'data/soc-address-map.json',address_catalog)
+    dump(output/'data/test-intents.json',flow_intents)
     ddr_views = ddr_csr_views(entries, output)
     dump(output/'data/ddr-csr-verified-runs.json', ddr_views)
     (output/'data/soc-data-memories.rdl').write_text(address_map.memory_rdl_view(address_catalog))
@@ -798,7 +819,8 @@ def build(output,evidence,repository,sha,config):
     dataset={'schema_version':1,'title':config['title'],'source_sha':sha,'repository':repository,
              'built_at':datetime.now(timezone.utc).isoformat(),'runs':runs,'entries':entries,
              'notes':notes,'documents':docs,'networks':noc['networks'],'chip':chip,
-             'monitors':monitors['monitors'],'fabric':fabric['summary'],'tests':catalog['tests']}
+             'monitors':monitors['monitors'],'fabric':fabric['summary'],'tests':catalog['tests'],
+             'test_intents':flow_intents}
     dump(output/'data/site.json',dataset)
     data=json.dumps(dataset,separators=(',',':')).replace('<','\\u003c')
     for page in ('index','topology','explorer','fabric','address-map','runs','docs','reference'):
