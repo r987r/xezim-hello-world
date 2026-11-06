@@ -22,7 +22,13 @@ The diagrams must show the packet ingress and queue register attachment as
 **planned**, not wired. No CPU-driven GMII→local SRAM route may be reported as
 measured until actual packet traffic has completed through the generated NoC.
 
-## One future end-to-end integration change: issue #64
+## Active end-to-end integration: draft PR #73 / issue #64
+
+The single [integration PR #73](https://github.com/r987r/xezim-hello-world/pull/73) starts from main and currently contains **interface plumbing only**: queue-owned RX/TX CQ slot addresses, RX policy metadata, and TX descriptor/completion hookups, with focused standalone test additions. See the [five named RUN/CHECK acceptance gates](ethernet0-closure-gate.md) and the [source-backed current-status table](implementation-status.md). Standalone queue/MAC/NoC tests being green **do not** prove a connected packet path.
+
+All five steps remain unverified on generated full-chip RTL. Do not merge #73 or close #64 until exact-head CI passes those real-path checks, source-fresh generated RTL and diagrams agree, and the CPU/host sees correct memory and CQ data.
+
+## Remaining end-to-end integration work: issue #64
 
 The single future PR should wire actual RX packet staging, header metadata,
 queue policy, descriptor fetch, upstream AXI DMA and SRAM. Reuse the
