@@ -41,12 +41,14 @@ def main():
     data=json.loads(html[start:end])
     assert "chip-ethernet" in data["tests"]
     assert "chip-pcie-host" in data["tests"]
+    # Exercise a deterministic synthetic dataset even when the main-branch
+    # Pages build has already collected many real historical CI results.
     data["entries"]=[
         sample("chip-pcie-host","PCIe0 integrated test"),
         sample("chip-ethernet","Ethernet0 integrated test"),
         sample("chip-cpu-dma","PCIe0 supplemental CPU test"),
         sample("chip-cpu-dma","Full-chip CPU boot test"),
-    ]+data["entries"]
+    ]
     embedded=json.dumps(data,separators=(",",":")).replace("<","\\u003c")
     page=html[:start]+embedded+html[end:]
 
