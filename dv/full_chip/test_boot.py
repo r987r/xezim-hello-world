@@ -63,6 +63,7 @@ async def execute_cold_boot(dut, *, external=None):
         host=PcieHostParticipant(flow,manifest)
     memory = json.loads((ROOT/'gen/chip/manifest.json').read_text())['memory_models']
     cpu_dma_mode = os.environ.get('SOC_CPU_DMA_MODE') == '1'
+    real_ddr_mode = os.environ.get('SOC_DDR_REAL_MODE') == '1'
     # The probe outputs mirror the *real iDMA response* when DmaEnable=1
     # and ProbeEnable=0. Attaching AxiMaster in CPU mode would let its
     # unsolicited R-channel worker consume the DMA's valid descriptor R
@@ -73,6 +74,8 @@ async def execute_cold_boot(dut, *, external=None):
         probe = AxiMaster(AxiBus.from_prefix(dut, 'probe'), dut.clk,
                           dut.rst_n, reset_active_level=False)
     dut.rst_n.value = 0
+    if real_ddr_mode:
+        dut.ddr_init_mode.value = 1
     if host is not None:
         dut.completer_id.value=0
         dut.max_payload_size.value=0
@@ -81,6 +84,9 @@ async def execute_cold_boot(dut, *, external=None):
     for _ in range(10):
         await FallingEdge(dut.clk)
     dut.rst_n.value = 1
+    if real_ddr_mode:
+        from dv.full_chip.ddr_init import initialize_controller
+        await initialize_controller(dut)
     if host is not None:
         from dv.pcie0.tlp_trace import LiveTlpCapture
         # The pinned helper already provides PcieIfFrame / Tlp decoding.
