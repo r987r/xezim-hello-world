@@ -28,6 +28,7 @@ class EthernetVariantTests(unittest.TestCase):
                                image_prefix=str(out),**kwargs)
             return {
                 "top":(out/"soc_top.sv").read_text(),
+                "dma_tb":(out/"full_chip_dma_tb.sv").read_text(),
                 "manifest":json.loads((out/"manifest.json").read_text())
             }
 
@@ -46,6 +47,8 @@ class EthernetVariantTests(unittest.TestCase):
         self.assertIn("64'h0000000013001600",source)
         self.assertIn("64'h0000000140000000",source)
         self.assertIn("32'h40050000",source)
+        self.assertIn("gmii_tx_clk",built["dma_tb"])
+        self.assertIn("eth_irq_o(eth_irq)",built["dma_tb"])
         eth=next(x for x in built["manifest"]["peripheral_subsystems"]
                  if x["name"]=="ethernet0")
         self.assertEqual(eth["rtl_attachment"],"live_ethernet_gmii_queue_axi_mvp")
@@ -62,6 +65,7 @@ class EthernetVariantTests(unittest.TestCase):
         self.assertNotIn("ethernet0_axi_mvp",built["top"])
         self.assertNotIn("ethernet_queue_axi_regs",built["top"])
         self.assertNotIn("gmii_rx_clk",built["top"])
+        self.assertNotIn("gmii_rx_clk",built["dma_tb"])
 
 
 if __name__=="__main__":
