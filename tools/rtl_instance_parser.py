@@ -33,7 +33,8 @@ def source_files(root: Path, sources):
     extra = [p.relative_to(root).as_posix()
              for folder in ("rtl/adapters", "rtl/io/ethernet0")
              for pattern in ("*.sv", "*.v")
-             for p in sorted((root / folder).glob(pattern))]
+             for p in sorted((root / folder).glob(pattern))
+             if re.search(r"(?m)^\\s*module\\s+", p.read_text())]
     return tuple(sources) + tuple(dict.fromkeys(extra))
 
 TOKEN = re.compile(r"^[A-Za-z_$][A-Za-z0-9_$]*$")
