@@ -97,6 +97,19 @@ class AgentOwnershipTests(unittest.TestCase):
         self.assertIn("DmaTestMode ? probe_req : cpu_data_", gen)
         self.assertIn("cpu_reset_n[{i}] = ({release}) && !DmaTestMode", gen)
 
+    def test_ddr_negative_routed_probe_after_cpu_check(self):
+        gen = (ROOT / "tools/full_chip_gen.py").read_text()
+        check = (ROOT / "dv/full_chip/test_ddr_real.py").read_text()
+        self.assertIn("ddr_negative_mode_i ? probe_req", gen)
+        self.assertIn("dma_engine_rsp = f'dma_{i}_hw_rsp'", gen)
+        self.assertIn("ddr_negative_mode && (!pass_flag || ddr_init_mode)", gen)
+        self.assertIn("await execute_cold_boot(dut)", check)
+        self.assertIn("dut.ddr_negative_mode.value = 1", check)
+        self.assertIn('expect_axi_response("compute0_local_data.dma"', check)
+        self.assertIn("AxiResp.DECERR", check)
+        self.assertIn("counts_before == counts_after", check)
+        self.assertIn("after.data == pattern", check)
+
     def test_ddr_config_bfm_cannot_contend_with_cpu(self):
         driver = (ROOT/"dv/full_chip/ddr_init.py").read_text()
         boot = (ROOT/"dv/full_chip/test_boot.py").read_text()

@@ -63,7 +63,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m py_compile tools/ddr_chip.py tools/full_chip_gen.py tools/regress.py tools/cpu_dma_firmware.py dv/full_chip/ddr_init.py dv/full_chip/test_ddr_real.py dv/full_chip/test_boot.py
-          python3 -m unittest tests.test_regression tests.test_full_chip_gen -v
+          python3 -m unittest tests.test_regression tests.test_full_chip_gen tests.test_axi_agent_ownership -v
           make check-generated
       - name: Generate actual pinned LiteDRAM and upstream-derived DFII commands
         run: |
@@ -94,6 +94,11 @@ jobs:
           assert evidence['init_done']==1 and evidence['init_error']==0
           assert all(evidence[key]>0 for key in ('axi_aw','axi_b','axi_ar','axi_rlast','dfi_read','dfi_write','bank_storage_write'))
           assert evidence['axi_aw']==evidence['axi_b'] and evidence['axi_ar']==evidence['axi_rlast']
+          negative=evidence['routed_negative']
+          assert negative['status']=='pass', negative
+          assert negative['source']=='compute0_local_data.dma', negative
+          assert negative['bad_write_resp']==3 and negative['bad_read_resp']==3, negative
+          assert negative['no_controller_forwarding'] and negative['nonaliased_valid_readback'], negative
           report=json.loads((p/'result.json').read_text())
           assert report['passed'], report
           print('PASS DDR-B full-chip real-controller source/capture contract')

@@ -103,7 +103,7 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
     cfgprobe = probe_ports('cfgprobe', addr_bits=32, data_bits=32, id_bits=1)
     lines = ['// Generated chip boot + DMA configuration: see gen/chip/manifest.json.',
              'module soc_top #(parameter bit ProbeEnable = 0, DmaEnable = 0, DmaTestMode = 0) (input logic clk_i, rst_ni,', f'  input logic [{count-1}:0] hold_mask_i,',
-              *(['  input logic ddr_init_mode_i,'] if real_ddr_mode else []),
+              *(['  input logic ddr_init_mode_i,', '  input logic ddr_negative_mode_i,'] if real_ddr_mode else []),
              f'  output logic [{count-1}:0] dma_irq_o, dma_irq_pending_o,',
              f'  output logic [{count-1}:0] released_o, fetch_valid_o,', f'  output logic [{32*count-1}:0] fetch_addr_o,',
              f'  output logic [{count-1}:0] sram_valid_o, sram_write_o,',
@@ -244,11 +244,25 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
             for pin, _, ch, member in probe:
                 if request_field(ch,member):
                     lines += [f'  assign {field("probe_req",ch,member)} = {pin};']
+                elif real_ddr_mode:
+                    # The probe cannot consume iDMA responses before CHECK.
+                    lines += [f"  assign {pin} = ddr_negative_mode_i ? {field(rsp(dma),ch,member)} : '0;"]
                 else:
                     lines += [f'  assign {pin} = DmaTestMode ? {field(rsp(d),ch,member)} : {field(rsp(dma),ch,member)};']
             lines += ["  assign probe_req.aw.atop = '0;"]
             for ch in ('aw','w','ar'):
                 lines += [f"  assign probe_req.{ch}.user = '0;"]
+        # Only after CPU/iDMA CHECK may the existing passive probe become an
+        # active verification master at the real compute0 DMA NoC port.
+        takeover = real_ddr_mode and i == 0
+        dma_engine_req = f'dma_{i}_hw_req' if takeover else req(dma)
+        dma_engine_rsp = f'dma_{i}_hw_rsp' if takeover else rsp(dma)
+        if takeover:
+            lines += [f'  {dtype(dma,"req")} {dma_engine_req};',
+                      f'  {dtype(dma,"rsp")} {dma_engine_rsp};',
+                      f'  assign {req(dma)} = ddr_negative_mode_i ? probe_req : {dma_engine_req};',
+                      f"  assign {dma_engine_rsp} = ddr_negative_mode_i ? '0 : {rsp(dma)};",
+                      f'  always @(posedge clk_i) if (ddr_negative_mode_i && ({dma_engine_req}.aw_valid || {dma_engine_req}.w_valid || {dma_engine_req}.ar_valid)) $fatal(1, "DDR probe takeover during active iDMA request");']
         engine_con = {'clk_i':'clk_i', 'rst_ni':'rst_ni',
                       'apb_addr_i':f'dma_{i}_apb_addr',
                       'apb_data_i':f'dma_{i}_apb_data',
@@ -262,7 +276,7 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
         for ch, members in CHANNELS.items():
             for member in [*members.values(), 'valid', 'ready']:
                 is_req = request_field(ch, member)
-                engine_con['dma_'+ch+member] = field(req(dma) if is_req else rsp(dma), ch, member)
+                engine_con['dma_'+ch+member] = field(dma_engine_req if is_req else dma_engine_rsp, ch, member)
         dma_opts = dma_params_for(cfg, core)
         lines += [f'  if (DmaEnable) begin: gen_dma_{name}',
                   module('soc_idma_engine', 'u_dma_'+name, {
@@ -270,11 +284,11 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
                       'BufferDepth': dma_opts['buffer_depth'],
                       'DescriptorPrefetch': dma_opts['descriptor_prefetch']
                   }, engine_con),
-                  f'    assign {req(dma)}.aw.atop = \'0;',
-                  *[f"    assign {req(dma)}.{ch}.user = '0;" for ch in ('aw','w','ar')],
+                  f'    assign {dma_engine_req}.aw.atop = \'0;',
+                  *[f"    assign {dma_engine_req}.{ch}.user = '0;" for ch in ('aw','w','ar')],
                   '  end else begin: gen_dma_disabled_'+name]
         if i == 0:
-            lines += [f"    assign {req(dma)} = ProbeEnable ? probe_req : '0;"]
+            lines += [f"    assign {dma_engine_req} = " + ("'0;" if takeover else "ProbeEnable ? probe_req : '0;")]
         else:
             lines += [f"    assign {req(dma)} = '0;"]
         lines += [f"    assign dma_irq_o[{i}] = 1'b0;", '  end']
@@ -601,6 +615,7 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
         }
     if real_ddr_mode:
         manifest['real_ddr_controller'] = True
+        manifest['verification_probe'] = 'PULP iDMA owns compute0 DMA NoC port until CPU CHECK; verification AXI master may take over only afterward'
     manifest['dma_parameters_by_compute'] = {
         core['name']: dma_params_for(cfg, core) for core in cores}
     manifest['axi_actors']=actors
@@ -711,7 +726,7 @@ def emit_tb(cfg, fw, out, *, image_prefix='gen/chip', cpu_dma_mode=False,
            '  wire [7:0] gmii_txd;',
            '  wire gmii_tx_en, gmii_tx_er, eth_irq, eth_drop, eth_bad_fcs, eth_tx_failed;']
           if ethernet_mode else []),
-        *(['  reg ddr_init_mode = 1;'] if real_ddr_mode else []),
+        *(['  reg ddr_init_mode = 1, ddr_negative_mode = 0;'] if real_ddr_mode else []),
         *(['  wire rst = ~rst_n;'] if pcie_host_mode else []),
         '`ifndef COCOTB_SIM', '  always #5 clk = ~clk;',
         '  initial begin repeat (10) @(negedge clk); rst_n = 1; end', '`endif',
@@ -732,7 +747,8 @@ def emit_tb(cfg, fw, out, *, image_prefix='gen/chip', cpu_dma_mode=False,
         '    .sram_valid_o(sram_valid), .sram_write_o(sram_write), .sram_addr_o(sram_addr),',
         '    .sram_data_o(sram_data), .sram_strb_o(sram_strb), .rom_reads_o(rom_reads), .flash_reads_o(flash_reads),',
         '    .dma_irq_o(), .dma_irq_pending_o(),',
-        *(['    .ddr_init_mode_i(ddr_init_mode),'] if real_ddr_mode else []),
+        *(['    .ddr_init_mode_i(ddr_init_mode),',
+           '    .ddr_negative_mode_i(ddr_negative_mode),'] if real_ddr_mode else []),
         '    '+',\n    '.join([*(f'.{p[0]}({p[0]})' for p in probe),
                            *(f'.{p[0]}({p[0]})' if real_ddr_mode else (f'.{p[0]}(\'0)' if request_field(p[2],p[3]) else f'.{p[0]}()')
                              for p in cfgprobe),
@@ -753,6 +769,7 @@ def emit_tb(cfg, fw, out, *, image_prefix='gen/chip', cpu_dma_mode=False,
         '  reg [31:0] expected [0:N*MAX_WORDS-1];', '  reg [MAX_WORDS-1:0] copied [0:N-1];',
         '  reg [N-1:0] init_mask = 0, hello_mask = 0, check_mask = 0, app_fetch = 0;',
         '  reg init_complete = 0, run_complete = 0, check_complete = 0, pass_flag = 0;',
+        *(['  always @(posedge clk) if (rst_n && ddr_negative_mode && (!pass_flag || ddr_init_mode)) $fatal(1, "DDR negative test takeover before CPU CHECK/DFII init");'] if real_ddr_mode else []),
         *(['  reg [31:0] cpu_dma_evidence = 0;',
            '  reg cpu_dma_success = 0;',
            '  reg [191:0] cpu_dma_addresses = 0;',
