@@ -105,6 +105,38 @@ class DFIModelProbeTests(unittest.TestCase):
             self.assertEqual(events[0]["kind"], "probe_start")
             self.assertEqual(events[-1]["kind"], "probe_end")
 
+    def test_legacy_phy_act_and_ddr4_act_n_are_both_observed_once(self):
+        # Verified generated SDRAMPHYModel decodes ACT from legacy DFI
+        # !CS & !RAS & CAS & WE, even if ACT_n stays deasserted.
+        with tempfile.TemporaryDirectory() as d:
+            p=DFIProbe(Path(d))
+            phases,banks=idle_phases(),idle_banks()
+            phases[0].update(cs_n=0,act_n=1,ras_n=0,cas_n=1,
+                             we_n=1,bank=5,address=0x123)
+            p.record(5000,phases,banks,"traffic",10000)
+            # Dedicated DDR4 ACT_n encoding should still be decoded.
+            phases,banks=idle_phases(),idle_banks()
+            phases[1].update(cs_n=0,act_n=0,ras_n=1,cas_n=1,
+                             we_n=1,bank=3,address=0x456)
+            p.record(15000,phases,banks,"traffic",10000)
+            # When both encodings are asserted, emit only one ACT.
+            phases,banks=idle_phases(),idle_banks()
+            phases[2].update(cs_n=0,act_n=0,ras_n=0,cas_n=1,
+                             we_n=1,bank=4,address=0x789)
+            p.record(25000,phases,banks,"traffic",10000)
+            # No selected chip -> no ACT, even if command pins match.
+            phases,banks=idle_phases(),idle_banks()
+            phases[0].update(cs_n=1,act_n=0,ras_n=0,cas_n=1,we_n=1)
+            p.record(35000,phases,banks,"traffic",10000)
+            result=p.finish("pass")
+            self.assertEqual(result["counters"]["dfi_activate"],3)
+            events=[json.loads(x) for x in p.events_path.read_text().splitlines()]
+            acts=[x for x in events if x["kind"]=="dfi_activate"]
+            self.assertEqual([x["bank"] for x in acts],[5,3,4])
+            self.assertEqual([x["address"] for x in acts],[0x123,0x456,0x789])
+            self.assertEqual([x["decode_basis"] for x in acts],
+                             ["ras_cas_we_phy_model","act_n","act_n"])
+
     def test_lost_clock_edge_rejected(self):
         with tempfile.TemporaryDirectory() as d:
             probe = DFIProbe(Path(d))
