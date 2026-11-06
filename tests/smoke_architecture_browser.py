@@ -62,7 +62,7 @@ def main():
         # An ordinary IP must open its nested compiler-parsed implementation.
         dblclick_by_label("compute0.cpu")
         wait.until(lambda d:"IP COMPOSITION" in d.find_element(By.ID,"arch-svg").text)
-        assert "picorv32_cpu_adapter" in driver.find_element(By.ID,"arch-svg").text
+        assert "picorv32_cpu_adapter" in driver.find_element(By.ID,"arch-svg").text, driver.find_element(By.ID,"arch-svg").text[:1500]
         driver.save_screenshot(str(args.screenshots/"03-compute0-cpu-ip.png"))
         driver.execute_script(
             """const b=[...document.querySelectorAll("#arch-crumbs button")]
