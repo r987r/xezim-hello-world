@@ -51,6 +51,7 @@ jobs:
           c=RDLCompiler()
           c.compile_file('.tools/soc-data-memories.rdl')
           root=c.elaborate(top_def_name='soc_data_memory_view')
-          assert len(list(root.top.memories())) == 8
+          from systemrdl.node import MemNode
+          assert sum(isinstance(n, MemNode) for n in root.top.children()) == 8
           print('PASS: RDL external data memories and unified CSR subset')
           PY
