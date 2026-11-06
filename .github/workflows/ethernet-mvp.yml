@@ -41,7 +41,7 @@ jobs:
               "ethernet_rx_queue_engine.v","ethernet_queue_ctrl.sv",
               "ethernet_rx_desc_fetch.v","ethernet_rx_dma.v",
               "ethernet_cq_axi_writer.v","ethernet_tx_dma.v",
-              "ethernet0_tx_mvp.v",
+              "ethernet0_tx_mvp.v","ethernet0_mvp.v",
           )]
           for directory,meta in fetch_pinned().values():
               sources.extend(directory/path for path in meta["modules"])
@@ -55,6 +55,10 @@ jobs:
                           "-s","ethernet0_tx_mvp","-t","null",
                           *(str(p) for p in sources)],check=True)
           print("PASS TX descriptor, upstream AXI DMA, MAC wire-completion and CQ RTL elaboration")
+          subprocess.run(["iverilog","-g2012","-Wall",
+                          "-s","ethernet0_mvp","-t","null",
+                          *(str(p) for p in sources)],check=True)
+          print("PASS one-MAC RX/TX Ethernet MVP IP elaborates with six upstream AXI masters")
           print("PASS connected Ethernet GMII RX -> complete-frame -> queue -> AXI DMA and real CQ writer RTL elaboration")
           sources.extend((
               root/".tools/verilog_axi/rtl/axi_ram.v",
