@@ -52,6 +52,7 @@
   const holder=e('am-csr-browser');holder.replaceChildren();
   const query=e('am-search').value.toLowerCase().trim(),plane=e('am-plane').value,kind=e('am-kind').value;
   let shown=0,defined=0,reference=0,missing=0,firstExpanded=false;
+  const hasBuildDefinitions=d.regions.some(x=>x.plane==='config'&&(x.registers||[]).length);
   const regions=d.regions.filter(r=>r.plane==='config'&&(!plane||plane==='config')&&(!kind||r.kind===kind));
   for(const r of regions){
    const regionMatch=[r.name,r.owner,r.base].filter(Boolean).some(x=>String(x).toLowerCase().includes(query));
@@ -66,8 +67,9 @@
    reference+=regs.filter(x=>x.definition_status==='C_ABI_RTL_crosschecked_source_reference_not_build_qualified').length;
    if(!displayed.length)missing++;
    const card=append(holder,'details','','am-csr-ip');
-   if((regs.length&&!firstExpanded)||Boolean(query))card.open=true;
-   if(regs.length)firstExpanded=true;
+   const expand=regs.length&&!firstExpanded&&(active.length||!hasBuildDefinitions);
+   if(expand||Boolean(query))card.open=true;
+   if(expand)firstExpanded=true;
    append(card,'summary',r.name+' · '+r.base+' · '+displayed.length+' register definition(s)'+(sourceOnly.length?' · SOURCE ONLY':''));
    const status=active.length?'Selected-variant register definitions; independent RTL evidence is separate':
      sourceOnly.length?'Source-only C/RTL register references. These do NOT assert enabled RTL or Config-NoC attachment in this build':
