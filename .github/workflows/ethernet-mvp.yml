@@ -186,3 +186,42 @@ jobs:
           path: .tools/regression/chip-ethernet/
           include-hidden-files: true
           if-no-files-found: warn
+  chip-cpu-ethernet:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-bender
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned RTL, simulation VIP and LLVM RV32I toolchain
+        run: |
+          set -euo pipefail
+          python3 -m pip install -r requirements.txt
+          python3 -m pip install 'mako==1.3.10' 'hjson==3.1.0' 'peakrdl>=1.5.0' 'peakrdl-rawheader>=0.2.8' 'peakrdl-cheader>=1.1.0'
+          python3 -m pip install 'cocotb==1.9.2' 'cocotb-bus==0.2.1' 'cocotbext-axi==0.1.28' 'cocotbext-eth==0.1.28' 'cocotb-test==0.2.6'
+          python3 tools/ip_fetch.py floonoc pulp_idma verilog_axi picorv32 serv wb2axip
+          python3 -m pip install -e .tools/floonoc
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends verilator clang llvm lld
+      - name: Verify RV32I CPU0 C flash image and Ethernet opt-in source truth
+        run: |
+          set -euo pipefail
+          python3 -m unittest tests.test_ethernet_chip_variant -v
+          make check-generated
+          python3 tools/regress.py chip-ethernet-cpu --stage files
+          test -f .tools/regression/chip-ethernet-cpu/variant/cpu_dma.elf
+          test -f .tools/regression/chip-ethernet-cpu/variant/flash.hex
+          test -f .tools/regression/chip-ethernet-cpu/sources.f
+      - name: Run actual PicoRV32 C queue CSR, GMII and B-gated CQ regression
+        run: python3 tools/regress.py chip-ethernet-cpu
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ethernet-cpu0-c-queue-cq-${{ github.run_id }}
+          path: .tools/regression/chip-ethernet-cpu/
+          include-hidden-files: true
+          if-no-files-found: warn
