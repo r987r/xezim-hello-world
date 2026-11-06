@@ -50,11 +50,17 @@ class DFIProbe:
 
         for i, p in enumerate(phases):
             if not p["cs_n"]:
-                # DDR4 ACT_N uses the command/address encoding as an ACT
-                # discriminator; read and write follow the RAS/CAS/WE DFI bits.
-                if not p["act_n"]:
+                # The pinned SDRAMPHYModel executes ACT from the legacy
+                # DFI RAS/CAS/WE code (CS=0,RAS=0,CAS=1,WE=1).
+                # Other DDR4 PHYs use dedicated ACT_n=0; accept either
+                # encoding but count the operation only once. Both cases
+                # require an actually selected chip-select and sampled pins.
+                legacy_act = (not p["ras_n"] and p["cas_n"] and p["we_n"])
+                if not p["act_n"] or legacy_act:
                     emit("dfi_activate", dfi_phase=i, bank=p["bank"],
-                         address=p["address"])
+                         address=p["address"],
+                         decode_basis=("act_n" if not p["act_n"]
+                                       else "ras_cas_we_phy_model"))
                 elif p["ras_n"] and not p["cas_n"]:
                     operation = "dfi_write" if not p["we_n"] else "dfi_read"
                     emit(operation, dfi_phase=i, bank=p["bank"],
