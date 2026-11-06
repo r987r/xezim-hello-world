@@ -305,33 +305,57 @@ def discover_test_workflows(root=ROOT):
             producers[file.name]={'file':file.name,'label':str(workflow.get('name') or file.stem),'artifacts':artifacts}
     return producers
 
+def select_workflow_runs(client, producers, merged_heads, history, *, max_pages=10):
+    """Collect recent trusted history for EACH test workflow independently.
+
+    A global latest-500 run window starves infrequent DDR/Ethernet/PCIe tests
+    when agents trigger many unrelated jobs. Workflow-scoped pagination also
+    bounds the number of archives to the configured history depth.
+    """
+    if history <= 0 or max_pages <= 0:
+        raise ValueError("workflow history and pagination bounds must be positive")
+    selected={name:[] for name in producers}
+    notes=[]
+    for name in producers:
+        # The workflow file is a repository-controlled filename, not a URL
+        # from an artifact or an Actions response.
+        workflow_id=urllib.parse.quote(name, safe="")
+        for page in range(1, max_pages+1):
+            response=client.request(
+                f"/repos/{client.repository}/actions/workflows/{workflow_id}/runs?per_page=100&page={page}")
+            batch=response.get("workflow_runs", [])
+            for raw in batch:
+                if raw.get("path", "").split("/")[-1] != name:
+                    continue
+                merged_pr=verified_merged_pr(raw, merged_heads)
+                if raw.get("head_branch") != "main" and merged_pr is None:
+                    continue
+                run=dict(raw)
+                if merged_pr is not None:
+                    run["verified_merged_pr"]=merged_pr
+                selected[name].append(run)
+                if len(selected[name]) >= history:
+                    break
+            if len(selected[name]) >= history or len(batch) < 100:
+                break
+        else:
+            notes.append(f"{name}: trusted history truncated after {max_pages} workflow pages")
+    return selected, notes
+
+
 def collect(client,config,destination):
     destination.mkdir(parents=True,exist_ok=True)
     producers=discover_test_workflows()
-    selected={name:[] for name in producers}
     merged_heads=merged_main_pr_heads(client)
-    site_sha=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip()
+    selected,notes=select_workflow_runs(
+        client,producers,merged_heads,config["history_per_workflow"],
+        max_pages=config.get("max_history_pages_per_workflow",10))
+    site_sha=subprocess.check_output(["git","rev-parse","HEAD"],cwd=ROOT,text=True).strip()
     tree_cache={}
     fabric_cache={}
-    # Only trusted main and source-SHA-matched merged PR workflow runs are
-    # published. PR code and artifacts are not executed in this trusted job.
-    for page in range(1,6):
-        response=client.request(f'/repos/{client.repository}/actions/runs?per_page=100&page={page}')
-        batch=response['workflow_runs']
-        for run in batch:
-            file=run['path'].split('/')[-1]
-            if file not in selected or len(selected[file])>=config['history_per_workflow']:
-                continue
-            merged_pr=verified_merged_pr(run,merged_heads)
-            if run.get('head_branch')!='main' and merged_pr is None:
-                continue
-            run=dict(run)
-            if merged_pr is not None:
-                run['verified_merged_pr']=merged_pr
-            selected[file].append(run)
-        if not batch or (selected and all(len(r)>=config['history_per_workflow'] for r in selected.values())):
-            break
-    notes=[]
+    # Publish only main or exact merged-PR source; PR artifact bytes are
+    # never executed by this trusted Pages job.
+
     verified_cache={}
     for workflow in producers.values():
         for run in selected[workflow['file']]:
