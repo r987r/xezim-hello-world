@@ -1,7 +1,7 @@
 <div class="eyebrow">Source-defined architecture · data and config planes</div>
 <h1>SoC address map &amp; CSR register definitions</h1>
 <p class="lede">ROM, SRAM, flash, DDR, HBM and control windows from the configured SoC. SystemRDL-owned and upstream LiteDRAM/LiteX native registers are subsets of the physical apertures. Choose the exact SoC build below.</p>
-<div class="actions"><a href="#csr-definitions">Browse registers &amp; bitfields</a><a href="data/soc-address-map.json">Download address-map JSON</a><a href="data/soc-data-memories.rdl">External memory RDL view</a><a href="runs.html">Inspect measured run evidence</a></div>
+<div class="actions"><a href="#csr-definitions">Browse registers &amp; bitfields</a><a href="data/soc-address-map.json">Download address-map JSON</a><a href="data/csr-source-coverage.json">CSR coverage / missing IP sources</a><a href="data/soc-data-memories.rdl">External memory RDL view</a><a href="runs.html">Inspect measured run evidence</a></div>
 <p class="muted">__CSR_SOURCE_LINKS__</p>
 <div class="grid" id="am-summary"></div>
 <p class="notice">Mapped apertures and register definitions are not RTL test coverage. Memory-model backing may be far smaller than the declared DDR/HBM windows. Unassigned holes are not backed storage; read/write evidence belongs to each run's passive AXI trace.</p>
@@ -82,7 +82,7 @@
    if(!regs.length){
     append(card,'p',displayed.length
      ?'No registers in this IP match the current search.'
-     :'No CSR definitions imported for this IP in the selected build; an aperture alone does not establish registers or their values.','am-csr-empty');
+     :'No CSR definitions imported for this IP in the selected build; an aperture alone does not establish registers or their values. '+(r.source_gap_reason?'Reason: '+r.source_gap_reason:'Source metadata unavailable.'),'am-csr-empty');
     continue;
    }
    let firstReg=true;
