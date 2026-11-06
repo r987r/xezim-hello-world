@@ -104,7 +104,7 @@ RUN:
   descriptor/IRQ checks, then three more real DMA descriptors:
   PCIe SRAM +`0x500` → modeled DDR +`0x800`;
   existing DMA-populated DDR region → PCIe SRAM +`0x600`;
-  DDR +`0x800` → CPU-visible SRAM.
+  DDR +`0x800` → CPU-visible SRAM. The comprehensive DDR/HBM\n  five-descriptor test still runs independently as `chip-cpu-dma`.
 - CPU0 checks the host's 64 bytes after the last descriptor, validates
   descriptors and IRQ, then announces RUN to the host.
 - Host reads BAR0+`0x600`, independently checks every byte against the CPU
@@ -114,8 +114,7 @@ CHECK:
 - The unchanged CPU/host CHECK handshake runs after both directions pass.
   The passive AXI reporter validates accepted transfers/completions and the
   shared TLP observer validates the inbound host TLP/completion stream.
-  The common `test-flow.json` adds `host0.seed_ddr_input`,
-  `cpu0.pcie_ddr_exchange`, and `host0.read_ddr_dma_output`.
+  The common `test-flow.json` adds `host0.seed_ddr_input`,\n  `cpu0.pcie_ddr_exchange`, and `host0.read_ddr_dma_output`.
 
 The host uses BAR readback (a **host pull**), not a device-initiated PCIe
 outbound memory-write TLP. Production host-memory DMA via upstream
