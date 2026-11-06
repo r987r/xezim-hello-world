@@ -206,15 +206,18 @@ It imports vendor-generated `csr.json`, checks the translated 16-KiB
 same Address Map. The *default* build continues to show the 4-KiB
 reserved controller window and fast AXI-RAM backing, never a fabricated
 active controller. Successful CSR and Pages **PR preview** jobs do not
-publish that native DDR view. It requires real-DDR full-chip evidence,
-merge to main and a successful main Pages deployment.
+publish that native DDR view. The real-DDR CSR full-chip evidence has now **passed** in
+[workflow 42267019604](https://github.com/r987r/xezim-hello-world/actions/runs/42267019604),
+including the 16-KiB native register catalog and accepted Config-NoC CSR reads/writes.
+It still requires conflict reconciliation, exact-final-head CI, merge to main,
+and a successful main Pages deployment before the DDR variant can be considered live.
 
 **Verified publication status at this review:** the main [Pages workflow
 42265803416](https://github.com/r987r/xezim-hello-world/actions/runs/42265803416)
 successfully built site artifacts, but its deployment was left queued and
-failed with `Deployment failed, try again later`. The earlier
-[workflow 42258407423](https://github.com/r987r/xezim-hello-world/actions/runs/42258407423)
-deployed successfully. Do not claim the latest main source is live solely
+failed with `Deployment failed, try again later`. Subsequently,
+[main workflow 42271755340](https://github.com/r987r/xezim-hello-world/actions/runs/42271755340)
+completed **both build and deployment successfully** for its own tested commit. Do not claim the latest main source is live solely
 because its build succeeded, nor promise an old Pages release shows later
 CSR changes. A new main-ref release must independently complete its deploy
 job and the actual published route must be checked before declaring release.
