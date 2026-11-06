@@ -1,0 +1,30 @@
+name: Ethernet MVP source and integration gate
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'rtl/io/ethernet0/**'
+      - 'dv/ethernet0/**'
+      - '.github/workflows/ethernet-mvp.yml'
+      - 'tools/full_chip_gen.py'
+      - 'tools/ethernet_chip.py'
+      - 'docs/ethernet0-closure-gate.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ethernet-mvp-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Snapshot exact branch source for local integration audit
+        run: tar -czf eth-source.tgz --exclude=.git --exclude=.tools --exclude=eth-source.tgz .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ethernet-mvp-source-${{ github.run_id }}
+          path: eth-source.tgz
+          retention-days: 1
