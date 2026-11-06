@@ -288,9 +288,27 @@ def verified_fabric_execution_equivalent(client, run, tested_sha, site_sha, cach
 
 
 
+def discover_test_workflows(root=ROOT):
+    """Auto-discover checked-in CI workflows publishing regression evidence."""
+    producers={}
+    for file in sorted((root/'.github/workflows').glob('*.yml')):
+        workflow=yaml.safe_load(file.read_text()) or {}
+        artifacts=[]
+        for job in (workflow.get('jobs') or {}).values():
+            for step in job.get('steps',[]):
+                if not str(step.get('uses','')).startswith('actions/upload-artifact@'):
+                    continue
+                opts=step.get('with') or {}
+                if '.tools/regression/' in str(opts.get('path','')):
+                    artifacts.append(str(opts.get('name','')))
+        if artifacts:
+            producers[file.name]={'file':file.name,'label':str(workflow.get('name') or file.stem),'artifacts':artifacts}
+    return producers
+
 def collect(client,config,destination):
     destination.mkdir(parents=True,exist_ok=True)
-    selected={w['file']:[] for w in config['workflows']}
+    producers=discover_test_workflows()
+    selected={name:[] for name in producers}
     merged_heads=merged_main_pr_heads(client)
     site_sha=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip()
     tree_cache={}
@@ -311,11 +329,11 @@ def collect(client,config,destination):
             if merged_pr is not None:
                 run['verified_merged_pr']=merged_pr
             selected[file].append(run)
-        if not batch or all(len(r)>=config['history_per_workflow'] for r in selected.values()):
+        if not batch or (selected and all(len(r)>=config['history_per_workflow'] for r in selected.values())):
             break
     notes=[]
     verified_cache={}
-    for workflow in config['workflows']:
+    for workflow in producers.values():
         for run in selected[workflow['file']]:
             folder=destination/(str(run['id'])+'-'+str(run.get('run_attempt',1)))
             folder.mkdir(parents=True,exist_ok=True)
@@ -324,13 +342,15 @@ def collect(client,config,destination):
                 dump(folder/'run.json',run)
                 continue
             artifacts=client.request(f'/repos/{client.repository}/actions/runs/{run["id"]}/artifacts?per_page=100')['artifacts']
-            # Artifact names may include GitHub run IDs/attempts. Accept only
-            # explicit producer-owned prefixes, never arbitrary ZIPs.
+            # Only collect named regression archives uploaded by this CI workflow.
             for artifact in artifacts:
                 allowed=workflow['artifacts']
                 if not any(artifact['name']==pattern or
-                           (pattern.endswith('*') and artifact['name'].startswith(pattern[:-1]))
+                           ('${' in pattern and artifact['name'].startswith(pattern.split('${',1)[0]))
                            for pattern in allowed):
+                    continue
+                if artifact.get('size_in_bytes',0)>config['max_archive_mib']*1024**2:
+                    notes.append(f'Run {run["id"]}: archive too large {artifact["name"]}')
                     continue
                 if artifact['expired']:
                     notes.append(f'Run {run["id"]}: expired artifact {artifact["name"]}')
