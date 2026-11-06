@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'csr/rdl/soc_dma_shim.rdl'
+      - 'sw/dma/dma.h'
       - 'tools/csr_dma_headers.py'
       - 'tests/test_csr_dma_headers.py'
       - '.github/workflows/csr-firmware.yml'
@@ -42,3 +43,9 @@ jobs:
           int dma_csr_header_smoke(void) { return SOC_DMA_REG_STATUS; }
           EOF
           clang --target=riscv32-unknown-elf -march=rv32i -mabi=ilp32 -ffreestanding -std=c11 -Wall -Wextra -Werror -Oz -c .tools/csr-dma/header_abi_test.c -o .tools/csr-dma/header_abi_test.o
+      - name: Compile real DMA C driver in generated and legacy ABI modes
+        run: |
+          clang --target=riscv32-unknown-elf -march=rv32i -mabi=ilp32 -ffreestanding -std=c11 -Wall -Wextra -Werror -Oz -ffunction-sections -fdata-sections -DSOC_USE_GENERATED_DMA_CSR -I .tools/csr-dma -c sw/dma/dma.c -o .tools/csr-dma/dma_generated.o
+          clang --target=riscv32-unknown-elf -march=rv32i -mabi=ilp32 -ffreestanding -std=c11 -Wall -Wextra -Werror -Oz -ffunction-sections -fdata-sections -c sw/dma/dma.c -o .tools/csr-dma/dma_legacy.o
+          test -s .tools/csr-dma/dma_generated.o
+          test -s .tools/csr-dma/dma_legacy.o
