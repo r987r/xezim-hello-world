@@ -371,6 +371,21 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
                 'IdWidth':p['id_width'],'Base':f"64'h{region['base']:016x}",'Bytes':size,
                 'ReadOnly':int(is_rom),'InitFile':f'"{image_prefix}/{image}"' if image else '""'},
                 {'clk_i':'clk_i','rst_ni':'rst_ni','req_i':req(p),'rsp_o':rsp(p),**mon})]
+        elif ethernet_mode and ep == 'controller_regs' and p['network'] == ethernet[0]['name']+'_local_config':
+            ctrl_region = next(r for r in cfg['address_map']['config']
+                               if r['name'] == ethernet[0]['name']+'.ctrl')
+            lines += [module('ethernet_queue_axi_regs','u_ethernet_queue_regs',{
+                'axi_req_t':dtype(p,'req'),'axi_rsp_t':dtype(p,'rsp'),
+                'lite_req_t':'lite_req_t','lite_rsp_t':'lite_resp_t',
+                'AxiIdWidth':p['id_width'],
+                'CsrBase':f"32'h{int(ctrl_region['base'],0):08x}"},{
+                'clk_i':'clk_i','rst_ni':'rst_ni',
+                'cfg_req_i':req(p),'cfg_rsp_o':rsp(p),
+                'queue_valid_o':'ethq_cfg_valid','queue_write_o':'ethq_cfg_write',
+                'queue_addr_o':'ethq_cfg_addr','queue_wdata_o':'ethq_cfg_wdata',
+                'queue_wstrb_o':'ethq_cfg_wstrb',
+                'queue_ready_i':'ethq_cfg_ready','queue_rdata_i':'ethq_cfg_rdata',
+                'queue_error_i':'ethq_cfg_error'})]
         elif ep == 'controller_regs' and any(
                 p['network'] == sub['name']+'_local_config'
                 for sub in cfg['subsystems'] if sub['type']=='peripheral'):
