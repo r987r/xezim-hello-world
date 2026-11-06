@@ -222,6 +222,35 @@ jobs:
           print('DDR4 monitor PASS:', report['sampled_cycles'], 'cycles,', report['channels'])
           PY
 
+      - name: Publish source-verified DDR4 ACT/PRE/RD/WR/REF protocol evidence
+        run: |
+          set -euo pipefail
+          python3 rtl/memory/ddr4/publish_protocol.py \
+            --source .tools/ddr4/litedram_sim \
+            --destination .tools/regression/ddr4-standalone
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          d=Path(".tools/regression/ddr4-standalone")
+          p=json.loads((d/"protocol-transactions.json").read_text())
+          r=json.loads((d/"result.json").read_text())
+          assert r["passed"] and p["capture_complete"]
+          commands={row["operation"] for row in p["records"] if row["protocol"]=="dfi"}
+          assert {"rd","wr"}<=commands
+          assert all(row["fields"]["capture_scope"]=="standalone_controller_behavioral_phy_not_fullchip"
+                     for row in p["records"])
+          print("DDR DFI commands:",r["dfi_commands"],"sources:",len(p["sources"]))
+          PY
+
+      - name: Upload compact DDR4 DFI command protocol evidence for unified Test Runs
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ddr4-standalone-protocol-${{ github.run_id }}
+          if-no-files-found: error
+          retention-days: 14
+          path: .tools/regression/ddr4-standalone/
+
       - name: Upload generated RTL, initialization plan and diagnostic logs
         if: always()
         uses: actions/upload-artifact@v4
