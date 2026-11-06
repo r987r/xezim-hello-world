@@ -65,7 +65,7 @@ class GitHub:
         if self.token: headers['Authorization']='Bearer '+self.token
         body=json.dumps(data).encode() if data is not None else None
         req=urllib.request.Request('https://api.github.com'+path,headers=headers,data=body,method=method)
-        with self.opener.open(req,timeout=60) as response:
+        with self.opener.open(req,timeout=180 if binary else 60) as response:
             raw=response.read()
         return raw if binary else json.loads(raw) if raw else {}
 
