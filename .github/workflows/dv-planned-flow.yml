@@ -1,0 +1,45 @@
+name: Declared test INIT RUN CHECK plans
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'tools/planned_test_flow.py'
+      - 'tools/regress.py'
+      - 'tools/publish_site.py'
+      - 'tools/templates/site_runs.html'
+      - 'config/regression.yaml'
+      - 'config/scenarios/**'
+      - 'tests/test_planned_test_flow.py'
+      - '.github/workflows/dv-planned-flow.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  plan-only-flow:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: python3 -m pip install -r requirements.txt
+      - name: Test all declared phase/stimulus flows without executing RTL
+        run: python3 -m unittest tests.test_planned_test_flow tests.test_regression -v
+      - name: Verify HTML flow controls and browser JavaScript syntax
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          page=Path('tools/templates/site_runs.html').read_text()
+          match=re.findall(r'<script>(.*?)</script>',page,re.S)
+          assert len(match)==1, 'expected one trusted inline Test Runs script'
+          Path('.tools').mkdir(exist_ok=True)
+          Path('.tools/site_runs_inline.js').write_text(match[0])
+          for marker in ('id="flow-target"', 'id="flow-phases"',
+                         'showFlow(name)', 'renderFlow()'):
+              assert marker in page, marker
+          PY
+          node --check .tools/site_runs_inline.js
