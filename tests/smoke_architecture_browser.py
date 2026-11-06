@@ -110,7 +110,23 @@ def main():
             start=original.index(marker)+len(marker)
             end=original.index('</script>',start)
             copied=Path(scratch)/'explorer.html'
-            copied.write_text(original[:start]+json.dumps([synthetic])+
+                        synthetic_ddr={
+                'run_id':67890,'attempt':1,'target':'ddr4-standalone',
+                'source_sha':'c'*40,'recorded_at':'2026-11-06T00:01:00Z',
+                'passed':True,'workflow':'DDR4 verified foundation',
+                'report_path':'runs/67890/ddr4-standalone/protocols.html',
+                'axi_report_path':'runs/67890/ddr4-standalone/report.html',
+                'raw_path':'runs/67890/ddr4-standalone/protocol-transactions.json',
+                'links':{'capture_complete':True,'sources':[
+                    {'source':'memory0.ddr0.dfi','protocol':'dfi',
+                     'role':'link','clock_domain':'ddr_source_clk',
+                     'implementation':'litedram_flat_dfi_probe','count':2,
+                     'operations':{'rd':1,'wr':1},
+                     'preview':[{'kind':'event','operation':'rd',
+                                 'id':None,'start_ps':45000,'end_ps':45000,
+                                 'status':'observed',
+                                 'fields':{'bank':2,'dfi_phase':3,'address':128}}]}]}}
+            copied.write_text(original[:start]+json.dumps([synthetic,synthetic_ddr])+
                               original[end:])
             driver.get(copied.as_uri())
             wait.until(lambda d:"SYSTEM-ON-CHIP" in d.find_element(By.ID,"arch-svg").text)
@@ -126,6 +142,20 @@ def main():
                 "#arch-traffic-actions a").get_attribute("href")
             assert "protocol=pcie" in detail and "source=pcie0.rx_req" in detail
             driver.save_screenshot(str(args.screenshots/"04-pcie-verified-tlp-link.png"))
+            driver.get(copied.as_uri())
+            wait.until(lambda d:"SYSTEM-ON-CHIP" in d.find_element(By.ID,"arch-svg").text)
+            dblclick_by_label("memory0")
+            wait.until(lambda d:"memory0" in d.find_element(By.ID,"arch-crumbs").text.lower())
+            dblclick_by_label("memory0.ddr0")
+            wait.until(lambda d: d.find_element(By.ID,"arch-link-traffic").is_displayed())
+            assert "ddr_source_clk" in driver.find_element(By.ID,"arch-traffic-context").text
+            assert "rd" in driver.find_element(By.ID,"arch-traffic-rows").text
+            assert "dfi" in driver.find_element(By.ID,"arch-traffic-source").text
+            detail=driver.find_element(By.CSS_SELECTOR,
+                "#arch-traffic-actions a").get_attribute("href")
+            assert "protocol=dfi" in detail and "source=memory0.ddr0.dfi" in detail
+            driver.save_screenshot(str(args.screenshots/"05-ddr-nested-dfi-link.png"))
+
         print("PASS: architecture RTL drilldown, PCIe monitor link and bounded real-evidence UI")
 
 
