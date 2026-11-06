@@ -172,6 +172,10 @@ class FlooNoCProfilesTest(unittest.TestCase):
     def test_reject_upstream_power_of_two_rob_usage_counter_mismatch(self):
         knobs = copy.deepcopy(self.knobs)
         knobs["fabric_parameters"]["global_data"]["MaxTxnsPerId"] = 8
+        # That usage counter exists only for NormalRoB/SimpleRoB.
+        # Explicitly enable a real reorder FIFO to test the guard; with
+        # NoRoB there is no usage FIFO and depth=8 is not the same bug.
+        knobs["fabric_parameters"]["global_data"]["RRoBType"] = "NormalRoB"
         with self.assertRaisesRegex(
                 floonoc_gen.NoCGenerationError, "power-of-two MaxTxnsPerId"):
             floonoc_gen.profiles(self.soc, knobs)
