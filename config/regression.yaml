@@ -242,6 +242,7 @@ tests:
     timeout_s: 3000
     pass: 'PASS DDR-B full-chip'
     report:
+      address_map: {config: .tools/regression/chip-ddr4-real/ddr_noc/soc.yaml, variant: ddr_real, csr_map: .tools/regression/chip-ddr4-real/ddr-native-csr-map.json}
       context: 'Real pinned LiteDRAM with behavioral DDR4 DFI/BankModel behind existing Memory0 crossbar and independent 16KiB Config NoC, real CPU/iDMA and measured AXI/DFI. No physical PHY.'
       flow:
         required_steps:

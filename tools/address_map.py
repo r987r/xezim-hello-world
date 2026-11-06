@@ -53,6 +53,12 @@ def model_capacity(cfg, name, kind, arch_size):
     """Advertise a configured modeled capacity, not an actual RTL proof."""
     if kind == "sram":
         value = number(cfg["boot"]["simulation_sram_bytes"])
+    elif kind == "ddr" and any(
+            target["name"] == name and target.get("simulation", {}).get("backend") == "litedram_sim"
+            for target in cfg.get("memory_targets", [])):
+        # DDR-B's pinned real LiteDRAM DFI/BankModel preflight validates the
+        # low 32 MiB, not the default fast-AXI-RAM model's 64 KiB.
+        value = 32 * 1024 * 1024
     elif kind in ("ddr", "hbm"):
         value = 1 << number(cfg["verification"]["memory"]["model_address_bits"])
     else:
@@ -66,10 +72,20 @@ def build(config_path=CONFIG, *, csr_path=None, variant="architecture"):
     """Compose independent data and config planes without unifying their buses."""
     config_path = Path(config_path)
     cfg = yaml.safe_load(config_path.read_text())
-    # Validate the SoC's full normal physical-map contract, not a duplicate
-    # custom CSR-only address decoder.
+    # Default SoC uses the normal strict validator. The opt-in DDR-B variant
+    # is allowed only if it is EXACTLY the deterministic transform of the
+    # checked-in baseline, not an arbitrary alternative/relaxed SoC YAML.
     import socgen
-    socgen.validate(cfg)
+    if variant == "ddr_real":
+        from ddr_chip import variant_configuration
+        baseline = yaml.safe_load(CONFIG.read_text())
+        if cfg != variant_configuration(baseline):
+            raise AddressMapError("DDR CSR variant differs from the pinned real-LiteDRAM SoC composition")
+        for plane in ("data", "config"):
+            socgen.check_region_map(cfg["address_map"][plane],
+                                    number(cfg["buses"][plane]["addr_bits"]), plane)
+    else:
+        socgen.validate(cfg)
 
     if not isinstance(variant, str) or not re.fullmatch(r"[a-zA-Z_][\w.-]*", variant):
         raise AddressMapError("invalid exact-build variant identifier")
@@ -148,7 +164,10 @@ def build(config_path=CONFIG, *, csr_path=None, variant="architecture"):
                     masks |= mask
                 mapped["registers"].append({
                     **register, "address": hx(base + offset),
-                    "definition_status": "SystemRDL_defined_not_RTL_proof",
+                    "definition_status": (
+                        "native_LiteDRAM_generated_CSR_not_bus_coverage"
+                        if entry.get("source") == "LiteDRAM native csr.json"
+                        else "SystemRDL_defined_not_RTL_proof"),
                 })
             if registers:
                 mapped["implementation_status"] = "register_map_defined_RTL_unverified"
