@@ -205,7 +205,7 @@ class AxiReportTests(unittest.TestCase):
                 event('ar',10,id=0,addr=0x10000000,len=0,size=2),
                 event('r',20,id=0,data=0x44332211,last=1,resp=0),
             ]
-            (directory/'axi-events.jsonl').write_text(''.join(json.dumps(e)+'\\n' for e in events))
+            (directory/'axi-events.jsonl').write_text(''.join(json.dumps(e)+'\n' for e in events))
             plan={'target':'map-demo','engine':'cocotb-verilator',
                   'report':{'axi':{'catalog':str(catalog)},
                             'address_map':{'config':'config/soc.yaml','variant':'architecture'}}}
