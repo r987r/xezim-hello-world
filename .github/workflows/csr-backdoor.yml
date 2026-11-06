@@ -1,0 +1,28 @@
+name: CSR backdoor runtime binding contract
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'tools/csr_runtime.py'
+      - 'tools/csr_backdoor.py'
+      - 'tests/test_csr_runtime.py'
+      - 'tests/test_csr_backdoor.py'
+      - '.github/workflows/csr-backdoor.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fail-closed-read:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Test compositional path and runtime handle contract
+        run: python3 -m unittest tests.test_csr_backdoor tests.test_csr_runtime -v
+      - name: Syntax-check simulator-neutral Python adapters
+        run: python3 -m py_compile tools/csr_backdoor.py tools/csr_runtime.py
