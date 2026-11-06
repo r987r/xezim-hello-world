@@ -16,6 +16,26 @@ const networkOf=id=>{for(const n of nets.keys())if(id.startsWith(n+"."))return n
 const networksOf=id=>[...nets.keys()].filter(n=>n.startsWith(id+"_"));
 const color=n=>nets.get(n)?.info?.plane==="config"?C.config:C.data,clip=(s,n)=>String(s).length>n?String(s).slice(0,n-1)+"…":String(s);
 const short=id=>String(id).split(".").slice(-1)[0];
+// Logical diagram node -> parsed module; this is a syntax-only association.
+// Preserve test-profile-dependent RTL composition as a separate concern.
+const parsedModules=new Map((parsed.modules||[]).map(m=>[m.name,m]));
+const moduleCandidates=id=>{
+  const n=nodes.get(id),ip=n?.info?.ip||"";
+  const preferred={
+    "ethernet0.ip":["ethernet0_axi_mvp","ethernet0_mvp"],
+    "pcie0.ip":["pcie_tlp_bridge"],
+    "compute0.cpu":["picorv32_cpu_adapter"],
+    "compute1.cpu":["serv_cpu_adapter"],
+    "compute0.dma":["soc_idma_engine"],"compute1.dma":["soc_idma_engine"],
+    "compute0.dma_csr":["soc_dma_regs"],"compute1.dma_csr":["soc_dma_regs"],
+    "compute0.sram":["axi_sram_target"],"compute1.sram":["axi_sram_target"],
+    "pcie0.sram":["axi_sram_target"],"ethernet0.sram":["axi_sram_target"]
+  };
+  return [...new Set([...(preferred[id]||[]),ip,n?.module].filter(Boolean))];
+};
+const ipModule=id=>moduleCandidates(id).find(x=>parsedModules.has(x))||null;
+const ipDestination=id=>({mode:"ip",name:id});
+
 const actorFor=n=>{
   const id=n?.id||"";
   const p=g.profiles[profile.value]||{};
@@ -66,8 +86,8 @@ const box=(p,x,y,w,h,fill="#12253a",stroke="#3b5e79",r=10,sw=1.4,dash="")=>add(p
 const route=(p,pts,c=C.data,w=3,dash="")=>add(p,elem("path",{d:pts.map((pt,i)=>(i?"L":"M")+pt[0]+" "+pt[1]).join(" "),stroke:c,"stroke-width":w,fill:"none","stroke-linejoin":"round","stroke-linecap":"round",...(dash?{"stroke-dasharray":dash}:{})}));
 function clickable(n,item,dest){
   n.setAttribute("class","arch-click");n.setAttribute("tabindex","0");n.setAttribute("role","button");n.setAttribute("aria-label",item.title||item.kind||"Select diagram item");
-  n.addEventListener("click",e=>{e.stopPropagation();inspect(item,dest)});
-  n.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();inspect(item,dest)}});
+  n.addEventListener("click",e=>{e.stopPropagation();if(dest?.mode==="ip")navigate(dest.mode,dest.name);else inspect(item,dest)});
+  n.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();if(dest?.mode==="ip")navigate(dest.mode,dest.name);else inspect(item,dest)}});
   if(dest)n.addEventListener("dblclick",e=>{e.preventDefault();e.stopPropagation();navigate(dest.mode,dest.name)});
 }
 function bus(p,points,details,c=C.data,w=3,dashed=false){
@@ -101,7 +121,7 @@ function subBox(p,name,r){
   blocks.sort((a,b)=>{const i=kinds.indexOf(short(a.id)),j=kinds.indexOf(short(b.id));return(i<0?99:i)-(j<0?99:j)||a.id.localeCompare(b.id)});
   const top=r.y+65,netX=r.x+r.w*.55,netW=r.w*.4,blockX=r.x+17,blockW=r.w*.45;
   local.slice(0,2).forEach((net,i)=>netCard(content,net,netX,top+i*104,netW,78));
-  blocks.slice(0,5).forEach((n,i)=>card(content,blockX,top+i*59,blockW,50,short(n.id),role(n),C.ip,{title:n.id,kind:"RTL IP/boundary",source:n.info?.source,status:n.info?.status,instance:n.id,actor:actorFor(n)?.label||null,actor_status:actorFor(n)?.kind||"unregistered"}));
+  blocks.slice(0,5).forEach((n,i)=>card(content,blockX,top+i*59,blockW,50,short(n.id),role(n),C.ip,{title:n.id,kind:"RTL IP/boundary",source:n.info?.source,status:n.info?.status,instance:n.id,actor:actorFor(n)?.label||null,actor_status:actorFor(n)?.kind||"unregistered"},ipDestination(n.id)));
   g.edges.filter(e=>{
     const a=e.from.instance,b=e.to.instance;
     return (a.startsWith(name+".")&&networkOf(b)?.startsWith(name+"_"))||(b.startsWith(name+".")&&networkOf(a)?.startsWith(name+"_"));
@@ -166,7 +186,7 @@ function subsystem(name){
   const wires=add(root,elem("g")),draw=add(root,elem("g"));
   blocks.sort((a,b)=>a.id.localeCompare(b.id));
   blocks.forEach((b,i)=>{const l={x:35,y:top+i*91,w:330,h:64};lpos.set(b.id,l);
-    card(draw,l.x,l.y,l.w,l.h,short(b.id),role(b),C.ip,{title:b.id,kind:"RTL IP/boundary",instance:b.id,status:b.info?.status,source:b.info?.source})});
+    card(draw,l.x,l.y,l.w,l.h,short(b.id),role(b),C.ip,{title:b.id,kind:"RTL IP/boundary",instance:b.id,status:b.info?.status,source:b.info?.source},ipDestination(b.id))});
   netNames.forEach((name,i)=>{const l={x:520,y:top+i*155,w:350,h:112};npos.set(name,l);netCard(draw,name,l.x,l.y,l.w,l.h)});
   const outside=g.edges.filter(e=>{
     const a=memberOf.get(e.from.instance),b=memberOf.get(e.to.instance);
@@ -203,6 +223,54 @@ function subsystem(name){
   }
   text(root,35,dims.h-30,"Click a NoC to inspect its generated XY router grid and attached NIs.",12,C.muted);
   return {label:name,count:blocks.length+" IPs · "+netNames.length+" local networks"};
+}
+function ipView(id){
+  const selected=nodes.get(id);
+  const moduleName=ipModule(id);
+  const m=moduleName?parsedModules.get(moduleName):null;
+  const children=m?.instances||[];
+  const shown=Math.min(children.length,22);
+  dims={w:1160,h:Math.max(500,245+shown*75)};
+  const root=add(svg,elem("g"));box(root,0,0,dims.w,dims.h,C.bg,"none",0);
+  text(root,38,47,id.toUpperCase()+" / IP COMPOSITION",17,C.text,760);
+  text(root,38,79,(selected?.info?.ip||"RTL boundary")+" · "+(selected?.info?.status||"status not specified"),13,C.muted);
+  text(root,38,108,"Selected profile "+profile.value+" · custom RTL hierarchy is a syntax parse, not proof this variant elaborates it",12,C.planned);
+  if(!m){
+    card(root,40,153,1050,82,id,"No parsed implementation in the canonical checked-in RTL source",C.ip,{title:id,kind:"opaque / reserved IP boundary"});
+    text(root,42,276,"Pinned upstream IP or opt-in variant may be external. No internal wiring is inferred.",12,C.muted);
+    return {label:id,count:"Opaque boundary · no verified internal hierarchy"};
+  }
+  card(root,40,153,435,70,moduleName,m.source||"Parsed module",C.ip,
+       {title:moduleName,kind:"slang CST parsed RTL module",source:m.source,evidence:m.evidence});
+  text(root,543,142,children.length+" parsed child instantiations",13,C.muted,650);
+  children.slice(0,22).forEach((inst,i)=>{
+    const y=163+i*75,more=parsedModules.has(inst.module)&&inst.module!==moduleName;
+    route(root,[[475,188],[510,188],[510,y+30],[537,y+30]],more?C.data:C.planned,2);
+    card(root,537,y,560,62,inst.name,inst.module+(more?" · open child":" · leaf / external"),more?C.data:C.planned,
+      {title:inst.name,kind:"Parsed instance",rtl_module:inst.module,source:inst.source,port_count:inst.port_count,
+       conditional_generate:inst.conditional_generate,evidence:inst.evidence},
+      more?{mode:"module",name:inst.module}:null);
+  });
+  if(children.length>22)text(root,41,dims.h-26,(children.length-22)+" more instances are in the compiler-parsed RTL table",12,C.muted);
+  else text(root,41,dims.h-26,"Parsed module composition is not elaborated or runtime-tested connectivity.",12,C.muted);
+  return {label:id,count:children.length+" parsed child instances · "+moduleName};
+}
+function moduleView(name){
+  const m=parsedModules.get(name);
+  if(!m)return {label:name,count:"No parsed module available"};
+  const children=m.instances||[];
+  dims={w:1120,h:Math.max(460,215+Math.min(children.length,22)*73)};
+  const root=add(svg,elem("g"));box(root,0,0,dims.w,dims.h,C.bg,"none",0);
+  text(root,38,47,name.toUpperCase()+" / RTL MODULE",17,C.text,750);
+  text(root,38,80,m.source+" · syntax parsed (not elaborated)",12,C.muted);
+  children.slice(0,22).forEach((inst,i)=>{
+    const more=parsedModules.has(inst.module)&&inst.module!==name;
+    card(root,45,120+i*73,1030,59,inst.name,inst.module+(more?" · open child":" · leaf / external"),
+      more?C.data:C.planned,{title:inst.name,kind:"Parsed instance",source:inst.source,port_count:inst.port_count},
+      more?{mode:"module",name:inst.module}:null);
+  });
+  if(!children.length)text(root,43,162,"No nested RTL module instances parsed for this source.",13,C.muted);
+  return {label:name,count:children.length+" parsed child instances"};
 }
 function network(name){
   const group=nets.get(name);if(!group)return fullChip();
@@ -287,7 +355,7 @@ function inspect(item,dest){
   const ep=inventory.endpoints[item.instance||item.title];
   if(ep){const b=document.createElement("button");b.textContent="Inspect "+ep.signals.length+" RTL signal ports";b.addEventListener("click",()=>pickEndpoint(item.instance||item.title));document.getElementById("arch-inspect-links").append(b)}
   open.hidden=!next;
-  if(next)open.textContent="Open "+(next.mode==="sub"?"subsystem":"NoC")+" ›";
+  if(next)open.textContent="Open "+(next.mode==="sub"?"subsystem":next.mode==="noc"?"NoC":"RTL module")+" ›";
 }
 open.addEventListener("click",()=>{if(next)navigate(next.mode,next.name)});
 function resize(){
@@ -300,6 +368,12 @@ function navigate(kind,name){
   current=kind;scope=name||"";svg.replaceChildren();crumbs.replaceChildren();
   const trail=[["Full chip","chip",""]];
   if(kind==="sub")trail.push([name,"sub",name]);
+  if(kind==="ip"){
+    const sub=subs.find(q=>name.startsWith(subName(q)+"."));
+    if(sub)trail.push([subName(sub),"sub",subName(sub)]);
+    trail.push([name,"ip",name]);
+  }
+  if(kind==="module")trail.push([name,"module",name]);
   if(kind==="noc"){
     const sub=subs.find(q=>name.startsWith(subName(q)+"_"));if(sub)trail.push([subName(sub),"sub",subName(sub)]);
     trail.push([name,"noc",name]);
@@ -310,8 +384,8 @@ function navigate(kind,name){
     if(i===trail.length-1)btn.setAttribute("aria-current","page");
     btn.addEventListener("click",()=>navigate(type,id));crumbs.append(btn);
   });
-  const summary=kind==="noc"?network(name):kind==="sub"?subsystem(name):fullChip();
-  inspect({title:summary.label,kind:kind==="chip"?"System overview":kind==="sub"?"Subsystem view":"Generated NoC mesh",description:summary.count});
+  const summary=kind==="noc"?network(name):kind==="sub"?subsystem(name):kind==="ip"?ipView(name):kind==="module"?moduleView(name):fullChip();
+  inspect({title:summary.label,kind:kind==="chip"?"System overview":kind==="sub"?"Subsystem view":kind==="noc"?"Generated NoC mesh":"Compiler-parsed RTL composition",description:summary.count});
   status.textContent=summary.count+" · "+(kind==="noc"?"Generated router topology":"Subsystem hierarchy");
   requestAnimationFrame(()=>{fit();vp.scrollTo(0,0)});
 }
