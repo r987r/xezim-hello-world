@@ -1,0 +1,13 @@
+schema_version: 1
+# Future Ethernet queue peripherals with <name>.ctrl inherit this source.
+subsystem_type: peripheral
+subsystem_ip: ethernet_queue_mac
+aperture_suffix: ctrl
+header: sw/ethernet/eth_queue_abi.h
+register_macro_prefix: ETHQ_REG_
+rtl: rtl/io/ethernet0/ethernet_queue_ctrl.sv
+rtl_register_source: sv_cfg_case
+field_macro_groups:
+  ENABLE: ETHQ_ENABLE_
+  ERRORS: ETHQ_ERROR_
+  POLICY_CONTROL: [ETHQ_POLICY_VALID, ETHQ_POLICY_REQUIRE_UDP, ETHQ_POLICY_DROP]
