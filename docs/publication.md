@@ -186,3 +186,46 @@ compiled RTL storage or frontdoor/backdoor paths match the catalog.
 Individual AXI run reports remain the source for real accepted transactions.
 PR preview builds do not deploy; merge-to-main dispatch is the only
 Pages deployment path.
+
+
+## Current CSR / DDR register-reference release gate (2026-11-06)
+
+The **merged** Pages Address Map is a useful *human-readable aperture and
+partial-register inventory*: search by region/address, filter the data/config
+planes, select a known register, and inspect its source-defined metadata. It
+is **not yet a completed per-IP field datasheet for all subsystems**: the
+existing Inspect details use JSON, and unsourced register fields or resets
+must remain absent. The [CSR ownership matrix](csr-generation.md) lists
+which register sources and generated firmware integrations are qualified.
+
+The real LiteDRAM DDR-B controller was integrated via merged PR #74, but
+the **native controller CSR register view** is a distinct, still-draft
+integration in [PR #100](https://github.com/r987r/xezim-hello-world/pull/100).
+It imports vendor-generated `csr.json`, checks the translated 16-KiB
+`memory0.ctrl` register window, and prepares a variant selector for this
+same Address Map. The *default* build continues to show the 4-KiB
+reserved controller window and fast AXI-RAM backing, never a fabricated
+active controller. Successful CSR and Pages **PR preview** jobs do not
+publish that native DDR view. It requires real-DDR full-chip evidence,
+merge to main and a successful main Pages deployment.
+
+**Verified publication status at this review:** the main [Pages workflow
+42265803416](https://github.com/r987r/xezim-hello-world/actions/runs/42265803416)
+successfully built site artifacts, but its deployment was left queued and
+failed with `Deployment failed, try again later`. The earlier
+[workflow 42258407423](https://github.com/r987r/xezim-hello-world/actions/runs/42258407423)
+deployed successfully. Do not claim the latest main source is live solely
+because its build succeeded, nor promise an old Pages release shows later
+CSR changes. A new main-ref release must independently complete its deploy
+job and the actual published route must be checked before declaring release.
+
+**Provenance distinction:** a declared register is metadata, an
+exact-variant RTL attachment is implementation evidence, and completed
+passive Config-NoC requests/responses are observation evidence.
+Back-door snapshots are not AXI frontdoor transactions. ACT/PCH/RD/WR
+are DDR protocol/DFI events, not CSR register definitions. Firmware
+register headers must be per-IP generated and compiled for the actual
+selected CPU/test variant; opt-in generated-header image equality under
+[#90](https://github.com/r987r/xezim-hello-world/issues/90) does not
+prove production-wide adoption. These rules also apply to Ethernet, PCIe
+and iDMA sources when their catalogs are imported.
