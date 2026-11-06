@@ -1,0 +1,92 @@
+{
+  "registers": [
+    {
+      "fields": [
+        {
+          "access": "rw",
+          "lsb": 0,
+          "mask": 4294967295,
+          "msb": 31,
+          "name": "value"
+        }
+      ],
+      "name": "head_lo",
+      "offset": 0,
+      "width_bits": 32
+    },
+    {
+      "fields": [
+        {
+          "access": "rw",
+          "lsb": 0,
+          "mask": 4294967295,
+          "msb": 31,
+          "name": "value"
+        }
+      ],
+      "name": "head_hi",
+      "offset": 4,
+      "width_bits": 32
+    },
+    {
+      "fields": [
+        {
+          "access": "rw",
+          "lsb": 0,
+          "mask": 1,
+          "msb": 0,
+          "name": "submit"
+        },
+        {
+          "access": "rw",
+          "lsb": 1,
+          "mask": 2,
+          "msb": 1,
+          "name": "irq_ack"
+        }
+      ],
+      "name": "command",
+      "offset": 8,
+      "width_bits": 32
+    },
+    {
+      "fields": [
+        {
+          "access": "r",
+          "lsb": 0,
+          "mask": 1,
+          "msb": 0,
+          "name": "apb_busy"
+        },
+        {
+          "access": "r",
+          "lsb": 1,
+          "mask": 2,
+          "msb": 1,
+          "name": "irq"
+        },
+        {
+          "access": "r",
+          "lsb": 2,
+          "mask": 4,
+          "msb": 2,
+          "name": "apb_error"
+        },
+        {
+          "access": "r",
+          "lsb": 3,
+          "mask": 8,
+          "msb": 3,
+          "name": "raw_irq"
+        }
+      ],
+      "name": "status",
+      "offset": 12,
+      "width_bits": 32
+    }
+  ],
+  "rtl_owner": "rtl/adapters/soc_dma_regs.sv",
+  "rtl_replaced": false,
+  "schema_version": 1,
+  "source": "csr/rdl/soc_dma_shim.rdl"
+}
