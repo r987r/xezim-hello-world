@@ -20,8 +20,21 @@ PAGE=ROOT/".tools/pages-site/runs.html"
 
 
 def sample(target,workflow,sha="a"*40):
+    protocol="pcie" if "pcie" in workflow.lower() else "ethernet" if "ethernet" in workflow.lower() else "axi4"
+    source="pcie0.rx_req" if protocol=="pcie" else "ethernet0.gmii_tx" if protocol=="ethernet" else "compute0_local_data.cpu"
+    operation="mem_read" if protocol=="pcie" else "frame_tx" if protocol=="ethernet" else "read"
+    fields={"tag":"0x4","address":"0x4000","header_hex":"0x1122"} if protocol=="pcie" else (
+        {"dst_mac":"02:50:b6:00:00:22","ether_type":"0x0800","length_bytes":85}
+        if protocol=="ethernet" else {"address":"0x13000000"})
     return {
-        "target":target,"engine":"cocotb-verilator","passed":True,
+        "protocol_links":{"capture_complete":True,"sources":[{
+            "source":source,"protocol":protocol,"role":"target",
+            "clock_domain":"clk","implementation":"test_fixture","count":1,
+            "operations":{operation:1},"preview":[{
+                "kind":"transaction","operation":operation,"id":"test:4",
+                "source":source,"start_ps":1000,"end_ps":3000,
+                "status":"complete","fields":fields}]}]},
+        "target":target,"attempt":1,"engine":"cocotb-verilator","passed":True,
         "expected_failure":None,"axi":True,"observations":5,
         "protocols":["pcie","axi4"] if "pcie" in workflow.lower() else ["axi4"],
         "protocol_observations":5,"annotations":True,
@@ -90,7 +103,27 @@ def main():
                    q.value="ethernet";q.dispatchEvent(new Event("input"));""")
             assert "chip-ethernet" in driver.find_element(By.ID,"results").text
             assert "chip-pcie-host" not in driver.find_element(By.ID,"results").text
-            print("PASS: dynamic suite catalog, PCIe/Ethernet filters, source-aware history")
+            # The main page, not a separate protocol report, must display
+            # source-native TLP and GMII records with a run and protocol filter.
+            driver.execute_script(
+                """const q=document.getElementById("search");
+                   q.value="";q.dispatchEvent(new Event("input"));""")
+            driver.execute_script(
+                """const e=[...document.querySelectorAll("#results tr")]
+                   .find(n=>n.textContent.includes("chip-pcie-host"));
+                   e.querySelector("button").click();""")
+            wait.until(lambda d:"mem_read" in d.find_element(By.ID,"traffic-rows").text)
+            assert "0x4000" in driver.find_element(By.ID,"traffic-rows").text
+            assert "pcie" in driver.find_element(By.ID,"traffic-protocol").text
+            driver.execute_script(
+                """const sel=document.getElementById("traffic-run");
+                   const found=[...sel.options].find(x=>x.textContent.includes("chip-ethernet"));
+                   if(!found)throw new Error("missing Ethernet run");
+                   sel.value=found.value;sel.dispatchEvent(new Event("change"));""")
+            wait.until(lambda d:"frame_tx" in d.find_element(By.ID,"traffic-rows").text)
+            assert "02:50:b6:00:00:22" in driver.find_element(By.ID,"traffic-rows").text
+            assert "ethernet" in driver.find_element(By.ID,"traffic-protocol").text
+            print("PASS: unified Test Runs filters show actual-schema PCIe and Ethernet sample records")
 
 
 if __name__=="__main__":
