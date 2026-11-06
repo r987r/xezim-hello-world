@@ -8,6 +8,10 @@ on:
       - 'dv/full_chip/**'
       - 'config/regression.yaml'
       - 'tools/ddr_chip.py'
+      - 'tools/ddr_csr_catalog.py'
+      - 'tools/address_map.py'
+      - 'tests/test_ddr_csr_catalog.py'
+      - 'tools/axi_report.py'
       - 'tools/full_chip_gen.py'
       - 'tools/cpu_dma_firmware.py'
       - 'tools/regress.py'
@@ -70,6 +74,7 @@ jobs:
           set -euo pipefail
           python3 rtl/memory/ddr4/bringup.py generate
           python3 -m unittest discover -s rtl/memory/ddr4 -p 'test_*.py'
+          python3 -m unittest tests.test_ddr_csr_catalog tests.test_ddr_csr_pages -v
       - name: Build exact-head real LiteDRAM full-chip RTL
         timeout-minutes: 25
         run: |
@@ -85,6 +90,7 @@ jobs:
           python3 tools/regress.py chip-ddr4-real --stage run --fail-fast
           test -s .tools/regression/chip-ddr4-real/ddr4_fullchip_evidence.json
           test -s .tools/regression/chip-ddr4-real/report.html
+          test -s .tools/regression/chip-ddr4-real/ddr-native-csr-map.json
           python3 - <<'PY'
           import json
           from pathlib import Path
@@ -99,6 +105,22 @@ jobs:
           assert negative['source']=='compute0_local_data.dma', negative
           assert negative['bad_write_resp']==3 and negative['bad_read_resp']==3, negative
           assert negative['no_controller_forwarding'] and negative['nonaliased_valid_readback'], negative
+          native=json.loads((p/'ddr-native-csr-map.json').read_text())
+          assert native['variant']=='ddr_real' and native['register_count']>0
+          assert native['native_csr_sha256'] and native['config_sha256']
+          trace=json.loads((p/'axi-transactions.json').read_text())
+          mapping=trace['sections']['address_map']
+          assert mapping['variant']=='ddr_real'
+          ctrl=next(r for r in mapping['regions'] if r['name']=='memory0.ctrl')
+          ddr=next(r for r in mapping['regions'] if r['name']=='memory0.ddr0')
+          assert ctrl['base']=='0x40030000' and ctrl['size']=='0x4000'
+          assert len(ctrl['registers'])==native['register_count']
+          assert ddr['modeled_capacity_bytes']==32*1024*1024
+          assert all(r['definition_status']=='native_LiteDRAM_generated_CSR_not_bus_coverage'
+                     for r in ctrl['registers'])
+          assert ctrl['observations']['capture']=='measured', ctrl
+          assert ctrl['observations']['reads_ok']>0
+          assert ctrl['observations']['writes_ok']>0
           report=json.loads((p/'result.json').read_text())
           assert report['passed'], report
           print('PASS DDR-B full-chip real-controller source/capture contract')
