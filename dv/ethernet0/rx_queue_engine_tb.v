@@ -17,6 +17,8 @@ reg rx_axis_tvalid=0,rx_axis_tlast=0,rx_axis_tuser=0;
 wire write_result_valid,write_result_ok,frame_drop_pulse;
 wire [3:0] write_result_error;wire [15:0] write_result_length;
 wire [31:0] write_result_cookie;wire [7:0] write_result_tag;
+wire [7:0] write_result_policy;
+wire [63:0] rx_cq_slot_addr_o,tx_cq_slot_addr_o;
 reg cpl_written_i=0;
 
 wire [3:0] rd_arid,rd_rid,wr_awid,wr_bid;
@@ -32,11 +34,14 @@ wire [2:0] rd_arprot,wr_awprot;
 ethernet_rx_queue_engine u_eth (
  .clk,.rst,.cfg_valid,.cfg_write,.cfg_addr,.cfg_wdata,.cfg_wstrb,
  .cfg_ready,.cfg_rdata,.cfg_error,
+ .tx_desc_ready_i(1'b0),.tx_cpl_written_i(1'b0),
+ .tx_desc_valid_o(),.tx_desc_addr_o(),
+ .rx_cq_slot_addr_o,.tx_cq_slot_addr_o,
  .frame_valid,.frame_ready,.frame_length,.frame_ethertype,.frame_is_udp,
  .frame_udp_dst_port,.rx_axis_tdata,.rx_axis_tkeep,.rx_axis_tvalid,
  .rx_axis_tready,.rx_axis_tlast,.rx_axis_tuser,
  .write_result_valid,.write_result_ok,.write_result_error,
- .write_result_length,.write_result_cookie,.write_result_tag,
+ .write_result_length,.write_result_cookie,.write_result_policy,.write_result_tag,
  .frame_drop_pulse,.cpl_written_i,.irq,
  .rd_arid,.rd_araddr,.rd_arlen,.rd_arsize,.rd_arburst,.rd_arlock,
  .rd_arcache,.rd_arprot,.rd_arvalid,.rd_arready,.rd_rid,
@@ -251,10 +256,13 @@ initial begin
  wr_reg(8'h74,32'h0800);wr_reg(8'h78,32'hffff);
  wr_reg(8'h7c,6000);wr_reg(8'h80,32'hffff);
  wr_reg(8'h84,3);wr_reg(8'h28,1);wr_reg(8'h08,1);
+ check(rx_cq_slot_addr_o==64'h500,"RX CQ slot matches SRAM ring base");
  send_frame(85,16'h0800,37);
  wait_status(1,1);
  check(last_error==0 && last_length==85 &&
        last_cookie==32'hc0febabe,"DMA B completed, cookie and length checked");
+ check(write_result_policy==8'd0,"RX policy exported with write result");
+ check(rx_cq_slot_addr_o==64'h500,"CQ slot unchanged before CQ B");
  check(desc_reads>0 && packet_writes>0,"actual AXI descriptor read and payload write");
  rd_reg(8'h2c,1);
  rd_reg(8'h38,0);
@@ -269,6 +277,7 @@ initial begin
  check(irq,"IRQ posted after CQ write B response");
  @(negedge clk);cpl_written_i=0;
  rd_reg(8'h38,1);
+ check(rx_cq_slot_addr_o==64'h520,"CQ slot follows successful B-gated retirement");
  // No more RX descriptors: unsolicited valid frames drop without
  // overwriting the first buffer or incrementing the CQ producer.
  send_frame(64,16'h0800,50);
