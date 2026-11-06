@@ -2,6 +2,7 @@ name: DV scenario contract (SCN-1)
 
 on:
   pull_request:
+    branches: [main]
     paths:
       - 'dv/common/scenario.py'
       - 'tools/scenario_plan.py'
@@ -11,13 +12,6 @@ on:
       - 'config/soc.yaml'
       - 'tests/test_scenario_plan.py'
       - '.github/workflows/dv-scenario.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'dv/common/scenario.py'
-      - 'tools/scenario_plan.py'
-      - 'config/scenarios/**'
-      - 'tests/test_scenario_plan.py'
   workflow_dispatch:
 
 permissions:
