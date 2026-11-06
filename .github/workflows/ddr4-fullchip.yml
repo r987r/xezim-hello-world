@@ -25,7 +25,7 @@ permissions:
 jobs:
   cpu-idma-ddr:
     runs-on: ubuntu-24.04
-    timeout-minutes: 55
+    timeout-minutes: 95
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -70,11 +70,19 @@ jobs:
           set -euo pipefail
           python3 rtl/memory/ddr4/bringup.py generate
           python3 -m unittest discover -s rtl/memory/ddr4 -p 'test_*.py'
-      - name: Run real CPU/iDMA to real LiteDRAM through generated Data and Config NoCs
-        timeout-minutes: 30
+      - name: Build exact-head real LiteDRAM full-chip RTL
+        timeout-minutes: 25
         run: |
           set -euo pipefail
-          python3 tools/regress.py chip-ddr4-real --fail-fast
+          python3 tools/regress.py chip-ddr4-real --stage build --fail-fast
+          test -x .tools/chip-ddr4-real-obj/full_chip_tb
+      - name: Run real CPU/iDMA to real LiteDRAM through generated Data and Config NoCs
+        timeout-minutes: 55
+        run: |
+          set -euo pipefail
+          # Same fingerprint-verified binary as the prior step: compilation
+          # time must not consume our expensive simulation budget.
+          python3 tools/regress.py chip-ddr4-real --stage run --fail-fast
           test -s .tools/regression/chip-ddr4-real/ddr4_fullchip_evidence.json
           test -s .tools/regression/chip-ddr4-real/report.html
           python3 - <<'PY'

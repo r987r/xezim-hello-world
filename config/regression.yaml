@@ -183,7 +183,7 @@ tests:
     test_dir: .
     build: .tools/chip-ddr4-real-obj
     env: {MAKEFLAGS: '-j2', SOC_CPU_DMA_MODE: '1', SOC_DDR_REAL_MODE: '1'}
-    timeout_s: 2400
+    timeout_s: 3000
     pass: 'PASS DDR-B full-chip'
     report:
       context: 'Real pinned LiteDRAM with behavioral DDR4 DFI/BankModel behind existing Memory0 crossbar and independent 16KiB Config NoC, real CPU/iDMA and measured AXI/DFI. No physical PHY.'
