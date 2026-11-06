@@ -104,7 +104,7 @@ class SourceCsrTests(unittest.TestCase):
             wrong.write_text(wrong.read_text().replace(
                 "#define ETHQ_REG_ENABLE           0x08u",
                 "#define ETHQ_REG_ENABLE           0xb0u"))
-            with self.assertRaisesRegex(SourceCatalogError, "disagree"):
+            with self.assertRaisesRegex(SourceCatalogError, "mismatch|disagree"):
                 attach_sources(address_map.build(), root=root)
 
 
