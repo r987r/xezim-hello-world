@@ -15,12 +15,23 @@ module ethernet0_rx_mvp #(
     parameter [63:0] ALT_BUFFER_BYTES=0,
     parameter [63:0] CQ_REGION_BASE=64'h500,
     parameter [63:0] CQ_REGION_BYTES=64'h200,
-    parameter integer AXI_ID_WIDTH=4
+    parameter integer AXI_ID_WIDTH=4,
+    parameter integer TX_ENABLE=0
 )(
     input wire logic_clk, logic_rst,
     input wire gmii_rx_clk, gmii_rx_rst, gmii_tx_clk, gmii_tx_rst,
     input wire [7:0] gmii_rxd,
     input wire gmii_rx_dv, gmii_rx_er,
+    input wire [63:0] tx_axis_tdata,
+    input wire [7:0] tx_axis_tkeep,
+    input wire tx_axis_tvalid,
+    output wire tx_axis_tready,
+    input wire tx_axis_tlast,tx_axis_tuser,
+    output wire [7:0] gmii_txd,
+    output wire gmii_tx_en,gmii_tx_er,tx_error_underflow,
+    output wire tx_desc_valid_o,
+    input wire tx_desc_ready_i,tx_cpl_written_i,
+    output wire [63:0] tx_desc_addr_o,tx_cq_slot_addr_o,
     input wire cfg_valid, cfg_write,
     input wire [7:0] cfg_addr,
     input wire [31:0] cfg_wdata,
@@ -105,9 +116,12 @@ module ethernet0_rx_mvp #(
     wire [3:0] cq_error;
     wire [7:0] cq_tag;
 
-    ethernet0_rx_gmii_stager u_gmii_stage (
+    ethernet0_rx_gmii_stager #(.TX_ENABLE(TX_ENABLE)) u_gmii_stage (
       .logic_clk,.logic_rst,.gmii_rx_clk,.gmii_rx_rst,
       .gmii_tx_clk,.gmii_tx_rst,.gmii_rxd,.gmii_rx_dv,.gmii_rx_er,
+      .tx_axis_tdata,.tx_axis_tkeep,.tx_axis_tvalid,
+      .tx_axis_tready,.tx_axis_tlast,.tx_axis_tuser,
+      .gmii_txd,.gmii_tx_en,.gmii_tx_er,.tx_error_underflow,
       .meta_valid,.meta_ready,.meta_length,.meta_ethertype,
       .meta_is_udp,.meta_udp_dst_port(meta_udp_port),
       .rx_axis_tdata(axis_data),.rx_axis_tkeep(axis_keep),
@@ -130,7 +144,7 @@ module ethernet0_rx_mvp #(
       .clk(logic_clk),.rst(logic_rst),
       .cfg_valid,.cfg_write,.cfg_addr,.cfg_wdata,.cfg_wstrb,
       .cfg_ready,.cfg_rdata,.cfg_error,
-      .tx_desc_ready_i(1'b0),.tx_cpl_written_i(1'b0),
+      .tx_desc_ready_i,.tx_cpl_written_i,
       .tx_desc_valid_o(tx_desc_valid),.tx_desc_addr_o(tx_desc_addr),
       .rx_cq_slot_addr_o(rx_cq_slot),.tx_cq_slot_addr_o(tx_cq_slot),
       .frame_valid(meta_valid),.frame_ready(meta_ready),
@@ -215,6 +229,9 @@ module ethernet0_rx_mvp #(
     .m_axi_bready(cq_bready)
     );
     assign cq_failed_o = cq_done_valid && !cq_written;
+    assign tx_desc_valid_o = tx_desc_valid;
+    assign tx_desc_addr_o = tx_desc_addr;
+    assign tx_cq_slot_addr_o = tx_cq_slot;
     assign frame_drop_o = frontend_drop || engine_drop;
     initial begin
       if(RING_BYTES<32 || BUFFER_BYTES<64 || CQ_REGION_BYTES<512 ||
