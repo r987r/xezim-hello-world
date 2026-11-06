@@ -105,6 +105,34 @@ class DFIModelProbeTests(unittest.TestCase):
             self.assertEqual(events[0]["kind"], "probe_start")
             self.assertEqual(events[-1]["kind"], "probe_end")
 
+    def test_pinned_litedram_classic_dfi_act_without_act_n(self):
+        # Actual pinned LiteDRAM DFIPhaseModel recognizes ACT from
+        # !CS_N !RAS_N CAS_N WE_N; its behavioral PHY ignores ACT_N.
+        with tempfile.TemporaryDirectory() as d:
+            probe=DFIProbe(Path(d))
+            phases,banks=idle_phases(),idle_banks()
+            phases[2].update(cs_n=0,act_n=1,ras_n=0,cas_n=1,
+                             we_n=1,bank=5,address=0x3c)
+            probe.record(5000,phases,banks,"initialization",10000)
+            phases,banks=idle_phases(),idle_banks()
+            phases[1].update(cs_n=0,act_n=1,ras_n=0,cas_n=1,
+                             we_n=0,bank=5)
+            probe.record(15000,phases,banks,"traffic",10000)
+            phases,banks=idle_phases(),idle_banks()
+            phases[0].update(cs_n=0,act_n=0,ras_n=1,cas_n=1,
+                             we_n=1,bank=6,address=0x42)
+            probe.record(25000,phases,banks,"traffic",10000)
+            counts=probe.finish("pass")["counters"]
+            self.assertEqual(counts.get("dfi_activate"),2)
+            self.assertEqual(counts.get("dfi_precharge"),1)
+            observed=[json.loads(x) for x in probe.events_path.read_text().splitlines()]
+            acts=[r for r in observed if r.get("kind")=="dfi_activate"]
+            self.assertEqual(acts[0]["decode"],"litedram_classic_dfi")
+            self.assertEqual(acts[0]["bank"],5)
+            self.assertEqual(acts[0]["address"],0x3c)
+            self.assertEqual(acts[1]["decode"],"ddr4_act_n")
+            self.assertEqual(acts[1]["bank"],6)
+
     def test_lost_clock_edge_rejected(self):
         with tempfile.TemporaryDirectory() as d:
             probe = DFIProbe(Path(d))
