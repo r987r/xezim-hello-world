@@ -56,16 +56,21 @@ void soc_dma_publish(void);  /* cache clean required on noncoherent CPUs */
  * APB_BUSY covers only head submission, never full descriptor retirement.
  * Keep descriptors/source SRAM allocated until IRQ, writebacks and idle.
  */
-#define SOC_DMA_REG_HEAD_LO       0x00u
-#define SOC_DMA_REG_HEAD_HI       0x04u
-#define SOC_DMA_REG_COMMAND       0x08u
-#define SOC_DMA_REG_STATUS        0x0cu
-#define SOC_DMA_CMD_SUBMIT        (1u << 0)
-#define SOC_DMA_CMD_IRQ_ACK       (1u << 1)
-#define SOC_DMA_STATUS_APB_BUSY   (1u << 0)
-#define SOC_DMA_STATUS_IRQ        (1u << 1)
-#define SOC_DMA_STATUS_APB_ERROR  (1u << 2)
-#define SOC_DMA_STATUS_RAW_IRQ    (1u << 3)
+/* Namespaced per-IP constants are generated from SystemRDL, never
+ * manually duplicated. Compatibility aliases preserve existing callers.
+ * This does not replace the existing soc_dma_regs.sv implementation.
+ */
+#include "../generated/soc_dma_shim_regs.h"
+#define SOC_DMA_REG_HEAD_LO       SOC_DMA_HEAD_LO_OFFSET
+#define SOC_DMA_REG_HEAD_HI       SOC_DMA_HEAD_HI_OFFSET
+#define SOC_DMA_REG_COMMAND       SOC_DMA_COMMAND_OFFSET
+#define SOC_DMA_REG_STATUS        SOC_DMA_STATUS_OFFSET
+#define SOC_DMA_CMD_SUBMIT        SOC_DMA_COMMAND_SUBMIT_MASK
+#define SOC_DMA_CMD_IRQ_ACK       SOC_DMA_COMMAND_IRQ_ACK_MASK
+#define SOC_DMA_STATUS_APB_BUSY   SOC_DMA_STATUS_APB_BUSY_MASK
+#define SOC_DMA_STATUS_IRQ        SOC_DMA_STATUS_IRQ_MASK
+#define SOC_DMA_STATUS_APB_ERROR  SOC_DMA_STATUS_APB_ERROR_MASK
+#define SOC_DMA_STATUS_RAW_IRQ    SOC_DMA_STATUS_RAW_IRQ_MASK
 
 /* Reject invalid, unaligned and busy/pending/error CSR submissions. A
  * release fence precedes the doorbell; noncoherent CPUs need cache clean.
