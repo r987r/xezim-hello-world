@@ -120,3 +120,95 @@ ambiguous, stale or cross-variant paths. Test reset, W1C, IRQ, doorbell,
 write-strobe, read-only register behavior and missing-net cases in both
 simulators where supported. Backdoor-to-frontdoor equivalence must be
 bidirectional only for *safe ordinary storage*, not for side-effectful fields.
+
+
+## Unified SoC physical address space: memories + CSR subset
+
+**Decided:** The full SoC address space includes every declared **data-plane
+memory window** (ROM, flash, all configured SRAMs, DDR, HBM) and every
+**configuration-plane window** (DMA, reset control, DDR controller, Ethernet,
+PCIe). The CSR catalog is a *subset* of this architectural map. Unassigned
+holes remain unmapped; we do not describe the whole numerical 64-bit space
+as backed memory. The two planes are intentionally separate buses/NoCs even
+though they can share the same software-visible physical-address notation.
+
+The only authority for architectural base addresses and window sizes is
+\`config/soc.yaml\`. Neither the RDL files nor generated C drivers may
+invent, duplicate, or override a physical base. RDL owns per-block *relative*
+register offsets, field semantics and configurable local block composition.
+\`tools/address_map.py\` combines the full SoC aperture list with an
+**optional exact-variant** generated \`csr-map.json\` and explicitly rejects a
+stale configuration digest, incompatible variant, overlapping registers, or
+out-of-window offsets. For multi-instance blocks, the same RDL type can
+be elaborated repeatedly; composition names every instance and applies its
+own base. \`tools/csr_backdoor.py\` separately binds these logical paths to
+exact compiled RTL storage where the simulator supports it.
+
+SystemRDL supports \`external mem\` with \`memwidth\`, \`mementries\`,
+\`sw\` permissions and explicit physical offsets. We emit an optional
+\`soc-data-memories.rdl\` view for *all* configured data-plane windows, while
+the canonical JSON includes both data and configuration planes. A generated
+RDL \`mem\` declaration **does not** instantiate a memory, produce DDR/DFI
+protocol logic, prove a NoC route, or make behavioral backing equivalent to
+a real memory controller. Existing PULP/tc_sram, AXI RAM and LiteDRAM RTL
+remain unchanged. Third-party CSR maps are imported as their native
+register definitions when available, not converted to fabricated RAM.
+
+Example (default architectural configuration):
+- \`compute0.sram\`: physical window \`0x10000000..0x100fffff\`,
+  but default modeled SRAM is **16 KiB**.
+- \`memory0.hbm0\`: architectural \`0x100000000..0x13fffffff\`,
+  **1 GiB aperture** with only **64 KiB** modeled in the baseline.
+- \`memory0.ddr0\`: architectural \`0x140000000..0x17fffffff\`,
+  **1 GiB aperture** with only **64 KiB** modeled in the baseline.
+- \`boot.reset_ctrl\`: config window \`0x40020000..0x40020fff\`,
+  RDL register \`cpu_release\` at **offset zero**, absolute
+  \`0x40020000\`; the field width is parameterized by the count of
+  secondary CPUs. This is a register definition; trial generated RTL is
+  *not* the default SoC's active bank yet.
+
+Those are architectural apertures; changing the DDR variant to real
+LiteDRAM must also change the captured backing model/size provenance.
+The 32-bit CPU cannot directly dereference above-4-GiB HBM/DDR
+addresses; DMA is the intended 64-bit physical address initiator.
+
+### Commands and CI
+
+\`\`\`sh
+python3 -m pip install -r requirements.txt -r csr/requirements.txt
+python3 tools/csrgen.py --out .tools/csr-verified --variant cold_boot
+python3 tools/csrgen.py --out .tools/csr-verified --variant cold_boot --check
+python3 tools/address_map.py \
+  --csr-map .tools/csr-verified/csr-map.json \
+  --variant cold_boot \
+  --out .tools/soc-address-map.json \
+  --rdl-out .tools/soc-data-memories.rdl
+python3 -m unittest tests.test_csr_backdoor tests.test_address_map \
+  tests.test_axi_report tests.test_regression -v
+\`\`\`
+
+The dedicated \`.github/workflows/csr.yml\` runs these on PRs. It verifies
+the real pinned SystemRDL compiler can elaborate the external memory view,
+and checks byte-for-byte deterministic CSR RTL/header/catalog generation.
+Generation validation is **not** a passing full-chip CSR hardware test.
+
+### One map panel in the existing run HTML
+
+\`config/regression.yaml\` enables a **static architecture-only** map section
+for appropriate existing full-chip/NoC AXI reports. \`tools/axi_report.py\`
+embeds that map in the same \`axi-transactions.json\` JSON and offline
+\`report.html\`; it separately counts accepted AXI *initiator* traffic by
+plane and region. \`tools/templates/run_report.html\` shows searchable
+region/CSR rows with the declared aperture, modeled-backing capacity and
+observed count. Selecting a row filters the existing AXI transaction table.
+The report does not create a second AXI monitor or treat map definitions
+or back-door accesses as hardware bus evidence. Reports with no map remain
+compatible. Register/field detail is shown only when the exact compiled
+variant supplies its RDL-derived catalog; otherwise a whole CSR aperture
+appears without invented register rows.
+
+**Status boundary:** The RDL metadata, trial generated register bank and
+unit/CI checks can be green before the generated register bank is wired into
+the active \`soc_top\`, before real backdoor hierarchy handles exist, and
+before imported native DDR/Ethernet/PCIe register maps are qualified.
+Keep issue #82 and draft PR #83 open for those integration gates.
