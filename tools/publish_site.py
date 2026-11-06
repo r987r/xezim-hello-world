@@ -28,12 +28,14 @@ import yaml
 from axi_report import render_report
 from protocol_report import render as render_protocol_report
 from test_flow_report import render_summary as render_test_flow
+from planned_test_flow import compile_flow, validate_snapshot, render_fragment
 
 ROOT=Path(__file__).resolve().parents[1]
 FILES={'result.json','plan.json','sources.f','simulation.log','build.log','results.xml',
        'axi-transactions.json','axi-events.jsonl',
        'protocol-transactions.json','protocol-events.jsonl','memory-operations.json',
-       'test-flow.json','test-flow-events.jsonl','traffic-latency.json'}
+       'test-flow.json','test-flow-events.jsonl','traffic-latency.json',
+       'planned-flow.json'}
 
 
 def dump(path,data):
@@ -542,6 +544,17 @@ def evidence_index(evidence,output,repository):
             protocol_data=json.loads(protocol_path.read_text()) if protocol_path.exists() else None
             flow_path=source_dir/'test-flow.json'
             flow_data=json.loads(flow_path.read_text()) if flow_path.exists() else None
+            # Use the plan captured BEFORE simulation. Older runs retain
+            # only their archived per-target phase contract (never silently
+            # graft newer, current-main scenario actions onto old evidence).
+            plan_snapshot=source_dir/'planned-flow.json'
+            archived_test=plan if isinstance(plan,dict) and isinstance(plan.get('engine'),str) else {'engine':'unknown'}
+            if plan_snapshot.is_file():
+                declared_flow=validate_snapshot(json.loads(plan_snapshot.read_text()),target,archived_test)
+            else:
+                declared_flow=compile_flow(target,archived_test,root=ROOT,
+                                           include_actions=False,source='archived_runner_plan')
+            planned_html=render_fragment(declared_flow)
             latency_path=source_dir/'traffic-latency.json'
             latency_data=json.loads(latency_path.read_text()) if latency_path.exists() else None
             if flow_data is not None:
@@ -568,6 +581,7 @@ def evidence_index(evidence,output,repository):
                    'protocols':sorted({r['protocol'] for r in protocol_data.get('records',[])}) if protocol_data else [],
                    'protocol_observations':len(protocol_data['records']) if protocol_data else 0,
                    'flow_steps':len(flow_data['rows']) if flow_data else 0,
+                   'planned_flow':declared_flow,
                    'pcie_latency_measured':bool(latency_data and latency_data.get('passed')),
                    'result':result}
             if protocol_data:
@@ -621,7 +635,7 @@ def evidence_index(evidence,output,repository):
                     nav+='<p><a href="protocols.html">Unified protocol explorer / PCIe latency</a></p>'
                 if flow_data:
                     nav+='<p><a href="test-flow.html">INIT/RUN/CHECK verified steps</a></p>'
-                (destination/'report.html').write_text(html.replace('<main>','<main>'+nav,1))
+                (destination/'report.html').write_text(html.replace('<main>','<main>'+nav+planned_html,1))
                 transactions=trace['sections']['axi']['transactions']
                 entry['observations']=len(transactions)
                 entry['expected_errors']=sum(r.get('error_intent')=='expected' and r['role']=='initiator' for r in transactions)
@@ -629,10 +643,15 @@ def evidence_index(evidence,output,repository):
                 entry['annotations']=trace['run'].get('annotations_available',False)
             else:
                 if protocol_data and (destination/'protocols.html').is_file():
-                    (destination/'report.html').write_text((destination/'protocols.html').read_text())
+                    protocol_html=(destination/'protocols.html').read_text()
+                    if '<main>' in protocol_html:
+                        protocol_html=protocol_html.replace('<main>','<main>'+planned_html,1)
+                    else:
+                        protocol_html+=planned_html
+                    (destination/'report.html').write_text(protocol_html)
                     entries.append(entry)
                     continue
-                body='<p>This scope publishes its actual result, plan, filelist and logs. It has no AXI traffic observer.</p>'
+                body=planned_html+'<p>This scope publishes its actual result, plan, filelist and logs. It has no AXI traffic observer.</p>'
                 body+=f'<p><strong>Regression {"PASS" if entry["passed"] else "FAIL"}</strong> · {escape(entry["engine"])} · tested SHA <code>{escape(entry["source_sha"])}</code></p>'
                 if entry['expected_failure']:body+='<p>Expected-failure case: '+escape(entry['expected_failure'])+'</p>'
                 body+='<pre>'+escape(json.dumps(result,indent=2))+'</pre>'
@@ -709,6 +728,8 @@ def build(output,evidence,repository,sha,config):
     import fabric_report
     fabric = fabric_report.load(ROOT)
     catalog=yaml.safe_load((ROOT/'config/regression.yaml').read_text())
+    declared_flows={target:compile_flow(target,test,root=ROOT)
+                    for target,test in catalog['tests'].items()}
     noc=json.loads((ROOT/'gen/noc/floonoc/manifest.json').read_text())
     chip=json.loads((ROOT/'gen/chip/manifest.json').read_text())
     monitors=json.loads((ROOT/'gen/supernoc/axi_monitors.json').read_text())
@@ -759,7 +780,8 @@ def build(output,evidence,repository,sha,config):
     dataset={'schema_version':1,'title':config['title'],'source_sha':sha,'repository':repository,
              'built_at':datetime.now(timezone.utc).isoformat(),'runs':runs,'entries':entries,
              'notes':notes,'documents':docs,'networks':noc['networks'],'chip':chip,
-             'monitors':monitors['monitors'],'fabric':fabric['summary'],'tests':catalog['tests']}
+             'monitors':monitors['monitors'],'fabric':fabric['summary'],
+             'tests':catalog['tests'],'test_flows':declared_flows}
     dump(output/'data/site.json',dataset)
     data=json.dumps(dataset,separators=(',',':')).replace('<','\\u003c')
     for page in ('index','topology','explorer','fabric','address-map','runs','docs','reference'):
