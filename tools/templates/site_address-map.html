@@ -1,15 +1,17 @@
 <div class="eyebrow">Source-defined architecture · data and config planes</div>
 <h1>Physical address map</h1>
-<p class="lede">ROM, SRAM, flash, DDR, HBM and control windows from the configured SoC. SystemRDL registers are a subset of the physical apertures.</p>
+<p class="lede">ROM, SRAM, flash, DDR, HBM and control windows from the configured SoC. SystemRDL-owned and upstream LiteDRAM/LiteX native registers are subsets of the physical apertures. Choose the exact SoC build below.</p>
 <div class="actions"><a href="data/soc-address-map.json">Download address-map JSON</a><a href="data/soc-data-memories.rdl">External memory RDL view</a><a href="runs.html">Inspect measured run evidence</a></div>
 <p class="muted">__CSR_SOURCE_LINKS__</p>
 <div class="grid" id="am-summary"></div>
 <p class="notice">Mapped apertures and register definitions are not RTL test coverage. Memory-model backing may be far smaller than the declared DDR/HBM windows. Unassigned holes are not backed storage; read/write evidence belongs to each run's passive AXI trace.</p>
 <div class="filters">
+<label>SoC build / register provider<select id="am-variant"></select></label>
 <label>Region, address or register<input type="search" id="am-search" placeholder="0x40020000, ddr0, cpu_release"></label>
 <label>Plane<select id="am-plane"><option value="">Both planes</option><option value="data">Data</option><option value="config">Config / CSR</option></select></label>
 <label>Type<select id="am-kind"><option value="">All types</option><option value="csr_aperture">CSR</option><option value="sram">SRAM</option><option value="rom">ROM</option><option value="flash">Flash</option><option value="ddr">DDR</option><option value="hbm">HBM</option></select></label>
 </div>
+<p class="muted" id="am-variant-evidence">The default chip uses modeled AXI RAM; real DDR registers appear only in independently verified DDR CI variants.</p>
 <p class="muted" id="am-count" aria-live="polite"></p>
 <div class="scroll am-table"><table><thead><tr><th>Plane</th><th>Region / register</th><th>Address</th><th>End inclusive</th><th>Size</th><th>Modeled backing</th><th>Status</th><th>Details</th></tr></thead><tbody id="am-rows"></tbody></table></div>
 <div class="am-mobile" id="am-mobile"></div>
@@ -18,19 +20,20 @@
 .am-mobile{display:none}.am-mobile .card{margin:12px 0}.am-mobile p{margin:4px 0;font-size:13px}.am-register{border-left:3px solid var(--accent)}.am-table td{overflow-wrap:anywhere;max-width:340px}.am-table button{font-size:12px}@media(max-width:820px){.am-table{display:none}.am-mobile{display:block}}
 </style>
 <script type="application/json" id="address-map-data">__ADDRESS_MAP_DATA__</script>
+<script type="application/json" id="ddr-csr-variants-data">__DDR_CSR_VARIANTS__</script>
 <script>
 'use strict';
 (()=>{
- const d=JSON.parse(document.getElementById('address-map-data').textContent);
+ let d=JSON.parse(document.getElementById('address-map-data').textContent);
+ const ddrVariants=JSON.parse(document.getElementById('ddr-csr-variants-data').textContent);
  const e=id=>document.getElementById(id);
  const append=(parent,tag,s,cls)=>{const x=document.createElement(tag);x.textContent=String(s);if(cls)x.className=cls;parent.append(x);return x;};
  const end=(base,size)=>'0x'+(BigInt(base)+BigInt(size)-1n).toString(16);
  const size=s=>{const n=Number(BigInt(s));return n>=1073741824?(n/1073741824)+' GiB':n>=1048576?(n/1048576)+' MiB':n>=1024?(n/1024)+' KiB':n+' B';};
- const entries=[];
- for(const r of d.regions){entries.push({r,reg:null});for(const reg of r.registers||[])entries.push({r,reg});}
- for(const [k,v] of [['Apertures',d.regions.length],['Data windows',d.regions.filter(x=>x.plane==='data').length],['CSR windows',d.regions.filter(x=>x.plane==='config').length],['RDL-defined registers',entries.filter(x=>x.reg).length]]){
-  const card=append(e('am-summary'),'div','','card');append(card,'div',v,'stat');append(card,'div',k,'muted');
- }
+ const variants=[{label:'Default SoC · modeled DDR / architecture-only CSRs',catalog:d},...ddrVariants];
+ const menu=e('am-variant');
+ variants.forEach((v,i)=>{const o=append(menu,'option',v.label);o.value=String(i);});
+ let entries=[];
  const inspect=(r,reg)=>{
   e('am-detail-title').textContent=r.name+(reg?' / '+reg.name:'');
   e('am-detail').textContent=JSON.stringify(reg?{absolute_address:reg.address,relative_offset:reg.offset,register:reg,aperture:r}:r,null,2);
@@ -59,7 +62,27 @@
   }
   e('am-count').textContent=visible+' entries · catalog '+d.variant+' · config SHA '+d.config_sha256.slice(0,12);
  };
+ const selectVariant=()=>{
+  const selected=variants[Number(menu.value)||0];
+  d=selected.catalog;
+  entries=[];
+  for(const r of d.regions){entries.push({r,reg:null});for(const reg of r.registers||[])entries.push({r,reg});}
+  e('am-summary').replaceChildren();
+  for(const [k,v] of [['Apertures',d.regions.length],['Data windows',d.regions.filter(x=>x.plane==='data').length],['CSR windows',d.regions.filter(x=>x.plane==='config').length],['Defined register words',entries.filter(x=>x.reg).length]]){
+   const card=append(e('am-summary'),'div','','card');append(card,'div',v,'stat');append(card,'div',k,'muted');
+  }
+  const notice=e('am-variant-evidence');notice.replaceChildren();
+  if(selected.run_id){
+   append(notice,'span','Native LiteDRAM CSR layout from independently verified CI run '+selected.run_id+' · tested '+selected.source_sha.slice(0,12)+' · ');
+   const link=append(notice,'a','View real AXI/DDR run and CSR observations');link.href=selected.report_href;
+  } else {
+   append(notice,'span','Default build uses modeled AXI RAM: real LiteDRAM control registers are not implemented in this variant. ');
+   if(!ddrVariants.length)append(notice,'span','No verified DDR-run register map is available in the published evidence history.');
+  }
+  draw();
+ };
  for(const id of ['am-search','am-plane','am-kind'])e(id).addEventListener(id==='am-search'?'input':'change',draw);
- draw();
+ menu.addEventListener('change',selectVariant);
+ selectVariant();
 })();
 </script>

@@ -33,7 +33,8 @@ ROOT=Path(__file__).resolve().parents[1]
 FILES={'result.json','plan.json','sources.f','simulation.log','build.log','results.xml',
        'axi-transactions.json','axi-events.jsonl',
        'protocol-transactions.json','protocol-events.jsonl','memory-operations.json',
-       'test-flow.json','test-flow-events.jsonl','traffic-latency.json'}
+       'test-flow.json','test-flow-events.jsonl','traffic-latency.json',
+       'ddr-native-csr-map.json','ddr4_fullchip_evidence.json'}
 
 
 def dump(path,data):
@@ -697,6 +698,42 @@ def markdown_pages(output,repository,sha):
     return listing
 
 
+def ddr_csr_views(entries, output):
+    """Only source-verified, successful DDR run JSON can supply DDR CSR rows.
+
+    Existing evidence_index() already rejects PR artifacts without verified
+    original run+commit provenance. Do not treat an opt-in controller's CSR
+    catalog as registers present in the default AXI-RAM chip.
+    """
+    views = []
+    for item in entries:
+        if item.get('target') != 'chip-ddr4-real' or not item.get('passed') or not item.get('axi'):
+            continue
+        path = output / Path(item['path']).parent / 'axi-transactions.json'
+        if not path.is_file():
+            continue
+        data = json.loads(path.read_text())
+        model = data.get('sections', {}).get('address_map', {})
+        if model.get('variant') != 'ddr_real' or model.get('schema_version') != 1:
+            continue
+        regions = [r for r in model.get('regions', []) if r.get('name') == 'memory0.ctrl']
+        if (len(regions) != 1 or regions[0].get('size') != '0x4000'
+                or regions[0].get('base') != '0x40030000'
+                or not regions[0].get('registers')
+                or not all(r.get('definition_status') ==
+                           'native_LiteDRAM_generated_CSR_not_bus_coverage'
+                           for r in regions[0]['registers'])):
+            continue
+        views.append({
+            'label': f"Real LiteDRAM · {item['target']} · {item['run_id']}",
+            'source_sha': item['source_sha'],
+            'run_id': item['run_id'],
+            'report_href': item['path'],
+            'catalog': model,
+        })
+    return views[:12]
+
+
 def build(output,evidence,repository,sha,config):
     if output.exists():
         if not (output/'.soc-site').is_file():raise ValueError('refusing to replace an unowned site directory')
@@ -723,6 +760,8 @@ def build(output,evidence,repository,sha,config):
         csr_path=csr_path if csr_ready else None,
         variant='cold_boot' if csr_ready else 'architecture')
     dump(output/'data/soc-address-map.json',address_catalog)
+    ddr_views = ddr_csr_views(entries, output)
+    dump(output/'data/ddr-csr-verified-runs.json', ddr_views)
     (output/'data/soc-data-memories.rdl').write_text(address_map.memory_rdl_view(address_catalog))
     if csr_ready:
         for filename in ('csr-map.json','soc_csr_bases.h','soc_boot_reset_ctrl_regs.h','boot_reset_ctrl_types.h'):
@@ -792,6 +831,8 @@ def build(output,evidence,repository,sha,config):
         if page=='address-map':
             map_json=json.dumps(address_catalog,separators=(',',':')).replace('<','\\u003c')
             body=body.replace('__ADDRESS_MAP_DATA__',map_json)
+            ddr_json = json.dumps(ddr_views,separators=(',',':')).replace('<','\\u003c')
+            body=body.replace('__DDR_CSR_VARIANTS__',ddr_json)
             details=('<a href="data/csr-map.json">Generated CSR metadata</a> · '
                      '<a href="data/soc_boot_reset_ctrl_regs.h">Register C header</a> · '
                      '<a href="data/soc_csr_bases.h">Instance-base C header</a>') if csr_ready else (
