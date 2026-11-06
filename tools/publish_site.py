@@ -642,6 +642,10 @@ def evidence_index(evidence,output,repository):
             else:
                 if protocol_data and (destination/'protocols.html').is_file():
                     (destination/'report.html').write_text((destination/'protocols.html').read_text())
+                    html=(destination/'report.html').read_text()
+                    if '<main>' in html:
+                        (destination/'report.html').write_text(
+                            html.replace('<main>','<main>'+render_intended_flow(intended),1))
                     entries.append(entry)
                     continue
                 body='<p>This scope publishes its actual result, plan, filelist and logs. It has no AXI traffic observer.</p>'
