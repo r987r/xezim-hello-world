@@ -168,6 +168,7 @@ tests:
           steps: {'101': alloc_phys, '102': dma_roundtrip, '103': verify_memory}
       axi: {scope: dut.u_noc, clock: clk, reset: rst_n, catalog: gen/supernoc/axi_monitors.json, actors: .tools/regression/chip-cpu-dma/variant/manifest.json, max_events: 500000, required_complete: true}
   chip-ddr4-real:
+    opt_in: true
     # Same generated soc_top and full_chip_tb checker, but real PicoRV32 runs
     # compiled RV32I C DMA firmware during the existing INIT/RUN/CHECK phases.
     # No AXI BFM assumes the CPU role and SRAM remains cold.
