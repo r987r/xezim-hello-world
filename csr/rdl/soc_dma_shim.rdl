@@ -1,0 +1,39 @@
+// Register-map description of existing SoC-owned DMA CSR shim.
+// The RTL remains rtl/adapters/soc_dma_regs.sv; this source generates only
+// software metadata and headers, not a replacement AXI register bank.
+addrmap soc_dma_shim {
+  reg {
+    desc = "Low 32 bits of staged 64-bit descriptor head";
+    regwidth = 32;
+    field { sw = rw; hw = r; reset = 0; } value[31:0];
+  } head_lo @0x0;
+  reg {
+    desc = "High 32 bits of staged 64-bit descriptor head";
+    regwidth = 32;
+    field { sw = rw; hw = r; reset = 0; } value[31:0];
+  } head_hi @0x4;
+  reg {
+    desc = "One-shot APB head submission and interrupt acknowledgement";
+    regwidth = 32;
+    field {
+      desc = "Submit staged descriptor head (side effect; frontdoor only)";
+      sw = rw;
+      hw = r;
+      reset = 0;
+    } submit[0:0] = 0;
+    field {
+      desc = "Acknowledge sticky pending IRQ (side effect; frontdoor only)";
+      sw = rw;
+      hw = r;
+      reset = 0;
+    } irq_ack[1:1] = 0;
+  } command @0x8;
+  reg {
+    desc = "DMA APB submission, pending IRQ, error and raw IRQ status";
+    regwidth = 32;
+    field { sw = r; hw = w; reset = 0; } apb_busy[0:0];
+    field { sw = r; hw = w; reset = 0; } irq_pending[1:1];
+    field { sw = r; hw = w; reset = 0; } apb_error[2:2];
+    field { sw = r; hw = w; reset = 0; } raw_irq[3:3];
+  } status @0xc;
+};
