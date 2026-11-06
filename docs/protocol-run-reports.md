@@ -121,6 +121,40 @@ simulation time. These are **not physical Ethernet PHY** observations.
 AXI DDR/SRAM/CQ traffic still comes from the existing passive AXI
 correlator; no new MAC, BFM, decoder, or inferred DMA correlation was added.
 
+## DDR4 DFI command traffic from existing open-source LiteDRAM
+
+The open-source DDR4 controller/PHY-model decision is **LiteDRAM** pinned
+through config/ip.lock.yaml, with an independently pinned compatible LiteX
+generator. The real controller, scheduler and DFI interface are generated
+upstream. Standalone simulation uses LiteDRAM's upstream SDRAMPHYModel and
+BankModel, not a physical ASIC PHY or DDR4 chip; no second controller,
+DFI driver or scoreboard was implemented.
+
+The previously checked, selective **read-only four-phase DFIProbe** captures
+actual generated RTL DFI command signals (cs_n/act_n/ras_n/cas_n/we_n,
+bank/address) and modeled bank activity. New publication glue transforms
+this completed probe stream into exactly the same
+protocol-transactions.json used by PCIe, Ethernet, APB and AXI. It supports
+ACT, PRE, RD, WR, REF, DFI data-enable/valid and modeled bank reads/writes,
+with source IDs memory0.ddr0.dfi.phase0–3 and individual bankmodel sources,
+simulation picosecond timestamps, command phases and model boundaries.
+
+**Test Runs → DDR / HBM → ddr4-standalone** loads this protocol from the
+compact ddr4-standalone-protocol CI artifact, with filter protocol=dfi and
+operation=act/pre/rd/wr/ref. **Chip Architecture → memory0 → memory0.ddr0**
+attaches the same source-verified standalone link evidence using longest
+known IP ownership. Unknown or unobserved sources never create speculative
+links; the all-runs viewer stays protocol-neutral.
+
+**Scope restriction:** This particular timestamped ACT/PRE stream is
+standalone controller+behavioral PHY, even though its RTL is pinned and real.
+The separately integrated opt-in full-chip chip-ddr4-real DDR-B case currently
+captures AXI and aggregate DFI read/write/storage counters, not a per-command
+ACT/PRE timeline. Those full-chip counters must NOT be assigned timestamps
+from the standalone test or treated as physical JEDEC compliance. Full-chip
+per-command tracing is a separate addition requiring independently validated
+generated-net visibility under the real SoC elaboration.
+
 ## Architecture link traffic explorer (all protocols)
 
 The architecture inspector is a **read-only evidence consumer**. Each published
