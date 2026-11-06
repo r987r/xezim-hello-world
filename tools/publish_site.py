@@ -65,7 +65,7 @@ class GitHub:
         if self.token: headers['Authorization']='Bearer '+self.token
         body=json.dumps(data).encode() if data is not None else None
         req=urllib.request.Request('https://api.github.com'+path,headers=headers,data=body,method=method)
-        with self.opener.open(req,timeout=60) as response:
+        with self.opener.open(req,timeout=180 if binary else 60) as response:
             raw=response.read()
         return raw if binary else json.loads(raw) if raw else {}
 
@@ -80,21 +80,38 @@ class GitHub:
         return site
 
 
-def extract_archive(data,destination,config,digest=None):
+def extract_archive(data,destination,config,digest=None,*,evidence_only=False):
+    """Verify CI ZIP provenance and safely extract only useful regression evidence.
+
+    Simulator object directories can be >1 GiB even for a small test.
+    Selection happens *before* the expanded-size limit; we still inspect
+    every member for traversal/symlinks, and never use discarded build files
+    as evidence of a passing run.
+    """
     if len(data)>config['max_archive_mib']*1024**2:
         raise ValueError('CI archive exceeds publication size limit')
     if digest and digest.startswith('sha256:') and hashlib.sha256(data).hexdigest()!=digest[7:]:
         raise ValueError('CI archive digest mismatch')
     import io
     with zipfile.ZipFile(io.BytesIO(data)) as archive:
-        if sum(i.file_size for i in archive.infolist())>config['max_expanded_mib']*1024**2:
-            raise ValueError('expanded CI archive exceeds publication size limit')
+        selected=[]
         for info in archive.infolist():
             path=PurePosixPath(info.filename)
             mode=info.external_attr>>16
             if path.is_absolute() or '..' in path.parts or '\\' in info.filename or stat.S_ISLNK(mode):
                 raise ValueError('unsafe CI archive member')
-        archive.extractall(destination)
+            if evidence_only:
+                # Reject simulator products and previously generated HTML: the
+                # trusted Pages builder re-renders reports from checked JSON.
+                base=path.name
+                if base not in FILES and not base.endswith(('.log','.f')):
+                    continue
+                if any(part in ('obj_dir','sim_build','noc_build','full_chip_build') for part in path.parts):
+                    continue
+            selected.append(info)
+        if sum(i.file_size for i in selected)>config['max_expanded_mib']*1024**2:
+            raise ValueError('expanded CI archive exceeds publication size limit')
+        archive.extractall(destination, members=selected)
 
 
 def merged_main_pr_heads(client):
@@ -407,7 +424,7 @@ def collect(client,config,destination):
                 if not (target/'.complete').exists():
                     raw=client.request(f'/repos/{client.repository}/actions/artifacts/{artifact["id"]}/zip',binary=True)
                     target.mkdir(exist_ok=True)
-                    extract_archive(raw,target,config,artifact.get('digest'))
+                    extract_archive(raw,target,config,artifact.get('digest'),evidence_only=True)
                     (target/'.complete').write_text('verified\n')
                 if run.get('verified_merged_pr') is not None:
                     verified=set(run.get('verified_tested_shas',[]))

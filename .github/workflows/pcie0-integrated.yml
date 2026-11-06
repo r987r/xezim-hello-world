@@ -49,15 +49,14 @@ jobs:
         run: |
           python3 -m unittest tests.test_pcie_host_phase -v
           python3 tools/regress.py chip-pcie-host
-      - name: Preserve build, Cocotb XML and raw transaction logs
+      - name: Preserve canonical PCIe results, Cocotb XML and transaction logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: pcie0-dedicated-noc-${{ github.run_id }}
-          path: |
-            .tools/pcie0/noc_build/
-            .tools/pcie0/full_chip_build/
-            .tools/regression/chip-pcie-host/
+          # Preserve result/protocol/AXI/flow provenance, not 1+ GiB of
+          # reproducible Verilator object files and precompiled headers.
+          path: .tools/regression/chip-pcie-host/
           include-hidden-files: true
           if-no-files-found: warn
 
