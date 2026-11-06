@@ -141,7 +141,9 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    # Large verified CI evidence can leave Pages queued longer than the
+    # former 10-minute deploy limit; do not cancel an otherwise valid release.
+    timeout-minutes: 25
     permissions:
       contents: read
       pages: write
