@@ -8,7 +8,7 @@ h1{font-size:26px;margin:4px 0}.eyebrow{color:#375e9f;text-transform:uppercase;f
 p,small{color:#54687f}.card{background:white;border:1px solid #d9e4ed;border-radius:12px;padding:16px;margin-top:14px}
 .tools{display:flex;gap:12px;flex-wrap:wrap}.tools label{display:flex;flex-direction:column;gap:4px;flex:1;min-width:160px;font-size:12px}
 input,select,button{border:1px solid #c9d6e2;background:white;color:#162a3f;border-radius:6px;padding:8px;font:inherit}
-button{cursor:pointer}table{border-collapse:collapse;width:100%;font-size:12px}th,td{border-bottom:1px solid #e5ebf2;padding:10px;text-align:left}th{background:#edf3f8;position:sticky;top:0}
+button{cursor:pointer}table{border-collapse:collapse;width:100%;font-size:12px}th,td{border-bottom:1px solid #e5ebf2;padding:10px;text-align:left}#decoded-table td{max-width:210px;overflow-wrap:anywhere;vertical-align:top}#decoded-table td:nth-child(-n+3){white-space:nowrap}th{background:#edf3f8;position:sticky;top:0}
 .tablewrap{overflow:auto;max-height:650px}.mono{font-family:ui-monospace,monospace}.warning{background:#fff1d5;padding:12px;border-radius:8px}
 canvas{width:100%;display:block}pre{font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere;max-height:400px;overflow:auto}
 @media(max-width:650px){main{padding:12px 8px}h1{font-size:23px}th,td{padding:7px}.card{padding:10px}}
@@ -27,6 +27,10 @@ canvas{width:100%;display:block}pre{font-size:12px;white-space:pre-wrap;overflow
 <div class="card"><h2>Observed event/transaction completion timeline</h2>
 <p>One point per observed event or completed transaction. No inferred cross-protocol correlation.</p>
 <div style="overflow:auto"><canvas id="timeline" height="280" aria-label="Protocol events by monitor and simulation time" role="img"></canvas></div></div>
+<div class="card"><h2>Decoded fields · source-native protocol records</h2>
+<p>The columns below are derived from the fields actually emitted by the selected protocol monitor. PCIe TLP headers, tags and byte enables are decoded by the pinned upstream VIP; future Ethernet, APB, AXI5 and other monitors supply their own fields without changes to this viewer. Click a row for the complete untruncated record.</p>
+<div class="tablewrap"><table id="decoded-table"><thead id="decoded-head"></thead><tbody id="decoded-body"></tbody></table></div>
+<p id="decoded-count" class="muted"></p></div>
 <div class="card"><h2>All observations</h2><div class="tools"><button id="csv">Export filtered CSV</button><button id="json">Export filtered JSON</button></div>
 <div class="tablewrap"><table><thead><tr><th>Time ns</th><th>Protocol</th><th>Monitor</th><th>Type</th><th>Operation/event</th><th>ID</th><th>Duration ns</th><th>Status</th><th>Details</th></tr></thead><tbody id="body"></tbody></table></div>
 <p id="page-label"></p><button id="prev">Previous</button> <button id="next">Next</button><pre id="detail">Select an observation to inspect its payload and timestamps.</pre></div>
@@ -46,6 +50,51 @@ $('sources').textContent=S.map(s=>s.id+' ('+s.protocol+' · '+s.role+' · '+s.cl
 $('issues').textContent=D.issues?.length?JSON.stringify(D.issues,null,2):'No protocol capture diagnostics.';
 let filtered=R,page=0;const size=100;
 function select(o){$('detail').textContent=JSON.stringify(o,null,2)}
+// Display columns follow the selected monitor's self-described field names,
+// not a PCIe-only packet struct. The preferred order is semantic, and any
+// previously unseen protocol field is supported automatically.
+const prominent=['direction','address','requester_id','completer_id','tag',
+                 'length_dw','payload_bytes','completion_status','byte_count',
+                 'first_be','last_be','ether_type','command','register',
+                 'header_hex','payload_hex'];
+function decodedFieldKeys(records){
+  const counts=new Map();
+  for(const r of records.slice(0,500)){
+    for(const key of Object.keys(r.fields||{}))counts.set(key,(counts.get(key)||0)+1);
+  }
+  return [...counts.keys()].sort((a,b)=>{
+    const ai=prominent.indexOf(a),bi=prominent.indexOf(b);
+    if(ai>=0||bi>=0)return (ai<0?999:ai)-(bi<0?999:bi);
+    return (counts.get(b)-counts.get(a))||a.localeCompare(b);
+  }).slice(0,8);
+}
+function renderDecoded(){
+  const head=$('decoded-head'),body=$('decoded-body');
+  head.replaceChildren();body.replaceChildren();
+  const keys=decodedFieldKeys(filtered),h=document.createElement('tr');
+  for(const field of ['Time ns','Monitor','Operation','ID / tag',...keys]){
+    const cell=document.createElement('th');cell.textContent=field;h.append(cell);
+  }
+  head.append(h);
+  for(const r of filtered.slice(page*size,(page+1)*size)){
+    const tr=document.createElement('tr');
+    const cells=[N(r.end_ps??r.start_ps),r.source,r.operation,r.id??'—',
+      ...keys.map(k=>r.fields?.[k]??'—')];
+    for(const v of cells){
+      const td=document.createElement('td');
+      const raw=typeof v==='object'?JSON.stringify(v):safe(v);
+      td.textContent=raw.length>135?raw.slice(0,132)+'…':raw;
+      if(raw.length>135)td.title=raw.slice(0,1024);
+      tr.append(td);
+    }
+    tr.onclick=()=>select(r);tr.tabIndex=0;
+    tr.onkeydown=e=>{if(e.key==='Enter')select(r)};
+    body.append(tr);
+  }
+  $('decoded-count').textContent=keys.length+
+    ' captured field columns · '+filtered.length+' source observations · select row for complete raw fields';
+}
+
 function apply(){const q=$('search').value.toLowerCase(),p=$('protocol').value,s=$('source').value,k=$('kind').value,st=$('status').value;
 filtered=R.filter(r=>(!p||r.protocol===p)&&(!s||r.source===s)&&(!k||r.kind===k)&&(!st||r.status===st)&&(!q||[r.source,r.protocol,r.operation,r.id,JSON.stringify(r.fields)].join(' ').toLowerCase().includes(q)));
 page=0;render()}
@@ -56,7 +105,7 @@ items.forEach((v,i)=>{const td=document.createElement('td');td.textContent=safe(
 tr.onclick=()=>select(r);tr.tabIndex=0;tr.onkeydown=e=>{if(e.key==='Enter')select(r)};body.append(tr)}
 $('page-label').textContent=(filtered.length?(page*size+1)+'–'+Math.min((page+1)*size,filtered.length):'0')+' / '+filtered.length+' observations';
 $('prev').disabled=page===0;$('next').disabled=(page+1)*size>=filtered.length;
-$('count').textContent=filtered.length+' / '+R.length+' observations · '+S.length+' cataloged monitors';draw()}
+$('count').textContent=filtered.length+' / '+R.length+' observations · '+S.length+' cataloged monitors';renderDecoded();draw()}
 function draw(){const canvas=$('timeline'),ctx=canvas.getContext('2d'),dpr=window.devicePixelRatio||1;
 const width=Math.max(360,canvas.parentElement.clientWidth),names=[...new Set(filtered.map(r=>r.source))],height=Math.max(200,90+36*names.length);
 canvas.width=width*dpr;canvas.height=height*dpr;canvas.style.height=height+'px';ctx.scale(dpr,dpr);ctx.font='11px system-ui';ctx.clearRect(0,0,width,height);
@@ -69,6 +118,13 @@ function download(name,content,type){const url=URL.createObjectURL(new Blob([con
 $('json').onclick=()=>download('protocol-observations.json',JSON.stringify({...D,records:filtered},null,2),'application/json');
 $('csv').onclick=()=>{const cols=['protocol','source','kind','operation','id','start_ps','end_ps','status','fields'];const quote=x=>'"'+safe(x).replaceAll('"','""')+'"';const rows=filtered.map(r=>cols.map(k=>quote(k==='fields'?JSON.stringify(r.fields):r[k])).join(','));download('protocol-observations.csv',[cols.join(','),...rows].join('\r\n'),'text/csv')};
 for(const k of ['search','protocol','source','kind','status'])$(k).addEventListener('input',apply);
-$('prev').onclick=()=>{if(page){page--;render()}};$('next').onclick=()=>{if((page+1)*size<filtered.length){page++;render()}};render();
+$('prev').onclick=()=>{if(page){page--;render()}};$('next').onclick=()=>{if((page+1)*size<filtered.length){page++;render()}};const params=new URLSearchParams(location.search);
+for(const name of ['protocol','source','kind','status']){
+  const wanted=params.get(name);
+  const control=$(name);
+  if(wanted&&[...control.options].some(opt=>opt.value===wanted))control.value=wanted;
+}
+if(params.get('search'))$('search').value=params.get('search');
+apply();
 </script>
 </html>
