@@ -23,6 +23,10 @@ AGENT_SCOPES = {
         "allowed": {"AxiMaster"},
         "reason": "DmaTestMode=1 holds CPUs reset; BFMs own CPU0 ports",
     },
+    "dv/ethernet0/test_chip_mvp.py": {
+        "allowed": {"AxiMaster"},
+        "reason": "Ethernet opt-in chip uses DmaTestMode=1, which holds both CPUs in reset; the two BFMs exclusively own CPU0 Data and Config NoC ports while physical GMII MAC/AXI DMA run autonomously",
+    },
     "dv/supernoc/test_supernoc.py": {
         "allowed": {"AxiMaster", "AxiSlave"},
         "reason": "No CPU/DMA; BFM masters own exposed NoC inputs, slaves own outputs",
