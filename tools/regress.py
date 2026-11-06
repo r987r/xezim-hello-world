@@ -25,7 +25,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ENGINES = {'xezim', 'xezim-compile', 'verilator-lint', 'cocotb-verilator'}
 FIELDS = {'engine', 'sources', 'ip', 'top', 'args', 'pass', 'expect_failure',
           'timeout_s', 'memory_config', 'boot_relocate', 'module', 'test_dir',
-          'build', 'reuse_build', 'env', 'seed', 'bender_targets', 'mode', 'report', 'firmware_mode', 'opt_in'}
+          'build', 'reuse_build', 'env', 'seed', 'bender_targets', 'mode', 'report', 'firmware_mode', 'opt_in', 'flow_plan'}
 
 
 def expand(config, names, stack=()):
@@ -71,6 +71,9 @@ def load_config(path):
             raise ValueError(f'{name}: mode=compile requires the Xezim engine')
         if 'opt_in' in test and type(test['opt_in']) is not bool:
             raise ValueError(f'{name}: opt_in must be boolean')
+        if 'flow_plan' in test:
+            from planned_test_flow import _scenario_source
+            _scenario_source(ROOT, test['flow_plan'])
         if test.get('firmware_mode') not in (None, 'cpu_dma', 'pcie_host', 'pcie_dma_host', 'ethernet_mvp', 'ethernet_cpu', 'ddr_cpu_dma', 'cpu_dma_scenario', 'scenario_bfm'):
             raise ValueError(f'{name}: unknown compiled CPU firmware mode')
         if 'firmware_mode' in test and (
@@ -477,6 +480,11 @@ def run_target(name, test, resolver, options):
             'args': args, 'results_xml': str(out/'results.xml'), 'stage': options.stage}
     plan_file = out/'plan.json'
     plan_file.write_text(json.dumps(plan, indent=2) + '\n')
+    # This exists before simulation: expected phases, declared stimulus and
+    # fallback runner outline are useful even when no evidence was captured.
+    from planned_test_flow import compile_flow
+    expected_flow = compile_flow(name, test, root=ROOT, source='run_snapshot')
+    (out/'planned-flow.json').write_text(json.dumps(expected_flow, indent=2, sort_keys=True) + '\n')
     if options.stage == 'files':
         print(f'FILES {name}: {filelist.relative_to(ROOT)}', flush=True)
         return True
