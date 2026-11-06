@@ -19,6 +19,10 @@ AGENT_SCOPES = {
         "allowed": {"AxiMaster"},
         "reason": "BFM only in default boot; real CPU+DMA forbids it",
     },
+    "dv/full_chip/test_ddr_real.py": {
+        "allowed": {"AxiMaster"},
+        "reason": "Opt-in real DDR only; after CPU/iDMA CHECK and drained controller requests, a verification AXI master exclusively owns compute0 DMA manager port for routed DECERR/nonalias tests",
+    },
     "dv/full_chip/ddr_init.py": {
         "allowed": {"AxiMaster"},
         "reason": "CPU0 is held by real DDR DdrInitMode; BFM owns only Config NoC preboot initialization and is disconnected before CPU release",
