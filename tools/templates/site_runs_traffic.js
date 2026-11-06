@@ -31,6 +31,7 @@ function listOptions(select,values,allLabel,previous){
   select.value=values.includes(previous)?previous:"";
 }
 function init(){
+  option(selectedRun,"__all__","All recorded runs · verified previews");
   for(const e of candidates)option(selectedRun,key(e),label(e));
   if(!candidates.length){
     $("traffic-notice").textContent="No source-verified protocol observations have been published yet. Configured tests and CI results remain visible below.";
@@ -57,7 +58,7 @@ function init(){
       String(e.run_id)===wanted);
     if(match)selectedRun.value=key(match);
   }
-  if(!selectedRun.value)selectedRun.selectedIndex=0;
+  if(!selectedRun.value)selectedRun.value="__all__";
   load({protocol:query.get("protocol"),source:query.get("source")});
 }
 function rawPath(e){
@@ -67,16 +68,27 @@ function preview(e){
   const records=[];
   for(const s of e.protocol_links?.sources||[]){
     for(const r of s.preview||[]){
-      records.push({...r,source:s.source,protocol:s.protocol});
+      records.push({...r,source:s.source,protocol:s.protocol,
+        run_id:e.run_id,target:e.target});
     }
   }
   return records.sort((a,b)=>(a.start_ps??0)-(b.start_ps??0));
 }
 async function load(initial={}){
   const id=++current.request;
+  if(selectedRun.value==="__all__"){
+    current.entry=null;current.preview=true;
+    $("traffic-open-raw").disabled=true;
+    current.all=candidates.flatMap(preview);
+    $("traffic-provenance").textContent="All source-verified runs · cross-run bounded previews";
+    $("traffic-notice").textContent="Cross-run view is a bounded preview (not all records). Choose a single test run to load every observation, examine full payloads, or export complete filtered evidence.";
+    refreshProtocols(initial);
+    return;
+  }
   const entry=candidates.find(e=>key(e)===selectedRun.value);
   if(!entry)return;
   current.entry=entry;current.all=preview(entry);current.preview=true;
+  $("traffic-open-raw").disabled=false;
   $("traffic-provenance").textContent=
     entry.target+" · tested "+entry.source_sha+" · CI run #"+entry.run_id+
     " attempt "+entry.attempt+" · "+entry.workflow+
@@ -161,7 +173,7 @@ function render(){
   const tbody=$("traffic-rows");tbody.replaceChildren();
   const fields=fieldKeys(),head=$("traffic-head");head.replaceChildren();
   const hr=document.createElement("tr");
-  for(const col of ["Time ns","Protocol","Monitor","Operation","ID / tag",
+  for(const col of ["Run","Time ns","Protocol","Monitor","Operation","ID / tag",
                     "Status",...fields]){
     const th=uiText("th",col);hr.append(th);
   }
@@ -169,7 +181,7 @@ function render(){
   const start=current.page*current.size;
   for(const r of current.filtered.slice(start,start+current.size)){
     const tr=document.createElement("tr");tr.tabIndex=0;
-    const vals=[psTime(r.end_ps??r.start_ps),r.protocol,r.source,r.operation,
+    const vals=[r.run_id??current.entry?.run_id??"—",psTime(r.end_ps??r.start_ps),r.protocol,r.source,r.operation,
       r.id??"—",r.status,...fields.map(k=>r.fields?.[k]??"—")];
     for(const val of vals){
       const str=typeof val==="object"?JSON.stringify(val):String(val);
@@ -183,11 +195,11 @@ function render(){
   if(!current.filtered.length){
     const tr=document.createElement("tr");
     const td=uiText("td","No captured observations match these filters.");
-    td.colSpan=6+fields.length;tr.append(td);tbody.append(tr);
+    td.colSpan=7+fields.length;tr.append(td);tbody.append(tr);
   }
   $("traffic-total").textContent=current.filtered.length+" / "+current.all.length+
-    (current.preview?" preview records":" observed records")+
-    " · "+(start+1)+"–"+Math.min(start+current.size,current.filtered.length);
+    (current.preview?" verified preview records":" observed records")+
+    " · "+(current.filtered.length?start+1:0)+"–"+Math.min(start+current.size,current.filtered.length);
   $("traffic-prev").disabled=current.page===0;
   $("traffic-next").disabled=(current.page+1)*current.size>=current.filtered.length;
   draw();
