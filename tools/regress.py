@@ -69,12 +69,12 @@ def load_config(path):
             raise ValueError(f'{name}: build reuse is only supported by cocotb-verilator')
         if test.get('mode', 'simulate') not in ('simulate', 'compile') or (test.get('mode') == 'compile' and test['engine'] != 'xezim'):
             raise ValueError(f'{name}: mode=compile requires the Xezim engine')
-        if test.get('firmware_mode') not in (None, 'cpu_dma', 'pcie_host', 'pcie_dma_host'):
+        if test.get('firmware_mode') not in (None, 'cpu_dma', 'pcie_host', 'pcie_dma_host', 'ethernet_mvp'):
             raise ValueError(f'{name}: unknown compiled CPU firmware mode')
         if 'firmware_mode' in test and (
             test['engine'] != 'cocotb-verilator' or
             'chip_boot' not in test.get('bender_targets', []) or
-            (test['firmware_mode'] in ('cpu_dma','pcie_dma_host')
+            (test['firmware_mode'] in ('cpu_dma','pcie_dma_host','ethernet_mvp')
              and 'dma' not in test.get('bender_targets', []))):
             raise ValueError(f'{name}: selected test needs real chip RTL and specified active IP')
         if 'report' in test:
@@ -365,6 +365,36 @@ def run_target(name, test, resolver, options):
                    if Path(filename).parent == generated_root and
                    Path(filename).name in replacements else filename
                    for filename in sources]
+    if test.get('firmware_mode') == 'ethernet_mvp':
+        if str(ROOT) not in sys.path:
+            sys.path.insert(0,str(ROOT))
+        from full_chip_gen import emit as emit_chip
+        from dv.ethernet0.run_mac_gmii import fetch_pinned
+        cfg = yaml.safe_load((ROOT/'config/soc.yaml').read_text())
+        noc_manifest = json.loads((ROOT/'gen/supernoc/manifest.json').read_text())
+        variant = out/'variant'
+        emit_chip(cfg,noc_manifest,ROOT/'gen/noc/floonoc',variant,
+                  image_prefix=variant.relative_to(ROOT).as_posix(),
+                  ethernet_mode=True)
+        generated_root=ROOT/'gen/chip'
+        replacements={'soc_top.sv','full_chip_tb.sv','full_chip_dma_tb.sv'}
+        sources=[str(variant/Path(filename).name)
+                 if Path(filename).parent==generated_root and
+                 Path(filename).name in replacements else filename
+                 for filename in sources]
+        eth_rtl=ROOT/'rtl/io/ethernet0'
+        sources += [str(eth_rtl/name) for name in (
+            'ethernet0_axi_mvp.sv','ethernet0_mvp.v','ethernet0_rx_mvp.v',
+            'ethernet0_tx_mvp.v','ethernet0_rx_gmii_stager.v',
+            'ethernet0_mac_gmii.v','ethernet_rx_frame_stager.v',
+            'ethernet_rx_queue_engine.v','ethernet_queue_ctrl.sv',
+            'ethernet_rx_desc_fetch.v','ethernet_rx_dma.v',
+            'ethernet_tx_dma.v','ethernet_cq_axi_writer.v',
+            'ethernet_queue_axi_regs.sv')]
+        for directory,meta in fetch_pinned().values():
+            sources += [str(directory/name) for name in meta['modules']]
+        sources += [str(ROOT/'.tools/verilog_axi/rtl'/name)
+                    for name in ('axi_dma_rd.v','axi_dma_wr.v')]
     if test.get('firmware_mode') in ('pcie_host', 'pcie_dma_host'):
         if str(ROOT) not in sys.path:
             sys.path.insert(0, str(ROOT))
