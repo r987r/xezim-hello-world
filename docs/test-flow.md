@@ -48,7 +48,8 @@ It is essential that:
 | Native C firmware (prepared reusable ABI) | `sw/common/test_flow.h`, `soc_flow_emit(volatile uint32_t *sink, ...)` | **only** after correlated accepted AXI write with OKAY response; optional `report.flow.firmware_mmio` codebook |
 | Ethernet/IP/other external actors | same Python step context; their VIP monitor reports independently through `dv/common/protocol_trace.py` | events are `stimulus`; real packets/completions require VIP/RTL evidence |
 
-The PCIe-host and CPU C/iDMA scenarios opt into the strict step-flow gate in this PR.
+The PCIe-host (combined CPU/iDMA + modeled DDR + host) and separate CPU C/iDMA
+scenarios opt into the strict step-flow gate.
 The generic API and cross-language adapters are implemented and unit-tested;
 **other existing tests have not all been instrumented**. Their existing
 capture/results remain unchanged. Add the `report.flow` contract to each
@@ -75,8 +76,11 @@ Flow `required_origins` optionally binds each required `actor.step` to its
 expected provenance (`stimulus`, `observed`, `checker`, or
 `rtl_observed`). PCIe0 and CPU C/iDMA require origins explicitly; a Python
 stimulus event cannot masquerade as a firmware/RTL completion. A CHECK step
-observed before RUN, or RUN after CHECK, fails even when all steps eventually
-appear. Start and finish of a step must have the same origin.
+observed before RUN, or RUN after CHECK, fails **for the same actor** when
+it occurs on a later simulator tick. Independent CPU, host and SV checker
+actors may legitimately have overlapping phases; same-tick boundaries are
+not assigned a fabricated global ordering. Start and finish of a step must
+have the same origin.
 
 For the two real-CPU tests, `report.axi.required_complete: true` rejects
 outstanding AXI transactions at capture close, including the final firmware
@@ -190,3 +194,13 @@ TLP-to-AXI B time, **not** a nonexistent PCIe write completion. Separate
 callback, not real link/PHY/LTSSM or physical host latency. DDR/HBM timings
 belong to their actual memory-controller/DFI reports and are not silently
 ascribed to the PCIe SRAM target.
+
+## Verified initial PCIe and DDR-model host flow
+
+[PCIe CI #42134213227](https://github.com/r987r/xezim-hello-world/actions/runs/42134213227)
+passed the real bridge, full-chip CPU/iDMA/host scenario and the separate
+CPU C/iDMA scenario. The combined run's 27 required flow steps completed
+with zero issues. The accepted traffic captured 3,741 matched PCIe read
+TLPs and completions, 8 posted writes, and 47,864 completed AXI transactions.
+Its reported TLP read latency is min 130 ns, avg 130.083 ns, max 200 ns.
+See [PCIe initial integration and model limits](pcie0-host-phases.md).
