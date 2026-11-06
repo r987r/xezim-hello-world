@@ -41,9 +41,12 @@ wire [7:0] cq_awlen,cq_wstrb;
 wire [2:0] cq_awsize,cq_arprot;
 wire [1:0] cq_awburst,cq_bresp;
 wire cq_awlock,cq_awvalid,cq_awready,cq_wlast,cq_wvalid,cq_wready;
-wire cq_bvalid,cq_bready,cq_writer_bready;
+wire cq_bvalid,cq_bready,cq_writer_bready,cq_ram_bvalid;
 reg cq_allow_b=0;
+// Consistent protocol stall: gate BOTH BVALID observed by the writer and
+// BREADY seen by the RAM. Neither side can retire a response prematurely.
 assign cq_bready = cq_allow_b && cq_writer_bready;
+assign cq_bvalid = cq_allow_b && cq_ram_bvalid;
 reg [15:0] cq_check_araddr=0;
 reg cq_check_arvalid=0,cq_check_rready=0;
 wire cq_check_arready,cq_check_rvalid,cq_check_rlast;
@@ -113,7 +116,7 @@ axi_ram #(.DATA_WIDTH(64),.ADDR_WIDTH(16),.ID_WIDTH(4)) u_cq_ram (
  .s_axi_wdata(cq_wdata),.s_axi_wstrb(cq_wstrb),
  .s_axi_wlast(cq_wlast),.s_axi_wvalid(cq_wvalid),
  .s_axi_wready(cq_wready),.s_axi_bid(cq_bid),
- .s_axi_bresp(cq_bresp),.s_axi_bvalid(cq_bvalid),
+ .s_axi_bresp(cq_bresp),.s_axi_bvalid(cq_ram_bvalid),
  .s_axi_bready(cq_bready),
  .s_axi_arid(4'd0),.s_axi_araddr(cq_check_araddr),
  .s_axi_arlen(8'd0),.s_axi_arsize(3'd3),
