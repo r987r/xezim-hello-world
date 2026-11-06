@@ -4,7 +4,8 @@
 `timescale 1ns/1ps
 module ethernet_rx_queue_engine #(
  parameter [63:0] RING_BASE=64'h100, RING_BYTES=64'h1000,
- parameter [63:0] BUFFER_BASE=64'h2000, BUFFER_BYTES=64'h8000
+ parameter [63:0] BUFFER_BASE=64'h2000, BUFFER_BYTES=64'h8000,
+ parameter [63:0] ALT_BUFFER_BASE=0, ALT_BUFFER_BYTES=0
 )(
  input wire clk,rst,cfg_valid,cfg_write,
  input wire [7:0] cfg_addr,input wire [31:0] cfg_wdata,
@@ -95,7 +96,8 @@ module ethernet_rx_queue_engine #(
  );
  ethernet_rx_desc_fetch #(.AXI_ADDR_WIDTH(64),.AXI_ID_WIDTH(4),
   .RING_BASE(RING_BASE),.RING_BYTES(RING_BYTES),
-  .BUFFER_BASE(BUFFER_BASE),.BUFFER_BYTES(BUFFER_BYTES)) u_fetch (
+  .BUFFER_BASE(BUFFER_BASE),.BUFFER_BYTES(BUFFER_BYTES),
+  .ALT_BUFFER_BASE(ALT_BUFFER_BASE),.ALT_BUFFER_BYTES(ALT_BUFFER_BYTES)) u_fetch (
   .clk,.rst,.req_valid(rx_desc_valid && state==FETCH),
   .req_ready(fetch_ready),.req_ring_addr(rx_desc_addr),
   .req_frame_len(packet_length),.req_tag(8'd0),
@@ -114,7 +116,8 @@ module ethernet_rx_queue_engine #(
  );
  ethernet_rx_dma #(.AXI_ADDR_WIDTH(64),.AXI_DATA_WIDTH(64),
   .AXI_ID_WIDTH(4),.LEN_WIDTH(16),
-  .REGION_BASE(BUFFER_BASE),.REGION_BYTES(BUFFER_BYTES)) u_write (
+  .REGION_BASE(BUFFER_BASE),.REGION_BYTES(BUFFER_BYTES),
+  .ALT_REGION_BASE(ALT_BUFFER_BASE),.ALT_REGION_BYTES(ALT_BUFFER_BYTES)) u_write (
   .clk,.rst,.desc_valid(state==ISSUE),.desc_ready(dma_ready),
   .desc_dst_addr(dst_addr),.desc_length(packet_length),
   .desc_capacity(capacity),.desc_tag(active_tag),
