@@ -19,6 +19,8 @@ module ethernet_queue_ctrl_tb;
   wire rx_desc_queue,tx_desc_queue;
   reg rx_cpl_written=0,tx_cpl_written=0;
   wire irq;
+  wire [63:0] rx_cq_slot_addr, tx_cq_slot_addr;
+  wire [7:0] rx_active_policy;
   integer checks=0;
   ethernet_queue_ctrl dut(
     .clk,.rst,.cfg_valid,.cfg_write,.cfg_addr,.cfg_wdata,.cfg_wstrb,
@@ -27,7 +29,9 @@ module ethernet_queue_ctrl_tb;
     .rx_route_valid,.rx_route_drop,.rx_route_queue,.rx_route_policy,
     .rx_desc_valid,.rx_desc_ready,.rx_desc_addr,.rx_desc_queue,
     .tx_desc_valid,.tx_desc_ready,.tx_desc_addr,.tx_desc_queue,
-    .rx_cpl_written,.tx_cpl_written,.irq
+    .rx_cpl_written,.tx_cpl_written,.irq,
+    .rx_cq_slot_addr,.tx_cq_slot_addr,
+    .rx_active_policy_o(rx_active_policy)
   );
   task check(input logic ok,input string why);
     begin
@@ -95,7 +99,13 @@ module ethernet_queue_ctrl_tb;
     wr(8'h74,32'h0800,0);wr(8'h78,32'hffff,0);
     wr(8'h7c,6000,0);wr(8'h80,32'hffff,0);wr(8'h84,3,0);
     wr(8'h28,2,0);wr(8'h48,1,0);wr(8'h08,3,0);
-    receive(16'h0800,1,6000,0);consume(64'h100004000);
+    check(rx_cq_slot_addr==64'h100005000 &&
+          tx_cq_slot_addr==64'h100007000,
+          "queue-owned initial RX/TX completion slots");
+    receive(16'h0800,1,6000,0);
+    check(rx_active_policy==0,"RX policy snapshot");
+    consume(64'h100004000);
+    check(rx_cq_slot_addr==64'h100005020,"RX CQ advances only on acknowledged completion");
     rd(8'h2c,1);rd(8'h38,1);
     check(tx_desc_valid,"TX descriptor valid");
     check(tx_desc_addr==64'h100006000,"TX descriptor address");
@@ -105,6 +115,7 @@ module ethernet_queue_ctrl_tb;
     @(posedge clk);#1;
     @(negedge clk);tx_cpl_written=0;
     rd(8'h4c,1);rd(8'h58,1);
+    check(tx_cq_slot_addr==64'h100007020,"TX CQ advanced on completion only");
     receive(16'h0800,1,6000,0);consume(64'h100004020);
     rd(8'h2c,2);rd(8'h38,2);
     receive(16'h0800,1,6000,1);
@@ -121,6 +132,7 @@ module ethernet_queue_ctrl_tb;
       consume(64'h100004000 + ((idx & 15) * 32));
     end
     rd(8'h2c,18);rd(8'h38,18);
+    check(rx_cq_slot_addr==64'h100005040,"RX CQ slot wraps at queue depth");
     // CQ now full with 16 unread entries, despite a preposted new buffer.
     wr(8'h28,19,0);
     receive(16'h0800,1,6000,1);
