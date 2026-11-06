@@ -116,7 +116,14 @@ writes distinct burst data into both HBM/DDR windows, applies a partial write,
 then reads both back. Distinct data checks that the targets are independent.
 Read and write responses must be OKAY; accesses just beyond each model's
 capacity must return SLVERR rather than alias valid storage.
-The default cold-boot test still uses a BFM at the inactive DMA boundary. **In real CPU C-DMA mode the active probe BFM must not be instantiated** because its response wires mirror true iDMA traffic; only passive AXI observers remain.
+The default cold-boot test still uses a BFM at the inactive DMA boundary.
+**During real CPU C-DMA execution no active AXI master may attach to its
+mirrored iDMA probe pins**, because it would consume real iDMA responses.
+The opt-in DDR-B regression adds a distinct, RTL-gated exception **only
+after the real CPU/iDMA CHECK phase completes and controller requests drain**:
+a verification-only AXI master exclusively takes over the compute0 DMA NoC
+manager port to check routed DDR aperture DECERR and nonalias. Ordinary
+CPU-DMA, Ethernet and PCIe runs do not enable this takeover.
 The separate `make dv-chip-dma` test instead uses both real PULP iDMA
 engines over the same NoCs with CPUs held in reset. These are distinct scopes.
 The CPUs remain 32-bit and cannot directly address the windows above 4 GiB.

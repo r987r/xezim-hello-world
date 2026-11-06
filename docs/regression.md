@@ -188,8 +188,20 @@ its report contains 48,144 observed AXI events. The
 [artifact](https://github.com/r987r/xezim-hello-world/actions/runs/42217902632/artifacts/13503312198) retains variant sources, trace/report HTML,
 controller manifest, CSR map and evidence JSON. Controller-side AXI
 and simulated DFI measurements are **not electrical PHY timing**.
-Full-chip invalid-aperture negative and joint Ethernet/PCIe-to-real-DDR
-remain distinct gates (DDR #40 / epic #34).
+The full-chip routed invalid-aperture negative is now **implemented** on
+[DDR-B PR #74](https://github.com/r987r/xezim-hello-world/pull/74).
+After compiled CPU/iDMA INIT/RUN/CHECK succeeds, a guarded, verification-only
+AXI master takes ownership of the existing compute0 DMA initiator. It writes
+and reads one address outside the 32-MiB modeled LiteDRAM backing, requires
+`BRESP/RRESP=DECERR`, checks zero forbidden controller AW/AR forwarding,
+then verifies the original valid address remains unchanged. The assertions
+and JSON evidence are mandatory in
+[DDR-B CI #42231439614](https://github.com/r987r/xezim-hello-world/actions/runs/42231439614).
+At documentation update, the routed test is **implemented but not yet
+independently passed at the latest merged source**; do not infer success
+from the earlier CPU/iDMA controller pass. Full baseline boot and affected
+NoC/PCIe regressions must also pass after final main synchronization.
+Joint Ethernet/PCIe-to-real-DDR is a separate #34 interoperability gate.
 
 The generic `noc` / `supernoc` structural test remains an independent
 repository-wide gate. A NoBResponseIdQueue assertion in that flow is **not**

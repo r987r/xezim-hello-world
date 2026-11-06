@@ -27,6 +27,21 @@ The generic FlooNoC backend registry is not a universal arbitrary-SoC plugin; de
 Optional real iDMA wiring passes full-chip RTL traffic regression ([CI 41885417960](https://github.com/r987r/xezim-hello-world/actions/runs/41885417960)).
 CPU C-DMA execution is verified, including the opt-in LiteDRAM controller with behavioral DFI; interrupt-service firmware, HBM controller and physical PHYs remain pending.
 
+## DDR-B integration signoff status (November 6, 2026)
+
+[DDR-B PR #74](https://github.com/r987r/xezim-hello-world/pull/74)
+has a passing earlier CPU/iDMA-to-real LiteDRAM controller test,
+[CI 42217902632](https://github.com/r987r/xezim-hello-world/actions/runs/42217902632).
+The **post-CHECK routed negative** (read/write DECERR beyond the 32-MiB
+model, no controller request forwarding and unchanged valid bytes) has
+been implemented but **must pass new exact-head CI before issue #40 closes**.
+The DDR integration remains opt-in; normal generated SoC memory models and
+single canonical topology are unchanged. Newer main PR #85 adds automatic
+regression discovery and deeper IP RTL drilldown; DDR integration must
+preserve those shared publication/viewer features. Exact-head full-chip
+DDR, boot, PCIe and fabric verification are separate release gates.
+No electrical PHY or cross-protocol-to-real-controller signoff is implied.
+
 ## Independent global NoC concurrency regression
 
 The historical upstream `NoBResponseIdQueue` assertion at 227.52 µs (CI #42145885829) was fixed and regression-tested in [merged PR #78](https://github.com/r987r/xezim-hello-world/pull/78) on `main` `b91e3d3`. Ethernet PR #73 includes that fix and [exact-head CI 42162107273](https://github.com/r987r/xezim-hello-world/actions/runs/42162107273) is all green. Generic stress/performance limits still require their own qualification.

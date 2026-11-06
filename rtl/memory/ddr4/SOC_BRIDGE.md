@@ -105,7 +105,12 @@ architectural 1-GiB DDR window is unchanged; only the low 32 MiB has
 behavioral DFI/BankModel backing. Invalid bursts and addresses must
 return DECERR, not wrap into the backing store. The bridge's standalone
 invalid-aperture negative passed; a matching **full-chip routed**
-negative test is still pending DDR-B signoff.
+negative test is now **implemented** using the real NoC after CPU/iDMA
+CHECK: the existing compute0 DMA manager port is multiplexed to a
+verification-only AXI master only after CHECK and controller drain.
+It checks read/write DECERR for an address 32 MiB above valid modeled
+storage, no forwarded controller AW/AR, and unchanged valid readback.
+A completed source-fresh RTL run is still needed before signoff.
 
 ## Verified status and remaining gates
 
@@ -117,9 +122,12 @@ negative test is still pending DDR-B signoff.
 - **Preserved:** standalone LiteDRAM/DFI + bridge/DECERR tests,
   fast AXI RAM default, independent HBM model, and upstream NoC
   ordering (merged PR #78).
-- **Remaining for DDR-B merge/close:** routed invalid-aperture negative,
-  full baseline boot suite on the exact source, and reconciliation
-  with newer `main` (which already includes Ethernet PR #73).
+- **Remaining for DDR-B merge/close:** actual source-fresh RTL acceptance
+  of the newly implemented routed invalid-aperture negative, full default
+  boot/CPU DMA and affected regression suites, and final main merge checks.
+  Ethernet, CSR and stimulus framework changes were reconciled in
+  `2220f43`; automatic test discovery/IP drilldown from main PR #85
+  also needs to be preserved during the latest main synchronization.
 - **Outside DDR-B scope:** physical DDR PHY, JEDEC/silicon timing,
   long forced backpressure/refresh/reset stress (DDR-A #35),
   and joint Ethernet/PCIe-to-*real-controller* traffic (epic #34).

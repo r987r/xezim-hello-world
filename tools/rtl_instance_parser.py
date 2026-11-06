@@ -21,7 +21,23 @@ import subprocess
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
+# The top-level and the repository-owned adapters / custom Ethernet logic
+# are syntax-parsed, not elaborated. Imported IP remains a pinned opaque
+# boundary until its checked-out sources are available in a verified build.
 DEFAULT_SOURCES = ("gen/chip/soc_top.sv", "gen/supernoc/soc_noc.sv")
+
+
+def source_files(root: Path, sources):
+    if tuple(sources) != DEFAULT_SOURCES:
+        return tuple(sources)
+    extra = [p.relative_to(root).as_posix()
+             for folder in ("rtl/adapters", "rtl/io/ethernet0")
+             for pattern in ("*.sv", "*.v")
+             for p in sorted((root / folder).glob(pattern))
+             if re.search(r"(?m)^\s*module\s+", p.read_text())
+             and not re.search(r"(?m)^\s*`include\b", p.read_text())]
+    return tuple(sources) + tuple(dict.fromkeys(extra))
+
 TOKEN = re.compile(r"^[A-Za-z_$][A-Za-z0-9_$]*$")
 
 
@@ -199,7 +215,7 @@ def build(root=ROOT, *, slang="slang", sources=DEFAULT_SOURCES):
         raise ValueError(f"slang compiler missing: {slang}")
     modules = []
     checksums = {}
-    for rel in sources:
+    for rel in source_files(root, sources):
         source = (root / rel).resolve()
         if not source.is_relative_to(root):
             raise ValueError(f"source escapes repository: {rel}")

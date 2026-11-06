@@ -3,19 +3,5 @@ title: SoC verification hub
 history_per_workflow: 4
 max_archive_mib: 50
 max_expanded_mib: 250
-workflows:
-  - file: dv-soc.yml
-    label: Xezim CPU and memory
-    artifacts: [heterogeneous-soc-results]
-  - file: full-chip.yml
-    label: Coordinated chip boot
-    artifacts: [full-chip-boot-results]
-  - file: floonoc-elab.yml
-    label: NoC traffic and compiler checks
-    artifacts: [supernoc-real-axi-traffic, xezim-floonoc-compile-probe]
-  - file: dma.yml
-    label: Real iDMA AXI descriptor chains
-    artifacts: [dma-rtl-results]
-  - file: floogen.yml
-    label: Generated topology and contracts
-    artifacts: []
+# Regression producers are discovered from checked-in Actions workflows.
+# No manual workflow or protocol allowlist is maintained.
