@@ -1,4 +1,4 @@
-name: Ethernet MVP source and integration gate
+name: Ethernet MVP connected RX RTL and AXI CQ gate
 on:
   pull_request:
     branches: [main]
@@ -6,9 +6,6 @@ on:
       - 'rtl/io/ethernet0/**'
       - 'dv/ethernet0/**'
       - '.github/workflows/ethernet-mvp.yml'
-      - 'tools/full_chip_gen.py'
-      - 'tools/ethernet_chip.py'
-      - 'docs/ethernet0-closure-gate.md'
   workflow_dispatch:
 permissions:
   contents: read
@@ -16,15 +13,52 @@ concurrency:
   group: ethernet-mvp-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 jobs:
-  source:
+  connected-rx:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
-      - name: Snapshot exact branch source for local integration audit
-        run: tar -czf "$RUNNER_TEMP/eth-source.tgz" --exclude=.git --exclude=.tools .
-      - uses: actions/upload-artifact@v4
+      - uses: actions/setup-python@v5
         with:
-          name: ethernet-mvp-source-${{ github.run_id }}
-          path: ${{ runner.temp }}/eth-source.tgz
-          retention-days: 1
+          python-version: '3.11'
+      - name: Install pinned Ethernet and AXI simulation dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends iverilog
+          python3 -m pip install 'PyYAML==6.0.3'
+          python3 tools/ip_fetch.py verilog_axi
+      - name: Elaborate actual GMII MAC to CQ writer connectivity
+        run: |
+          python3 - <<'PY'
+          from dv.ethernet0.run_mac_gmii import fetch_pinned
+          from pathlib import Path
+          import subprocess
+          root=Path.cwd()
+          sources=[root/"rtl/io/ethernet0"/name for name in (
+              "ethernet0_rx_mvp.v","ethernet0_rx_gmii_stager.v",
+              "ethernet0_mac_gmii.v","ethernet_rx_frame_stager.v",
+              "ethernet_rx_queue_engine.v","ethernet_queue_ctrl.sv",
+              "ethernet_rx_desc_fetch.v","ethernet_rx_dma.v",
+              "ethernet_cq_axi_writer.v",
+          )]
+          for directory,meta in fetch_pinned().values():
+              sources.extend(directory/path for path in meta["modules"])
+          sources.extend(root/".tools/verilog_axi/rtl"/name for name in (
+              "axi_dma_rd.v","axi_dma_wr.v",
+          ))
+          subprocess.run(["iverilog","-g2012","-Wall",
+                          "-s","ethernet0_rx_mvp","-t","null",
+                          *(str(p) for p in sources)],check=True)
+          print("PASS connected Ethernet GMII RX -> complete-frame -> queue -> AXI DMA and real CQ writer RTL elaboration")
+          PY
+      - name: Archive structural source list
+        if: always()
+        run: |
+          mkdir -p .tools/regression/ethernet-mvp
+          git rev-parse HEAD > .tools/regression/ethernet-mvp/source-head.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ethernet-mvp-structural-${{ github.run_id }}
+          path: .tools/regression/ethernet-mvp/
+          if-no-files-found: warn
