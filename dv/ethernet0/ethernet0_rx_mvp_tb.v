@@ -202,7 +202,7 @@ axi_ram #(.DATA_WIDTH(64),.ADDR_WIDTH(16),.ID_WIDTH(4)) u_cq_ram (
  .s_axi_awid(cq_awid),.s_axi_awaddr(cq_awaddr[15:0]),
  .s_axi_awlen(cq_awlen),.s_axi_awsize(cq_awsize),
  .s_axi_awburst(cq_awburst),.s_axi_awlock(cq_awlock),
- .s_axi_awcache(cq_awcache),.s_axi_awprot(cq_arprot),
+ .s_axi_awcache(cq_awcache),.s_axi_awprot(cq_awprot),
  .s_axi_awvalid(cq_awvalid),.s_axi_awready(cq_awready),
  .s_axi_wdata(cq_wdata),.s_axi_wstrb(cq_wstrb),
  .s_axi_wlast(cq_wlast),.s_axi_wvalid(cq_wvalid),
