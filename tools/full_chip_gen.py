@@ -558,7 +558,8 @@ def emit_tb(cfg, fw, out, *, image_prefix='gen/chip', cpu_dma_mode=False,
     probe = probe_ports()
     cfgprobe = probe_ports('cfgprobe', addr_bits=32, data_bits=32, id_bits=1)
     lines = ['`timescale 1ns/1ps', '// One boot/coordination checker shared by both simulators.',
-        'module full_chip_tb (', *[p[1] for p in probe]]
+        'module full_chip_tb (', *[p[1] for p in probe],
+        *([p[1] for p in cfgprobe] if real_ddr_mode else [])]
     if pcie_host_mode:
         lines += pcie_chip.top_ports()
     lines[-1] = lines[-1].rstrip(',')
@@ -589,7 +590,7 @@ def emit_tb(cfg, fw, out, *, image_prefix='gen/chip', cpu_dma_mode=False,
         '    .dma_irq_o(), .dma_irq_pending_o(),',
         *(['    .ddr_init_mode_i(ddr_init_mode),'] if real_ddr_mode else []),
         '    '+',\n    '.join([*(f'.{p[0]}({p[0]})' for p in probe),
-                           *(f'.{p[0]}(\'0)' if request_field(p[2],p[3]) else f'.{p[0]}()'
+                           *(f'.{p[0]}({p[0]})' if real_ddr_mode else (f'.{p[0]}(\'0)' if request_field(p[2],p[3]) else f'.{p[0]}()')
                              for p in cfgprobe),
                              *(pcie_chip.instance_ports() if pcie_host_mode else []),
                              *(['.pcie_sram_write_count(pcie_sram_write_count)',
