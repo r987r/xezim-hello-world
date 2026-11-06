@@ -72,10 +72,13 @@ The verified RTL equivalence fingerprint is derived from Git-authenticated blob 
 
 The shared single-clock simulation drives `clk_i`; the captured period is 10,000 ps (10 ns), corresponding to a **100 MHz simulation reference clock**. This value is measured in the AXI capture and displayed alongside min/average/max cycles, with original ps durations retained. No physical device clock frequency is asserted. When multiple clock domains are introduced, route timing must be normalized using the relevant observed period or common timebase before comparing path cycles.
 
+### IP composition drill-down
+
+Chip architecture blocks open the compiler-parsed RTL instance hierarchy, including repository-owned Ethernet datapath modules and CPU/DMA adapters. Nested parsed modules can be opened without generating a new static diagram. Pinned third-party IP and inactive opt-in variants appear as opaque/reserved boundaries unless their actual module sources were parsed; syntax presence alone does not prove elaborated or active hardware. Published source paths and test profile overlays remain independent of structural evidence.
+
 ## Collection, retention and reproducibility
 
-`config/publication.yaml` selects trusted producer workflows and artifact names,
-history depth and archive size limits. Every PR targeting `main` builds an
+The collector automatically discovers CI workflows that upload canonical `.tools/regression/` artifacts and their declared artifact names; new test targets require no publication allowlist edits. `config/regression.yaml` supplies the test catalog, while `config/publication.yaml` only sets retention and archive size limits. Every PR targeting `main` builds an
 offline preview. After a PR merges, a minimally privileged PR-close job dispatches
 one new Pages workflow on the actual `main` ref, so the GitHub Pages environment
 permits deployment; that main-ref run builds and publishes the trusted `main`
