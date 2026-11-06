@@ -11,6 +11,9 @@ on:
       - 'sw/dma/tests/scenario_dma_run.c'
       - 'tools/cpu_dma_firmware.py'
       - 'tools/regress.py'
+      - 'tools/scenario_memory_trace.py'
+      - 'tests/test_scenario_memory_trace.py'
+      - 'tests/test_scenario_memory_finalization.py'
       - 'config/regression.yaml'
       - 'tests/test_scenario_dma.py'
       - 'tools/scenario_replay_audit.py'
@@ -76,10 +79,27 @@ jobs:
           sudo apt-get install -y verilator clang llvm lld
       - name: Check source ABI, CPU C and generated platform
         run: |
-          python3 -m unittest tests.test_scenario_plan tests.test_scenario_dma tests.test_scenario_replay_audit tests.test_cpu_dma_firmware -v
+          python3 -m unittest tests.test_scenario_plan tests.test_scenario_dma tests.test_scenario_replay_audit tests.test_scenario_memory_trace tests.test_scenario_memory_finalization tests.test_cpu_dma_firmware -v
           make check-generated
       - name: Execute actual CPU0 C and CPU0 BFM scenario via RTL
         run: python3 tools/regress.py scenario
+      - name: Check real CPU and BFM memory views in the original run reports
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          for mode, expected in (
+              ("chip-cpu-scenario", "cpu_phys_correlated_lifetimes_planned_only"),
+              ("chip-dma-scenario", "bfm_traffic_observed_allocation_unmeasured"),
+          ):
+              path = Path(".tools/regression") / mode
+              view = json.loads((path / "memory-lifetimes.json").read_text())
+              assert view["status"] == expected
+              assert len(view["buffers"]) == 3
+              assert view["real_allocation_tokens_proven"] is False
+              assert view["release_quiescence_proven"] is False
+              assert (path / "report.html").read_text().count("<!-- DV-MEM-LIFETIME-V1 -->") == 1
+          PY
       - name: Fail closed if CPU/BFM intent or observed RTL evidence diverges
         run: |
           python3 tools/scenario_replay_audit.py \
