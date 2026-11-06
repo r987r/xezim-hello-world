@@ -1,15 +1,8 @@
 # Ethernet0 standalone 1G MAC / GMII bring-up
 
-Scope: **real upstream RTL** for 1G frame RX/TX and two frame-aware clock
-domain crossing FIFOs, with upstream Cocotb GMII VIP. Additional queue-control,
-header staging, descriptor-driven RX/TX DMA and B-gated CQ-writer modules have
-now merged independently, but the generated SoC still **does not connect**
-those blocks to the Ethernet Data/Config FlooNoCs. `gen/chip/manifest.json`
-still labels packet DMA `reserved_idle` and management CSR
-`explicit_axi_error`. The external GMII BFM is a simulation-only wire
-interface, not a silicon SerDes. See [draft PR #73](../../../docs/ethernet0-closure-gate.md)
-for the connected-subsystem acceptance tests.
+Scope: pinned upstream 1G GMII RX/TX MAC/FCS, clock-domain FIFOs, programmable queue/descriptor DMA, completion ring and an optional generated-chip Data/Config NoC attachment. The connected functional Ethernet MVP has **passed** in the opt-in variant: [CI #42145885849](https://github.com/r987r/xezim-hello-world/actions/runs/42145885849), including GMII RX/TX to/from SRAM and modeled DDR with real AXI and CQ readback. Standalone MAC/queue/CQ groundwork is merged from #52/#61/#68 and structural Ethernet NoCs from #70.
 
+The **default** committed generated `soc_top` / manifest still reserves packet DMA and queue CSRs. The RTL is physically wired only when generating with `ethernet_mode=True` in `tools/full_chip_gen.py`; this distinction is deliberate, not an incomplete IP-level test. A GMII BFM is simulation wire traffic, not an off-chip silicon PHY.
 ## Pinned dependencies
 
 `ip.lock.yml` pins exact commits of Alex Forencich's MIT-licensed
@@ -54,17 +47,10 @@ then injects a corrupted FCS and requires a MAC error indication and no
 delivery to the logic RX FIFO. Runs are bounded by Cocotb timeouts.
 CI installs the open-source simulator and runs this test on PRs.
 
-## Remaining system integration gate (#64)
+## Ethernet MVP vs. final combined integration (#64)
 
-Foundation PRs #52 (MAC/stager), #61 (queue/descriptor/DMA), #68 (real CQ
-writer), and #70 (generated Ethernet NoCs/topology) are **merged**. Older
-Ethernet prep issues #37/#42 were closed as consolidated, **not** end-to-end
-verified. Do not resurrect the standalone bring-up PRs.
+One MAC, RX/TX queues, upstream DMA, six-source PULP AXI mux, Config NoC CSR target, and B-gated 32-byte CQ are now connected in [draft PR #73](https://github.com/r987r/xezim-hello-world/pull/73). The real opt-in generated-chip test `python3 tools/regress.py chip-ethernet` passed [CI 42145885849](https://github.com/r987r/xezim-hello-world/actions/runs/42145885849). It checks RX SRAM/DDR, TX SRAM/DDR and no-buffer negative; focused regressions also check bad FCS and CQ B stalls.
 
-One draft [PR #73](https://github.com/r987r/xezim-hello-world/pull/73)
-tracks the actual missing MAC→queue→NoC→memory/CQ/IRQ and SRAM→GMII TX
-connections plus Config NoC CPU CSR access. Run the five named
-[RUN/CHECK tests](../../../docs/ethernet0-closure-gate.md) and require
-byte-perfect independent readback, real AXI B/RLAST, GMII TX completion,
-and source-true generated diagrams/reporting before merging. Physical DDR
-controller/PHY, full PCIe/link, and stress/performance remain separate.
+The SoC test uses CPU0 **AXI BFMs** with the actual CPUs in reset. **Issue #64 is still open** because one combined CPU0 C / modeled PCIe Root Complex run must verify host visibility of the Ethernet-generated buffer and CQ, emit the prescribed five INIT/RUN/CHECK records, and reconcile real variant reports/diagrams. General global-NoC same-ID concurrency assertion #75/#78, physical DDR controller/PHY #40 and PCIe post-MVP #76 are separate work; do not hide the failing NoC regression.
+
+Details: [five-step closure gate](../../../docs/ethernet0-closure-gate.md) and [combined-protocol readiness](../../../docs/multiprotocol-integration-readiness.md).

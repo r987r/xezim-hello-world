@@ -24,10 +24,16 @@ boundary. See [full evidence and limits](docs/pcie0-host-phases.md).
 
 The PCIe path is currently **host-BAR pull, not endpoint-initiated DMA into
 host DRAM**. The DDR aperture is an AXI SRAM-backed model, not a real
-DDR4 controller. Ethernet end-to-end, outbound host DMA, physical PHY,
+DDR4 controller. Combined Ethernet+CPU+PCIe host end-to-end, outbound host DMA, physical PHY,
 backpressure and performance qualification remain separate tracks.
 Generated topology diagrams and RTL continue to be governed by `make gen`;
 this status section does not override the source-true variant manifest.
+
+## Ethernet0 minimal viable IP: generated-chip GMII RX/TX now passing
+
+[Draft PR #73](https://github.com/r987r/xezim-hello-world/pull/73) contains a single real 1G GMII MAC, RX and TX queues, descriptor and packet AXI DMA, B-gated completion records, one six-initiator upstream PULP AXI mux into Ethernet local Data NoC and an independent Config NoC AXI4-to-Lite queue CSR target. [CI #42145885849](https://github.com/r987r/xezim-hello-world/actions/runs/42145885849) passed the opt-in generated-chip RX into SRAM and **modeled** DDR plus TX from both memories, with exact bytes/FCS and CQ frontdoor readback. The test uses CPU0 AXI BFMs with the real CPUs held reset.
+
+This is **Ethernet IP MVP readiness for the next integration**, not yet the one combined CPU0 compiled-C + PCIe Root Complex observation test. The default generated chip and canonical architecture diagram retain reserved Ethernet endpoints; only `ethernet_mode=True` instantiates this packet engine. The independent SuperNoC concurrent same-ID response assertion remains open [#75](https://github.com/r987r/xezim-hello-world/issues/75)/[#78](https://github.com/r987r/xezim-hello-world/pull/78). See the [acceptance gate](docs/ethernet0-closure-gate.md) and [combined protocol plan](docs/multiprotocol-integration-readiness.md); keep Ethernet #64 open pending five-step host/CPU audit.
 
 ## Architecture, real RTL connectivity, and verification
 
