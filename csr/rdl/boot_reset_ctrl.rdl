@@ -1,0 +1,17 @@
+// CSR-1 source model for the project-owned SoC boot reset-control MMIO.
+// Existing live RTL remains PULP axi_lite_regs until a separately verified
+// generated-RTL migration. CPU0 is never software-reset; bit n controls CPU(n+1).
+// 16-bit field defines the supported 2..16 CPU logical ABI; unused bits reserved.
+addrmap boot_reset_ctrl {
+    desc = "Boot secondary-core release register; CPU0 remains primary";
+    reg {
+        desc = "Bit i releases secondary CPU i+1; reset value holds secondaries";
+        regwidth = 32;
+        field {
+            desc = "Secondary CPU release enables (one bit per secondary)";
+            sw = rw;
+            hw = r;
+            reset = 0;
+        } secondary_release[15:0];
+    } cpu_release @0x0;
+};
