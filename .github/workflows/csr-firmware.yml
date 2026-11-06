@@ -1,0 +1,44 @@
+name: CSR firmware RDL and generated headers
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'csr/rdl/soc_dma_shim.rdl'
+      - 'tools/csr_dma_headers.py'
+      - 'tests/test_csr_dma_headers.py'
+      - '.github/workflows/csr-firmware.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dma-header:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Install pinned SystemRDL compiler
+        run: python3 -m pip install -r requirements.txt -r csr/requirements.txt
+      - name: Validate real RDL data, existing C ABI and generation drift
+        run: |
+          python3 -m unittest tests.test_csr_dma_headers -v
+          python3 tools/csr_dma_headers.py --out .tools/csr-dma
+          python3 tools/csr_dma_headers.py --out .tools/csr-dma --check
+      - name: Prove generated aliases compile as freestanding RV32I
+        run: |
+          clang --version
+          cat > .tools/csr-dma/header_abi_test.c <<'EOF'
+          #include "soc_dma_shim_regs.h"
+          _Static_assert(SOC_DMA_REG_HEAD_LO == 0x0u, "head low ABI drift");
+          _Static_assert(SOC_DMA_REG_HEAD_HI == 0x4u, "head high ABI drift");
+          _Static_assert(SOC_DMA_REG_COMMAND == 0x8u, "command ABI drift");
+          _Static_assert(SOC_DMA_REG_STATUS == 0xcu, "status ABI drift");
+          _Static_assert(SOC_DMA_CMD_IRQ_ACK == 2u, "IRQ acknowledge ABI drift");
+          _Static_assert(SOC_DMA_STATUS_RAW_IRQ == 8u, "raw IRQ ABI drift");
+          int dma_csr_header_smoke(void) { return SOC_DMA_REG_STATUS; }
+          EOF
+          clang --target=riscv32-unknown-elf -march=rv32i -mabi=ilp32 -ffreestanding -std=c11 -Wall -Wextra -Werror -Oz -c .tools/csr-dma/header_abi_test.c -o .tools/csr-dma/header_abi_test.o
