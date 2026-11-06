@@ -494,8 +494,11 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
                     'local_data_noc':s['name']+'_local_data',
                     'local_config_noc':s['name']+'_local_config',
                     'rtl_attachment':('live_pcie_tlp_axi_bridge' if pcie_host_mode and
-                                      s.get('ip') == 'verilog_pcie' else 'reserved_idle'),
-                    'csr_attachment':'explicit_axi_error'}
+                                      s.get('ip') == 'verilog_pcie' else
+                                      'live_ethernet_gmii_queue_axi_mvp' if ethernet_mode and
+                                      s.get('ip') == 'ethernet_queue_mac' else 'reserved_idle'),
+                    'csr_attachment':('live_ethernet_queue_axi4_lite' if ethernet_mode and
+                                      s.get('ip') == 'ethernet_queue_mac' else 'explicit_axi_error')}
                     for s in cfg['subsystems'] if s['type']=='peripheral'],
                 'dma':'PULP iDMA engines generated for each compute, enabled by DmaEnable=1; data ports route via local FlooNoCs and 32-bit CSRs via local/global config FlooNoCs; old boot defaults to disabled.',
                 'firmware':'firmware.json','reset_register_bytes':reg_bytes,
@@ -541,6 +544,21 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
             key = sub['name'] + '_local_data.' + sub['data_initiator']
             actors[key] = {'kind':'rtl_pcie_bridge',
                            'label':'Pinned real PCIe TLP-AXI bridge; modeled Root Complex'}
+    if ethernet_mode:
+        manifest['ethernet0'] = {
+            'mode':'opt_in_1g_gmii_mac_rx_tx_queue_dma_cq',
+            'data_attachment':'single_pulp_axi_mux_six_sources_into_ethernet_local_data',
+            'config_attachment':'pulp_axi_to_axi_lite_into_queue_csrs',
+            'memory':'local_ethernet_sram_and_bounded_modeled_ddr',
+            'gmii_test_proven':False,
+            'completion_test_proven':False,
+            'note':'Attachment is generated; exact-chip RTL traffic NOT yet measured',
+        }
+        actors[ethernet[0]['name']+'_local_data.'+
+               ethernet[0]['data_initiator']] = {
+            'kind':'rtl_ethernet_dma',
+            'label':'Pinned GMII MAC and PULP AXI-muxed Ethernet RX/TX; requires GMII test'
+        }
     manifest['dma_parameters_by_compute'] = {
         core['name']: dma_params_for(cfg, core) for core in cores}
     manifest['axi_actors']=actors
