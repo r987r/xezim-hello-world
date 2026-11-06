@@ -59,6 +59,14 @@ def main():
         assert "LOCAL FABRICS" in driver.find_element(By.ID,"arch-svg").text
         driver.save_screenshot(str(args.screenshots/"02-compute0-composition.png"))
 
+        # An ordinary IP must open its nested compiler-parsed implementation.
+        dblclick_by_label("compute0.cpu")
+        wait.until(lambda d:"IP COMPOSITION" in d.find_element(By.ID,"arch-svg").text)
+        assert "picorv32_cpu_adapter" in driver.find_element(By.ID,"arch-svg").text
+        driver.save_screenshot(str(args.screenshots/"03-compute0-cpu-ip.png"))
+        driver.execute_script(
+            """const b=[...document.querySelectorAll("#arch-crumbs button")]
+               .find(b=>b.textContent==="compute0");if(!b)throw new Error("missing breadcrumb");b.click();""")
         dblclick_by_label("compute0_local_data")
         wait.until(lambda d:"compute0_local_data" in d.find_element(By.ID,"arch-crumbs").text and "FLOONOC ROUTERS" in d.find_element(By.ID,"arch-svg").text)
         mesh=driver.find_element(By.ID,"arch-svg").text
