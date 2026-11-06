@@ -16,6 +16,15 @@ workflows:
   - file: dma.yml
     label: Real iDMA AXI descriptor chains
     artifacts: [dma-rtl-results]
+  - file: pcie0-integrated.yml
+    label: PCIe0 host BAR and CPU DMA
+    artifacts: [pcie0-dedicated-noc-*, cpu-c-init-run-check-flow-*]
+  - file: ethernet-mvp.yml
+    label: Ethernet0 GMII, NoC, CPU queue and CQ
+    artifacts: [ethernet-chip-data-config-noc-*, ethernet-cpu0-c-queue-cq-*, ethernet-mvp-structural-*, ethernet-axi-mux-sources-*]
+  - file: ethernet-standalone.yml
+    label: Ethernet0 standalone MAC / GMII
+    artifacts: [ethernet0-real-mac-*]
   - file: floogen.yml
     label: Generated topology and contracts
     artifacts: []
