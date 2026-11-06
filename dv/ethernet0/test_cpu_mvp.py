@@ -16,6 +16,7 @@ from cocotbext.eth import GmiiSource,GmiiSink,GmiiFrame
 
 from dv.ethernet0.frame_contract import Packet,encode
 from dv.ethernet0.gmii_trace import GmiiEvidence,RX,TX
+from dv.common.protocol_trace import open_from_plan
 from dv.common.axi_trace import attach_observers,trace_phase
 from dv.full_chip.test_boot import phase
 
@@ -94,7 +95,8 @@ async def cpu0_c_programs_real_rx_tx_queue_and_checks_cq(dut):
     dut.gmii_rx_dv.value=0
     dut.gmii_rx_er.value=0
     attach_observers(dut)
-    gmii_evidence=GmiiEvidence()
+    protocol_trace=open_from_plan()
+    gmii_evidence=GmiiEvidence(protocol_trace)
     cocotb.start_soon(Clock(dut.clk,10,units='ns').start())
     cocotb.start_soon(Clock(dut.gmii_rx_clk,8,units='ns').start())
     cocotb.start_soon(Clock(dut.gmii_tx_clk,8,units='ns').start())
@@ -136,4 +138,5 @@ async def cpu0_c_programs_real_rx_tx_queue_and_checks_cq(dut):
     counts=verify_accepted_axi(os.environ['SOC_RUN_PLAN'])
     dut._log.info('CPU_ETHERNET_ACCEPTED_AXI=%s',counts)
     gmii_evidence.finish()
+    protocol_trace.close("pass")
     dut._log.info('PASS ethernet-cpu: real CPU0 C queue and CQ; GMII RX/TX, SRAM bytes, IRQ ack, B-gated CQ and shared cold boot')
