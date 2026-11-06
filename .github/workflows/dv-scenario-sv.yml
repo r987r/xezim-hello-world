@@ -1,0 +1,63 @@
+name: SCN-3 SystemVerilog scenario contract
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'tools/scenario_sv.py'
+      - 'tests/test_scenario_sv.py'
+      - 'dv/common/test_scenario_sv_adapter.sv'
+      - 'docs/scenario-sv-contract.md'
+      - '.github/workflows/dv-scenario-sv.yml'
+      - 'dv/common/scenario.py'
+      - 'tools/scenario_plan.py'
+      - 'config/scenarios/**'
+      - 'config/soc.yaml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scn3-sv-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sv-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install simple contract tools (no full NoC build)
+        run: |
+          python3 -m pip install 'PyYAML==6.0.3'
+          sudo apt-get update -qq
+          sudo apt-get install -y verilator
+      - name: 'Unit tests: fail-closed SV and scenario ABI'
+        run: python3 -m unittest tests.test_scenario_sv tests.test_scenario_plan -v
+      - name: Generate source-neutral SV from canonical scenario
+        run: |
+          python3 tools/scenario_plan.py --scenario config/scenarios/dma-roundtrip.json --soc config/soc.yaml --out .tools/scenario-sv/scenario-plan.json
+          python3 tools/scenario_sv.py generate --plan .tools/scenario-sv/scenario-plan.json --out .tools/scenario-sv/soc_scenario_contract_pkg.sv
+      - name: Compile and execute SV contract smoke (driver only)
+        run: |
+          verilator --binary --timing -Wno-fatal --top-module test_scenario_sv_adapter --Mdir .tools/scenario-sv/obj -o scenario_sv_smoke .tools/scenario-sv/soc_scenario_contract_pkg.sv dv/common/test_scenario_sv_adapter.sv
+          .tools/scenario-sv/obj/scenario_sv_smoke > .tools/scenario-sv/smoke.log
+          grep -F 'PASS SCN-3 SystemVerilog scenario metadata and driver events (no RTL proof)' .tools/scenario-sv/smoke.log
+      - name: Parse real SV trace and ensure it does NOT claim RTL proof
+        run: |
+          python3 tools/scenario_sv.py audit --plan .tools/scenario-sv/scenario-plan.json --log .tools/scenario-sv/smoke.log --out .tools/scenario-sv/sv-driver-events.json
+          python3 -c 'import json; p=json.load(open(".tools/scenario-sv/sv-driver-events.json")); assert p["status"]=="driver_log_unverified" and p["rtl_evidence"] is None and p["event_count"]==4'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: scn3-sv-contract-only
+          path: |
+            .tools/scenario-sv/scenario-plan.json
+            .tools/scenario-sv/soc_scenario_contract_pkg.sv
+            .tools/scenario-sv/smoke.log
+            .tools/scenario-sv/sv-driver-events.json
+          if-no-files-found: ignore
