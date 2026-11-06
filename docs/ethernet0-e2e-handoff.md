@@ -12,12 +12,17 @@ The reusable RTL is `rtl/io/ethernet0/ethernet0_mvp.v` (one pinned MAC, one RX a
 
 The *default* committed `gen/chip/soc_top.sv` and architecture diagram still reserve Ethernet packet/CSR attachments. They are **not contradictory** to the measured opt-in variant: `tools/full_chip_gen.py::emit(..., ethernet_mode=True)` generates the live Ethernet instance. Its manifest labels the live attachment but does not mark unmeasured physical DDR controller/PHY or PCIe host as observed. Two opt-in/default source-generation tests and `make check-generated` have passed. A separate exact-variant diagram/parsed-port audit remains on the final checklist.
 
-## What still blocks final #64 closure
+## The only remaining Ethernet #64 closure gate
 
-1. Real **CPU0 compiled C firmware** must program Ethernet queue registers through Config NoC, ring doorbells, and independently check CQ/IRQ; the current `chip-ethernet` test uses an **AXI BFM** with CPUs held reset, not CPU software.
-2. One *combined* simulation must include a modeled **PCIe Root Complex** and demonstrate host-side reads of the **Ethernet-produced** packet and CQ through the real SoC or explicitly checked PCIe SRAM/iDMA staging. The independently merged PCIe path in [#60](https://github.com/r987r/xezim-hello-world/pull/60) proves PCIe/DDR transfers, but not this Ethernet/PCIe join.
-3. The original `ETH_RX_SRAM`, `ETH_RX_MODELED_DDR`, `ETH_TX_SRAM_GMII`, `ETH_HOST_PCIe_VISIBILITY`, and `ETH_CPU_CQ_AUDIT` checks must use the *existing common* INIT/RUN/CHECK `StepRecorder` with actual AXI/TLP/GMII observation and no missing/incomplete steps. `trace_phase` labels in the functional test are not equivalent to these recorded gates.
-4. The variant-aware source/connection audit, one diagram, actor map, flow report and monitor traffic must agree. Keep physical DDR4/PHY and PCIe PHY/outbound DMA as separate tracks.
+Use the existing CPU0 cold boot/C firmware runner in the **same opt-in Ethernet RTL variant** to program queue CSR and policy through the Config NoC, post one RX and one TX descriptor through the Data NoC, then read real SRAM packet bytes, 32-byte CQ records, producer status and IRQ acknowledgment. The external GMII source/sink remains a legitimate testbench peripheral; **do not substitute CPU0 AXI BFMs for CPU0 firmware**. Reuse `sw/ethernet/eth_queue_abi.h`, shared INIT/RUN/CHECK and existing monitors. Polling IRQ status is sufficient for MVP; an OS driver or interrupt service routine is not required.
+
+Once that *one* test passes on the source-exact head and the opt-in source/manifest/port audit is consistent, **merge PR #73 and close #64**. Keep all existing standalone and generated-chip RX/TX SRAM/model-DDR tests as regression gates. Default committed `gen/chip` intentionally remains reserved.
+
+## Moved to #34 multiprotocol integration (not blockers for Ethernet closure)
+
+1. Modeled PCIe Root Complex reads **Ethernet-produced** payload and CQ via real TLPs and independently checks correct host bytes and completion records. Merged PCIe #60 is a reusable foundation, not proof of this join.
+2. The five original named `ETH_RX_SRAM`, `ETH_RX_MODELED_DDR`, `ETH_TX_SRAM_GMII`, `ETH_HOST_PCIe_VISIBILITY`, `ETH_CPU_CQ_AUDIT` steps must run together under the shared `StepRecorder` with passive AXI/TLP/GMII correlation and source-true topology/latencies. Do not treat `trace_phase` as complete step records.
+3. Broader fabric concurrency assertions, real LiteDRAM, PCIe PHY/outbound DMA and stress/performance remain their independent tracks; they are not Ethernet first-MVP requirements.
 
 ## Known unrelated fabric failure
 
@@ -27,7 +32,7 @@ The broader concurrent `supernoc` positive/negative regression failed at `NoBRes
 
 - `python3 tools/regress.py chip-ethernet`: generated-chip RX/TX SRAM and modeled-DDR smoke, Config NoC CSR via CPU0 BFM, passive AXI report.
 - `.github/workflows/ethernet-mvp.yml`: pinned vendor source elaboration, connected component simulation and full-chip optional variant CI.
-- `docs/ethernet0-closure-gate.md`: the five original final acceptance stages and current checklist.
+- `docs/ethernet0-closure-gate.md`: the scoped **CPU0 C Ethernet closure** and deferred full-system five-step checklist.
 - `docs/multiprotocol-integration-readiness.md`: the combined CPU/PCIe/Ethernet bring-up and dependencies.
 
-**Decision:** Ethernet is ready to serve as a functional MVP input to the combined test. Keep #64 open and #73 draft until the promised real CPU/host five-step closure gate is passed.
+**Decision:** Ethernet is already a functional IP-level MVP. Keep #64 open / #73 draft only until actual CPU0 C Ethernet control and CQ audit pass; PCIe host and five-step cross-protocol closure have moved to #34.

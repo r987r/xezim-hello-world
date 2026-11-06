@@ -47,10 +47,10 @@ then injects a corrupted FCS and requires a MAC error indication and no
 delivery to the logic RX FIFO. Runs are bounded by Cocotb timeouts.
 CI installs the open-source simulator and runs this test on PRs.
 
-## Ethernet MVP vs. final combined integration (#64)
+## Ethernet MVP closure (#64) vs full integration (#34)
 
 One MAC, RX/TX queues, upstream DMA, six-source PULP AXI mux, Config NoC CSR target, and B-gated 32-byte CQ are now connected in [draft PR #73](https://github.com/r987r/xezim-hello-world/pull/73). The real opt-in generated-chip test `python3 tools/regress.py chip-ethernet` passed [CI 42145885849](https://github.com/r987r/xezim-hello-world/actions/runs/42145885849). It checks RX SRAM/DDR, TX SRAM/DDR and no-buffer negative; focused regressions also check bad FCS and CQ B stalls.
 
-The SoC test uses CPU0 **AXI BFMs** with the actual CPUs in reset. **Issue #64 is still open** because one combined CPU0 C / modeled PCIe Root Complex run must verify host visibility of the Ethernet-generated buffer and CQ, emit the prescribed five INIT/RUN/CHECK records, and reconcile real variant reports/diagrams. General global-NoC same-ID concurrency assertion #75/#78, physical DDR controller/PHY #40 and PCIe post-MVP #76 are separate work; do not hide the failing NoC regression.
+The passing SoC Ethernet test uses CPU0 **AXI BFMs** with CPUs held reset. **Only one new Ethernet #64 closure test is needed:** real CPU0 compiled C programs Ethernet Config NoC queue registers, posts one RX and TX descriptor, validates SRAM bytes, CQ producer/IRQ/cookie/length and acknowledgment against real GMII and AXI completions. Reuse existing C ABI and boot INIT/RUN/CHECK; no ISR or stress suite required. After passing exact-head tests and real opt-in netlist/report audit, close #64 and merge #73. The modeled PCIe host-visible Ethernet buffer and **five combined cross-protocol `StepRecorder` stages** are tracked in #34; global NoC same-ID assertion #75/#78, physical DDR #40 and PCIe post-MVP #76 remain distinct.
 
 Details: [five-step closure gate](../../../docs/ethernet0-closure-gate.md) and [combined-protocol readiness](../../../docs/multiprotocol-integration-readiness.md).

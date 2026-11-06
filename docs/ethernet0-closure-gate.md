@@ -1,8 +1,15 @@
-# Ethernet0 issue #64 — exact-head functional closure gate
+# Ethernet0 MVP — issue #64 scoped closure
 
-The optional generated-chip Ethernet RX/TX packet path has **passed** through real Data/Config NoCs to SRAM and modeled DDR. The broader CPU0 C plus PCIe host test is **not complete**. Do not close #64 or claim three-protocol integration until all five final steps below pass together with independently verified bytes.
+## Authoritative scope
 
-## Verified Ethernet IP MVP (November 5, 2026, Central Time)
+The opt-in generated-chip GMII RX/TX through actual Ethernet Data/Config FlooNoCs to SRAM and modeled DDR **already passes** [CI 42145885849](https://github.com/r987r/xezim-hello-world/actions/runs/42145885849). Ethernet #64 is now *the CPU0 C control milestone*, not the entire four-protocol integration project.
+
+**Close #64 and merge Ethernet PR #73 after one additional integration gate:** real PicoRV32 CPU0 compiled C must configure the Ethernet queue through its real Config NoC CSR, publish at least one RX and one TX descriptor using the documented shared queue ABI, observe GMII RX/TX, independently validate SRAM payload bytes and both real B-gated CQ records, read/ack producer and IRQ status, and complete INIT/RUN/CHECK without a CPU0-port AXI BFM replacing the CPU. Use existing firmware bootstrap and test-flow infrastructure. Polling is acceptable for this first MVP; no new interrupt-driven service framework is required.
+
+**Not required to close #64:** PCIe Root Complex visibility of Ethernet data, five combined protocol StepRecorder steps, endpoint-initiated PCIe DMA, real DDR controller/PHY, arbitrary outstanding-ID stress, saturation/performance or full network-stack features. These are separately tracked under [multiprotocol epic #34](https://github.com/r987r/xezim-hello-world/issues/34) (and #40/#75/#76/#78 where appropriate).
+
+## Existing passing RTL regression (retain as merge gate)
+
 
 - **Connected RTL:** One pinned 1G GMII MAC, FCS/CDC, RX/TX queues, real descriptor DMA, 32-byte B-gated completion writers. [RX standalone CI](https://github.com/r987r/xezim-hello-world/actions/runs/42143412383) and [TX standalone CI](https://github.com/r987r/xezim-hello-world/actions/runs/42143915021) passed exact bytes and completion ordering.
 - **Generated-chip pass:** [CI #42145885849](https://github.com/r987r/xezim-hello-world/actions/runs/42145885849) at RTL SHA `3dcf2c2ef2e3480f5a4abd78dea49f2ad57a5c22` passed all three Ethernet jobs: GMII RX/TX, six-source pinned PULP `axi_mux` elaboration, and `chip-ethernet` in the real generated Ethernet Data/Config NoCs against SRAM and **modeled** DDR. Tested SRAM and modeled-DDR packet bytes, GMII TX FCS, CQ records and MMIO producers.
@@ -12,48 +19,33 @@ The optional generated-chip Ethernet RX/TX packet path has **passed** through re
 
 **Decision:** Ethernet is **functionally ready as the IP input to combined E2E development**. Keep issue #64 open and PR #73 draft under the original final five-step acceptance requirement.
 
-## Five named RUN/CHECK steps
 
-| Name | RUN action | CHECK evidence |
-| --- | --- | --- |
-| `ETH_RX_SRAM` | Host GMII frame enters real MAC/FCS/CDC/stager, queue rule matches, posted SRAM descriptor fetched through generated Ethernet0 local Data FlooNoC, and DMA writes bytes | Independent AXI SRAM readback equals FCS-stripped frame; accepted AW/W/B tracked; descriptor cookie/policy/length in CQ; CPU CSR CQ producer and IRQ only after successful packet B + CQ B |
-| `ETH_RX_MODELED_DDR` | Post bounded RX descriptor targeting `memory0.ddr0` simulation AXI RAM across Ethernet0/local + global + memory-local NoCs | Read back exact bytes from second initiator, check B and CQ ordering, label physical DDR controller/PHY unmeasured |
-| `ETH_TX_SRAM_GMII` | CPU/host posts TX descriptor pointing to SRAM and rings TX doorbell; upstream `axi_dma_rd` sends frame to MAC via TX FIFO | AXI AR/RLAST confirms read; physical GMII monitor verifies emitted bytes + FCS; TX CQ/IRQ only after GMII-end marker and successful CQ B, not merely FIFO admission |
-| `ETH_HOST_PCIe_VISIBILITY` | Modeled PCIe host/CPU uses shared NoC to read RX buffer and CQ, then posts a TX descriptor (or exchanges via SRAM) | Host-side read data, completion record, and initiator/correlation metadata match Ethernet observed AXI traffic; do not claim physical PCIe LTSSM, PHY or host-memory outbound DMA |
-| `ETH_CPU_CQ_AUDIT` | CPU0 INIT programs Config NoC queue CSRs + policy + descriptor/CQ bases; RUN includes RX/TX; CHECK reads CQ and acknowledges interrupt | Real CPU0 C MMIO reads/writes, same `sw/ethernet/eth_queue_abi.h` and host Python ABI; check producer/consumer, cookie/status/length, no early IRQ; per-step JSONL, passive AXI, GMII, and NoC diagram agree on exact SHA |
+## Ethernet #64 remaining acceptance checklist
 
-These names must be present in the shared INIT/RUN/CHECK report. Every CHECK must use actual passive channel handshakes and independent readback; do not infer success from a command/driver invocation.
+- [x] Real one-MAC RX/TX and FCS/CDC, descriptor DMA, true memory AW/W/B and AR/R, B-gated 32-byte CQ, no-buffer and bad-FCS negatives.
+- [x] Generated opt-in Data NoC packets to SRAM and modeled DDR, Config NoC CSR via BFM, source/manifest check and independent readback; dedicated 3/3 Ethernet jobs passed.
+- [ ] Compiled **CPU0 C** owns its data/config ports, not the test BFM, and uses `sw/ethernet/eth_queue_abi.h` and shared C APIs to program at least one RX and one TX queue (descriptor, policy, ring bases, doorbell).
+- [ ] External GMII simulation sends one RX frame and observes one TX frame. C/verification reports check payload bytes in SRAM, valid GMII TX FCS, 32-byte RX/TX CQ cookie/length/status, producer/consumer, IRQ assertion and acknowledgment **only after real AXI completion**.
+- [ ] Pass same exact-head Ethernet RTL/CPU test using existing INIT/RUN/CHECK and independent B/R channel data, not injected success pulses or memory backdoors. Keep default generated Ethernet reserved; audit actual opt-in top ports/manifest/reported actor, and report only measured paths.
+- [ ] Required merge CI passes on head, or any unrelated global stress regression is explicitly documented in #75/#78 and handled under repository merge protections; no silent assertion suppression.
 
-## Fixed V1 constraints
+## Deferred to #34: full Ethernet–DDR–CPU/iDMA–PCIe integration
 
-- One RX queue, one TX queue, one selected policy; accept only a complete FCS-checked frame, no CPU per-frame handoff.
-- RX/TX packet buffers are restricted to bounded physical memory apertures. V1 primary-region (`region_id=0`) SRAM remains the default. Optional `region_id=1` maps **only** an explicitly configured second window (for the modeled DDR test: `0x140000000`, 32 MiB), with 64-bit non-aliasing and crossing rejection. Do not expose a catch-all DDR/host-physical DMA window. RX descriptor fetch and RX/TX DMA must use identical whitelist settings.
-- Reuse existing pinned `ethernet0_mac_gmii`, `ethernet_rx_frame_stager`, `ethernet_rx_queue_engine`, `ethernet_rx_desc_fetch`, `ethernet_rx_dma`, `ethernet_tx_dma`, `ethernet_cq_axi_writer`, upstream `axi_dma_rd/wr` and upstream AXI arbiter/mux.
-- Source of truth `config/soc.yaml`; generated `gen/chip/soc_top.sv`, `gen/chip/manifest.json`, `gen/noc/`, `gen/diagrams/` and README must be regenerated by `make gen` and pass `make check-generated` on identical SHA.
-- Do not flip `reserved_idle` / `explicit_axi_error` or change graph edges to wired until actual top-level instances/ports are connected and proven.
-- Never promote `GENERATED_STRUCTURAL` to `MEASURED` without traffic at destination. List all PHY, DDR controller, physical PCIe and stress/performance as `UNMEASURED`.
+The original five named stages are **not prerequisites for closing Ethernet #64**. They must still run before declaring the complete combined system functional:
 
-## Remaining implementation and closure gates
+| Shared final step | Full-system proof |
+| --- | --- |
+| `ETH_RX_SRAM` | Real GMII to Ethernet SRAM, readback and B-gated CQ |
+| `ETH_RX_MODELED_DDR` | Real GMII to modeled DDR through the actual generated Data NoCs |
+| `ETH_TX_SRAM_GMII` | Descriptor-driven SRAM to physical GMII TX/FCS and CQ |
+| `ETH_HOST_PCIe_VISIBILITY` | Modeled Root Complex receives actual TLP completions with *Ethernet-produced* data/CQ via existing PCIe SRAM + iDMA staging |
+| `ETH_CPU_CQ_AUDIT` | Real CPU0 C config/control and CQ audit integrated with host test |
 
-- [x] One MAC for RX/TX; true GMII wire-end, FCS/CDC, queue-driven descriptors, upstream RX/TX DMA, packet and CQ AXI completion ordering.
-- [x] RX/TX SRAM and bounded modeled-DDR source/destination readbacks through the *opt-in generated* Ethernet Data NoC.
-- [x] Six descriptor/payload/CQ initiators through pinned PULP AXI mux; independent Config NoC AXI4-to-Lite queue CSR register access by CPU0 AXI BFM.
-- [x] Optional generated `soc_top` and manifest instantiated without changing default reserved variants; generator contract tests and `make check-generated` pass.
-- [x] Standalone bad-FCS, unposted-buffer, and stalled CQ B negatives; full-chip unposted-buffer negative.
-- [ ] Real CPU0 C firmware programs Ethernet queue CSRs and reads CQ/IRQ (without a substitute AXI BFM).
-- [ ] Real modeled PCIe RC sees the **Ethernet-produced** payload and CQ through shared NoC or explicitly checked PCIe SRAM/iDMA staging, with actual matched completion TLPs.
-- [ ] All **five original named** steps above have `StepRecorder` INIT/RUN/CHECK events, verified completion and appropriate passive AXI/TLP/GMII correlations; `trace_phase` alone is not a completed step report.
-- [ ] Variant-aware required-port audit, route diagram, reported actors and exact-head simulation correlate; default diagram remains reserved/unmeasured.
-- [ ] Resolve concurrent global NoC B-response ordering [#75](https://github.com/r987r/xezim-hello-world/issues/75) / [#78](https://github.com/r987r/xezim-hello-world/issues/78) before general fabric signoff; do not make physical DDR controller a dependency of initial modeled DDR smoke.
+Under #34 the five stages must use the existing shared `StepRecorder`, passive AXI/TLP/GMII evidence and exact variant source/diagram reporting; current `trace_phase` labels are insufficient for the cross-protocol signoff. Original stage names retained for compatibility. A failing concurrent same-ID `NoBResponseIdQueue` regression (#75/#78) is tracked independently and must not be hidden or waived for broader fabric qualification.
 
-## Integration with other tracks (not a claim of three-way completion)
+## Bounds and source of truth
 
-- [Merged PCIe PR #60](https://github.com/r987r/xezim-hello-world/pull/60) provides initial host TLP + CPU iDMA **staging through PCIe SRAM to modeled DDR**, with verified return data and 27 complete flow steps. Its independent generic SuperNoC stress/negative CI fails `NoBResponseIdQueue` around 227.52 µs; [issue #75](https://github.com/r987r/xezim-hello-world/issues/75) owns reproduction/repair. #41 closed for PCIe MVP; [#76](https://github.com/r987r/xezim-hello-world/issues/76) covers outbound DMA/PHY/stress. Do not suppress this assertion.
-- [DDR-B draft PR #74](https://github.com/r987r/xezim-hello-world/pull/74) has an independently checked AXI-to-Wishbone control target, **not** a full-chip real LiteDRAM Data/Config NoC attachment. The fast AXI RAM model is sufficient for initial Ethernet/PCIe communication; real controller qualification remains #40.
-- For initial combined functional integration, use the existing `memory0.ddr0` modeled window and PCIe BAR↔PCIe SRAM↔iDMA↔modeled DDR, never advertise direct host-visible DDR BAR or a PCIe link PHY. Follow the [multiprotocol integration gate](multiprotocol-integration-readiness.md).
-
-## Source-backed handoff
-
-- Live one-MAC Ethernet RTL is in `rtl/io/ethernet0/ethernet0_mvp.v`; the six-source AXI mux is `ethernet0_axi_mvp.sv` and queue config bridge is `ethernet_queue_axi_regs.sv`.
-- The opt-in generated-chip test is `python3 tools/regress.py chip-ethernet` with result artifacts linked above. Its 85-byte RX/TX and modeled-DDR results are **functional** evidence, not the final CPU/host E2E proof.
-- Reuse existing `sw/ethernet/eth_queue_abi.h`, PCIe host participant, shared `StepRecorder`, and common report/diagram generators for final integration. No competing framework.
+- One RX queue, one TX queue, one policy for MVP. Use pinned upstream MAC, AXI mux and DMA.
+- Primary SRAM region and explicitly bounded modeled-DDR alternate aperture only; reject high-bit aliases, invalid regions, and boundary crossings.
+- `ethernet_mode=True` physically instantiates the six-source AXI mux and queue Config NoC. Default canonical `gen/chip` + topology diagram intentionally show reserved Ethernet endpoints. Compare variant source, AXI reports and actual net connections before merging; do not hand-edit generated artifacts.
+- Keep real DDR4 controller/PHY, outbound host DMA, physical PCIe link and stress/performance out of the first Ethernet MVP acceptance gate.
