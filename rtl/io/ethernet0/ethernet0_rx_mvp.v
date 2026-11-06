@@ -14,7 +14,8 @@ module ethernet0_rx_mvp #(
     parameter [63:0] ALT_BUFFER_BASE=0,
     parameter [63:0] ALT_BUFFER_BYTES=0,
     parameter [63:0] CQ_REGION_BASE=64'h500,
-    parameter [63:0] CQ_REGION_BYTES=64'h200
+    parameter [63:0] CQ_REGION_BYTES=64'h200,
+    parameter integer AXI_ID_WIDTH=4
 )(
     input wire logic_clk, logic_rst,
     input wire gmii_rx_clk, gmii_rx_rst, gmii_tx_clk, gmii_tx_rst,
@@ -30,7 +31,7 @@ module ethernet0_rx_mvp #(
     output wire irq_o,
     output wire frame_drop_o, cq_failed_o,
     output wire rx_error_bad_fcs_o,
-    output wire [3:0] rd_arid,
+    output wire [AXI_ID_WIDTH-1:0] rd_arid,
     output wire [63:0] rd_araddr,
     output wire [7:0] rd_arlen,
     output wire [2:0] rd_arsize,
@@ -40,13 +41,13 @@ module ethernet0_rx_mvp #(
     output wire [2:0] rd_arprot,
     output wire rd_arvalid,
     input wire rd_arready,
-    input wire [3:0] rd_rid,
+    input wire [AXI_ID_WIDTH-1:0] rd_rid,
     input wire [63:0] rd_rdata,
     input wire [1:0] rd_rresp,
     input wire rd_rlast,
     input wire rd_rvalid,
     output wire rd_rready,
-    output wire [3:0] wr_awid,
+    output wire [AXI_ID_WIDTH-1:0] wr_awid,
     output wire [63:0] wr_awaddr,
     output wire [7:0] wr_awlen,
     output wire [2:0] wr_awsize,
@@ -61,11 +62,11 @@ module ethernet0_rx_mvp #(
     output wire wr_wlast,
     output wire wr_wvalid,
     input wire wr_wready,
-    input wire [3:0] wr_bid,
+    input wire [AXI_ID_WIDTH-1:0] wr_bid,
     input wire [1:0] wr_bresp,
     input wire wr_bvalid,
     output wire wr_bready,
-    output wire [3:0] cq_awid,
+    output wire [AXI_ID_WIDTH-1:0] cq_awid,
     output wire [63:0] cq_awaddr,
     output wire [7:0] cq_awlen,
     output wire [2:0] cq_awsize,
@@ -80,7 +81,7 @@ module ethernet0_rx_mvp #(
     output wire cq_wlast,
     output wire cq_wvalid,
     input wire cq_wready,
-    input wire [3:0] cq_bid,
+    input wire [AXI_ID_WIDTH-1:0] cq_bid,
     input wire [1:0] cq_bresp,
     input wire cq_bvalid,
     output wire cq_bready
@@ -123,7 +124,8 @@ module ethernet0_rx_mvp #(
     ethernet_rx_queue_engine #(
       .RING_BASE(RING_BASE),.RING_BYTES(RING_BYTES),
       .BUFFER_BASE(BUFFER_BASE),.BUFFER_BYTES(BUFFER_BYTES),
-      .ALT_BUFFER_BASE(ALT_BUFFER_BASE),.ALT_BUFFER_BYTES(ALT_BUFFER_BYTES)
+      .ALT_BUFFER_BASE(ALT_BUFFER_BASE),.ALT_BUFFER_BYTES(ALT_BUFFER_BYTES),
+      .AXI_ID_WIDTH(AXI_ID_WIDTH)
     ) u_rx_queue (
       .clk(logic_clk),.rst(logic_rst),
       .cfg_valid,.cfg_write,.cfg_addr,.cfg_wdata,.cfg_wstrb,
@@ -180,7 +182,8 @@ module ethernet0_rx_mvp #(
     );
 
     ethernet_cq_axi_writer #(
-      .REGION_BASE(CQ_REGION_BASE),.REGION_BYTES(CQ_REGION_BYTES)
+      .REGION_BASE(CQ_REGION_BASE),.REGION_BYTES(CQ_REGION_BYTES),
+      .AXI_ID_WIDTH(AXI_ID_WIDTH)
     ) u_rx_cq (
       .clk(logic_clk),.rst(logic_rst),
       .req_valid(result_valid),.req_ready(),
