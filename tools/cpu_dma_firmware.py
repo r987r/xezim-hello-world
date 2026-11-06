@@ -32,7 +32,7 @@ def require_tool(name):
     return found
 
 
-def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False):
+def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False, ethernet_cpu_mode=False):
     directory.mkdir(parents=True, exist_ok=True)
     mapping = {r["name"]: int(r["base"], 0)
                for r in cfg["address_map"]["data"] + cfg["address_map"]["config"]}
@@ -62,6 +62,11 @@ def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False):
     }
     if pcie_host_mode:
         macros["SOC_PCIE_SRAM"] = mapping["pcie0.sram"]
+    if ethernet_cpu_mode:
+        if pcie_host_mode:
+            raise ValueError('Ethernet CPU MVP is separate from the PCIe host test')
+        macros['SOC_ETH_SRAM'] = mapping['ethernet0.sram']
+        macros['SOC_ETH_CTRL'] = mapping['ethernet0.ctrl']
     linker = directory / "cpu_dma.ld"
     linker.write_text(
         "ENTRY(cpu_dma_run)\nSECTIONS {\n"
@@ -81,7 +86,8 @@ def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False):
             "-nostdlib", "-fuse-ld=lld", "-Wl,--no-relax",
             "-Wl,--build-id=none", f"-Wl,-T,{linker}",
             *[f"-D{name}=0x{value:x}ULL" for name, value in macros.items()],
-            str(ROOT / "sw/dma/tests/cpu_dma_run.c"),
+            str(ROOT / ('sw/ethernet/tests/eth_cpu_run.c' if ethernet_cpu_mode
+                        else 'sw/dma/tests/cpu_dma_run.c')),
             str(ROOT / "sw/common/memory_pool.c"),
             str(ROOT / "sw/common/memory_pattern.c"),
             str(ROOT / "sw/common/sram_pool.c"),
@@ -108,18 +114,21 @@ def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False):
                 defines=macros, flash_limit=flash_size)
 
 
-def prepare(cfg, noc_manifest, noc_root, output: Path, *, pcie_host_mode=False):
+def prepare(cfg, noc_manifest, noc_root, output: Path, *, pcie_host_mode=False, ethernet_cpu_mode=False):
     from tools import full_chip_gen
     if pcie_host_mode:
         from tools.pcie_chip import host_variant_config
         cfg = host_variant_config(cfg)
-    fw = compile_firmware(cfg, output, pcie_host_mode=pcie_host_mode)
+    fw = compile_firmware(cfg, output, pcie_host_mode=pcie_host_mode,
+                          ethernet_cpu_mode=ethernet_cpu_mode)
     image_prefix = output.relative_to(ROOT).as_posix()
     # Normal generated gen/chip outputs remain byte-for-byte unchanged.
     manifest = full_chip_gen.emit(cfg, noc_manifest, noc_root, output,
                                   cpu0_run_hook=fw["hook"],
                                   image_prefix=image_prefix, cpu_dma_mode=True,
-                                  pcie_host_mode=pcie_host_mode)
+                                  pcie_host_mode=pcie_host_mode,
+                                  ethernet_mode=ethernet_cpu_mode,
+                                  ethernet_cpu_mode=ethernet_cpu_mode)
     image = output / "flash.hex"
     additional = [f"@{HOOK_OFFSET // 8:x}"]
     blob = fw["data"]
@@ -129,7 +138,7 @@ def prepare(cfg, noc_manifest, noc_root, output: Path, *, pcie_host_mode=False):
         output_file.write("\n" + "\n".join(additional) + "\n")
     # Hardware-visible C evidence will be checked against the golden
     # plan and actual accepted AXI events, not a preload.
-    manifest["cpu_dma_firmware"] = {
+    manifest['cpu_ethernet_firmware' if ethernet_cpu_mode else 'cpu_dma_firmware'] = {
         "entry": fw["hook"], "bytes": len(blob), "sha256": fw["sha256"], "file": image_prefix + "/flash.hex",
         "allocation_plan": {name: r.as_dict() for name, r in
                             memory_plan.configured_regions(cfg, profile="boot_live").items()},
