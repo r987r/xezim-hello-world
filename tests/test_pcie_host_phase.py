@@ -71,8 +71,9 @@ class PcieHostPhaseTests(unittest.TestCase):
         self.assertIn("SOC_PCIE_SRAM + 0x500u",firmware)
         self.assertIn("SOC_PCIE_SRAM + 0x600u",firmware)
         self.assertIn("SOC_DDR_BASE + 0x800u",firmware)
-        self.assertIn("soc_dma_chain_build(&desc, across_pcie, 3",firmware)
-        self.assertIn("host_verify[i] !=",firmware)
+        self.assertIn("soc_dma_chain_build(&desc,inbound,2",firmware)
+        self.assertIn("soc_dma_chain_build(&desc,outbound,2",firmware)
+        self.assertIn("readback[i]!=",firmware)
 
     def test_host_contract_rejects_missing_peripheral(self):
         cfg = copy.deepcopy(self.cfg)
