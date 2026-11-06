@@ -1,0 +1,31 @@
+name: DV planned INIT RUN CHECK for every test
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'tools/test_intent.py'
+      - 'tools/publish_site.py'
+      - 'tools/templates/site_runs.html'
+      - 'tests/test_test_intent.py'
+      - 'docs/test-intended-flow.md'
+      - '.github/workflows/dv-test-intent.yml'
+      - 'config/regression.yaml'
+      - 'config/scenarios/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  intent-catalog:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python3 -m pip install 'PyYAML==6.0.3'
+      - name: Validate every configured test has a truthful phase-intent entry
+        run: python3 -m unittest tests.test_test_intent tests.test_scenario_plan -v
