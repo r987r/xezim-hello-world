@@ -110,15 +110,15 @@ jobs:
           python3 tools/ip_fetch.py floonoc pulp_idma verilog_axi
           python3 -m pip install -e .tools/floonoc
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends verilator
+          sudo apt-get install -y --no-install-recommends verilator clang llvm lld
       - name: Resolve source-true chip Bender filelist and compile six-source AXI mux
         run: |
           set -euo pipefail
-          python3 tools/regress.py chip --stage files
-          test -f .tools/regression/chip/sources.f
+          python3 tools/regress.py chip-boot --stage files
+          test -f .tools/regression/chip-boot/sources.f
           verilator --lint-only --timing -Wno-fatal \
             --top-module ethernet0_axi_mvp \
-            -f .tools/regression/chip/sources.f \
+            -f .tools/regression/chip-boot/sources.f \
             rtl/io/ethernet0/ethernet0_axi_mvp.sv \
             rtl/io/ethernet0/ethernet0_mvp.v \
             rtl/io/ethernet0/ethernet0_rx_mvp.v \
@@ -139,5 +139,5 @@ jobs:
         if: always()
         with:
           name: ethernet-axi-mux-sources-${{ github.run_id }}
-          path: .tools/regression/chip/sources.f
+          path: .tools/regression/chip-boot/sources.f
           if-no-files-found: warn
