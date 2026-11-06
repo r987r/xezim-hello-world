@@ -2,6 +2,26 @@
 
 Tracked by [issue #36](https://github.com/r987r/xezim-hello-world/issues/36), [draft PR #51](https://github.com/r987r/xezim-hello-world/pull/51) and parent #34.
 
+## Current status — dedicated PCIe0 and real full-chip DMA smoke
+
+**Initial PCIe0 path verified in [PR #60](https://github.com/r987r/xezim-hello-world/pull/60)**:
+[exact-head CI 42134213227](https://github.com/r987r/xezim-hello-world/actions/runs/42134213227)
+passes a real PCIe TLP→AXI master attached to the **dedicated**
+`pcie0_local_data` FlooNoC and PULP SRAM, with real CPU0/iDMA through
+independent local/global NoCs and a **modeled DDR** target. Modeled host
+BAR0 writes 64 bytes, CPU0 iDMA copies them PCIe SRAM→DDR→CPU SRAM,
+and a separate 64-byte SRAM→DDR→PCIe SRAM transfer is pulled via host
+BAR0 and compared. The same run checks 27 INIT/RUN/CHECK steps, 47,864
+complete AXI transactions, 3,741 matched PCIe read/completion pairs,
+8 posted writes and a measured PCIe read TLP mean of 130.083 ns.
+Generated PCIe RTL is marked live in this variant; no physical PHY or
+outbound DMA is claimed. See [shared full-chip PCIe scope](../../docs/pcie0-host-phases.md).
+
+**The two stages below are historical isolated milestones**, not a
+description of the current full-chip topology. The first isolated test
+used `cocotbext-axi AxiRam`; the second temporarily reused
+Compute0's mesh before the dedicated PCIe0 FlooNoC was generated.
+
 ## Verified simulation stages
 
 **Stage 1 — real PCIe TLP-to-AXI4 bridge**
@@ -24,7 +44,10 @@ cocotbext-pcie modeled RootComplex + Endpoint
     -> upstream PULP tc_sram RTL (0x10000000, 16 KiB)
 ```
 
-Standalone `pcie_noc_tb.sv` reuses the **existing Compute0 local data NoC**, connecting its CPU initiator NI to the PCIe bridge for isolated testing. It instantiates the same existing SRAM target RTL as the chip. There is **no new PCIe0 NoC**, no CPU involved in data forwarding, no configuration-NoC integration, and no modifications to `soc.yaml`, shared Bender source sets or generated `gen/`. That work belongs to #38 and #41.
+The **historical** standalone `pcie_noc_tb.sv` reuses the **existing Compute0 local data NoC**, connecting its CPU initiator NI to the PCIe bridge for isolated testing. It instantiates the same existing SRAM target RTL as the chip. That **isolated stage** has no dedicated PCIe0 NoC, no CPU involvement,
+and no configuration-NoC connection. The later full-chip test in PR #60
+**does** instantiate the dedicated PCIe0 local data/config networks and
+CPU/DMA coordination. PCIe management CSRs are still reserved.
 
 [Real RTL CI at commit d4f307c68019](https://github.com/r987r/xezim-hello-world/actions/runs/41968540566) passed both jobs. The NoC test checks three PCIe BAR read/write patterns against real SRAM readback, and monitors 12 SRAM write and 12 read events through real RTL. The simulator logs `PCIE0_REAL_NOC_SRAM_PASS vectors=3 SRAM_WRITES=12 SRAM_READS=12` at 890 ns simulated time.
 
@@ -49,12 +72,19 @@ python3 dv/pcie0/run_noc_smoke.py
 
 The [dedicated workflow](../../.github/workflows/pcie0-bridge.yml) runs Icarus/Cocotb for stage 1 and Verilator/Cocotb for stage 2. A new GitHub Pages deployment is not needed for isolated PCIe PR smoke tests.
 
-## Remaining acceptance work
+## Remaining optional PCIe qualification (outside initial smoke)
 
-- Add a dedicated **PCIe0** local data/config FlooNoC and CSRs through #38, then global SoC wiring via #41; the currently tested local NoC belongs to Compute0.
+- The dedicated **PCIe0** local data/config FlooNoCs and global SoC links
+  are now generated and the data bridge is attached. Real PCIe management
+  CSRs remain an unimplemented future endpoint.
 - Add multiple outstanding tags, completion fragmentation and negative cases: Unsupported Request, out-of-window, timeouts, burst stalls/backpressure and reset recovery.
-- Record source/target addresses, IDs, per-hop accepted transaction timing, PCIe completion evidence and independent checks using the **existing** protocol trace infrastructure, not another BFM/reporting framework.
+- Maintain the now-working unified PCIe TLP/AXI/DDR-model trace and
+  host-vs-controller latency report. Expand it to future traffic and PCIe
+  outbound/DMA modes without a second monitor or report engine.
 - Test PCIe Endpoint-initiated outbound TLP/DMA into actual Root Complex host memory; writing PCIe0 SRAM alone is **not host delivery**.
 - Qualify physical PCIe controller/PIPE/LTSSM/SerDes separately; all link/configuration behavior in these tests is modeled.
 
-Keep PR #51 as a **draft** until complete issue #36 acceptance gates. The current passing stage is a real RTL data-path milestone, not a complete PCIe subsystem/PHY.
+PR #51 is the historical standalone stage; PR #60 carries the current
+combined full-chip path. The initial functional path is proven, while
+multi-tag/backpressure, controller CSR, true outbound host-memory DMA and
+physical PHY qualification are separate follow-ups.
