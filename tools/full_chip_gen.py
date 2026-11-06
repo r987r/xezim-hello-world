@@ -145,7 +145,13 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
         if request_field(ch,member):
             lines += [f'  assign {field("cfgprobe_req",ch,member)} = {pin};']
         else:
-            lines += [f'  assign {pin} = {field(rsp(cfg_port),ch,member)};']
+            if real_ddr_mode:
+                # CPU0 must NOT leak later B/R responses to the preboot
+                # initialization AxiMaster. It stays alive after ownership
+                # handoff; mirror response only while CPU is held in reset.
+                lines += [f"  assign {pin} = ddr_init_mode_i ? {field(rsp(cfg_port),ch,member)} : '0;"]
+            else:
+                lines += [f'  assign {pin} = {field(rsp(cfg_port),ch,member)};']
     lines += ["  assign cfgprobe_req.aw.atop = '0;",
               "  assign cfgprobe_req.aw.user = '0;",
               "  assign cfgprobe_req.w.user = '0;",

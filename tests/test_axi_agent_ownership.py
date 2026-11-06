@@ -104,6 +104,7 @@ class AgentOwnershipTests(unittest.TestCase):
         self.assertIn("await initialize_controller(dut)", boot)
         self.assertIn("release += ' && !ddr_init_mode_i'", gen)
         self.assertIn("ddr_init_mode_i ? cfgprobe_req", gen)
+        self.assertIn("ddr_init_mode_i ? {field(rsp(cfg_port),ch,member)} : '0;", gen)
         self.assertNotIn("probe = AxiMaster", driver)
 
     def test_cpu0_bfm_only_when_real_cpu_held_reset(self):
