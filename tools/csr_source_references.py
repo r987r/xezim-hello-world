@@ -199,6 +199,18 @@ def attach_sources(catalog, *, root=ROOT, config_path=None, source_dir=None,
         raise SourceCatalogError("no CSR source plugins installed")
     plugins = [_load(p, root) for p in paths]
     for spec, registers, provenance in plugins:
+        # An existing compatible IP type must expose the expected declared
+        # Config-NoC CSR aperture. Silently hiding a new instance is a bug.
+        present = {r["name"] for r in regions}
+        for subsystem in subsystems.values():
+            if subsystem.get("type") != spec["subsystem_type"]:
+                continue
+            if spec.get("subsystem_ip") and subsystem.get("ip") != spec["subsystem_ip"]:
+                continue
+            expected = subsystem["name"] + "." + spec["aperture_suffix"]
+            if expected not in present:
+                raise SourceCatalogError(
+                    "configured CSR-capable subsystem lacks aperture: " + expected)
         for r in regions:
             owner, sep, suffix = r["name"].partition(".")
             if not sep or suffix != spec["aperture_suffix"]:
@@ -223,6 +235,8 @@ def attach_sources(catalog, *, root=ROOT, config_path=None, source_dir=None,
     known = json.loads(gaps_path.read_text())
     if known.get("schema_version") != 1 or not isinstance(known.get("known_gaps"), dict):
         raise SourceCatalogError("invalid CSR known-gap registry")
+    for r in regions:
+        r["source_gap_reason"] = known["known_gaps"].get(r["name"]) if r["name"] in gaps else None
     unacknowledged = sorted(set(gaps) - set(known["known_gaps"]))
     if unacknowledged:
         raise SourceCatalogError(
