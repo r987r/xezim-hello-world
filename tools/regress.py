@@ -69,12 +69,12 @@ def load_config(path):
             raise ValueError(f'{name}: build reuse is only supported by cocotb-verilator')
         if test.get('mode', 'simulate') not in ('simulate', 'compile') or (test.get('mode') == 'compile' and test['engine'] != 'xezim'):
             raise ValueError(f'{name}: mode=compile requires the Xezim engine')
-        if test.get('firmware_mode') not in (None, 'cpu_dma', 'pcie_host', 'pcie_dma_host'):
+        if test.get('firmware_mode') not in (None, 'cpu_dma', 'pcie_host', 'pcie_dma_host', 'ddr_cpu_dma'):
             raise ValueError(f'{name}: unknown compiled CPU firmware mode')
         if 'firmware_mode' in test and (
             test['engine'] != 'cocotb-verilator' or
             'chip_boot' not in test.get('bender_targets', []) or
-            (test['firmware_mode'] in ('cpu_dma','pcie_dma_host')
+            (test['firmware_mode'] in ('cpu_dma','pcie_dma_host','ddr_cpu_dma')
              and 'dma' not in test.get('bender_targets', []))):
             raise ValueError(f'{name}: selected test needs real chip RTL and specified active IP')
         if 'report' in test:
@@ -395,6 +395,26 @@ def run_target(name, test, resolver, options):
         sources += [str(bridge)] + [
             str(ROOT/'.tools/verilog_pcie'/item)
             for item in vendor_pin['rtl_modules'] if item != 'rtl/pcie_axi_master.v']
+    if test.get('firmware_mode') == 'ddr_cpu_dma':
+        # Same CPU C/iDMA INIT/RUN/CHECK; opt-in generated 16KiB
+        # independent Config NoC and pinned LiteDRAM memory target.
+        if str(ROOT) not in sys.path:
+            sys.path.insert(0, str(ROOT))
+        import ddr_chip
+        from cpu_dma_firmware import prepare as prepare_cpu_dma
+        cfg = yaml.safe_load((ROOT/'config/soc.yaml').read_text())
+        info = ddr_chip.prepare(cfg, out)
+        variant = out / 'variant'
+        prepare_cpu_dma(info['variant_cfg'], info['noc_manifest'], info['noc_root'],
+                        variant, real_ddr_mode=True,
+                        ddr_wb_base=info['wb_base'], ddr_wb_adr_bits=info['wb_bits'])
+        generated_root = ROOT/'gen/chip'
+        replacements = {'soc_top.sv', 'full_chip_tb.sv'}
+        sources = [str(variant/Path(filename).name)
+                   if Path(filename).parent == generated_root
+                   and Path(filename).name in replacements else filename
+                   for filename in sources]
+        sources = ddr_chip.source_closure(sources, info)
     sources = list(dict.fromkeys(sources))
     includes = list(dict.fromkeys(includes))
     defines = list(dict.fromkeys(defines))
