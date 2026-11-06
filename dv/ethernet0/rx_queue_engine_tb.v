@@ -41,7 +41,9 @@ wire [7:0] cq_awlen,cq_wstrb;
 wire [2:0] cq_awsize,cq_arprot;
 wire [1:0] cq_awburst,cq_bresp;
 wire cq_awlock,cq_awvalid,cq_awready,cq_wlast,cq_wvalid,cq_wready;
-wire cq_bvalid,cq_bready;
+wire cq_bvalid,cq_bready,cq_writer_bready;
+reg cq_allow_b=0;
+assign cq_bready = cq_allow_b && cq_writer_bready;
 reg [15:0] cq_check_araddr=0;
 reg cq_check_arvalid=0,cq_check_rready=0;
 wire cq_check_arready,cq_check_rvalid,cq_check_rlast;
@@ -95,7 +97,7 @@ ethernet_cq_axi_writer #(
  .m_axi_wlast(cq_wlast),.m_axi_wvalid(cq_wvalid),
  .m_axi_wready(cq_wready),.m_axi_bid(cq_bid),
  .m_axi_bresp(cq_bresp),.m_axi_bvalid(cq_bvalid),
- .m_axi_bready(cq_bready)
+ .m_axi_bready(cq_writer_bready)
 );
 assign cpl_written_i = cq_written;
 // Separate CQ RAM in this focused adapter test: its frontdoor AR/R is used
@@ -378,6 +380,11 @@ initial begin
  rd_reg(8'h38,0);
  check(!irq,"IRQ withheld until CQ record actually written");
  check_packet(16'h2100,85,37);
+ // Hold BREADY low until readback is complete. CQ producer/IRQ MUST stay
+ // unchanged while a real completion AXI BVALID is stalled.
+ rd_reg(8'h38,0);
+ check(!irq && cq_b_count==0,"no CQ retirement during BREADY stall");
+ @(negedge clk);cq_allow_b=1;
  // The same RTL CQ writer now consumes the queued DMA result, writes four
  // 64-bit words using actual upstream axi_dma_wr, and observes AXI B.
  // No testbench completion pulse is injected.
