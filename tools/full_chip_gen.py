@@ -60,12 +60,17 @@ def dma_params_for(cfg, core):
 
 
 def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
-         image_prefix='gen/chip', cpu_dma_mode=False, pcie_host_mode=False):
+         image_prefix='gen/chip', cpu_dma_mode=False, pcie_host_mode=False,
+         ethernet_mode=False):
     """Emit standard chip, or opt-in CPU DMA firmware variant (same RTL/checker)."""
     if cpu_dma_mode != (cpu0_run_hook is not None):
         raise ValueError('CPU DMA mode requires a valid compiled C hook')
     if pcie_host_mode:
         cfg = pcie_chip.host_variant_config(cfg)
+    ethernet = [s for s in cfg['subsystems'] if s['type']=='peripheral' and
+                s.get('ip')=='ethernet_queue_mac']
+    if ethernet_mode and len(ethernet)!=1:
+        raise ValueError('Ethernet mode requires one configured Ethernet queue MAC')
     fw, firmware = chip_bootgen.emit(cfg, out, cpu0_run_hook=cpu0_run_hook,
                                      pcie_host_phase=pcie_host_mode)
     nets = json.loads((noc_root/'manifest.json').read_text())['networks']
@@ -103,6 +108,15 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
         lines += [
             '  output logic [31:0] pcie_sram_write_count, pcie_sram_read_count,',
             '  output logic [63:0] pcie_sram_last_write_addr, pcie_sram_last_read_addr,'
+        ]
+    if ethernet_mode:
+        lines += [
+            '  input logic gmii_rx_clk, gmii_rx_rst, gmii_tx_clk, gmii_tx_rst,',
+            '  input logic [7:0] gmii_rxd,',
+            '  input logic gmii_rx_dv, gmii_rx_er,',
+            '  output logic [7:0] gmii_txd,',
+            '  output logic gmii_tx_en, gmii_tx_er, eth_irq_o, eth_drop_o,',
+            '  output logic eth_bad_fcs_o, eth_tx_failed_o,',
         ]
     lines[-1] = lines[-1].rstrip(',')
     lines += [');', '  import chip_types_pkg::*;']
