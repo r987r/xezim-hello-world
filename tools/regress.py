@@ -25,7 +25,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ENGINES = {'xezim', 'xezim-compile', 'verilator-lint', 'cocotb-verilator'}
 FIELDS = {'engine', 'sources', 'ip', 'top', 'args', 'pass', 'expect_failure',
           'timeout_s', 'memory_config', 'boot_relocate', 'module', 'test_dir',
-          'build', 'reuse_build', 'env', 'seed', 'bender_targets', 'mode', 'report', 'firmware_mode'}
+          'build', 'reuse_build', 'env', 'seed', 'bender_targets', 'mode', 'report', 'firmware_mode', 'opt_in'}
 
 
 def expand(config, names, stack=()):
@@ -69,6 +69,8 @@ def load_config(path):
             raise ValueError(f'{name}: build reuse is only supported by cocotb-verilator')
         if test.get('mode', 'simulate') not in ('simulate', 'compile') or (test.get('mode') == 'compile' and test['engine'] != 'xezim'):
             raise ValueError(f'{name}: mode=compile requires the Xezim engine')
+        if 'opt_in' in test and type(test['opt_in']) is not bool:
+            raise ValueError(f'{name}: opt_in must be boolean')
         if test.get('firmware_mode') not in (None, 'cpu_dma', 'pcie_host', 'pcie_dma_host', 'ddr_cpu_dma'):
             raise ValueError(f'{name}: unknown compiled CPU firmware mode')
         if 'firmware_mode' in test and (
@@ -151,8 +153,12 @@ def load_config(path):
                     raise ValueError(f'{name}: invalid generic protocol report configuration: {exc}') from exc
     for name in config['suites']:
         expand(config, [name])
-    if set(expand(config, ['full'])) != set(config['tests']):
-        raise ValueError('full suite must cover every declared test')
+    opt_in = {name for name, test in config['tests'].items() if test.get('opt_in') is True}
+    required = set(config['tests']) - opt_in
+    if set(expand(config, ['full'])) != required:
+        raise ValueError('full suite must cover every non-opt-in declared test')
+    if any(not any(name in expand(config, [suite]) for suite in config['suites'] if suite != 'full') for name in opt_in):
+        raise ValueError('opt-in regression must remain addressable through a named suite')
     return config
 
 
