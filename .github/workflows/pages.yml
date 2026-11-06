@@ -122,6 +122,7 @@ jobs:
         run: |
           python3 -m pip install 'selenium==4.38.0'
           python3 tests/smoke_architecture_browser.py
+          python3 tests/smoke_address_map_browser.py
       - name: Upload diagram screenshots for visual review
         if: always()
         uses: actions/upload-artifact@v4
