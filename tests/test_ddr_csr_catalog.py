@@ -125,7 +125,7 @@ class NativeDdrCsrTests(unittest.TestCase):
         with self.assertRaises((DdrCsrError,address_map.AddressMapError)):
             self.generate(variant=broken)
         transport=copy.deepcopy(self.transport)
-        transport["generated_wb_base"]=0
+        transport["generated_wb_base"]=0x4000
         with self.assertRaisesRegex(DdrCsrError,"required"):
             self.generate(transport=transport)
         transport=copy.deepcopy(self.transport)
