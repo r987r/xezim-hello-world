@@ -81,6 +81,17 @@ class SuperNoCConnectivityTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "missing/ambiguous NoC decode"):
             self.emit_profiles(self.soc, mutate)
 
+    def test_supernoc_runtime_exercises_per_initiator_axi_id_ordering(self):
+        """Do not silently drop the directed routed RTL ordering regression."""
+        source = (ROOT / "dv/supernoc/test_supernoc.py").read_text()
+        self.assertIn("await same_id_local_global_ordering(dut, masters, sinks, memory)", source)
+        self.assertLess(source.index("await same_id_local_global_ordering(dut, masters, sinks, memory)"),
+                        source.index("trace_phase('Burst, byte-strobe and channel-stall stress')"))
+        for case in ("local SRAM->DDR", "remote SRAM->DDR",
+                     "DDR->local SRAM", "Same numeric ID across independent initiators",
+                     "older same-ID B", "older same-ID R", "DDR/HBM"):
+            self.assertIn(case, source)
+
     def test_cross_network_width_mismatch_is_rejected(self):
         def mutate(name, config):
             if name == "global_data":

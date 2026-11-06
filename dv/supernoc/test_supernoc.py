@@ -82,6 +82,180 @@ async def transfer(agent, desc, memory, address, pattern, txn_id=0, readonly=Fal
     return target
 
 
+
+async def same_id_local_global_ordering(dut, masters, sinks, memory):
+    """Exercise AXI ordering at the FIRST split and again at the global split.
+
+    Earlier AW/AR and later AW/AR carry the same source ID but route to
+    different targets. Delaying the earlier target B/R forces an actual
+    cross-destination race. Different B responses / read payloads make a
+    swapped completion observable at the originating initiator.
+    """
+    trace_phase("Same-ID B/R ordering: local vs global, remote SRAM vs DDR")
+    all_data = [x for x in CONTRACT["masters"] if x["plane"] == "data"]
+    routes_by_source = {}
+    b_cases = r_cases = 0
+
+    for index, desc in enumerate(CONTRACT["masters"]):
+        if desc["plane"] != "data":
+            continue
+        # Source-true route selection: require each Data-NoC initiator to
+        # reach its own local SRAM, at least one other subsystem's SRAM,
+        # and Memory0 DDR. Never silently skip an initiator.
+        routes = []
+        for region in desc["regions"]:
+            if region["access"] != "read_write" or region["size"] < 0x4000:
+                continue
+            address = region["base"] + 0x2c00 + index * 0x40
+            routes.append((address, expected_sink(desc, address, 8)))
+        local = next((r for r in routes
+                      if r[1] == f"s_{desc['network']}_sram"), None)
+        remote = next((r for r in routes
+                       if r[1].endswith("_sram") and r[1] != (local[1] if local else None)), None)
+        ddr = next((r for r in routes
+                    if r[0] >= 0x100000000 and r[0] < 0x140000000
+                    and r[1] == "s_memory0_local_data_target_crossbar"), None)
+        hbm = next((r for r in routes
+                    if r[0] >= 0x140000000 and r[0] < 0x180000000
+                    and r[1] == "s_memory0_local_data_target_crossbar"), None)
+        assert all((local, remote, ddr, hbm)), (
+            f"{desc['name']}: missing local/global/DDR/HBM path in generated manifest")
+        routes_by_source[desc["name"]] = (desc, local, remote, ddr, hbm)
+        master = masters[desc["name"]]
+        monitor = desc["network"] + "." + desc["endpoint"]
+
+        async def check_b_order(older, newer, label):
+            old_addr, old_sink = older
+            new_addr, new_sink = newer
+            slave = sinks[old_sink]
+            # Make the older B a deliberate SLVERR; the younger B is OKAY.
+            # Thus even when the master sees the same BID in both responses,
+            # a response-order inversion is detectable.
+            slave.write_if.target = AddressSpace(size=1 << desc["addr_width"])
+            slave.write_if.b_channel.set_pause_generator(
+                itertools.chain(itertools.repeat(1, 120), itertools.repeat(0)))
+            expect_axi_response(monitor, "write", old_addr, AxiResp.SLVERR,
+                                "Expected older same-ID B error: " + label)
+            try:
+                first = cocotb.start_soon(master.write(old_addr, b"OLDERROR", awid=1))
+                # Allow AW to launch before starting another AW with BID=1.
+                for _ in range(6):
+                    await RisingEdge(dut.clk_i)
+                second = cocotb.start_soon(master.write(new_addr, b"NEWDATA!", awid=1))
+                old_result = await bounded(first, label + " older B")
+                new_result = await bounded(second, label + " newer B")
+                assert old_result.resp == AxiResp.SLVERR, (
+                    f"{label}: older same-ID B was overtaken (got {old_result.resp})")
+                assert new_result.resp == AxiResp.OKAY, (
+                    f"{label}: newer same-ID B did not return OKAY ({new_result.resp})")
+                assert await memory[new_sink].read(new_addr, 8) == b"NEWDATA!", (
+                    f"{label}: younger target data corrupted/misrouted")
+            finally:
+                slave.write_if.b_channel.set_pause_generator(itertools.repeat(0))
+                slave.write_if.target = memory[old_sink]
+
+        async def check_r_order(older, newer, label):
+            old_addr, old_sink = older
+            new_addr, new_sink = newer
+            old_addr += 0x10
+            new_addr += 0x10
+            old_bytes = b"OLDER_R!"
+            new_bytes = b"NEWER_R!"
+            await memory[old_sink].write(old_addr, old_bytes)
+            await memory[new_sink].write(new_addr, new_bytes)
+            channel = sinks[old_sink].read_if.r_channel
+            channel.set_pause_generator(
+                itertools.chain(itertools.repeat(1, 120), itertools.repeat(0)))
+            try:
+                first = cocotb.start_soon(master.read(old_addr, 8, arid=1))
+                for _ in range(6):
+                    await RisingEdge(dut.clk_i)
+                second = cocotb.start_soon(master.read(new_addr, 8, arid=1))
+                old_result = await bounded(first, label + " older R")
+                new_result = await bounded(second, label + " newer R")
+                assert old_result.resp == new_result.resp == AxiResp.OKAY, (
+                    f"{label}: non-OKAY same-ID R response")
+                assert old_result.data == old_bytes, (
+                    f"{label}: older same-ID R overtaken; got {old_result.data.hex()}")
+                assert new_result.data == new_bytes, (
+                    f"{label}: newer same-ID R mispaired; got {new_result.data.hex()}")
+            finally:
+                channel.set_pause_generator(itertools.repeat(0))
+
+        # Two ordering boundaries with conflicting older/newer B statuses:
+        # local vs global and two distinct global destinations.
+        await check_b_order(local, ddr, desc["name"] + " local SRAM->DDR")
+        await check_b_order(remote, ddr, desc["name"] + " remote SRAM->DDR")
+        await check_b_order(ddr, local, desc["name"] + " DDR->local SRAM")
+        b_cases += 3
+        await check_r_order(local, ddr, desc["name"] + " local SRAM->DDR")
+        await check_r_order(remote, ddr, desc["name"] + " remote SRAM->DDR")
+        r_cases += 2
+
+        # DDR and HBM share the Memory0 ingress endpoint in this particular
+        # SuperNoC TB, so do not falsely claim it models internal DDR/HBM
+        # controller scheduling. Still verify same-ID address non-aliasing.
+        aw0 = cocotb.start_soon(master.write(ddr[0] + 0x20, b"DDRDATA!", awid=1))
+        for _ in range(6):
+            await RisingEdge(dut.clk_i)
+        aw1 = cocotb.start_soon(master.write(hbm[0] + 0x20, b"HBMDATA!", awid=1))
+        assert (await bounded(aw0, "DDR write B")).resp == AxiResp.OKAY
+        assert (await bounded(aw1, "HBM write B")).resp == AxiResp.OKAY
+        assert await memory[ddr[1]].read(ddr[0] + 0x20, 8) == b"DDRDATA!"
+        assert await memory[hbm[1]].read(hbm[0] + 0x20, 8) == b"HBMDATA!"
+        b_cases += 2
+        dut._log.info("PASS same-ID B/R ordering for %s: local/global, remote/DDR, DDR/local, DDR/HBM",
+                      desc["name"])
+
+    # Same BID=1 is legal on two independent initiators. Test simultaneous
+    # writes using separate source ports of the same local NoC (CPU and DMA),
+    # where the two flows must not accidentally share response bookkeeping.
+    paired = 0
+    by_network = {}
+    for desc in all_data:
+        by_network.setdefault(desc["network"], []).append(desc)
+    trace_phase("Same numeric ID across independent initiators")
+    for network, group in by_network.items():
+        if len(group) < 2:
+            continue
+        first_desc, second_desc = group[:2]
+        first_master = masters[first_desc["name"]]
+        second_master = masters[second_desc["name"]]
+        _, _, first_remote, _, _ = routes_by_source[first_desc["name"]]
+        _, _, _, second_ddr, _ = routes_by_source[second_desc["name"]]
+        old_addr, old_sink = first_remote
+        new_addr, new_sink = second_ddr
+        # Source-specific scratch addresses were generated above, so this
+        # second writer cannot alias an earlier matching target byte range.
+        slave = sinks[old_sink]
+        slave.write_if.target = AddressSpace(size=1 << first_desc["addr_width"])
+        slave.write_if.b_channel.set_pause_generator(
+            itertools.chain(itertools.repeat(1, 120), itertools.repeat(0)))
+        expect_axi_response(first_desc["network"] + "." + first_desc["endpoint"],
+                            "write", old_addr, AxiResp.SLVERR,
+                            "Independent initiators reuse BID 1: " + network)
+        try:
+            first = cocotb.start_soon(first_master.write(old_addr, b"OLDERROR", awid=1))
+            for _ in range(6):
+                await RisingEdge(dut.clk_i)
+            second = cocotb.start_soon(second_master.write(new_addr, b"NEWDATA!", awid=1))
+            result_new = await bounded(second, network + " independent DMA B")
+            result_old = await bounded(first, network + " independent CPU B")
+            assert result_old.resp == AxiResp.SLVERR, (
+                f"{network}: response status escaped independent master")
+            assert result_new.resp == AxiResp.OKAY, (
+                f"{network}: same numeric BID confused independent master")
+            assert await memory[new_sink].read(new_addr, 8) == b"NEWDATA!"
+        finally:
+            slave.write_if.b_channel.set_pause_generator(itertools.repeat(0))
+            slave.write_if.target = memory[old_sink]
+        paired += 1
+    assert len(routes_by_source) == len(all_data) and paired, (
+        f"missing directed same-ID coverage: sources={len(routes_by_source)}/"
+        f"{len(all_data)} independent_pairs={paired}")
+    dut._log.info("PASS supernoc same-ID source ordering: %d B, %d R, %d independent-source pairs",
+                  b_cases, r_cases, paired)
+
 @cocotb.test(timeout_time=500, timeout_unit="us")
 async def routed_data_and_config_all_local_global_nocs(dut):
     masters, sinks, memory = await setup(dut)
@@ -120,6 +294,8 @@ async def routed_data_and_config_all_local_global_nocs(dut):
                 baseline_cases += 1
     dut._log.info("PASS controlled one-beat baseline: %d serial route samples, no injected channel pauses",
                   baseline_cases)
+
+    await same_id_local_global_ordering(dut, masters, sinks, memory)
 
     trace_phase('Burst, byte-strobe and channel-stall stress')
     # All five channels stall through upstream pause generators.
