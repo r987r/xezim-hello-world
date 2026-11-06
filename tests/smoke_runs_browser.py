@@ -80,6 +80,29 @@ def main():
             assert "chip-pcie-host" in catalog
             assert "chip-ethernet" in catalog
             assert "PASS" in driver.find_element(By.ID,"results").text
+            # Expected flow is a declaration, not a monitor-dependent view.
+            # It must exist for every configured target, even with no CI row.
+            opts=driver.find_element(By.ID,"flow-target").find_elements(By.TAG_NAME,"option")
+            assert len(opts)==len(data["tests"]), "test catalog and plan selectors differ"
+            driver.execute_script(
+                """const s=document.getElementById("flow-target");
+                   s.value="chip-cpu-scenario";s.dispatchEvent(new Event("change"));""")
+            wait.until(lambda d:"copy_out" in d.find_element(By.ID,"flow-phases").text)
+            assert "copy_back" in driver.find_element(By.ID,"flow-phases").text
+            assert "alloc_source" in driver.find_element(By.ID,"flow-phases").text
+            assert "check_return" in driver.find_element(By.ID,"flow-phases").text
+            assert "PLAN ONLY" in driver.find_element(By.ID,"flow-summary").text
+            driver.execute_script(
+                """const s=document.getElementById("flow-target");
+                   s.value="chip-ethernet-cpu";s.dispatchEvent(new Event("change"));""")
+            wait.until(lambda d:"cpu0.eth_rx" in d.find_element(By.ID,"flow-phases").text)
+            assert "cpu0.eth_tx" in driver.find_element(By.ID,"flow-phases").text
+            assert "detailed stimulus" in driver.find_element(By.ID,"flow-summary").text
+            driver.execute_script(
+                """const s=document.getElementById("flow-target");
+                   s.value="smoke";s.dispatchEvent(new Event("change"));""")
+            wait.until(lambda d:"Only a runner outline" in d.find_element(By.ID,"flow-summary").text)
+
 
             driver.execute_script(
                 """const f=document.getElementById("family");
