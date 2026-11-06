@@ -60,6 +60,11 @@ jobs:
         run: |
           make check-generated
           python3 tools/regress.py --check-noc
+      - name: Verify directed same-ID corner test is compiled and covers generated topology
+        run: |
+          set -euo pipefail
+          python3 -m py_compile dv/supernoc/test_supernoc.py
+          python3 -m unittest tests.test_supernoc_gen tests.test_floonoc_gen -v
       - name: Run YAML-defined Verilator elaboration, connected traffic and named corruption check
         run: python3 tools/regress.py noc
       - name: Retain resolved NoC filelists, plans, logs and cocotb XML
