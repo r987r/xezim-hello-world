@@ -9,6 +9,26 @@ publishes this README, all documentation, the canonical topology and actual CI
 test results with tested commits, logs and AXI traffic reports.
 See [publication and retention](docs/publication.md).
 
+## Initial PCIe0 + CPU iDMA + modeled-DDR↔host integration
+
+**Functional RTL path validated** in [PCIe CI #42134213227](https://github.com/r987r/xezim-hello-world/actions/runs/42134213227)
+(PR [#60](https://github.com/r987r/xezim-hello-world/pull/60)).
+One real CPU0 C program configures PULP iDMA through the generated
+configuration NoC. Data moves in both directions between modeled DDR and
+PCIe0 SRAM over live data NoCs; a modeled PCIe host sends and reads 64-byte
+vectors through the real upstream TLP→AXI bridge. Its report records 27
+successful INIT/RUN/CHECK steps, 3,741 matched read/completion TLP pairs,
+8 posted write TLPs, 47,864 completed AXI transactions, no correlation
+issues and 130.083 ns average accepted TLP read latency at the real bridge
+boundary. See [full evidence and limits](docs/pcie0-host-phases.md).
+
+The PCIe path is currently **host-BAR pull, not endpoint-initiated DMA into
+host DRAM**. The DDR aperture is an AXI SRAM-backed model, not a real
+DDR4 controller. Ethernet end-to-end, outbound host DMA, physical PHY,
+backpressure and performance qualification remain separate tracks.
+Generated topology diagrams and RTL continue to be governed by `make gen`;
+this status section does not override the source-true variant manifest.
+
 ## Architecture, real RTL connectivity, and verification
 
 <!-- BEGIN GENERATED SOC -->
