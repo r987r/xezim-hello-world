@@ -32,7 +32,7 @@ def require_tool(name):
     return found
 
 
-def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False, ethernet_cpu_mode=False):
+def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False, ethernet_cpu_mode=False, use_generated_dma_csr=False):
     directory.mkdir(parents=True, exist_ok=True)
     mapping = {r["name"]: int(r["base"], 0)
                for r in cfg["address_map"]["data"] + cfg["address_map"]["config"]}
@@ -79,6 +79,11 @@ def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False, ethernet_cpu
     )
     elf = directory / "cpu_dma.elf"
     raw = directory / "cpu_dma.bin"
+    if use_generated_dma_csr:
+        # Variant-scoped generated headers only; no checked-in generated
+        # output and no change to the default production firmware path.
+        from tools.csr_dma_headers import emit as generate_dma_csr
+        generate_dma_csr(directory / "csr")
     args = [require_tool("clang"),
             "--target=riscv32-unknown-elf", "-march=rv32i", "-mabi=ilp32",
             "-Oz", "-ffunction-sections", "-ffreestanding", "-fno-builtin",
@@ -86,6 +91,8 @@ def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False, ethernet_cpu
             "-nostdlib", "-fuse-ld=lld", "-Wl,--no-relax",
             "-Wl,--build-id=none", f"-Wl,-T,{linker}",
             *[f"-D{name}=0x{value:x}ULL" for name, value in macros.items()],
+            *(['-DSOC_USE_GENERATED_DMA_CSR=1', '-I', str(directory / 'csr')]
+              if use_generated_dma_csr else []),
             str(ROOT / ('sw/ethernet/tests/eth_cpu_run.c' if ethernet_cpu_mode
                         else 'sw/dma/tests/cpu_dma_run.c')),
             str(ROOT / "sw/common/memory_pool.c"),
