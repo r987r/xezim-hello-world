@@ -41,8 +41,8 @@ def frame_fields(raw: bytes, *, observed: bool, fcs_valid=None, error=None):
 
 
 class GmiiEvidence:
-    def __init__(self, plan_path=None):
-        self.trace=open_from_plan(plan_path)
+    def __init__(self, trace):
+        self.trace=trace
         if self.trace is None or set(self.trace.sources)!={RX,TX}:
             raise ValueError("Ethernet GMII evidence source inventory differs from regression plan")
         self.seq={RX:0,TX:0}
@@ -61,4 +61,5 @@ class GmiiEvidence:
     def finish(self):
         if not all(self.seq.values()):
             raise AssertionError("missing either injected GMII RX or observed RTL GMII TX frame")
-        self.trace.close("pass")
+        # The owning Cocotb test closes its own run-bound protocol capture.
+        # This keeps start/close visible to static lifecycle policy.
