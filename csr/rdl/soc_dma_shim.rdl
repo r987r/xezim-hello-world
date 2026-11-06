@@ -20,13 +20,13 @@ addrmap soc_dma_shim {
       sw = rw;
       hw = r;
       reset = 0;
-    } submit[0:0] = 0;
+    } submit[0:0];
     field {
       desc = "Acknowledge sticky pending IRQ (side effect; frontdoor only)";
       sw = rw;
       hw = r;
       reset = 0;
-    } irq_ack[1:1] = 0;
+    } irq_ack[1:1];
   } command @0x8;
   reg {
     desc = "DMA APB submission, pending IRQ, error and raw IRQ status";
