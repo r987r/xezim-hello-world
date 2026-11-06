@@ -134,6 +134,57 @@ class PublicationTests(unittest.TestCase):
         self.assertEqual(selected["new-protocol.yml"],[])
         self.assertEqual(client.request.call_count,2)
         self.assertIn("truncated",notes[0])
+    def test_protocol_link_index_tracks_arbitrary_vip_source_fields(self):
+        report={'capture_complete':True,
+                'sources':[
+                    {'id':'pcie0.rx_req','protocol':'pcie','role':'target',
+                     'clock_domain':'soc_single_clock',
+                     'implementation':'upstream_pcieifframe'},
+                    {'id':'ethernet0.mac.rx','protocol':'ethernet','role':'target',
+                     'clock_domain':'rx_clk','implementation':'cocotbext_eth'},
+                    {'id':'peripheral0.apb','protocol':'apb','role':'target',
+                     'clock_domain':'pclk','implementation':'apb_vip'}],
+                'records':[
+                    {'source':'pcie0.rx_req','protocol':'pcie','kind':'transaction',
+                     'operation':'mem_read','id':'02:3','start_ps':1000,
+                     'end_ps':3000,'status':'complete',
+                     'fields':{'tag':'0x3','header_hex':'0x123',
+                               'address':'0x4000','length_dw':1}},
+                    {'source':'ethernet0.mac.rx','protocol':'ethernet',
+                     'kind':'transaction','operation':'frame_rx','id':5,
+                     'start_ps':4000,'end_ps':9000,'status':'complete',
+                     'fields':{'ether_type':'0x0800','frame_length':64}},
+                    {'source':'peripheral0.apb','protocol':'apb',
+                     'kind':'transaction','operation':'write','id':6,
+                     'start_ps':10000,'end_ps':12000,'status':'complete',
+                     'fields':{'register':'0x40','pslverr':False}}]}
+        actual=site.protocol_link_catalog(report)
+        self.assertEqual({s['protocol'] for s in actual['sources']},
+                         {'pcie','ethernet','apb'})
+        self.assertTrue(actual['capture_complete'])
+        self.assertEqual(actual['sources'][0]['preview'][0]['fields']['header_hex'],
+                         '0x123')
+        self.assertEqual(actual['sources'][1]['preview'][0]['fields']['ether_type'],
+                         '0x0800')
+        self.assertEqual(actual['sources'][2]['preview'][0]['fields']['pslverr'],
+                         False)
+
+    def test_protocol_link_index_caps_previews_but_counts_every_record(self):
+        report={'capture_complete':False,
+                'sources':[{'id':'new0.axi5','protocol':'axi5',
+                            'role':'initiator','clock_domain':'clk',
+                            'implementation':'future_vip'}],
+                'records':[{'source':'new0.axi5','protocol':'axi5',
+                            'kind':'transaction','operation':'read',
+                            'start_ps':n*1000,'end_ps':(n+1)*1000,
+                            'status':'complete','fields':{'new_axi5_attr':n}}
+                           for n in range(100)]}
+        data=site.protocol_link_catalog(report,preview_per_source=4)
+        self.assertEqual(data['sources'][0]['count'],100)
+        self.assertEqual(data['sources'][0]['operations'],{'read':100})
+        self.assertEqual(len(data['sources'][0]['preview']),4)
+        self.assertFalse(data['capture_complete'])
+
     def test_complete_offline_site_links_are_relative_and_exist(self):
         with tempfile.TemporaryDirectory() as tmp:
             output=Path(tmp)/'site';dataset=site.build(output,Path(tmp)/'empty','r987r/xezim-hello-world',SHA,CONFIG)
@@ -163,6 +214,8 @@ class PublicationTests(unittest.TestCase):
             expected_networks=json.loads((ROOT/'gen/noc/floonoc/manifest.json').read_text())['networks']
             self.assertEqual(json.loads((output/'data/fabric.json').read_text())['summary']['meshes'],len(expected_networks))
             self.assertNotIn('__FABRIC_DATA__',(output/'fabric.html').read_text())
+            self.assertNotIn('__PROTOCOL_LINK_DATA__',(output/'explorer.html').read_text())
+            self.assertIn('id="arch-embedded-protocol-links"',(output/'explorer.html').read_text())
             fabric=json.loads((output/'data/fabric.json').read_text())
             self.assertEqual(fabric['latency_table']['units'],
                              'simulation_reference_clock_cycles')
