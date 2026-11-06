@@ -9,6 +9,12 @@ publishes this README, all documentation, the canonical topology and actual CI
 test results with tested commits, logs and AXI traffic reports.
 See [publication and retention](docs/publication.md).
 
+## Opt-in real LiteDRAM full-chip milestone (November 6, 2026)
+
+[DDR-B PR #74](https://github.com/r987r/xezim-hello-world/pull/74) now has a **passing exact-head CPU/iDMA-to-real-controller simulation** at commit `a8cd8bb9eb9b8c18f48eb2c4af67a1c2d6340fa3`: [CI #42217902632](https://github.com/r987r/xezim-hello-world/actions/runs/42217902632) and [source/AXI/DFI evidence artifact](https://github.com/r987r/xezim-hello-world/actions/runs/42217902632/artifacts/13503312198). The opt-in `chip-ddr4-real` variant connects the existing Memory0 crossbar to the **pinned LiteDRAM RTL** behind the 64→25-bit AXI guard, initializes real controller CSRs through the **independent 16-KiB Config NoC → AXI/Wishbone path**, and executes compiled PicoRV32/PULP iDMA SRAM→DDR→SRAM with real byte-readback checks. The checker required complete INIT/RUN/CHECK, matching controller AXI B/R completions, DFI read/write activity, behavioral bank writes and passive NoC AXI capture (48,144 observed events). The original single-step 30-minute timeout was corrected by separating RTL build and simulation; the validated simulator binary is fingerprint checked.
+
+**Scope matters:** default boot/PCIe/Ethernet regressions still use fast behavioral AXI-memory targets. `chip-ddr4-real` uses **behavioral SDRAMPHYModel/BankModel**, not an electrical DDR4 PHY or silicon timing. PCIe host and Ethernet packet traffic through this *real-controller variant* have **not** been jointly qualified; those are separate interoperability gates under [epic #34](https://github.com/r987r/xezim-hello-world/issues/34). Full-chip negative-aperture routing, remaining baseline CI and merging onto newer main must be reviewed before DDR-B closure. The canonical checked-in topology continues to describe the default model; the exact opt-in generated RTL/NoC and runtime reports live in the CI artifact.
+
 ## Initial PCIe0 + CPU iDMA + modeled-DDR↔host integration
 
 **Functional RTL path validated** in [PCIe CI #42134213227](https://github.com/r987r/xezim-hello-world/actions/runs/42134213227)
@@ -23,9 +29,7 @@ issues and 130.083 ns average accepted TLP read latency at the real bridge
 boundary. See [full evidence and limits](docs/pcie0-host-phases.md).
 
 The PCIe path is currently **host-BAR pull, not endpoint-initiated DMA into
-host DRAM**. The DDR aperture is an AXI SRAM-backed model, not a real
-DDR4 controller. Ethernet end-to-end, outbound host DMA, physical PHY,
-backpressure and performance qualification remain separate tracks.
+host DRAM**. The PCIe test described above uses an AXI SRAM-backed DDR model, **not** the opt-in real LiteDRAM controller. Ethernet-to-real-DDR, PCIe-to-real-DDR, outbound host DMA, physical PHY, backpressure and performance qualification remain separate tracks.
 Generated topology diagrams and RTL continue to be governed by `make gen`;
 this status section does not override the source-true variant manifest.
 
@@ -227,7 +231,7 @@ The memory regression instantiates the publicly available Verilog-AXI crossbar a
 an explicit enable (separate from cold boot), and the independent iDMA RTL
 regression already passed. Full-chip DMA traffic is a new CI gate.
 CPU-side interrupt handlers, general controller IP integration,
-and physical HBM/DDR controller/PHY models are pending. Selected controller projects are research/integration candidates; the simulated `axi_ram` targets are **not timing-accurate HBM or DDR controllers**. The HBM candidate currently relies on vendor HBM PHY IP.
+and physical HBM controller/DDR PHY integration remains pending. Opt-in DDR-B uses a real LiteDRAM RTL controller with a behavioral DFI/BankModel; the default `axi_ram` targets are **not timing-accurate HBM or DDR controllers**. The HBM candidate currently relies on vendor HBM PHY IP.
 
 ## IP replacement and implementation boundaries
 
@@ -257,19 +261,4 @@ doorbells. The actual PULP iDMA RTL then fetches its own descriptors
 and performs all payload transfers through the NoCs. There is no PCIe
 host, PCIe link, or external initiator involved in this verification.
 
-**DDR-A and DDR-B status (November 2026):** [#50](https://github.com/r987r/xezim-hello-world/pull/50)
-and [#59](https://github.com/r987r/xezim-hello-world/pull/59) are merged.
-Standalone, pinned LiteDRAM/DFI RTL completes DFII/Wishbone initialization,
-deterministic AXI burst/strobe stress and passive DFI/BankModel timing capture.
-A **separate synthesizable DDR-B AXI bridge** now passes Verilator tests for
-full 64-bit physical address-window validation, 25-bit local address
-translation, real AW/W/B/AR/R forwarding and bounded DECERR completion.
-[Exact combined RTL/DDR4 verification](https://github.com/r987r/xezim-hello-world/actions/runs/42057781622)
-passed. **Memory0's generated full-chip DDR0 target still uses an AXI SRAM
-model:** the bridge is not yet instantiated through the Memory0 NoCs and
-the independent Config-NoC DFII init service is not yet connected.
-See [DDR-B handoff](rtl/memory/ddr4/SOC_BRIDGE.md) and
-[integration issue #40](https://github.com/r987r/xezim-hello-world/issues/40).
-The DMA concurrency defaults in `config/soc.yaml` are conservative
-bring-up settings; do not infer a DDR controller or PHY from successful
-DMA-to-AXI-RAM tests.
+**DDR-A and DDR-B status (November 6, 2026):** Standalone DDR-A (#35) has pinned real LiteDRAM RTL, DFI/BankModel probes and independent stress reports; its extended stress/refresh/reset gates remain separate. DDR-B now adds an opt-in connected Memory0 controller and Config NoC initialization through PR #74; [CI #42217902632](https://github.com/r987r/xezim-hello-world/actions/runs/42217902632) verifies CPU0 C + actual PULP iDMA SRAM↔DDR byte integrity, controller AXI completions and modeled DFI/bank events. The **default** Memory0 target remains a fast behavioral AXI RAM; DDR-B is **not a physical PHY** and the passing CPU/iDMA run is not yet combined Ethernet/PCIe host traffic against real DDR. See [DDR4 integration contract](rtl/memory/ddr4/SOC_BRIDGE.md), [DDR regression guide](docs/regression.md) and [issue #40](https://github.com/r987r/xezim-hello-world/issues/40).

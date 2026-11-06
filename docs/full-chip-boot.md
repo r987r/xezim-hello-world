@@ -121,13 +121,27 @@ The separate `make dv-chip-dma` test instead uses both real PULP iDMA
 engines over the same NoCs with CPUs held in reset. These are distinct scopes.
 The CPUs remain 32-bit and cannot directly address the windows above 4 GiB.
 
+### Opt-in real LiteDRAM path (DDR-B)
+
+The default `chip-boot`, `chip-cpu-dma` and PCIe tests above **retain**
+AXI RAM models. The separate `chip-ddr4-real` variant dynamically
+generates the pinned LiteDRAM controller and behavioral DFI/BankModel
+behind Memory0's existing Data NoC crossbar, enables a 16-KiB Config NoC
+Wishbone/DFII initialization path, and holds CPU0 in reset until real
+DDR init completes. The same compiled CPU0 C/iDMA INIT/RUN/CHECK software
+copies SRAM→DDR→SRAM and verifies byte contents. The real-controller
+[CI #42217902632](https://github.com/r987r/xezim-hello-world/actions/runs/42217902632) passed with DFI/model-bank and
+AXI completion evidence. This is simulation-controller integration,
+**not** a physical DDR PHY or a combined Ethernet/PCIe DDR test.
+
 ## Commands and acceptance
 
 ```bash
 make gen
 make dv-chip
 make dv-chip-dma
-make dv-chip-cpu-dma  # actual CPU0 C DMA + DDR/HBM roundtrip + passive AXI evidence
+make dv-chip-cpu-dma  # default modeled DDR/HBM + actual CPU0 C DMA
+make dv-chip-ddr4-real # opt-in pinned real LiteDRAM RTL + behavioral DFI
 python3 tools/regress.py chip-boot --stage files
 python3 tools/regress.py chip-boot --stage run  # requires matching built RTL
 python3 tools/regress.py chip-boot-negative

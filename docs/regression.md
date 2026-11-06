@@ -165,8 +165,31 @@ Artifacts include `result.json`, `test-flow.json`, `axi-transactions.json`,
 AXI/protocol/step HTML explorers. The TLP monitor reuses upstream
 `PcieIfFrame.to_tlp()` and does not drive the bus. The test does **not**
 claim outbound PCIe requester DMA into host RAM: DDR-to-host delivery is
-a host BAR *pull*. Full DDR controller integration, Ethernet and
+a host BAR *pull*. The opt-in CPU/iDMA-to-real-LiteDRAM controller integration is
+verified in DDR-B [CI #42217902632](https://github.com/r987r/xezim-hello-world/actions/runs/42217902632); the PCIe host run above still uses
+modeled DDR. Joint PCIe/Ethernet-to-real-controller and
 backpressure/throughput qualification remain separate.
+
+### Opt-in DDR-B real controller full-chip regression
+
+The existing `chip-ddr4-real` test is selected with `make dv-chip-ddr4-real`
+or `python3 tools/regress.py chip-ddr4-real`. On CI, `--stage build`
+then `--stage run` use a fingerprint-checked Verilator executable, rather
+than spending the entire simulation budget in compilation. This is an
+**opt-in** suite: it does not silently lengthen `full` or change the
+default AXI-RAM boot, PCIe or Ethernet variants. The same compiled C
+PicoRV32/PULP iDMA scenario and INIT/RUN/CHECK checker run with a real
+pinned LiteDRAM controller and simulated SDRAMPHYModel/BankModel.
+
+[CI #42217902632](https://github.com/r987r/xezim-hello-world/actions/runs/42217902632) passed complete CPU/iDMA
+SRAM→DDR→SRAM bytes, actual Config NoC DFII initialization,
+completed controller AXI AW/B and AR/RLAST, DFI R/W and bank writes;
+its report contains 48,144 observed AXI events. The
+[artifact](https://github.com/r987r/xezim-hello-world/actions/runs/42217902632/artifacts/13503312198) retains variant sources, trace/report HTML,
+controller manifest, CSR map and evidence JSON. Controller-side AXI
+and simulated DFI measurements are **not electrical PHY timing**.
+Full-chip invalid-aperture negative and joint Ethernet/PCIe-to-real-DDR
+remain distinct gates (DDR #40 / epic #34).
 
 The generic `noc` / `supernoc` structural test remains an independent
 repository-wide gate. A NoBResponseIdQueue assertion in that flow is **not**
