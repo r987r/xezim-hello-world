@@ -229,6 +229,19 @@ def write_report(directory, plan, result):
         if memory_issues:
             payload['sections']['axi']['issues'].extend(
                 {'message':'memory: '+message} for message in memory_issues)
+    # The address map is passive metadata plus independent accepted AXI evidence.
+    # Only explicitly configured test variants opt in; never infer RTL
+    # instances from a different or aspirational architecture.
+    if plan['report'].get('address_map'):
+        from address_map import build as build_address_map, observe as annotate_address_map
+        spec = plan['report']['address_map']
+        config = ROOT / spec['config']
+        csr_path = ROOT / spec['csr_map'] if spec.get('csr_map') else None
+        map_data = build_address_map(config, csr_path=csr_path, variant=spec['variant'])
+        payload['sections']['address_map'] = annotate_address_map(
+            map_data, rows,
+            complete_capture=(binding_complete and not overflow
+                              and not issues and not correlation_issues))
     (directory/'axi-transactions.json').write_text(json.dumps(payload,indent=2)+'\n')
     # Escape '<' even inside JSON strings: transaction text must never close
     # the embedded script element. All table/details text uses textContent.
