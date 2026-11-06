@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "known_gaps": {
+    "boot.reset_ctrl": "Boot SystemRDL generates this register map in CI; source-less local preview is aperture-only.",
+    "memory0.ctrl": "Reserved on baseline AXI-RAM model; real LiteDRAM native CSR words are selected only from verified DDR runs.",
+    "pcie0.ctrl": "PCIe bridge data path exists, but an independently implemented PCIe management CSR responder is not yet qualified."
+  }
+}

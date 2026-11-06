@@ -199,6 +199,15 @@ class PublicationTests(unittest.TestCase):
             self.assertEqual(len(addr['regions']),14)
             self.assertEqual(sum(r['plane']=='data' for r in addr['regions']),8)
             self.assertEqual(sum(r['plane']=='config' for r in addr['regions']),6)
+            region={r['name']:r for r in addr['regions']}
+            self.assertEqual(len(region['compute0.dma']['source_registers']),4)
+            self.assertEqual(len(region['compute1.dma']['source_registers']),4)
+            self.assertGreaterEqual(len(region['ethernet0.ctrl']['source_registers']),25)
+            self.assertEqual(region['ethernet0.ctrl']['registers'],[])
+            self.assertEqual(region['pcie0.ctrl']['source_registers'],[])
+            coverage=json.loads((output/'data/csr-source-coverage.json').read_text())
+            self.assertFalse(coverage['unacknowledged'])
+            self.assertIn('pcie0.ctrl',{g['instance'] for g in coverage['gaps']})
             self.assertEqual(addr['config_sha256'],
                 hashlib.sha256((ROOT/'config/soc.yaml').read_bytes()).hexdigest())
             self.assertEqual(next(r for r in addr['regions']

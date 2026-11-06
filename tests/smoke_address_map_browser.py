@@ -29,6 +29,20 @@ def check(driver):
       }
     """)
     assert "No CSR definitions imported" in csr_browser.text, "missing map must be explicit"
+    driver.execute_script("""
+      for(const ip of document.querySelectorAll('#am-csr-browser .am-csr-ip')){
+        if(['compute0.dma','ethernet0.ctrl'].some(n=>ip.querySelector('summary').textContent.startsWith(n))){
+          ip.open=true;
+          for(const reg of ip.querySelectorAll('.am-csr-register'))reg.open=true;
+        }
+      }
+    """)
+    body = csr_browser.text
+    assert "compute0.dma" in body and "head_lo" in body and "submit" in body
+    assert "ethernet0.ctrl" in body and "enable" in body and "irq_status" in body
+    assert "SOURCE ONLY" in body, "source-only registers incorrectly labeled active"
+    assert "Source-only C/RTL register references" in body
+    assert "source-only reference(s)" in driver.find_element(By.ID, "am-csr-count").text
     assert driver.find_element(By.ID, "am-csr-count").text
     assert "16 KiB" in content and "64 KiB" in content
     # Physical 64-bit HBM address cannot be truncated to 32-bit signed JS.
