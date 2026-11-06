@@ -341,10 +341,15 @@ const trafficContext=document.getElementById("arch-traffic-context");
 // electrical connectivity. Unknown source IDs remain accessible through
 // test-run reports rather than being attached to an invented diagram node.
 function trafficOwner(source){
-  if(nodes.has(source))return source;
-  const base=String(source).split(".")[0];
-  if(nodes.has(base+".ip"))return base+".ip";
-  if(nodes.has(base))return base;
+  // A monitor can belong to nested IP composition, e.g.
+  // memory0.ddr0.dfi.phase0 -> memory0.ddr0. Use the longest actual
+  // known architecture instance, never a fabricated diagram node.
+  const parts=String(source).split(".");
+  for(let end=parts.length;end>=1;end--){
+    const path=parts.slice(0,end).join(".");
+    if(nodes.has(path))return path;
+    if(nodes.has(path+".ip"))return path+".ip";
+  }
   return null;
 }
 const trafficSourcesFor=owner=>linkRuns.flatMap(run=>(run.links?.sources||[])
