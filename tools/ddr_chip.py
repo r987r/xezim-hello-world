@@ -79,11 +79,17 @@ def prepare(cfg: dict, out: Path) -> dict:
         raise ValueError("DDR-B generated init commands incomplete")
     (root / "soc.yaml").write_text(yaml.safe_dump(variant, sort_keys=False))
     (root / "ddr4_init_script.json").write_text(json.dumps(contract, indent=2) + "\n")
+    # The same pinned vendor csr.json and translated init contract supply
+    # every *addressable* native CSR, with no substitute vendor RTL.
+    from ddr_csr_catalog import generate as generate_ddr_csr
+    csr_catalog = out / "ddr-native-csr-map.json"
+    generate_ddr_csr(root / "soc.yaml", ddr_generated / "csr.json",
+                     root / "ddr4_init_script.json", csr_catalog)
     return {
         "variant_cfg": variant, "noc_manifest": noc_manifest, "noc_root": noc_root,
         "source_root": root, "wb_base": contract["generated_wb_base"],
         "wb_bits": wb_bits, "controller_files": controller_files,
-        "contract": contract
+        "contract": contract, "csr_catalog": str(csr_catalog)
     }
 
 
