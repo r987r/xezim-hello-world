@@ -1,10 +1,20 @@
-name: DV scenario contract (SCN-1)
+name: DV scenario contract (SCN-1 + SCN-2)
 
 on:
   pull_request:
     branches: [main]
     paths:
       - 'dv/common/scenario.py'
+      - 'dv/common/scenario_dma.py'
+      - 'dv/full_chip/test_boot.py'
+      - 'dv/full_chip/test_dma.py'
+      - 'sw/dma/tests/scenario_dma_run.c'
+      - 'tools/cpu_dma_firmware.py'
+      - 'tools/regress.py'
+      - 'config/regression.yaml'
+      - 'tests/test_scenario_dma.py'
+      - 'tools/scenario_replay_audit.py'
+      - 'tests/test_scenario_replay_audit.py'
       - 'tools/scenario_plan.py'
       - 'tools/memory_plan.py'
       - 'tools/sram_layout.py'
@@ -16,6 +26,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: dv-scenario-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   scenario-schema:
@@ -29,7 +43,7 @@ jobs:
       - name: Install existing configuration parser
         run: python3 -m pip install 'PyYAML==6.0.3'
       - name: Test typed scenarios, allocator contract and replay
-        run: python3 -m unittest tests.test_scenario_plan tests.test_memory_plan tests.test_dma_vectors -v
+        run: python3 -m unittest tests.test_scenario_plan tests.test_scenario_dma tests.test_scenario_replay_audit tests.test_memory_plan tests.test_dma_vectors -v
       - name: Materialize intent-only manifest with source provenance
         run: |
           python3 tools/scenario_plan.py --scenario config/scenarios/dma-roundtrip.json --soc config/soc.yaml --out .tools/scenarios/smoke/scenario-plan.json --source-revision "${GITHUB_SHA}"
@@ -40,3 +54,46 @@ jobs:
           name: scenario-plan-intent-only
           path: .tools/scenarios/smoke/scenario-plan.json
           if-no-files-found: ignore
+
+  scenario-real-rtl:
+    name: CPU C and BFM use same plan on generated FlooNoC RTL
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-bender
+        env: {GH_TOKEN: "${{ github.token }}"}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Install pinned real NoC/iDMA/C toolchains
+        run: |
+          python3 -m pip install -r requirements.txt
+          python3 -m pip install 'mako==1.3.10' 'hjson==3.1.0' 'peakrdl>=1.5.0' 'peakrdl-rawheader>=0.2.8' 'peakrdl-cheader>=1.1.0'
+          python3 tools/ip_fetch.py floonoc pulp_idma
+          python3 -m pip install -e .tools/floonoc
+          python3 -m pip install 'cocotb==1.9.2' 'cocotbext-axi==0.1.24'
+          sudo apt-get update -qq
+          sudo apt-get install -y verilator clang llvm lld
+      - name: Check source ABI, CPU C and generated platform
+        run: |
+          python3 -m unittest tests.test_scenario_plan tests.test_scenario_dma tests.test_scenario_replay_audit tests.test_cpu_dma_firmware -v
+          make check-generated
+      - name: Execute actual CPU0 C and CPU0 BFM scenario via RTL
+        run: python3 tools/regress.py scenario
+      - name: Fail closed if CPU/BFM intent or observed RTL evidence diverges
+        run: |
+          python3 tools/scenario_replay_audit.py \
+            --cpu .tools/regression/chip-cpu-scenario \
+            --bfm .tools/regression/chip-dma-scenario \
+            --out .tools/regression/scenario-replay-audit.json
+      - name: Retain manifest, RTL traces, per-run reports, CPU and BFM evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dv-scenario-rtl-${{ github.run_id }}
+          path: |
+            .tools/regression/chip-cpu-scenario/
+            .tools/regression/chip-dma-scenario/
+            .tools/regression/scenario-replay-audit.json
+          include-hidden-files: true
+          if-no-files-found: warn

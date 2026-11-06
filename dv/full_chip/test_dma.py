@@ -148,6 +148,54 @@ async def two_compute_dmas_through_all_fabrics(dut):
     for _ in range(8):
         await RisingEdge(dut.clk_i)
 
+    scenario_path = os.environ.get("SOC_SCENARIO_PLAN")
+    if scenario_path:
+        from dv.common.scenario_dma import (
+            execute_bfm_roundtrip, load_contract_from_plan)
+        contract = load_contract_from_plan(Path(scenario_path))
+        # This is a *different opt-in regression*, not a replacement for
+        # the two-engine 105-descriptor HBM/DDR baseline below.
+        await execute_bfm_roundtrip(dut, cpu0_data_bfm, cpu0_config_bfm,
+                                    contract)
+        # Give the passive VALID/READY capture callbacks time to settle
+        # before reading the independent source-side AXI event stream.
+        await Timer(1, units="us")
+        plan_file = os.environ.get("SOC_RUN_PLAN")
+        assert plan_file, "SCN-2 needs canonical regression monitor plan"
+        raw = Path(plan_file).parent/"axi-events.jsonl"
+        assert raw.is_file(), "SCN-2 missing passive real NoC AXI capture"
+        from tools.axi_report import read_events
+        events, issues = read_events(raw)
+        assert not issues, f"SCN-2 invalid AXI stream: {issues[:3]}"
+        observed = {"src_ar": 0, "ddr_aw": 0, "ddr_ar": 0,
+                    "return_aw": 0}
+        for event in events:
+            if (event.get("monitor") != "compute0_local_data.dma"
+                    or event.get("channel") not in ("ar", "aw")):
+                continue
+            phys = int(event["fields"]["addr"], 0)
+            for label, channel, start in (
+                ("src_ar", "ar", contract["source_phys"]),
+                ("ddr_aw", "aw", contract["ddr_phys"]),
+                ("ddr_ar", "ar", contract["ddr_phys"]),
+                ("return_aw", "aw", contract["return_phys"]),
+            ):
+                if event["channel"] == channel and start <= phys < start + contract["length"]:
+                    observed[label] += 1
+        assert all(observed.values()), (
+            f"SCN-2 BFM has no independently accepted full-NoC DMA traffic: {observed}")
+        evidence = {"scenario_id": contract["scenario_id"],
+                    "plan_sha256": contract["plan_sha256"],
+                    "profile": "reset_isolated_cocotb_bfm",
+                    "execution_state": "rtl_observed",
+                    "observed_dma_axi_counts": observed,
+                    "independently_readback_bytes": contract["length"],
+                    "intent_is_not_evidence": True}
+        (Path(plan_file).parent/"scenario-execution.json").write_text(
+            json.dumps(evidence, sort_keys=True, indent=2)+"\n")
+        dut._log.info("PASS chipdma: scenario BFM real full-NoC DDR roundtrip, %s", observed)
+        return
+
     # First prove low-concurrency routed completion on each engine; only
     # then exercise the 100-descriptor stress chain from shared SRAM.
     checks = [

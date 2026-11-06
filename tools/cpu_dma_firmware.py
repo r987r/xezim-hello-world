@@ -32,8 +32,14 @@ def require_tool(name):
     return found
 
 
-def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False, ethernet_cpu_mode=False):
+def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False, ethernet_cpu_mode=False,
+                     scenario_mode=False):
     directory.mkdir(parents=True, exist_ok=True)
+    if scenario_mode:
+        if pcie_host_mode or ethernet_cpu_mode:
+            raise ValueError('scenario CPU mode cannot alias PCIe/Ethernet variants')
+        from dv.common.scenario_dma import materialize
+        materialize(cfg, directory)
     mapping = {r["name"]: int(r["base"], 0)
                for r in cfg["address_map"]["data"] + cfg["address_map"]["config"]}
     flash_start = mapping["boot.flash"]
@@ -86,8 +92,10 @@ def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False, ethernet_cpu
             "-nostdlib", "-fuse-ld=lld", "-Wl,--no-relax",
             "-Wl,--build-id=none", f"-Wl,-T,{linker}",
             *[f"-D{name}=0x{value:x}ULL" for name, value in macros.items()],
-            str(ROOT / ('sw/ethernet/tests/eth_cpu_run.c' if ethernet_cpu_mode
+            str(ROOT / ('sw/dma/tests/scenario_dma_run.c' if scenario_mode
+                        else 'sw/ethernet/tests/eth_cpu_run.c' if ethernet_cpu_mode
                         else 'sw/dma/tests/cpu_dma_run.c')),
+            *(['-I', str(directory)] if scenario_mode else []),
             str(ROOT / "sw/common/memory_pool.c"),
             str(ROOT / "sw/common/memory_pattern.c"),
             str(ROOT / "sw/common/sram_pool.c"),
@@ -115,13 +123,17 @@ def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False, ethernet_cpu
 
 
 def prepare(cfg, noc_manifest, noc_root, output: Path, *, pcie_host_mode=False,
-            ethernet_cpu_mode=False, real_ddr_mode=False, ddr_wb_base=0, ddr_wb_adr_bits=30):
+            ethernet_cpu_mode=False, real_ddr_mode=False, ddr_wb_base=0, ddr_wb_adr_bits=30,
+            scenario_mode=False):
     from tools import full_chip_gen
+    if scenario_mode and real_ddr_mode:
+        raise ValueError('SCN-2 uses modeled DDR; real LiteDRAM requires separate scenario qualification')
     if pcie_host_mode:
         from tools.pcie_chip import host_variant_config
         cfg = host_variant_config(cfg)
     fw = compile_firmware(cfg, output, pcie_host_mode=pcie_host_mode,
-                          ethernet_cpu_mode=ethernet_cpu_mode)
+                          ethernet_cpu_mode=ethernet_cpu_mode,
+                          scenario_mode=scenario_mode)
     image_prefix = output.relative_to(ROOT).as_posix()
     # Normal generated gen/chip outputs remain byte-for-byte unchanged.
     manifest = full_chip_gen.emit(cfg, noc_manifest, noc_root, output,
@@ -146,6 +158,13 @@ def prepare(cfg, noc_manifest, noc_root, output: Path, *, pcie_host_mode=False,
         "allocation_plan": {name: r.as_dict() for name, r in
                             memory_plan.configured_regions(cfg, profile="boot_live").items()},
     }
+    if scenario_mode:
+        from dv.common.scenario_dma import load_contract_from_plan
+        contract = load_contract_from_plan(output/'scenario-plan.json')
+        manifest['scenario_intent'] = {'scenario_id': contract['scenario_id'],
+                                       'plan_sha256': contract['plan_sha256'],
+                                       'path': str(output/'scenario-plan.json'),
+                                       'execution_state': 'pending_real_rtl'}
     (output/"manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True)+"\n")
     return manifest
 
