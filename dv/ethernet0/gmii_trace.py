@@ -7,7 +7,6 @@ All timing is cocotb simulation time. No inferred physical PHY delay.
 """
 from __future__ import annotations
 
-from cocotb.utils import get_sim_time
 from dv.common.protocol_trace import open_from_plan
 
 RX="ethernet0.gmii_rx"
@@ -51,6 +50,7 @@ class GmiiEvidence:
     def packet(self, source, payload, *, fcs_valid=None, error=None):
         if source not in self.seq:
             raise ValueError("unknown GMII evidence source")
+        from cocotb.utils import get_sim_time
         t=int(get_sim_time(units="ps"))
         observed=source==TX
         self.seq[source]+=1
