@@ -13,6 +13,10 @@ module ethernet_rx_desc_fetch #(
     parameter [AXI_ADDR_WIDTH-1:0] RING_BYTES=64'h1000,
     parameter [AXI_ADDR_WIDTH-1:0] BUFFER_BASE=64'h2000,
     parameter [AXI_ADDR_WIDTH-1:0] BUFFER_BYTES=64'h8000,
+    // Optional second descriptor aperture (region_id=1): modeled DDR in
+    // the full-chip test. Disabled by default. Never truncate 64-bit PA.
+    parameter [AXI_ADDR_WIDTH-1:0] ALT_BUFFER_BASE=0,
+    parameter [AXI_ADDR_WIDTH-1:0] ALT_BUFFER_BYTES=0,
     parameter integer MAX_FRAME_BYTES=2048
 ) (
     input wire clk,rst,
@@ -73,12 +77,19 @@ assign result_tag = active_tag;
 assign result_buffer_addr = word0;
 assign result_capacity = word1[31:0];
 assign result_cookie = word1[63:32];
-wire buffer_ok =
+// Descriptor word2: flags [31:0] must be zero in V1 and region_id [63:32]
+// selects exactly one program-authorized window. A descriptor cannot span
+// region boundaries or silently alias a high (>4GiB) DDR address to SRAM.
+wire primary_buffer_ok = word2[63:32]==0 &&
     word0>=BUFFER_BASE && BUFFER_BYTES>=word1[31:0] &&
-    word0-BUFFER_BASE <= BUFFER_BYTES-word1[31:0] &&
+    word0-BUFFER_BASE <= BUFFER_BYTES-word1[31:0];
+wire alt_buffer_ok = word2[63:32]==1 && ALT_BUFFER_BYTES!=0 &&
+    word0>=ALT_BUFFER_BASE && ALT_BUFFER_BYTES>=word1[31:0] &&
+    word0-ALT_BUFFER_BASE <= ALT_BUFFER_BYTES-word1[31:0];
+wire buffer_ok = (primary_buffer_ok || alt_buffer_ok) &&
     (word0 & 7)==0 &&
     word1[31:0]>=frame_len && word1[31:0]<=MAX_FRAME_BYTES &&
-    word2==0 && word3==0;
+    word2[31:0]==0 && word3==0;
 assign result_ok = !invalid_req && !read_bad && got_last &&
                    got_status && dma_error==0 && beats==4 && buffer_ok;
 assign result_error = invalid_req ? ERR_REQ :

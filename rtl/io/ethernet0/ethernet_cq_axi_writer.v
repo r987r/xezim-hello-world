@@ -14,7 +14,8 @@
 
 module ethernet_cq_axi_writer #(
     parameter [63:0] REGION_BASE = 0,
-    parameter [63:0] REGION_BYTES = 65536
+    parameter [63:0] REGION_BYTES = 65536,
+    parameter integer AXI_ID_WIDTH = 4
 ) (
     input  wire clk,
     input  wire rst,
@@ -32,7 +33,7 @@ module ethernet_cq_axi_writer #(
     output reg [3:0] cpl_error,
     output reg [7:0] cpl_tag,
 
-    output wire [3:0] m_axi_awid,
+    output wire [AXI_ID_WIDTH-1:0] m_axi_awid,
     output wire [63:0] m_axi_awaddr,
     output wire [7:0] m_axi_awlen,
     output wire [2:0] m_axi_awsize,
@@ -47,7 +48,7 @@ module ethernet_cq_axi_writer #(
     output wire m_axi_wlast,
     output wire m_axi_wvalid,
     input  wire m_axi_wready,
-    input  wire [3:0] m_axi_bid,
+    input  wire [AXI_ID_WIDTH-1:0] m_axi_bid,
     input  wire [1:0] m_axi_bresp,
     input  wire m_axi_bvalid,
     output wire m_axi_bready
@@ -140,7 +141,7 @@ module ethernet_cq_axi_writer #(
 
     axi_dma_wr #(
         .AXI_DATA_WIDTH(64), .AXI_ADDR_WIDTH(64),
-        .AXI_STRB_WIDTH(8), .AXI_ID_WIDTH(4),
+        .AXI_STRB_WIDTH(8), .AXI_ID_WIDTH(AXI_ID_WIDTH),
         .AXI_MAX_BURST_LEN(16),
         .AXIS_DATA_WIDTH(64), .AXIS_KEEP_ENABLE(1),
         .AXIS_KEEP_WIDTH(8), .AXIS_LAST_ENABLE(1),

@@ -1,0 +1,65 @@
+<div class="eyebrow">Source-defined architecture · data and config planes</div>
+<h1>Physical address map</h1>
+<p class="lede">ROM, SRAM, flash, DDR, HBM and control windows from the configured SoC. SystemRDL registers are a subset of the physical apertures.</p>
+<div class="actions"><a href="data/soc-address-map.json">Download address-map JSON</a><a href="data/soc-data-memories.rdl">External memory RDL view</a><a href="runs.html">Inspect measured run evidence</a></div>
+<p class="muted">__CSR_SOURCE_LINKS__</p>
+<div class="grid" id="am-summary"></div>
+<p class="notice">Mapped apertures and register definitions are not RTL test coverage. Memory-model backing may be far smaller than the declared DDR/HBM windows. Unassigned holes are not backed storage; read/write evidence belongs to each run's passive AXI trace.</p>
+<div class="filters">
+<label>Region, address or register<input type="search" id="am-search" placeholder="0x40020000, ddr0, cpu_release"></label>
+<label>Plane<select id="am-plane"><option value="">Both planes</option><option value="data">Data</option><option value="config">Config / CSR</option></select></label>
+<label>Type<select id="am-kind"><option value="">All types</option><option value="csr_aperture">CSR</option><option value="sram">SRAM</option><option value="rom">ROM</option><option value="flash">Flash</option><option value="ddr">DDR</option><option value="hbm">HBM</option></select></label>
+</div>
+<p class="muted" id="am-count" aria-live="polite"></p>
+<div class="scroll am-table"><table><thead><tr><th>Plane</th><th>Region / register</th><th>Address</th><th>End inclusive</th><th>Size</th><th>Modeled backing</th><th>Status</th><th>Details</th></tr></thead><tbody id="am-rows"></tbody></table></div>
+<div class="am-mobile" id="am-mobile"></div>
+<section class="card"><h2 id="am-detail-title">Address metadata</h2><pre id="am-detail">Select an entry to inspect its mapped address and fields.</pre></section>
+<style>
+.am-mobile{display:none}.am-mobile .card{margin:12px 0}.am-mobile p{margin:4px 0;font-size:13px}.am-register{border-left:3px solid var(--accent)}.am-table td{overflow-wrap:anywhere;max-width:340px}.am-table button{font-size:12px}@media(max-width:820px){.am-table{display:none}.am-mobile{display:block}}
+</style>
+<script type="application/json" id="address-map-data">__ADDRESS_MAP_DATA__</script>
+<script>
+'use strict';
+(()=>{
+ const d=JSON.parse(document.getElementById('address-map-data').textContent);
+ const e=id=>document.getElementById(id);
+ const append=(parent,tag,s,cls)=>{const x=document.createElement(tag);x.textContent=String(s);if(cls)x.className=cls;parent.append(x);return x;};
+ const end=(base,size)=>'0x'+(BigInt(base)+BigInt(size)-1n).toString(16);
+ const size=s=>{const n=Number(BigInt(s));return n>=1073741824?(n/1073741824)+' GiB':n>=1048576?(n/1048576)+' MiB':n>=1024?(n/1024)+' KiB':n+' B';};
+ const entries=[];
+ for(const r of d.regions){entries.push({r,reg:null});for(const reg of r.registers||[])entries.push({r,reg});}
+ for(const [k,v] of [['Apertures',d.regions.length],['Data windows',d.regions.filter(x=>x.plane==='data').length],['CSR windows',d.regions.filter(x=>x.plane==='config').length],['RDL-defined registers',entries.filter(x=>x.reg).length]]){
+  const card=append(e('am-summary'),'div','','card');append(card,'div',v,'stat');append(card,'div',k,'muted');
+ }
+ const inspect=(r,reg)=>{
+  e('am-detail-title').textContent=r.name+(reg?' / '+reg.name:'');
+  e('am-detail').textContent=JSON.stringify(reg?{absolute_address:reg.address,relative_offset:reg.offset,register:reg,aperture:r}:r,null,2);
+  e('am-detail-title').scrollIntoView({block:'nearest'});
+ };
+ const draw=()=>{
+  e('am-rows').replaceChildren();e('am-mobile').replaceChildren();let visible=0;
+  const query=e('am-search').value.toLowerCase().trim(),plane=e('am-plane').value,kind=e('am-kind').value;
+  for(const {r,reg} of entries){
+   if(plane&&r.plane!==plane||kind&&r.kind!==kind)continue;
+   const search=[r.name,r.base,r.kind,reg?.name,reg?.address,...(reg?.fields||[]).map(f=>f.name)].filter(Boolean).join(' ').toLowerCase();
+   if(query&&!search.includes(query))continue;
+   visible++;
+   const addr=reg?reg.address:r.base,span=reg?reg.size_bytes:r.size;
+   const labels=[r.plane,reg?r.name+' / '+reg.name:r.name,addr,end(addr,span),reg?reg.width_bits+' bits':size(span),
+                 reg?'Register-defined':r.modeled_capacity_bytes==null?'Not specified':size(r.modeled_capacity_bytes),
+                 reg?reg.definition_status:r.implementation_status];
+   const tr=append(e('am-rows'),'tr','',reg?'am-register':'');
+   for(const v of labels)append(tr,'td',v);
+   const td=append(tr,'td',''),button=append(td,'button','Inspect');
+   button.addEventListener('click',()=>inspect(r,reg));
+   const card=append(e('am-mobile'),'div','', 'card'+(reg?' am-register':''));
+   append(card,'h3',labels[1]);append(card,'p',labels[2]+' – '+labels[3]);
+   append(card,'p',labels[4]+' · '+labels[5]+' · '+labels[6],'muted');
+   const b=append(card,'button','Inspect metadata');b.addEventListener('click',()=>inspect(r,reg));
+  }
+  e('am-count').textContent=visible+' entries · catalog '+d.variant+' · config SHA '+d.config_sha256.slice(0,12);
+ };
+ for(const id of ['am-search','am-plane','am-kind'])e(id).addEventListener(id==='am-search'?'input':'change',draw);
+ draw();
+})();
+</script>

@@ -1,7 +1,8 @@
 // Real queue -> AXI ring descriptor -> AXI packet write integration.
 // Both SRAM instances are upstream axi_ram RTL, NOT host-only models.
 // The frame source is a TEST BFM for already FCS-checked complete frames.
-// CQ record writer is TEST BFM and only acknowledges after actual AXI B.
+// Real upstream axi_dma_wr CQ adapter writes a 32-byte record after packet B.
+// A separate AXI SRAM models the CQ target pending shared-NoC arbitration.
 `timescale 1ns/1ps
 module ethernet_rx_queue_engine_tb;
 reg clk=0; always #5 clk=~clk; reg rst=1;
@@ -17,7 +18,13 @@ reg rx_axis_tvalid=0,rx_axis_tlast=0,rx_axis_tuser=0;
 wire write_result_valid,write_result_ok,frame_drop_pulse;
 wire [3:0] write_result_error;wire [15:0] write_result_length;
 wire [31:0] write_result_cookie;wire [7:0] write_result_tag;
-reg cpl_written_i=0;
+wire [7:0] write_result_policy;
+wire [63:0] rx_cq_slot_addr_o,tx_cq_slot_addr_o;
+wire cpl_written_i;
+wire cq_done_valid, cq_written;
+wire [3:0] cq_error;
+wire [7:0] cq_done_tag;
+integer cq_aw_count=0, cq_b_count=0;
 
 wire [3:0] rd_arid,rd_rid,wr_awid,wr_bid;
 wire [63:0] rd_araddr,rd_rdata,wr_awaddr,wr_wdata;
@@ -28,15 +35,36 @@ wire rd_arlock,rd_arvalid,rd_arready,rd_rlast,rd_rvalid,rd_rready;
 wire wr_awlock,wr_awvalid,wr_awready,wr_wlast,wr_wvalid,wr_wready,wr_bvalid,wr_bready;
 wire [3:0] rd_arcache,wr_awcache;
 wire [2:0] rd_arprot,wr_awprot;
+wire [3:0] cq_awid,cq_bid,cq_arcache;
+wire [63:0] cq_awaddr,cq_wdata;
+wire [7:0] cq_awlen,cq_wstrb;
+wire [2:0] cq_awsize,cq_arprot;
+wire [1:0] cq_awburst,cq_bresp;
+wire cq_awlock,cq_awvalid,cq_awready,cq_wlast,cq_wvalid,cq_wready;
+wire cq_bvalid,cq_bready,cq_writer_bready,cq_ram_bvalid;
+reg cq_allow_b=0;
+// Consistent protocol stall: gate BOTH BVALID observed by the writer and
+// BREADY seen by the RAM. Neither side can retire a response prematurely.
+assign cq_bready = cq_allow_b && cq_writer_bready;
+assign cq_bvalid = cq_allow_b && cq_ram_bvalid;
+reg [15:0] cq_check_araddr=0;
+reg cq_check_arvalid=0,cq_check_rready=0;
+wire cq_check_arready,cq_check_rvalid,cq_check_rlast;
+wire [3:0] cq_check_rid;
+wire [63:0] cq_check_rdata;
+wire [1:0] cq_check_rresp;
 
 ethernet_rx_queue_engine u_eth (
  .clk,.rst,.cfg_valid,.cfg_write,.cfg_addr,.cfg_wdata,.cfg_wstrb,
  .cfg_ready,.cfg_rdata,.cfg_error,
+ .tx_desc_ready_i(1'b0),.tx_cpl_written_i(1'b0),
+ .tx_desc_valid_o(),.tx_desc_addr_o(),
+ .rx_cq_slot_addr_o,.tx_cq_slot_addr_o,
  .frame_valid,.frame_ready,.frame_length,.frame_ethertype,.frame_is_udp,
  .frame_udp_dst_port,.rx_axis_tdata,.rx_axis_tkeep,.rx_axis_tvalid,
  .rx_axis_tready,.rx_axis_tlast,.rx_axis_tuser,
  .write_result_valid,.write_result_ok,.write_result_error,
- .write_result_length,.write_result_cookie,.write_result_tag,
+ .write_result_length,.write_result_cookie,.write_result_policy,.write_result_tag,
  .frame_drop_pulse,.cpl_written_i,.irq,
  .rd_arid,.rd_araddr,.rd_arlen,.rd_arsize,.rd_arburst,.rd_arlock,
  .rd_arcache,.rd_arprot,.rd_arvalid,.rd_arready,.rd_rid,
@@ -46,7 +74,73 @@ ethernet_rx_queue_engine u_eth (
  .wr_wstrb,.wr_wlast,.wr_wvalid,.wr_wready,.wr_bid,.wr_bresp,
  .wr_bvalid,.wr_bready
 );
-// Memory 1: descriptor rings and completion records.
+
+// Synthesizable, real B-gated completion writer rather than a BFM pulse.
+// Completion slot comes directly from the queue producer, and the writer's
+// cpl_written can advance the queue only after its accepted AXI write B.
+ethernet_cq_axi_writer #(
+ .REGION_BASE(64'h500),.REGION_BYTES(64'h200)
+) u_cq_writer (
+ .clk,.rst,
+ .req_valid(write_result_valid),.req_ready(),
+ .req_addr(rx_cq_slot_addr_o),
+ .req_cookie(write_result_cookie),
+ .req_length({16'd0,write_result_length}),
+ .req_status(write_result_ok ? 32'd0 : {28'd0,write_result_error}),
+ .req_policy({24'd0,write_result_policy}),
+ .req_queue(32'd0),.req_tag(write_result_tag),
+ .cpl_done_valid(cq_done_valid),.cpl_written(cq_written),
+ .cpl_error(cq_error),.cpl_tag(cq_done_tag),
+ .m_axi_awid(cq_awid),.m_axi_awaddr(cq_awaddr),
+ .m_axi_awlen(cq_awlen),.m_axi_awsize(cq_awsize),
+ .m_axi_awburst(cq_awburst),.m_axi_awlock(cq_awlock),
+ .m_axi_awcache(cq_arcache),.m_axi_awprot(cq_arprot),
+ .m_axi_awvalid(cq_awvalid),.m_axi_awready(cq_awready),
+ .m_axi_wdata(cq_wdata),.m_axi_wstrb(cq_wstrb),
+ .m_axi_wlast(cq_wlast),.m_axi_wvalid(cq_wvalid),
+ .m_axi_wready(cq_wready),.m_axi_bid(cq_bid),
+ .m_axi_bresp(cq_bresp),.m_axi_bvalid(cq_bvalid),
+ .m_axi_bready(cq_writer_bready)
+);
+assign cpl_written_i = cq_written;
+// Separate CQ RAM in this focused adapter test: its frontdoor AR/R is used
+// solely for independent inspection. Full-chip integration must route both
+// packet and CQ masters through the same real Data NoC before #64 closure.
+axi_ram #(.DATA_WIDTH(64),.ADDR_WIDTH(16),.ID_WIDTH(4)) u_cq_ram (
+ .clk,.rst,
+ .s_axi_awid(cq_awid),.s_axi_awaddr(cq_awaddr[15:0]),
+ .s_axi_awlen(cq_awlen),.s_axi_awsize(cq_awsize),
+ .s_axi_awburst(cq_awburst),.s_axi_awlock(cq_awlock),
+ .s_axi_awcache(cq_arcache),.s_axi_awprot(cq_arprot),
+ .s_axi_awvalid(cq_awvalid),.s_axi_awready(cq_awready),
+ .s_axi_wdata(cq_wdata),.s_axi_wstrb(cq_wstrb),
+ .s_axi_wlast(cq_wlast),.s_axi_wvalid(cq_wvalid),
+ .s_axi_wready(cq_wready),.s_axi_bid(cq_bid),
+ .s_axi_bresp(cq_bresp),.s_axi_bvalid(cq_ram_bvalid),
+ .s_axi_bready(cq_bready),
+ .s_axi_arid(4'd0),.s_axi_araddr(cq_check_araddr),
+ .s_axi_arlen(8'd0),.s_axi_arsize(3'd3),
+ .s_axi_arburst(2'b01),.s_axi_arlock(1'b0),
+ .s_axi_arcache(4'd0),.s_axi_arprot(3'd0),
+ .s_axi_arvalid(cq_check_arvalid),.s_axi_arready(cq_check_arready),
+ .s_axi_rid(cq_check_rid),.s_axi_rdata(cq_check_rdata),
+ .s_axi_rresp(cq_check_rresp),.s_axi_rlast(cq_check_rlast),
+ .s_axi_rvalid(cq_check_rvalid),.s_axi_rready(cq_check_rready)
+);
+always @(posedge clk) if (!rst) begin
+ if(cq_awvalid && cq_awready)begin
+  if(cq_awaddr!=64'h500 || cq_awlen!=8'd3 ||
+     cq_awsize!=3'd3 || cq_awburst!=2'b01)
+   $fatal(1,"invalid completion-ring AXI AW");
+  cq_aw_count<=cq_aw_count+1;
+ end
+ if(cq_bvalid && cq_bready)begin
+  if(cq_bresp!=0) $fatal(1,"CQ AXI B not OKAY");
+  cq_b_count<=cq_b_count+1;
+ end
+end
+
+// Memory 1: RX descriptors written by test software through real AXI.
 reg [15:0] ctrl_awaddr=0;reg ctrl_awvalid=0;
 wire ctrl_awready;reg [63:0] ctrl_wdata=0;reg [7:0] ctrl_wstrb=0;
 reg ctrl_wvalid=0,ctrl_wlast=0,ctrl_bready=0;
@@ -238,6 +332,32 @@ begin
  end
 end
 endtask
+task automatic cq_read(input [15:0] addr,input [63:0] expected);
+ integer n;reg got,ack;reg [63:0] observed;
+ begin
+  @(negedge clk);cq_check_araddr=addr;
+  cq_check_arvalid=1;cq_check_rready=1;
+  ack=0;n=0;
+  while(!ack && n<400)begin
+   @(posedge clk);ack=cq_check_arready;n=n+1;
+  end
+  check(ack,"CQ frontdoor AXI AR");
+  @(negedge clk);cq_check_arvalid=0;got=0;n=0;observed=0;
+  while(!got && n<400)begin
+   @(posedge clk);got=cq_check_rvalid;
+   if(got)begin
+    observed=cq_check_rdata;
+    check(cq_check_rresp==0 && cq_check_rlast,
+          "CQ real AXI R last/OKAY");
+   end
+   n=n+1;
+  end
+  check(got,"CQ SRAM real AXI readback");
+  check(observed===expected,"CQ record exact 64-bit payload");
+  @(negedge clk);cq_check_rready=0;
+ end
+endtask
+
 initial begin #30000000;$fatal(1,"integrated RX watchdog");end
 initial begin
  repeat(8)@(posedge clk);@(negedge clk);rst=0;
@@ -251,24 +371,44 @@ initial begin
  wr_reg(8'h74,32'h0800);wr_reg(8'h78,32'hffff);
  wr_reg(8'h7c,6000);wr_reg(8'h80,32'hffff);
  wr_reg(8'h84,3);wr_reg(8'h28,1);wr_reg(8'h08,1);
+ check(rx_cq_slot_addr_o==64'h500,"RX CQ slot matches SRAM ring base");
  send_frame(85,16'h0800,37);
  wait_status(1,1);
  check(last_error==0 && last_length==85 &&
        last_cookie==32'hc0febabe,"DMA B completed, cookie and length checked");
+ check(write_result_policy==8'd0,"RX policy exported with write result");
+ check(rx_cq_slot_addr_o==64'h500,"CQ slot unchanged before CQ B");
  check(desc_reads>0 && packet_writes>0,"actual AXI descriptor read and payload write");
  rd_reg(8'h2c,1);
  rd_reg(8'h38,0);
  check(!irq,"IRQ withheld until CQ record actually written");
  check_packet(16'h2100,85,37);
- // Emulate the *separate* completion writer through AXI SRAM frontdoor,
- // and only then report the successful CQ B response to queue control.
- frontdoor_write(16'h500,64'hc0febabe);
- frontdoor_write(16'h508,{32'd0,32'd85});
- @(negedge clk);cpl_written_i=1;
- @(posedge clk);#1;
- check(irq,"IRQ posted after CQ write B response");
- @(negedge clk);cpl_written_i=0;
+ // Hold BREADY low until readback is complete. CQ producer/IRQ MUST stay
+ // unchanged while a real completion AXI BVALID is stalled.
+ rd_reg(8'h38,0);
+ check(!irq && cq_b_count==0,"no CQ retirement during BREADY stall");
+ @(negedge clk);cq_allow_b=1;
+ // The same RTL CQ writer now consumes the queued DMA result, writes four
+ // 64-bit words using actual upstream axi_dma_wr, and observes AXI B.
+ // No testbench completion pulse is injected.
+ begin : wait_real_cq
+  integer cycles;
+  cycles=0;
+  while(cq_b_count<1 && cycles<3000)begin
+   @(posedge clk);cycles=cycles+1;
+  end
+  check(cq_b_count==1 && cq_aw_count==1,"one real CQ AXI AW/B");
+  repeat(5)@(posedge clk);
+ end
+ check(cq_done_valid===1'b0 && cq_error==0,
+       "CQ writer completed without a latched error");
+ check(irq,"IRQ posted after real CQ writer B response");
  rd_reg(8'h38,1);
+ cq_read(16'h500,64'hc0febabe);
+ cq_read(16'h508,{32'd0,32'd85});
+ cq_read(16'h510,64'd0);
+ cq_read(16'h518,64'd0);
+ check(rx_cq_slot_addr_o==64'h520,"CQ slot follows successful B-gated retirement");
  // No more RX descriptors: unsolicited valid frames drop without
  // overwriting the first buffer or incrementing the CQ producer.
  send_frame(64,16'h0800,50);
@@ -280,8 +420,8 @@ initial begin
  repeat(10)@(posedge clk);
  check(status_count==1,"unmatched frame cannot cause write result");
  check_packet(16'h2100,85,37);
- $display("PASS ethernet_rx_queue_engine_tb checks=%0d AXI_desc_AR=%0d AXI_payload_AW=%0d",
-          checks,desc_reads,packet_writes);
+ $display("PASS ethernet_rx_queue_engine_tb checks=%0d AXI_desc_AR=%0d AXI_payload_AW=%0d CQ_AW=%0d CQ_B=%0d",
+          checks,desc_reads,packet_writes,cq_aw_count,cq_b_count);
  $finish;
 end
 endmodule

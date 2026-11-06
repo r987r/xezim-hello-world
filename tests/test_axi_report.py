@@ -195,5 +195,36 @@ class AxiReportTests(unittest.TestCase):
         self.assertEqual(dma['compute0_local_config.cpu']['kind'],'verification_bfm')
 
 
+    def test_optional_architecture_address_map_on_original_html_report(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory=Path(tmp)
+            catalog=directory/'catalog.json'
+            catalog.write_text(json.dumps(CATALOG))
+            events=[
+                {'channel':'capture_start','time_ps':0,'monitors':['cpu']},
+                event('ar',10,id=0,addr=0x10000000,len=0,size=2),
+                event('r',20,id=0,data=0x44332211,last=1,resp=0),
+            ]
+            (directory/'axi-events.jsonl').write_text(''.join(json.dumps(e)+'\n' for e in events))
+            plan={'target':'map-demo','engine':'cocotb-verilator',
+                  'report':{'axi':{'catalog':str(catalog)},
+                            'address_map':{'config':'config/soc.yaml','variant':'architecture'}}}
+            axi_report.write_report(directory,plan,{'passed':True})
+            data=json.loads((directory/'axi-transactions.json').read_text())
+            self.assertIn('address_map',data['sections'])
+            amap=data['sections']['address_map']
+            self.assertEqual(len(amap['regions']),14)
+            ram=next(r for r in amap['regions'] if r['name']=='compute0.sram')
+            self.assertEqual(ram['observations']['reads_ok'],1)
+            self.assertEqual(ram['observations']['observation_status'],'observed_complete')
+            ddr=next(r for r in amap['regions'] if r['name']=='memory0.ddr0')
+            self.assertEqual(ddr['observations']['observation_status'],'not_accessed')
+            self.assertEqual(ddr['modeled_capacity_bytes'],65536)
+            html=(directory/'report.html').read_text()
+            self.assertIn('Physical Address Map',html)
+            self.assertIn('address-map-rows',html)
+            self.assertIn('Inspect / AXI',html)
+
+
 if __name__=='__main__':
     unittest.main()

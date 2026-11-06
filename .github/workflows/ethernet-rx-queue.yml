@@ -7,6 +7,7 @@ on:
       - 'rtl/io/ethernet0/ethernet_queue_ctrl.sv'
       - 'rtl/io/ethernet0/ethernet_rx_desc_fetch.v'
       - 'rtl/io/ethernet0/ethernet_rx_dma.v'
+      - 'rtl/io/ethernet0/ethernet_cq_axi_writer.v'
       - 'dv/ethernet0/rx_queue_engine_tb.v'
       - '.github/workflows/ethernet-rx-queue.yml'
   workflow_dispatch:
@@ -37,6 +38,7 @@ jobs:
             rtl/io/ethernet0/ethernet_rx_desc_fetch.v \
             rtl/io/ethernet0/ethernet_rx_dma.v \
             rtl/io/ethernet0/ethernet_rx_queue_engine.v \
+            rtl/io/ethernet0/ethernet_cq_axi_writer.v \
             dv/ethernet0/rx_queue_engine_tb.v \
             .tools/verilog_axi/rtl/axi_dma_rd.v \
             .tools/verilog_axi/rtl/axi_dma_wr.v \

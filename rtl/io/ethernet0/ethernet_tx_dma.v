@@ -12,7 +12,10 @@ module ethernet_tx_dma #(
     parameter integer AXI_ID_WIDTH=4,
     parameter integer LEN_WIDTH=16,
     parameter [AXI_ADDR_WIDTH-1:0] REGION_BASE=0,
-    parameter [AXI_ADDR_WIDTH-1:0] REGION_BYTES=65536
+    parameter [AXI_ADDR_WIDTH-1:0] REGION_BYTES=65536,
+    // Optional DDR window, disabled unless the full-chip generator opts in.
+    parameter [AXI_ADDR_WIDTH-1:0] ALT_REGION_BASE=0,
+    parameter [AXI_ADDR_WIDTH-1:0] ALT_REGION_BYTES=0
 ) (
     input wire clk, rst,
     input wire desc_valid,
@@ -62,10 +65,15 @@ module ethernet_tx_dma #(
     wire [AXI_DATA_WIDTH/8-1:0] dma_tkeep;
     wire dma_tvalid,dma_tready,dma_tlast,dma_tuser;
 
-    wire valid_range =
-        desc_length != 0 && desc_length <= desc_capacity &&
-        desc_src_addr >= REGION_BASE && REGION_BYTES >= desc_length &&
-        (desc_src_addr-REGION_BASE) <= (REGION_BYTES-desc_length) &&
+    wire primary_range = desc_src_addr >= REGION_BASE &&
+        REGION_BYTES >= desc_length &&
+        (desc_src_addr-REGION_BASE) <= (REGION_BYTES-desc_length);
+    wire alt_range = ALT_REGION_BYTES != 0 &&
+        desc_src_addr >= ALT_REGION_BASE &&
+        ALT_REGION_BYTES >= desc_length &&
+        (desc_src_addr-ALT_REGION_BASE) <= (ALT_REGION_BYTES-desc_length);
+    wire valid_range = desc_length != 0 && desc_length <= desc_capacity &&
+        (primary_range || alt_range) &&
         ((desc_src_addr & (AXI_DATA_WIDTH/8-1)) == 0);
     assign desc_ready = !busy && (valid_range ? dma_desc_ready : 1'b1);
     wire dma_desc_valid = desc_valid && !busy && valid_range;

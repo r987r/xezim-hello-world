@@ -71,12 +71,12 @@ def load_config(path):
             raise ValueError(f'{name}: mode=compile requires the Xezim engine')
         if 'opt_in' in test and type(test['opt_in']) is not bool:
             raise ValueError(f'{name}: opt_in must be boolean')
-        if test.get('firmware_mode') not in (None, 'cpu_dma', 'pcie_host', 'pcie_dma_host', 'ddr_cpu_dma'):
+        if test.get('firmware_mode') not in (None, 'cpu_dma', 'pcie_host', 'pcie_dma_host', 'ethernet_mvp', 'ethernet_cpu', 'ddr_cpu_dma'):
             raise ValueError(f'{name}: unknown compiled CPU firmware mode')
         if 'firmware_mode' in test and (
             test['engine'] != 'cocotb-verilator' or
             'chip_boot' not in test.get('bender_targets', []) or
-            (test['firmware_mode'] in ('cpu_dma','pcie_dma_host','ddr_cpu_dma')
+            (test['firmware_mode'] in ('cpu_dma','pcie_dma_host','ethernet_mvp','ethernet_cpu','ddr_cpu_dma')
              and 'dma' not in test.get('bender_targets', []))):
             raise ValueError(f'{name}: selected test needs real chip RTL and specified active IP')
         if 'report' in test:
@@ -84,9 +84,16 @@ def load_config(path):
             required = {'scope','clock','reset','catalog'}
             if (test['engine'] != 'cocotb-verilator' or not isinstance(report, dict)
                 or not ({'axi','protocols'} & set(report))
-                or set(report) - {'axi','protocols','memory','context','flow'}
+                or set(report) - {'axi','protocols','memory','context','flow','address_map'}
                 or ('context' in report and not isinstance(report['context'],str))):
                 raise ValueError(f'{name}: invalid protocol report configuration for cocotb-verilator')
+            if 'address_map' in report:
+                amap = report['address_map']
+                if (not isinstance(amap, dict) or not {'config','variant'} <= set(amap)
+                        or set(amap)-{'config','variant','csr_map'}
+                        or any(not isinstance(amap[k],str) or not amap[k]
+                               for k in amap)):
+                    raise ValueError(f'{name}: invalid variant-bound address map report configuration')
             if 'flow' in report:
                 flow = report['flow']
                 if not isinstance(flow, dict) or not {'required_steps'} <= set(flow) or set(flow)-{'required_steps','firmware_mmio','required_origins'}:
@@ -371,6 +378,41 @@ def run_target(name, test, resolver, options):
                    if Path(filename).parent == generated_root and
                    Path(filename).name in replacements else filename
                    for filename in sources]
+    if test.get('firmware_mode') in ('ethernet_mvp', 'ethernet_cpu'):
+        if str(ROOT) not in sys.path:
+            sys.path.insert(0,str(ROOT))
+        from full_chip_gen import emit as emit_chip
+        from dv.ethernet0.run_mac_gmii import fetch_pinned
+        cfg = yaml.safe_load((ROOT/'config/soc.yaml').read_text())
+        noc_manifest = json.loads((ROOT/'gen/supernoc/manifest.json').read_text())
+        variant = out/'variant'
+        if test['firmware_mode'] == 'ethernet_cpu':
+            from cpu_dma_firmware import prepare as prepare_cpu_firmware
+            prepare_cpu_firmware(cfg,noc_manifest,ROOT/'gen/noc/floonoc',variant,
+                                 ethernet_cpu_mode=True)
+        else:
+            emit_chip(cfg,noc_manifest,ROOT/'gen/noc/floonoc',variant,
+                      image_prefix=variant.relative_to(ROOT).as_posix(),
+                      ethernet_mode=True)
+        generated_root=ROOT/'gen/chip'
+        replacements={'soc_top.sv','full_chip_tb.sv','full_chip_dma_tb.sv'}
+        sources=[str(variant/Path(filename).name)
+                 if Path(filename).parent==generated_root and
+                 Path(filename).name in replacements else filename
+                 for filename in sources]
+        eth_rtl=ROOT/'rtl/io/ethernet0'
+        sources += [str(eth_rtl/name) for name in (
+            'ethernet0_axi_mvp.sv','ethernet0_mvp.v','ethernet0_rx_mvp.v',
+            'ethernet0_tx_mvp.v','ethernet0_rx_gmii_stager.v',
+            'ethernet0_mac_gmii.v','ethernet_rx_frame_stager.v',
+            'ethernet_rx_queue_engine.v','ethernet_queue_ctrl.sv',
+            'ethernet_rx_desc_fetch.v','ethernet_rx_dma.v',
+            'ethernet_tx_dma.v','ethernet_cq_axi_writer.v',
+            'ethernet_queue_axi_regs.sv')]
+        for directory,meta in fetch_pinned().values():
+            sources += [str(directory/name) for name in meta['modules']]
+        sources += [str(ROOT/'.tools/verilog_axi/rtl'/name)
+                    for name in ('axi_dma_rd.v','axi_dma_wr.v')]
     if test.get('firmware_mode') in ('pcie_host', 'pcie_dma_host'):
         if str(ROOT) not in sys.path:
             sys.path.insert(0, str(ROOT))
