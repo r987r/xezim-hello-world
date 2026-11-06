@@ -355,10 +355,23 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
             for i,t in enumerate(targets):
                 lines += [f'  {dtype(p,"req")} memory_{i}_req;',f'  {dtype(p,"rsp")} memory_{i}_rsp;']
                 base = int(window[t['name']]['base'],0)
-                lines += [module('axi_sram_target',f'u_memory_model_{i}',{'req_t':dtype(p,'req'),'rsp_t':dtype(p,'rsp'),
-                    'IdWidth':p['id_width'],'Base':f"64'h{base:016x}",'Bytes':1 << cfg['verification']['memory']['model_address_bits']},
-                    {'clk_i':'clk_i','rst_ni':'rst_ni','req_i':f'memory_{i}_req','rsp_o':f'memory_{i}_rsp',
-                     **{f'mon_{k}_o':'' for k in ('valid','write','addr','data','strb')}}),f"  assign memory_{i}_req.aw.atop = '0;"]
+                if real_ddr_mode and t['name'] == 'memory0.ddr0':
+                    control = all_ports['s_memory0_local_config_controller_regs']
+                    lines += [module('ddr_litedram_fullchip_target','u_ddr_real',{
+                        'data_req_t':dtype(p,'req'),'data_rsp_t':dtype(p,'rsp'),
+                        'cfg_req_t':dtype(control,'req'),'cfg_rsp_t':dtype(control,'rsp'),
+                        'WB_BASE':f"32'h{ddr_wb_base:08x}",
+                        'WB_ADR_BITS':ddr_wb_adr_bits},{
+                        'clk_i':'clk_i','rst_ni':'rst_ni',
+                        'data_req_i':f'memory_{i}_req','data_rsp_o':f'memory_{i}_rsp',
+                        'cfg_req_i':req(control),'cfg_rsp_o':rsp(control),
+                        'ddr_init_done_o':'ddr_init_done','ddr_init_error_o':'ddr_init_error'}),
+                        f"  assign memory_{i}_req.aw.atop = '0;"]
+                else:
+                    lines += [module('axi_sram_target',f'u_memory_model_{i}',{'req_t':dtype(p,'req'),'rsp_t':dtype(p,'rsp'),
+                        'IdWidth':p['id_width'],'Base':f"64'h{base:016x}",'Bytes':1 << cfg['verification']['memory']['model_address_bits']},
+                        {'clk_i':'clk_i','rst_ni':'rst_ni','req_i':f'memory_{i}_req','rsp_o':f'memory_{i}_rsp',
+                         **{f'mon_{k}_o':'' for k in ('valid','write','addr','data','strb')}}),f"  assign memory_{i}_req.aw.atop = '0;"]
             xcon = {'clk':'clk_i','rst':'!rst_ni'}
             for side in ('s','m'):
                 for ch,members in CHANNELS.items():
@@ -449,6 +462,10 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
             {'kind':'reserved_error','label':'DECERR responder: controller/DMA registers not integrated'}))
         if endpoint == 'dma_regs':
             continue
+        if real_ddr_mode and port['network'] == 'memory0_local_config' and endpoint == 'controller_regs':
+            actor = {'kind':'rtl_registers','label':'Pinned LiteDRAM DFII/CSR on Config NoC via Wishbone'}
+        if real_ddr_mode and endpoint == 'target_crossbar':
+            actor = {'kind':'rtl_controller','label':'Memory0 local crossbar; pinned LiteDRAM+modeled DFI; HBM AXI SRAM'}
         actors[port['network']+'.'+endpoint]=actor
     if pcie_host_mode:
         manifest['pcie0_host'] = {
