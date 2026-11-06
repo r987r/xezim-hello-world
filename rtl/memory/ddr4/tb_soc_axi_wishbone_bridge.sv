@@ -27,7 +27,7 @@ module tb_ddr_litedram_axi_wishbone;
 
   ddr_litedram_axi_wishbone_bridge #(
     .WB_ADR_BITS(16),.WB_BASE(32'h2000),.TIMEOUT_CYCLES(64)
-  ) dut(.*);
+  ) dut(.clk_i(clk),.*);
   always @(posedge clk) begin
     wb_ctrl_ack <= 0;
     if (rst_ni && wb_ctrl_cyc && wb_ctrl_stb && !wb_ctrl_ack) begin
