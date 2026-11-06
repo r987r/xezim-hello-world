@@ -462,6 +462,46 @@ def collect(client,config,destination):
     dump(destination/'collection.json',{'notes':notes})
 
 
+
+def protocol_link_catalog(protocol_data, *, preview_per_source=12):
+    """Build a bounded protocol-neutral index from verified monitor records.
+
+    Protocol-specific fields remain opaque data owned by the VIP adapter.
+    Bindings are source IDs, not inferred PHY wires or elaborated connectivity.
+    """
+    if not protocol_data:
+        return None
+    sources = {item['id']: item for item in protocol_data.get('sources', [])
+               if isinstance(item, dict) and isinstance(item.get('id'), str)}
+    indexed = {}
+    for row in protocol_data.get('records', []):
+        source = row.get('source')
+        if source not in sources or row.get('kind') not in ('transaction', 'event'):
+            continue
+        group = indexed.setdefault(source, {
+            'source': source, 'protocol': sources[source]['protocol'],
+            'role': sources[source].get('role', 'unknown'),
+            'clock_domain': sources[source].get('clock_domain', 'unknown'),
+            'implementation': sources[source].get('implementation', 'unrecorded'),
+            'count': 0, 'operations': {}, 'preview': []
+        })
+        group['count'] += 1
+        operation = row.get('operation', 'unknown')
+        group['operations'][operation] = group['operations'].get(operation, 0) + 1
+        if len(group['preview']) < preview_per_source:
+            group['preview'].append({
+                'kind': row['kind'], 'operation': operation,
+                'id': row.get('id'), 'start_ps': row.get('start_ps'),
+                'end_ps': row.get('end_ps'), 'status': row.get('status'),
+                # Bounded rows only; preserve native, protocol-specific fields
+                # (PCIe tags/headers/bytes, Ethernet EtherType, APB regs,
+                # AXI5 transaction attributes) without parsing or inference.
+                'fields': row.get('fields', {})
+            })
+    return {'capture_complete': protocol_data.get('capture_complete') is True,
+            'sources': list(indexed.values())} if indexed else None
+
+
 def evidence_index(evidence,output,repository):
     runs,entries,notes=[],[],[]
     if (evidence/'collection.json').exists():notes=json.loads((evidence/'collection.json').read_text()).get('notes',[])
@@ -541,6 +581,9 @@ def evidence_index(evidence,output,repository):
                 if protocol_data.get('schema_version')!=1:
                     raise ValueError('unsupported protocol publication schema')
                 entry['source_sha']=protocol_sha
+                link_catalog = protocol_link_catalog(protocol_data)
+                if link_catalog:
+                    entry['protocol_links'] = link_catalog
                 # Do not publish artifact-supplied HTML. Re-render the trusted
                 # JSON through the site source's audited escaping/textContent UI.
                 render_protocol_report(protocol_data, destination/'protocols.html')
@@ -728,6 +771,22 @@ def build(output,evidence,repository,sha,config):
             body = body.replace('__SIGNAL_DATA__', signal_data)
             parsed_data = json.dumps(parsed_rtl, separators=(',', ':')).replace('<','\\u003c')
             body = body.replace('__RTL_PARSE_DATA__', parsed_data)
+            # Every protocol monitor with verified evidence is discoverable:
+            # source ID, protocol and role come from the audited VIP capture,
+            # not manually registered workflow names or guessed hardware.
+            link_runs = [
+                {'run_id': e['run_id'], 'attempt': e['attempt'],
+                 'target': e['target'], 'recorded_at': e['recorded_at'],
+                 'source_sha': e['source_sha'], 'passed': e['passed'],
+                 'workflow': e['workflow'],
+                 'report_path': e['path'].rsplit('/',1)[0] + '/protocols.html',
+                 'axi_report_path': e['path'],
+                 'raw_path': e['path'].rsplit('/',1)[0] + '/protocol-transactions.json',
+                 'links': e['protocol_links']}
+                for e in entries if e.get('protocol_links')
+            ]
+            protocol_links_json=json.dumps(link_runs,separators=(',',':')).replace('<','\\u003c')
+            body=body.replace('__PROTOCOL_LINK_DATA__',protocol_links_json)
             architecture_js = (ROOT/'tools/templates/site_arch_explorer.js').read_text()
             body = body.replace('__ARCH_JS__', architecture_js)
         if page=='address-map':

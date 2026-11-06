@@ -26,6 +26,16 @@
     <p id="arch-inspect-subtitle" class="muted">Click a subsystem to see its composition, or a NoC to see its routers and interfaces.</p>
     <div id="arch-inspect-facts"></div>
     <div id="arch-inspect-links"></div>
+    <section id="arch-link-traffic" class="arch-traffic" aria-label="Observed link traffic" hidden>
+      <h3>Observed protocol traffic</h3>
+      <p class="muted" id="arch-traffic-context"></p>
+      <label>Verified test run <select id="arch-traffic-run"></select></label>
+      <label>Monitor / protocol <select id="arch-traffic-source"></select></label>
+      <p id="arch-traffic-count" class="muted"></p>
+      <div class="scroll"><table><thead><tr><th>Time (ns)</th><th>Monitor</th><th>Operation</th><th>ID / tag</th><th>Decoded fields</th></tr></thead><tbody id="arch-traffic-rows"></tbody></table></div>
+      <p id="arch-traffic-actions"></p>
+      <small>Only captured RTL/VIP monitor observations from the selected CI run. Source IDs identify the measured boundary; this is not proof of physical link, PHY or inactive configuration traffic.</small>
+    </section>
     <button id="arch-inspect-open" type="button" hidden>Open this block</button>
   </aside>
 </div>
@@ -78,6 +88,7 @@
 .arch-inspector .arch-chip{display:inline-block;padding:2px 8px;border:1px solid #3d6b8a;border-radius:12px;background:#1a3043;font:11px ui-monospace,monospace;color:#a8e8f5}
 .arch-inspector button{margin-top:12px;display:block;max-width:100%;white-space:normal}.arch-inspector button[hidden]{display:none}
 .arch-evidence{font-size:12px;line-height:1.6;color:#abc4d4;margin:12px 2px 20px;padding:11px 14px;border-left:3px solid #4e97a9;background:#122235}
+.arch-traffic{margin-top:17px;padding-top:14px;border-top:1px solid var(--line)}.arch-traffic h3{margin:0 0 7px}.arch-traffic label{display:block;margin:10px 0}.arch-traffic select{max-width:100%;width:100%}.arch-traffic .scroll{max-height:400px}.arch-traffic td{font-size:11px;overflow-wrap:anywhere;max-width:270px}.arch-traffic #arch-traffic-actions a{display:inline-block;margin-right:14px;margin-top:8px}
 .arch-signal-panel{border:1px solid var(--line);background:var(--panel);border-radius:12px;padding:12px 18px;margin:18px 0}
 .arch-signal-panel summary{font-size:16px;font-weight:700;cursor:pointer;color:#dff2ff}
 .arch-signal-panel summary span{font:12px ui-monospace,monospace;color:#8eb6d3;padding-left:6px}
@@ -91,4 +102,5 @@
 <script type="application/json" id="ex-embedded-graph">__GRAPH_DATA__</script>
 <script type="application/json" id="ex-embedded-rtl">__RTL_PARSE_DATA__</script>
 <script type="application/json" id="ex-embedded-signals">__SIGNAL_DATA__</script>
+<script type="application/json" id="arch-embedded-protocol-links">__PROTOCOL_LINK_DATA__</script>
 <script>__ARCH_JS__</script>

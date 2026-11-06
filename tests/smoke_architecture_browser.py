@@ -8,7 +8,9 @@ and drilled-down router structures, not just static HTML presence.
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
+import tempfile
 
 from selenium import webdriver
 from selenium.webdriver import ChromeOptions
@@ -83,7 +85,49 @@ def main():
         wait.until(lambda d: "awaddr" in d.find_element(By.ID,"ex-signal-rows").text)
         rows=driver.find_element(By.ID,"ex-signal-rows").text
         assert "awaddr" in rows and "araddr" in rows and "rdata" in rows
-        print("PASS: browser rendered all three hierarchy levels, 9 real XY routers, and AXI signal details")
+        # Synthetic monitor evidence checks the browser UI without publishing
+        # fake CI records or relying on PR-preview historical run availability.
+        with tempfile.TemporaryDirectory() as scratch:
+            original=args.page.read_text()
+            synthetic={
+                'run_id':12345,'attempt':1,'target':'chip-pcie-host',
+                'source_sha':'b'*40,'recorded_at':'2026-11-06T00:00:00Z',
+                'passed':True,'workflow':'PCIe0 integrated test',
+                'report_path':'runs/12345/chip-pcie-host/protocols.html',
+                'axi_report_path':'runs/12345/chip-pcie-host/report.html',
+                'raw_path':'runs/12345/chip-pcie-host/protocol-transactions.json',
+                'links':{'capture_complete':True,'sources':[
+                    {'source':'pcie0.rx_req','protocol':'pcie',
+                     'role':'target','clock_domain':'soc_single_clock',
+                     'implementation':'upstream_pcieifframe','count':1,
+                     'operations':{'mem_read':1},
+                     'preview':[{'kind':'transaction','operation':'mem_read',
+                                 'id':'02:3','start_ps':1000,'end_ps':3000,
+                                 'status':'complete',
+                                 'fields':{'tag':'0x3','address':'0x4000',
+                                           'length_dw':1,'header_hex':'0x123'}}]}]}}
+            marker='<script type="application/json" id="arch-embedded-protocol-links">'
+            start=original.index(marker)+len(marker)
+            end=original.index('</script>',start)
+            copied=Path(scratch)/'explorer.html'
+            copied.write_text(original[:start]+json.dumps([synthetic])+
+                              original[end:])
+            driver.get(copied.as_uri())
+            wait.until(lambda d:"SYSTEM-ON-CHIP" in d.find_element(By.ID,"arch-svg").text)
+            dblclick_by_label("pcie0")
+            wait.until(lambda d:"pcie0" in d.find_element(By.ID,"arch-crumbs").text.lower())
+            dblclick_by_label("pcie0.ip")
+            wait.until(lambda d:"IP COMPOSITION" in d.find_element(By.ID,"arch-svg").text)
+            traffic=driver.find_element(By.ID,"arch-link-traffic")
+            assert traffic.is_displayed(), "verified TLP traffic inspector hidden"
+            assert "mem_read" in driver.find_element(By.ID,"arch-traffic-rows").text
+            assert "0x4000" in driver.find_element(By.ID,"arch-traffic-rows").text
+            detail=driver.find_element(By.CSS_SELECTOR,
+                "#arch-traffic-actions a").get_attribute("href")
+            assert "protocol=pcie" in detail and "source=pcie0.rx_req" in detail
+            driver.save_screenshot(str(args.screenshots/"04-pcie-verified-tlp-link.png"))
+        print("PASS: architecture RTL drilldown, PCIe monitor link and bounded real-evidence UI")
+
 
 
 if __name__=="__main__":

@@ -90,6 +90,44 @@ time/monitor chart and filterable table.
 - Raw JSONL and versioned JSON remain downloadable; historical AXI report
   files are not rewritten in-place.
 
+## Architecture link traffic explorer (all protocols)
+
+The architecture inspector is a **read-only evidence consumer**. Each published
+run retains its exact tested commit, Actions workflow/attempt, complete-capture
+status and source monitor provenance. It indexes the protocol-neutral
+protocol-transactions.json into a bounded per-monitor summary, then links
+to the complete, source-verified protocol viewer.
+
+* Select the chip's subsystem and IP (for example **pcie0 → pcie0.ip**).
+  If a verified run includes observations for that IP's monitor source IDs,
+  a run/monitor selector and actual transaction preview appears.
+* Select a run and monitor to see operation, simulation timestamp, identifier,
+  and the source-native fields. **Open full filtered protocol timeline / details**
+  deep-links into the full protocol report using protocol and source URL
+  parameters; raw JSON, AXI correlations and detailed decoded records remain
+  accessible.
+* No protocol-specific UI registration or register-list maintenance is needed:
+  the index uses the existing source catalog (id, protocol, role,
+  clock_domain, implementation) and recorded fields dictionary. The
+  detail viewer chooses columns from observed field keys. This works with
+  pinned PCIe TLP, Ethernet MAC, APB, AXI4/AXI5 or future VIP adapters,
+  including fields not known when the page was authored.
+* The architecture resolver attaches a monitor only when its source ID matches
+  a known diagram node or a uniquely named IP owner (pcie0.* maps to pcie0.ip).
+  Unmatched monitors remain visible through **Test Runs** and never cause
+  speculative physical wire attachment. Structural links, an active simulated
+  protocol boundary, and physical PHY/DFI signaling are distinct claims.
+* Preview samples are capped; counts include all observed records, while the
+  full provenance-checked JSON and protocol table preserve the details. An
+  incomplete capture is explicitly marked, not promoted to PASS.
+
+**Current PCIe capture:** pcie0.rx_req and pcie0.tx_cpl are accepted
+verilog-pcie RTL bridge interface TLPs, parsed by pinned upstream
+PcieIfFrame.to_tlp() / cocotbext-pcie, with a *modeled* Root Complex.
+The decoder records operation, direction, address, requester/tag, length,
+header/payload, byte enables and completions. It **does not** measure
+electrical PCIe PHY traffic, negotiated link training or physical-layer timing.
+
 ## Supported now / later
 
 | Protocol | Existing capture | Generic display |
