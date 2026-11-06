@@ -462,6 +462,42 @@ def collect(client,config,destination):
     dump(destination/'collection.json',{'notes':notes})
 
 
+
+def pcie_link_catalog(protocol_data, *, preview_limit=16):
+    """Read actual accepted PCIe RTL TLP transactions; never infer link traffic.
+
+    The configured Root Complex is behavioral. These records represent the
+    bridge's accepted rx_req/tx_cpl TLP interfaces, not PHY/link-layer traffic.
+    """
+    records = [r for r in (protocol_data or {}).get('records', [])
+               if r.get('protocol') == 'pcie' and r.get('kind') == 'transaction'
+               and r.get('source') in ('pcie0.rx_req', 'pcie0.tx_cpl')]
+    if not records:
+        return None
+    counts = {}
+    for row in records:
+        operation = row.get('operation', 'other')
+        counts[operation] = counts.get(operation, 0) + 1
+    permitted = ('direction', 'requester_id', 'tag', 'address', 'length_dw',
+                 'payload_bytes', 'completion_status', 'byte_count',
+                 'matched_request_address', 'request_to_completion_ps',
+                 'header_hex', 'first_be', 'last_be')
+    preview = []
+    for row in sorted(records, key=lambda r: (r.get('start_ps') or 0,
+                                              r.get('end_ps') or 0))[:preview_limit]:
+        fields = row.get('fields') or {}
+        preview.append({
+            'source': row['source'], 'operation': row['operation'],
+            'id': row.get('id'), 'start_ps': row.get('start_ps'),
+            'end_ps': row.get('end_ps'), 'status': row.get('status'),
+            'fields': {key: fields[key] for key in permitted if key in fields}
+        })
+    return {'boundary': 'accepted RTL PCIe TLP (modeled Root Complex)',
+            'sources': ['pcie0.rx_req', 'pcie0.tx_cpl'],
+            'total': len(records), 'operations': counts, 'preview': preview,
+            'capture_complete': protocol_data.get('capture_complete') is True}
+
+
 def evidence_index(evidence,output,repository):
     runs,entries,notes=[],[],[]
     if (evidence/'collection.json').exists():notes=json.loads((evidence/'collection.json').read_text()).get('notes',[])
@@ -541,6 +577,9 @@ def evidence_index(evidence,output,repository):
                 if protocol_data.get('schema_version')!=1:
                     raise ValueError('unsupported protocol publication schema')
                 entry['source_sha']=protocol_sha
+                link_catalog = pcie_link_catalog(protocol_data)
+                if link_catalog:
+                    entry['pcie_link'] = link_catalog
                 # Do not publish artifact-supplied HTML. Re-render the trusted
                 # JSON through the site source's audited escaping/textContent UI.
                 render_protocol_report(protocol_data, destination/'protocols.html')
@@ -728,6 +767,21 @@ def build(output,evidence,repository,sha,config):
             body = body.replace('__SIGNAL_DATA__', signal_data)
             parsed_data = json.dumps(parsed_rtl, separators=(',', ':')).replace('<','\\u003c')
             body = body.replace('__RTL_PARSE_DATA__', parsed_data)
+            # Bind the architectural PCIe TLP link only to verified CI run
+            # records.  This is a short index, not a fabricated live PHY link.
+            pcie_runs = [
+                {'run_id': e['run_id'], 'attempt': e['attempt'],
+                 'target': e['target'], 'recorded_at': e['recorded_at'],
+                 'source_sha': e['source_sha'], 'passed': e['passed'],
+                 'workflow': e['workflow'], 'report_path':
+                     e['path'].rsplit('/',1)[0] + '/protocols.html?protocol=pcie',
+                 'axi_report_path': e['path'],
+                 'raw_path': e['path'].rsplit('/',1)[0] + '/protocol-transactions.json',
+                 'link': e['pcie_link']}
+                for e in entries if e.get('pcie_link')
+            ]
+            pcie_json=json.dumps(pcie_runs,separators=(',',':')).replace('<','\\u003c')
+            body=body.replace('__PCIE_LINK_DATA__',pcie_json)
             architecture_js = (ROOT/'tools/templates/site_arch_explorer.js').read_text()
             body = body.replace('__ARCH_JS__', architecture_js)
         if page=='address-map':
