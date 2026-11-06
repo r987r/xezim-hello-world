@@ -36,7 +36,8 @@ integer checks=0,read_requests=0;
 ethernet_rx_desc_fetch #(
     .AXI_ADDR_WIDTH(64),.AXI_ID_WIDTH(4),
     .RING_BASE(64'h100),.RING_BYTES(64'h1000),
-    .BUFFER_BASE(64'h2000),.BUFFER_BYTES(64'h8000)
+    .BUFFER_BASE(64'h2000),.BUFFER_BYTES(64'h8000),
+    .ALT_BUFFER_BASE(64'h140000000),.ALT_BUFFER_BYTES(64'h2000000)
 ) dut (
     .clk,.rst,.req_valid,.req_ready,.req_ring_addr,.req_frame_len,.req_tag,
     .result_valid,.result_ready,.result_ok,.result_error,
@@ -166,16 +167,27 @@ initial begin
     // Too-small posted buffer and wrong region IDs are rejected before DMA.
     store(16'h160,64'h2400,32,4,0,0,0);
     request_desc(64'h160,85,8'h14,0,4'ha,0,0,0);
-    store(16'h180,64'h2600,2048,5,0,1,0);
-    request_desc(64'h180,85,8'h15,0,4'ha,0,0,0);
+    // Region 1 accepts physical >4GiB modeled DDR without truncation.
+    store(16'h180,64'h140000100,2048,5,0,1,0);
+    request_desc(64'h180,85,8'h15,1,0,64'h140000100,2048,5);
+    // Region 2 and wrong-region SRAM pointers must remain rejected.
+    store(16'h1c0,64'h140000100,2048,7,0,2,0);
+    request_desc(64'h1c0,85,8'h19,0,4'ha,0,0,0);
+    store(16'h1e0,64'h2600,2048,8,0,1,0);
+    request_desc(64'h1e0,85,8'h1a,0,4'ha,0,0,0);
+    // Region crossing and high-bit aliasing are rejected before packet DMA.
+    store(16'h200,64'h141fffff8,128,9,0,1,0);
+    request_desc(64'h200,85,8'h1b,0,4'ha,0,0,0);
+    store(16'h220,64'h100,128,10,0,1,0);
+    request_desc(64'h220,85,8'h1c,0,4'ha,0,0,0);
     // Reserved fields are not silently treated as valid new ABI.
     store(16'h1a0,64'h2800,2048,6,0,0,64'h1);
     request_desc(64'h1a0,85,8'h16,0,4'ha,0,0,0);
     // Bad ring address must cause no new AXI read.
     request_desc(64'h20000,85,8'h17,0,4'h8,0,0,0);
-    check(read_requests==6,"invalid ring address emitted no AR");
+    check(read_requests==10,"invalid ring address emitted no AR");
     request_desc(64'h123,85,8'h18,0,4'h8,0,0,0);
-    check(read_requests==6,"unaligned ring address emitted no AR");
+    check(read_requests==10,"unaligned ring address emitted no AR");
     $display("PASS ethernet_rx_desc_fetch_tb checks=%0d AXI_reads=%0d",
              checks,read_requests);
     $finish;
