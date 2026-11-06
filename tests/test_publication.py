@@ -50,6 +50,90 @@ class Links(HTMLParser):
 
 
 class PublicationTests(unittest.TestCase):
+    def test_ci_producer_discovery_includes_new_protocol_workflows(self):
+        workflows=site.discover_test_workflows(ROOT)
+        self.assertIn("ethernet-mvp.yml",workflows)
+        self.assertIn("ethernet-standalone.yml",workflows)
+        self.assertIn("pcie0-integrated.yml",workflows)
+        self.assertIn("full-chip.yml",workflows)
+        self.assertNotIn("pages.yml",workflows)
+        self.assertNotIn("publish-xezim.yml",workflows)
+        self.assertTrue(any("ethernet-chip-data-config" in a for a in workflows["ethernet-mvp.yml"]["artifacts"]))
+        self.assertTrue(any("pcie0-dedicated-noc" in a for a in workflows["pcie0-integrated.yml"]["artifacts"]))
+
+    def test_future_workflow_is_discovered_without_yaml_registration(self):
+        with tempfile.TemporaryDirectory() as temp:
+            directory=Path(temp)/".github/workflows"
+            directory.mkdir(parents=True)
+            (directory/"new-ip.yml").write_text(
+                "name: New protocol\njobs:\n  test:\n    steps:\n"
+                "      - uses: actions/upload-artifact@v4\n"
+                "        with:\n          name: custom-${{ github.run_id }}\n"
+                "          path: .tools/regression/chip-new-ip/\n")
+            result=site.discover_test_workflows(Path(temp))
+            self.assertIn("new-ip.yml",result)
+            self.assertEqual(result["new-ip.yml"]["label"],"New protocol")
+
+    def test_standalone_test_without_artifact_is_visible_as_workflow_only(self):
+        with tempfile.TemporaryDirectory() as temp:
+            directory=Path(temp)/".github/workflows"
+            directory.mkdir(parents=True)
+            (directory/"standalone.yml").write_text(
+                "name: Standalone Ethernet sanity\njobs:\n  test:\n    steps:\n"
+                "      - run: python3 -m unittest tests.test_ethernet_queue_api -v\n")
+            workflows=site.discover_test_workflows(Path(temp))
+            self.assertIn("standalone.yml",workflows)
+            self.assertEqual(workflows["standalone.yml"]["artifacts"],[])
+    def test_workflow_scoped_history_cannot_be_starved_by_other_ci(self):
+        from unittest.mock import Mock
+        from datetime import datetime
+        names={"ethernet-mvp.yml": {}, "pcie0-integrated.yml": {}}
+        calls=[]
+        def request(path):
+            calls.append(path)
+            workflow=next(name for name in names if name in path)
+            return {"workflow_runs": [
+                {"id": 123 if workflow.startswith("ethernet") else 456,
+                 "path": ".github/workflows/"+workflow,
+                 "head_branch": "main", "head_sha": SHA,
+                 "event": "workflow_dispatch", "status": "completed",
+                 "conclusion": "success"}]}
+        client=Mock(repository="r987r/xezim-hello-world",request=Mock(side_effect=request))
+        selected,notes=site.select_workflow_runs(client,names,{},4)
+        self.assertFalse(notes)
+        self.assertEqual(selected["ethernet-mvp.yml"][0]["id"],123)
+        self.assertEqual(selected["pcie0-integrated.yml"][0]["id"],456)
+        self.assertEqual(len(calls),2)
+        self.assertTrue(all("/actions/workflows/" in u for u in calls))
+        self.assertTrue(all("/actions/runs?" not in u for u in calls))
+
+    def test_unmerged_pr_excluded_and_main_accepted_in_workflow_history(self):
+        from unittest.mock import Mock
+        fixture_runs=[{"id": 10, "path": ".github/workflows/ethernet-mvp.yml",
+                       "head_branch": "unmerged-feature", "head_sha": "b"*40,
+                       "event": "pull_request"},
+                      {"id": 11, "path": ".github/workflows/ethernet-mvp.yml",
+                       "head_branch": "main", "head_sha": SHA,
+                       "event": "workflow_dispatch"}]
+        client=Mock(repository="r987r/xezim-hello-world",
+                    request=Mock(return_value={"workflow_runs":fixture_runs}))
+        selected,notes=site.select_workflow_runs(
+            client,{"ethernet-mvp.yml":{}},{},4)
+        self.assertEqual([run["id"] for run in selected["ethernet-mvp.yml"]],[11])
+        self.assertFalse(notes)
+
+    def test_truncated_workflow_history_is_explicitly_reported(self):
+        from unittest.mock import Mock
+        rows=[{"id":n,"path":".github/workflows/new-protocol.yml",
+               "head_branch":"unmerged", "head_sha":"b"*40,
+               "event":"pull_request"} for n in range(100)]
+        client=Mock(repository="r987r/xezim-hello-world",
+                    request=Mock(return_value={"workflow_runs":rows}))
+        selected,notes=site.select_workflow_runs(
+            client,{"new-protocol.yml":{}},{},4,max_pages=2)
+        self.assertEqual(selected["new-protocol.yml"],[])
+        self.assertEqual(client.request.call_count,2)
+        self.assertIn("truncated",notes[0])
     def test_complete_offline_site_links_are_relative_and_exist(self):
         with tempfile.TemporaryDirectory() as tmp:
             output=Path(tmp)/'site';dataset=site.build(output,Path(tmp)/'empty','r987r/xezim-hello-world',SHA,CONFIG)
