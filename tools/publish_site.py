@@ -324,8 +324,14 @@ def collect(client,config,destination):
                 dump(folder/'run.json',run)
                 continue
             artifacts=client.request(f'/repos/{client.repository}/actions/runs/{run["id"]}/artifacts?per_page=100')['artifacts']
+            # Artifact names may include GitHub run IDs/attempts. Accept only
+            # explicit producer-owned prefixes, never arbitrary ZIPs.
             for artifact in artifacts:
-                if artifact['name'] not in workflow['artifacts']:continue
+                allowed=workflow['artifacts']
+                if not any(artifact['name']==pattern or
+                           (pattern.endswith('*') and artifact['name'].startswith(pattern[:-1]))
+                           for pattern in allowed):
+                    continue
                 if artifact['expired']:
                     notes.append(f'Run {run["id"]}: expired artifact {artifact["name"]}')
                     continue
