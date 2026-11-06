@@ -60,10 +60,15 @@ def dma_params_for(cfg, core):
 
 
 def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
-         image_prefix='gen/chip', cpu_dma_mode=False, pcie_host_mode=False):
+         image_prefix='gen/chip', cpu_dma_mode=False, pcie_host_mode=False,
+          real_ddr_mode=False, ddr_wb_base=0, ddr_wb_adr_bits=30):
     """Emit standard chip, or opt-in CPU DMA firmware variant (same RTL/checker)."""
     if cpu_dma_mode != (cpu0_run_hook is not None):
         raise ValueError('CPU DMA mode requires a valid compiled C hook')
+    if real_ddr_mode and not cpu_dma_mode:
+        raise ValueError('real DDR requires CPU/iDMA firmware mode')
+    if real_ddr_mode and not (1 <= ddr_wb_adr_bits <= 30 and ddr_wb_base >= 0 and ddr_wb_base % 0x4000 == 0):
+        raise ValueError('bad generated DDR Wishbone parameters')
     if pcie_host_mode:
         cfg = pcie_chip.host_variant_config(cfg)
     fw, firmware = chip_bootgen.emit(cfg, out, cpu0_run_hook=cpu0_run_hook,
@@ -91,6 +96,7 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
     cfgprobe = probe_ports('cfgprobe', addr_bits=32, data_bits=32, id_bits=1)
     lines = ['// Generated chip boot + DMA configuration: see gen/chip/manifest.json.',
              'module soc_top #(parameter bit ProbeEnable = 0, DmaEnable = 0, DmaTestMode = 0) (input logic clk_i, rst_ni,', f'  input logic [{count-1}:0] hold_mask_i,',
+              *(['  input logic ddr_init_mode_i,'] if real_ddr_mode else []),
              f'  output logic [{count-1}:0] dma_irq_o, dma_irq_pending_o,',
              f'  output logic [{count-1}:0] released_o, fetch_valid_o,', f'  output logic [{32*count-1}:0] fetch_addr_o,',
              f'  output logic [{count-1}:0] sram_valid_o, sram_write_o,',
@@ -151,6 +157,8 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
         lines += [f'  lite_req_t cpu_{i}_req;', f'  lite_resp_t cpu_{i}_rsp;']
         release = 'rst_ni' if i == 0 else f'rst_ni && reset_regs[{(i-1)//8}][{(i-1)%8}] && !hold_mask_i[{i}]'
         lines += [f'  assign cpu_reset_n[{i}] = ({release}) && !DmaTestMode;', f'  assign released_o[{i}] = cpu_reset_n[{i}];']
+        if real_ddr_mode:
+            release += ' && !ddr_init_mode_i'
         if i == 0:
             con = {'clk':'clk_i','rst':f'!cpu_reset_n[{i}]','trap':f'cpu_{i}_trap'}
             lines += [f'  logic cpu_{i}_trap;']
@@ -193,8 +201,8 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
                       f'  {dtype(c,"rsp")} cpu_config_{i}_rsp;',
                       f'  assign {req(d)} = DmaTestMode ? probe_req : cpu_data_{i}_req;',
                       f"  assign cpu_data_{i}_rsp = DmaTestMode ? '0 : {rsp(d)};",
-                      f'  assign {req(c)} = DmaTestMode ? cfgprobe_req : cpu_config_{i}_req;',
-                      f"  assign cpu_config_{i}_rsp = DmaTestMode ? '0 : {rsp(c)};"]
+                      f'  assign {req(c)} = DmaTestMode ? cfgprobe_req : '+('ddr_init_mode_i ? cfgprobe_req : ' if real_ddr_mode else '')+'cpu_config_{i}_req;',
+                      f"  assign cpu_config_{i}_rsp = "+('DmaTestMode || ddr_init_mode_i' if real_ddr_mode else 'DmaTestMode')+f" ? '0 : {rsp(c)};"]
         lines += [module('cpu_noc_adapter', 'u_edge_'+name, {
             'data_req_t':dtype(d,'req'),'data_rsp_t':dtype(d,'rsp'),'cfg_req_t':dtype(c,'req'),'cfg_rsp_t':dtype(c,'rsp'),
             'ConfigBase':f"32'h{cfg_base:08x}",'ConfigEnd':f"32'h{cfg_end:08x}"}, {
@@ -269,6 +277,8 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
                 continue
             port = all_ports[f"m_{sub['name']}_local_{plane}_{endpoint}"]
             lines += [f"  assign {req(port)} = '0;"]
+    if real_ddr_mode:
+        lines += ['  logic ddr_init_done, ddr_init_error;']
     # Leaf attachments: SRAM/ROM/flash use only upstream memory/IP modules.
     for p in noc_manifest['slaves']:
         ep = p['endpoint']
@@ -293,6 +303,9 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
                 'IdWidth':p['id_width'],'Base':f"64'h{region['base']:016x}",'Bytes':size,
                 'ReadOnly':int(is_rom),'InitFile':f'"{image_prefix}/{image}"' if image else '""'},
                 {'clk_i':'clk_i','rst_ni':'rst_ni','req_i':req(p),'rsp_o':rsp(p),**mon})]
+        elif ep == 'controller_regs' and p['network'] == 'memory0_local_config' and real_ddr_mode:
+            # Live memory controller wrapper below owns this separate Config NoC target.
+            pass
         elif ep == 'controller_regs' and any(
                 p['network'] == sub['name']+'_local_config'
                 for sub in cfg['subsystems'] if sub['type']=='peripheral'):
@@ -387,7 +400,8 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
               '    end', 'endmodule']
     (out/'soc_top.sv').write_text('\n'.join(lines)+'\n')
     emit_tb(cfg, fw, out, image_prefix=image_prefix,
-            cpu_dma_mode=cpu_dma_mode, pcie_host_mode=pcie_host_mode)
+            cpu_dma_mode=cpu_dma_mode, pcie_host_mode=pcie_host_mode,
+            real_ddr_mode=real_ddr_mode)
     emit_dma_tb(cfg, fw, out)
     manifest = {'top':'soc_top','testbench':'full_chip_tb','dma_testbench':'full_chip_dma_tb',
                 'cores':count,'networks':len(nets),
@@ -395,7 +409,8 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
                 'dma_configuration':'DmaEnable=1; default cold-boot mode DmaEnable=0',
                 'memory_crossbar_inputs':1,
                 'memory_crossbar_outputs':len(cfg['memory_targets']),
-                'memory_controllers':'AXI slave SRAM models only; no physical HBM/DDR RTL',
+                'memory_controllers':('Pinned LiteDRAM RTL + modeled DFI for DDR; HBM SRAM model' if real_ddr_mode else 'AXI slave SRAM models only; no physical HBM/DDR RTL'),
+                 'real_ddr_controller':real_ddr_mode,
                 'peripheral_subsystems':[{
                     'name':s['name'],'ip':s['ip'],
                     'local_data_noc':s['name']+'_local_data',
@@ -505,13 +520,16 @@ def emit_dma_tb(cfg, fw, out):
 
 
 def emit_tb(cfg, fw, out, *, image_prefix='gen/chip', cpu_dma_mode=False,
-            pcie_host_mode=False):
+            pcie_host_mode=False, real_ddr_mode=False):
     n = len(fw['cores'])
     words = [len(fw['images'][c['name']]) for c in fw['cores']]
     max_words = max(words)
     bases = '{'+', '.join(f"32'h{v:08x}" for v in reversed(fw['sram_bases']))+'}'
     counts = '{'+', '.join(f"32'd{v}" for v in reversed(words))+'}'
     opts = dict(cfg['verification']['full_chip_boot'])
+    if real_ddr_mode:
+        opts['timeout_cycles'] = max(opts['timeout_cycles'], 1500000)
+        opts['phase_timeout_cycles'] = max(opts['phase_timeout_cycles'], 1200000)
     if pcie_host_mode:
         opts['timeout_cycles'] = max(opts['timeout_cycles'], 600000)
         opts['phase_timeout_cycles'] = max(opts['phase_timeout_cycles'], 500000)
@@ -531,6 +549,7 @@ def emit_tb(cfg, fw, out, *, image_prefix='gen/chip', cpu_dma_mode=False,
         f'  localparam [N*32-1:0] BASES = {bases};', f'  localparam [N*32-1:0] WORDS = {counts};',
         f"  localparam [31:0] MAILBOX = 32'h{fw['mailbox']:08x};", f'  localparam integer DONE_OFFSET = {fw["done_offset"]};',
         '  reg clk = 0, rst_n = 0;',
+        *(['  reg ddr_init_mode = 1;'] if real_ddr_mode else []),
         *(['  wire rst = ~rst_n;'] if pcie_host_mode else []),
         '`ifndef COCOTB_SIM', '  always #5 clk = ~clk;',
         '  initial begin repeat (10) @(negedge clk); rst_n = 1; end', '`endif',
@@ -551,6 +570,7 @@ def emit_tb(cfg, fw, out, *, image_prefix='gen/chip', cpu_dma_mode=False,
         '    .sram_valid_o(sram_valid), .sram_write_o(sram_write), .sram_addr_o(sram_addr),',
         '    .sram_data_o(sram_data), .sram_strb_o(sram_strb), .rom_reads_o(rom_reads), .flash_reads_o(flash_reads),',
         '    .dma_irq_o(), .dma_irq_pending_o(),',
+        *(['    .ddr_init_mode_i(ddr_init_mode),'] if real_ddr_mode else []),
         '    '+',\n    '.join([*(f'.{p[0]}({p[0]})' for p in probe),
                            *(f'.{p[0]}(\'0)' if request_field(p[2],p[3]) else f'.{p[0]}()'
                              for p in cfgprobe),
