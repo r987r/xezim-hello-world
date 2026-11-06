@@ -1,0 +1,43 @@
+name: CSR runtime backdoor access policy
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'tools/csr_runtime.py'
+      - 'tools/csr_backdoor.py'
+      - 'tests/test_csr_runtime.py'
+      - 'tests/test_csr_backdoor.py'
+      - '.github/workflows/csr-backdoor.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  csr-runtime-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Fail-closed live handle and logical-map unit tests
+        run: |
+          python3 -m unittest tests.test_csr_runtime tests.test_csr_backdoor -v
+      - name: Verify no direct signal write API in runtime adapter
+        run: |
+          python3 - <<'PY'
+          import ast
+          from pathlib import Path
+          path=Path('tools/csr_runtime.py')
+          source=path.read_text()
+          tree=ast.parse(source)
+          assigns=[n for n in ast.walk(tree) if isinstance(n,(ast.Assign,ast.AugAssign,ast.AnnAssign))]
+          for n in assigns:
+              for target in (n.targets if isinstance(n,ast.Assign) else [n.target]):
+                  if isinstance(target,ast.Attribute) and target.attr=='value':
+                      raise AssertionError('CSR runtime must never write simulator signal value')
+          assert 'direct CSR backdoor writes are disabled' in source
+          print('PASS: runtime read-only CSR access contract')
+          PY
