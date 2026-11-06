@@ -203,6 +203,42 @@ jobs:
           set -euo pipefail
           python3 rtl/memory/ddr4/run_functional.py
 
+      - name: Export observed DDR4 DFI commands into unified Test Runs protocol evidence
+        run: |
+          set -euo pipefail
+          python3 rtl/memory/ddr4/dfi_to_protocol.py \
+            --input .tools/ddr4/litedram_sim \
+            --output .tools/regression/ddr4-standalone
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path(".tools/regression/ddr4-standalone")
+          d=json.loads((p/"protocol-transactions.json").read_text())
+          assert d["capture_complete"] and d["schema_version"]==1
+          from collections import Counter
+          commands=Counter(r["operation"] for r in d["records"])
+          # LiteDRAM's current behavioral PHY stream observes RD/WR, PRE
+          # and REF, but emits no decoded ACT. An ACT count of zero must
+          # remain visible as missing coverage, not falsify an observed ACT.
+          assert {"rd","wr","pre","ref"} <= set(commands), commands
+          assert all(r["protocol"]=="dfi" for r in d["records"])
+          assert not any(r["kind"]=="transaction" for r in d["records"])
+          assert d["run"]["commit"] and not d["run"]["dirty"]
+          print("PASS source-verified DFI events:",len(d["records"]),
+                "operations:",dict(sorted(commands.items())),
+                "ACT observed:",commands["act"],
+                "(zero is a coverage gap, not a failing DDR functional test)")
+          PY
+
+      - name: Upload compact source-verified DDR4 DFI protocol report for main test explorer
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ddr4-standalone-dfi-protocol-${{ github.run_id }}
+          path: .tools/regression/ddr4-standalone/
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Verify DDR4 standalone HTML report (measured vs unmeasured)
         run: |
           set -euo pipefail
