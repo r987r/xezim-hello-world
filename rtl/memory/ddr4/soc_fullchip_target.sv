@@ -32,7 +32,45 @@ module ddr_litedram_fullchip_target #(
   logic [1:0] m_bresp,m_rresp;
   logic m_awvalid,m_awready,m_wvalid,m_wready,m_wlast;
   logic m_bvalid,m_bready,m_arvalid,m_arready,m_rvalid,m_rready,m_rlast;
-  logic [63:0] unused_user_flags;
+  // Passive read-only evidence from the actual generated pinned DDR4 RTL.
+  // Signal names are contract-checked by dfi_probe_contract.py at generation.
+  logic [31:0] dfi_read_count, dfi_write_count, bank_storage_write_count;
+  wire dfi_rd_en = u_controller.soc_ddrphy_dfi_p0_rddata_en |
+                   u_controller.soc_ddrphy_dfi_p1_rddata_en |
+                   u_controller.soc_ddrphy_dfi_p2_rddata_en |
+                   u_controller.soc_ddrphy_dfi_p3_rddata_en;
+  wire dfi_wr_en = u_controller.soc_ddrphy_dfi_p0_wrdata_en |
+                   u_controller.soc_ddrphy_dfi_p1_wrdata_en |
+                   u_controller.soc_ddrphy_dfi_p2_wrdata_en |
+                   u_controller.soc_ddrphy_dfi_p3_wrdata_en;
+  wire bank_storage_we =
+      (|u_controller.soc_ddrphy_bankmodel0_write_port_we) |
+      (|u_controller.soc_ddrphy_bankmodel1_write_port_we) |
+      (|u_controller.soc_ddrphy_bankmodel2_write_port_we) |
+      (|u_controller.soc_ddrphy_bankmodel3_write_port_we) |
+      (|u_controller.soc_ddrphy_bankmodel4_write_port_we) |
+      (|u_controller.soc_ddrphy_bankmodel5_write_port_we) |
+      (|u_controller.soc_ddrphy_bankmodel6_write_port_we) |
+      (|u_controller.soc_ddrphy_bankmodel7_write_port_we) |
+      (|u_controller.soc_ddrphy_bankmodel8_write_port_we) |
+      (|u_controller.soc_ddrphy_bankmodel9_write_port_we) |
+      (|u_controller.soc_ddrphy_bankmodel10_write_port_we) |
+      (|u_controller.soc_ddrphy_bankmodel11_write_port_we) |
+      (|u_controller.soc_ddrphy_bankmodel12_write_port_we) |
+      (|u_controller.soc_ddrphy_bankmodel13_write_port_we) |
+      (|u_controller.soc_ddrphy_bankmodel14_write_port_we) |
+      (|u_controller.soc_ddrphy_bankmodel15_write_port_we);
+  always_ff @(posedge clk_i or negedge rst_ni) begin
+    if (!rst_ni) begin
+      dfi_read_count <= '0;
+      dfi_write_count <= '0;
+      bank_storage_write_count <= '0;
+    end else if (ddr_init_done_o && !ddr_init_error_o) begin
+      if (dfi_rd_en) dfi_read_count <= dfi_read_count + 1'b1;
+      if (dfi_wr_en) dfi_write_count <= dfi_write_count + 1'b1;
+      if (bank_storage_we) bank_storage_write_count <= bank_storage_write_count + 1'b1;
+    end
+  end
   // Data crossbar targets have local AXI ID width 4; reject reconfiguration.
   initial begin
     assert ($bits(data_req_i.aw.id) == 4 && $bits(data_req_i.aw.addr) == 64)
