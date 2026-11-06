@@ -236,16 +236,17 @@ function draw(){
   ctx.fillText("Simulation time: "+psTime(first)+"–"+psTime(last)+" ns",left+span/2,height-13);
 }
 function exportFiltered(ext){
+  const cols=["protocol","source","operation","id","start_ps","end_ps","status","fields"];
+  const quote=x=>'"'+String(x??"").replaceAll('"','""')+'"';
+  const csv=[cols.join(","),...current.filtered.map(r=>
+    cols.map(k=>quote(k==="fields"?JSON.stringify(r.fields||{}):r[k])).join(",")
+  )].join("\r\n");
   const blob=ext==="json"
     ?new Blob([JSON.stringify({run:current.entry?.target,
       preview:current.preview,records:current.filtered},null,2)],{type:"application/json"})
-    :new Blob([["protocol","source","operation","id","start_ps","end_ps","status","fields"]
-      .join(","),...current.filtered.map(r=>[
-       r.protocol,r.source,r.operation,r.id,r.start_ps,r.end_ps,r.status,JSON.stringify(r.fields)]
-       .map(x=>'"'+String(x??"").replaceAll('"','""')+'"').join(","))].join("\r\n")],
-      {type:"text/csv"});
+    :new Blob([csv],{type:"text/csv"});
   const url=URL.createObjectURL(blob),a=document.createElement("a");
-  a.href=url;a.download="traffic-"+(current.entry?.target||"run")+"."+ext;
+  a.href=url;a.download="traffic-"+(current.entry?.target||"all-runs")+"."+ext;
   a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 // Used by the existing per-target list to open the integrated inspector.
