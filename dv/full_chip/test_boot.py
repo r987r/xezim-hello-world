@@ -151,22 +151,31 @@ async def execute_cold_boot(dut, *, external=None):
         from tools.axi_report import read_events
         events, issues = read_events(events_file)
         assert not issues, f"bad AXI trace: {issues[:3]}"
-        actual = {target: {"ar": 0, "aw": 0}
-                  for target in ("memory0.ddr0","memory0.hbm0")}
+        # The minimal combined host smoke uses DDR + PCIe SRAM. The
+        # original separate CPU C/DMA regression still requires DDR + HBM.
+        targets = (("memory0.ddr0", "pcie0.sram") if host is not None else
+                   ("memory0.ddr0", "memory0.hbm0"))
+        actual = {target: {"ar": 0, "aw": 0} for target in targets}
         for event in events:
             if event.get("monitor") != "compute0_local_data.dma" or event.get("channel") not in ("ar","aw"):
                 continue
             address = int(event["fields"]["addr"], 0)
             for target in actual:
-                region = regions[target]
-                if region.base <= address < region.base + region.capacity:
+                if target == "pcie0.sram":
+                    base, capacity = host.sram_base, 16384
+                else:
+                    region = regions[target]
+                    base, capacity = region.base, region.capacity
+                if base <= address < base + capacity:
                     actual[target][event["channel"]] += 1
         for target, counts in actual.items():
             assert counts["aw"] > 0 and counts["ar"] > 0, (
                 f"real CPU DMA missing full-NoC DDR/HBM accepted writes+reads: {target}, {counts}")
-        trace_phase("CPU compiled C DMA complete: monitored DDR+HBM roundtrips")
+        trace_phase("CPU compiled C DMA complete: monitored " +
+                    ("DDR + PCIe SRAM" if host is not None else "DDR + HBM"))
         dut._log.info("PASS fullchip: CPU-executed compiled C DMA, shared INIT/RUN/CHECK, "
-                      "DDR+HBM roundtrip, SRAM allocator and passive AXI monitors")
+                      "%s, SRAM allocator and passive AXI monitors",
+                      "DDR+PCIe SRAM roundtrip" if host is not None else "DDR+HBM roundtrip")
         if host is None:
             return
         # Both external host and C-DMA now run in ONE real RTL configuration;
