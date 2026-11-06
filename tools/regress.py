@@ -69,12 +69,12 @@ def load_config(path):
             raise ValueError(f'{name}: build reuse is only supported by cocotb-verilator')
         if test.get('mode', 'simulate') not in ('simulate', 'compile') or (test.get('mode') == 'compile' and test['engine'] != 'xezim'):
             raise ValueError(f'{name}: mode=compile requires the Xezim engine')
-        if test.get('firmware_mode') not in (None, 'cpu_dma', 'pcie_host', 'pcie_dma_host', 'ethernet_mvp'):
+        if test.get('firmware_mode') not in (None, 'cpu_dma', 'pcie_host', 'pcie_dma_host', 'ethernet_mvp', 'ethernet_cpu'):
             raise ValueError(f'{name}: unknown compiled CPU firmware mode')
         if 'firmware_mode' in test and (
             test['engine'] != 'cocotb-verilator' or
             'chip_boot' not in test.get('bender_targets', []) or
-            (test['firmware_mode'] in ('cpu_dma','pcie_dma_host','ethernet_mvp')
+            (test['firmware_mode'] in ('cpu_dma','pcie_dma_host','ethernet_mvp','ethernet_cpu')
              and 'dma' not in test.get('bender_targets', []))):
             raise ValueError(f'{name}: selected test needs real chip RTL and specified active IP')
         if 'report' in test:
@@ -365,7 +365,7 @@ def run_target(name, test, resolver, options):
                    if Path(filename).parent == generated_root and
                    Path(filename).name in replacements else filename
                    for filename in sources]
-    if test.get('firmware_mode') == 'ethernet_mvp':
+    if test.get('firmware_mode') in ('ethernet_mvp', 'ethernet_cpu'):
         if str(ROOT) not in sys.path:
             sys.path.insert(0,str(ROOT))
         from full_chip_gen import emit as emit_chip
@@ -373,9 +373,14 @@ def run_target(name, test, resolver, options):
         cfg = yaml.safe_load((ROOT/'config/soc.yaml').read_text())
         noc_manifest = json.loads((ROOT/'gen/supernoc/manifest.json').read_text())
         variant = out/'variant'
-        emit_chip(cfg,noc_manifest,ROOT/'gen/noc/floonoc',variant,
-                  image_prefix=variant.relative_to(ROOT).as_posix(),
-                  ethernet_mode=True)
+        if test['firmware_mode'] == 'ethernet_cpu':
+            from cpu_dma_firmware import prepare as prepare_cpu_firmware
+            prepare_cpu_firmware(cfg,noc_manifest,ROOT/'gen/noc/floonoc',variant,
+                                 ethernet_cpu_mode=True)
+        else:
+            emit_chip(cfg,noc_manifest,ROOT/'gen/noc/floonoc',variant,
+                      image_prefix=variant.relative_to(ROOT).as_posix(),
+                      ethernet_mode=True)
         generated_root=ROOT/'gen/chip'
         replacements={'soc_top.sv','full_chip_tb.sv','full_chip_dma_tb.sv'}
         sources=[str(variant/Path(filename).name)
