@@ -37,6 +37,29 @@ python3 tools/action_evidence.py \
 
 Only supply `--protocols` when the test has a protocol capture. Likewise `--axi` and `--scoreboard` are opt-in and **never** implicitly faked when absent. Missing or malformed references, duplicate actor claims for the same passive transaction, non-OKAY AXI, overflowed/incomplete captures, out-of-order times and unchecked accepts are errors. `--require-all` also demands all planned action instances issued, even when no independent protocol check exists. Note that **the command can exit zero for valid but unverified evidence**; always inspect the reported `passed` and `status` separately.
 
+
+## SystemVerilog to v2 driver-event handoff
+
+After SCN-3's Verilator driver-only smoke (or an SV testbench using the same
+generated package), run:
+
+```sh
+python3 tools/action_sv_import.py \
+  --plan .tools/scenario-sv/scenario-plan.json \
+  --sv-events .tools/scenario-sv/sv-driver-events.json \
+  --out .tools/scenario-sv/action-events.jsonl \
+  --tick-ps 1000
+```
+
+The `--tick-ps` factor is **required** and must match the simulator's actual
+SV time unit. Never infer clock cycles or use an arbitrary default. The
+converter verifies the original scenario SHA, action ID, actor, phase, kind,
+original SCN-3 `driver_log_unverified` status, and every record's
+`rtl_observed: false`. It maps only `issued` and `driver_done`, rejects
+forged acceptance/checker stages, and emits action-events v2 with
+`origin: sv_driver` and **empty evidence**. Only passive monitor and
+checker artifacts can add real accepted/completed/checked stages.
+
 ## Compatibility and next steps
 
 The v2 row carries `scenario_id`, `plan_sha256`, `action_instance_id`, actor, phase, kind, stage, sequence, simulator timestamp (picoseconds), origin and optional evidence reference. A source-neutral `action-events.jsonl` stream is additive to current test-flow v1; it permits 1,200+ interleaved and repeated actions without the old one-required-step-per-run restriction.
