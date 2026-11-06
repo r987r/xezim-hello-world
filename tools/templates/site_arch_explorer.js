@@ -341,8 +341,20 @@ const trafficContext=document.getElementById("arch-traffic-context");
 // electrical connectivity. Unknown source IDs remain accessible through
 // test-run reports rather than being attached to an invented diagram node.
 function trafficOwner(source){
-  if(nodes.has(source))return source;
-  const base=String(source).split(".")[0];
+  // Bind to the deepest *real* architecture node owning this monitor.
+  // memory0.ddr0.dfi -> memory0.ddr0, including nested IPs and adapters.
+  // Do not assign a name-only pseudo-node; exact source ownership is
+  // matched against generator-derived instances, not invented RTL links.
+  const name=String(source);
+  let owner=null;
+  for(const id of nodes.keys()){
+    if((name===id||name.startsWith(id+"."))&&
+       (owner===null||id.length>owner.length))owner=id;
+  }
+  if(owner)return owner;
+  // Some external interface probes are adjacent to the IP rather than
+  // module children: pcie0.rx_req or ethernet0.gmii_tx -> pcie0.ip etc.
+  const base=name.split(".")[0];
   if(nodes.has(base+".ip"))return base+".ip";
   if(nodes.has(base))return base;
   return null;
