@@ -1,7 +1,6 @@
 # Generic peripheral generator integration boundary
 
-The generic peripheral emitter in this branch must be integrated without
-inventing packet-capable hardware behind the reserved endpoints.
+The generic peripheral emitter and current variant-specific hardware attachments must be distinguished without inventing packet-capable hardware behind default reserved endpoints. This is a historical boundary note; the maintained entry points are [architecture](architecture.md), [verification](verification.md), and [next-stage integration](multiprotocol-integration-readiness.md).
 
 - `config/soc.yaml` defines the typed SoC peripheral and address map.
 - `tools/socgen.py`, `tools/floonoc_gen.py`,
@@ -12,9 +11,9 @@ inventing packet-capable hardware behind the reserved endpoints.
   structural connection **if** the chip manifest marks that endpoint as
   `reserved_idle`. Control endpoints marked `explicit_axi_error`
   are **not** queue registers.
-- Future Ethernet attachment must use the proven MAC/CDC, queue/DMA,
-  completion writer, and actual AXI arbitration; only then may the
-  generated manifest promote attachment to live.
+- The opt-in Ethernet variant now uses the verified MAC/CDC, queue/DMA,
+  completion writer, and real AXI arbitration. Only its **own** generated
+  manifest may mark that RTL attachment live; default chip remains reserved.
 - Build and source hash verification must run again after merge onto main,
   because newer memory and DV changes may affect generated collateral.
 
