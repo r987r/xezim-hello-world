@@ -23,12 +23,12 @@ class NativeDdrCsrTests(unittest.TestCase):
         self.real=ddr_chip.variant_configuration(self.cfg)
         self.native={
             "csr_registers":{
-                "ddrctrl_init_done":{"addr":0x2000,"size":1,"type":"rw"},
-                "ddrctrl_init_error":{"addr":0x2004,"size":1,"type":"rw"},
-                "sdram_dfii_control":{"addr":0x2008,"size":1,"type":"rw"},
-                "sdram_dfii_pi0_command_issue":{"addr":0x200c,"size":1,"type":"rw"},
-                "sdram_dfii_pi0_wrdata":{"addr":0x2010,"size":2,"type":"rw"},
-                "ddrctrl_status":{"addr":0x2018,"size":1,"type":"ro"},
+                "ddrctrl_init_done":{"addr":0x4000,"size":1,"type":"rw"},
+                "ddrctrl_init_error":{"addr":0x4004,"size":1,"type":"rw"},
+                "sdram_dfii_control":{"addr":0x4008,"size":1,"type":"rw"},
+                "sdram_dfii_pi0_command_issue":{"addr":0x400c,"size":1,"type":"rw"},
+                "sdram_dfii_pi0_wrdata":{"addr":0x4010,"size":2,"type":"rw"},
+                "ddrctrl_status":{"addr":0x4018,"size":1,"type":"ro"},
                 "foreign_unrouted":{"addr":0xa000,"size":1,"type":"rw"},
             }
         }
@@ -39,7 +39,7 @@ class NativeDdrCsrTests(unittest.TestCase):
             "config_base":0x40030000,
             "configured_window_bytes":16384,
             "window_bytes":16384,
-            "generated_wb_base":0x2000,
+            "generated_wb_base":0x4000,
             "actions":[{"csr":name} for name in
                        ("ddrctrl_init_done","ddrctrl_init_error",
                         "sdram_dfii_control","sdram_dfii_pi0_command_issue")]
@@ -103,7 +103,7 @@ class NativeDdrCsrTests(unittest.TestCase):
 
     def test_reject_duplicate_missing_invalid_vendor_registers(self):
         native=copy.deepcopy(self.native)
-        native["csr_registers"]["ddrctrl_init_error"]["addr"]=0x2000
+        native["csr_registers"]["ddrctrl_init_error"]["addr"]=0x4000
         with self.assertRaisesRegex(DdrCsrError,"overlapping"):
             self.generate(native=native)
         native=copy.deepcopy(self.native)
@@ -121,11 +121,11 @@ class NativeDdrCsrTests(unittest.TestCase):
 
     def test_reject_stale_and_incompatible_variant(self):
         broken=copy.deepcopy(self.real)
-        broken["address_map"]["config"][-1]["size"]="0x2000"
+        broken["address_map"]["config"][-1]["size"]="0x4000"
         with self.assertRaises((DdrCsrError,address_map.AddressMapError)):
             self.generate(variant=broken)
         transport=copy.deepcopy(self.transport)
-        transport["generated_wb_base"]=0x4000
+        transport["generated_wb_base"]=0x8000
         with self.assertRaisesRegex(DdrCsrError,"required"):
             self.generate(transport=transport)
         transport=copy.deepcopy(self.transport)
