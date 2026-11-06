@@ -22,9 +22,28 @@ class RegressionTests(unittest.TestCase):
 
     def test_full_suite_covers_all_profiles_and_both_simulators(self):
         names = regress.expand(self.config, ['full'])
-        self.assertEqual(set(names), set(self.config['tests']))
+        self.assertEqual(set(names), {name for name, test in self.config['tests'].items()
+                                      if not test.get('opt_in', False)})
+        self.assertEqual(regress.expand(self.config, ['ddr-real']), ['chip-ddr4-real'])
+        self.assertNotIn('chip-ddr4-real', names)
         self.assertTrue({'memory-full', 'memory-sparse', 'boot-relocated',
                          'supernoc', 'supernoc-negative', 'noc-xezim'} <= set(names))
+
+    def test_opt_in_requires_explicit_suite_and_boolean(self):
+        import tempfile
+        for bad in ("boolean", "unlisted", "default"):
+            cfg = copy.deepcopy(self.config)
+            if bad == "boolean":
+                cfg["tests"]["chip-ddr4-real"]["opt_in"] = "yes"
+            elif bad == "unlisted":
+                cfg["suites"]["ddr-real"] = []
+            else:
+                cfg["suites"]["full"].append("chip-ddr4-real")
+            with tempfile.TemporaryDirectory() as tmp:
+                p = Path(tmp) / "regression.yaml"
+                p.write_text(yaml.safe_dump(cfg))
+                with self.assertRaises(ValueError):
+                    regress.load_config(p)
 
     def test_suite_errors_fail_closed(self):
         self.config['suites']['loop'] = ['loop']
