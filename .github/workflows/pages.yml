@@ -167,3 +167,12 @@ jobs:
       - name: Deploy documentation and verified run evidence
         id: deployment
         uses: actions/deploy-pages@v4
+      - name: Verify actual public Pages CSR browser and qualified DDR provenance
+        # Do not mark the release green based solely on the uploaded artifact.
+        env:
+          PUBLISHED_PAGES_URL: ${{ steps.deployment.outputs.page_url }}
+          PUBLISHED_MAIN_SHA: ${{ github.sha }}
+        run: |
+          python3 tools/check_published_csr.py \
+            --base-url "$PUBLISHED_PAGES_URL" \
+            --sha "$PUBLISHED_MAIN_SHA"
