@@ -1,5 +1,32 @@
 # CSR ownership and generation contract
 
+> **Implementation status (2026-11-06):** The merged CSR-1 foundation (#83) provides a source-controlled SoC aperture map, initial boot-reset SystemRDL model, deterministic PeakRDL outputs, generated C headers/JSON, and the existing Pages Address Map plus per-run passive AXI address annotations. This does **not** mean every subsystem's registers are described, all firmware uses generated headers, or generated register RTL/back-door paths are active in the default full chip. The follow-on tracks remain open: reset-bank RTL [#86](https://github.com/r987r/xezim-hello-world/pull/86), firmware DMA shim [#93](https://github.com/r987r/xezim-hello-world/pull/93) / [#90](https://github.com/r987r/xezim-hello-world/issues/90), real DDR native CSR [#100](https://github.com/r987r/xezim-hello-world/pull/100) / [#98](https://github.com/r987r/xezim-hello-world/issues/98), runtime CSR back-door [#91](https://github.com/r987r/xezim-hello-world/issues/91). These PRs are **draft/unmerged** as of this review; their passing preview jobs are not released Pages proof.
+
+## Unified address-map / software adoption matrix (2026-11-06)
+
+| IP or resource | Authoritative source | Implemented in merged main | Follow-on / qualification |
+| --- | --- | --- | --- |
+| SoC ROM, SRAM, flash, DDR, HBM apertures and CSR windows | `config/soc.yaml` | 64-bit physical window and backing-size map; not all windows are active controller registers | Per-variant exact instance/RTL qualification; do not confuse memory windows with CSRs |
+| Project-owned boot/reset | `csr/rdl/boot_reset_ctrl.rdl` + PeakRDL | Generated trial C header, JSON, trial SV; live default register bank not replaced | #86 actual Config-NoC RTL integration, CPU/ACK/strobes/reset equivalence |
+| CPU DMA shim | Existing `soc_dma_regs` RTL, software model in #93 | Existing handwritten `sw/dma/dma.h` ABI; real DMA datapath | #90/#93 generated per-IP header and real CPU migration; no duplicated offset constants |
+| Upstream PULP iDMA | Pinned upstream generator/RTL | Working vendor engine and descriptor ABI | Import **actual** native CSR map and cross-check against real RTL; never replace vendor CSR RTL with project RDL |
+| LiteDRAM controller | Pinned LiteDRAM/LiteX `csr.json` + Wishbone translation | Real DDR-B integration exists as opt-in; default remains fast modeled RAM with reserved control window | #98/#100 draft: native CSR word catalog and verified DDR-variant Pages selector; no invented bitfields/resets |
+| Ethernet queue/MAC | Actual queue RTL and `sw/ethernet/eth_queue_abi.h` | Existing software ABI and protocol tests | Import/migrate source-true queue control register metadata; distinguish queue descriptors from CSRs |
+| PCIe bridge | Pinned bridge RTL and any upstream management definitions | PCIe traffic/bridge integration | Source-true control/management CSR catalog only where implemented and exposed |
+| HBM | `config/soc.yaml` memory aperture | Memory window/model metadata only | Do not invent HBM controller registers without a real controller and vendor map |
+
+**One register definition per owner:** SoC composition owns *instance and absolute base*, per-IP RDL owns project custom *offsets/fields/semantics*, pinned upstream generators own third-party register layout, and runtime elaboration owns *actual hierarchy handles*. Generate/compose a **per-variant** catalog for HTML, firmware base headers, and verification; no independently maintained duplicate CSR tables. Distinguish source-defined, implemented in exact RTL, and independently observed frontdoor traffic. A successful HTML preview is not a successful production Pages deployment.
+
+**Firmware rules:** Drivers include their own generated IP header and the relevant variant-specific instance-base header, with checked transitional aliases until migration completes. Keep descriptor/CQ structures in separate ABI headers. `#define` offsets/masks have no runtime table by themselves; unused `static inline` functions are eligible for section garbage collection only with compatible compiler/linker flags. Record actual RV32I ELF `size`/`nm` evidence, compile and execute real CPU firmware, and reject ABI/offset drift before claiming that all software is migrated.
+
+**Human-readable Pages goal:** Existing `address-map.html` searches physical regions and defined register rows and has an Inspect JSON detail panel; field detail exists only where sourced. The #100 variant selector is not released until merged, full real DDR CI qualifies its native CSR observations, and a **main-branch Pages deployment succeeds**. Follow-on UX should expand an IP into a readable register/field table (absolute and relative addresses, width, RO/RW, reset when known, side effects, source, generated C symbol), link to *measured* per-run AXI transactions, and clearly mark reserved, unavailable, or unobserved entries. Never show DDR command ACT/PCH/RD/WR as controller CSR rows: those belong to separate DFI/protocol evidence.
+
+**Frontdoor/backdoor:** Register frontdoor is CPU/BFM MMIO over the real Config NoC; passive accepted AXI is evidence. Backdoor CSR read is a separate, fail-closed exact-elaboration handle binding under #91 and is **not yet qualified** for all subsystems. Side-effectful registers default frontdoor-only. Bulk SRAM/DDR/HBM backdoor INIT/CHECK providers are owned by #39, not #91. Both consume the same logical composition and must never be counted as frontdoor AXI coverage.
+
+**Release verification:** A main Pages workflow build can pass while deployment fails (latest observed main run [42265803416](https://github.com/r987r/xezim-hello-world/actions/runs/42265803416) had a successful build and failed queued deployment). Treat only a successful main deployment and its published source/run provenance as released. CSR/Pages preview success on #100 does not establish production deployment. The DDR full-chip job [42267019604](https://github.com/r987r/xezim-hello-world/actions/runs/42267019604) was still running at this review; do not mark #98 done until real DDR qualification and merge.
+
+
+
 Tracking: [#82](https://github.com/r987r/xezim-hello-world/issues/82). This is an **implementation contract only**; generated RTL and firmware changes require dedicated follow-up commits with real RTL/CI evidence. This document does not claim new hardware behavior or test passes.
 
 ## Scope boundaries
