@@ -481,7 +481,7 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
     (out/'soc_top.sv').write_text('\n'.join(lines)+'\n')
     emit_tb(cfg, fw, out, image_prefix=image_prefix,
             cpu_dma_mode=cpu_dma_mode, pcie_host_mode=pcie_host_mode)
-    emit_dma_tb(cfg, fw, out)
+    emit_dma_tb(cfg, fw, out, ethernet_mode=ethernet_mode)
     manifest = {'top':'soc_top','testbench':'full_chip_tb','dma_testbench':'full_chip_dma_tb',
                 'cores':count,'networks':len(nets),
                 'fabric_core':'gen/supernoc/soc_noc.sv','dma_engines_instantiated':count,
@@ -590,7 +590,7 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
     return manifest
 
 
-def emit_dma_tb(cfg, fw, out):
+def emit_dma_tb(cfg, fw, out, *, ethernet_mode=False):
     """Dedicated reset-isolated DMA-through-NoC test (no firmware preload)."""
     probe = probe_ports('cpu0_data_bfm')
     cfgprobe = probe_ports('cpu0_config_bfm', addr_bits=32, data_bits=32, id_bits=1)
@@ -600,6 +600,15 @@ def emit_dma_tb(cfg, fw, out):
              '  input logic clk_i, rst_ni,',
              f'  output logic [{len(fw["cores"])-1}:0] dma_irq_o, dma_irq_pending_o,',
              *[p[1] for p in probe], *[p[1] for p in cfgprobe]]
+    if ethernet_mode:
+        lines += [
+            '  input logic gmii_rx_clk, gmii_rx_rst, gmii_tx_clk, gmii_tx_rst,',
+            '  input logic [7:0] gmii_rxd,',
+            '  input logic gmii_rx_dv, gmii_rx_er,',
+            '  output logic [7:0] gmii_txd,',
+            '  output logic gmii_tx_en, gmii_tx_er, eth_irq, eth_drop,',
+            '  output logic eth_bad_fcs, eth_tx_failed,',
+        ]
     lines[-1] = lines[-1].rstrip(',')
     lines += [');',
              "  soc_top #(.ProbeEnable(1'b1), .DmaEnable(1'b1), .DmaTestMode(1'b1)) dut (",
@@ -608,6 +617,12 @@ def emit_dma_tb(cfg, fw, out):
              '    .sram_valid_o(), .sram_write_o(), .sram_addr_o(),',
              '    .sram_data_o(), .sram_strb_o(), .rom_reads_o(), .flash_reads_o(),',
              '    .dma_irq_o(dma_irq_o), .dma_irq_pending_o(dma_irq_pending_o),',
+             *(['    .gmii_rx_clk, .gmii_rx_rst, .gmii_tx_clk, .gmii_tx_rst,',
+                 '    .gmii_rxd, .gmii_rx_dv, .gmii_rx_er,',
+                 '    .gmii_txd, .gmii_tx_en, .gmii_tx_er,',
+                 '    .eth_irq_o(eth_irq), .eth_drop_o(eth_drop),',
+                 '    .eth_bad_fcs_o(eth_bad_fcs), .eth_tx_failed_o(eth_tx_failed),']
+               if ethernet_mode else []),
              '    '+',\n    '.join(
                  f'.{("probe_" if p[0].startswith("cpu0_data_bfm_") else "cfgprobe_") + p[0].split("_bfm_",1)[1]}({p[0]})'
                  for p in [*probe,*cfgprobe])+');',
