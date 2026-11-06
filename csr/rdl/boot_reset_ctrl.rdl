@@ -24,4 +24,17 @@ addrmap boot_reset_ctrl #(
             csr_backdoor_policy = "frontdoor_only";
         } secondary_release[SECONDARY_COUNT - 1:0];
     } cpu_release @0x0;
+    // CPU(n+1) writes ack[n] = 1 at offset 4 + 4*n, and CPU0 polls it.
+    // This is part of the existing firmware MMIO ABI, not a status mirror.
+    reg {
+        desc = "Secondary CPU boot acknowledgement, one word per secondary";
+        regwidth = 32;
+        field {
+            desc = "Peer firmware acknowledgement (software written)";
+            sw = rw;
+            hw = r;
+            reset = 0;
+            csr_backdoor_policy = "frontdoor_only";
+        } ack[31:0];
+    } secondary_ack[SECONDARY_COUNT] @0x4 += 0x4;
 };

@@ -6,6 +6,12 @@ on:
     paths:
       - 'csr/**'
       - 'tools/csrgen.py'
+      - 'tools/run_csr_axi.py'
+      - 'dv/csr/**'
+      - 'tools/full_chip_gen.py'
+      - 'tools/regress.py'
+      - 'tests/test_full_chip_gen.py'
+      - 'config/regression.yaml'
       - 'tools/csr_backdoor.py'
       - 'tools/address_map.py'
       - 'tests/test_csr_backdoor.py'
@@ -55,3 +61,62 @@ jobs:
           assert sum(isinstance(n, MemNode) for n in root.top.children()) == 8
           print('PASS: RDL external data memories and unified CSR subset')
           PY
+
+  csr-rtl-boot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - uses: ./.github/actions/setup-bender
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Install pinned CSR and cocotb/Verilator tools
+        run: |
+          python3 -m pip install -r requirements.txt -r csr/requirements.txt
+          python3 tools/ip_fetch.py floonoc
+          python3 -m pip install -e .tools/floonoc
+          python3 -m pip install 'cocotb==1.9.2' 'cocotbext-axi==0.1.24'
+          sudo apt-get update -qq
+          sudo apt-get install -y verilator clang llvm lld
+      - name: Verify opt-in top generation and configuration
+        run: |
+          python3 -m unittest tests.test_full_chip_gen tests.test_regression -v
+      - name: Compile generated C CSR headers with real RV32I target
+        run: |
+          python3 tools/csrgen.py --out .tools/csr-smoke --variant cold_boot
+          clang --target=riscv32-unknown-elf -march=rv32i -mabi=ilp32 -std=c11 -Wall -Wextra -Werror -Oz -ffunction-sections -fdata-sections -I .tools/csr-smoke -c tests/fixtures/csr_headers_smoke.c -o .tools/csr-smoke/csr_headers_smoke.o
+      - name: Fast standalone generated AXI-Lite register behavior
+        run: python3 tools/run_csr_axi.py
+      - name: Simulate CPU cold boot through PeakRDL Config NoC
+        run: python3 tools/regress.py chip-peakrdl-reset --fail-fast
+      - name: Verify qualified CSR catalog and observed Config-NoC traffic
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path('.tools/regression/chip-peakrdl-reset')
+          catalog=json.loads((root/'csr/csr-map.json').read_text())
+          assert catalog['variant']=='cold_boot'
+          assert catalog['register_count']==2
+          real=json.loads((root/'axi-transactions.json').read_text())
+          mapping=real['sections']['address_map']
+          assert mapping['variant']=='cold_boot'
+          reset=[r for r in mapping['regions'] if r['name']=='boot.reset_ctrl']
+          assert len(reset)==1 and len(reset[0]['registers'])==2
+          regs={r['name']:r for r in reset[0]['registers']}
+          assert regs['cpu_release']['address']=='0x40020000'
+          assert regs['secondary_ack[0]']['address']=='0x40020004'
+          assert reset[0]['observations']['reads_ok']>=1
+          assert reset[0]['observations']['writes_ok']>=1
+          print('PASS: exact compiled CSR variant plus passive real AXI frontdoor traffic')
+          PY
+      - name: Upload CSR RTL compile and traffic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: csr-peakrdl-real-chip-boot
+          path: .tools/regression/chip-peakrdl-reset/
+          include-hidden-files: true
+          if-no-files-found: warn

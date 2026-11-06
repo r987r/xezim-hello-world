@@ -71,8 +71,12 @@ def load_config(path):
             raise ValueError(f'{name}: mode=compile requires the Xezim engine')
         if 'opt_in' in test and type(test['opt_in']) is not bool:
             raise ValueError(f'{name}: opt_in must be boolean')
-        if test.get('firmware_mode') not in (None, 'cpu_dma', 'pcie_host', 'pcie_dma_host', 'ethernet_mvp', 'ethernet_cpu', 'ddr_cpu_dma'):
+        if test.get('firmware_mode') not in (None, 'cpu_dma', 'pcie_host', 'pcie_dma_host', 'ethernet_mvp', 'ethernet_cpu', 'ddr_cpu_dma', 'peakrdl_reset'):
             raise ValueError(f'{name}: unknown compiled CPU firmware mode')
+        if test.get('firmware_mode') == 'peakrdl_reset' and (
+                test['engine'] != 'cocotb-verilator' or test.get('top') != 'full_chip_tb'
+                or 'chip_boot' not in test.get('bender_targets', [])):
+            raise ValueError(f'{name}: PeakRDL reset requires real full-chip boot RTL')
         if 'firmware_mode' in test and (
             test['engine'] != 'cocotb-verilator' or
             'chip_boot' not in test.get('bender_targets', []) or
@@ -463,6 +467,35 @@ def run_target(name, test, resolver, options):
                    and Path(filename).name in replacements else filename
                    for filename in sources]
         sources = ddr_chip.source_closure(sources, info)
+    if test.get('firmware_mode') == 'peakrdl_reset':
+        # Opt-in RTL variant: never change checked-in gen/chip or vendor IP.
+        from full_chip_gen import emit as emit_chip
+        from csrgen import generate as generate_csr
+        cfg = yaml.safe_load((ROOT/'config/soc.yaml').read_text())
+        noc_manifest = json.loads((ROOT/'gen/supernoc/manifest.json').read_text())
+        variant = out/'variant'
+        variant.mkdir(parents=True, exist_ok=True)
+        emit_chip(cfg, noc_manifest, ROOT/'gen/noc/floonoc', variant,
+                  image_prefix=variant.relative_to(ROOT).as_posix(),
+                  peakrdl_reset=True)
+        generated_root = ROOT/'gen/chip'
+        replacements = {'soc_top.sv', 'full_chip_tb.sv', 'full_chip_dma_tb.sv'}
+        sources = [str(variant/Path(filename).name)
+                   if Path(filename).parent == generated_root and
+                   Path(filename).name in replacements else filename
+                   for filename in sources]
+        csr_out = out/'csr'
+        generate_csr(ROOT/'config/soc.yaml', ROOT/'csr/rdl/boot_reset_ctrl.rdl',
+                     csr_out, 'cold_boot')
+        rtl = csr_out/'rtl'
+        pkg = str(rtl/'soc_boot_reset_ctrl_regblock_pkg.sv')
+        regblock = str(rtl/'soc_boot_reset_ctrl_regblock.sv')
+        # SV package must be resolved before its generated regblock and soc_top.
+        top_src = str(variant/'soc_top.sv')
+        if sources.count(top_src) != 1:
+            raise ValueError('expected one generated SoC RTL top in CSR variant')
+        slot = sources.index(top_src)
+        sources[slot:slot] = [pkg, regblock]
     sources = list(dict.fromkeys(sources))
     includes = list(dict.fromkeys(includes))
     defines = list(dict.fromkeys(defines))
