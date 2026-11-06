@@ -2,9 +2,9 @@
 
 ## Authoritative scope
 
-The opt-in generated-chip GMII RX/TX through actual Ethernet Data/Config FlooNoCs to SRAM and modeled DDR **already passes** [CI 42145885849](https://github.com/r987r/xezim-hello-world/actions/runs/42145885849). Ethernet #64 is now *the CPU0 C control milestone*, not the entire four-protocol integration project.
+**Ethernet0 standalone functional MVP is complete at tested RTL SHA `2ae83f279f96ced2f3393dede9e34f3d174e26f5`.** [Full exact-head Ethernet CI 42162107273](https://github.com/r987r/xezim-hello-world/actions/runs/42162107273) passed all four jobs: real PicoRV32 C program using queue Config NoC CSR and SRAM descriptors/CQ/IRQ; actual GMII RX/TX; generated Data/Config FlooNoCs to SRAM and modeled DDR; and six-source upstream PULP AXI mux elaboration. Real CPU0 owns its AXI ports in the CPU acceptance test; no CPU0 BFM is substituted.
 
-**Close #64 and merge Ethernet PR #73 after one additional integration gate:** real PicoRV32 CPU0 compiled C must configure the Ethernet queue through its real Config NoC CSR, publish at least one RX and one TX descriptor using the documented shared queue ABI, observe GMII RX/TX, independently validate SRAM payload bytes and both real B-gated CQ records, read/ack producer and IRQ status, and complete INIT/RUN/CHECK without a CPU0-port AXI BFM replacing the CPU. Use existing firmware bootstrap and test-flow infrastructure. Polling is acceptable for this first MVP; no new interrupt-driven service framework is required.
+**Closure criterion met:** the existing compiled RV32I C-hook cold-boot and shared INIT/RUN/CHECK executed with real CPU0, drove queue/policy/descriptor CSRs through Config NoC and SRAM through Data NoC, observed GMII RX and TX, checked 85-byte RX SRAM bytes and both B-gated 32-byte CQ records/producer/consumer/IRQ acknowledgment. The testbench supplies/sinks GMII only; a separate CPU0 AXI BFM is not used. Retain `chip-ethernet-cpu`, `chip-ethernet` and the focused RX/TX regressions for subsequent changes. This is ready to merge/close #64 subject to GitHub's merge gate.
 
 **Not required to close #64:** PCIe Root Complex visibility of Ethernet data, five combined protocol StepRecorder steps, endpoint-initiated PCIe DMA, real DDR controller/PHY, arbitrary outstanding-ID stress, saturation/performance or full network-stack features. These are separately tracked under [multiprotocol epic #34](https://github.com/r987r/xezim-hello-world/issues/34) (and #40/#75/#76/#78 where appropriate).
 
@@ -15,19 +15,19 @@ The opt-in generated-chip GMII RX/TX through actual Ethernet Data/Config FlooNoC
 - **Generated-chip pass:** [CI #42145885849](https://github.com/r987r/xezim-hello-world/actions/runs/42145885849) at RTL SHA `3dcf2c2ef2e3480f5a4abd78dea49f2ad57a5c22` passed all three Ethernet jobs: GMII RX/TX, six-source pinned PULP `axi_mux` elaboration, and `chip-ethernet` in the real generated Ethernet Data/Config NoCs against SRAM and **modeled** DDR. Tested SRAM and modeled-DDR packet bytes, GMII TX FCS, CQ records and MMIO producers.
 - **Test-level distinction:** `dv/ethernet0/test_chip_mvp.py` uses a CPU0 Data/Config **AXI BFM** while CPUs are held in reset. It emits `trace_phase` RUN/CHECK labels for `ETH_RX_SRAM`, `ETH_RX_MODELED_DDR`, `ETH_TX_SRAM_GMII`, `ETH_TX_DDR_GMII`, and `ETH_UNPOSTED_RX_NEGATIVE`. These are **not** the five final acceptance steps below and do not constitute real CPU0 C code or a modeled PCIe host reading Ethernet payload/CQ.
 - **Source truth:** `ethernet_mode=True` generates live optional RTL and manifests; default canonical generated RTL and diagram correctly continue to say Ethernet packet/queue attachments are *reserved*. Generator variant unit tests and `make check-generated` passed. Do not relabel default topology as a measured variant.
-- **Other CI blocker:** [SuperNoC regression #42145885829](https://github.com/r987r/xezim-hello-world/actions/runs/42145885829) still fails `NoBResponseIdQueue` at 227,520 ns in a separate generic concurrent-traffic test. This is tracked under [#75](https://github.com/r987r/xezim-hello-world/issues/75) / candidate fix [#78](https://github.com/r987r/xezim-hello-world/pull/78). Never suppress the assertion or claim all repository CI is green.
+- **NoC bug resolved on this base:** [PR #78](https://github.com/r987r/xezim-hello-world/pull/78) merged into `main` as `b91e3d3` and into #73 as `ec236eb`. Its positive/corruption-negative SuperNoC regressions passed. Historical [#75](https://github.com/r987r/xezim-hello-world/issues/75) is tracked separately; its older failure logs must not be mistaken for a current Ethernet failure. [Exact-head Ethernet CI](https://github.com/r987r/xezim-hello-world/actions/runs/42162107273) is green; physical PHY and stress/performance remain unqualified.
 
-**Decision:** Ethernet is **functionally ready as the IP input to combined E2E development**. Keep issue #64 open and PR #73 draft under the original final five-step acceptance requirement.
+**Decision:** standalone Ethernet MVP passes its agreed acceptance gate. Merge #73 and close #64, then launch the PCIe-host/DDR/CPU/iDMA combined five-stage test owned by #34; do not impose that combined test on #64.
 
 
 ## Ethernet #64 remaining acceptance checklist
 
 - [x] Real one-MAC RX/TX and FCS/CDC, descriptor DMA, true memory AW/W/B and AR/R, B-gated 32-byte CQ, no-buffer and bad-FCS negatives.
 - [x] Generated opt-in Data NoC packets to SRAM and modeled DDR, Config NoC CSR via BFM, source/manifest check and independent readback; dedicated 3/3 Ethernet jobs passed.
-- [ ] Compiled **CPU0 C** owns its data/config ports, not the test BFM, and uses `sw/ethernet/eth_queue_abi.h` and shared C APIs to program at least one RX and one TX queue (descriptor, policy, ring bases, doorbell).
-- [ ] External GMII simulation sends one RX frame and observes one TX frame. C/verification reports check payload bytes in SRAM, valid GMII TX FCS, 32-byte RX/TX CQ cookie/length/status, producer/consumer, IRQ assertion and acknowledgment **only after real AXI completion**.
-- [ ] Pass same exact-head Ethernet RTL/CPU test using existing INIT/RUN/CHECK and independent B/R channel data, not injected success pulses or memory backdoors. Keep default generated Ethernet reserved; audit actual opt-in top ports/manifest/reported actor, and report only measured paths.
-- [ ] Required merge CI passes on head, or any unrelated global stress regression is explicitly documented in #75/#78 and handled under repository merge protections; no silent assertion suppression.
+- [x] Compiled **CPU0 C** owns its Data/Config NoC AXI ports (no CPU BFM), with queue ABI CSRs, policy, SRAM RX/TX descriptors and doorbells; `chip-ethernet-cpu` passed.
+- [x] External GMII source/sink proves RX 85-byte SRAM readback and TX exact bytes/FCS; real CPU C checks RX/TX CQ cookie, length, status, producers/consumers and IRQ ack after accepted AXI writes.
+- [x] Shared INIT/RUN/CHECK plus passive AXI evidence passes at exact RTL SHA `2ae83f2`, retaining source-true opt-in RTL, manifest and port contract. Default generated Ethernet remains reserved and must not be presented as the live optional variant.
+- [x] All 4 dedicated Ethernet CI jobs and other applicable PR checks passed at `2ae83f2`. Any subsequent documentation-only commit requires its own GitHub merge-check evaluation; do not suppress RTL assertions.
 
 ## Deferred to #34: full Ethernet–DDR–CPU/iDMA–PCIe integration
 

@@ -12,11 +12,11 @@ The reusable RTL is `rtl/io/ethernet0/ethernet0_mvp.v` (one pinned MAC, one RX a
 
 The *default* committed `gen/chip/soc_top.sv` and architecture diagram still reserve Ethernet packet/CSR attachments. They are **not contradictory** to the measured opt-in variant: `tools/full_chip_gen.py::emit(..., ethernet_mode=True)` generates the live Ethernet instance. Its manifest labels the live attachment but does not mark unmeasured physical DDR controller/PHY or PCIe host as observed. Two opt-in/default source-generation tests and `make check-generated` have passed. A separate exact-variant diagram/parsed-port audit remains on the final checklist.
 
-## The only remaining Ethernet #64 closure gate
+## Completed Ethernet #64 closure gate
 
-Use the existing CPU0 cold boot/C firmware runner in the **same opt-in Ethernet RTL variant** to program queue CSR and policy through the Config NoC, post one RX and one TX descriptor through the Data NoC, then read real SRAM packet bytes, 32-byte CQ records, producer status and IRQ acknowledgment. The external GMII source/sink remains a legitimate testbench peripheral; **do not substitute CPU0 AXI BFMs for CPU0 firmware**. Reuse `sw/ethernet/eth_queue_abi.h`, shared INIT/RUN/CHECK and existing monitors. Polling IRQ status is sufficient for MVP; an OS driver or interrupt service routine is not required.
+The real PicoRV32 C program `sw/ethernet/tests/eth_cpu_run.c` executes through the existing cold-boot hook, programs actual Ethernet Config NoC CSR/policy, posts one RX and one TX descriptor and doorbell, and independently checks RX SRAM bytes, both 32-byte CQ records and producer/consumer/IRQ acknowledge. The physical GMII source/sink remains a line-level testbench peripheral, while **CPU0 uses its real AXI master**, not BFMs or memory backdoors. The companion `dv/ethernet0/test_cpu_mvp.py` requires passive accepted Data/Config NoC AXI events and the existing INIT/RUN/CHECK phases. [CI #42162107273](https://github.com/r987r/xezim-hello-world/actions/runs/42162107273) **PASS, four of four jobs**, including `chip-ethernet-cpu` against tested RTL SHA `2ae83f279f96ced2f3393dede9e34f3d174e26f5`.
 
-Once that *one* test passes on the source-exact head and the opt-in source/manifest/port audit is consistent, **merge PR #73 and close #64**. Keep all existing standalone and generated-chip RX/TX SRAM/model-DDR tests as regression gates. Default committed `gen/chip` intentionally remains reserved.
+**Ethernet MVP criterion is met.** Merge [PR #73](https://github.com/r987r/xezim-hello-world/pull/73) and close #64 when GitHub accepts the final head. Keep dedicated `chip-ethernet-cpu` and BFM `chip-ethernet` tests, focused RX/TX tests, and actual opt-in generated-source checks as continuing regressions. The committed default `gen/chip` intentionally remains reserved.
 
 ## Moved to #34 multiprotocol integration (not blockers for Ethernet closure)
 
@@ -24,15 +24,16 @@ Once that *one* test passes on the source-exact head and the opt-in source/manif
 2. The five original named `ETH_RX_SRAM`, `ETH_RX_MODELED_DDR`, `ETH_TX_SRAM_GMII`, `ETH_HOST_PCIe_VISIBILITY`, `ETH_CPU_CQ_AUDIT` steps must run together under the shared `StepRecorder` with passive AXI/TLP/GMII correlation and source-true topology/latencies. Do not treat `trace_phase` as complete step records.
 3. Broader fabric concurrency assertions, real LiteDRAM, PCIe PHY/outbound DMA and stress/performance remain their independent tracks; they are not Ethernet first-MVP requirements.
 
-## Known unrelated fabric failure
+## Resolved NoC ordering issue and remaining fabric scope
 
-The broader concurrent `supernoc` positive/negative regression failed at `NoBResponseIdQueue` 227,520 ns in [CI #42145885829](https://github.com/r987r/xezim-hello-world/actions/runs/42145885829). See [#75](https://github.com/r987r/xezim-hello-world/issues/75) and proposed fix [#78](https://github.com/r987r/xezim-hello-world/pull/78). The dedicated Ethernet functional result stays valid; do not call global same-ID concurrent traffic qualified until this is resolved.
+The historical generic concurrent `supernoc` failure (`NoBResponseIdQueue` at 227.52 µs in CI #42145885829) was repaired by [merged PR #78](https://github.com/r987r/xezim-hello-world/pull/78), which passed its dedicated same-ID positive and negative scenarios and is incorporated in Ethernet PR #73. [Issue #75](https://github.com/r987r/xezim-hello-world/issues/75) tracks that history. This is a functional SoC test vehicle; large-scale simultaneous traffic and performance remain further qualification, not implied by the fix.
 
 ## Reproduce and hand off
 
+- `python3 tools/regress.py chip-ethernet-cpu`: **real CPU0 C** cold boot + RX/TX queue/CQ/IRQ, GMII line, passive accepted AXI and flow events (required Ethernet #64 gate).
 - `python3 tools/regress.py chip-ethernet`: generated-chip RX/TX SRAM and modeled-DDR smoke, Config NoC CSR via CPU0 BFM, passive AXI report.
 - `.github/workflows/ethernet-mvp.yml`: pinned vendor source elaboration, connected component simulation and full-chip optional variant CI.
 - `docs/ethernet0-closure-gate.md`: the scoped **CPU0 C Ethernet closure** and deferred full-system five-step checklist.
 - `docs/multiprotocol-integration-readiness.md`: the combined CPU/PCIe/Ethernet bring-up and dependencies.
 
-**Decision:** Ethernet is already a functional IP-level MVP. Keep #64 open / #73 draft only until actual CPU0 C Ethernet control and CQ audit pass; PCIe host and five-step cross-protocol closure have moved to #34.
+**Decision:** Ethernet #64 is complete at the test level and ready to merge/close once GitHub accepts the head. Full PCIe/DDR/Ethernet cross-protocol host visibility and five-step closure remain with #34.
