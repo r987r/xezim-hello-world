@@ -68,6 +68,14 @@ jobs:
               sim_build=str(root/".tools/regression/ethernet-mvp/sim_build"),
               timescale="1ns/1ps",waves=False)
           print("PASS real GMII RX -> SRAM packet -> 32-byte CQ AXI B and independent readback")
+          sources.append(root/"dv/ethernet0/ethernet0_tx_mvp_tb.v")
+          run(simulator="icarus",verilog_sources=[str(p) for p in sources],
+              toplevel="ethernet0_tx_mvp_tb",
+              module="dv.ethernet0.tb_tx_mvp",
+              python_search=[str(root)],
+              sim_build=str(root/".tools/regression/ethernet-mvp/tx_sim_build"),
+              timescale="1ns/1ps",waves=False)
+          print("PASS real SRAM TX descriptor -> GMII wire frame/FCS -> B-gated TX CQ")
           PY
       - name: Archive structural source list
         if: always()
