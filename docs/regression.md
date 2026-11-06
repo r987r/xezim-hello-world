@@ -94,6 +94,15 @@ firmware where relevant. Each attempt replaces
 that target's previous outputs. CI retains these artifacts on success
 and failure; preparation failures are failures even if no result is written.
 
+The optional strict `report.flow` contract uses the **same**
+`config/regression.yaml` and shared INIT/RUN/CHECK phase engine to
+enumerate every required actor/routine step. Python/Cocotb actions,
+accepted CPU C MMIO marker writes, and SV checker-observed firmware
+stages normalize into `test-flow.json` and `test-flow.html`, linked
+from the existing `report.html`. Omitted or failed steps fail CI;
+legacy tests not yet instrumented are labeled **UNMEASURED**, not
+silently counted as complete. See [step ABI and migration](test-flow.md).
+
 The NoC/chip cocotb targets also enable passive AXI capture through their
 YAML `report.axi` settings. Each produces a self-contained HTML explorer,
 raw JSONL events and versioned transaction JSON, including negative runs.
@@ -131,6 +140,39 @@ NoC provider. `bender_targets` composes ordered root source sets after
 generated NoC packages/tops; it replaces hardcoded wrapper paths.
 `mode: compile` explicitly marks the Xezim chip structural target.
 See [chip boot](full-chip-boot.md).
+
+## Minimum PCIe host + real CPU DMA functional smoke
+
+`python3 tools/regress.py chip-pcie-host` is the *existing* shared
+Cocotb/Verilator INIT/RUN/CHECK flow with opt-in `pcie_dma_host` firmware.
+The CPU programs the real PULP iDMA through the configuration NoC;
+DMA transfers move 64-byte buffers between PCIe0 SRAM, modeled DDR and
+compute SRAM across actual data NoCs. The modeled Root Complex uses BAR0
+writes/reads over pinned RTL `pcie_axi_master` and checks returned bytes.
+
+The [verified PCIe CI run](https://github.com/r987r/xezim-hello-world/actions/runs/42134213227)
+passed the combined test and separate CPU/iDMA job. The combined artifact
+reports 27 complete flow steps with zero issues, 47,864 completed AXI
+transactions with no outstanding rows, 3,741 PCIe read/completion TLP pairs
+and 8 posted writes. `traffic-latency.json` has zero correlation issues,
+and measured bridge-port TLP→completion latency min/avg/max
+**130 / 130.083 / 200 ns** (10 ns simulated clock). Distinguish measured
+bridge/NoC/SRAM boundaries from modeled host callback time; physical
+PCIe PHY/link and real DDR4 controller/DFI latency remain unmeasured.
+
+Artifacts include `result.json`, `test-flow.json`, `axi-transactions.json`,
+`protocol-transactions.json`, `traffic-latency.json`, and the existing
+AXI/protocol/step HTML explorers. The TLP monitor reuses upstream
+`PcieIfFrame.to_tlp()` and does not drive the bus. The test does **not**
+claim outbound PCIe requester DMA into host RAM: DDR-to-host delivery is
+a host BAR *pull*. Full DDR controller integration, Ethernet and
+backpressure/throughput qualification remain separate.
+
+The generic `noc` / `supernoc` structural test remains an independent
+repository-wide gate. A NoBResponseIdQueue assertion in that flow is **not**
+a PCIe SRAM data-correlation failure; investigate and fix it separately.
+See [PCIe test and topology scope](pcie0-host-phases.md) and
+[step-flow contract](test-flow.md).
 
 ## Pinned PULP iDMA RTL bring-up
 

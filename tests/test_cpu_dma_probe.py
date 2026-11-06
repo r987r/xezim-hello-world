@@ -18,22 +18,21 @@ class CpuDmaProbeTests(unittest.TestCase):
     def test_bfm_is_only_instantiated_when_cpu_dma_mode_is_disabled(self):
         module = ast.parse((ROOT/"dv/full_chip/test_boot.py").read_text())
         fn = next(n for n in module.body if isinstance(n, ast.AsyncFunctionDef)
-                  and n.name == "coordinated_cold_boot")
+                  and n.name == "execute_cold_boot")
         calls = [n for n in ast.walk(fn)
                  if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
                  and n.func.id == "AxiMaster"]
         self.assertEqual(len(calls), 1, "only one optional probe BFM is allowed")
         guarded = [
-            node for node in ast.walk(fn)
-            if isinstance(node, ast.If)
-            and isinstance(node.test, ast.UnaryOp)
-            and isinstance(node.test.op, ast.Not)
-            and isinstance(node.test.operand, ast.Name)
-            and node.test.operand.id == "cpu_dma_mode"
+            node for node in ast.walk(fn) if isinstance(node, ast.If)
+            and isinstance(node.test, ast.BoolOp)
+            and isinstance(node.test.op, ast.And)
+            and ast.unparse(node.test) == "not cpu_dma_mode and host is None"
             and calls[0] in list(ast.walk(node))
         ]
         self.assertEqual(len(guarded), 1,
-                         "AxiMaster must be guarded by 'if not cpu_dma_mode'")
+                         "AxiMaster must be disabled for both real CPU/DMA and PCIe host")
+
 
     def test_cpu_dma_first_when_suite_is_fast_fail(self):
         cfg = yaml.safe_load((ROOT/"config/regression.yaml").read_text())

@@ -188,6 +188,11 @@ def write_report(directory, plan, result):
             row['issues'].append('initiator error response has no declared expectation')
     correlation_issues += [{'monitor':row['monitor'],'transaction':row['uid'],'message':message}
                            for row in rows for message in row['issues']]
+    if plan['report']['axi'].get('required_complete'):
+        correlation_issues += [
+            {'monitor':row['monitor'],'transaction':row['uid'],
+             'message':'AXI transaction remained incomplete at capture end'}
+            for row in rows if row['status'] != 'complete']
     binding_complete = bool(starts) and set(starts[0]['monitors']) == {m['id'] for m in catalog['monitors']}
     if not binding_complete:
         issues.append({'message':'AXI capture did not bind every cataloged boundary; no complete capture is claimed'})
@@ -228,6 +233,12 @@ def write_report(directory, plan, result):
     # Escape '<' even inside JSON strings: transaction text must never close
     # the embedded script element. All table/details text uses textContent.
     render_report(payload,directory/'report.html')
+    # Explicitly label legacy tests without complete step instrumentation.
+    if 'flow' not in plan['report']:
+        index = directory/'report.html'
+        current = index.read_text()
+        index.write_text(current.replace('<main>',
+            '<main><p>INIT/RUN/CHECK step coverage: UNMEASURED (not instrumented)</p>',1))
     # The existing AXI correlator remains the sole owner of AXI semantics.
     # Export its completed observations through the protocol-neutral view.
     import protocol_report

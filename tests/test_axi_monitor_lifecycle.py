@@ -94,6 +94,36 @@ def check_module(text: str) -> None:
         raise AssertionError("no monitored cocotb setup was validated")
 
 
+def check_delegated_full_chip(module_path: Path) -> None:
+    """Verify the thin PCIe selector runs the already-audited shared boot flow.
+
+    A selector need not duplicate AXI/PCIe observers. Do not whitelist generic
+    external helpers: require this exact module + canonical delegate shape and
+    inspect the actual observer/clock ownership in the shared implementation.
+    """
+    if module_path.relative_to(ROOT).as_posix() != "dv/pcie0/test_full_chip_host.py":
+        raise AssertionError("unknown cross-module passive monitor delegate")
+    tree=ast.parse(module_path.read_text())
+    tests=[n for n in tree.body if _is_test(n)]
+    if len(tests)!=1:
+        raise AssertionError("PCIe selector must expose exactly one test")
+    entry=tests[0]
+    calls=[n for n in ast.walk(entry) if isinstance(n, ast.Call)
+           and isinstance(n.func, ast.Name) and n.func.id=="execute_cold_boot"]
+    if len(calls)!=1 or not any(
+            k.arg=="external" and isinstance(k.value, ast.Constant)
+            and k.value.value=="pcie0" for k in calls[0].keywords):
+        raise AssertionError("PCIe selector must delegate explicitly to canonical boot flow")
+    canonical=ROOT/"dv/full_chip/test_boot.py"
+    check_module(canonical.read_text())
+    source=canonical.read_text()
+    if not (source.index("attach_observers(dut)") <
+            source.index("Clock(dut.clk, 10") and
+            "LiveTlpCapture(dut, frame_type=PcieIfFrame)" in source and
+            "tlp_capture.finish()" in source):
+        raise AssertionError("PCIe shared flow lacks bounded passive TLP/AXI monitoring")
+
+
 def check_generic_module(text: str) -> None:
     """Protocol-only monitors must start before clocks and close at teardown.
 
@@ -165,10 +195,13 @@ class MonitorLifecyclePolicyTests(unittest.TestCase):
                 continue
             path = _source_path(profile)
             with self.subTest(test=name, module=str(path.relative_to(ROOT))):
-                if "axi" in report:
-                    check_module(path.read_text())
-                if "protocols" in report:
-                    check_generic_module(path.read_text())
+                if name == "chip-pcie-host":
+                    check_delegated_full_chip(path)
+                else:
+                    if "axi" in report:
+                        check_module(path.read_text())
+                    if "protocols" in report:
+                        check_generic_module(path.read_text())
             covered.add(name)
         self.assertTrue({"supernoc", "supernoc-negative", "chip-boot",
                          "chip-boot-negative"} <= covered)

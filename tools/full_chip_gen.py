@@ -8,6 +8,8 @@ subsystem from the same endpoint graph; physical DRAM controllers remain pending
 import json
 from pathlib import Path
 import chip_bootgen
+import pcie_chip
+from test_flow_codec import sv_event
 from supernoc_gen import AW_FIELDS, W_FIELDS, B_FIELDS, AR_FIELDS, R_FIELDS
 
 CHANNELS = {'aw': AW_FIELDS, 'w': W_FIELDS, 'b': B_FIELDS, 'ar': AR_FIELDS, 'r': R_FIELDS}
@@ -58,11 +60,14 @@ def dma_params_for(cfg, core):
 
 
 def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
-         image_prefix='gen/chip', cpu_dma_mode=False):
+         image_prefix='gen/chip', cpu_dma_mode=False, pcie_host_mode=False):
     """Emit standard chip, or opt-in CPU DMA firmware variant (same RTL/checker)."""
     if cpu_dma_mode != (cpu0_run_hook is not None):
         raise ValueError('CPU DMA mode requires a valid compiled C hook')
-    fw, firmware = chip_bootgen.emit(cfg, out, cpu0_run_hook=cpu0_run_hook)
+    if pcie_host_mode:
+        cfg = pcie_chip.host_variant_config(cfg)
+    fw, firmware = chip_bootgen.emit(cfg, out, cpu0_run_hook=cpu0_run_hook,
+                                     pcie_host_phase=pcie_host_mode)
     nets = json.loads((noc_root/'manifest.json').read_text())['networks']
     ports = noc_manifest['masters'] + noc_manifest['slaves']
     cores = fw['cores']
@@ -93,6 +98,12 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
              f'  output logic [{8*count-1}:0] sram_strb_o,',
              '  output logic [31:0] rom_reads_o, flash_reads_o,',
              *[p[1] for p in probe], *[p[1] for p in cfgprobe]]
+    if pcie_host_mode:
+        lines += pcie_chip.top_ports()
+        lines += [
+            '  output logic [31:0] pcie_sram_write_count, pcie_sram_read_count,',
+            '  output logic [63:0] pcie_sram_last_write_addr, pcie_sram_last_read_addr,'
+        ]
     lines[-1] = lines[-1].rstrip(',')
     lines += [');', '  import chip_types_pkg::*;']
     connections = ['.clk_i(clk_i)', '.rst_ni(rst_ni)']
@@ -237,10 +248,25 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
         else:
             lines += [f"    assign {req(dma)} = '0;"]
         lines += [f"    assign dma_irq_o[{i}] = 1'b0;", '  end']
-    # Peripheral ingress ports are reserved until their own IP plugin is attached.
+    # Exactly one agent drives PCIe0's data initiator in this opt-in mode.
+    pcie = [s for s in cfg["subsystems"]
+            if s["type"] == "peripheral" and s.get("ip") == "verilog_pcie"]
+    if pcie_host_mode and len(pcie) != 1:
+        raise ValueError("PCIe host mode requires exactly one PCIe subsystem")
+    if pcie_host_mode:
+        active = pcie[0]
+        host = all_ports[f"m_{active['name']}_local_data_{active['data_initiator']}"]
+        lines += [pcie_chip.bridge_lines(req(host), rsp(host))]
+        lines += [
+            '  logic pcie_sram_valid, pcie_sram_write;',
+            '  logic [63:0] pcie_sram_addr, pcie_sram_data;',
+            '  logic [7:0] pcie_sram_strb;',
+        ]
     for sub in (s for s in cfg["subsystems"] if s["type"] == "peripheral"):
         for plane, endpoint in (("data", sub["data_initiator"]),
                                 ("config", sub["config_initiator"])):
+            if pcie_host_mode and sub is pcie[0] and plane == "data":
+                continue
             port = all_ports[f"m_{sub['name']}_local_{plane}_{endpoint}"]
             lines += [f"  assign {req(port)} = '0;"]
     # Leaf attachments: SRAM/ROM/flash use only upstream memory/IP modules.
@@ -260,7 +286,9 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
                 size = cfg['boot']['simulation_sram_bytes']
                 image = ''
                 mon = monitor(core) if core is not None else {
-                    f'mon_{k}_o': '' for k in ('valid','write','addr','data','strb')}
+                    f'mon_{k}_o': ('pcie_sram_'+k if pcie_host_mode and p['network'] ==
+                                  pcie[0]['name']+'_local_data' else '')
+                    for k in ('valid','write','addr','data','strb')}
             lines += [module('axi_sram_target', 'u_'+p['name'], {'req_t':dtype(p,'req'),'rsp_t':dtype(p,'rsp'),
                 'IdWidth':p['id_width'],'Base':f"64'h{region['base']:016x}",'Bytes':size,
                 'ReadOnly':int(is_rom),'InitFile':f'"{image_prefix}/{image}"' if image else '""'},
@@ -339,13 +367,27 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
             lines += [module('axi_err_slv','u_unused_'+p['name'],{'AxiIdWidth':p['id_width'],
                 'axi_req_t':dtype(p,'req'),'axi_resp_t':dtype(p,'rsp'),'ATOPs':0},
                 {'clk_i':'clk_i','rst_ni':'rst_ni','slv_req_i':req(p),'slv_resp_o':rsp(p)})]
+    if pcie_host_mode:
+        lines += [
+            '  always_ff @(posedge clk_i or negedge rst_ni) begin',
+            "    if (!rst_ni) begin pcie_sram_write_count <= '0; pcie_sram_read_count <= '0;",
+            "      pcie_sram_last_write_addr <= '0; pcie_sram_last_read_addr <= '0; end",
+            '    else if (pcie_sram_valid) begin',
+            '      if (pcie_sram_write) begin pcie_sram_write_count <= pcie_sram_write_count + 1;',
+            '        pcie_sram_last_write_addr <= pcie_sram_addr; end',
+            '      else begin pcie_sram_read_count <= pcie_sram_read_count + 1;',
+            '        pcie_sram_last_read_addr <= pcie_sram_addr; end',
+            '    end',
+            '  end',
+        ]
     lines += ['  always_ff @(posedge clk_i or negedge rst_ni)',
               "    if (!rst_ni) begin rom_reads_o <= '0; flash_reads_o <= '0; end",
               '    else begin', '      if (boot_rom_valid && !boot_rom_write) rom_reads_o <= rom_reads_o + 1;',
               '      if (boot_flash_valid && !boot_flash_write) flash_reads_o <= flash_reads_o + 1;',
               '    end', 'endmodule']
     (out/'soc_top.sv').write_text('\n'.join(lines)+'\n')
-    emit_tb(cfg, fw, out, image_prefix=image_prefix, cpu_dma_mode=cpu_dma_mode)
+    emit_tb(cfg, fw, out, image_prefix=image_prefix,
+            cpu_dma_mode=cpu_dma_mode, pcie_host_mode=pcie_host_mode)
     emit_dma_tb(cfg, fw, out)
     manifest = {'top':'soc_top','testbench':'full_chip_tb','dma_testbench':'full_chip_dma_tb',
                 'cores':count,'networks':len(nets),
@@ -358,7 +400,8 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
                     'name':s['name'],'ip':s['ip'],
                     'local_data_noc':s['name']+'_local_data',
                     'local_config_noc':s['name']+'_local_config',
-                    'rtl_attachment':'reserved_idle',
+                    'rtl_attachment':('live_pcie_tlp_axi_bridge' if pcie_host_mode and
+                                      s.get('ip') == 'verilog_pcie' else 'reserved_idle'),
                     'csr_attachment':'explicit_axi_error'}
                     for s in cfg['subsystems'] if s['type']=='peripheral'],
                 'dma':'PULP iDMA engines generated for each compute, enabled by DmaEnable=1; data ports route via local FlooNoCs and 32-bit CSRs via local/global config FlooNoCs; old boot defaults to disabled.',
@@ -392,6 +435,19 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
         if endpoint == 'dma_regs':
             continue
         actors[port['network']+'.'+endpoint]=actor
+    if pcie_host_mode:
+        manifest['pcie0_host'] = {
+            'mode': 'real_pinned_TLP_AXI4_bridge_on_local_NoC',
+            'root_complex': 'cocotbext_pcie_model', 'phy': 'modeled_no_LTSSM',
+            'firmware': 'CPU0 remote PCIe0 SRAM handshake via global FlooNoC',
+            'host_phase': firmware['external_host'],
+            'no_host_sram_preload': True,
+            'pcie_sram_monitor': 'actual_accepted_reads_and_writes'
+        }
+        for sub in pcie:
+            key = sub['name'] + '_local_data.' + sub['data_initiator']
+            actors[key] = {'kind':'rtl_pcie_bridge',
+                           'label':'Pinned real PCIe TLP-AXI bridge; modeled Root Complex'}
     manifest['dma_parameters_by_compute'] = {
         core['name']: dma_params_for(cfg, core) for core in cores}
     manifest['axi_actors']=actors
@@ -448,44 +504,62 @@ def emit_dma_tb(cfg, fw, out):
     (out/'full_chip_dma_tb.sv').write_text('\n'.join(lines)+'\n')
 
 
-def emit_tb(cfg, fw, out, *, image_prefix='gen/chip', cpu_dma_mode=False):
+def emit_tb(cfg, fw, out, *, image_prefix='gen/chip', cpu_dma_mode=False,
+            pcie_host_mode=False):
     n = len(fw['cores'])
     words = [len(fw['images'][c['name']]) for c in fw['cores']]
     max_words = max(words)
     bases = '{'+', '.join(f"32'h{v:08x}" for v in reversed(fw['sram_bases']))+'}'
     counts = '{'+', '.join(f"32'd{v}" for v in reversed(words))+'}'
     opts = dict(cfg['verification']['full_chip_boot'])
+    if pcie_host_mode:
+        opts['timeout_cycles'] = max(opts['timeout_cycles'], 600000)
+        opts['phase_timeout_cycles'] = max(opts['phase_timeout_cycles'], 500000)
     if cpu_dma_mode:
         # Compiled CPU C code executes over real NoCs: much longer than the
         # tiny minimal RV32I mailbox bootstrap, but still strictly bounded.
-        opts['timeout_cycles'] = max(opts['timeout_cycles'], 400000)
-        opts['phase_timeout_cycles'] = max(opts['phase_timeout_cycles'], 350000)
+        opts['timeout_cycles'] = max(opts['timeout_cycles'], 1000000 if pcie_host_mode else 400000)
+        opts['phase_timeout_cycles'] = max(opts['phase_timeout_cycles'], 900000 if pcie_host_mode else 350000)
     probe = probe_ports()
     cfgprobe = probe_ports('cfgprobe', addr_bits=32, data_bits=32, id_bits=1)
     lines = ['`timescale 1ns/1ps', '// One boot/coordination checker shared by both simulators.',
         'module full_chip_tb (', *[p[1] for p in probe]]
+    if pcie_host_mode:
+        lines += pcie_chip.top_ports()
     lines[-1] = lines[-1].rstrip(',')
     lines += [');', f'  localparam integer N = {n}, MAX_WORDS = {max_words};',
         f'  localparam [N*32-1:0] BASES = {bases};', f'  localparam [N*32-1:0] WORDS = {counts};',
         f"  localparam [31:0] MAILBOX = 32'h{fw['mailbox']:08x};", f'  localparam integer DONE_OFFSET = {fw["done_offset"]};',
         '  reg clk = 0, rst_n = 0;',
+        *(['  wire rst = ~rst_n;'] if pcie_host_mode else []),
         '`ifndef COCOTB_SIM', '  always #5 clk = ~clk;',
         '  initial begin repeat (10) @(negedge clk); rst_n = 1; end', '`endif',
         '  reg [N-1:0] hold_mask = 0;', '  initial if ($test$plusargs("HOLD_SECONDARY")) hold_mask[1] = 1;',
         '  wire [N-1:0] released, fetch_valid, sram_valid, sram_write;',
         '  wire [N*32-1:0] fetch_addr;', '  wire [N*64-1:0] sram_addr, sram_data;',
         '  wire [N*8-1:0] sram_strb;', '  wire [31:0] rom_reads, flash_reads;',
+        *(['  wire [31:0] pcie_sram_write_count, pcie_sram_read_count;',
+           '  wire [63:0] pcie_sram_last_write_addr, pcie_sram_last_read_addr;']
+          if pcie_host_mode else []),
         '`ifdef COCOTB_SIM', '  localparam bit ProbeEnable = 1;', '`else', '  localparam bit ProbeEnable = 0;', '`endif',
         ("  soc_top #(.ProbeEnable(1'b0), .DmaEnable(1'b1)) dut (.clk_i(clk), .rst_ni(rst_n), .hold_mask_i(hold_mask),"
          if cpu_dma_mode else
-         '  soc_top #(.ProbeEnable(ProbeEnable)) dut (.clk_i(clk), .rst_ni(rst_n), .hold_mask_i(hold_mask),'),
+         ("  soc_top #(.ProbeEnable(1'b0)) dut (.clk_i(clk), .rst_ni(rst_n), .hold_mask_i(hold_mask),"
+          if pcie_host_mode else
+          '  soc_top #(.ProbeEnable(ProbeEnable)) dut (.clk_i(clk), .rst_ni(rst_n), .hold_mask_i(hold_mask),')),
         '    .released_o(released), .fetch_valid_o(fetch_valid), .fetch_addr_o(fetch_addr),',
         '    .sram_valid_o(sram_valid), .sram_write_o(sram_write), .sram_addr_o(sram_addr),',
         '    .sram_data_o(sram_data), .sram_strb_o(sram_strb), .rom_reads_o(rom_reads), .flash_reads_o(flash_reads),',
         '    .dma_irq_o(), .dma_irq_pending_o(),',
         '    '+',\n    '.join([*(f'.{p[0]}({p[0]})' for p in probe),
                            *(f'.{p[0]}(\'0)' if request_field(p[2],p[3]) else f'.{p[0]}()'
-                             for p in cfgprobe)])+');',
+                             for p in cfgprobe),
+                             *(pcie_chip.instance_ports() if pcie_host_mode else []),
+                             *(['.pcie_sram_write_count(pcie_sram_write_count)',
+                                '.pcie_sram_read_count(pcie_sram_read_count)',
+                                '.pcie_sram_last_write_addr(pcie_sram_last_write_addr)',
+                                '.pcie_sram_last_read_addr(pcie_sram_last_read_addr)']
+                               if pcie_host_mode else [])])+');',
         '  reg [31:0] expected [0:N*MAX_WORDS-1];', '  reg [MAX_WORDS-1:0] copied [0:N-1];',
         '  reg [N-1:0] init_mask = 0, hello_mask = 0, check_mask = 0, app_fetch = 0;',
         '  reg init_complete = 0, run_complete = 0, check_complete = 0, pass_flag = 0;',
@@ -532,12 +606,23 @@ def emit_tb(cfg, fw, out, *, image_prefix='gen/chip', cpu_dma_mode=False):
         '            if (i==0 && address >= MAILBOX && address <= MAILBOX + DONE_OFFSET) begin',
         '              off = address - MAILBOX;', '              if (off==0 && value!=0) begin',
         '                if (value==2) begin', '                  if (&init_mask !== 1\'b1) $fatal(1, "FAIL fullchip run before all CPUs initialized");',
-        '                  init_complete <= 1;', '                  $display("PHASE init complete: all CPUs ready");',
+        '                  init_complete <= 1;',
+                  *(['                  '+sv_event('init','cpu0','firmware_init','pass'),
+                      '                  '+sv_event('run','cpu0','firmware_run','start')]
+                    if (pcie_host_mode or cpu_dma_mode) else []),
+                  '                  $display("PHASE init complete: all CPUs ready");',
         '                end else if (value==3) begin', '                  if (&hello_mask !== 1\'b1) $fatal(1, "FAIL fullchip check before all CPU greetings");',
-        '                  run_complete <= 1;', '                  $display("PHASE run complete: all CPUs greeted");',
+        '                  run_complete <= 1;',
+                  *(['                  '+sv_event('run','cpu0','firmware_run','pass'),
+                      '                  '+sv_event('check','cpu0','firmware_check','start')]
+                    if (pcie_host_mode or cpu_dma_mode) else []),
+                  '                  $display("PHASE run complete: all CPUs greeted");',
         '                end else $fatal(1, "FAIL fullchip unsupported phase");', '                phase <= value;',
         '              end', '              for (core=0; core<N; core=core+1) begin',
-        '                if (off==4+16*core && value==1) init_mask[core] <= 1;',
+        *(['                if (off==4+16*core && value==1) begin init_mask[core] <= 1;',
+            "                  if (core==0) "+sv_event('init','cpu0','firmware_init','start'),
+            '                end'] if (pcie_host_mode or cpu_dma_mode) else
+           ['                if (off==4+16*core && value==1) init_mask[core] <= 1;']),
         '                if (off==8+16*core && value!=0) begin',
         '                  if (phase!=2 || value!=32\'h550+core) $fatal(1, "FAIL fullchip wrong-phase CPU greeting");',
         '                  hello_mask[core] <= 1;', '                  $display("hello world from CPU%0d (firmware mailbox)", core);',
@@ -551,6 +636,8 @@ def emit_tb(cfg, fw, out, *, image_prefix='gen/chip', cpu_dma_mode=False):
             "                if (cpu_dma_address_seen != 6'h3f) $fatal(1, \"FAIL fullchip CPU DMA physical allocation addresses missing\");"]
            if cpu_dma_mode else []),
         '                check_complete <= 1;', '                pass_flag <= 1;',
+         *(['                '+sv_event('check','cpu0','firmware_check','pass')]
+           if (pcie_host_mode or cpu_dma_mode) else []),
         '                $display("PHASE check complete: coordinator observed all peer checks");',
         '                $display("PASS fullchip: %0d real CPUs, shared NoCs, cold boot, init/run/check", N);',
         '`ifndef COCOTB_SIM', '                $finish;', '`endif', '              end', '            end',

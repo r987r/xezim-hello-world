@@ -11,13 +11,16 @@ from cocotb.triggers import FallingEdge, RisingEdge, Timer, with_timeout
 from cocotb.result import SimTimeoutError
 from cocotbext.axi import AxiBus, AxiMaster
 from dv.common.axi_trace import attach_observers, expect_axi_response, trace_phase
+from dv.common.test_flow import attach_from_plan, close_active
+from cocotb.utils import get_sim_time
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
 async def phase(dut, signal, name):
     timeout = 5 if os.environ.get('SOC_CPU_DMA_MODE') == '1' else 1
-    await with_timeout(RisingEdge(signal), timeout, 'ms')
+    if int(signal.value) != 1:
+        await with_timeout(RisingEdge(signal), timeout, 'ms')
     dut._log.info('observed firmware phase %s complete', name)
     trace_phase('CPU '+name+' complete')
 
@@ -38,7 +41,26 @@ async def memory_transaction(dut, operation):
 
 @cocotb.test()
 async def coordinated_cold_boot(dut):
-    manifest = json.loads((ROOT/'gen/chip/firmware.json').read_text())
+    await execute_cold_boot(dut)
+
+
+async def execute_cold_boot(dut, *, external=None):
+    if external not in (None,"pcie0"):
+        raise ValueError("unsupported shared test participant")
+    plan=os.environ.get("SOC_RUN_PLAN")
+    if external:
+        if not plan:
+            raise AssertionError("no shared regression plan")
+        firmware=Path(plan).parent/"variant"/"firmware.json"
+    else:
+        firmware=ROOT/"gen/chip/firmware.json"
+    manifest=json.loads(firmware.read_text())
+    flow = attach_from_plan(lambda:int(get_sim_time(units="ps"))) if external else None
+    host = None
+    tlp_capture = None
+    if external=="pcie0":
+        from dv.pcie0.host_adapter import PcieHostParticipant
+        host=PcieHostParticipant(flow,manifest)
     memory = json.loads((ROOT/'gen/chip/manifest.json').read_text())['memory_models']
     cpu_dma_mode = os.environ.get('SOC_CPU_DMA_MODE') == '1'
     # The probe outputs mirror the *real iDMA response* when DmaEnable=1
@@ -47,25 +69,49 @@ async def coordinated_cold_boot(dut):
     # (ID=7), raising cocotbext-axi "unexpected burst ID". In this mode
     # the probe is an observation port only: NEVER attach an active agent.
     probe = None
-    if not cpu_dma_mode:
+    if not cpu_dma_mode and host is None:
         probe = AxiMaster(AxiBus.from_prefix(dut, 'probe'), dut.clk,
                           dut.rst_n, reset_active_level=False)
     dut.rst_n.value = 0
+    if host is not None:
+        dut.completer_id.value=0
+        dut.max_payload_size.value=0
     attach_observers(dut)
     cocotb.start_soon(Clock(dut.clk, 10, 'ns').start())
     for _ in range(10):
         await FallingEdge(dut.clk)
     dut.rst_n.value = 1
-    await phase(dut, dut.init_complete, 'init')
-    await phase(dut, dut.run_complete, 'run')
-    await phase(dut, dut.check_complete, 'check')
-    await Timer(1, 'ns')
+    if host is not None:
+        from dv.pcie0.tlp_trace import LiveTlpCapture
+        # The pinned helper already provides PcieIfFrame / Tlp decoding.
+        from pcie_if import PcieIfFrame
+        tlp_capture = LiveTlpCapture(dut, frame_type=PcieIfFrame)
+        await host.setup(dut)
+    for name, signal in (("init",dut.init_complete),("run",dut.run_complete),
+                         ("check",dut.check_complete)):
+        if host is not None:
+            await host.before_phase(name)
+            with flow.step(name,"cpu0",name+"_complete",origin="checker"):
+                await phase(dut,signal,name)
+        else:
+            await phase(dut,signal,name)
+    # Real CPUs can still be retiring final mailbox stores when CHECK rises.
+    # Give actual AXI B handshakes time to drain before the passive reporter
+    # closes; the strict AXI report will still reject any outstanding burst.
+    await Timer(1, 'us' if host is not None or cpu_dma_mode else 'ns')
     assert int(dut.pass_flag.value) == 1
     mask = (1 << len(manifest['cores'])) - 1
     assert int(dut.init_mask.value) == mask
     assert int(dut.hello_mask.value) == mask
     assert int(dut.check_mask.value) == mask
     assert int(dut.app_fetch.value) == mask
+    if host is not None and not cpu_dma_mode:
+        assert probe is None, "PCIe mode must not instantiate active CPU0 AXI BFM"
+        host.finish()
+        tlp_counts = tlp_capture.finish()
+        dut._log.info("PCIE0_ACCEPTED_TLP_REPORT_COUNTS=%s", tlp_counts)
+        close_active()
+        return
     if cpu_dma_mode:
         assert probe is None  # a CPU-DMA run must never own the BFM port
         # Same testbench and INIT/RUN/CHECK checker; no AXI BFM drives the
@@ -105,22 +151,40 @@ async def coordinated_cold_boot(dut):
         from tools.axi_report import read_events
         events, issues = read_events(events_file)
         assert not issues, f"bad AXI trace: {issues[:3]}"
-        actual = {target: {"ar": 0, "aw": 0}
-                  for target in ("memory0.ddr0","memory0.hbm0")}
+        # The minimal combined host smoke uses DDR + PCIe SRAM. The
+        # original separate CPU C/DMA regression still requires DDR + HBM.
+        targets = (("memory0.ddr0", "pcie0.sram") if host is not None else
+                   ("memory0.ddr0", "memory0.hbm0"))
+        actual = {target: {"ar": 0, "aw": 0} for target in targets}
         for event in events:
             if event.get("monitor") != "compute0_local_data.dma" or event.get("channel") not in ("ar","aw"):
                 continue
             address = int(event["fields"]["addr"], 0)
             for target in actual:
-                region = regions[target]
-                if region.base <= address < region.base + region.capacity:
+                if target == "pcie0.sram":
+                    base, capacity = host.sram_base, 16384
+                else:
+                    region = regions[target]
+                    base, capacity = region.base, region.capacity
+                if base <= address < base + capacity:
                     actual[target][event["channel"]] += 1
         for target, counts in actual.items():
             assert counts["aw"] > 0 and counts["ar"] > 0, (
                 f"real CPU DMA missing full-NoC DDR/HBM accepted writes+reads: {target}, {counts}")
-        trace_phase("CPU compiled C DMA complete: monitored DDR+HBM roundtrips")
+        trace_phase("CPU compiled C DMA complete: monitored " +
+                    ("DDR + PCIe SRAM" if host is not None else "DDR + HBM"))
         dut._log.info("PASS fullchip: CPU-executed compiled C DMA, shared INIT/RUN/CHECK, "
-                      "DDR+HBM roundtrip, SRAM allocator and passive AXI monitors")
+                      "%s, SRAM allocator and passive AXI monitors",
+                      "DDR+PCIe SRAM roundtrip" if host is not None else "DDR+HBM roundtrip")
+        if host is None:
+            return
+        # Both external host and C-DMA now run in ONE real RTL configuration;
+        # no second coordinator, and the host PASS is issued only after the
+        # independent CPU DMA checks above have succeeded.
+        host.finish()
+        tlp_counts = tlp_capture.finish()
+        dut._log.info("PCIE0_ACCEPTED_TLP_REPORT_COUNTS=%s", tlp_counts)
+        close_active()
         return
     # Only a verification manager occupies the not-yet-integrated DMA port.
     # It never drives SRAM/boot mailboxes. Distinct values detect model aliasing.
