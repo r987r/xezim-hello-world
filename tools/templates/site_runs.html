@@ -303,7 +303,8 @@ function render(){
     flowButton.textContent="View planned flow";flowButton.style.display="block";
     flowButton.style.fontSize="12px";flowButton.style.marginTop="6px";
     flowButton.onclick=()=>showFlow(e.target,e);
-    td(tr,testLink,flowButton,inspect);
+    // Preserve the original first button for established traffic/browser flows.
+    td(tr,testLink,inspect,flowButton);
     td(tr,suite(e.target,e.workflow));
     td(tr,text("span",e.passed?"PASS":"FAIL",e.passed?"good":"bad"),
       text("div",e.expected_failure?"Required negative check":"Positive / compile gate","muted"));
