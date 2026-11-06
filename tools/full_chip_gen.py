@@ -61,8 +61,10 @@ def dma_params_for(cfg, core):
 
 def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
          image_prefix='gen/chip', cpu_dma_mode=False, pcie_host_mode=False,
-         ethernet_mode=False):
-    """Emit standard chip, or opt-in CPU DMA firmware variant (same RTL/checker)."""
+         ethernet_mode=False, ethernet_cpu_mode=False):
+    """Emit normal or opt-in compiled CPU Ethernet/PCIe/DMA firmware."""
+    if ethernet_cpu_mode and not (ethernet_mode and cpu_dma_mode):
+        raise ValueError('real Ethernet CPU test requires active Ethernet and C-hook')
     if cpu_dma_mode != (cpu0_run_hook is not None):
         raise ValueError('CPU DMA mode requires a valid compiled C hook')
     if pcie_host_mode:
@@ -480,7 +482,8 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
               '    end', 'endmodule']
     (out/'soc_top.sv').write_text('\n'.join(lines)+'\n')
     emit_tb(cfg, fw, out, image_prefix=image_prefix,
-            cpu_dma_mode=cpu_dma_mode, pcie_host_mode=pcie_host_mode)
+            cpu_dma_mode=cpu_dma_mode, pcie_host_mode=pcie_host_mode,
+            ethernet_mode=ethernet_mode, ethernet_cpu_mode=ethernet_cpu_mode)
     emit_dma_tb(cfg, fw, out, ethernet_mode=ethernet_mode)
     manifest = {'top':'soc_top','testbench':'full_chip_tb','dma_testbench':'full_chip_dma_tb',
                 'cores':count,'networks':len(nets),
@@ -631,7 +634,7 @@ def emit_dma_tb(cfg, fw, out, *, ethernet_mode=False):
 
 
 def emit_tb(cfg, fw, out, *, image_prefix='gen/chip', cpu_dma_mode=False,
-            pcie_host_mode=False):
+            pcie_host_mode=False, ethernet_mode=False, ethernet_cpu_mode=False):
     n = len(fw['cores'])
     words = [len(fw['images'][c['name']]) for c in fw['cores']]
     max_words = max(words)
@@ -657,6 +660,13 @@ def emit_tb(cfg, fw, out, *, image_prefix='gen/chip', cpu_dma_mode=False,
         f'  localparam [N*32-1:0] BASES = {bases};', f'  localparam [N*32-1:0] WORDS = {counts};',
         f"  localparam [31:0] MAILBOX = 32'h{fw['mailbox']:08x};", f'  localparam integer DONE_OFFSET = {fw["done_offset"]};',
         '  reg clk = 0, rst_n = 0;',
+        *(['  reg gmii_rx_clk = 0, gmii_tx_clk = 0;',
+           '  reg gmii_rx_rst = 1, gmii_tx_rst = 1;',
+           '  reg [7:0] gmii_rxd = 0;',
+           '  reg gmii_rx_dv = 0, gmii_rx_er = 0;',
+           '  wire [7:0] gmii_txd;',
+           '  wire gmii_tx_en, gmii_tx_er, eth_irq, eth_drop, eth_bad_fcs, eth_tx_failed;']
+          if ethernet_mode else []),
         *(['  wire rst = ~rst_n;'] if pcie_host_mode else []),
         '`ifndef COCOTB_SIM', '  always #5 clk = ~clk;',
         '  initial begin repeat (10) @(negedge clk); rst_n = 1; end', '`endif',
@@ -681,6 +691,14 @@ def emit_tb(cfg, fw, out, *, image_prefix='gen/chip', cpu_dma_mode=False,
                            *(f'.{p[0]}(\'0)' if request_field(p[2],p[3]) else f'.{p[0]}()'
                              for p in cfgprobe),
                              *(pcie_chip.instance_ports() if pcie_host_mode else []),
+                             *(['.gmii_rx_clk', '.gmii_rx_rst',
+                                '.gmii_tx_clk', '.gmii_tx_rst',
+                                '.gmii_rxd', '.gmii_rx_dv', '.gmii_rx_er',
+                                '.gmii_txd', '.gmii_tx_en', '.gmii_tx_er',
+                                '.eth_irq_o(eth_irq)', '.eth_drop_o(eth_drop)',
+                                '.eth_bad_fcs_o(eth_bad_fcs)',
+                                '.eth_tx_failed_o(eth_tx_failed)']
+                               if ethernet_mode else []),
                              *(['.pcie_sram_write_count(pcie_sram_write_count)',
                                 '.pcie_sram_read_count(pcie_sram_read_count)',
                                 '.pcie_sram_last_write_addr(pcie_sram_last_write_addr)',
@@ -726,7 +744,8 @@ def emit_tb(cfg, fw, out, *, image_prefix='gen/chip', cpu_dma_mode=False,
             '            end'] if cpu_dma_mode else []),
         *(['            if (i==0 && address==MAILBOX+64) begin',
             '              cpu_dma_evidence <= value;',
-            "              if (value==32'h600dc0de) cpu_dma_success <= 1;",
+            ("              if (value==32'he700600d) cpu_dma_success <= 1;" if ethernet_cpu_mode else
+             "              if (value==32'h600dc0de) cpu_dma_success <= 1;"),
             '              $display("CPU C DMA evidence 0x%08x",value);',
             '            end'] if cpu_dma_mode else []),
         '            if (i==0 && address >= MAILBOX && address <= MAILBOX + DONE_OFFSET) begin',
@@ -758,8 +777,9 @@ def emit_tb(cfg, fw, out, *, image_prefix='gen/chip', cpu_dma_mode=False,
         "              if (off==DONE_OFFSET && value==32'h600d) begin",
         '                if (&check_mask !== 1\'b1 || &app_fetch !== 1\'b1 || !copied_all || rom_reads==0 || flash_reads==0)',
         '                  $fatal(1, "FAIL fullchip incomplete CPU execution/coordination");',
-        *(['                if (!cpu_dma_success) $fatal(1, "FAIL fullchip CPU DMA C evidence missing");',
-            "                if (cpu_dma_address_seen != 6'h3f) $fatal(1, \"FAIL fullchip CPU DMA physical allocation addresses missing\");"]
+        *(['                if (!cpu_dma_success) $fatal(1, "FAIL fullchip CPU C hook evidence missing");',
+            *([] if ethernet_cpu_mode else
+              ["                if (cpu_dma_address_seen != 6'h3f) $fatal(1, \"FAIL fullchip CPU DMA physical allocation addresses missing\");"])]
            if cpu_dma_mode else []),
         '                check_complete <= 1;', '                pass_flag <= 1;',
          *(['                '+sv_event('check','cpu0','firmware_check','pass')]
