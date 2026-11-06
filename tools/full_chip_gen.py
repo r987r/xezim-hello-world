@@ -156,9 +156,9 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
         c = all_ports[f'm_{name}_local_config_cpu']
         lines += [f'  lite_req_t cpu_{i}_req;', f'  lite_resp_t cpu_{i}_rsp;']
         release = 'rst_ni' if i == 0 else f'rst_ni && reset_regs[{(i-1)//8}][{(i-1)%8}] && !hold_mask_i[{i}]'
-        lines += [f'  assign cpu_reset_n[{i}] = ({release}) && !DmaTestMode;', f'  assign released_o[{i}] = cpu_reset_n[{i}];']
         if real_ddr_mode:
             release += ' && !ddr_init_mode_i'
+        lines += [f'  assign cpu_reset_n[{i}] = ({release}) && !DmaTestMode;', f'  assign released_o[{i}] = cpu_reset_n[{i}];']
         if i == 0:
             con = {'clk':'clk_i','rst':f'!cpu_reset_n[{i}]','trap':f'cpu_{i}_trap'}
             lines += [f'  logic cpu_{i}_trap;']
@@ -201,7 +201,7 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
                       f'  {dtype(c,"rsp")} cpu_config_{i}_rsp;',
                       f'  assign {req(d)} = DmaTestMode ? probe_req : cpu_data_{i}_req;',
                       f"  assign cpu_data_{i}_rsp = DmaTestMode ? '0 : {rsp(d)};",
-                      f'  assign {req(c)} = DmaTestMode ? cfgprobe_req : '+('ddr_init_mode_i ? cfgprobe_req : ' if real_ddr_mode else '')+'cpu_config_{i}_req;',
+                      f'  assign {req(c)} = DmaTestMode ? cfgprobe_req : '+('ddr_init_mode_i ? cfgprobe_req : ' if real_ddr_mode else '')+f'cpu_config_{i}_req;',
                       f"  assign cpu_config_{i}_rsp = "+('DmaTestMode || ddr_init_mode_i' if real_ddr_mode else 'DmaTestMode')+f" ? '0 : {rsp(c)};"]
         lines += [module('cpu_noc_adapter', 'u_edge_'+name, {
             'data_req_t':dtype(d,'req'),'data_rsp_t':dtype(d,'rsp'),'cfg_req_t':dtype(c,'req'),'cfg_rsp_t':dtype(c,'rsp'),
