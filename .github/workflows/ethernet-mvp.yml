@@ -25,7 +25,8 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends iverilog
-          python3 -m pip install 'PyYAML==6.0.3'
+          python3 -m pip install 'PyYAML==6.0.3' 'cocotb==1.9.2' \
+            'cocotbext-axi==0.1.28' 'cocotbext-eth==0.1.28' 'cocotb-test==0.2.6'
           python3 tools/ip_fetch.py verilog_axi
       - name: Elaborate actual GMII MAC to CQ writer connectivity
         run: |
@@ -50,6 +51,18 @@ jobs:
                           "-s","ethernet0_rx_mvp","-t","null",
                           *(str(p) for p in sources)],check=True)
           print("PASS connected Ethernet GMII RX -> complete-frame -> queue -> AXI DMA and real CQ writer RTL elaboration")
+          sources.extend((
+              root/".tools/verilog_axi/rtl/axi_ram.v",
+              root/"dv/ethernet0/ethernet0_rx_mvp_tb.v",
+          ))
+          from cocotb_test.simulator import run
+          run(simulator="icarus",verilog_sources=[str(p) for p in sources],
+              toplevel="ethernet0_rx_mvp_tb",
+              module="dv.ethernet0.tb_rx_mvp",
+              python_search=[str(root)],
+              sim_build=str(root/".tools/regression/ethernet-mvp/sim_build"),
+              timescale="1ns/1ps",waves=False)
+          print("PASS real GMII RX -> SRAM packet -> 32-byte CQ AXI B and independent readback")
           PY
       - name: Archive structural source list
         if: always()
