@@ -1,10 +1,14 @@
 # Ethernet0 standalone 1G MAC / GMII bring-up
 
 Scope: **real upstream RTL** for 1G frame RX/TX and two frame-aware clock
-domain crossing FIFOs, with upstream Cocotb GMII VIP. This branch intentionally
-does **not** connect Ethernet0 to the local/global FlooNoCs, instantiate SRAM
-DMA, implement UDP filtering in hardware, or model an analog PHY. The external
-GMII BFM is a simulation-only wire interface, not a silicon SerDes.
+domain crossing FIFOs, with upstream Cocotb GMII VIP. Additional queue-control,
+header staging, descriptor-driven RX/TX DMA and B-gated CQ-writer modules have
+now merged independently, but the generated SoC still **does not connect**
+those blocks to the Ethernet Data/Config FlooNoCs. `gen/chip/manifest.json`
+still labels packet DMA `reserved_idle` and management CSR
+`explicit_axi_error`. The external GMII BFM is a simulation-only wire
+interface, not a silicon SerDes. See [draft PR #73](../../../docs/ethernet0-closure-gate.md)
+for the connected-subsystem acceptance tests.
 
 ## Pinned dependencies
 
@@ -31,9 +35,8 @@ ignored `.tools/ethernet0/` with exact-SHA checks.
 * RX/TX `tuser[0]` is the upstream error marker, not classification metadata.
   The existing Python `frame_contract.py` is a golden model, not RTL.
 * FIFO sizes in this milestone are 2048 bytes; byte capacity is independent
-  of the width adapter. Verify no incomplete frame can escape on overflow.
-* FIFO sizes in this milestone are 2048 bytes. Oversize/overflow and frame
-  accounting require dedicated stress coverage before DMA integration.
+  of the width adapter. Oversize/overflow and frame accounting need separate
+  stress coverage before a full controller-quality claim.
 
 ## Focused test
 
@@ -51,17 +54,17 @@ then injects a corrupted FCS and requires a MAC error indication and no
 delivery to the logic RX FIFO. Runs are bounded by Cocotb timeouts.
 CI installs the open-source simulator and runs this test on PRs.
 
-## Follow-ons before #37 can close
+## Remaining system integration gate (#64)
 
-1. Verify actual packet count/overflow under long GMII input with DMA-side
-   stalls, reset during a frame, bad preamble and minimum/maximum sizes.
-2. Add upstream packet parser/UDP-port classifier with a documented split
-   between local/DDR/PCIe fast-path policy, preserving full frame metadata.
-3. Qualify the pinned upstream PULP iDMA AXI-Stream frontend/backend or another
-   established streaming-to-AXI DMA, then connect local SRAM. **No homegrown
-   DMA.**
-4. Wire DMA+SRAM to a generated Ethernet0 local FlooNoC through the #38
-   integration owner; only then claim hardware NoC routing. Track actual
-   AXI/packet events using the existing protocol-neutral report.
-5. Keep #52 a draft until the complete standalone MAC/DMA/SRAM acceptance
-   tests are green; a green MAC smoke is not that acceptance.
+Foundation PRs #52 (MAC/stager), #61 (queue/descriptor/DMA), #68 (real CQ
+writer), and #70 (generated Ethernet NoCs/topology) are **merged**. Older
+Ethernet prep issues #37/#42 were closed as consolidated, **not** end-to-end
+verified. Do not resurrect the standalone bring-up PRs.
+
+One draft [PR #73](https://github.com/r987r/xezim-hello-world/pull/73)
+tracks the actual missing MAC→queue→NoC→memory/CQ/IRQ and SRAM→GMII TX
+connections plus Config NoC CPU CSR access. Run the five named
+[RUN/CHECK tests](../../../docs/ethernet0-closure-gate.md) and require
+byte-perfect independent readback, real AXI B/RLAST, GMII TX completion,
+and source-true generated diagrams/reporting before merging. Physical DDR
+controller/PHY, full PCIe/link, and stress/performance remain separate.
