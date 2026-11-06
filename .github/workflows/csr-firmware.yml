@@ -38,7 +38,7 @@ jobs:
           clang --target=riscv32-unknown-elf -march=rv32i -mabi=ilp32 -std=c11 -Wall -Wextra -Werror -Oz -ffreestanding -ffunction-sections -fdata-sections -c sw/dma/dma.c -o /tmp/soc_dma_generated.o
       - name: Build actual CPU C DMA ELF and verify size
         run: |
-          python3 tools/cpu_dma_firmware.py --out .tools/csr-fw-probe
+          python3 -m tools.cpu_dma_firmware --out .tools/csr-fw-probe
           test -s .tools/csr-fw-probe/cpu_dma.elf
           test -s .tools/csr-fw-probe/cpu_dma.bin
           llvm-size .tools/csr-fw-probe/cpu_dma.elf
