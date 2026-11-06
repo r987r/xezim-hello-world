@@ -61,12 +61,12 @@ async def csr_init(cfg):
         await write_word(cfg,ETH_CTRL+addr,val)
 
 
-async def poll(cfg,offset,value,label):
+async def poll(cfg,clock,offset,value,label):
     for _ in range(150):
         actual=await read_word(cfg,ETH_CTRL+offset)
         if actual==value:
             return
-        await RisingEdge(cfg.clock)
+        await RisingEdge(clock)
     raise AssertionError(f'{label}: CSR {offset:#x} expected {value} got {actual}')
 
 
@@ -122,7 +122,7 @@ async def gmii_rx_tx_through_real_eth_local_and_global_nocs(dut):
     await descriptor(data,RX_RING,DATA_BUF,2048,0xc0febabe)
     await write_word(cfg,ETH_CTRL+0x28,1)
     await gmii_src.send(GmiiFrame.from_payload(frame))
-    await poll(cfg,0x38,1,'RX to SRAM completion')
+    await poll(cfg,dut.clk_i,0x38,1,'RX to SRAM completion')
     trace_phase('CHECK ETH_RX_SRAM')
     got=await d_read(data,DATA_BUF,len(frame),'independent AXI SRAM readback')
     assert got==frame,'GMII RX to SRAM data mismatch'
@@ -135,7 +135,7 @@ async def gmii_rx_tx_through_real_eth_local_and_global_nocs(dut):
     await descriptor(data,RX_RING+32,ddr_target,2048,0xdd00dd00,region=1)
     await write_word(cfg,ETH_CTRL+0x28,2)
     await gmii_src.send(GmiiFrame.from_payload(frame))
-    await poll(cfg,0x38,2,'RX to modeled DDR completion')
+    await poll(cfg,dut.clk_i,0x38,2,'RX to modeled DDR completion')
     trace_phase('CHECK ETH_RX_MODELED_DDR')
     got=await d_read(data,ddr_target,len(frame),'DDR readback through full NoC')
     assert got==frame,'GMII RX to DDR data mismatch'
@@ -148,7 +148,7 @@ async def gmii_rx_tx_through_real_eth_local_and_global_nocs(dut):
     tx=await with_timeout(gmii_dst.recv(),250,'us')
     assert bytes(tx.get_payload())==frame,'TX SRAM to GMII byte mismatch'
     assert tx.check_fcs() and tx.error is None,'TX SRAM GMII FCS/error'
-    await poll(cfg,0x58,1,'TX SRAM completion')
+    await poll(cfg,dut.clk_i,0x58,1,'TX SRAM completion')
     trace_phase('CHECK ETH_TX_SRAM_GMII')
     await cq_check(data,TX_CQ,0xfeedcafe,len(frame),1,'TX SRAM')
 
@@ -158,7 +158,7 @@ async def gmii_rx_tx_through_real_eth_local_and_global_nocs(dut):
     tx=await with_timeout(gmii_dst.recv(),250,'us')
     assert bytes(tx.get_payload())==frame,'TX DDR to GMII mismatch'
     assert tx.check_fcs() and tx.error is None,'TX DDR GMII FCS/error'
-    await poll(cfg,0x58,2,'TX DDR completion')
+    await poll(cfg,dut.clk_i,0x58,2,'TX DDR completion')
     trace_phase('CHECK ETH_TX_DDR_GMII')
     await cq_check(data,TX_CQ+32,0x55aa55aa,len(frame),1,'TX DDR')
 
