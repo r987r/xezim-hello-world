@@ -25,7 +25,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ENGINES = {'xezim', 'xezim-compile', 'verilator-lint', 'cocotb-verilator'}
 FIELDS = {'engine', 'sources', 'ip', 'top', 'args', 'pass', 'expect_failure',
           'timeout_s', 'memory_config', 'boot_relocate', 'module', 'test_dir',
-          'build', 'reuse_build', 'env', 'seed', 'bender_targets', 'mode', 'report', 'firmware_mode'}
+          'build', 'reuse_build', 'env', 'seed', 'bender_targets', 'mode', 'report', 'firmware_mode', 'opt_in'}
 
 
 def expand(config, names, stack=()):
@@ -69,12 +69,14 @@ def load_config(path):
             raise ValueError(f'{name}: build reuse is only supported by cocotb-verilator')
         if test.get('mode', 'simulate') not in ('simulate', 'compile') or (test.get('mode') == 'compile' and test['engine'] != 'xezim'):
             raise ValueError(f'{name}: mode=compile requires the Xezim engine')
-        if test.get('firmware_mode') not in (None, 'cpu_dma', 'pcie_host', 'pcie_dma_host', 'ethernet_mvp', 'ethernet_cpu'):
+        if 'opt_in' in test and type(test['opt_in']) is not bool:
+            raise ValueError(f'{name}: opt_in must be boolean')
+        if test.get('firmware_mode') not in (None, 'cpu_dma', 'pcie_host', 'pcie_dma_host', 'ethernet_mvp', 'ethernet_cpu', 'ddr_cpu_dma'):
             raise ValueError(f'{name}: unknown compiled CPU firmware mode')
         if 'firmware_mode' in test and (
             test['engine'] != 'cocotb-verilator' or
             'chip_boot' not in test.get('bender_targets', []) or
-            (test['firmware_mode'] in ('cpu_dma','pcie_dma_host','ethernet_mvp','ethernet_cpu')
+            (test['firmware_mode'] in ('cpu_dma','pcie_dma_host','ethernet_mvp','ethernet_cpu','ddr_cpu_dma')
              and 'dma' not in test.get('bender_targets', []))):
             raise ValueError(f'{name}: selected test needs real chip RTL and specified active IP')
         if 'report' in test:
@@ -158,8 +160,12 @@ def load_config(path):
                     raise ValueError(f'{name}: invalid generic protocol report configuration: {exc}') from exc
     for name in config['suites']:
         expand(config, [name])
-    if set(expand(config, ['full'])) != set(config['tests']):
-        raise ValueError('full suite must cover every declared test')
+    opt_in = {name for name, test in config['tests'].items() if test.get('opt_in') is True}
+    required = set(config['tests']) - opt_in
+    if set(expand(config, ['full'])) != required:
+        raise ValueError('full suite must cover every non-opt-in declared test')
+    if any(not any(name in expand(config, [suite]) for suite in config['suites'] if suite != 'full') for name in opt_in):
+        raise ValueError('opt-in regression must remain addressable through a named suite')
     return config
 
 
@@ -437,6 +443,26 @@ def run_target(name, test, resolver, options):
         sources += [str(bridge)] + [
             str(ROOT/'.tools/verilog_pcie'/item)
             for item in vendor_pin['rtl_modules'] if item != 'rtl/pcie_axi_master.v']
+    if test.get('firmware_mode') == 'ddr_cpu_dma':
+        # Same CPU C/iDMA INIT/RUN/CHECK; opt-in generated 16KiB
+        # independent Config NoC and pinned LiteDRAM memory target.
+        if str(ROOT) not in sys.path:
+            sys.path.insert(0, str(ROOT))
+        import ddr_chip
+        from cpu_dma_firmware import prepare as prepare_cpu_dma
+        cfg = yaml.safe_load((ROOT/'config/soc.yaml').read_text())
+        info = ddr_chip.prepare(cfg, out)
+        variant = out / 'variant'
+        prepare_cpu_dma(info['variant_cfg'], info['noc_manifest'], info['noc_root'],
+                        variant, real_ddr_mode=True,
+                        ddr_wb_base=info['wb_base'], ddr_wb_adr_bits=info['wb_bits'])
+        generated_root = ROOT/'gen/chip'
+        replacements = {'soc_top.sv', 'full_chip_tb.sv'}
+        sources = [str(variant/Path(filename).name)
+                   if Path(filename).parent == generated_root
+                   and Path(filename).name in replacements else filename
+                   for filename in sources]
+        sources = ddr_chip.source_closure(sources, info)
     sources = list(dict.fromkeys(sources))
     includes = list(dict.fromkeys(includes))
     defines = list(dict.fromkeys(defines))

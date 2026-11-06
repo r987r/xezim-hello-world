@@ -23,7 +23,9 @@ class SlangLintTests(unittest.TestCase):
             "  soc-e2e-negative:\n    sources: noc\n    engine: cocotb-verilator\n"
             "    top: new_top\n    reuse_build: true\n    expect_failure: bad\n"
             "  unknown-ip-test:\n    sources: noc\n    engine: cocotb-verilator\n    top: another_top\n"
-            "  noc-elaborate:\n    sources: noc\n    engine: verilator-lint\n")
+            "  noc-elaborate:\n    sources: noc\n    engine: verilator-lint\n"
+            "  optional-real-memory:\n    sources: noc\n    engine: cocotb-verilator\n"
+            "    top: full_chip_tb\n    opt_in: true\n")
         self.folder = self.root / ".tools/regression/soc-e2e"
         self.folder.mkdir(parents=True)
         (self.folder / "sources.f").write_text("fake.sv\n")
@@ -35,6 +37,11 @@ class SlangLintTests(unittest.TestCase):
                          ["soc-e2e", "unknown-ip-test"])
         with self.assertRaisesRegex(ValueError, "unknown lint profiles"):
             lint_rtl.select_profiles(self.root, ["missing"])
+        # Real DDR controller variant only exists after its pinned runtime
+        # generation; ordinary source-filelist lint must stay source-true.
+        self.assertNotIn("optional-real-memory", lint_rtl.select_profiles(self.root, []))
+        self.assertEqual(lint_rtl.select_profiles(self.root, ["optional-real-memory"]),
+                         ["optional-real-memory"])
 
     def test_source_location_and_severity(self):
         raw = self.root / "diagnostics.json"

@@ -2,14 +2,20 @@
 
 Issue #40; coordinates with standalone DDR-A #35 and shared generator owner #38.
 
-The live SoC memory0.ddr0 target still uses AXI RAM. This contract is an integration prerequisite, not the completed controller RTL hookup. It does not modify generated SoC files.
+The **default** SoC memory0.ddr0 target still uses fast AXI RAM, but
+DDR-B PR #74 now generates an **opt-in real LiteDRAM** target behind the
+Memory0 crossbar. [Exact-head CI #42217902632](https://github.com/r987r/xezim-hello-world/actions/runs/42217902632) passed CPU0
+C/PULP iDMA frontdoor SRAM↔DDR traffic, real Config NoC initialization,
+controller AXI completions, DFI read/write, modeled bank writes and bytes.
+This document retains standalone preflight history below; it is no longer
+accurate to describe the opt-in full-chip controller as unwired.
 
 ## Data versus configuration fabrics
 
 - Keep the 64-bit global/local AXI4 Data NoCs independent from the 32-bit Config NoCs.
 - The architectural DDR address window is 0x140000000 through 0x17fffffff (1 GiB). The isolated DDR4 DFI/BankModel supports only the low 32 MiB of that window.
 - Translate and validate the full physical address BEFORE driving the LiteDRAM local AXI pins. Do not slice or mask upper address bits or alias unsupported offsets into modeled storage.
-- A future RTL bridge MUST send legal DECERR on out-of-range or unsupported accesses, consuming write beats and maintaining AW/W/B/AR/R ordering; the Python contract itself is not a bus responder.
+- The implemented RTL bridge sends legal DECERR on out-of-range or unsupported accesses, consuming write beats while maintaining AW/W/B/AR/R ordering; the Python contract itself is not a bus responder.
 - Validate AWID/ARID, WSTRB, byte widths, burst length, 4 KiB boundary, and ATOP before forwarding. If the crossbar widens ID fields, use an explicit reversible tag mapper rather than silently dropping bits.
 - Controller Wishbone/DFII initialization needs a real Config NoC path, resets, init_done and init_error propagation. Do not fake or force initialization or silently preload the controller.
 - Use the pinned LiteDRAM controller, simulation PHY and DFI/BankModel; keep the default axi_ram backend available for fast baseline regressions.
@@ -24,7 +30,7 @@ After the pinned controller top has been generated, additionally validate actual
 
     python3 rtl/memory/ddr4/soc_bridge_contract.py --generated-verilog .tools/ddr4/litedram_sim/gateware/soc_ddr4_sim.v
 
-JSON is explicitly labeled integration_state=contract_only, never RTL tested.
+This **standalone CLI's** JSON is intentionally labeled `integration_state=contract_only`; it is not the full-chip controller runtime evidence. The separately verified full-chip run and source files are linked above.
 
 ## Real RTL aperture checker (initial DDR-B hardware)
 The memory-only soc_aperture_guard.sv is a **synthesizable combinational
@@ -58,8 +64,9 @@ real DFII/Wishbone initialization service. `tb_soc_axi_bridge.sv` drives
 a real HDL test for successful pass-through and invalid-address DECERR,
 including B/R backpressure and ID preservation; the standalone pinned
 DDR4 controller/DFI test is still a separate functional test in the
-same CI job. This is stronger than a host-only contract, **but is not
-yet an end-to-end full-chip controller path**.
+same CI job. The isolated bridge test alone is not end-to-end proof;
+the separate `chip-ddr4-real` full-chip CPU/iDMA test now provides
+that proof within its behavioral-DFI simulation scope.
 
 ## Verified standalone report and source provenance
 
@@ -74,48 +81,58 @@ AW→B boundary observations are distinct; **AW→DFI WRITE per-ID remains
 unmeasured**. This is standalone modeled controller timing, never a
 current-source NoC→DDR latency claim.
 
-## DDR-B Config NoC INIT transport (independent preflight)
+## DDR-B Config NoC: implemented 16-KiB controller initialization
 
-The standalone LiteDRAM `init_plan.wishbone_script()` is reused as the
-**single authoritative DDR4 controller-initialization script**.
-`config_noc_init_contract.py` maps its generated CSR writes and waits
-to **planned** 32-bit AXI-Lite accesses inside
-`memory0.ctrl` (`0x40030000` window). It preserves the original
-LiteDRAM Wishbone byte/word address and records the required address
-translation; the generated `wb_ctrl_adr` pin width and actual `csr.json`
-are checked during DDR4 CI. **Actual generated-pin CI exposed a 4-KiB CSR aperture mismatch:**
-the pinned LiteX CSR handler allocates 2048-byte pages across DDR control,
-DDR PHY and SDRAM CSR banks. The currently configured `memory0.ctrl`
-window is **0x40030000–0x40030fff (4 KiB)** and cannot contain the
-required generated CSR map. CI now tests the real 4-KiB window as an
-**expected negative**, then separately validates an **opt-in proposed
-16-KiB window** at the same physical base using
-`--proposed-window-bytes 0x4000`. No checked-in SoC address-map change
-is made on this PR. #38 must review/emit the larger non-overlapping
-`memory0.ctrl` aperture plus a real address-translating AXI-Lite-to-Wishbone
-endpoint and update checked-in RTL/topology atomically. Both read and write
-control accesses must complete with verified AXI-Lite responses. A
-contract-only proposal is explicitly **not** proof of runtime INIT.
+The original **standalone** `config_noc_init_contract.py` established
+that the former 4-KiB `memory0.ctrl` aperture could not accommodate
+the pinned LiteX DDR control/PHY/SDRAM CSR pages. Its old
+`contract_only_not_driven_in_full_chip` result remains an accurate
+historical standalone *preflight*, not a statement about today's DDR-B
+runtime. DDR-B now uses an opt-in 16-KiB window
+`0x40030000–0x40033fff`, an independent Config NoC
+and synthesizable 32-bit AXI-to-Wishbone transport. During the full-chip
+simulation the existing `init_plan.wishbone_script` genuinely executes
+43 writes and three readbacks; controller `init_done=1`,
+`init_error=0` are required. CPU0 is held in reset while the
+preboot Config-NoC AXI initiator is active; the initiator's response
+wires are electrically isolated before CPU0 takes control. The normal
+fast boot profile is unchanged.
 
-It fails closed if the proposed aperture still cannot hold the generated
-CSR map, aliases other config regions, changes bus widths, truncates
-Wishbone addresses, or loses generated init_done/init_error/control readbacks.
+The independent Data NoC routes 64-bit-physical AXI4 transactions
+through the Memory0 crossbar to the verified 64→25-bit guarded
+`ddr_litedram_axi_bridge` and generated `soc_ddr4_sim`. The
+architectural 1-GiB DDR window is unchanged; only the low 32 MiB has
+behavioral DFI/BankModel backing. Invalid bursts and addresses must
+return DECERR, not wrap into the backing store. The bridge's standalone
+invalid-aperture negative passed; the **full-chip routed**
+negative now also **passed** at `d65147b` in
+[DDR-B CI 42234769827](https://github.com/r987r/xezim-hello-world/actions/runs/42234769827).
+After CPU/iDMA CHECK and drained AXI responses, a simulation-only
+master exclusively takes over the existing compute0 DMA NoC manager.
+Its `0x142001000` off-model write and read return `DECERR`;
+the controller sees no corresponding AW/AR forwarding, and a
+subsequent read at `0x140001000` proves that valid data was not
+aliased. The default behavioral targets are unchanged.
 
-The result is `ddr4_config_noc_init_contract.json` in the **standalone
-DDR4 CI artifact** with `status=contract_only_not_driven_in_full_chip`.
-**No actual Config NoC transactions, LiteDRAM register writes, firmware
-execution or INIT/RUN/CHECK outcomes are implied.** The physical
-implementation remains the #38 generated AXI-Lite-to-Wishbone endpoint and
-the existing full-chip CPU INIT/RUN/CHECK coordinator. When the pending
-#60 universal per-step evidence ABI reaches main, register the DDR actor
-using that same ABI; do not add a second stage runner or mark a proposed
-Wishbone script as a runtime step PASS. Data NoC and Config NoC remain
-separate.
+## Verified status and remaining gates
 
-## Remaining DDR-B hardware and verification gates
-
-1. The standalone bridge/guard protocol tests are **merged and passed** on [exact combined-head CI 42057781622](https://github.com/r987r/xezim-hello-world/actions/runs/42057781622): 106 Python tests, Verilator guard and bridge handshake/DECERR tests, actual LiteDRAM/DFI Cocotb 1/1 and 121,795 passive monitor cycles. Expand malformed write/reset recovery, extra AXI attribute rules, and concurrent requester arbitration/ID remapping before accepting production-level integration. The bridge permits one concurrent read and one write; do not infer wider out-of-order capability.
-2. Add Wishbone init/status service on the independent Config NoC, with CPU-controlled init and failure timeouts.
-3. Hand bridge and Bender source closure to sole #38 generator owner; that track will edit config/soc.yaml, tools/full_chip_gen.py and generated RTL/diagrams. No parallel generator edits here.
-4. Add opt-in chip-ddr4-real with actual CPU/iDMA traffic through the generated Data NoC and controller, DFI monitoring, independent INIT/RUN/CHECK, negative aperture tests and comparison against axi_ram timing.
-5. Only then claim full-chip DDR4 integration. Standalone DFI and BankModel are simulation models, not a physical DDR PHY.
+- **Exact-head DDR-B PASS at `d65147b`:**
+  [CI #42234769827](https://github.com/r987r/xezim-hello-world/actions/runs/42234769827).
+  Genuine CPU0/PULP iDMA SRAM→DDR→SRAM bytes, complete INIT/RUN/CHECK,
+  real controller AW/B and AR/RLAST equality, DFI R/W, bank-model writes,
+  passive AXI reports, and source-observed routed negative all passed.
+  Earlier positive-only [CI 42217902632](https://github.com/r987r/xezim-hello-world/actions/runs/42217902632)
+  remains historical evidence.
+- **Preserved:** standalone LiteDRAM/DFI plus bridge/DECERR tests,
+  fast default AXI RAM, independent HBM model and merged NoC response-ordering fix.
+- **Common boot evidence:** [CI 42234770010](https://github.com/r987r/xezim-hello-world/actions/runs/42234770010)
+  logged all five `dv-chip` targets PASS, but was labelled **cancelled**
+  when its 45-minute job limit expired during artifact/report finalization.
+  The budget is corrected to 65 minutes; final-head green CI is still required.
+- **Remaining DDR-B merge gate:** reconcile latest `main`, including
+  published test-run browser improvements, and obtain source-matched
+  DDR, common boot and affected CI results. Do not confuse implemented
+  RTL and previously passing code with final merge acceptance.
+- **Outside DDR-B scope:** physical DDR PHY, JEDEC/silicon timing,
+  long forced backpressure/refresh/reset stress (DDR-A #35),
+  and joint Ethernet/PCIe-to-*real-controller* traffic (epic #34).

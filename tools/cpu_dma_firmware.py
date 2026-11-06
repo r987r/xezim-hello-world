@@ -114,7 +114,8 @@ def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False, ethernet_cpu
                 defines=macros, flash_limit=flash_size)
 
 
-def prepare(cfg, noc_manifest, noc_root, output: Path, *, pcie_host_mode=False, ethernet_cpu_mode=False):
+def prepare(cfg, noc_manifest, noc_root, output: Path, *, pcie_host_mode=False,
+            ethernet_cpu_mode=False, real_ddr_mode=False, ddr_wb_base=0, ddr_wb_adr_bits=30):
     from tools import full_chip_gen
     if pcie_host_mode:
         from tools.pcie_chip import host_variant_config
@@ -128,7 +129,9 @@ def prepare(cfg, noc_manifest, noc_root, output: Path, *, pcie_host_mode=False, 
                                   image_prefix=image_prefix, cpu_dma_mode=True,
                                   pcie_host_mode=pcie_host_mode,
                                   ethernet_mode=ethernet_cpu_mode,
-                                  ethernet_cpu_mode=ethernet_cpu_mode)
+                                  ethernet_cpu_mode=ethernet_cpu_mode,
+                                  real_ddr_mode=real_ddr_mode,
+                                  ddr_wb_base=ddr_wb_base, ddr_wb_adr_bits=ddr_wb_adr_bits)
     image = output / "flash.hex"
     additional = [f"@{HOOK_OFFSET // 8:x}"]
     blob = fw["data"]

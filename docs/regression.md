@@ -165,8 +165,12 @@ Artifacts include `result.json`, `test-flow.json`, `axi-transactions.json`,
 AXI/protocol/step HTML explorers. The TLP monitor reuses upstream
 `PcieIfFrame.to_tlp()` and does not drive the bus. The test does **not**
 claim outbound PCIe requester DMA into host RAM: DDR-to-host delivery is
-a host BAR *pull*. Full DDR controller integration, Ethernet and
-backpressure/throughput qualification remain separate.
+a host BAR *pull*. The opt-in CPU/iDMA-to-real-LiteDRAM controller integration is
+verified in DDR-B The verified **exact-head DDR-B run** is [CI #42234769827](https://github.com/r987r/xezim-hello-world/actions/runs/42234769827) at `d65147b7695b193d12554e3c4321a9692d03d469`. It passed compiled CPU0/PULP iDMA SRAM→DDR→SRAM, actual independent Config NoC DFII initialization, controller AXI AW/B and AR/RLAST, DFI read/write and bank writes, passive NoC traffic reporting, and required step-flow evidence. This extends the earlier positive-only [CI #42217902632](https://github.com/r987r/xezim-hello-world/actions/runs/42217902632).
+
+The **full-chip routed aperture-negative test is now RTL-verified in that run**. Following firmware CHECK and a drained iDMA, an explicit verification-only switch gives the existing compute0 DMA NoC manager port to a cocotb AXI initiator. The test writes and reads one address 32 MiB beyond the bounded controller storage, requires `BRESP/RRESP=DECERR`, checks that neither invalid request was forwarded to real LiteDRAM controller AXI pins, and then verifies the original in-range bytes were not aliased. The CI job requires the negative-test status, both response codes, zero forwarding and valid readback in its evidence JSON.
+
+The shared [full-chip boot run #42234770010](https://github.com/r987r/xezim-hello-world/actions/runs/42234770010) logged PASS for `chip-cpu-dma`, `chip-dma`, `chip-boot`, `chip-boot-negative`, and `chip-xezim-compile`, but the job was marked **cancelled** after reaching its 45-minute time limit during final artifact processing. Its `timeout-minutes` has been raised to 65; a completed final-head CI run is still needed before DDR-B can merge. PCIe's standalone and shared CPU/iDMA integration jobs both passed at `d65147b` in [CI #42234769914](https://github.com/r987r/xezim-hello-world/actions/runs/42234769914). All full-chip DDR timing uses modeled SDRAMPHYModel/BankModel, **not electrical PHY timing**. Joint Ethernet/PCIe-to-real-DDR remains a separate [#34](https://github.com/r987r/xezim-hello-world/issues/34) interoperability gate.
 
 The generic `noc` / `supernoc` structural test remains an independent
 repository-wide gate. A NoBResponseIdQueue assertion in that flow is **not**

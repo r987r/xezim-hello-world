@@ -2,7 +2,7 @@
 
 The architecture comes from `config/soc.yaml`; its generated verification
 plan distinguishes independent executable scopes from the planned full SoC.
-A passing BFM test does not by itself establish CPU/iDMA/controller integration. The real CPU0 C-DMA gate now provides separate CPU-executed proof; no physical DDR/HBM controllers or PHYs are integrated.
+A passing BFM test does not by itself establish CPU/iDMA/controller integration. The real CPU0 C-DMA gate now provides separate CPU-executed proof. **Opt-in DDR-B has a passing real LiteDRAM controller RTL/behavioral DFI full-chip CPU/iDMA run** ([CI #42217902632](https://github.com/r987r/xezim-hello-world/actions/runs/42217902632)); default SoC DDR/HBM targets remain behavioral AXI RAM, and no physical DDR/HBM PHY is integrated.
 
 | Part | Executable scope | Remaining boundary |
 | --- | --- | --- |
@@ -17,15 +17,38 @@ A passing BFM test does not by itself establish CPU/iDMA/controller integration.
 | Ethernet0 connected one-MAC RX/TX IP | [PR #73](https://github.com/r987r/xezim-hello-world/pull/73), [exact-head CI 42162107273](https://github.com/r987r/xezim-hello-world/actions/runs/42162107273) **4/4 Ethernet jobs PASS**: one pinned 1G MAC, GMII RX/TX and FCS, descriptor/packet DMA, 32-byte B-gated CQs, SRAM/model-DDR readback, Config/Data FlooNoCs. Real PicoRV32 C executes cold boot, programs RX/TX queue CSRs/policy, checks RX bytes, CQ/IRQ and acknowledgments; no CPU0 AXI BFM. | **Ethernet #64 MVP satisfied.** After merge, full PCIe RC reading Ethernet-produced bytes/CQ and five combined StepRecorder gates are owned by #34. Physical DDR/PCIe PHY and stress/performance remain deferred. |
 | Ethernet0 local Data/Config FlooNoCs | `ethernet_mode=True` physically wires six-source PULP mux to Ethernet Data NoC and queue CSR AXI4-to-Lite through Config NoC; both BFM and real CPU0 C tests pass [CI #42162107273](https://github.com/r987r/xezim-hello-world/actions/runs/42162107273). | Default canonical `gen/chip` stays reserved and must not be misrepresented; combined variant host-route diagram/latency audit belongs to #34. |
 | PCIe0 minimal host/CPU DMA path | Merged [#60](https://github.com/r987r/xezim-hello-world/pull/60), [CI 42134213227](https://github.com/r987r/xezim-hello-world/actions/runs/42134213227) passed real TLP/AXI host BAR to PCIe SRAM with CPU C/iDMA transfer to modeled DDR and return readback | No actual PCIe-host read of an Ethernet-generated packet/CQ in the same simulation yet; no physical PCIe link/PHY or outbound host-memory DMA (#76). |
-| HBM/DDR controllers and PHYs | No executable physical path | All current targets are behavioral AXI models |
+| HBM/DDR controllers and PHYs | **Opt-in `chip-ddr4-real`: real pinned LiteDRAM controller RTL, 16-KiB Config NoC CSR init, real PicoRV32/PULP iDMA SRAM↔DDR and matched AXI/DFI/BankModel evidence** ([CI](https://github.com/r987r/xezim-hello-world/actions/runs/42217902632), [artifact](https://github.com/r987r/xezim-hello-world/actions/runs/42217902632/artifacts/13503312198)) | Default chip/PCIe/Ethernet modes still use AXI RAM; LiteDRAM DFI PHY and bank are behavioral; HBM controller/physical PHY, real-controller interoperability and joint Ethernet/PCIe-to-real-controller interoperability remain separate |
 | Chip boot `soc_top` | `make dv-chip`: real CPUs cold-boot and coordinate INIT/RUN/CHECK; `chip-cpu-dma` runs compiled C on PicoRV32 and validates SRAM/DDR/HBM roundtrips through iDMA ([CI 41933332567](https://github.com/r987r/xezim-hello-world/actions/runs/41933332567)) | CPU ISR, mixed-engine concurrent firmware and physical controller/PHY integration remain pending |
 
 See [super-NoC verification](supernoc-verification.md) for the exact traffic
 checks, local evidence, test commands and known limitations. See
 [simulator compatibility](simulator-compatibility.md) for diagnostics.
-The generic FlooNoC backend registry remains non-executable as a universal
-arbitrary-SoC plugin; dedicated generated chip and BFM emitters exist. Shared NoC, BFM and CPU boot-configuration
-emitters exist; optional real iDMA wiring is emitted and passed full-chip RTL traffic regression ([CI run 41885417960](https://github.com/r987r/xezim-hello-world/actions/runs/41885417960)); CPU C-DMA integration has been verified; interrupt-service firmware and physical controllers remain pending.
+The generic FlooNoC backend registry is not a universal arbitrary-SoC plugin; dedicated generated chip and BFM emitters exist.
+Optional real iDMA wiring passes full-chip RTL traffic regression ([CI 41885417960](https://github.com/r987r/xezim-hello-world/actions/runs/41885417960)).
+CPU C-DMA execution is verified, including the opt-in LiteDRAM controller with behavioral DFI; interrupt-service firmware, HBM controller and physical PHYs remain pending.
+
+## DDR-B integration signoff status (November 6, 2026)
+
+[DDR-B PR #74](https://github.com/r987r/xezim-hello-world/pull/74)
+now has an **exact-head passing real-controller and routed negative test**
+at `d65147b`: [CI #42234769827](https://github.com/r987r/xezim-hello-world/actions/runs/42234769827).
+This includes real compiled CPU0/PULP iDMA SRAM→DDR→SRAM and
+controller AXI/behavioral DFI plus required post-CHECK routed
+`BRESP/RRESP=DECERR` for an off-model address, no controller AW/AR
+forwarding and nonalias readback. The opt-in DDR source does not
+replace default modeled DDR/HBM, and neither run models a physical PHY.
+
+The [common boot workflow](https://github.com/r987r/xezim-hello-world/actions/runs/42234770010)
+logged PASS for CPU C-DMA, dual-engine DMA, cold boot, named negative
+and Xezim compile, then reached its 45-minute job timeout during
+post-run reporting; GitHub records **cancelled**, not success.
+The job budget is being raised to 65 minutes and a final-head
+green run is still required. [PCIe integration](https://github.com/r987r/xezim-hello-world/actions/runs/42234769914),
+FlooNoC, iDMA, Ethernet topology, DDR foundation, memory contracts,
+generation and lint passed on `d65147b`. The latest main test-discovery,
+RTL drilldown and published run-browser changes are preserved in the
+next branch reconciliation. Real Ethernet/PCIe packets to LiteDRAM
+and electrical PHY/timing remain separate projects.
 
 ## Independent global NoC concurrency regression
 
@@ -36,7 +59,7 @@ The historical upstream `NoBResponseIdQueue` assertion at 227.52 µs (CI #421458
 [The one whole-chip diagram](../gen/diagrams/noc-hierarchy.svg) is embedded
 in README. Its Mermaid source and `noc-topology.json` preserve topology
 for inspection. Router positions come from actual FlooGen profiles. The
-cross-network link set is checked against `supernoc_tb`; chip DMA/CSR links are generated when enabled; physical-controller integration remains pending.
+cross-network link set is checked against `supernoc_tb`; chip DMA/CSR links are generated when enabled. The checked-in diagram is the **default modeled-memory topology**; the real LiteDRAM attachment is generated within the opt-in DDR-B runtime variant and preserved in the CI artifact.
 CPU/SRAM/reset and memory-model paths are wired in the boot configuration. There are
 no separate per-router, boot or verification pictures.
 

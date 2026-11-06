@@ -61,12 +61,17 @@ def dma_params_for(cfg, core):
 
 def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
          image_prefix='gen/chip', cpu_dma_mode=False, pcie_host_mode=False,
-         ethernet_mode=False, ethernet_cpu_mode=False):
+         ethernet_mode=False, ethernet_cpu_mode=False,
+         real_ddr_mode=False, ddr_wb_base=0, ddr_wb_adr_bits=30):
     """Emit normal or opt-in compiled CPU Ethernet/PCIe/DMA firmware."""
     if ethernet_cpu_mode and not (ethernet_mode and cpu_dma_mode):
         raise ValueError('real Ethernet CPU test requires active Ethernet and C-hook')
     if cpu_dma_mode != (cpu0_run_hook is not None):
         raise ValueError('CPU DMA mode requires a valid compiled C hook')
+    if real_ddr_mode and not cpu_dma_mode:
+        raise ValueError('real DDR requires CPU/iDMA firmware mode')
+    if real_ddr_mode and not (1 <= ddr_wb_adr_bits <= 30 and ddr_wb_base >= 0 and ddr_wb_base % 0x4000 == 0):
+        raise ValueError('bad generated DDR Wishbone parameters')
     if pcie_host_mode:
         cfg = pcie_chip.host_variant_config(cfg)
     ethernet = [s for s in cfg['subsystems'] if s['type']=='peripheral' and
@@ -98,6 +103,7 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
     cfgprobe = probe_ports('cfgprobe', addr_bits=32, data_bits=32, id_bits=1)
     lines = ['// Generated chip boot + DMA configuration: see gen/chip/manifest.json.',
              'module soc_top #(parameter bit ProbeEnable = 0, DmaEnable = 0, DmaTestMode = 0) (input logic clk_i, rst_ni,', f'  input logic [{count-1}:0] hold_mask_i,',
+              *(['  input logic ddr_init_mode_i,', '  input logic ddr_negative_mode_i,'] if real_ddr_mode else []),
              f'  output logic [{count-1}:0] dma_irq_o, dma_irq_pending_o,',
              f'  output logic [{count-1}:0] released_o, fetch_valid_o,', f'  output logic [{32*count-1}:0] fetch_addr_o,',
              f'  output logic [{count-1}:0] sram_valid_o, sram_write_o,',
@@ -155,7 +161,13 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
         if request_field(ch,member):
             lines += [f'  assign {field("cfgprobe_req",ch,member)} = {pin};']
         else:
-            lines += [f'  assign {pin} = {field(rsp(cfg_port),ch,member)};']
+            if real_ddr_mode:
+                # CPU0 must NOT leak later B/R responses to the preboot
+                # initialization AxiMaster. It stays alive after ownership
+                # handoff; mirror response only while CPU is held in reset.
+                lines += [f"  assign {pin} = ddr_init_mode_i ? {field(rsp(cfg_port),ch,member)} : '0;"]
+            else:
+                lines += [f'  assign {pin} = {field(rsp(cfg_port),ch,member)};']
     lines += ["  assign cfgprobe_req.aw.atop = '0;",
               "  assign cfgprobe_req.aw.user = '0;",
               "  assign cfgprobe_req.w.user = '0;",
@@ -166,6 +178,8 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
         c = all_ports[f'm_{name}_local_config_cpu']
         lines += [f'  lite_req_t cpu_{i}_req;', f'  lite_resp_t cpu_{i}_rsp;']
         release = 'rst_ni' if i == 0 else f'rst_ni && reset_regs[{(i-1)//8}][{(i-1)%8}] && !hold_mask_i[{i}]'
+        if real_ddr_mode:
+            release += ' && !ddr_init_mode_i'
         lines += [f'  assign cpu_reset_n[{i}] = ({release}) && !DmaTestMode;', f'  assign released_o[{i}] = cpu_reset_n[{i}];']
         if i == 0:
             con = {'clk':'clk_i','rst':f'!cpu_reset_n[{i}]','trap':f'cpu_{i}_trap'}
@@ -209,8 +223,8 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
                       f'  {dtype(c,"rsp")} cpu_config_{i}_rsp;',
                       f'  assign {req(d)} = DmaTestMode ? probe_req : cpu_data_{i}_req;',
                       f"  assign cpu_data_{i}_rsp = DmaTestMode ? '0 : {rsp(d)};",
-                      f'  assign {req(c)} = DmaTestMode ? cfgprobe_req : cpu_config_{i}_req;',
-                      f"  assign cpu_config_{i}_rsp = DmaTestMode ? '0 : {rsp(c)};"]
+                      f'  assign {req(c)} = DmaTestMode ? cfgprobe_req : '+('ddr_init_mode_i ? cfgprobe_req : ' if real_ddr_mode else '')+f'cpu_config_{i}_req;',
+                      f"  assign cpu_config_{i}_rsp = "+('DmaTestMode || ddr_init_mode_i' if real_ddr_mode else 'DmaTestMode')+f" ? '0 : {rsp(c)};"]
         lines += [module('cpu_noc_adapter', 'u_edge_'+name, {
             'data_req_t':dtype(d,'req'),'data_rsp_t':dtype(d,'rsp'),'cfg_req_t':dtype(c,'req'),'cfg_rsp_t':dtype(c,'rsp'),
             'ConfigBase':f"32'h{cfg_base:08x}",'ConfigEnd':f"32'h{cfg_end:08x}"}, {
@@ -230,11 +244,25 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
             for pin, _, ch, member in probe:
                 if request_field(ch,member):
                     lines += [f'  assign {field("probe_req",ch,member)} = {pin};']
+                elif real_ddr_mode:
+                    # The probe cannot consume iDMA responses before CHECK.
+                    lines += [f"  assign {pin} = ddr_negative_mode_i ? {field(rsp(dma),ch,member)} : '0;"]
                 else:
                     lines += [f'  assign {pin} = DmaTestMode ? {field(rsp(d),ch,member)} : {field(rsp(dma),ch,member)};']
             lines += ["  assign probe_req.aw.atop = '0;"]
             for ch in ('aw','w','ar'):
                 lines += [f"  assign probe_req.{ch}.user = '0;"]
+        # Only after CPU/iDMA CHECK may the existing passive probe become an
+        # active verification master at the real compute0 DMA NoC port.
+        takeover = real_ddr_mode and i == 0
+        dma_engine_req = f'dma_{i}_hw_req' if takeover else req(dma)
+        dma_engine_rsp = f'dma_{i}_hw_rsp' if takeover else rsp(dma)
+        if takeover:
+            lines += [f'  {dtype(dma,"req")} {dma_engine_req};',
+                      f'  {dtype(dma,"rsp")} {dma_engine_rsp};',
+                      f'  assign {req(dma)} = ddr_negative_mode_i ? probe_req : {dma_engine_req};',
+                      f"  assign {dma_engine_rsp} = ddr_negative_mode_i ? '0 : {rsp(dma)};",
+                      f'  always @(posedge clk_i) if (ddr_negative_mode_i && ({dma_engine_req}.aw_valid || {dma_engine_req}.w_valid || {dma_engine_req}.ar_valid)) $fatal(1, "DDR probe takeover during active iDMA request");']
         engine_con = {'clk_i':'clk_i', 'rst_ni':'rst_ni',
                       'apb_addr_i':f'dma_{i}_apb_addr',
                       'apb_data_i':f'dma_{i}_apb_data',
@@ -248,7 +276,7 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
         for ch, members in CHANNELS.items():
             for member in [*members.values(), 'valid', 'ready']:
                 is_req = request_field(ch, member)
-                engine_con['dma_'+ch+member] = field(req(dma) if is_req else rsp(dma), ch, member)
+                engine_con['dma_'+ch+member] = field(dma_engine_req if is_req else dma_engine_rsp, ch, member)
         dma_opts = dma_params_for(cfg, core)
         lines += [f'  if (DmaEnable) begin: gen_dma_{name}',
                   module('soc_idma_engine', 'u_dma_'+name, {
@@ -256,11 +284,11 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
                       'BufferDepth': dma_opts['buffer_depth'],
                       'DescriptorPrefetch': dma_opts['descriptor_prefetch']
                   }, engine_con),
-                  f'    assign {req(dma)}.aw.atop = \'0;',
-                  *[f"    assign {req(dma)}.{ch}.user = '0;" for ch in ('aw','w','ar')],
+                  f'    assign {dma_engine_req}.aw.atop = \'0;',
+                  *[f"    assign {dma_engine_req}.{ch}.user = '0;" for ch in ('aw','w','ar')],
                   '  end else begin: gen_dma_disabled_'+name]
         if i == 0:
-            lines += [f"    assign {req(dma)} = ProbeEnable ? probe_req : '0;"]
+            lines += [f"    assign {dma_engine_req} = " + ("'0;" if takeover else "ProbeEnable ? probe_req : '0;")]
         else:
             lines += [f"    assign {req(dma)} = '0;"]
         lines += [f"    assign dma_irq_o[{i}] = 1'b0;", '  end']
@@ -349,6 +377,8 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
                 continue
             port = all_ports[f"m_{sub['name']}_local_{plane}_{endpoint}"]
             lines += [f"  assign {req(port)} = '0;"]
+    if real_ddr_mode:
+        lines += ['  logic ddr_init_done, ddr_init_error;']
     # Leaf attachments: SRAM/ROM/flash use only upstream memory/IP modules.
     for p in noc_manifest['slaves']:
         ep = p['endpoint']
@@ -373,6 +403,9 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
                 'IdWidth':p['id_width'],'Base':f"64'h{region['base']:016x}",'Bytes':size,
                 'ReadOnly':int(is_rom),'InitFile':f'"{image_prefix}/{image}"' if image else '""'},
                 {'clk_i':'clk_i','rst_ni':'rst_ni','req_i':req(p),'rsp_o':rsp(p),**mon})]
+        elif ep == 'controller_regs' and p['network'] == 'memory0_local_config' and real_ddr_mode:
+            # Live memory controller wrapper below owns this separate Config NoC target.
+            pass
         elif ethernet_mode and ep == 'controller_regs' and p['network'] == ethernet[0]['name']+'_local_config':
             ctrl_region = next(r for r in cfg['address_map']['config']
                                if r['name'] == ethernet[0]['name']+'.ctrl')
@@ -437,10 +470,23 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
             for i,t in enumerate(targets):
                 lines += [f'  {dtype(p,"req")} memory_{i}_req;',f'  {dtype(p,"rsp")} memory_{i}_rsp;']
                 base = int(window[t['name']]['base'],0)
-                lines += [module('axi_sram_target',f'u_memory_model_{i}',{'req_t':dtype(p,'req'),'rsp_t':dtype(p,'rsp'),
-                    'IdWidth':p['id_width'],'Base':f"64'h{base:016x}",'Bytes':1 << cfg['verification']['memory']['model_address_bits']},
-                    {'clk_i':'clk_i','rst_ni':'rst_ni','req_i':f'memory_{i}_req','rsp_o':f'memory_{i}_rsp',
-                     **{f'mon_{k}_o':'' for k in ('valid','write','addr','data','strb')}}),f"  assign memory_{i}_req.aw.atop = '0;"]
+                if real_ddr_mode and t['name'] == 'memory0.ddr0':
+                    control = all_ports['s_memory0_local_config_controller_regs']
+                    lines += [module('ddr_litedram_fullchip_target','u_ddr_real',{
+                        'data_req_t':dtype(p,'req'),'data_rsp_t':dtype(p,'rsp'),
+                        'cfg_req_t':dtype(control,'req'),'cfg_rsp_t':dtype(control,'rsp'),
+                        'WB_BASE':f"32'h{ddr_wb_base:08x}",
+                        'WB_ADR_BITS':ddr_wb_adr_bits},{
+                        'clk_i':'clk_i','rst_ni':'rst_ni',
+                        'data_req_i':f'memory_{i}_req','data_rsp_o':f'memory_{i}_rsp',
+                        'cfg_req_i':req(control),'cfg_rsp_o':rsp(control),
+                        'ddr_init_done_o':'ddr_init_done','ddr_init_error_o':'ddr_init_error'}),
+                        f"  assign memory_{i}_req.aw.atop = '0;"]
+                else:
+                    lines += [module('axi_sram_target',f'u_memory_model_{i}',{'req_t':dtype(p,'req'),'rsp_t':dtype(p,'rsp'),
+                        'IdWidth':p['id_width'],'Base':f"64'h{base:016x}",'Bytes':1 << cfg['verification']['memory']['model_address_bits']},
+                        {'clk_i':'clk_i','rst_ni':'rst_ni','req_i':f'memory_{i}_req','rsp_o':f'memory_{i}_rsp',
+                         **{f'mon_{k}_o':'' for k in ('valid','write','addr','data','strb')}}),f"  assign memory_{i}_req.aw.atop = '0;"]
             xcon = {'clk':'clk_i','rst':'!rst_ni'}
             for side in ('s','m'):
                 for ch,members in CHANNELS.items():
@@ -483,7 +529,8 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
     (out/'soc_top.sv').write_text('\n'.join(lines)+'\n')
     emit_tb(cfg, fw, out, image_prefix=image_prefix,
             cpu_dma_mode=cpu_dma_mode, pcie_host_mode=pcie_host_mode,
-            ethernet_mode=ethernet_mode, ethernet_cpu_mode=ethernet_cpu_mode)
+            ethernet_mode=ethernet_mode, ethernet_cpu_mode=ethernet_cpu_mode,
+            real_ddr_mode=real_ddr_mode)
     emit_dma_tb(cfg, fw, out, ethernet_mode=ethernet_mode)
     manifest = {'top':'soc_top','testbench':'full_chip_tb','dma_testbench':'full_chip_dma_tb',
                 'cores':count,'networks':len(nets),
@@ -491,7 +538,7 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
                 'dma_configuration':'DmaEnable=1; default cold-boot mode DmaEnable=0',
                 'memory_crossbar_inputs':1,
                 'memory_crossbar_outputs':len(cfg['memory_targets']),
-                'memory_controllers':'AXI slave SRAM models only; no physical HBM/DDR RTL',
+                'memory_controllers':('Pinned LiteDRAM RTL + modeled DFI for DDR; HBM SRAM model' if real_ddr_mode else 'AXI slave SRAM models only; no physical HBM/DDR RTL'),
                 'peripheral_subsystems':[{
                     'name':s['name'],'ip':s['ip'],
                     'local_data_noc':s['name']+'_local_data',
@@ -533,6 +580,10 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
             {'kind':'reserved_error','label':'DECERR responder: controller/DMA registers not integrated'}))
         if endpoint == 'dma_regs':
             continue
+        if real_ddr_mode and port['network'] == 'memory0_local_config' and endpoint == 'controller_regs':
+            actor = {'kind':'rtl_registers','label':'Pinned LiteDRAM DFII/CSR on Config NoC via Wishbone'}
+        if real_ddr_mode and endpoint == 'target_crossbar':
+            actor = {'kind':'rtl_controller','label':'Memory0 local crossbar; pinned LiteDRAM+modeled DFI; HBM AXI SRAM'}
         actors[port['network']+'.'+endpoint]=actor
     if pcie_host_mode:
         manifest['pcie0_host'] = {
@@ -562,6 +613,9 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
             'kind':'rtl_ethernet_dma',
             'label':'Pinned GMII MAC and PULP AXI-muxed Ethernet RX/TX; requires GMII test'
         }
+    if real_ddr_mode:
+        manifest['real_ddr_controller'] = True
+        manifest['verification_probe'] = 'PULP iDMA owns compute0 DMA NoC port until CPU CHECK; verification AXI master may take over only afterward'
     manifest['dma_parameters_by_compute'] = {
         core['name']: dma_params_for(cfg, core) for core in cores}
     manifest['axi_actors']=actors
@@ -634,13 +688,17 @@ def emit_dma_tb(cfg, fw, out, *, ethernet_mode=False):
 
 
 def emit_tb(cfg, fw, out, *, image_prefix='gen/chip', cpu_dma_mode=False,
-            pcie_host_mode=False, ethernet_mode=False, ethernet_cpu_mode=False):
+            pcie_host_mode=False, ethernet_mode=False, ethernet_cpu_mode=False,
+            real_ddr_mode=False):
     n = len(fw['cores'])
     words = [len(fw['images'][c['name']]) for c in fw['cores']]
     max_words = max(words)
     bases = '{'+', '.join(f"32'h{v:08x}" for v in reversed(fw['sram_bases']))+'}'
     counts = '{'+', '.join(f"32'd{v}" for v in reversed(words))+'}'
     opts = dict(cfg['verification']['full_chip_boot'])
+    if real_ddr_mode:
+        opts['timeout_cycles'] = max(opts['timeout_cycles'], 1500000)
+        opts['phase_timeout_cycles'] = max(opts['phase_timeout_cycles'], 1200000)
     if pcie_host_mode:
         opts['timeout_cycles'] = max(opts['timeout_cycles'], 600000)
         opts['phase_timeout_cycles'] = max(opts['phase_timeout_cycles'], 500000)
@@ -652,7 +710,8 @@ def emit_tb(cfg, fw, out, *, image_prefix='gen/chip', cpu_dma_mode=False,
     probe = probe_ports()
     cfgprobe = probe_ports('cfgprobe', addr_bits=32, data_bits=32, id_bits=1)
     lines = ['`timescale 1ns/1ps', '// One boot/coordination checker shared by both simulators.',
-        'module full_chip_tb (', *[p[1] for p in probe]]
+        'module full_chip_tb (', *[p[1] for p in probe],
+        *([p[1] for p in cfgprobe] if real_ddr_mode else [])]
     if pcie_host_mode:
         lines += pcie_chip.top_ports()
     lines[-1] = lines[-1].rstrip(',')
@@ -667,6 +726,7 @@ def emit_tb(cfg, fw, out, *, image_prefix='gen/chip', cpu_dma_mode=False,
            '  wire [7:0] gmii_txd;',
            '  wire gmii_tx_en, gmii_tx_er, eth_irq, eth_drop, eth_bad_fcs, eth_tx_failed;']
           if ethernet_mode else []),
+        *(['  reg ddr_init_mode = 1, ddr_negative_mode = 0;'] if real_ddr_mode else []),
         *(['  wire rst = ~rst_n;'] if pcie_host_mode else []),
         '`ifndef COCOTB_SIM', '  always #5 clk = ~clk;',
         '  initial begin repeat (10) @(negedge clk); rst_n = 1; end', '`endif',
@@ -687,8 +747,10 @@ def emit_tb(cfg, fw, out, *, image_prefix='gen/chip', cpu_dma_mode=False,
         '    .sram_valid_o(sram_valid), .sram_write_o(sram_write), .sram_addr_o(sram_addr),',
         '    .sram_data_o(sram_data), .sram_strb_o(sram_strb), .rom_reads_o(rom_reads), .flash_reads_o(flash_reads),',
         '    .dma_irq_o(), .dma_irq_pending_o(),',
+        *(['    .ddr_init_mode_i(ddr_init_mode),',
+           '    .ddr_negative_mode_i(ddr_negative_mode),'] if real_ddr_mode else []),
         '    '+',\n    '.join([*(f'.{p[0]}({p[0]})' for p in probe),
-                           *(f'.{p[0]}(\'0)' if request_field(p[2],p[3]) else f'.{p[0]}()'
+                           *(f'.{p[0]}({p[0]})' if real_ddr_mode else (f'.{p[0]}(\'0)' if request_field(p[2],p[3]) else f'.{p[0]}()')
                              for p in cfgprobe),
                              *(pcie_chip.instance_ports() if pcie_host_mode else []),
                              *(['.gmii_rx_clk', '.gmii_rx_rst',
@@ -707,6 +769,7 @@ def emit_tb(cfg, fw, out, *, image_prefix='gen/chip', cpu_dma_mode=False,
         '  reg [31:0] expected [0:N*MAX_WORDS-1];', '  reg [MAX_WORDS-1:0] copied [0:N-1];',
         '  reg [N-1:0] init_mask = 0, hello_mask = 0, check_mask = 0, app_fetch = 0;',
         '  reg init_complete = 0, run_complete = 0, check_complete = 0, pass_flag = 0;',
+        *(['  always @(posedge clk) if (rst_n && ddr_negative_mode && (!pass_flag || ddr_init_mode)) $fatal(1, "DDR negative test takeover before CPU CHECK/DFII init");'] if real_ddr_mode else []),
         *(['  reg [31:0] cpu_dma_evidence = 0;',
            '  reg cpu_dma_success = 0;',
            '  reg [191:0] cpu_dma_addresses = 0;',

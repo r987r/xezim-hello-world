@@ -124,6 +124,12 @@ in their own regressions; no duplicate DMA engine, PCIe VIP, or test runner
 was added. `test-flow.json` includes `host0.seed_ddr_input`,
 `cpu0.pcie_ddr_exchange`, and `host0.read_ddr_dma_output`.
 
+The PCIe result in this document explicitly uses **modeled DDR**. A
+separate opt-in CPU/iDMA→real LiteDRAM controller path now passes
+[DDR-B CI #42217902632](https://github.com/r987r/xezim-hello-world/actions/runs/42217902632), but that is **not** evidence
+of PCIe host transactions using the real controller. The combined
+PCIe+real-DDR path remains an epic #34 interoperability gate.
+
 ### Not part of initial PCIe closure
 
 - The host **pulls** DDR data by BAR read; there is **no** endpoint-initiated

@@ -18,11 +18,40 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 async def phase(dut, signal, name):
-    timeout = 5 if os.environ.get('SOC_CPU_DMA_MODE') == '1' else 1
+    # Full LiteDRAM DFI simulation is far slower than AXI RAM, and our
+    # real CPU enters RUN only after >1 ms of genuine JEDEC/DFII init.
+    # Keep the original 5 ms CPU-DMA deadline for the fast regression.
+    timeout = (12 if os.environ.get('SOC_DDR_REAL_MODE') == '1'
+               else 5 if os.environ.get('SOC_CPU_DMA_MODE') == '1' else 1)
     if int(signal.value) != 1:
         await with_timeout(RisingEdge(signal), timeout, 'ms')
     dut._log.info('observed firmware phase %s complete', name)
     trace_phase('CPU '+name+' complete')
+
+
+async def _ddr_progress(dut):
+    """Periodic passive checkpoints during the opt-in real DDR CPU run.
+
+    No bus agent or force; sampling existing retired-operation counters
+    prevents another 30-minute wall timeout with no phase diagnostics.
+    """
+    controller = dut.dut.u_ddr_real
+    while True:
+        await Timer(500, 'us')
+        fields = (
+            ("init", dut.init_complete), ("run", dut.run_complete),
+            ("check", dut.check_complete), ("success", dut.cpu_dma_success),
+            ("firmware", dut.cpu_dma_evidence),
+            ("axi_aw", controller.controller_axi_aw_count),
+            ("axi_b", controller.controller_axi_b_count),
+            ("axi_ar", controller.controller_axi_ar_count),
+            ("axi_rlast", controller.controller_axi_rlast_count),
+            ("dfi_write", controller.dfi_write_count),
+            ("dfi_read", controller.dfi_read_count),
+            ("bank_write", controller.bank_storage_write_count),
+        )
+        summary = " ".join(f"{key}={int(signal.value):#x}" for key, signal in fields)
+        dut._log.info("DDR_PROGRESS at %dus: %s", int(get_sim_time(units="us")), summary)
 
 
 async def memory_transaction(dut, operation):
@@ -63,6 +92,7 @@ async def execute_cold_boot(dut, *, external=None):
         host=PcieHostParticipant(flow,manifest)
     memory = json.loads((ROOT/'gen/chip/manifest.json').read_text())['memory_models']
     cpu_dma_mode = os.environ.get('SOC_CPU_DMA_MODE') == '1'
+    real_ddr_mode = os.environ.get('SOC_DDR_REAL_MODE') == '1'
     # The probe outputs mirror the *real iDMA response* when DmaEnable=1
     # and ProbeEnable=0. Attaching AxiMaster in CPU mode would let its
     # unsolicited R-channel worker consume the DMA's valid descriptor R
@@ -73,6 +103,8 @@ async def execute_cold_boot(dut, *, external=None):
         probe = AxiMaster(AxiBus.from_prefix(dut, 'probe'), dut.clk,
                           dut.rst_n, reset_active_level=False)
     dut.rst_n.value = 0
+    if real_ddr_mode:
+        dut.ddr_init_mode.value = 1
     if host is not None:
         dut.completer_id.value=0
         dut.max_payload_size.value=0
@@ -81,6 +113,10 @@ async def execute_cold_boot(dut, *, external=None):
     for _ in range(10):
         await FallingEdge(dut.clk)
     dut.rst_n.value = 1
+    if real_ddr_mode:
+        from dv.full_chip.ddr_init import initialize_controller
+        await initialize_controller(dut)
+        cocotb.start_soon(_ddr_progress(dut))
     if host is not None:
         from dv.pcie0.tlp_trace import LiveTlpCapture
         # The pinned helper already provides PcieIfFrame / Tlp decoding.

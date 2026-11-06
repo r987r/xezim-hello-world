@@ -93,6 +93,23 @@ Do not silence source assertions or restrict all pending IDs to one
 merely to make the simulator start. A passing compile is not enough;
 the full AXI data/readback regression must pass independently.
 
+## Corrected source-ID ordering across local and global NoCs (PR #78)
+
+The upstream FlooNoC `NoRoB` per-ID destination owner is now
+selected for **both write B and read R** source NIs in **each local
+Data NoC and global Data NoC**, not just the final global fabric.
+Two same-ID requests to different destinations cannot bypass an
+earlier response at the first local/global split. Other IDs and
+independent initiators remain concurrent (their numeric ID is not
+a globally unique transaction identity). The existing
+`dv/supernoc/test_supernoc.py` includes directed local-SRAM→DDR,
+remote-SRAM→DDR, DDR→local, R-data order and independent-manager
+same-ID cases, with intentional delays and different response
+statuses. Exact-head [SuperNoC CI #42155410190](https://github.com/r987r/xezim-hello-world/actions/runs/42155410190)
+passed the positive and named corruption-negative tests. These
+are modeled-memory NoC tests; DDR-B subsequently passed the separate
+real-controller CPU/iDMA simulation. No upstream assertion is muted.
+
 ## Target-only FlooNoC reorder-buffer configuration
 
 A later full eight-mesh simulation reached a different upstream

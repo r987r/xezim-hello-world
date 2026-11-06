@@ -406,7 +406,7 @@ def overview_svg(cfg: dict, networks: dict, dst: Path):
     a.box_label(1142,my+64,375,71,"Controller CSRs",
                 "Controller registers pending", "config",title_size=20,detail_size=14)
     a.line([(1107,my+100),(1142,my+100)],PURPLE,2,True,True)
-    a.box_label(83,my+171,702,75,f"Internal 1x{len(cfg["memory_targets"])} Verilog-AXI crossbar",
+    a.box_label(83,my+171,702,75,f"Internal 1x{len(cfg['memory_targets'])} Verilog-AXI crossbar",
                 "One local-NoC output; upstream target crossbar","rtl",title_size=22,detail_size=15)
     targets=cfg["memory_targets"]
     for j,t in enumerate(targets):

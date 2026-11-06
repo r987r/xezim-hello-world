@@ -170,6 +170,41 @@ tests:
           actors: {'1': cpu0}
           steps: {'101': alloc_phys, '102': dma_roundtrip, '103': verify_memory}
       axi: {scope: dut.u_noc, clock: clk, reset: rst_n, catalog: gen/supernoc/axi_monitors.json, actors: .tools/regression/chip-cpu-dma/variant/manifest.json, max_events: 500000, required_complete: true}
+  chip-ddr4-real:
+    opt_in: true
+    # Same generated soc_top and full_chip_tb checker, but real PicoRV32 runs
+    # compiled RV32I C DMA firmware during the existing INIT/RUN/CHECK phases.
+    # No AXI BFM assumes the CPU role and SRAM remains cold.
+    engine: cocotb-verilator
+    sources: noc
+    bender_targets: [chip_boot, dma]
+    ip: [picorv32, serv, wb2axip, verilog_axi, pulp_idma]
+    firmware_mode: ddr_cpu_dma
+    top: full_chip_tb
+    module: dv.full_chip.test_ddr_real
+    seed: 1
+    test_dir: .
+    build: .tools/chip-ddr4-real-obj
+    env: {MAKEFLAGS: '-j2', SOC_CPU_DMA_MODE: '1', SOC_DDR_REAL_MODE: '1'}
+    timeout_s: 3000
+    pass: 'PASS DDR-B full-chip'
+    report:
+      context: 'Real pinned LiteDRAM with behavioral DDR4 DFI/BankModel behind existing Memory0 crossbar and independent 16KiB Config NoC, real CPU/iDMA and measured AXI/DFI. No physical PHY.'
+      flow:
+        required_steps:
+          init: [cpu0.firmware_init]
+          run: [cpu0.firmware_run, cpu0.alloc_phys, cpu0.dma_roundtrip, cpu0.verify_memory]
+          check: [cpu0.firmware_check]
+        required_origins:
+          init: {cpu0.firmware_init: rtl_observed}
+          run: {cpu0.firmware_run: rtl_observed, cpu0.alloc_phys: rtl_observed, cpu0.dma_roundtrip: rtl_observed, cpu0.verify_memory: rtl_observed}
+          check: {cpu0.firmware_check: rtl_observed}
+        firmware_mmio:
+          monitor: compute0_local_data.cpu
+          address: '0x1000045c'
+          actors: {'1': cpu0}
+          steps: {'101': alloc_phys, '102': dma_roundtrip, '103': verify_memory}
+      axi: {scope: dut.u_noc, clock: clk, reset: rst_n, catalog: .tools/regression/chip-ddr4-real/ddr_noc/supernoc/axi_monitors.json, actors: .tools/regression/chip-ddr4-real/variant/manifest.json, max_events: 500000, required_complete: true}
   chip-boot: &chip
     engine: cocotb-verilator
     sources: noc
@@ -310,4 +345,5 @@ suites:
   chip: [chip-cpu-dma, chip-dma, chip-boot, chip-boot-negative, chip-xezim-compile]
   # Every declared test is covered. Structural Xezim probes stay distinct
   # from the Verilator traffic gate; make test requires both toolchains.
+  ddr-real: [chip-ddr4-real]
   full: [xezim, noc, compatibility, diagnostics, dma, chip, chip-pcie-host, chip-ethernet, chip-ethernet-cpu]

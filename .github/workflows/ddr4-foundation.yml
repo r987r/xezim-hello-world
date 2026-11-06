@@ -171,6 +171,16 @@ jobs:
             rtl/memory/ddr4/tb_soc_axi_bridge.sv
           .tools/ddr4/bridge_sim/Vtb_ddr_litedram_axi_bridge
 
+      - name: Verify real DDR Config NoC AXI to LiteX Wishbone RTL bridge
+        run: |
+          set -euo pipefail
+          verilator --binary --timing --assert -Wno-fatal \
+            --top-module tb_ddr_litedram_axi_wishbone \
+            --Mdir .tools/ddr4/wishbone_bridge_sim \
+            rtl/memory/ddr4/soc_axi_wishbone_bridge.sv \
+            rtl/memory/ddr4/tb_soc_axi_wishbone_bridge.sv
+          .tools/ddr4/wishbone_bridge_sim/Vtb_ddr_litedram_axi_wishbone
+
       - name: Lint actual generated DDR4 RTL
         run: python3 rtl/memory/ddr4/check_rtl.py --tool verilator --timeout 600
 

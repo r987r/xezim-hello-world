@@ -4,7 +4,7 @@ This directory contains the independent LiteDRAM controller/DFI simulation
 configuration, contracts, and standalone functional verification. The
 **foundation merged to main in PR #21**; the real AXI read/write functional
 test was merged through **PR #22**, without wiring DDR into the chip.
-The full-chip DDR address map still uses the original AXI SRAM stand-in.
+The **default** full-chip DDR address map still uses the fast AXI SRAM stand-in; the separate opt-in `chip-ddr4-real` variant now connects real LiteDRAM RTL behind the actual generated NoCs. See [CI #42217902632](https://github.com/r987r/xezim-hello-world/actions/runs/42217902632).
 
 The implementation uses the upstream LiteDRAM source pinned in
 `config/ip.lock.yaml` (SHA `3506dc02e2b790011c1c147e2aad4541a6ddf836`),
@@ -23,7 +23,7 @@ simulation.
   Wishbone control pins and initialization/status signals.
 - Simulation-only geometry bounds the modeled storage at 32 MiB for
   practical CI memory footprint (the architectural DDR aperture remains
-  1 GiB and has **not** been wired to this model). This is not valid
+  1 GiB; the opt-in full-chip variant attaches its low 32 MiB to this model). This is not valid
   production DDR4 silicon geometry.
 - The generated RTL is checked with Verilator lint against its actual
   port map. This is **not** proof of JEDEC initialization or AXI data.
@@ -74,15 +74,15 @@ individually isolated which scheduling adjustment was decisive.
 The passive monitor remains continuously active from before the first
 clock edge through initialization, all traffic, and teardown.
 
-**Not yet proven:** ASIC/physical DDR PHY, JEDEC behavior beyond the
-LiteDRAM simulation PHY/model, full-size DDR4 capacity, multi-controller
-SoC integration, CPU/DMA boot traffic to real DDR, or Xezim functional
-execution of this generated DDR controller. Those require separate gates.
+**Not proven by this standalone PR #22:** CPU/DMA integration, ASIC DDR PHY,
+full-size DDR4 capacity, physical JEDEC timing or multi-controller stress.
+The CPU/iDMA-to-controller scope was verified **later** by the opt-in DDR-B
+full-chip run #42217902632; Xezim functional execution of this generated
+controller and a physical DDR device remain unproven.
 
-Do not make significant changes to `config/`, `tools/full_chip_gen.py`,
-`Bender.yml`, CPU/DMA/boot software, canonical diagrams or shared
-RTL in this track. Wait until the other boot/DMA PRs stabilize and obtain
-explicit approval before integrating real DDR4 into the chip.
+The standalone DDR-A track still must not modify shared SoC generator,
+boot/DMA RTL, canonical diagrams or memory backend defaults without the
+assigned integration owner. DDR-B #74 owns the opt-in full-chip attachment.
 
 ## Monitor lifecycle policy
 
@@ -137,10 +137,11 @@ Model inventory, accurately labeled:
   simulation storage with a bounded 32 MiB geometry.
 - **Not modeled:** an electrical/physical DDR4 PHY, IO pad timing,
   training, DDR4 analog behavior, and a physical JEDEC DDR4 device.
-- **Not connected:** the shared SoC's full-chip DDR aperture still
-  ends at a bounded AXI SRAM stand-in. Fabric Explorer's verified
-  NoC stages and this standalone timing report are separately sourced;
-  **do not sum** them until real end-to-end DDR integration passes.
+- **Default versus opt-in:** standard chip boot still uses bounded AXI
+  SRAM memory targets. The DDR-B `chip-ddr4-real` variant connects the
+  actual LiteDRAM controller behind Memory0. Do **not** sum standalone
+  DFI latency and source-to-NoC stage latency without matched transaction
+  evidence; unsupported stage attribution remains UNMEASURED.
 
 The merged selective probe measures DFI per-phase READ/WRITE commands,
 `rddata_en`, `rddata_valid`, and modeled bank accesses with
@@ -151,11 +152,10 @@ have no AXI IDs and AXI B can precede model bank storage. High-outstanding
 correlation additionally requires verified bank-machine queue mapping;
 never guess missing timing from PHY configuration.
 
-The planned final integration PR reuses this report's schema, attaches
-a real 64-bit-to-local-AXI address adapter and CSR init path, and adds
-full-chip tests with the existing NoC monitors. No shared generator,
-clock domain, NoC, DMA, boot, or diagrams were changed for standalone
-timing instrumentation.
+DDR-B #74 has now attached a real 64-bit-to-local-AXI adapter and CSR
+initialization path and added full-chip tests using the existing monitors;
+standalone timing instrumentation itself did not modify shared generators
+or canonical diagrams.
 
 ## Captured internal DFI and BankModel probes (merged #26)
 
@@ -185,8 +185,9 @@ Only observed stage intervals are numeric; unmatched steps are unmeasured.
 Actual timestamps are in picoseconds, for the standalone 100 MHz
 simulation clock. The internal probe checkpoints were exercised in the
 passing [combined real RTL CI run 42057781622](https://github.com/r987r/xezim-hello-world/actions/runs/42057781622).
-Full-chip Memory0 DDR remains separately unconnected; these measured
-model checkpoints are not a physical PHY/DRAM benchmark.
+The default chip mode remains modeled; DDR-B #74 separately verifies
+opt-in Memory0-to-LiteDRAM connectivity. These measured model checkpoints
+are not a physical PHY/DRAM benchmark.
 
 ### Existing DFI verification reuse (explicit audit)
 
@@ -329,7 +330,18 @@ python3 rtl/memory/ddr4/run_functional.py
 python3 rtl/memory/ddr4/report_html.py --dir .tools/ddr4/litedram_sim
 ~~~
 
-Full-chip DDR-B integration remains separate: memory0.ddr0 uses AXI RAM
-until real controller RTL is connected via the generated Data NoC, Wishbone
-initialization through the independent Config NoC, and CPU/iDMA traffic
-with current-source regression evidence. See `SOC_BRIDGE.md`, #40/#38.
+
+## Full-chip DDR-B CPU/iDMA integration (opt-in, PR #74)
+
+**Exact-head passed:** [DDR-B CI #42217902632](https://github.com/r987r/xezim-hello-world/actions/runs/42217902632) at `a8cd8bb9eb9b8c18f48eb2c4af67a1c2d6340fa3`; [controller/NoC/AXI/DFI evidence](https://github.com/r987r/xezim-hello-world/actions/runs/42217902632/artifacts/13503312198). The opt-in variant uses a real generated `soc_ddr4_sim` controller, a 64→25-bit guarded AXI target behind Memory0, and real Config NoC CSR initialization with 43 Wishbone-script writes and three checked readbacks. The compiled PicoRV32 C program drives PULP iDMA and the shared INIT/RUN/CHECK flow, confirms SRAM↔DDR roundtrip bytes, controller AXI AW/B and AR/RLAST equality, DFI read/write activity and modeled bank writes. The final passive AXI report contains 48,144 observations with no reported capture inconsistencies.
+
+Reproduce with the pinned dependencies in `.github/workflows/ddr4-fullchip.yml`:
+
+~~~sh
+python3 rtl/memory/ddr4/bringup.py generate
+python3 tools/regress.py chip-ddr4-real --stage build --fail-fast
+python3 tools/regress.py chip-ddr4-real --stage run --fail-fast
+# Alternatively, make dv-chip-ddr4-real (build and run, slower)
+~~~
+
+Both stages use the same source-fingerprinted simulator binary. The default `chip-cpu-dma`, PCIe and Ethernet modes continue to use modeled DDR; no physical DDR PHY or joint Ethernet/PCIe-to-real-DDR scenario was asserted. The bridge has separate standalone invalid-aperture DECERR tests; an invalid 32-MiB-aperture transaction **through the full generated NoCs** is still an explicit DDR-B close-out verification item. Broad reset/refresh/backpressure stress remains DDR-A #35.

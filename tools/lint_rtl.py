@@ -40,7 +40,8 @@ def select_profiles(root: Path, requested: list[str]) -> list[str]:
                  if test.get("sources") == "noc"
                  and test.get("engine") == "cocotb-verilator"
                  and test.get("top") and not test.get("reuse_build")
-                 and not test.get("expect_failure")]
+                 and not test.get("expect_failure")
+                 and not test.get("opt_in", False)]
     if not names or any(not isinstance(tests[n].get("top"), str) for n in names):
         raise ValueError("no elaboratable RTL profiles selected")
     return names

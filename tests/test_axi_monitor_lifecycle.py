@@ -124,6 +124,36 @@ def check_delegated_full_chip(module_path: Path) -> None:
         raise AssertionError("PCIe shared flow lacks bounded passive TLP/AXI monitoring")
 
 
+
+def check_delegated_ddr_full_chip(module_path: Path) -> None:
+    """DDR selector must use the same proven AXI monitor/clock owner as CPU."""
+    if module_path.relative_to(ROOT).as_posix() != "dv/full_chip/test_ddr_real.py":
+        raise AssertionError("unknown DDR full-chip delegate")
+    tree = ast.parse(module_path.read_text())
+    tests = [n for n in tree.body if _is_test(n)]
+    if len(tests) != 1:
+        raise AssertionError("real DDR must have exactly one shared-flow test")
+    entry = tests[0]
+    calls = [n for n in ast.walk(entry)
+             if isinstance(n, ast.Call)
+             and isinstance(n.func, ast.Name)
+             and n.func.id == "execute_cold_boot"]
+    if len(calls) != 1:
+        raise AssertionError("real DDR must delegate exactly once to canonical CPU flow")
+    source = (ROOT / "dv/full_chip/test_boot.py").read_text()
+    check_module(source)
+    if not (source.index("attach_observers(dut)") <
+            source.index("Clock(dut.clk, 10") <
+            source.index("await initialize_controller(dut)") and
+            "dut.ddr_init_mode.value = 1" in source):
+        raise AssertionError("real DDR Config NoC initialization bypasses passive monitor")
+    body = module_path.read_text()
+    for evidence in ("controller_axi_aw_count", "controller_axi_b_count",
+                     "controller_axi_ar_count", "controller_axi_rlast_count",
+                     "dfi_read_count", "dfi_write_count", "bank_storage_write_count"):
+        if evidence not in body:
+            raise AssertionError(f"missing independently observed real DDR evidence: {evidence}")
+
 def check_generic_module(text: str) -> None:
     """Protocol-only monitors must start before clocks and close at teardown.
 
@@ -197,6 +227,8 @@ class MonitorLifecyclePolicyTests(unittest.TestCase):
             with self.subTest(test=name, module=str(path.relative_to(ROOT))):
                 if name == "chip-pcie-host":
                     check_delegated_full_chip(path)
+                elif name == "chip-ddr4-real":
+                    check_delegated_ddr_full_chip(path)
                 else:
                     if "axi" in report:
                         check_module(path.read_text())

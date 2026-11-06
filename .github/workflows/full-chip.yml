@@ -39,7 +39,10 @@ jobs:
   boot:
     needs: firmware-preflight
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    # CI 42234770010 completed all five dv-chip targets, but ran out of
+    # the previous 45-minute job budget during final report/artifact steps.
+    # Keep the job bounded while allowing evidence publishing to complete.
+    timeout-minutes: 65
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

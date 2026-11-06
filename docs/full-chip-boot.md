@@ -116,10 +116,38 @@ writes distinct burst data into both HBM/DDR windows, applies a partial write,
 then reads both back. Distinct data checks that the targets are independent.
 Read and write responses must be OKAY; accesses just beyond each model's
 capacity must return SLVERR rather than alias valid storage.
-The default cold-boot test still uses a BFM at the inactive DMA boundary. **In real CPU C-DMA mode the active probe BFM must not be instantiated** because its response wires mirror true iDMA traffic; only passive AXI observers remain.
+The default cold-boot test still uses a BFM at the inactive DMA boundary.
+**During real CPU C-DMA execution no active AXI master may attach to its
+mirrored iDMA probe pins**, because it would consume real iDMA responses.
+The opt-in DDR-B regression adds a distinct, RTL-gated exception **only
+after the real CPU/iDMA CHECK phase completes and controller requests drain**:
+a verification-only AXI master exclusively takes over the compute0 DMA NoC
+manager port to check routed DDR aperture DECERR and nonalias. Ordinary
+CPU-DMA, Ethernet and PCIe runs do not enable this takeover.
 The separate `make dv-chip-dma` test instead uses both real PULP iDMA
 engines over the same NoCs with CPUs held in reset. These are distinct scopes.
 The CPUs remain 32-bit and cannot directly address the windows above 4 GiB.
+
+### Opt-in real LiteDRAM path (DDR-B)
+
+The default `chip-boot`, `chip-cpu-dma` and PCIe tests above **retain**
+AXI RAM models. The separate `chip-ddr4-real` variant dynamically
+generates the pinned LiteDRAM controller and behavioral DFI/BankModel
+behind Memory0's existing Data NoC crossbar, enables a 16-KiB Config NoC
+Wishbone/DFII initialization path, and holds CPU0 in reset until real
+DDR init completes. The same compiled CPU0 C/iDMA INIT/RUN/CHECK software
+copies SRAM→DDR→SRAM and verifies byte contents. The real-controller
+[CI #42217902632](https://github.com/r987r/xezim-hello-world/actions/runs/42217902632) passed with DFI/model-bank and
+AXI completion evidence. The follow-up [source-matched DDR-B run #42234769827](https://github.com/r987r/xezim-hello-world/actions/runs/42234769827)
+also passed routed post-CHECK DDR read/write DECERR with no real
+controller forwarding and unchanged in-range data. This is simulation-controller
+integration, **not** a physical DDR PHY or a combined Ethernet/PCIe DDR test.
+
+The [common boot CI #42234770010](https://github.com/r987r/xezim-hello-world/actions/runs/42234770010)
+logged PASS for all five `dv-chip` targets (CPU-DMA, dual DMA,
+boot, boot-negative, Xezim structural compile) but was marked cancelled
+at its previous 45-minute job limit before artifact finalization.
+The workflow has a 65-minute budget for a completed exact-head rerun.
 
 ## Commands and acceptance
 
@@ -127,7 +155,8 @@ The CPUs remain 32-bit and cannot directly address the windows above 4 GiB.
 make gen
 make dv-chip
 make dv-chip-dma
-make dv-chip-cpu-dma  # actual CPU0 C DMA + DDR/HBM roundtrip + passive AXI evidence
+make dv-chip-cpu-dma  # default modeled DDR/HBM + actual CPU0 C DMA
+make dv-chip-ddr4-real # opt-in pinned real LiteDRAM RTL + behavioral DFI
 python3 tools/regress.py chip-boot --stage files
 python3 tools/regress.py chip-boot --stage run  # requires matching built RTL
 python3 tools/regress.py chip-boot-negative
