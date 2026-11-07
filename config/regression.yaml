@@ -181,6 +181,7 @@ tests:
     bender_targets: [chip_boot, dma]
     ip: [picorv32, serv, wb2axip, verilog_axi, pulp_idma]
     firmware_mode: cpu_dma_scenario
+    flow_plan: config/scenarios/cpu-bfm-ddr-roundtrip.json
     top: full_chip_tb
     module: dv.full_chip.test_boot
     seed: 1
@@ -217,6 +218,7 @@ tests:
     seed: 1
     test_dir: .
     firmware_mode: scenario_bfm
+    flow_plan: config/scenarios/cpu-bfm-ddr-roundtrip.json
     build: .tools/chip-dma-scenario-obj
     env: {MAKEFLAGS: '-j2'}
     timeout_s: 900

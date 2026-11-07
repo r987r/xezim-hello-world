@@ -302,6 +302,36 @@ class PublicationTests(unittest.TestCase):
             self.assertIn('results.xml',entries[0]['assets'])
             self.assertEqual((report.parent/'simulation.log').read_text(),'actual simulator transcript')
 
+    def test_archived_plan_survives_history_without_current_scenario(self):
+        from tools.test_intent import snapshot as capture_plan
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);target=fixture(root/'evidence',axi=True)
+            archived={'engine':'cocotb-verilator','top':'full_chip_tb',
+                      'args':['+RUN_SEED=31'],'firmware_mode':'legacy'}
+            site.dump(target/'plan.json',archived)
+            original=capture_plan('chip-boot',archived)
+            site.dump(target/'planned-flow.json',original)
+            output=root/'site';output.mkdir()
+            _,entries,_=site.evidence_index(root/'evidence',output,'r987r/xezim-hello-world')
+            self.assertEqual(entries[0]['planned_flow_sha256'],original['plan_sha256'])
+            self.assertEqual(entries[0]['planned_flow_intent'],original['intent'])
+            self.assertEqual(entries[0]['planned_flow_status'],'captured_before_simulation')
+            path=output/'runs/123-1/chip-boot'
+            self.assertEqual(json.loads((path/'test-intent.json').read_text())['selected_args'],
+                             ['+RUN_SEED=31'])
+            self.assertIn('Archived pre-run plan',(path/'report.html').read_text())
+
+    def test_tampered_archived_plan_rejected_on_publish(self):
+        from tools.test_intent import snapshot as capture_plan
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);target=fixture(root/'evidence')
+            old=capture_plan('chip-boot',{'engine':'xezim','args':['--max-time','10us']})
+            old['intent']['selected_args'].append('--dangerous')
+            site.dump(target/'planned-flow.json',old)
+            output=root/'site';output.mkdir()
+            with self.assertRaisesRegex(ValueError,'digest mismatch'):
+                site.evidence_index(root/'evidence',output,'r987r/xezim-hello-world')
+
     def test_historical_axi_is_rendered_without_rewriting_original_data(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);target=fixture(root/'evidence',axi=True)

@@ -7,9 +7,23 @@ runs:
       run: |
         set -euo pipefail
         mkdir -p .tools/bin
-        gh release download v0.32.1 --repo pulp-platform/bender \
-          --pattern bender-x86_64-unknown-linux-gnu.tar.xz \
-          --pattern bender-x86_64-unknown-linux-gnu.tar.xz.sha256 --dir .tools/bin
+        # GitHub release-assets API can transiently return HTTP 5xx.
+        # Retries never bypass our pinned version or checksum verification.
+        for attempt in 1 2 3; do
+          rm -f .tools/bin/bender-x86_64-unknown-linux-gnu.tar.xz \
+                .tools/bin/bender-x86_64-unknown-linux-gnu.tar.xz.sha256
+          if gh release download v0.32.1 --repo pulp-platform/bender \
+              --pattern bender-x86_64-unknown-linux-gnu.tar.xz \
+              --pattern bender-x86_64-unknown-linux-gnu.tar.xz.sha256 \
+              --dir .tools/bin; then
+            break
+          fi
+          if [ "$attempt" -eq 3 ]; then
+            echo "ERROR: pinned Bender asset fetch failed after 3 attempts" >&2
+            exit 1
+          fi
+          sleep "$((attempt * 4))"
+        done
         (cd .tools/bin && sha256sum -c bender-x86_64-unknown-linux-gnu.tar.xz.sha256)
         tar -xJf .tools/bin/bender-x86_64-unknown-linux-gnu.tar.xz -C .tools/bin
         candidate="$(find .tools/bin -maxdepth 4 -type f -name bender -print -quit)"
