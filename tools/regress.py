@@ -627,6 +627,15 @@ def run_target(name, test, resolver, options):
                 print(f'FAIL {name}/traffic correlation: {latency_issues[:8]}',flush=True)
                 protocol_report.finalize_run(out, result)
         print(f'REPORT {name}: {summary["transactions"]} observations; {out.relative_to(ROOT)}/report.html',flush=True)
+    if selected["adapter"]=="scenario_dispatch_adapter" and passed:
+        from runtime_contract import qualify_selected_scenario, RunContractError
+        try:
+            qualify_selected_scenario(selected,out,result=result)
+        except (RunContractError,OSError,ValueError,TypeError) as exc:
+            passed=result['passed']=False
+            results.append({'name':'selected scenario action correlation','passed':False,
+                            'reason':str(exc)})
+            print(f'FAIL {name}/selected scenario action correlation: {exc}',flush=True)
     (out/'result.json').write_text(json.dumps(result, indent=2) + '\n')
     return passed
 
