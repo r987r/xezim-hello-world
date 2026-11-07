@@ -626,6 +626,17 @@ def evidence_index(evidence,output,repository):
                            names.get(variant_view.get('selected_soc_top'))
                         or variant_graph.get('status')!='selected_generated_variant_topology_not_elaborated'):
                     raise ValueError('variant 2D diagram differs from selected RTL/source manifest')
+                configured_protocol_sources=variant_view.get('protocol_sources') or []
+                if configured_protocol_sources and result.get('passed') is True:
+                    if not protocol_data or protocol_data.get('capture_complete') is not True:
+                        raise ValueError('passing variant has no complete required native protocol capture')
+                    actual_sources={r['id']:r for r in protocol_data.get('sources',[])}
+                    for declared in configured_protocol_sources:
+                        observed=actual_sources.get(declared['id'])
+                        if observed is None or any(
+                                observed.get(key)!=declared.get(key)
+                                for key in ('protocol','clock_domain','role','implementation','modeling')):
+                            raise ValueError('passing native protocol source differs from selected YAML catalog')
                 records=variant_view.get('boundaries')
                 if (not isinstance(records,list) or
                         len(records)!=variant_view.get('summary',{}).get('monitors')
