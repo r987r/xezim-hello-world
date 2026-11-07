@@ -180,9 +180,12 @@ class RegressionTests(unittest.TestCase):
             resolver = types.SimpleNamespace(sources=lambda test: ([str(rtl)], [], []))
             options = types.SimpleNamespace(arg=[], memory_config=None, network=[], stage='files')
             test = {'engine': 'cocotb-verilator', 'sources': 'other', 'top': 'other_tb'}
+            # New unregistered legacy targets must now fail P1's strict
+            # adapter-policy gate. Reuse an approved temporary legacy target
+            # to test source-closure behavior without overriding that gate.
             with patch.object(regress, 'ROOT', root):
-                self.assertTrue(regress.run_target('other', test, resolver, options))
-            plan = json.loads((root/'.tools/regression/other/plan.json').read_text())
+                self.assertTrue(regress.run_target('memory', test, resolver, options))
+            plan = json.loads((root/'.tools/regression/memory/plan.json').read_text())
             self.assertEqual(plan['sources'], [str(rtl)])
 
 

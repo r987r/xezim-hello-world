@@ -185,6 +185,8 @@ def load_config(path):
         raise ValueError('full suite must cover every non-opt-in declared test')
     if any(not any(name in expand(config, [suite]) for suite in config['suites'] if suite != 'full') for name in opt_in):
         raise ValueError('opt-in regression must remain addressable through a named suite')
+    from runtime_contract import validate_migration_inventory
+    validate_migration_inventory(config)
     return config
 
 
@@ -522,6 +524,13 @@ def run_target(name, test, resolver, options):
             'args': args, 'results_xml': str(out/'results.xml'), 'stage': options.stage}
     plan_file = out/'plan.json'
     plan_file.write_text(json.dumps(plan, indent=2) + '\n')
+    # A separate source-fingerprinted *command dispatch envelope* is not
+    # another INIT/RUN/CHECK scenario planner. The canonical intent remains
+    # planned-flow.json and the original scenario-plan.json for SCN-2.
+    from runtime_contract import selection as select_runtime, save as save_runtime
+    from runtime_contract import dispatch_event, check_events
+    selected_path = out/'selected-test-plan.json'
+    save_runtime(selected_path, select_runtime(name,plan,out,commands=[]))
     if options.stage == 'files':
         print(f'FILES {name}: {filelist.relative_to(ROOT)}', flush=True)
         return True
@@ -578,6 +587,16 @@ def run_target(name, test, resolver, options):
         print(f'CONNECTIVITY {name}: {connectivity["summary"]["monitors"]} '
               f'AXI source taps, {connectivity["summary"]["declared_live_peripherals"]} '
               'declared live packet endpoints; not elaborated/observed', flush=True)
+    runtime_selected = select_runtime(name,plan,out,commands=commands)
+    save_runtime(selected_path,runtime_selected)
+    runner_events = []
+    def save_dispatch():
+        # A command start is not a proof that its internal stimulus ran.
+        (out/'runner-events.json').write_text(json.dumps({
+            'schema_version':1,'target':name,
+            'plan_sha256':runtime_selected['plan_sha256'],
+            'events':runner_events},indent=2)+'\n')
+    save_dispatch()
     env = dict(os.environ)
     env['SOC_RUN_PLAN'] = str(plan_file)
     if test.get('firmware_mode') in ('scenario_bfm', 'cpu_dma_scenario'):
@@ -594,7 +613,18 @@ def run_target(name, test, resolver, options):
     results = []
     for label, command in commands:
         print(f'RUN {name}/{label} ({engine}, stage={options.stage})', flush=True)
-        code, timed_out = run_process(command, out/f'{label}.log', test.get('timeout_s', resolver.config['defaults']['timeout_s']), env)
+        runner_events.append(dispatch_event(runtime_selected,label,status='started'))
+        save_dispatch()
+        command_started = time.monotonic()
+        try:
+            code, timed_out = run_process(command, out/f'{label}.log',
+                                          test.get('timeout_s', resolver.config['defaults']['timeout_s']), env)
+        except (OSError, subprocess.SubprocessError) as exc:
+            runner_events.append(dispatch_event(
+                runtime_selected,label,status='completed',passed=False,
+                duration_s=time.monotonic()-command_started,reason=str(exc)))
+            save_dispatch()
+            raise
         text = (out/f'{label}.log').read_text(errors='replace')
         if engine == 'cocotb-verilator':
             for collateral in ('build.log', 'simulation.log'):
@@ -602,11 +632,16 @@ def run_target(name, test, resolver, options):
                     text += '\n' + (out/collateral).read_text(errors='replace')
         expectation = {} if options.stage == 'build' or test.get('mode') == 'compile' else test
         ok, reason = check_outcome(code, text, expectation, timed_out)
+        runner_events.append(dispatch_event(
+            runtime_selected,label,status='completed',passed=ok,
+            duration_s=time.monotonic()-command_started,reason=reason))
+        save_dispatch()
         warnings = sum('[xezim][warning]' in line or '%Warning-' in line for line in text.splitlines())
         results.append({'name': label, 'passed': ok, 'exit_code': code, 'reason': reason, 'reported_warning_lines': warnings})
         print(f'{"PASS" if ok else "FAIL"} {name}/{label}: {reason}; warnings={warnings}; logs={out.relative_to(ROOT)}/', flush=True)
         if not ok:
             print('\n'.join(text.splitlines()[-30:]), flush=True)
+    check_events(runtime_selected, runner_events)
     passed = all(r['passed'] for r in results)
     result = {'target': name, 'passed': passed, 'stage': options.stage,
               'elapsed_s': round(time.monotonic()-started, 3), 'results': results,
@@ -670,6 +705,27 @@ def run_target(name, test, resolver, options):
                 print(f'FAIL {name}/traffic correlation: {latency_issues[:8]}',flush=True)
                 protocol_report.finalize_run(out, result)
         print(f'REPORT {name}: {summary["transactions"]} observations; {out.relative_to(ROOT)}/report.html',flush=True)
+    if (test.get('report',{}).get('flow') and passed
+            and options.stage in ('all','run')):
+        from runtime_contract import qualify_observed_phase_milestones, RunContractError
+        try:
+            milestone=qualify_observed_phase_milestones(runtime_selected,out,result=result)
+            (out/'selected-flow-correlation.json').write_text(
+                json.dumps(milestone,indent=2)+'\n')
+        except (RunContractError,OSError,ValueError,TypeError) as exc:
+            passed=result['passed']=False
+            results.append({'name':'selected INIT/RUN/CHECK source contract',
+                            'passed':False,'reason':str(exc)})
+            print(f'FAIL {name}/selected phase correlation: {exc}',flush=True)
+    if runtime_selected["adapter"]=="scenario_dispatch_adapter" and passed:
+        from runtime_contract import qualify_selected_scenario, RunContractError
+        try:
+            qualify_selected_scenario(runtime_selected,out,result=result)
+        except (RunContractError,OSError,ValueError,TypeError) as exc:
+            passed=result['passed']=False
+            results.append({'name':'selected scenario action correlation',
+                            'passed':False,'reason':str(exc)})
+            print(f'FAIL {name}/selected scenario action correlation: {exc}',flush=True)
     (out/'result.json').write_text(json.dumps(result, indent=2) + '\n')
     if (test.get('firmware_mode') in ('cpu_dma_scenario', 'scenario_bfm')
             and options.stage in ('all', 'run') and not test.get('expect_failure')):

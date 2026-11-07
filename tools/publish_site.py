@@ -37,7 +37,9 @@ FILES={'result.json','plan.json','sources.f','simulation.log','build.log','resul
        'protocol-transactions.json','protocol-events.jsonl','memory-operations.json',
        'test-flow.json','test-flow-events.jsonl','traffic-latency.json',
        'ddr-native-csr-map.json','ddr4_fullchip_evidence.json',
-       'planned-flow.json','memory-lifetimes.json','scenario-execution.json','scenario-plan.json','variant-connectivity.json','variant-topology.json','variant-chip-manifest.json'}
+       'planned-flow.json','memory-lifetimes.json','scenario-execution.json','scenario-plan.json',
+       'variant-connectivity.json','variant-topology.json','variant-chip-manifest.json',
+       'selected-test-plan.json','runner-events.json','selected-flow-correlation.json'}
 
 
 def dump(path,data):
@@ -592,6 +594,38 @@ def evidence_index(evidence,output,repository):
             protocol_data=json.loads(protocol_path.read_text()) if protocol_path.exists() else None
             flow_path=source_dir/'test-flow.json'
             flow_data=json.loads(flow_path.read_text()) if flow_path.exists() else None
+            # Runner dispatch is a separate factual command-bound envelope, not
+            # a competing intended-flow viewer or proof of internal actions.
+            selected_correlation=source_dir/'selected-flow-correlation.json'
+            selected_path=source_dir/'selected-test-plan.json'
+            runner_path=source_dir/'runner-events.json'
+            from runtime_contract import load as load_selected_plan, check_events
+            runtime_selected=(load_selected_plan(selected_path,target)
+                              if selected_path.is_file() else None)
+            if selected_correlation.is_file():
+                correlated=json.loads(selected_correlation.read_text())
+                if (runtime_selected is None or result.get('passed') is not True
+                        or correlated.get('status')!='observed_required_milestones'
+                        or correlated.get('plan_sha256')!=runtime_selected['plan_sha256']
+                        or correlated.get('evidence_kind')!=
+                           'observed_flow_milestones_not_all_internal_actions'):
+                    raise ValueError('historical selected flow correlation is not source-qualified')
+            if runtime_selected is not None:
+                if (runtime_selected.get('source_revision') not in verified_shas | {run['head_sha']}
+                        or runtime_selected.get('engine')!=plan.get('engine')
+                        or runtime_selected.get('stage')!=plan.get('stage')):
+                    raise ValueError('selected historical command plan disagrees with tested run')
+                if runner_path.is_file():
+                    runner_data=json.loads(runner_path.read_text())
+                    if (runner_data.get('target')!=target or
+                            runner_data.get('plan_sha256')!=runtime_selected['plan_sha256']):
+                        raise ValueError('runner dispatch fingerprint differs from selected plan')
+                    if len(runner_data.get('events',[])) == 2*len(runtime_selected['command_argv']):
+                        check_events(runtime_selected,runner_data['events'])
+                    elif result.get('passed') is True:
+                        raise ValueError('passing run lacks complete command dispatch events')
+                elif result.get('passed') is True and runtime_selected['command_argv']:
+                    raise ValueError('passing run lacks observed command dispatch')
             latency_path=source_dir/'traffic-latency.json'
             latency_data=json.loads(latency_path.read_text()) if latency_path.exists() else None
             variant_view=None
@@ -717,6 +751,8 @@ def evidence_index(evidence,output,repository):
                    'variant_connectivity':variant_view is not None,
                    'variant_chip_profile':variant_view.get('chip_variant') if variant_view else None,
                    'memory_lifetimes':memory_view is not None,
+                   'selected_plan_sha256':runtime_selected['plan_sha256'] if runtime_selected else None,
+                   'runtime_adapter':runtime_selected['adapter'] if runtime_selected else 'historical_unrecorded',
                    'planned_flow_status':snapshot_status,'planned_flow_sha256':declared_hash,
                    'planned_flow_intent':intended if declared_hash is not None else None,
                    'pcie_latency_measured':bool(latency_data and latency_data.get('passed')),
@@ -833,7 +869,26 @@ def evidence_index(evidence,output,repository):
             if report_html.is_file():
                 html=report_html.read_text()
                 if '<main>' in html:
-                    report_html.write_text(html.replace('<main>','<main>'+render_intended_flow(intended),1))
+                    catalog=(runtime_selected.get('actor_monitor_catalog',{})
+                             if runtime_selected else {})
+                    declared=catalog.get('monitors',{})
+                    source_count=declared.get('count')
+                    initiators=declared.get('declared_initiators',[])
+                    actor_note=(
+                        '<p>Selected source monitor catalog: '+escape(str(source_count))+
+                        ' boundaries, '+escape(str(len(initiators)))+
+                        ' declared initiators · '+escape(declared.get('status','not_declared'))+
+                        '. These are NOT proof of elaborated pins or accepted AXI traffic.</p>'
+                        if source_count is not None else
+                        '<p>Selected actor/monitor catalog unavailable for this run.</p>')
+                    note=(
+                        '<p>Selected per-run snapshot '+escape(runtime_selected['plan_sha256'][:16])+
+                        ' · adapter '+escape(runtime_selected['adapter'])+
+                        ' · internal steps independently instrumented only where available.</p>'+actor_note
+                        if runtime_selected else
+                        '<p>Historical run: command dispatch snapshot unavailable; '
+                        'no unobserved actions implied.</p>')
+                    report_html.write_text(html.replace('<main>','<main>'+note+render_intended_flow(intended),1))
             entries.append(entry)
     runs.sort(key=lambda r:r['created_at'],reverse=True)
     entries.sort(key=lambda r:r['recorded_at'],reverse=True)

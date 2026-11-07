@@ -54,6 +54,30 @@ async def _ddr_progress(dut):
         dut._log.info("DDR_PROGRESS at %dus: %s", int(get_sim_time(units="us")), summary)
 
 
+async def _cpu_dma_progress(dut):
+    """Passive wall/simulation clock checkpoints for the expensive CPU/DMA RTL.
+
+    Never drives a signal or turns incomplete INIT/RUN/CHECK into success.
+    The original 1800s cap caught two runs at sim=177.17us; the normal
+    passing reference took up to 27m23s. Record whether time advances at all.
+    """
+    import time
+    start = time.monotonic()
+    while True:
+        await Timer(20, 'us')
+        fields = (
+            ("init", dut.init_complete), ("run", dut.run_complete),
+            ("check", dut.check_complete), ("passed", dut.pass_flag),
+            ("dma_success", dut.cpu_dma_success),
+            ("address_seen", dut.cpu_dma_address_seen),
+        )
+        summary = " ".join(f"{key}={int(signal.value):#x}"
+                           for key, signal in fields)
+        dut._log.info("CPU_DMA_PROGRESS sim_us=%d wall_s=%d %s",
+                      int(get_sim_time(units="us")),
+                      int(time.monotonic() - start), summary)
+
+
 async def memory_transaction(dut, operation):
     try:
         return await with_timeout(operation, 20, 'us')
@@ -113,6 +137,8 @@ async def execute_cold_boot(dut, *, external=None):
         dut.completer_id.value=0
         dut.max_payload_size.value=0
     attach_observers(dut)
+    if cpu_dma_mode and os.environ.get('SOC_CPU_DMA_PROGRESS') == '1':
+        cocotb.start_soon(_cpu_dma_progress(dut))
     cocotb.start_soon(Clock(dut.clk, 10, 'ns').start())
     for _ in range(10):
         await FallingEdge(dut.clk)

@@ -149,8 +149,10 @@ tests:
     seed: 1
     test_dir: .
     build: .tools/chip-cpu-dma-obj
-    env: {MAKEFLAGS: '-j2', SOC_CPU_DMA_MODE: '1'}
-    timeout_s: 1800
+    env: {MAKEFLAGS: '-j2', SOC_CPU_DMA_MODE: '1', SOC_CPU_DMA_PROGRESS: '1'}
+    # The exact same real RTL PASS has taken 18m40s to 27m23s on hosted CI.
+    # Keep a finite scoped 40-minute bound, with passive progress checkpoints.
+    timeout_s: 2400
     pass: 'PASS fullchip:'
     report:
       address_map: {config: config/soc.yaml, variant: architecture}
