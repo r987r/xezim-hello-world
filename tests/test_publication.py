@@ -613,7 +613,8 @@ class PublicationTests(unittest.TestCase):
         self.assertIn('id="suite-summary"',site_html)
         self.assertIn('id="family"',site_html)
         self.assertIn('No recorded result',site_html)
-        self.assertIn('e.target+"|"+e.workflow',site_html)
+        self.assertIn('const key=identityKey+"|"+e.workflow',site_html)
+        self.assertIn('e.config_target',site_html)
 
     def test_archive_digest_and_traversal_are_checked(self):
         for name in ('../escape','/absolute','dir/../../escape','dir\\escape'):
