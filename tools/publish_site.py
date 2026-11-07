@@ -36,7 +36,7 @@ FILES={'result.json','plan.json','sources.f','simulation.log','build.log','resul
        'protocol-transactions.json','protocol-events.jsonl','memory-operations.json',
        'test-flow.json','test-flow-events.jsonl','traffic-latency.json',
        'ddr-native-csr-map.json','ddr4_fullchip_evidence.json',
-       'selected-test-plan.json','runner-events.json'}
+       'selected-test-plan.json','runner-events.json','selected-flow-correlation.json'}
 
 
 def dump(path,data):
@@ -591,6 +591,7 @@ def evidence_index(evidence,output,repository):
             protocol_data=json.loads(protocol_path.read_text()) if protocol_path.exists() else None
             flow_path=source_dir/'test-flow.json'
             flow_data=json.loads(flow_path.read_text()) if flow_path.exists() else None
+            selected_correlation=source_dir/'selected-flow-correlation.json'
             selected_path=source_dir/'selected-test-plan.json'
             runner_path=source_dir/'runner-events.json'
             # The exact plan selected before the DUT started is historical
@@ -598,6 +599,13 @@ def evidence_index(evidence,output,repository):
             from runtime_contract import load as load_selected_plan
             from runtime_contract import check_events, RunContractError
             selected=load_selected_plan(selected_path,target) if selected_path.exists() else None
+            if selected_correlation.is_file():
+                correlated=json.loads(selected_correlation.read_text())
+                if (selected is None or result.get('passed') is not True
+                        or correlated.get('status')!='observed_required_milestones'
+                        or correlated.get('plan_sha256')!=selected.get('plan_sha256')
+                        or correlated.get('evidence_kind')!='observed_flow_milestones_not_all_internal_actions'):
+                    raise ValueError('historical selected flow correlation is not source-qualified')
             if selected is not None:
                 if (selected.get('source_revision') not in verified_shas | {run['head_sha']}
                         or selected.get('engine')!=plan.get('engine')
