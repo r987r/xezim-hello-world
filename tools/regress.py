@@ -574,8 +574,11 @@ def run_target(name, test, resolver, options):
             raise ValueError('runtime-resolved scenario plan missing before pre-run snapshot')
         scenario = json.loads(scenario_location.read_text())
     from stimulus_catalog import load as load_stimuli
+    # The local `cfg` name is reserved for per-variant SoC configurations;
+    # always read the existing top-level regression selection authority.
+    regression_catalog = yaml.safe_load((ROOT/'config/regression.yaml').read_text())
     selected = snapshot_intent(name, plan, scenario=scenario,
-                               stimulus=load_stimuli(config)[name])
+                               stimulus=load_stimuli(regression_catalog)[name])
     validate_snapshot(selected, target=name)
     (out/'planned-flow.json').write_text(json.dumps(selected, indent=2) + '\n')
     # Before simulator dispatch, audit the exact generated selected variant.
