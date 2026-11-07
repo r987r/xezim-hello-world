@@ -1,0 +1,274 @@
+# Human-authored SoC DV stimulus index. NEVER generated into gen/.
+# Build/simulator/RTL selection is owned by config/regression.yaml.
+# Only scenario_native currently dispatches the actual action DAG; all
+# other phase summaries describe existing drivers, not executable YAML steps.
+# Any new regression target MUST be listed here, or validation fails.
+schema_version: 1
+tests:
+  - logical_test: axi-routing-smoke
+    targets: ["memory"]
+    execution: legacy_opaque
+    purpose: "Exercise the selected AXI address routing and response model."
+    phases:
+      init: 
+        - "Construct the configured memory-fabric target map."
+      run: 
+        - "Drive the standalone AXI memory-fabric transactions from the existing SV bench."
+      check: 
+        - "Check returned data and response codes in the bench."
+  - logical_test: axi-full-matrix
+    targets: ["memory-full"]
+    execution: legacy_opaque
+    purpose: "Exercise the full connectivity-matrix configuration."
+    phases:
+      init: 
+        - "Load the full connectivity matrix from config/examples/memory-fabric-connectivity.yaml."
+      run: 
+        - "Run the same memory-fabric testbench with the full matrix."
+      check: 
+        - "Use the existing response and routing assertions."
+  - logical_test: axi-sparse-matrix
+    targets: ["memory-sparse"]
+    execution: legacy_opaque
+    purpose: "Exercise the sparse connectivity-matrix configuration."
+    phases:
+      init: 
+        - "Load config/examples/memory-fabric-sparse.yaml."
+      run: 
+        - "Run the same AXI testbench against the sparse map."
+      check: 
+        - "Check supported and error routes under the existing bench."
+  - logical_test: axi-corruption-rejection
+    targets: ["memory-negative"]
+    execution: legacy_opaque
+    purpose: "Ensure injected unexpected AXI read data is detected, not accepted as a PASS."
+    phases:
+      init: 
+        - "Select the memory testbench with the explicit bad-expected injection argument."
+      run: 
+        - "Execute the existing negative read path."
+      check: 
+        - "Require the configured FAIL AXI read diagnostic; an ordinary PASS is not sufficient."
+  - logical_test: sram-port-consistency
+    targets: ["sram", "sram-synthesis"]
+    execution: legacy_opaque
+    purpose: "Check local SRAM behavioral and SYNTHESIS-guarded variants."
+    phases:
+      init: 
+        - "Construct the local SRAM testbench and selected compile defines."
+      run: 
+        - "Execute SRAM read/write behavior in the selected guard variant."
+      check: 
+        - "Require the existing SRAM data consistency checks."
+  - logical_test: cpu-instruction-smoke
+    targets: ["serv"]
+    execution: legacy_opaque
+    purpose: "Check the selected SERV instruction-level smoke program."
+    phases:
+      init: 
+        - "Select the pinned SERV source and minimal SV testbench."
+      run: 
+        - "Run the standalone SERV instruction sequence."
+      check: 
+        - "Require the bench's CPU completion/consistency criteria."
+  - logical_test: cpu-cold-boot
+    targets: ["boot", "boot-relocated"]
+    execution: legacy_opaque
+    purpose: "Exercise immutable boot ROM and boot handshake, including the relocated address-map variant."
+    phases:
+      init: 
+        - "Compile the boot image against the original or relocated source address map."
+      run: 
+        - "Run both CPUs through cold boot without preloading writable SRAM."
+      check: 
+        - "Check the explicit CPU cold-boot pass token and RTL assertions."
+  - logical_test: cpu-fetch-requests
+    targets: ["cpu-fetch"]
+    execution: legacy_opaque
+    purpose: "Exercise heterogeneous CPU fetch and request paths."
+    phases:
+      init: 
+        - "Set up PicoRV32 and SERV CPU testbench inputs."
+      run: 
+        - "Execute instruction/data fetch traffic from both CPU adapters."
+      check: 
+        - "Check CPU fetch response behavior with the existing bench."
+  - logical_test: hello-world
+    targets: ["smoke"]
+    execution: legacy_opaque
+    purpose: "Run the Xezim arithmetic smoke: 20 + 22 and 255 + 1."
+    phases:
+      init: 
+        - "Initialize the two unsigned 8-bit SV operands."
+      run: 
+        - "At successive simulation ticks, apply 20/22 then 255/1."
+      check: 
+        - "Require 9-bit results 42 and 256; reject with SV fatal if incorrect."
+  - logical_test: noc-rtl-lint
+    targets: ["noc-verilator"]
+    execution: non_runtime
+    purpose: "Compile/lint the resolved NoC RTL; this target has no stimulus-driven simulation."
+    phases:
+      init: []
+      run: []
+      check: []
+  - logical_test: noc-rtl-compile
+    targets: ["noc-xezim"]
+    execution: non_runtime
+    purpose: "Compile the NoC RTL with Xezim; no runtime action or DUT pass is claimed."
+    phases:
+      init: []
+      run: []
+      check: []
+  - logical_test: axi-noc-routing
+    targets: ["supernoc"]
+    execution: legacy_opaque
+    purpose: "Exercise local/global FlooNoC AXI routing, mapped bursts, stalls and error routes."
+    phases:
+      init: 
+        - "Start the SuperNoC RTL and register independent AXI monitors."
+      run: 
+        - "Run the Cocotb BFM's mapped route and burst/stall stimuli."
+      check: 
+        - "Check returned payloads/responses, including deliberate target SLVERR paths."
+  - logical_test: axi-noc-route-errors
+    targets: ["supernoc-negative"]
+    execution: legacy_opaque
+    purpose: "Prove the SuperNoC checker detects an injected data mismatch."
+    phases:
+      init: 
+        - "Reuse the selected SuperNoC RTL build and enable the negative stimulus flag."
+      run: 
+        - "Drive the intentional corruption through the existing Cocotb driver."
+      check: 
+        - "Require the expected explicit failure marker; never promote the corrupted run to functional PASS."
+  - logical_test: dma-descriptor-chain
+    targets: ["dma-rtl"]
+    execution: legacy_opaque
+    purpose: "Exercise pinned PULP iDMA descriptor chaining on actual DMA RTL."
+    phases:
+      init: 
+        - "Initialize the DMA testbench and descriptor source regions."
+      run: 
+        - "Start the existing real-RTL descriptor-chain sequence."
+      check: 
+        - "Check DMA completions and data integrity via the existing assertions."
+  - logical_test: dma-fabric-roundtrip
+    targets: ["chip-dma"]
+    execution: legacy_opaque
+    purpose: "Exercise both actual iDMA engines through local/global NoCs using held-reset CPU-side BFMs."
+    phases:
+      init: 
+        - "Keep CPUs in reset and prepare descriptor/payload memory through the authorized AXI BFMs."
+      run: 
+        - "Submit DMA transfers to generated memory targets over the actual fabrics."
+      check: 
+        - "Check AXI completions and round-trip bytes from the real RTL iDMA engines."
+  - logical_test: cpu-dma-roundtrip
+    targets: ["chip-cpu-dma"]
+    execution: observed_milestones
+    purpose: "Use real CPU0 C firmware to program iDMA and check a full-chip memory roundtrip."
+    phases:
+      init: 
+        - "Observe CPU0 firmware initialization and genuine cold boot."
+      run: 
+        - "Observe CPU allocation and iDMA copy/readback milestones on the generated NoC."
+      check: 
+        - "Observe CPU/checker completion and independent AXI data acceptance."
+  - logical_test: dma-sram-ddr-roundtrip
+    targets: ["chip-cpu-scenario", "chip-dma-scenario"]
+    execution: scenario_native
+    purpose: "One typed eight-action SRAM-to-modeled-DDR-to-SRAM scenario; CPU C and reset-isolated BFM are alternative executors."
+    scenario_source: config/scenarios/cpu-bfm-ddr-roundtrip.json
+    phases:
+      init: 
+        - "Resolve the same scenario source, actors, dependencies and selected seed."
+      run: 
+        - "Dispatch the scenario's allocation, initialization, DMA copy and wait actions."
+      check: 
+        - "Dispatch the independent memory check against the resulting readback."
+  - logical_test: dma-controller-readback
+    targets: ["chip-ddr4-real"]
+    execution: observed_milestones
+    purpose: "Exercise real LiteDRAM RTL with CPU/iDMA via generated Data and Config NoCs; behavioral DDR PHY model only."
+    phases:
+      init: 
+        - "Initialize real LiteDRAM/DFI and cold boot CPU0."
+      run: 
+        - "Observe CPU C SRAM-to-DDR transfer and return readback through iDMA."
+      check: 
+        - "Verify payload bytes, AXI completions and recorded DFI commands."
+  - logical_test: multicore-cold-boot
+    targets: ["chip-boot"]
+    execution: legacy_opaque
+    purpose: "Exercise the full generated SoC boot with both different CPU cores."
+    phases:
+      init: 
+        - "Initialize the selected ROM/flash and cold SRAM state."
+      run: 
+        - "Run PicoRV32/SERV cold-boot and cross-core coordination."
+      check: 
+        - "Require the full-chip boot and AXI response checks."
+  - logical_test: reset-ack-register-access
+    targets: ["chip-peakrdl-reset"]
+    execution: observed_milestones
+    purpose: "Exercise the opt-in real PeakRDL reset/ACK register block over the CPU Config NoC."
+    phases:
+      init: 
+        - "Cold boot CPU0 and initialize the real reset CSR block."
+      run: 
+        - "Use CPU0 software to release the second CPU via the Config NoC."
+      check: 
+        - "Verify observed firmware phase milestones and actual register/bus acknowledgments."
+  - logical_test: multicore-boot-timeout
+    targets: ["chip-boot-negative"]
+    execution: legacy_opaque
+    purpose: "Reject the full-chip boot timeout/negative condition."
+    phases:
+      init: 
+        - "Select the negative full-chip boot entrypoint."
+      run: 
+        - "Inject the documented negative boot condition."
+      check: 
+        - "Require the expected failure and reject a false successful boot."
+  - logical_test: soc-rtl-compile
+    targets: ["chip-xezim-compile"]
+    execution: non_runtime
+    purpose: "Compile the selected full-chip RTL with Xezim without claiming a simulation PASS."
+    phases:
+      init: []
+      run: []
+      check: []
+  - logical_test: network-queue-control
+    targets: ["chip-ethernet-cpu"]
+    execution: observed_milestones
+    purpose: "Exercise real CPU0 C Ethernet queue/descriptor programming and GMII/CQ completion."
+    phases:
+      init: 
+        - "Cold boot CPU0 and initialize real Ethernet queue CSRs and memory descriptors."
+      run: 
+        - "Drive GMII RX/TX with real Ethernet DMA over the generated SoC NoCs."
+      check: 
+        - "Check bytes, independent AXI handshakes and completion-queue observations."
+  - logical_test: network-frame-transfer
+    targets: ["chip-ethernet"]
+    execution: legacy_opaque
+    purpose: "Exercise the existing standalone/SoC Ethernet GMII queue, DMA and SRAM path."
+    phases:
+      init: 
+        - "Configure the queue-manager and frame-stager inputs."
+      run: 
+        - "Inject GMII packets and run RX/TX DMA transactions."
+      check: 
+        - "Verify packet bytes, AXI responses and queue completions."
+  - logical_test: host-memory-exchange
+    targets: ["chip-pcie-host"]
+    execution: observed_milestones
+    purpose: "Exercise PCIe host BAR access and CPU0/iDMA exchange through the generated PCIe local/global NoCs."
+    phases:
+      init: 
+        - "Run host enumeration and CPU0 firmware/PCIe preparation."
+      run: 
+        - "Execute BAR traffic and real CPU/iDMA memory exchange."
+      check: 
+        - "Require TLP/AXI completions, payload comparisons and the final host/CPU checks."

@@ -161,6 +161,36 @@ function renderFlow(){
        ". Showing current catalog only; it is NOT historical run intent.","muted"));
   }
   if(source.context)host.append(text("p",source.context,"muted"));
+  if(source.stimulus_source){
+    host.append(text("h3","Authored stimulus specification"));
+    host.append(text("p",source.stimulus_logical_test+
+      " · "+source.stimulus_source+" · SHA-256 "+source.stimulus_sha256+
+      " · "+source.stimulus_execution,"muted"));
+    host.append(text("p",source.stimulus_purpose||""));
+    if(source.stimulus_driver_source){
+      const sha=selected?.source_sha||D.source_sha;
+      const uri="https://github.com/"+D.repository+"/blob/"+sha+"/"+source.stimulus_driver_source;
+      const src=document.createElement("p");
+      src.append(link("Review actual Python/Cocotb driver",uri));
+      src.append(document.createTextNode(" · "+source.stimulus_driver_source));
+      host.append(src);
+    }else{
+      host.append(text("p","SV/compile top: "+(source.stimulus_rtl_top||"selected build")+
+        " · Bender source target: "+(source.stimulus_bender_source_target||"not specified"),"muted"));
+    }
+    host.append(text("p","These descriptions are reviewable intended behavior; only "+
+      "scenario_native executes the typed DAG. Legacy entries are not source-dispatched.", "muted"));
+    for(const phase of ["init","run","check"]){
+      const details=document.createElement("details");details.open=true;
+      const lines=source.stimulus_outline?.[phase]||[];
+      details.append(text("summary","Authored "+phase.toUpperCase()+" specification"));
+      const list=document.createElement("ol");
+      for(const line of lines)list.append(text("li",line));
+      if(!lines.length)details.append(text("p","Compile/lint target, no runtime stimulus.","muted"));
+      else details.append(list);
+      host.append(details);
+    }
+  }
   if(source.scenario_id)host.append(text("p","Scenario definition: "+source.scenario_id+
     " · configuration seed "+(source.seed??"not specified"),"muted"));
   const phases=source.phases||{};
