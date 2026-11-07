@@ -10,7 +10,7 @@ import yaml
 from tools.runtime_contract import (
     RunContractError, check_events, dispatch_event, load, save, selection,
     validate, validate_migration_inventory, qualify_selected_scenario,
-    catalog_provenance,
+    catalog_provenance, qualify_observed_phase_milestones,
 )
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -99,6 +99,35 @@ class SelectedRuntimeContractTests(unittest.TestCase):
                 self.assertEqual(snapshot["intent"]["phases"]["run"][0]["label"],
                                  "copy_out")
                 self.assertEqual(len(snapshot["scenario_plan_sha256"]),64)
+
+    def test_live_phase_milestones_require_matching_run_selected_flow(self):
+        directory=self.out
+        selected=self.plan("chip-cpu-dma")
+        phases=selected["intent"]["phases"]
+        expected={}
+        rows=[]
+        for phase,actions in phases.items():
+            expected[phase]=[]
+            for a in actions:
+                if a.get("kind")!="required_milestone":continue
+                expected[phase].append(a["actor"]+"."+a["label"])
+                rows.append({"phase":phase,"actor":a["actor"],
+                             "step":a["label"],"status":"pass"})
+        self.assertTrue(rows)
+        outcome={"schema_version":1,"expected_steps":expected,
+                 "passed":True,"issues":[],"rows":rows}
+        with self.assertRaisesRegex(RunContractError,"lacks observed"):
+            qualify_observed_phase_milestones(selected,directory,result={"passed":True})
+        (directory/"test-flow.json").write_text(json.dumps(outcome))
+        observed=qualify_observed_phase_milestones(
+            selected,directory,result={"passed":True})
+        self.assertEqual(observed["plan_sha256"],selected["plan_sha256"])
+        outcome["rows"][0]["status"]="fail"
+        (directory/"test-flow.json").write_text(json.dumps(outcome))
+        with self.assertRaisesRegex(RunContractError,"incomplete"):
+            qualify_observed_phase_milestones(selected,directory,result={"passed":True})
+        self.assertEqual(qualify_observed_phase_milestones(
+            selected,directory,result={"passed":False})["status"],"run_not_passed")
 
     def test_selected_scenario_requires_independent_observed_hash(self):
         folder=self.out/"variant"
