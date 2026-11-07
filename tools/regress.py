@@ -588,6 +588,11 @@ def run_target(name, test, resolver, options):
         if 'flow' in test['report']:
             from test_flow_report import write_report as write_flow
             flow_result = write_flow(out, plan)
+            # Bind real observed INIT/RUN/CHECK evidence to the immutable
+            # pre-simulation selected declaration; report parsing and the
+            # website must reject any mismatched run selection.
+            flow_result['planned_flow_sha256']=selected['plan_sha256']
+            (out/'test-flow.json').write_text(json.dumps(flow_result,indent=2)+'\n')
             result['test_flow'] = {'status':'complete' if flow_result['passed'] else 'incomplete',
                                    'passed':flow_result['passed'],
                                    'steps':len(flow_result['rows']),
