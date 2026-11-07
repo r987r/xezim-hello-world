@@ -1,5 +1,8 @@
 # SoC implementation status
 
+**IP replacement audit:** [source-of-truth and backend swap contract](ip-portability.md) distinguishes vendor-neutral SoC/config/AXI/verification evidence from FlooGen, LiteDRAM/DFI, iDMA and CPU firmware-specific implementations. Existing backend names are *not* proof that these providers can be swapped by changing a YAML string alone. Keep the per-variant source/elaboration and runtime evidence gates separate.
+
+
 The architecture comes from `config/soc.yaml`; its generated verification
 plan distinguishes independent executable scopes from the planned full SoC.
 A passing BFM test does not by itself establish CPU/iDMA/controller integration. The real CPU0 C-DMA gate now provides separate CPU-executed proof. **Opt-in DDR-B has a passing real LiteDRAM controller RTL/behavioral DFI full-chip CPU/iDMA run** ([CI #42217902632](https://github.com/r987r/xezim-hello-world/actions/runs/42217902632)); default SoC DDR/HBM targets remain behavioral AXI RAM, and no physical DDR/HBM PHY is integrated.
