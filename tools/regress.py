@@ -627,6 +627,18 @@ def run_target(name, test, resolver, options):
                 print(f'FAIL {name}/traffic correlation: {latency_issues[:8]}',flush=True)
                 protocol_report.finalize_run(out, result)
         print(f'REPORT {name}: {summary["transactions"]} observations; {out.relative_to(ROOT)}/report.html',flush=True)
+    if (test.get('report',{}).get('flow') and passed
+            and options.stage in ('all','run')):
+        from runtime_contract import qualify_observed_phase_milestones, RunContractError
+        try:
+            milestone=qualify_observed_phase_milestones(selected,out,result=result)
+            (out/'selected-flow-correlation.json').write_text(
+                json.dumps(milestone,indent=2)+'\n')
+        except (RunContractError,OSError,ValueError,TypeError) as exc:
+            passed=result['passed']=False
+            results.append({'name':'selected INIT/RUN/CHECK source contract','passed':False,
+                            'reason':str(exc)})
+            print(f'FAIL {name}/selected phase correlation: {exc}',flush=True)
     if selected["adapter"]=="scenario_dispatch_adapter" and passed:
         from runtime_contract import qualify_selected_scenario, RunContractError
         try:
