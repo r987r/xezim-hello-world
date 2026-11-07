@@ -10,6 +10,7 @@ import yaml
 from tools.runtime_contract import (
     RunContractError, check_events, dispatch_event, load, save, selection,
     validate, validate_migration_inventory, qualify_selected_scenario,
+    catalog_provenance,
 )
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -136,6 +137,33 @@ class SelectedRuntimeContractTests(unittest.TestCase):
         save(self.out/"selected-test-plan.json",p)
         with self.assertRaisesRegex(RunContractError,"target mismatch"):
             load(self.out/"selected-test-plan.json","foreign")
+
+    def test_variant_actor_monitor_catalog_provenance_never_claims_live(self):
+        (self.out/"variant").mkdir()
+        (self.out/"variant/actors.json").write_text(json.dumps({
+            "axi_actors":{"cpu0":{"kind":"rtl"},"target":{"kind":"rtl"}}}))
+        (self.out/"variant/monitors.json").write_text(json.dumps({
+            "monitors":[{"id":"cpu0","role":"initiator"},
+                        {"id":"target","role":"target"},
+                        {"id":"noc0","role":"link"}]}))
+        selected={"report":{"axi":{"actors":"variant/actors.json",
+                                   "catalog":"variant/monitors.json"}}}
+        data=catalog_provenance(selected,root=self.out)
+        self.assertEqual(data["actors"]["count"],2)
+        self.assertEqual(data["monitors"]["count"],3)
+        self.assertEqual(data["monitors"]["declared_initiators"],["cpu0"])
+        self.assertEqual(data["monitors"]["declared_links"],["noc0"])
+        self.assertEqual(data["unlabeled_initiators"],[])
+        self.assertEqual(data["monitors"]["status"],
+                         "source_catalog_loaded_not_runtime_bound")
+        selected["report"]["axi"]["actors"]="../foreign.json"
+        with self.assertRaisesRegex(RunContractError,"escapes source"):
+            catalog_provenance(selected,root=self.out)
+        selected["report"]["axi"]["actors"]="variant/actors.json"
+        (self.out/"variant/monitors.json").write_text(json.dumps({
+            "monitors":[{"id":"cpu0","role":"initiator"},{"id":"cpu0","role":"link"}]}))
+        with self.assertRaisesRegex(RunContractError,"duplicates"):
+            catalog_provenance(selected,root=self.out)
 
     def test_runner_events_are_not_passed_stimulus_actions(self):
         p=self.plan(commands=[("a",["sim","-f","rtl.f"])])
