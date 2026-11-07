@@ -25,6 +25,16 @@ ENGINE_SIMULATOR = {
 }
 SCHEMA = 1
 
+# Keep provenance rooted in existing dependency and interface source files.
+# These are inputs, not a second IP inventory or a substitute for Git SHA.
+SOURCE_LOCKS = (
+    "config/interface_contracts.yaml",
+    "config/ip.lock.yaml",
+    "Bender.yml",
+    "Bender.lock",
+)
+OPTIONAL_SOURCE_LOCKS = ("rtl/memory/ddr4/toolchain.lock.yml",)
+
 
 class IdentityError(ValueError):
     pass
@@ -112,6 +122,19 @@ def catalog(tests):
     return found
 
 
+def declared_selection(plan):
+    """Exactly the selected fields carried by the original execution plan."""
+    return {
+        "sources": plan.get("source_target", plan.get("sources")),
+        "top": plan.get("top"),
+        "firmware_mode": plan.get("firmware_mode"),
+        "memory_config": plan.get("memory_config"),
+        "boot_relocate": plan.get("boot_relocate"),
+        "bender_targets": plan.get("bender_targets", []),
+        "report_address_map": (plan.get("report") or {}).get("address_map"),
+    }
+
+
 def selected(name, plan, *, filelist=None, run_id=None, env=None, root=ROOT):
     """Select immutable metadata once per invocation before simulator launch."""
     root = Path(root)
@@ -129,15 +152,21 @@ def selected(name, plan, *, filelist=None, run_id=None, env=None, root=ROOT):
     soc = root / "config/soc.yaml"
     if not soc.is_file():
         raise IdentityError("missing authoritative SoC configuration")
+    # Filelist paths alone do not change when a pinned upstream revision or
+    # native AXI budget changes. Fingerprint the original authority as well.
+    pins = {}
+    for name in SOURCE_LOCKS:
+        source = root / name
+        if not source.is_file():
+            raise IdentityError(f"missing authoritative source lock: {name}")
+        pins[name] = sha(source.read_bytes())
+    for name in OPTIONAL_SOURCE_LOCKS:
+        source = root / name
+        pins[name] = sha(source.read_bytes()) if source.is_file() else None
     selection = {
-        "sources": plan.get("source_target", plan.get("sources")),
-        "top": plan.get("top"),
-        "firmware_mode": plan.get("firmware_mode"),
-        "memory_config": plan.get("memory_config"),
-        "boot_relocate": plan.get("boot_relocate"),
-        "bender_targets": plan.get("bender_targets", []),
-        "report_address_map": (plan.get("report") or {}).get("address_map"),
+        **declared_selection(plan),
         "soc_sha256": sha(soc.read_bytes()),
+        "source_lock_sha256": pins,
         "filelist_sha256": sha(Path(filelist).read_bytes()) if filelist is not None else None,
     }
     value = {
@@ -184,6 +213,11 @@ def validate(value, *, target=None, plan=None):
             or value["testname"] != plan.get("logical_test")
             or value["seed"] != plan.get("seed")):
         raise IdentityError("run identity differs from selected plan")
+    if plan is not None and any(
+        value["selection"].get(key) != selected_value
+        for key, selected_value in declared_selection(plan).items()
+    ):
+        raise IdentityError("run identity source selection differs from plan")
     return value
 
 
