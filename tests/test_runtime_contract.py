@@ -97,7 +97,7 @@ class SelectedRuntimeContractTests(unittest.TestCase):
         bad["intent"]["phases"]["run"].append({"label":"forged"})
         with self.assertRaisesRegex(RunContractError,"hash mismatch"):
             validate(bad)
-        with self.assertRaisesRegex(RunContractError,"target mismatch"):
+        with self.assertRaisesRegex(RunContractError,"missing or unsafe"):
             load(self.out/"invalid.json","foreign")
         save(self.out/"selected-test-plan.json",p)
         with self.assertRaisesRegex(RunContractError,"target mismatch"):
