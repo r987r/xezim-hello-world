@@ -879,10 +879,6 @@ def evidence_index(evidence,output,repository):
                         if declared_hash else
                         ' · no original pre-run snapshot in this historical archive')
                       +'</p>')
-                if selected_identity is not None:
-                    nav+=('<p><strong>Canonical run:</strong> <code>'+escape(canonical_path(selected_identity).as_posix())+
-                          '</code> · <a href="identity.json">Immutable identity</a>. '
-                          'Legacy report URL retained for historical compatibility.</p>')
                 if variant_view is not None:
                     nav+=('<p><a href="variant-architecture.html">Selected variant 2D NoC/initiator/monitor diagram</a> '
                           '(generated source only; open accepted traffic below for runtime proof)</p>')
@@ -900,7 +896,10 @@ def evidence_index(evidence,output,repository):
                     html=(destination/'report.html').read_text()
                     if '<main>' in html:
                         (destination/'report.html').write_text(
-                            html.replace('<main>','<main>'+render_intended_flow(intended),1))
+                            html.replace('<main>','<main>'+(
+                                '<p><strong>Canonical run:</strong> <code>'+escape(canonical_path(selected_identity).as_posix())+
+                                '</code> · <a href="identity.json">Immutable identity</a></p>'
+                                if selected_identity else '')+render_intended_flow(intended),1))
                     entries.append(entry)
                     continue
                 body='<p>This scope publishes its actual result, plan, filelist and logs. It has no AXI traffic observer.</p>'
@@ -934,6 +933,11 @@ def evidence_index(evidence,output,repository):
                         if runtime_selected else
                         '<p>Historical run: command dispatch snapshot unavailable; '
                         'no unobserved actions implied.</p>')
+                    if selected_identity is not None:
+                        note+=('<p><strong>Canonical run:</strong> <code>'+
+                               escape(canonical_path(selected_identity).as_posix())+
+                               '</code> · <a href="identity.json">Immutable identity</a>. '
+                               'Legacy report URL retained for historical compatibility.</p>')
                     report_html.write_text(html.replace('<main>','<main>'+note+render_intended_flow(intended),1))
             entries.append(entry)
     runs.sort(key=lambda r:r['created_at'],reverse=True)
