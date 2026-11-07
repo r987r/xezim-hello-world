@@ -85,7 +85,7 @@ class IdentityTests(unittest.TestCase):
 
     def test_no_unchecked_path_or_engine_aliases(self):
         plan=self.tests["memory"]
-        with self.assertRaisesRegex(IdentityError,"invalid run"):
+        with self.assertRaisesRegex(IdentityError,"invalid execution ID"):
             selected("memory",plan,run_id="../oops")
         with self.assertRaisesRegex(IdentityError,"unsupported simulator"):
             simulator({**plan,"engine":"unknown-simulator"})
