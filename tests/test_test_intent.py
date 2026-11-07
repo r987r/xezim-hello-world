@@ -29,6 +29,22 @@ class TestIntentFlowTests(unittest.TestCase):
             self.assertNotIn("passed",entry)
             self.assertIn(entry["detail_status"],("declared_steps","no_detailed_phase_steps_declared"))
 
+    def test_runtime_adoption_coverage_cannot_silently_regress(self):
+        from collections import Counter
+        status=Counter(v["execution_adoption"] for v in self.entries.values())
+        self.assertEqual(status["not_applicable_compile_or_lint"],3)
+        self.assertEqual(status["canonical_resolved_scenario"],2)
+        self.assertEqual(status["instrumented_legacy_flow"],4)
+        # Existing unmigrated test count is the strict upper bound;
+        # a newly added legacy target must be migrated along with another.
+        self.assertLessEqual(status["legacy_runtime_without_action_contract"],18)
+        self.assertEqual(sum(status.values()),len(self.entries))
+        for item in self.entries.values():
+            if item["execution_adoption"]=="not_applicable_compile_or_lint":
+                self.assertFalse(item["runtime_phases_applicable"])
+            else:
+                self.assertTrue(item["runtime_phases_applicable"])
+
     def test_pcie_init_run_check_are_from_regression_not_sim_logs(self):
         intent=self.entries["chip-pcie-host"]
         self.assertTrue(intent["declared_actions"]>=15)
