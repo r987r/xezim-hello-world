@@ -83,6 +83,38 @@ class IdentityTests(unittest.TestCase):
         with self.assertRaisesRegex(IdentityError,"lowercase"):
             catalog(bad)
 
+    def test_dependency_and_interface_changes_alter_config_provenance(self):
+        from test_identity import SOURCE_LOCKS, OPTIONAL_SOURCE_LOCKS
+        plan=self.tests["chip-cpu-scenario"]
+        baseline=selected("chip-cpu-scenario",plan,run_id="local-012345abcdef")
+        self.assertIn("source_lock_sha256",baseline["selection"])
+        locks=baseline["selection"]["source_lock_sha256"]
+        self.assertEqual(set(locks),set(SOURCE_LOCKS)|set(OPTIONAL_SOURCE_LOCKS))
+        self.assertTrue(locks["config/interface_contracts.yaml"])
+        self.assertTrue(locks["config/ip.lock.yaml"])
+        import hashlib
+        for path in SOURCE_LOCKS:
+            self.assertEqual(locks[path],hashlib.sha256((ROOT/path).read_bytes()).hexdigest())
+        drift=copy.deepcopy(baseline)
+        drift["selection"]["source_lock_sha256"]["config/ip.lock.yaml"]="0"*64
+        from test_identity import validate
+        with self.assertRaisesRegex(IdentityError,"fingerprint mismatch"):
+            validate(drift)
+
+    def test_selected_plan_must_match_exact_selected_configuration(self):
+        from test_identity import validate
+        plan=copy.deepcopy(self.tests["chip-cpu-scenario"])
+        identity=selected("chip-cpu-scenario",plan,run_id="local-012345abcdef")
+        validate(identity,target="chip-cpu-scenario",plan=plan)
+        for key,altered in (("firmware_mode","alternate-firmware"),
+                            ("bender_targets",["different"]),
+                            ("memory_config","config/examples/memory-fabric-sparse.yaml"),
+                            ("top","foreign_top")):
+            modified=copy.deepcopy(plan)
+            modified[key]=altered
+            with self.subTest(key=key), self.assertRaises(IdentityError):
+                validate(identity,target="chip-cpu-scenario",plan=modified)
+
     def test_no_unchecked_path_or_engine_aliases(self):
         plan=self.tests["memory"]
         with self.assertRaisesRegex(IdentityError,"invalid execution ID"):
