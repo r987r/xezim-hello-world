@@ -8,6 +8,8 @@ from __future__ import annotations
 from html import escape
 import hashlib
 import json
+from pathlib import Path
+import re
 
 PHASES=("init","run","check")
 
@@ -67,7 +69,7 @@ def plan(name: str, test: dict, *, scenario: dict | None = None) -> dict:
         "acceptance":test.get("expect_failure") or test.get("pass"),
         "acceptance_kind":"expected_failure" if test.get("expect_failure") else "success_or_compile",
         "scenario_id":scenario.get("scenario_id") if scenario else None,
-        "scenario_source":"config/scenarios/cpu-bfm-ddr-roundtrip.json" if scenario else None,
+        "scenario_source":test.get("flow_plan") if scenario else None,
         "phases":phases,
         "declared_actions":known,
         "detail_status":"declared_steps" if known else "no_detailed_phase_steps_declared",
@@ -119,13 +121,29 @@ def validate_snapshot(data: dict, *, target: str | None = None) -> dict:
 
 
 def catalog(config: dict, *, scenario: dict | None = None) -> dict:
+    """Load each explicitly registered scenario; never infer by test name.
+
+    The optional scenario parameter preserves callers that already loaded
+    this same source, but the regression's flow_plan path remains authoritative.
+    Only checked-in config/scenarios/<basename>.json may supply executable
+    source-defined action definitions.
+    """
     tests=config.get("tests")
     if not isinstance(tests,dict) or not tests:
         raise ValueError("no configured regression tests")
+    root=Path(__file__).resolve().parents[1]
     result={}
     for name,test in tests.items():
-        use_scenario=test.get("firmware_mode") in ("cpu_dma_scenario","scenario_bfm")
-        result[name]=plan(name,test,scenario=scenario if use_scenario else None)
+        path=test.get("flow_plan")
+        selected=None
+        if path is not None:
+            if not isinstance(path,str) or not re.fullmatch(
+                    r"config/scenarios/[a-zA-Z0-9_-]+\.json",path):
+                raise ValueError(f"{name}: unsafe scenario declaration")
+            selected=json.loads((root/path).read_text())
+            if scenario is not None and scenario != selected:
+                raise ValueError(f"{name}: declared scenario differs from caller source")
+        result[name]=plan(name,test,scenario=selected)
     return result
 
 
