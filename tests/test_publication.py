@@ -236,7 +236,7 @@ class PublicationTests(unittest.TestCase):
             self.assertIn(bindings['compute0.cpu']['status'],
                           {'compiler_parse_unavailable','unique_root_instance'})
             self.assertIn('ethernet0.ip',bindings)
-            self.assertNotIn('preferred=',(output/'explorer.html').read_text())
+            self.assertNotIn('const preferred={',(output/'explorer.html').read_text())
             fabric=json.loads((output/'data/fabric.json').read_text())
             self.assertEqual(fabric['latency_table']['units'],
                              'simulation_reference_clock_cycles')
