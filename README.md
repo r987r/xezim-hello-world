@@ -42,6 +42,8 @@ See [setup and regression options](docs/regression.md), [simulator limits](docs/
 
 **DMA mode:** `DmaEnable=1` instantiates actual PULP iDMA engines and Config-NoC CSRs; `make dv-chip-dma` tests CPU-reset BFM-controlled RTL transfers separately from real CPU0 C. CPU interrupt service is not implemented; polling-based C DMA is supported.
 
+**Inspect each test's stimulus:** [authored YAML](config/stimulus/tests.yaml), [selection and execution mapping](config/stimulus/README.md), and [the regression build specs](config/regression.yaml). Use `python3 tools/stimulus_catalog.py --list` or `--show chip-ethernet-cpu`. These descriptions do **not** imply every C/Python/SV driver has migrated to source-selected typed dispatch.
+
 ## Architecture and generated sources
 
 <!-- BEGIN GENERATED SOC -->

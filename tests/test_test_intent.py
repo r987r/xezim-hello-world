@@ -78,6 +78,24 @@ class TestIntentFlowTests(unittest.TestCase):
         self.assertTrue(any(a["args"].get("buffer") for a in actions))
         self.assertEqual(intent["phases"]["check"][0]["kind"],"memory.check")
 
+    def test_every_test_has_reviewable_authored_stimulus_without_fake_actions(self):
+        from tools.stimulus_catalog import load as load_stimuli
+        specs=load_stimuli(self.config)
+        self.assertEqual(set(specs),set(self.entries))
+        self.assertEqual(len(specs),28)
+        self.assertEqual(sum(v["execution"]=="scenario_native" for v in specs.values()),2)
+        self.assertEqual(sum(v["execution"]=="observed_milestones" for v in specs.values()),5)
+        self.assertEqual(sum(v["execution"]=="legacy_opaque" for v in specs.values()),18)
+        self.assertEqual(sum(v["execution"]=="non_runtime" for v in specs.values()),3)
+        for target, intent in self.entries.items():
+            self.assertEqual(intent["stimulus_source"],"config/stimulus/tests.yaml")
+            self.assertEqual(intent["stimulus_sha256"],specs[target]["sha256"])
+            self.assertEqual(intent["stimulus_execution"],specs[target]["execution"])
+            self.assertTrue(intent["stimulus_outline_is_not_dispatch_evidence"])
+            self.assertNotIn("passed",intent)
+        self.assertEqual(self.entries["smoke"]["declared_actions"],0)
+        self.assertEqual(len(self.entries["smoke"]["stimulus_outline"]["run"]),1)
+
     def test_no_phase_instrumentation_stays_not_described(self):
         simple=self.entries["smoke"]
         self.assertEqual(simple["declared_actions"],0)
@@ -152,6 +170,7 @@ class TestIntentFlowTests(unittest.TestCase):
         self.assertIn("dump(output/'data/test-intents.json',flow_intents)",site)
         self.assertIn("flowSelect.addEventListener",page)
         self.assertIn("View intended flow",page)
+        self.assertIn("Authored stimulus specification",page)
         self.assertIn("selected?.planned_flow_intent||intentMap[name]",page)
         self.assertIn("openFlow.onclick=()=>markFlow(e.target,e)",page)
         self.assertIn("No recorded result yet. Planned flow remains available.",page)

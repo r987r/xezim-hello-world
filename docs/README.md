@@ -6,7 +6,7 @@ The [root README](../README.md) contains setup and the single generated whole-ch
 | --- | --- |
 | Build, choose a test, run locally | [Regression](regression.md), [simulator compatibility](simulator-compatibility.md), [naming](test-identity.md) |
 | Configure subsystems and replace IP | [Architecture](architecture.md), [interface budgets](../config/interface_contracts.yaml), [IP portability](ip-portability.md) |
-| Testbench scope and stimulus | [Verification](verification.md), [scenario actions](scenario-contract.md), [test-flow evidence](test-flow.md) |
+| Testbench scope and stimulus | [Verification](verification.md), [authored test YAML](../config/stimulus/tests.yaml), [scenario actions](scenario-contract.md), [test-flow evidence](test-flow.md) |
 | Review CI evidence | [Pages/publication](publication.md), [AXI reports](axi-run-reports.md), [protocol reports](protocol-run-reports.md), [Fabric Explorer](design-explorer.md) |
 | CPU boot and DMA | [Boot](full-chip-boot.md), [DMA](dma-bringup.md), [memory allocation](memory-allocation.md) |
 | PCIe and Ethernet | [PCIe host](pcie0-host-phases.md), [Ethernet MVP](ethernet0-closure-gate.md) |

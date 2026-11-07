@@ -14,7 +14,8 @@ import re
 PHASES=("init","run","check")
 
 
-def plan(name: str, test: dict, *, scenario: dict | None = None) -> dict:
+def plan(name: str, test: dict, *, scenario: dict | None = None,
+         stimulus: dict | None = None) -> dict:
     if not isinstance(test, dict):
         raise ValueError("invalid regression test")
     flow=(test.get("report") or {}).get("flow") or {}
@@ -60,7 +61,7 @@ def plan(name: str, test: dict, *, scenario: dict | None = None) -> dict:
         "instrumented_legacy_flow" if required else
         "legacy_runtime_without_action_contract"
     )
-    return {
+    result = {
         "schema_version":1,"target":name,"engine":test.get("engine"),
         "top":test.get("top"),"module":test.get("module"),
         "seed":test.get("seed"),"variant":test.get("firmware_mode"),
@@ -78,17 +79,40 @@ def plan(name: str, test: dict, *, scenario: dict | None = None) -> dict:
         "provenance":"configured_test_definition_not_execution",
         "evidence_required_for_display":False,
     }
+    return attach_stimulus(result, stimulus)
 
 
+def attach_stimulus(intent: dict, stimulus: dict | None) -> dict:
+    """Keep reviewable YAML separate from executable/observed action claims."""
+    if stimulus is None:
+        return intent
+    if stimulus["execution"] == "scenario_native" and (
+            intent.get("scenario_source") != stimulus.get("scenario_source")):
+        raise ValueError("authored stimulus disagrees with selected executable source")
+    intent.update({
+        "stimulus_source":stimulus["source"],
+        "stimulus_sha256":stimulus["sha256"],
+        "stimulus_logical_test":stimulus["logical_test"],
+        "stimulus_purpose":stimulus["purpose"],
+        "stimulus_execution":stimulus["execution"],
+        "stimulus_driver_source":stimulus["driver_source"],
+        "stimulus_rtl_top":stimulus["rtl_top"],
+        "stimulus_bender_source_target":stimulus["bender_source_target"],
+        "stimulus_outline":stimulus["phases"],
+        "stimulus_outline_is_not_dispatch_evidence":True,
+    })
+    return intent
 
-def snapshot(name: str, test: dict, *, scenario: dict | None = None) -> dict:
+
+def snapshot(name: str, test: dict, *, scenario: dict | None = None,
+             stimulus: dict | None = None) -> dict:
     """Immutable declaration snapshot, not evidence that any action ran.
 
     Hash the exact source-defined flow independently of wall clock, log text,
     simulator result and publisher revision. Old runs must retain their own
     archived snapshot rather than borrowing a newer mainline scenario.
     """
-    intent = plan(name, test, scenario=scenario)
+    intent = plan(name, test, scenario=scenario, stimulus=stimulus)
     canonical = json.dumps(intent, sort_keys=True, separators=(",", ":"),
                            ensure_ascii=True, allow_nan=False).encode("ascii")
     return {
@@ -144,6 +168,16 @@ def catalog(config: dict, *, scenario: dict | None = None) -> dict:
             if scenario is not None and scenario != selected:
                 raise ValueError(f"{name}: declared scenario differs from caller source")
         result[name]=plan(name,test,scenario=selected)
+    # Do not coerce new human-authored descriptions into executable actions.
+    # Ensure every selected build target has a readable, reviewable source,
+    # even before any CI job has produced a result.
+    try:
+        from .stimulus_catalog import load as load_stimuli
+    except ImportError:
+        from stimulus_catalog import load as load_stimuli
+    definitions = load_stimuli(config)
+    for name in result:
+        attach_stimulus(result[name], definitions[name])
     return result
 
 
@@ -157,6 +191,27 @@ def render(flow: dict) -> str:
          'Evidence links are optional debugging tools.</p>']
     if flow.get("context"):
         out.append('<p>'+e(flow["context"])+'</p>')
+    if flow.get("stimulus_source"):
+        out.append('<h3>Reviewable stimulus specification</h3>')
+        out.append('<p><code>'+e(flow["stimulus_source"])+'</code>'
+                   +' · spec SHA-256 <code>'+e(flow["stimulus_sha256"])+'</code>'
+                   +' · '+e(flow.get("stimulus_execution"))+'</p>')
+        out.append('<p>'+e(flow.get("stimulus_purpose"))+'</p>')
+        if flow.get("stimulus_driver_source"):
+            out.append('<p>Driver source: <code>'+
+                       e(flow["stimulus_driver_source"])+'</code></p>')
+        else:
+            out.append('<p>SV/compile entrypoint: <code>'+
+                       e(flow.get("stimulus_rtl_top") or "build target")+
+                       '</code> · Bender target <code>'+
+                       e(flow.get("stimulus_bender_source_target"))+'</code></p>')
+        out.append('<p><small>INIT/RUN/CHECK outline below is authored intent, '
+                   'not proof of internal action dispatch or observed hardware.</small></p>')
+        for label in PHASES:
+            out.append('<details><summary>Authored '+label.upper()+' intent</summary><ol>')
+            for line in flow["stimulus_outline"][label]:
+                out.append('<li>'+e(line)+'</li>')
+            out.append('</ol></details>')
     out.append('<p><strong>Execution adoption:</strong> '+
                e(flow.get("execution_adoption","legacy_snapshot_missing_mode"))+'</p>')
     if flow.get("runtime_phases_applicable") is False:
