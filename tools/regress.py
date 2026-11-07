@@ -78,6 +78,11 @@ def load_config(path):
             if (not isinstance(source,str)
                     or not re.fullmatch(r'config/scenarios/[A-Za-z0-9_-]+\.json',source)
                     or not (ROOT/source).is_file()
+                    # Only this exact pinned scenario is supported by the
+                    # current eight-action C/BFM executor. A new scenario
+                    # must add a real adapter rather than silently driving
+                    # a different plan than the Test Runs viewer displays.
+                    or source != 'config/scenarios/cpu-bfm-ddr-roundtrip.json'
                     or test.get('firmware_mode') not in ('cpu_dma_scenario','scenario_bfm')):
                 raise ValueError(f'{name}: unsupported or unsafe executable scenario path')
         if test.get('firmware_mode') in ('cpu_dma_scenario','scenario_bfm') and 'flow_plan' not in test:
