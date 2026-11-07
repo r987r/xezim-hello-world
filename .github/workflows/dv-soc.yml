@@ -30,6 +30,7 @@ on:
       - 'tests/test_interface_contracts.py'
       - 'tests/test_fabric_config.py'
       - 'tests/test_floonoc_gen.py'
+      - 'tests/test_ip_portability_contract.py'
       - 'tests/test_supernoc_gen.py'
       - 'dv/**'
       - 'rtl/**'
