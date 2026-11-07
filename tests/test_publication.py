@@ -437,10 +437,18 @@ class PublicationTests(unittest.TestCase):
             self.assertIn('Selected per-run snapshot',html)
             self.assertIn('internal steps independently instrumented only where available',html)
             self.assertTrue((output/'runs/123-1/chip-boot/selected-test-plan.json').is_file())
+            # A second publication into an already populated destination
+            # must fail closed instead of silently overwriting one run.
+            with self.assertRaisesRegex(ValueError,'duplicate published canonical run or historical evidence path'):
+                site.evidence_index(root/'evidence',output,'r987r/xezim-hello-world')
             corrupt=dict(snapshot);corrupt['source_revision']='b'*40
             site.dump(target/'selected-test-plan.json',corrupt)
+            # Re-run the provenance-negative against a FRESH publication
+            # destination: an existing report must not mask the real
+            # selected-plan digest mismatch.
+            fresh=root/'site-corrupt';fresh.mkdir()
             with self.assertRaisesRegex(ValueError,'hash mismatch'):
-                site.evidence_index(root/'evidence',output,'r987r/xezim-hello-world')
+                site.evidence_index(root/'evidence',fresh,'r987r/xezim-hello-world')
 
     def test_protocol_report_is_provenance_verified_and_html_re_rendered(self):
         with tempfile.TemporaryDirectory() as tmp:
