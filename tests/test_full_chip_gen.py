@@ -59,6 +59,11 @@ class FullChipTests(unittest.TestCase):
             self.assertIn('axi_crossbar #(',top)
             self.assertIn('axi_to_axi_lite #(',top)
             self.assertIn('ProbeEnable ? probe_req',top)
+            declaration='floo_xezim_compute0_local_data_noc_pkg::axi_in_req_t probe_req;'
+            first_use='assign m_compute0_local_data_cpu_req = DmaTestMode ? probe_req'
+            self.assertEqual(top.count(declaration),1)
+            self.assertLess(top.index(declaration),top.index(first_use),
+                            'probe must be typed before CPU0 mux use')
             self.assertEqual(len(chip['memory_models']),2)
             self.assertNotIn('$readmemh',top)  # SRAM initialization cannot be hidden in top wiring
 
