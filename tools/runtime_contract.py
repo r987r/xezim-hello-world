@@ -314,3 +314,56 @@ def qualify_selected_scenario(snapshot:dict, directory:Path, *, result:dict) -> 
             or observed.get("execution_state")!="rtl_observed"
             or observed.get("intent_is_not_evidence") is not True):
         raise RunContractError("observed scenario actions do not match selected plan")
+
+
+def qualify_observed_phase_milestones(snapshot:dict,directory:Path,*,result:dict)->dict:
+    """Tie existing independently observed INIT/RUN/CHECK events to one selection.
+
+    This is *milestone correlation*, not complete internal Python/C/SV action
+    dispatch. Do not infer details absent in the selected source contract.
+    """
+    validate(snapshot)
+    if result.get("passed") is not True:
+        return {"status":"run_not_passed"}
+    phases=snapshot["intent"]["phases"]
+    declared={}
+    for phase in PHASES:
+        declared[phase]=sorted(
+            action["actor"]+"."+action["label"]
+            for action in phases[phase]
+            if action.get("kind")=="required_milestone")
+    if not any(declared.values()):
+        return {"status":"no_source_declared_milestones"}
+    flow=Path(directory)/"test-flow.json"
+    if not flow.is_file() or flow.is_symlink():
+        raise RunContractError("passing run lacks observed required phase milestones")
+    try:
+        data=json.loads(flow.read_text())
+    except (OSError,ValueError,TypeError) as exc:
+        raise RunContractError("observed flow milestone JSON invalid") from exc
+    expected=data.get("expected_steps")
+    if (data.get("schema_version")!=1
+            or data.get("passed") is not True
+            or data.get("issues")
+            or not isinstance(expected,dict)
+            or set(expected)!=set(PHASES)
+            or {k:sorted(v) for k,v in expected.items()}!=declared):
+        raise RunContractError("observed flow milestone contract differs from selected plan")
+    actual={}
+    for phase in PHASES:
+        actual[phase]=set()
+    for row in data.get("rows",[]):
+        if not isinstance(row,dict):
+            raise RunContractError("observed flow row invalid")
+        phase=row.get("phase")
+        actor=row.get("actor")
+        step=row.get("step")
+        if (phase in actual and isinstance(actor,str)
+                and isinstance(step,str) and row.get("status")=="PASS"):
+            actual[phase].add(actor+"."+step)
+    if any(not set(declared[phase]).issubset(actual[phase]) for phase in PHASES):
+        raise RunContractError("observed flow PASS milestones incomplete")
+    return {"status":"observed_required_milestones",
+            "plan_sha256":snapshot["plan_sha256"],
+            "observed_per_phase":{k:len(actual[k]) for k in PHASES},
+            "evidence_kind":"observed_flow_milestones_not_all_internal_actions"}
