@@ -10,18 +10,7 @@ Prefer existing public AXI, SRAM, DMA, NoC, CPU, BFM and controller IP. Add
 only small, explicit, reviewed glue needed for a real protocol boundary.
 Never invent a custom bus fabric, SRAM or AXI VIP simply because it is easy.
 
-**Do not claim the full SoC is running from a scoped NoC BFM pass**: `fabrics.global_data.backend: floonoc`
-in `config/soc.yaml` denotes selected architecture only. The current
-`tools/noc_backends.py` has `floonoc.executable=False` and likewise
-`pulp_axi.executable=False`. `gen/chip/soc_top.sv` is now an actual **chip boot configuration** with
-real CPUs, the shared NoCs, upstream AXI adapters, SRAM, reset registers
-and AXI memory stand-ins. Optional real PULP iDMA and CSRs are generator-wired for every compute
-subsystem in `DmaEnable=1`; CPU0 C DMA submits/polls successfully; CPU firmware IRQ handlers and physical controllers
-remain unintegrated. The separate full-NoC DMA gate **passed** with 105 real descriptor transfers
-in CI run 41885417960 (CPU0 AXI BFMs drive preparation, not CPU firmware). The generic backend flag still does not describe a complete
-arbitrary-configuration SoC emitter. Legacy memory/boot benches remain
-independent executable scopes. Read [implementation-status](docs/implementation-status.md)
-before describing progress.
+**Do not claim a full combined SoC pass from separate NoC, DMA, Ethernet, PCIe or DDR RTL tests.** `config/soc.yaml` describes topology, not proof that every optional IP or PHY is instantiated in the same tested variant. The default `gen/chip/soc_top.sv` contains CPU, SRAM/reset and memory stand-ins; opt-in iDMA, PCIe, Ethernet and LiteDRAM builds have separate evidence. CPU0 C polling-based DMA is verified; interrupt service, true HBM and analog PHYs remain separate. See [architecture](docs/architecture.md) and [open integration epic](https://github.com/r987r/xezim-hello-world/issues/34).
 
 Unified region allocation: `sw/common/memory_pool.[ch]` owns the
 physical SRAM, DDR and HBM allocator and `tools/memory_plan.py` independently
@@ -190,18 +179,15 @@ The default `.github/workflows/dv-soc.yml` downloads checksum-verified
 Xezim and executes the existing CPU boot, SRAM and AXI crossbar
 transaction regressions. The independent
 `.github/workflows/floonoc-elab.yml` downloads immutable FlooNoC
-and its upstream Bender.lock dependency tree, then **elaborates all
-eight FlooGen-generated local/global meshes with Verilator**, then runs
+and its upstream Bender.lock dependency tree, then **elaborates the generated local/global meshes with Verilator**, then runs
 the connected super-NoC traffic and corruption checks. These are different
 verification gates from Xezim CPU/memory simulation; report them separately.
-**All eight generated local and global FlooNoC meshes now also
-compile with pinned Xezim 0.11.4** using
+**The selected generated NoC structural tops are also compiled with pinned Xezim 0.11.4** using
 `python3 tools/regress.py compatibility` and the *same upstream Bender
 filelist* as the Verilator elaboration gate. The runner discovers its
 tops from `gen/noc/floonoc/manifest.json` so a new subsystem scales
 without editing hardcoded lists.
-**Xezim reports potentially significant RoB/FIFO port width warnings
-in all four DATA networks**, even though the compilation exits zero;
+**Xezim may report RoB/FIFO port width warnings in selected DATA networks**, even when compilation exits zero;
 Verilator emits other upstream width warnings. Read and maintain
 [docs/simulator-compatibility.md](docs/simulator-compatibility.md)
 before making any simulator workaround. The Xezim compile stage is
@@ -290,11 +276,12 @@ the BFM scope. See [docs/full-chip-boot.md](docs/full-chip-boot.md) for the
 CPU0 init/run/check mailbox contract, upstream WB/AXI bridges, AXI memory
 stand-ins, negative missing-CPU check and simulator limits. Firmware must
 execute on the real CPUs; the host never drives CPU result mailboxes.
-Next integration work: get the opt-in CPU-started C DMA through the
-full-chip INIT/RUN/CHECK RTL gate with passive AXI evidence and reviewed
-results. Extend it to CPU IRQ handling after polling validation; Xezim
-chip-level functional traffic remains distinct. Preserve the existing bus-driven cold-boot proof. HBM/DDR
+CPU0 C-launched DMA with bounded status polling is an existing independent regression; do not repeat it as pending. Real CPU IRQ service and same-run Ethernet/DDR/PCIe acceptance are separately tracked in #47 and #34. Preserve the existing bus-driven cold-boot proof. HBM/DDR
 controller/PHY integration is a separate stage.
+
+## Documentation maintenance
+
+Keep Markdown focused on **how to build, configure, run, inspect and interpret evidence**. Do not add dated progress logs, draft/merged PR status tables, old workflow snapshots or unverified PASS claims to README, guides or AGENTS. Put worklists, regressions and acceptance evidence on the relevant GitHub issues/PRs; link them once. Keep exact tested source/run SHA only where necessary to reproduce a test; live workflow and release state belongs to Actions. When changing generators or IPs, update user-facing limitations and commands with the source change, and verify links plus `make check-generated`. Preserve the autogenerated README section via its source in `tools/generate.py`.
 
 ## Passive AXI run reporting
 
