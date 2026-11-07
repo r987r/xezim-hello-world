@@ -52,6 +52,19 @@ class TestIntentFlowTests(unittest.TestCase):
         self.assertIn("bar_roundtrip",[a["label"] for a in intent["phases"]["run"]])
         self.assertIn("final_verify",[a["label"] for a in intent["phases"]["check"]])
 
+    def test_scenario_catalog_is_selected_from_yaml_not_firmware_name(self):
+        intent=self.entries["chip-cpu-scenario"]
+        self.assertEqual(intent["scenario_source"],
+                         self.config["tests"]["chip-cpu-scenario"]["flow_plan"])
+        with self.assertRaisesRegex(ValueError,"unsafe scenario declaration"):
+            mutated=copy.deepcopy(self.config)
+            mutated["tests"]["chip-dma-scenario"]["flow_plan"]="../evil.json"
+            catalog(mutated)
+        with self.assertRaisesRegex(ValueError,"declared scenario differs"):
+            altered=copy.deepcopy(self.scenario)
+            altered["seed"]+=1
+            catalog(self.config,scenario=altered)
+
     def test_scenario_actions_expose_dependencies_and_inputs(self):
         intent=self.entries["chip-dma-scenario"]
         actions=[a for phase in intent["phases"].values() for a in phase]
