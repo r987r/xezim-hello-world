@@ -39,7 +39,8 @@ FILES={'result.json','plan.json','sources.f','simulation.log','build.log','resul
        'ddr-native-csr-map.json','ddr4_fullchip_evidence.json',
        'planned-flow.json','memory-lifetimes.json','scenario-execution.json','scenario-plan.json',
        'variant-connectivity.json','variant-topology.json','variant-chip-manifest.json',
-       'selected-test-plan.json','runner-events.json','selected-flow-correlation.json'}
+       'selected-test-plan.json','runner-events.json','selected-flow-correlation.json',
+       'identity.json'}
 
 
 def dump(path,data):
@@ -582,6 +583,22 @@ def evidence_index(evidence,output,repository):
             found.add(target)
             source_dir=result_path.parent
             plan=json.loads((source_dir/'plan.json').read_text()) if (source_dir/'plan.json').exists() else {}
+            # A recorded identity is an immutable run-local artifact, never
+            # inferred from the *current* regression YAML for old CI runs.
+            from test_identity import load as load_identity, relative_path as canonical_path
+            identity_file=source_dir/'identity.json'
+            selected_identity=(load_identity(identity_file,target=target,plan=plan)
+                               if identity_file.is_file() else None)
+            if selected_identity is not None:
+                if (plan.get('identity')!=selected_identity
+                        or result.get('identity_sha256')!=selected_identity['identity_sha256']
+                        or result.get('canonical_id')!=canonical_path(selected_identity).as_posix()):
+                    raise ValueError('archived run identity differs from original plan/result')
+                prefix=f"ci-{run['id']}-a{run.get('run_attempt',1)}-"
+                if selected_identity['run_id'].startswith('ci-') and not selected_identity['run_id'].startswith(prefix):
+                    raise ValueError('canonical run ID refers to a different CI attempt')
+            elif plan.get('identity') is not None or result.get('identity_sha256') is not None:
+                raise ValueError('archived run identity source missing')
             relative=Path('runs')/(str(run['id'])+'-'+str(run.get('run_attempt',1)))/target
             destination=output/relative;destination.mkdir(parents=True,exist_ok=True)
             assets=[]
@@ -741,6 +758,12 @@ def evidence_index(evidence,output,repository):
             entry={'target':target,'engine':plan.get('engine','unknown'),'passed':result.get('passed') is True,
                    'expected_failure':plan.get('expect_failure'),'stage':result.get('stage'),
                    'run_id':run['id'],'attempt':run.get('run_attempt',1),'source_sha':run['tested_sha'],
+                   'canonical_id':canonical_path(selected_identity).as_posix() if selected_identity else None,
+                   'config_target':selected_identity['config_target'] if selected_identity else None,
+                   'testname':selected_identity['testname'] if selected_identity else None,
+                   'simulator':selected_identity['simulator'] if selected_identity else None,
+                   'execution_id':selected_identity['run_id'] if selected_identity else None,
+                   'identity_status':'source_verified' if selected_identity else 'historical_not_recorded',
                    'pr_head_sha':run['head_sha'],'merged_pr':run.get('merged_pr'),
                    'recorded_at':run['created_at'],'workflow':run['label'],'workflow_url':run['html_url'],
                    'path':str(relative/'report.html'),'assets':sorted(assets),
@@ -757,6 +780,22 @@ def evidence_index(evidence,output,repository):
                    'planned_flow_intent':intended if declared_hash is not None else None,
                    'pcie_latency_measured':bool(latency_data and latency_data.get('passed')),
                    'result':result}
+            if selected_identity is not None:
+                # Canonical paths are lightweight link-only aliases; avoid
+                # duplicating large captured AXI/protocol logs and preserve
+                # immutable original /runs/<workflow-attempt>/<target>/ URLs.
+                alias=output/'by-test'/canonical_path(selected_identity)/'index.html'
+                if alias.exists():
+                    raise ValueError('duplicate canonical run identity in verified CI evidence')
+                alias.parent.mkdir(parents=True,exist_ok=True)
+                back=os.path.relpath(destination/'report.html',alias.parent).replace(os.sep,'/')
+                alias.write_text(shell('Canonical test execution',
+                    '<main><h1>Canonical test execution</h1><p><code>'+
+                    escape(canonical_path(selected_identity).as_posix())+
+                    '</code></p><p><a href="'+escape(back)+
+                    '">Open original verified test report</a></p></main>',
+                    alias.relative_to(output),repository,run['head_sha']))
+                entry['canonical_url']=alias.relative_to(output).as_posix()
             if protocol_data:
                 protocol_run=protocol_data.get('run',{})
                 protocol_sha=protocol_run.get('commit')
@@ -837,6 +876,10 @@ def evidence_index(evidence,output,repository):
                         if declared_hash else
                         ' · no original pre-run snapshot in this historical archive')
                       +'</p>')
+                if selected_identity is not None:
+                    nav+=('<p><strong>Canonical run:</strong> <code>'+escape(canonical_path(selected_identity).as_posix())+
+                          '</code> · <a href="identity.json">Immutable identity</a>. '
+                          'Legacy report URL retained for historical compatibility.</p>')
                 if variant_view is not None:
                     nav+=('<p><a href="variant-architecture.html">Selected variant 2D NoC/initiator/monitor diagram</a> '
                           '(generated source only; open accepted traffic below for runtime proof)</p>')
