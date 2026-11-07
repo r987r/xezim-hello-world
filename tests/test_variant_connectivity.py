@@ -57,6 +57,22 @@ class VariantConnectivityTests(unittest.TestCase):
         self.assertTrue(all(b["observed_requests"] is None for b in inventory["boundaries"]))
         self.assertIn("not_elaborated",graph["status"])
 
+    def test_source_diagram_visualizes_generated_links_and_escapes_names(self):
+        with tempfile.TemporaryDirectory() as out:
+            inventory,graph=vc.collect(ROOT,"chip-boot",self.scenario(),Path(out))
+        page=vc.render_html(inventory,graph)
+        for token in ("<svg","pcie0","ethernet0","global_data","global_config",
+                      "Source-only","variant-chip-manifest.json","AXI monitor"):
+            self.assertIn(token,page)
+        tampered=copy.deepcopy(inventory)
+        tampered["peripherals"]["pcie0"]["ip"]="<script>alert(1)</script>"
+        html=vc.render_html(tampered,graph)
+        self.assertNotIn("<script>",html)
+        self.assertIn("&lt;script&gt;",html)
+        publisher=(ROOT/"tools/publish_site.py").read_text()
+        self.assertIn("variant AXI monitor inventory differs from accepted per-run report",publisher)
+        self.assertIn("variant-architecture.html",publisher)
+
     def test_reconcile_source_declared_pcie_without_claiming_bare_mgmt_link(self):
         chip=copy.deepcopy(self.chip)
         actors=copy.deepcopy(self.actors)
