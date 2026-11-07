@@ -296,8 +296,9 @@ def collect(root: Path, target: str, plan: dict, out: Path) -> tuple[dict,dict]:
     # DFI recording in protocol_report; keep it independently declared here.
     # Never treat a configured source as proof it generated an event.
     from dv.common.protocol_trace import normalize_sources
-    protocol_cfg=(plan.get("report") or {}).get("protocols",{})
-    normalized=normalize_sources(protocol_cfg.get("sources",{}))
+    protocol_cfg=(plan.get("report") or {}).get("protocols") or {}
+    configured_sources=protocol_cfg.get("sources")
+    normalized=normalize_sources(configured_sources) if configured_sources else {}
     protocol_sources=[{**record,"source_status":"declared_not_observed"}
                       for _,record in sorted(normalized.items())]
     result={
