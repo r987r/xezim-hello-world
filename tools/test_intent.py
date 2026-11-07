@@ -50,6 +50,14 @@ def plan(name: str, test: dict, *, scenario: dict | None = None) -> dict:
                 "expectation":None,
             })
     known=sum(len(v) for v in phases.values())
+    engine=test.get("engine")
+    is_compile=test.get("mode")=="compile" or engine in ("verilator-lint","xezim-compile")
+    execution_status=(
+        "not_applicable_compile_or_lint" if is_compile else
+        "canonical_resolved_scenario" if scenario is not None else
+        "instrumented_legacy_flow" if required else
+        "legacy_runtime_without_action_contract"
+    )
     return {
         "schema_version":1,"target":name,"engine":test.get("engine"),
         "top":test.get("top"),"module":test.get("module"),
@@ -63,6 +71,8 @@ def plan(name: str, test: dict, *, scenario: dict | None = None) -> dict:
         "phases":phases,
         "declared_actions":known,
         "detail_status":"declared_steps" if known else "no_detailed_phase_steps_declared",
+        "execution_adoption":execution_status,
+        "runtime_phases_applicable":not is_compile,
         "provenance":"configured_test_definition_not_execution",
         "evidence_required_for_display":False,
     }
@@ -129,6 +139,11 @@ def render(flow: dict) -> str:
          'Evidence links are optional debugging tools.</p>']
     if flow.get("context"):
         out.append('<p>'+e(flow["context"])+'</p>')
+    out.append('<p><strong>Execution adoption:</strong> '+
+               e(flow.get("execution_adoption","legacy_snapshot_missing_mode"))+'</p>')
+    if flow.get("runtime_phases_applicable") is False:
+        out.append('<p>Compile/lint-only target: INIT/RUN/CHECK stimulus phases '
+                   'are not applicable; no runtime actions are claimed.</p>')
     for phase in PHASES:
         out.append('<details open><summary><strong>'+phase.upper()+'</strong></summary>')
         actions=flow["phases"][phase]
