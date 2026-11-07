@@ -24,7 +24,7 @@
     "chip/soc_top.sv": "e2e5988898755c3f61b0beeda98d1c3570256abb6545b3f02870dcf276923fa3",
     "diagrams/graphs.json": "95c4180609de91bafa74d82c07dad563337e117e26547daa0ae8248d669a5300",
     "diagrams/noc-hierarchy.mmd": "b6e56f139c4545b2231c189df869a3e34f8918b704dd67485ef8ca6008d0910b",
-    "diagrams/noc-hierarchy.svg": "18bc9b96d2368fc73445e431c4ac54e914a13a17e22f15f08459afb267233cb5",
+    "diagrams/noc-hierarchy.svg": "0821e0b87f51dbb25caa04033aaaab5b61d7c26be577a95650217de75625aa1e",
     "diagrams/noc-topology.json": "e738da45ff94a52944894b3d420542cc2a93d67570f18cf223042da310107788",
     "memory/manifest.json": "7644b1c625b8ed34fde90eb7e8cd4a353a77d1becea4ecec25716e76efe9494e",
     "memory/memory_tb.sv": "69904e507109d279e3294ce7e57ec43dd9da2711630dca8140ff2d9022144d8c",

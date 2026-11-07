@@ -335,8 +335,20 @@ def hierarchy_mermaid(cfg: dict, networks: dict) -> str:
     return "\n".join(lines)+"\n"
 
 
-def overview_svg(cfg: dict, networks: dict, dst: Path):
+def overview_svg(cfg: dict, networks: dict, dst: Path, graph: dict | None = None):
     from diagram_svg import Art, BG, WHITE, INK, MUTED, FAINT, GREEN, PURPLE, BLUE, ORANGE
+    # Reuse the *same generated topology* as the interactive explorer.
+    # A drawn default link is source-declared, not elaborated or observed.
+    graph = graph if graph is not None else diagram_gen_metadata(cfg, networks)
+    edges = graph["connections"]
+
+    def require_edge(source, destination, status):
+        matches = [e for e in edges
+                   if e["from"]["instance"] == source
+                   and e["to"]["instance"] == destination]
+        if len(matches) != 1 or matches[0]["status"] != status:
+            raise ValueError(f"SVG connection absent/changed in source topology: "
+                             f"{source} -> {destination} ({status})")
     computes=[s for s in cfg["subsystems"] if s["type"]=="compute"]
     peripheral=[s for s in cfg["subsystems"] if s["type"]=="peripheral"]
     mem=next(s["name"] for s in cfg["subsystems"] if s["type"]=="memory")
@@ -384,6 +396,19 @@ def overview_svg(cfg: dict, networks: dict, dst: Path):
             a.box_label(col,py+145,670,70,"LOCAL "+key.upper()+" / FlooNoC",
                         str(networks[net]["entry"]["routers"])+" generated routers",kind,
                         title_size=18,detail_size=13)
+        # The original static SVG omitted these four already-declared links.
+        # Reserved packet/management initiators are dashed; the actual
+        # local SRAM and reserved AXI-error CSR endpoints are solid.
+        ld,lc=name+"_local_data",name+"_local_config"
+        require_edge(name+".ip",ld+"."+sub["data_initiator"],"planned_integration")
+        require_edge(name+".ip",lc+"."+sub["config_initiator"],"planned_integration")
+        require_edge(ld+".sram",name+".sram","wired_boot_configuration")
+        require_edge(lc+".controller_regs",name+".csr","wired_boot_configuration")
+        a.line([(250,py+122),(250,py+145)],BLUE,2,True,True)
+        a.line([(400,py+122),(400,py+133),(1100,py+133),(1100,py+145)],
+               PURPLE,2,True,True)
+        a.line([(630,py+122),(630,py+145)],GREEN,3,False,"both")
+        a.line([(1180,py+122),(1180,py+145)],PURPLE,3,False,True)
     a.box_label(56,gy,744,113,"GLOBAL DATA / FlooNoC",
                 str(networks["global_data"]["entry"]["routers"])+" routers / XY mesh / 64-bit AXI4\ncompute uplinks, remote SRAMs, configured memory ingress ports",
                 "fabric",title_size=24,detail_size=15)
@@ -395,6 +420,22 @@ def overview_svg(cfg: dict, networks: dict, dst: Path):
         y=158+(i//2)*285+236
         a.line([(x+192,y),(x+192,y+40),(428,gy-10),(428,gy)],GREEN,2,False,"both")
         a.line([(x+555,y),(x+555,y+44),(1193,gy-10),(1193,gy)],PURPLE,2,False,"both")
+    # Show both peripheral local->global uplinks, already present in the
+    # generated data/config NoC. Keep rail lanes in the panel center gutter,
+    # not across the packet-engine boxes.
+    for pi,sub in enumerate(peripheral):
+        name=sub["name"];py=158+rows*285+pi*270
+        ld,lc=name+"_local_data",name+"_local_config"
+        require_edge(ld+".global_out","global_data."+name,"wired_boot_configuration")
+        require_edge("global_data."+name+"_sram",ld+".global_in","wired_boot_configuration")
+        require_edge(lc+".global_out","global_config."+name,"wired_boot_configuration")
+        require_edge("global_config."+name+"_regs",lc+".global_in","wired_boot_configuration")
+        data_rail=766+pi*11
+        config_rail=817-pi*11
+        a.line([(746,py+180),(data_rail,py+180),(data_rail,gy-20),
+                (700-pi*100,gy)],GREEN,3,False,"both")
+        a.line([(830,py+180),(config_rail,py+180),(config_rail,gy-20),
+                (960+pi*100,gy)],PURPLE,3,False,"both")
     a.rect(56,my,1488,307,WHITE,FAINT,r=17,width=2)
     a.text(82,my+18,mem+" / memory subsystem",24,INK)
     a.box_label(83,my+64,500,71,"LOCAL DATA / FlooNoC",
@@ -446,7 +487,7 @@ def render(cfg: dict, root: Path, destination: Path) -> tuple[dict, dict[str,str
     mermaid = {"noc-hierarchy": hierarchy_mermaid(cfg, networks)}
     destination.mkdir(parents=True, exist_ok=True)
     (destination / "noc-hierarchy.mmd").write_text(mermaid["noc-hierarchy"])
-    overview_svg(cfg, networks, destination / "noc-hierarchy.svg")
     graph = diagram_gen_metadata(cfg, networks)
+    overview_svg(cfg, networks, destination / "noc-hierarchy.svg", graph)
     (destination / "noc-topology.json").write_text(json.dumps(graph, indent=2, sort_keys=True) + "\n")
     return graph, mermaid
