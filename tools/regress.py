@@ -76,7 +76,7 @@ def load_config(path):
         if 'flow_plan' in test:
             source=test['flow_plan']
             if (not isinstance(source,str)
-                    or not re.fullmatch(r'config/scenarios/[A-Za-z0-9_-]+\\.json',source)
+                    or not re.fullmatch(r'config/scenarios/[A-Za-z0-9_-]+\.json',source)
                     or not (ROOT/source).is_file()
                     or test.get('firmware_mode') not in ('cpu_dma_scenario','scenario_bfm')):
                 raise ValueError(f'{name}: unsupported or unsafe executable scenario path')
