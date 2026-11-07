@@ -203,6 +203,10 @@ def selection(target: str, plan: dict, directory: Path,
         "intent": intent,
         "evidence_kind": "selected_definition_not_runtime_execution",
     }
+    if plan.get("identity") is not None:
+        from test_identity import validate as validate_identity
+        validate_identity(plan["identity"], target=target, plan=plan)
+        content["identity_sha256"] = plan["identity"]["identity_sha256"]
     return {**content, "plan_sha256": digest(content)}
 
 
