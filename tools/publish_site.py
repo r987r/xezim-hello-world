@@ -639,8 +639,16 @@ def evidence_index(evidence,output,repository):
                     raise ValueError('canonical run ID refers to a different CI attempt')
             elif plan.get('identity') is not None or result.get('identity_sha256') is not None:
                 raise ValueError('archived run identity source missing')
-            relative=Path('runs')/(str(run['id'])+'-'+str(run.get('run_attempt',1)))/target
-            destination=output/relative;destination.mkdir(parents=True,exist_ok=True)
+            # Canonical names are the *only* published paths for new runs.
+            # Historical captures lack immutable identity and stay under their
+            # original verified run/target path for explicit comparison.
+            relative=(Path('runs')/canonical_path(selected_identity)
+                      if selected_identity is not None else
+                      Path('runs')/(str(run['id'])+'-'+str(run.get('run_attempt',1)))/target)
+            destination=output/relative
+            if destination.exists():
+                raise ValueError('duplicate published canonical run or historical evidence path')
+            destination.mkdir(parents=True,exist_ok=False)
             assets=[]
             for item in source_dir.iterdir():
                 if item.is_file() and (item.name in FILES or item.suffix in ('.log','.f')):
@@ -823,21 +831,10 @@ def evidence_index(evidence,output,repository):
                    'pcie_latency_measured':bool(latency_data and latency_data.get('passed')),
                    'result':result}
             if selected_identity is not None:
-                # Canonical paths are lightweight link-only aliases; avoid
-                # duplicating large captured AXI/protocol logs and preserve
-                # immutable original /runs/<workflow-attempt>/<target>/ URLs.
-                alias=output/'by-test'/canonical_path(selected_identity)/'index.html'
-                if alias.exists():
-                    raise ValueError('duplicate canonical run identity in verified CI evidence')
-                alias.parent.mkdir(parents=True,exist_ok=True)
-                back=os.path.relpath(destination/'report.html',alias.parent).replace(os.sep,'/')
-                alias.write_text(shell('Canonical test execution',
-                    '<main><h1>Canonical test execution</h1><p><code>'+
-                    escape(canonical_path(selected_identity).as_posix())+
-                    '</code></p><p><a href="'+escape(back)+
-                    '">Open original verified test report</a></p></main>',
-                    alias.relative_to(output),repository,run['head_sha']))
-                entry['canonical_url']=alias.relative_to(output).as_posix()
+                # No by-test alias or competing legacy report is emitted.
+                # The canonical hierarchy is the primary, single stored
+                # copy of current capture, logs, filelists and run reports.
+                entry['canonical_url']=(relative/'report.html').as_posix()
             if protocol_data:
                 protocol_run=protocol_data.get('run',{})
                 protocol_sha=protocol_run.get('commit')

@@ -46,25 +46,21 @@ No later version of the YAML can relabel an archived test.
 
 ## Rollout and backward compatibility
 
-- New runner invocations save `identity.json` beside their original
-  `.tools/regression/<legacy-target>/` results. This keeps existing
-  toolchain, Cocotb `results.xml`, build-cache and CI upload paths stable.
-- The Pages collector verifies the original saved identity/hash/runner
-  binding (and CI attempt if encoded) before advertising a canonical run.
-  It publishes a **link-only alias** at
-  `by-test/<simulator>/<config_target>/<testname>/<run_id>/index.html`,
-  pointing to the original verified
-  `runs/<workflow-id>-<attempt>/<legacy-target>/report.html`.
-  Actual large AXI/GMII/PCIe/DFI captures are stored only once.
-- Historical archives lacking the new identity remain at their old
-  URLs and are honestly labeled `historical_not_recorded`. The
-  collector never borrows a modern `logical_test` field to rewrite the
-  identity of an older run.
-- The canonical identity is a **path plus metadata contract**, not a
-  second on-disk copy of every build. Future retirement of the legacy
-  `.tools/regression/<target>` work directory must wait for every
-  script, variant emitter and artifact producer to use a common
-  output-dir resolver. Do not rename those directories inside #129.
+- New published reports use exactly one primary path:
+  `runs/<simulator>/<config_target>/<testname>/<run_id>/report.html`.
+  The collector verifies the original saved identity, hash, runner binding
+  and CI attempt before accepting that path. Raw AXI/GMII/PCIe/DFI capture,
+  logs and filelists are stored alongside it only once; no `by-test`
+  alias or duplicate current report is generated.
+- Historical archives without immutable identities retain their **original**
+  `runs/<workflow-id>-<attempt>/<old-target>/` paths for explicit comparison.
+  They cannot be silently relabeled with the latest catalog or presented as
+  current canonical test results.
+- The on-runner `.tools/regression/<selection-key>` scratch directory is
+  still a private temporary compatibility detail for workflows that resolve
+  source filelists by selection key. This is **not** a second public naming
+  scheme. Migrating this private scratch resolver and all upload scripts is
+  tracked separately in #119; do not delete historical build evidence. 
 - The physical memory aperture, CSR bases, NoC configuration and IP
   version still come from `config/soc.yaml`, pinned manifests and
   the actual selected source closure. Renaming a test cannot swap an IP.

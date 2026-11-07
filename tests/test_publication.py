@@ -302,7 +302,7 @@ class PublicationTests(unittest.TestCase):
             self.assertIn('results.xml',entries[0]['assets'])
             self.assertEqual((report.parent/'simulation.log').read_text(),'actual simulator transcript')
 
-    def test_archived_canonical_identity_and_link_alias_keep_old_url(self):
+    def test_archived_canonical_identity_uses_primary_current_run_path(self):
         from test_identity import selected, relative_path
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);target=fixture(root/'evidence')
@@ -326,13 +326,14 @@ class PublicationTests(unittest.TestCase):
             self.assertEqual(e['identity_status'],'source_verified')
             self.assertEqual(e['testname'],'multicore-cold-boot')
             self.assertEqual(e['config_target'],'soc-default')
-            self.assertTrue((output/e['canonical_url']).is_file())
-            self.assertIn('runs/123-1/chip-boot/report.html',
-                          (output/e['canonical_url']).read_text())
-            self.assertTrue((output/'runs/123-1/chip-boot/report.html').is_file())
-            self.assertIn('Immutable identity',
-                (output/'runs/123-1/chip-boot/report.html').read_text())
-            self.assertTrue((output/'runs/123-1/chip-boot/identity.json').is_file())
+            canonical_root=output/'runs'/relative_path(identity)
+            self.assertEqual(e['path'],(Path('runs')/relative_path(identity)/'report.html').as_posix())
+            self.assertEqual(e['canonical_url'],e['path'])
+            self.assertTrue((canonical_root/'report.html').is_file())
+            self.assertIn('Immutable identity',(canonical_root/'report.html').read_text())
+            self.assertTrue((canonical_root/'identity.json').is_file())
+            self.assertFalse((output/'runs/123-1/chip-boot').exists())
+            self.assertFalse((output/'by-test').exists())
             original=(target/'sources.f').read_bytes()
             (target/'sources.f').write_bytes(b'foreign selected RTL filelist')
             with self.assertRaisesRegex(ValueError,'original archived source filelist'):
