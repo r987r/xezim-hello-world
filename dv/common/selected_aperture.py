@@ -11,8 +11,6 @@ import json
 import os
 from pathlib import Path
 
-from tools.address_map import build as build_address_map
-
 ROOT = Path(__file__).resolve().parents[2]
 
 
