@@ -60,6 +60,15 @@ class StimulusCatalogTests(unittest.TestCase):
             root=Path(tmp)
             loc=root/SOURCE
             loc.parent.mkdir(parents=True)
+            # The fixture intentionally excludes real RTL execution, but the
+            # source catalog also requires every selected driver's path to
+            # exist. Materialize only path placeholders, not fake RTL results.
+            for test in self.config["tests"].values():
+                module=test.get("module")
+                if module:
+                    driver=root/(test.get("test_dir") or ".")/(module.replace(".","/")+".py")
+                    driver.parent.mkdir(parents=True, exist_ok=True)
+                    driver.touch()
             source=(ROOT/SOURCE).read_text()
             # A second declaration must never silently replace the first one.
             loc.write_text(source.replace("schema_version: 1",
