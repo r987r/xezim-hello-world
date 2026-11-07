@@ -8,7 +8,8 @@ from pathlib import Path
 import yaml
 
 from tools.runtime_contract import (
-    RunContractError, check_events, dispatch_event, load, save, selection, validate,
+    RunContractError, check_events, dispatch_event, load, save, selection,
+    validate, validate_migration_inventory,
 )
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -29,6 +30,17 @@ class SelectedRuntimeContractTests(unittest.TestCase):
         return selection(name,{**test,"stage":"all"},self.out,
                          commands=commands if commands is not None else
                          [(name,["python3","tools/sim.py",name])])
+
+    def test_migration_allowlist_exact_and_new_test_fails_closed(self):
+        status=validate_migration_inventory(self.config)
+        self.assertEqual(sum(v=="resolved_scenario_adapter" for v in status.values()),2)
+        self.assertEqual(sum(v=="not_applicable" for v in status.values()),3)
+        self.assertEqual(sum(v=="legacy_internal_stimulus_opaque" for v in status.values()),22)
+        changed=copy.deepcopy(self.config)
+        changed["tests"]["new-uninstrumented-test"] = copy.deepcopy(
+            changed["tests"]["memory"])
+        with self.assertRaisesRegex(RunContractError,"unregistered="):
+            validate_migration_inventory(changed)
 
     def test_non_scenario_runner_is_honestly_opaque(self):
         p=self.plan()
