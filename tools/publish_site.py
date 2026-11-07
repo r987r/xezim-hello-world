@@ -386,6 +386,41 @@ def select_workflow_runs(client, producers, merged_heads, history, *, max_pages=
     return selected, notes
 
 
+def invalid_artifact_trace_provenance(artifact_folder, run):
+    """Reject an untrustworthy capture *before* copying it into Pages.
+
+    A historical run is allowed in the run list, but its trace bytes only
+    appear as observed evidence if source, clean-state, CI run and attempt
+    match the exact authenticated workflow metadata. Never rewrite an
+    invalid trace to manufacture a pass or a "current" source SHA.
+    """
+    allowed=set(run.get('verified_tested_shas',[])) | {run['head_sha']}
+    for basename in ('axi-transactions.json','protocol-transactions.json'):
+        for trace in sorted(artifact_folder.rglob(basename)):
+            relative=trace.relative_to(artifact_folder).as_posix()
+            try:
+                payload=json.loads(trace.read_text())
+                actual=payload.get('run',{})
+                if not isinstance(actual,dict):
+                    raise ValueError('run provenance must be an object')
+            except (ValueError,TypeError,UnicodeError,OSError) as exc:
+                return f'{relative}: invalid JSON / provenance structure ({exc})'
+            commit=actual.get('commit')
+            if not isinstance(commit,str) or commit not in allowed:
+                return (f'{relative}: tested SHA mismatch: recorded={commit!r}, '
+                        f'expected one of {sorted(allowed)}')
+            if actual.get('dirty') is not False:
+                return f'{relative}: dirty/missing clean-source assertion'
+            if str(actual.get('workflow_run_id')) != str(run['id']):
+                return (f'{relative}: workflow_run_id mismatch: '
+                        f"recorded={actual.get('workflow_run_id')!r}, expected={run['id']}")
+            expected=run.get('run_attempt',1)
+            if str(actual.get('workflow_attempt'))!=str(expected):
+                return (f'{relative}: workflow_attempt mismatch: '
+                        f"recorded={actual.get('workflow_attempt')!r}, expected={expected}")
+    return None
+
+
 def collect(client,config,destination):
     destination.mkdir(parents=True,exist_ok=True)
     producers=discover_test_workflows()
@@ -447,6 +482,17 @@ def collect(client,config,destination):
                         notes.append(f'Run {run["id"]}, artifact {artifact["name"]}: excluded ({invalid})')
                         continue
                     run['verified_tested_shas']=sorted(verified)
+                # One legacy/incorrectly relabeled CI artifact must never
+                # hide unrelated verified tests or take the full hub offline.
+                # Keep the strict provenance contract: quarantine the entire
+                # offending archive and expose the cause in publication notes.
+                invalid=invalid_artifact_trace_provenance(target,run)
+                if invalid:
+                    shutil.rmtree(target)
+                    notes.append(
+                        f'Run {run["id"]}, artifact {artifact["name"]}: '
+                        f'excluded unverified capture ({invalid})')
+                    continue
                 # For clean CI captures, attest execution-input equivalence
                 # against the current published source using authenticated Git
                 # blob IDs. Never infer that a changed RTL still has old timing.
