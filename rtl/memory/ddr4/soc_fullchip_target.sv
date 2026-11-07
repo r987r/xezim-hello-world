@@ -61,6 +61,82 @@ module ddr_litedram_fullchip_target #(
       (|u_controller.soc_ddrphy_bankmodel13_write_port_we) |
       (|u_controller.soc_ddrphy_bankmodel14_write_port_we) |
       (|u_controller.soc_ddrphy_bankmodel15_write_port_we);
+  // Read-only, explicitly bounded DFI/BankModel pins for passive full-chip
+  // Cocotb visibility. This does not expose or modify DDR storage arrays.
+  // Source hierarchy is generated/pinned and validated by DFI probe contract.
+  // No vendor RTL changes and NO global --public-flat-rw setting.
+  wire dfi_obs_p0_cs_n /* verilator public_flat_rd */ = u_controller.soc_ddrphy_dfi_p0_cs_n;
+  wire dfi_obs_p0_act_n /* verilator public_flat_rd */ = u_controller.soc_ddrphy_dfi_p0_act_n;
+  wire dfi_obs_p0_ras_n /* verilator public_flat_rd */ = u_controller.soc_ddrphy_dfi_p0_ras_n;
+  wire dfi_obs_p0_cas_n /* verilator public_flat_rd */ = u_controller.soc_ddrphy_dfi_p0_cas_n;
+  wire dfi_obs_p0_we_n /* verilator public_flat_rd */ = u_controller.soc_ddrphy_dfi_p0_we_n;
+  wire [31:0] dfi_obs_p0_bank /* verilator public_flat_rd */ = u_controller.soc_ddrphy_dfi_p0_bank;
+  wire [31:0] dfi_obs_p0_address /* verilator public_flat_rd */ = u_controller.soc_ddrphy_dfi_p0_address;
+  wire dfi_obs_p0_rddata_en /* verilator public_flat_rd */ = u_controller.soc_ddrphy_dfi_p0_rddata_en;
+  wire dfi_obs_p0_rddata_valid /* verilator public_flat_rd */ = u_controller.soc_ddrphy_dfi_p0_rddata_valid;
+  wire dfi_obs_p0_wrdata_en /* verilator public_flat_rd */ = u_controller.soc_ddrphy_dfi_p0_wrdata_en;
+  wire dfi_obs_p1_cs_n /* verilator public_flat_rd */ = u_controller.soc_ddrphy_dfi_p1_cs_n;
+  wire dfi_obs_p1_act_n /* verilator public_flat_rd */ = u_controller.soc_ddrphy_dfi_p1_act_n;
+  wire dfi_obs_p1_ras_n /* verilator public_flat_rd */ = u_controller.soc_ddrphy_dfi_p1_ras_n;
+  wire dfi_obs_p1_cas_n /* verilator public_flat_rd */ = u_controller.soc_ddrphy_dfi_p1_cas_n;
+  wire dfi_obs_p1_we_n /* verilator public_flat_rd */ = u_controller.soc_ddrphy_dfi_p1_we_n;
+  wire [31:0] dfi_obs_p1_bank /* verilator public_flat_rd */ = u_controller.soc_ddrphy_dfi_p1_bank;
+  wire [31:0] dfi_obs_p1_address /* verilator public_flat_rd */ = u_controller.soc_ddrphy_dfi_p1_address;
+  wire dfi_obs_p1_rddata_en /* verilator public_flat_rd */ = u_controller.soc_ddrphy_dfi_p1_rddata_en;
+  wire dfi_obs_p1_rddata_valid /* verilator public_flat_rd */ = u_controller.soc_ddrphy_dfi_p1_rddata_valid;
+  wire dfi_obs_p1_wrdata_en /* verilator public_flat_rd */ = u_controller.soc_ddrphy_dfi_p1_wrdata_en;
+  wire dfi_obs_p2_cs_n /* verilator public_flat_rd */ = u_controller.soc_ddrphy_dfi_p2_cs_n;
+  wire dfi_obs_p2_act_n /* verilator public_flat_rd */ = u_controller.soc_ddrphy_dfi_p2_act_n;
+  wire dfi_obs_p2_ras_n /* verilator public_flat_rd */ = u_controller.soc_ddrphy_dfi_p2_ras_n;
+  wire dfi_obs_p2_cas_n /* verilator public_flat_rd */ = u_controller.soc_ddrphy_dfi_p2_cas_n;
+  wire dfi_obs_p2_we_n /* verilator public_flat_rd */ = u_controller.soc_ddrphy_dfi_p2_we_n;
+  wire [31:0] dfi_obs_p2_bank /* verilator public_flat_rd */ = u_controller.soc_ddrphy_dfi_p2_bank;
+  wire [31:0] dfi_obs_p2_address /* verilator public_flat_rd */ = u_controller.soc_ddrphy_dfi_p2_address;
+  wire dfi_obs_p2_rddata_en /* verilator public_flat_rd */ = u_controller.soc_ddrphy_dfi_p2_rddata_en;
+  wire dfi_obs_p2_rddata_valid /* verilator public_flat_rd */ = u_controller.soc_ddrphy_dfi_p2_rddata_valid;
+  wire dfi_obs_p2_wrdata_en /* verilator public_flat_rd */ = u_controller.soc_ddrphy_dfi_p2_wrdata_en;
+  wire dfi_obs_p3_cs_n /* verilator public_flat_rd */ = u_controller.soc_ddrphy_dfi_p3_cs_n;
+  wire dfi_obs_p3_act_n /* verilator public_flat_rd */ = u_controller.soc_ddrphy_dfi_p3_act_n;
+  wire dfi_obs_p3_ras_n /* verilator public_flat_rd */ = u_controller.soc_ddrphy_dfi_p3_ras_n;
+  wire dfi_obs_p3_cas_n /* verilator public_flat_rd */ = u_controller.soc_ddrphy_dfi_p3_cas_n;
+  wire dfi_obs_p3_we_n /* verilator public_flat_rd */ = u_controller.soc_ddrphy_dfi_p3_we_n;
+  wire [31:0] dfi_obs_p3_bank /* verilator public_flat_rd */ = u_controller.soc_ddrphy_dfi_p3_bank;
+  wire [31:0] dfi_obs_p3_address /* verilator public_flat_rd */ = u_controller.soc_ddrphy_dfi_p3_address;
+  wire dfi_obs_p3_rddata_en /* verilator public_flat_rd */ = u_controller.soc_ddrphy_dfi_p3_rddata_en;
+  wire dfi_obs_p3_rddata_valid /* verilator public_flat_rd */ = u_controller.soc_ddrphy_dfi_p3_rddata_valid;
+  wire dfi_obs_p3_wrdata_en /* verilator public_flat_rd */ = u_controller.soc_ddrphy_dfi_p3_wrdata_en;
+  wire dfi_obs_bank0_read /* verilator public_flat_rd */ = u_controller.soc_ddrphy_bankmodel0_read;
+  wire [31:0] dfi_obs_bank0_write_port_we /* verilator public_flat_rd */ = u_controller.soc_ddrphy_bankmodel0_write_port_we;
+  wire dfi_obs_bank1_read /* verilator public_flat_rd */ = u_controller.soc_ddrphy_bankmodel1_read;
+  wire [31:0] dfi_obs_bank1_write_port_we /* verilator public_flat_rd */ = u_controller.soc_ddrphy_bankmodel1_write_port_we;
+  wire dfi_obs_bank2_read /* verilator public_flat_rd */ = u_controller.soc_ddrphy_bankmodel2_read;
+  wire [31:0] dfi_obs_bank2_write_port_we /* verilator public_flat_rd */ = u_controller.soc_ddrphy_bankmodel2_write_port_we;
+  wire dfi_obs_bank3_read /* verilator public_flat_rd */ = u_controller.soc_ddrphy_bankmodel3_read;
+  wire [31:0] dfi_obs_bank3_write_port_we /* verilator public_flat_rd */ = u_controller.soc_ddrphy_bankmodel3_write_port_we;
+  wire dfi_obs_bank4_read /* verilator public_flat_rd */ = u_controller.soc_ddrphy_bankmodel4_read;
+  wire [31:0] dfi_obs_bank4_write_port_we /* verilator public_flat_rd */ = u_controller.soc_ddrphy_bankmodel4_write_port_we;
+  wire dfi_obs_bank5_read /* verilator public_flat_rd */ = u_controller.soc_ddrphy_bankmodel5_read;
+  wire [31:0] dfi_obs_bank5_write_port_we /* verilator public_flat_rd */ = u_controller.soc_ddrphy_bankmodel5_write_port_we;
+  wire dfi_obs_bank6_read /* verilator public_flat_rd */ = u_controller.soc_ddrphy_bankmodel6_read;
+  wire [31:0] dfi_obs_bank6_write_port_we /* verilator public_flat_rd */ = u_controller.soc_ddrphy_bankmodel6_write_port_we;
+  wire dfi_obs_bank7_read /* verilator public_flat_rd */ = u_controller.soc_ddrphy_bankmodel7_read;
+  wire [31:0] dfi_obs_bank7_write_port_we /* verilator public_flat_rd */ = u_controller.soc_ddrphy_bankmodel7_write_port_we;
+  wire dfi_obs_bank8_read /* verilator public_flat_rd */ = u_controller.soc_ddrphy_bankmodel8_read;
+  wire [31:0] dfi_obs_bank8_write_port_we /* verilator public_flat_rd */ = u_controller.soc_ddrphy_bankmodel8_write_port_we;
+  wire dfi_obs_bank9_read /* verilator public_flat_rd */ = u_controller.soc_ddrphy_bankmodel9_read;
+  wire [31:0] dfi_obs_bank9_write_port_we /* verilator public_flat_rd */ = u_controller.soc_ddrphy_bankmodel9_write_port_we;
+  wire dfi_obs_bank10_read /* verilator public_flat_rd */ = u_controller.soc_ddrphy_bankmodel10_read;
+  wire [31:0] dfi_obs_bank10_write_port_we /* verilator public_flat_rd */ = u_controller.soc_ddrphy_bankmodel10_write_port_we;
+  wire dfi_obs_bank11_read /* verilator public_flat_rd */ = u_controller.soc_ddrphy_bankmodel11_read;
+  wire [31:0] dfi_obs_bank11_write_port_we /* verilator public_flat_rd */ = u_controller.soc_ddrphy_bankmodel11_write_port_we;
+  wire dfi_obs_bank12_read /* verilator public_flat_rd */ = u_controller.soc_ddrphy_bankmodel12_read;
+  wire [31:0] dfi_obs_bank12_write_port_we /* verilator public_flat_rd */ = u_controller.soc_ddrphy_bankmodel12_write_port_we;
+  wire dfi_obs_bank13_read /* verilator public_flat_rd */ = u_controller.soc_ddrphy_bankmodel13_read;
+  wire [31:0] dfi_obs_bank13_write_port_we /* verilator public_flat_rd */ = u_controller.soc_ddrphy_bankmodel13_write_port_we;
+  wire dfi_obs_bank14_read /* verilator public_flat_rd */ = u_controller.soc_ddrphy_bankmodel14_read;
+  wire [31:0] dfi_obs_bank14_write_port_we /* verilator public_flat_rd */ = u_controller.soc_ddrphy_bankmodel14_write_port_we;
+  wire dfi_obs_bank15_read /* verilator public_flat_rd */ = u_controller.soc_ddrphy_bankmodel15_read;
+  wire [31:0] dfi_obs_bank15_write_port_we /* verilator public_flat_rd */ = u_controller.soc_ddrphy_bankmodel15_write_port_we;
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
       dfi_read_count <= '0;

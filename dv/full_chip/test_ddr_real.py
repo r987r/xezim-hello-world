@@ -13,14 +13,40 @@ from cocotb.triggers import Timer, with_timeout
 from cocotbext.axi import AxiBus, AxiMaster, AxiResp
 from dv.common.axi_trace import expect_axi_response, trace_phase
 from dv.full_chip.test_boot import execute_cold_boot
+from dv.common.protocol_trace import open_from_plan
+from rtl.memory.ddr4.dfi_probe import DFIProbe, observe_dfi
+from rtl.memory.ddr4.dfi_to_protocol import export_fullchip_probe
 
 
 @cocotb.test(timeout_time=20, timeout_unit="ms")
 async def cpu_dma_real_ddr_roundtrip(dut):
     assert os.environ.get("SOC_DDR_REAL_MODE") == "1"
     assert os.environ.get("SOC_CPU_DMA_MODE") == "1"
+    # Start passive DFI command capture BEFORE the shared boot helper starts
+    # DUT clocks, so init/boot/traffic/teardown all have continuous evidence.
+    plan_dir=Path(os.environ["SOC_RUN_PLAN"]).parent
+    dfi_protocol=open_from_plan()
+    if dfi_protocol is None:
+        raise AssertionError("full-chip DFI protocol catalog is missing")
+    dfi_probe=DFIProbe(plan_dir,scope="fullchip_litedram_dfi_sim")
+    dd=dut.dut.u_ddr_real
+
+    class _BootPhase:
+        @property
+        def phase(self):
+            # Metadata only: command decoding reads the actual RTL pins.
+            if int(dut.check_complete.value):
+                return "check"
+            if int(dut.run_complete.value):
+                return "run"
+            if int(dut.init_complete.value):
+                return "init"
+            return "pre_init"
+
+    dfi_task=cocotb.start_soon(
+        observe_dfi(dut,dfi_probe,_BootPhase(),10000,
+                    pins_dut=dd,fullchip_aliases=True))
     await execute_cold_boot(dut)
-    dd = dut.dut.u_ddr_real
     # The real CPU and pinned PULP iDMA have already completed CHECK.
     # Reusing the existing data probe is safe only after real controller
     # transactions drain; RTL gates both request and response ownership.
@@ -101,6 +127,20 @@ async def cpu_dma_real_ddr_roundtrip(dut):
                 "dfi_read", "dfi_write", "bank_storage_write")) > 0, evidence
     assert evidence["axi_aw"] == evidence["axi_b"], evidence
     assert evidence["axi_ar"] == evidence["axi_rlast"], evidence
+    # A passing full-chip result requires the observer to have stayed alive
+    # and the raw DFI events to reconcile with a complete source inventory.
+    dfi_probe.assert_alive(dfi_task)
+    dfi_task.kill()
+    dfi_summary=dfi_probe.finish("pass")
+    counts=export_fullchip_probe(plan_dir,dfi_protocol)
+    dfi_protocol.close("pass")
+    evidence["dfi_commands"]={
+        key:counts.get(f"dfi_{key}",0)
+        for key in ("activate","precharge","read","write","refresh")
+    }
+    evidence["dfi_sampled_cycles"]=dfi_summary["sampled_cycles"]
+    assert evidence["dfi_commands"]["read"]>0
+    assert evidence["dfi_commands"]["write"]>0
     evidence["status"] = "pass"
     path = Path(os.environ["SOC_RUN_PLAN"]).parent / "ddr4_fullchip_evidence.json"
     path.write_text(json.dumps(evidence, sort_keys=True, indent=2) + "\n")

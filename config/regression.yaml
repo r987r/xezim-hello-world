@@ -259,6 +259,14 @@ tests:
           actors: {'1': cpu0}
           steps: {'101': alloc_phys, '102': dma_roundtrip, '103': verify_memory}
       axi: {scope: dut.u_noc, clock: clk, reset: rst_n, catalog: .tools/regression/chip-ddr4-real/ddr_noc/supernoc/axi_monitors.json, actors: .tools/regression/chip-ddr4-real/variant/manifest.json, max_events: 500000, required_complete: true}
+      # The 72 read-only wrapper aliases source the same pinned LiteDRAM DFI
+      # signals validated by the standalone probe; no physical DDR PHY.
+      protocols:
+        max_events: 250000
+        sources:
+          memory0.ddr0.dfi: {protocol: dfi, clock_domain: ddr_source_clk, role: link, implementation: litedram_flat_dfi_probe, modeling: real_controller_rtl_behavioral_phy}
+          memory0.ddr0.bankmodel: {protocol: dfi, clock_domain: ddr_source_clk, role: target, implementation: litedram_bankmodel_probe, modeling: behavioral_dram_storage}
+
   chip-boot: &chip
     engine: cocotb-verilator
     sources: noc

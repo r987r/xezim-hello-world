@@ -123,6 +123,23 @@ jobs:
           assert ctrl['observations']['writes_ok']>0
           report=json.loads((p/'result.json').read_text())
           assert report['passed'], report
+          protocol=json.loads((p/'protocol-transactions.json').read_text())
+          assert protocol['schema_version']==1 and protocol['capture_complete']
+          assert protocol['run']['target']=='chip-ddr4-real'
+          dfi=[r for r in protocol['records']
+               if r['source']=='memory0.ddr0.dfi']
+          bank=[r for r in protocol['records']
+                if r['source']=='memory0.ddr0.bankmodel']
+          assert dfi and bank, 'missing continuous DFI and modeled storage observations'
+          commands={r['operation'] for r in dfi}
+          assert {'rd','wr'} <= commands, commands
+          assert all(r['kind']=='event' for r in dfi+bank)
+          assert all(r['start_ps'] is not None for r in dfi+bank)
+          assert evidence['dfi_sampled_cycles']>0
+          assert evidence['dfi_commands']['read']>0 and evidence['dfi_commands']['write']>0
+          print('PASS source-verified full-chip DFI commands:',sorted(commands),
+                'events=',len(dfi),'bank=',len(bank))
+
           print('PASS DDR-B full-chip real-controller source/capture contract')
           PY
       - name: Upload exact-head RTL, NoC files, CPU DMA reports and DFI evidence

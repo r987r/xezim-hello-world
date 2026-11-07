@@ -10,11 +10,14 @@ from collections import Counter
 import json
 from pathlib import Path
 
-from dfi_probe_contract import PHASES, BANKS, DFI_FIELDS, BANK_FIELDS
+try:
+    from .dfi_probe_contract import PHASES, BANKS, DFI_FIELDS, BANK_FIELDS
+except ImportError:
+    from dfi_probe_contract import PHASES, BANKS, DFI_FIELDS, BANK_FIELDS
 
 
 class DFIProbe:
-    def __init__(self, directory: Path):
+    def __init__(self, directory: Path, *, scope='standalone_litedram_dfi_sim'):
         self.directory = Path(directory)
         self.events_path = self.directory / "ddr4_dfi_events.jsonl"
         self.summary_path = self.directory / "ddr4_dfi_summary.json"
@@ -23,8 +26,9 @@ class DFIProbe:
         self.samples = 0
         self.last_time_ps = None
         self.closed = False
+        self.scope = scope
         self.file.write(json.dumps({"kind": "probe_start",
-                                    "scope": "standalone_litedram_dfi_sim",
+                                    "scope": scope,
                                     "physical_phy": "not_modeled",
                                     "physical_dram": "not_modeled"}) + "\n")
 
@@ -110,36 +114,46 @@ class DFIProbe:
                       "dram_storage": "BankModel dense memory (behavioral)",
                       "physical_phy": "not_modeled",
                       "physical_dram": "not_modeled",
-                      "full_chip": "not_connected",
+                      "full_chip": "connected" if self.scope=="fullchip_litedram_dfi_sim" else "not_connected",
                   }}
         self.summary_path.write_text(json.dumps(result, indent=2) + "\n")
         return result
 
 
-def get_internal_pins(dut):
-    # No writes or monkeypatches. A missing/renamed signal is a hard
-    # generated-net contract failure, not an inferred or zero-filled metric.
-    phases = []
+def get_internal_pins(dut, *, fullchip_aliases=False):
+    """Read exactly the validated 72 DFI/BankModel pins, never storage."""
+    phases=[]
     for i in range(PHASES):
         phases.append({
-            name: int(getattr(dut, f"soc_ddrphy_dfi_p{i}_{name}").value)
+            name:int(getattr(
+                dut,
+                f"dfi_obs_p{i}_{name}" if fullchip_aliases else
+                f"soc_ddrphy_dfi_p{i}_{name}"
+            ).value)
             for name in DFI_FIELDS
         })
-    banks = []
+    banks=[]
     for i in range(BANKS):
         banks.append({
-            name: int(getattr(dut, f"soc_ddrphy_bankmodel{i}_{name}").value)
+            name:int(getattr(
+                dut,
+                f"dfi_obs_bank{i}_{name}" if fullchip_aliases else
+                f"soc_ddrphy_bankmodel{i}_{name}"
+            ).value)
             for name in BANK_FIELDS
         })
-    return phases, banks
+    return phases,banks
 
 
-async def observe_dfi(dut, observer: DFIProbe, axi_observer, period_ps: int):
+async def observe_dfi(dut, observer: DFIProbe, axi_observer, period_ps: int,
+                      *, pins_dut=None, fullchip_aliases=False):
     from cocotb.triggers import RisingEdge, ReadOnly
     from cocotb.utils import get_sim_time
     while True:
         await RisingEdge(dut.clk)
         await ReadOnly()
-        phases, banks = get_internal_pins(dut)
-        observer.record(int(get_sim_time(units="ps")), phases, banks,
-                        axi_observer.phase, period_ps)
+        # Cocotb handles can be falsey even when valid; never use `or`.
+        phases,banks=get_internal_pins(pins_dut if pins_dut is not None else dut,
+                                      fullchip_aliases=fullchip_aliases)
+        observer.record(int(get_sim_time(units="ps")),phases,banks,
+                        axi_observer.phase,period_ps)

@@ -36,6 +36,48 @@ CATALOG={
 }
 
 
+def export_fullchip_probe(input_dir:Path, trace):
+    """Convert the completed full-chip passive probe to the EXISTING run's
+    protocol stream. Fail closed on scope mismatch, missing clock samples,
+    count mismatches, incomplete capture, or missing real RD/WR commands.
+    The caller opened this ProtocolTrace from SOC_RUN_PLAN before clocks.
+    """
+    folder=Path(input_dir)
+    summary=json.loads((folder/"ddr4_dfi_summary.json").read_text())
+    if summary.get("status")!="pass" or summary.get("sampled_cycles",0)<1:
+        raise ValueError("no successful continuous full-chip DFI samples")
+    rows=[json.loads(line) for line in
+          (folder/"ddr4_dfi_events.jsonl").read_text().splitlines()]
+    if len(rows)<3 or rows[0].get("scope")!="fullchip_litedram_dfi_sim":
+        raise ValueError("wrong full-chip DFI evidence scope")
+    last=rows[-1]
+    if (last.get("kind")!="probe_end" or last.get("status")!="pass" or
+            last.get("sampled_cycles")!=summary["sampled_cycles"]):
+        raise ValueError("incomplete full-chip DFI probe end")
+    if set(trace.sources)!={DFI,BANK}:
+        raise ValueError("full-chip DFI source catalog differs from trusted plan")
+    counts={}
+    for event in rows[1:-1]:
+        kind=event["kind"]
+        if kind=="probe_heartbeat":
+            counts[kind]=counts.get(kind,0)+1
+            continue
+        source=DFI if kind in DFI_COMMANDS else BANK if kind in BANK_EVENTS else None
+        if source is None:
+            raise ValueError(f"unknown full-chip DFI event {kind}")
+        fields={k:v for k,v in event.items() if k not in ("kind","time_ps")}
+        fields["origin_event"]=kind
+        fields["model_boundary"]="controller_dfi" if source==DFI else "behavioral_storage"
+        trace.event(source,DFI_COMMANDS.get(kind) or BANK_EVENTS[kind],
+                    event["time_ps"],fields)
+        counts[kind]=counts.get(kind,0)+1
+    if counts!=summary.get("counters"):
+        raise ValueError("full-chip DFI summary/event count mismatch")
+    if not counts.get("dfi_read") or not counts.get("dfi_write"):
+        raise ValueError("missing real full-chip DFI READ/WRITE observation")
+    return counts
+
+
 def convert(input_dir:Path,output_dir:Path):
     input_dir,output_dir=Path(input_dir),Path(output_dir)
     summary=json.loads((input_dir/"ddr4_dfi_summary.json").read_text())
