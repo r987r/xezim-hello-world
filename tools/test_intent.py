@@ -54,6 +54,7 @@ def plan(name: str, test: dict, *, scenario: dict | None = None) -> dict:
         "schema_version":1,"target":name,"engine":test.get("engine"),
         "top":test.get("top"),"module":test.get("module"),
         "seed":test.get("seed"),"variant":test.get("firmware_mode"),
+        "selected_args":list(test.get("args") or []),
         "context":(test.get("report") or {}).get("context"),
         "acceptance":test.get("expect_failure") or test.get("pass"),
         "acceptance_kind":"expected_failure" if test.get("expect_failure") else "success_or_compile",
