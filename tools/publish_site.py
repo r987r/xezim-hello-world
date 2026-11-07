@@ -37,7 +37,7 @@ FILES={'result.json','plan.json','sources.f','simulation.log','build.log','resul
        'protocol-transactions.json','protocol-events.jsonl','memory-operations.json',
        'test-flow.json','test-flow-events.jsonl','traffic-latency.json',
        'ddr-native-csr-map.json','ddr4_fullchip_evidence.json',
-       'planned-flow.json','memory-lifetimes.json','scenario-execution.json','scenario-plan.json'}
+       'planned-flow.json','memory-lifetimes.json','scenario-execution.json','scenario-plan.json','variant-connectivity.json','variant-topology.json','variant-chip-manifest.json'}
 
 
 def dump(path,data):
@@ -594,6 +594,57 @@ def evidence_index(evidence,output,repository):
             flow_data=json.loads(flow_path.read_text()) if flow_path.exists() else None
             latency_path=source_dir/'traffic-latency.json'
             latency_data=json.loads(latency_path.read_text()) if latency_path.exists() else None
+            variant_view=None
+            variant_graph=None
+            view_file=source_dir/'variant-connectivity.json'
+            if view_file.is_file():
+                import hashlib
+                from variant_connectivity import render_html as render_variant_html
+                variant_view=json.loads(view_file.read_text())
+                variant_graph=json.loads((source_dir/'variant-topology.json').read_text())
+                manifest_bytes=(source_dir/'variant-chip-manifest.json').read_bytes()
+                orig_manifest=variant_view.get('source_manifest')
+                names=variant_view.get('source_sha256') or {}
+                expected_manifest_hash=names.get(orig_manifest)
+                if (variant_view.get('schema_version')!=1
+                        or variant_view.get('target')!=target
+                        or variant_view.get('top')!=plan.get('top')
+                        or variant_view.get('elaborated') is not False
+                        or variant_view.get('observed_protocol_traffic') is not False
+                        or variant_view.get('source_proof')!=
+                           'generator_manifest_plus_selected_RTL_filelist_plus_actual_AXImon_taps_not_elaboration'
+                        or not isinstance(expected_manifest_hash,str)
+                        or hashlib.sha256(manifest_bytes).hexdigest()!=expected_manifest_hash):
+                    raise ValueError('variant inventory source provenance or selected manifest mismatch')
+                source_chip=json.loads(manifest_bytes)
+                if (source_chip.get('top')!='soc_top'
+                        or plan.get('top') not in (source_chip.get('testbench'),
+                                                   source_chip.get('dma_testbench'))):
+                    raise ValueError('variant chip source does not match selected testbench')
+                if (variant_graph.get('variant_source_manifest_sha256')!=expected_manifest_hash
+                        or variant_graph.get('variant_top_source_sha256') !=
+                           names.get(variant_view.get('selected_soc_top'))
+                        or variant_graph.get('status')!='selected_generated_variant_topology_not_elaborated'):
+                    raise ValueError('variant 2D diagram differs from selected RTL/source manifest')
+                configured_protocol_sources=variant_view.get('protocol_sources') or []
+                if configured_protocol_sources and result.get('passed') is True:
+                    if not protocol_data or protocol_data.get('capture_complete') is not True:
+                        raise ValueError('passing variant has no complete required native protocol capture')
+                    actual_sources={r['id']:r for r in protocol_data.get('sources',[])}
+                    for declared in configured_protocol_sources:
+                        observed=actual_sources.get(declared['id'])
+                        if observed is None or any(
+                                observed.get(key)!=declared.get(key)
+                                for key in ('protocol','clock_domain','role','implementation','modeling')):
+                            raise ValueError('passing native protocol source differs from selected YAML catalog')
+                records=variant_view.get('boundaries')
+                if (not isinstance(records,list) or
+                        len(records)!=variant_view.get('summary',{}).get('monitors')
+                        or len({r.get('id') for r in records})!=len(records)
+                        or trace is None or
+                        {r['id'] for r in records} !=
+                        {m['id'] for m in trace['sections']['axi']['monitors']}):
+                    raise ValueError('variant AXI monitor inventory differs from accepted per-run report')
             # Memory lifetimes must be re-derived from actual archived RTL
             # run inputs before being displayed. Never trust artifact HTML or
             # an unverified memory-lifetimes.json at face value.
@@ -663,6 +714,8 @@ def evidence_index(evidence,output,repository):
                    'protocols':sorted({r['protocol'] for r in protocol_data.get('records',[])}) if protocol_data else [],
                    'protocol_observations':len(protocol_data['records']) if protocol_data else 0,
                    'flow_steps':len(flow_data['rows']) if flow_data else 0,
+                   'variant_connectivity':variant_view is not None,
+                   'variant_chip_profile':variant_view.get('chip_variant') if variant_view else None,
                    'memory_lifetimes':memory_view is not None,
                    'planned_flow_status':snapshot_status,'planned_flow_sha256':declared_hash,
                    'planned_flow_intent':intended if declared_hash is not None else None,
@@ -685,6 +738,11 @@ def evidence_index(evidence,output,repository):
                 # Do not publish artifact-supplied HTML. Re-render the trusted
                 # JSON through the site source's audited escaping/textContent UI.
                 render_protocol_report(protocol_data, destination/'protocols.html')
+            if variant_view is not None:
+                page=render_variant_html(variant_view,variant_graph)
+                (destination/'variant-architecture.html').write_text(
+                    shell('Selected variant connectivity',page,
+                          relative/'variant-architecture.html',repository,run['head_sha']))
             if trace:
                 tested_sha=trace['run'].get('commit')
                 if (tested_sha not in (verified_shas | {run['head_sha']})
@@ -743,6 +801,9 @@ def evidence_index(evidence,output,repository):
                         if declared_hash else
                         ' · no original pre-run snapshot in this historical archive')
                       +'</p>')
+                if variant_view is not None:
+                    nav+=('<p><a href="variant-architecture.html">Selected variant 2D NoC/initiator/monitor diagram</a> '
+                          '(generated source only; open accepted traffic below for runtime proof)</p>')
                 if flow_data:
                     nav+='<p><a href="test-flow.html">INIT/RUN/CHECK verified steps</a></p>'
                 (destination/'report.html').write_text(html.replace('<main>','<main>'+nav,1))

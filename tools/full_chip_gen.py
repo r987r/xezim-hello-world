@@ -547,6 +547,11 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
                                       s.get('ip') == 'verilog_pcie' else
                                       'live_ethernet_gmii_queue_axi_mvp' if ethernet_mode and
                                       s.get('ip') == 'ethernet_queue_mac' else 'reserved_idle'),
+                    **({'rtl_module':'pcie_axi_master','rtl_instance':'u_bridge'}
+                       if pcie_host_mode and s.get('ip') == 'verilog_pcie' else
+                       {'rtl_module':'ethernet0_axi_mvp','rtl_instance':'u_ethernet_mvp',
+                        'csr_module':'ethernet_queue_axi_regs','csr_instance':'u_ethernet_queue_regs'}
+                       if ethernet_mode and s.get('ip') == 'ethernet_queue_mac' else {}),
                     'csr_attachment':('live_ethernet_queue_axi4_lite' if ethernet_mode and
                                       s.get('ip') == 'ethernet_queue_mac' else 'explicit_axi_error')}
                     for s in cfg['subsystems'] if s['type']=='peripheral'],
@@ -582,6 +587,8 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
             continue
         if real_ddr_mode and port['network'] == 'memory0_local_config' and endpoint == 'controller_regs':
             actor = {'kind':'rtl_registers','label':'Pinned LiteDRAM DFII/CSR on Config NoC via Wishbone'}
+        if ethernet_mode and port['network'] == ethernet[0]['name']+'_local_config' and endpoint == 'controller_regs':
+            actor = {'kind':'rtl_registers','label':'Generated Ethernet queue Config NoC target and AXI-Lite CSRs'}
         if real_ddr_mode and endpoint == 'target_crossbar':
             actor = {'kind':'rtl_controller','label':'Memory0 local crossbar; pinned LiteDRAM+modeled DFI; HBM AXI SRAM'}
         actors[port['network']+'.'+endpoint]=actor
