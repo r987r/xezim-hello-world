@@ -125,6 +125,8 @@ class TestIntentFlowTests(unittest.TestCase):
         self.assertIn("validate_snapshot(declared,target=target)",site)
         self.assertIn("legacy_run_selection_not_archived",site)
         self.assertNotIn("if target in ('chip-cpu-scenario','chip-dma-scenario'):",site)
+        self.assertIn("flow_result['planned_flow_sha256']=selected['plan_sha256']",source)
+        self.assertIn("observed test-flow evidence references a different selected plan",site)
 
     def test_site_uses_same_definition_catalog_not_data_from_passed_tests(self):
         site=(ROOT/"tools/publish_site.py").read_text()
