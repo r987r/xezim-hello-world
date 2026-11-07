@@ -302,6 +302,66 @@ class PublicationTests(unittest.TestCase):
             self.assertIn('results.xml',entries[0]['assets'])
             self.assertEqual((report.parent/'simulation.log').read_text(),'actual simulator transcript')
 
+    def test_archived_canonical_identity_uses_primary_current_run_path(self):
+        from test_identity import selected, relative_path
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);target=fixture(root/'evidence')
+            # A *selected original run*, not reconstructed from newer catalog.
+            plan={'engine':'cocotb-verilator','sources':'noc',
+                  'top':'full_chip_tb','logical_test':'multicore-cold-boot',
+                  'stage':'all'}
+            identity=selected('chip-boot',plan, filelist=target/'sources.f',
+                run_id='ci-123-a1-012345abcdef')
+            plan['identity']=identity
+            site.dump(target/'plan.json',plan)
+            site.dump(target/'identity.json',identity)
+            site.dump(target/'result.json',{
+                'target':'chip-boot','passed':True,'stage':'all',
+                'identity_sha256':identity['identity_sha256'],
+                'canonical_id':relative_path(identity).as_posix()})
+            output=root/'site';output.mkdir()
+            _,entries,_=site.evidence_index(root/'evidence',output,
+                                               'r987r/xezim-hello-world')
+            e=entries[0]
+            self.assertEqual(e['identity_status'],'source_verified')
+            self.assertEqual(e['testname'],'multicore-cold-boot')
+            self.assertEqual(e['config_target'],'soc-default')
+            canonical_root=output/'runs'/relative_path(identity)
+            self.assertEqual(e['path'],(Path('runs')/relative_path(identity)/'report.html').as_posix())
+            self.assertEqual(e['canonical_url'],e['path'])
+            self.assertTrue((canonical_root/'report.html').is_file())
+            self.assertIn('Immutable identity',(canonical_root/'report.html').read_text())
+            self.assertTrue((canonical_root/'identity.json').is_file())
+            self.assertFalse((output/'runs/123-1/chip-boot').exists())
+            self.assertFalse((output/'by-test').exists())
+            original=(target/'sources.f').read_bytes()
+            (target/'sources.f').write_bytes(b'foreign selected RTL filelist')
+            with self.assertRaisesRegex(ValueError,'original archived source filelist'):
+                site.evidence_index(root/'evidence',output,'r987r/xezim-hello-world')
+            (target/'sources.f').write_bytes(original)
+            identity['testname']='corrupt-name'
+            site.dump(target/'identity.json',identity)
+            with self.assertRaisesRegex(ValueError,'digest mismatch'):
+                site.evidence_index(root/'evidence',output,'r987r/xezim-hello-world')
+
+    def test_ci_attempt_identity_cannot_be_published_under_other_run(self):
+        from test_identity import selected,relative_path
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);target=fixture(root/'evidence')
+            plan={'engine':'cocotb-verilator','sources':'noc',
+                  'top':'full_chip_tb','logical_test':'multicore-cold-boot'}
+            identity=selected('chip-boot',plan,run_id='ci-98765-a2-012345abcdef')
+            plan['identity']=identity
+            site.dump(target/'plan.json',plan)
+            site.dump(target/'identity.json',identity)
+            site.dump(target/'result.json',{'target':'chip-boot','passed':True,
+                'identity_sha256':identity['identity_sha256'],
+                'canonical_id':relative_path(identity).as_posix()})
+            output=root/'site';output.mkdir()
+            with self.assertRaisesRegex(ValueError,'different CI attempt'):
+                site.evidence_index(root/'evidence',output,
+                                    'r987r/xezim-hello-world')
+
     def test_archived_plan_survives_history_without_current_scenario(self):
         from tools.test_intent import snapshot as capture_plan
         with tempfile.TemporaryDirectory() as tmp:
@@ -377,10 +437,18 @@ class PublicationTests(unittest.TestCase):
             self.assertIn('Selected per-run snapshot',html)
             self.assertIn('internal steps independently instrumented only where available',html)
             self.assertTrue((output/'runs/123-1/chip-boot/selected-test-plan.json').is_file())
+            # A second publication into an already populated destination
+            # must fail closed instead of silently overwriting one run.
+            with self.assertRaisesRegex(ValueError,'duplicate published canonical run or historical evidence path'):
+                site.evidence_index(root/'evidence',output,'r987r/xezim-hello-world')
             corrupt=dict(snapshot);corrupt['source_revision']='b'*40
             site.dump(target/'selected-test-plan.json',corrupt)
+            # Re-run the provenance-negative against a FRESH publication
+            # destination: an existing report must not mask the real
+            # selected-plan digest mismatch.
+            fresh=root/'site-corrupt';fresh.mkdir()
             with self.assertRaisesRegex(ValueError,'hash mismatch'):
-                site.evidence_index(root/'evidence',output,'r987r/xezim-hello-world')
+                site.evidence_index(root/'evidence',fresh,'r987r/xezim-hello-world')
 
     def test_protocol_report_is_provenance_verified_and_html_re_rendered(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -554,7 +622,8 @@ class PublicationTests(unittest.TestCase):
         self.assertIn('id="suite-summary"',site_html)
         self.assertIn('id="family"',site_html)
         self.assertIn('No recorded result',site_html)
-        self.assertIn('e.target+"|"+e.workflow',site_html)
+        self.assertIn('const key=identityKey+"|"+e.workflow',site_html)
+        self.assertIn('e.config_target',site_html)
 
     def test_archive_digest_and_traversal_are_checked(self):
         for name in ('../escape','/absolute','dir/../../escape','dir\\escape'):

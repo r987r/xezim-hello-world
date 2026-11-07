@@ -15,6 +15,7 @@ upstream_noc:
 
 tests:
   memory: &memory
+    logical_test: axi-routing-smoke
     engine: xezim
     sources: memory
     ip: [verilog_axi]
@@ -22,26 +23,32 @@ tests:
     args: [--max-time, 200us]
     pass: 'PASS: memory_fabric_tb'
   memory-full:
+    logical_test: axi-full-matrix
     <<: *memory
     memory_config: config/examples/memory-fabric-connectivity.yaml
   memory-sparse:
+    logical_test: axi-sparse-matrix
     <<: *memory
     memory_config: config/examples/memory-fabric-sparse.yaml
   memory-negative:
+    logical_test: axi-corruption-rejection
     <<: *memory
     args: [--max-time, 200us, '+INJECT_BAD_EXPECTED']
     expect_failure: 'FAIL AXI read:'
   sram: &sram
+    logical_test: sram-port-consistency
     engine: xezim
     sources: sram
     top: local_sram_tb
     args: [--max-time, 10us]
     pass: 'PASS: local_sram_tb'
   sram-synthesis:
+    logical_test: sram-port-consistency
     <<: *sram
     # Functional read behavior must survive simulation with synthesis guards.
     args: [-D, SYNTHESIS, --max-time, 10us]
   serv:
+    logical_test: cpu-instruction-smoke
     engine: xezim
     sources: serv
     ip: [serv]
@@ -49,6 +56,7 @@ tests:
     args: [--max-time, 40us]
     pass: 'PASS: serv_minimal_tb'
   boot: &boot
+    logical_test: cpu-cold-boot
     engine: xezim
     sources: boot
     ip: [picorv32, serv]
@@ -56,6 +64,7 @@ tests:
     args: [--max-time, 1500us]
     pass: 'PASS: cpu_cold_boot'
   boot-relocated:
+    logical_test: cpu-cold-boot
     <<: *boot
     # Same cold-boot bench, all movable windows changed together. The ROM
     # reset PC remains zero; bootgen explicitly rejects unsupported policies.
@@ -65,6 +74,7 @@ tests:
       boot.flash: '0x21000000'
       boot.reset_ctrl: '0x41020000'
   cpu-fetch:
+    logical_test: cpu-fetch-requests
     engine: xezim
     sources: cpu
     ip: [picorv32, serv]
@@ -72,20 +82,24 @@ tests:
     args: [--max-time, 50us]
     pass: 'PASS: heterogeneous_cpu_tb'
   smoke:
+    logical_test: hello-world
     engine: xezim
     sources: smoke
     top: hello_world_tb
     args: [--max-time, 1us]
     pass: 'PASS: hello_world_tb'
   noc-verilator:
+    logical_test: noc-rtl-lint
     engine: verilator-lint
     sources: noc
     timeout_s: 240
   noc-xezim:
+    logical_test: noc-rtl-compile
     engine: xezim-compile
     sources: noc
     timeout_s: 240
   supernoc: &supernoc
+    logical_test: axi-noc-routing
     engine: cocotb-verilator
     sources: noc
     bender_targets: [supernoc]
@@ -102,11 +116,13 @@ tests:
       axi: {scope: u_noc, clock: clk_i, reset: rst_ni, catalog: gen/supernoc/axi_monitors.json, actors: gen/supernoc/manifest.json, max_events: 500000}
       memory: {required: true, policies: [strict, fast, hybrid]}
   supernoc-negative:
+    logical_test: axi-noc-route-errors
     <<: *supernoc
     reuse_build: true
     env: {SUPERNOC_NEGATIVE: '1'}
     expect_failure: 'FAIL supernoc injected data mismatch detected'
   dma-rtl:
+    logical_test: dma-descriptor-chain
     engine: cocotb-verilator
     sources: noc
     bender_targets: [dma]
@@ -119,6 +135,7 @@ tests:
     timeout_s: 1800
     pass: 'PASS dma-rtl:'
   chip-dma:
+    logical_test: dma-fabric-roundtrip
     engine: cocotb-verilator
     sources: noc
     bender_targets: [chip_boot, dma, chip_dma]
@@ -136,6 +153,7 @@ tests:
       context: 'True iDMA0/iDMA1 instances drive configured local/global FlooNoC data traffic. CPU0 AXI BFM (data) and CPU0 AXI BFM (config) temporarily drive their original CPU0 ports for descriptor/payload SRAM loading and DMA doorbells (simulation only, no PCIe); CPUs stay in reset, so this is NOT a cold-boot pass. Real descriptor fetch, writeback, SSRAM, HBM, DDR and config NoCs are exercised.'
       axi: {scope: dut.u_noc, clock: clk_i, reset: rst_ni, catalog: gen/supernoc/axi_monitors.json, actors: gen/chip/dma_actors.json, max_events: 500000}
   chip-cpu-dma:
+    logical_test: cpu-dma-roundtrip
     # Same generated soc_top and full_chip_tb checker, but real PicoRV32 runs
     # compiled RV32I C DMA firmware during the existing INIT/RUN/CHECK phases.
     # No AXI BFM assumes the CPU role and SRAM remains cold.
@@ -173,6 +191,7 @@ tests:
           steps: {'101': alloc_phys, '102': dma_roundtrip, '103': verify_memory}
       axi: {scope: dut.u_noc, clock: clk, reset: rst_n, catalog: gen/supernoc/axi_monitors.json, actors: .tools/regression/chip-cpu-dma/variant/manifest.json, max_events: 500000, required_complete: true}
   chip-cpu-scenario:
+    logical_test: dma-sram-ddr-roundtrip
     # Same generated soc_top and full_chip_tb checker, but real PicoRV32 runs
     # compiled RV32I C DMA firmware during the existing INIT/RUN/CHECK phases.
     # No AXI BFM assumes the CPU role and SRAM remains cold.
@@ -209,6 +228,7 @@ tests:
           steps: {'101': alloc_phys, '102': dma_roundtrip, '103': verify_memory}
       axi: {scope: dut.u_noc, clock: clk, reset: rst_n, catalog: gen/supernoc/axi_monitors.json, actors: .tools/regression/chip-cpu-scenario/variant/manifest.json, max_events: 500000, required_complete: true}
   chip-dma-scenario:
+    logical_test: dma-sram-ddr-roundtrip
     engine: cocotb-verilator
     sources: noc
     bender_targets: [chip_boot, dma, chip_dma]
@@ -228,6 +248,7 @@ tests:
       context: 'SCN-2: reset-isolated CPU0 authorized AXI BFMs execute the same resolved DDR intent as real PicoRV32 C, through actual generated NoCs; confirms readback and DMA passive AXI; existing chip-dma stress stays unchanged. True iDMA0/iDMA1 instances drive configured local/global FlooNoC data traffic. CPU0 AXI BFM (data) and CPU0 AXI BFM (config) temporarily drive their original CPU0 ports for descriptor/payload SRAM loading and DMA doorbells (simulation only, no PCIe); CPUs stay in reset, so this is NOT a cold-boot pass. Real descriptor fetch, writeback, SSRAM, HBM, DDR and config NoCs are exercised.'
       axi: {scope: dut.u_noc, clock: clk_i, reset: rst_ni, catalog: gen/supernoc/axi_monitors.json, actors: gen/chip/dma_actors.json, max_events: 500000}
   chip-ddr4-real:
+    logical_test: dma-controller-readback
     opt_in: true
     # Same generated soc_top and full_chip_tb checker, but real PicoRV32 runs
     # compiled RV32I C DMA firmware during the existing INIT/RUN/CHECK phases.
@@ -272,6 +293,7 @@ tests:
           memory0.ddr0.bankmodel: {protocol: dfi, clock_domain: ddr_source_clk, role: target, implementation: litedram_bankmodel_probe, modeling: behavioral_dram_storage}
 
   chip-boot: &chip
+    logical_test: multicore-cold-boot
     engine: cocotb-verilator
     sources: noc
     bender_targets: [chip_boot]
@@ -289,6 +311,7 @@ tests:
       context: 'Real PicoRV32/SERV CPUs coordinate boot phases with OKAY responses. Afterwards a verification AXI BFM at the reserved compute0 DMA port tests two 64-KiB SRAM stand-ins, including four intentional out-of-capacity SLVERR transactions. No DMA engine or physical HBM/DDR controller is instantiated.'
       axi: {scope: dut.u_noc, clock: clk, reset: rst_n, catalog: gen/supernoc/axi_monitors.json, actors: gen/chip/manifest.json, max_events: 500000}
   chip-peakrdl-reset:
+    logical_test: reset-ack-register-access
     opt_in: true
     # Real PeakRDL reset/ACK RTL through the generated independent Config NoC.
     engine: cocotb-verilator
@@ -318,11 +341,13 @@ tests:
           check: {cpu0.check_complete: checker}
       axi: {scope: dut.u_noc, clock: clk, reset: rst_n, catalog: gen/supernoc/axi_monitors.json, actors: gen/chip/manifest.json, max_events: 500000, required_complete: true}
   chip-boot-negative:
+    logical_test: multicore-boot-timeout
     <<: *chip
     reuse_build: true
     args: ['+HOLD_SECONDARY']
     expect_failure: 'FAIL fullchip missing init acknowledgement'
   chip-xezim-compile:
+    logical_test: soc-rtl-compile
     engine: xezim
     sources: noc
     bender_targets: [chip_boot]
@@ -333,6 +358,7 @@ tests:
     pass: 'PASS fullchip:'
 
   chip-ethernet-cpu:
+    logical_test: network-queue-control
     # Real PicoRV32 executes compiled C via cold-boot ROM, no AXI CPU BFM.
     # Its on-chip queue CSR/descriptor/CQ accesses share the physical NoCs
     # with the pinned Ethernet RX/TX packet DMA and real GMII frontend.
@@ -373,6 +399,7 @@ tests:
           ethernet0.gmii_rx: {protocol: ethernet, clock_domain: gmii_rx_clock, role: stimulus, implementation: cocotbext_eth, modeling: vip_injected_to_rtl_mac}
           ethernet0.gmii_tx: {protocol: ethernet, clock_domain: gmii_tx_clock, role: target, implementation: cocotbext_eth, modeling: rtl_output_observed_by_vip}
   chip-ethernet:
+    logical_test: network-frame-transfer
     # Real 1-GMII-MAC RX/TX queue/DMA/CQ via six-source PULP AXI mux,
     # Ethernet0 local/global data and separate configuration FlooNoCs.
     # CPU0 AXI BFMs temporarily own CPU ports while CPUs are held reset.
@@ -400,6 +427,7 @@ tests:
           ethernet0.gmii_rx: {protocol: ethernet, clock_domain: gmii_rx_clock, role: stimulus, implementation: cocotbext_eth, modeling: vip_injected_to_rtl_mac}
           ethernet0.gmii_tx: {protocol: ethernet, clock_domain: gmii_tx_clock, role: target, implementation: cocotbext_eth, modeling: rtl_output_observed_by_vip}
   chip-pcie-host:
+    logical_test: host-memory-exchange
     # The same generated soc_top/full_chip_tb and firmware phase protocol.
     # Only this run owns the PCIe0 host initiator and external RC model.
     engine: cocotb-verilator

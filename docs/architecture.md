@@ -78,7 +78,12 @@ for all local/global data/config networks. The **single** visual is
 [Mermaid](../gen/diagrams/noc-hierarchy.mmd) and
 [Diagram-gen-style instance/connection metadata](../gen/diagrams/noc-topology.json)
 for detailed inspection. There are no per-mesh/per-subsystem/boot/verification
-SVG duplicates. Solid CPU/SRAM/reset/model links describe boot-configuration
+SVG duplicates. The overview now renders the source-declared peripheral local-to-global
+Data/Config connections and local SRAM/CSR responder attachments as well as
+compute and memory links. Reserved packet/management initiators remain dashed,
+not shown as active controller RTL. The Pages image is horizontally scrollable
+on narrow screens so 2D connection strokes remain legible; the interactive
+explorer uses the same generator-owned topology JSON. Solid CPU/SRAM/reset/model links describe boot-configuration
 wiring; solid optional iDMA/CSR links follow generated SoC RTL; dashed links denote
 pending physical controllers. The BFM
 and CPU boot scopes share `soc_noc`; independent memory and legacy boot

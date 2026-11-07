@@ -25,7 +25,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ENGINES = {'xezim', 'xezim-compile', 'verilator-lint', 'cocotb-verilator'}
 FIELDS = {'engine', 'sources', 'ip', 'top', 'args', 'pass', 'expect_failure',
           'timeout_s', 'memory_config', 'boot_relocate', 'module', 'test_dir',
-          'build', 'reuse_build', 'env', 'seed', 'bender_targets', 'mode', 'report', 'firmware_mode', 'opt_in', 'flow_plan'}
+          'build', 'reuse_build', 'env', 'seed', 'bender_targets', 'mode', 'report', 'firmware_mode', 'opt_in', 'flow_plan', 'logical_test'}
 
 
 def expand(config, names, stack=()):
@@ -185,6 +185,8 @@ def load_config(path):
         raise ValueError('full suite must cover every non-opt-in declared test')
     if any(not any(name in expand(config, [suite]) for suite in config['suites'] if suite != 'full') for name in opt_in):
         raise ValueError('opt-in regression must remain addressable through a named suite')
+    from test_identity import catalog as validate_identity_catalog
+    validate_identity_catalog(config["tests"])
     from runtime_contract import validate_migration_inventory
     validate_migration_inventory(config)
     return config
@@ -520,8 +522,16 @@ def run_target(name, test, resolver, options):
     defines = list(dict.fromkeys(defines))
     filelist = out/'sources.f'
     filelist.write_text(filelist_text(sources, includes, defines))
-    plan = {**test, 'target': name, 'sources': sources, 'includes': includes, 'defines': defines,
-            'args': args, 'results_xml': str(out/'results.xml'), 'stage': options.stage}
+    # Capture the single source-selected identity before the RTL executor runs.
+    # Keep legacy target artifact paths stable while old CI consumers migrate.
+    from test_identity import selected as select_identity, save as save_identity, relative_path
+    identity = select_identity(name, {**test, "source_target": test["sources"],
+                                     "args": args}, filelist=filelist)
+    save_identity(out/'identity.json', identity)
+    plan = {**test, 'target': name, 'source_target': test['sources'],
+            'sources': sources, 'includes': includes, 'defines': defines,
+            'args': args, 'results_xml': str(out/'results.xml'), 'stage': options.stage,
+            'identity': identity}
     plan_file = out/'plan.json'
     plan_file.write_text(json.dumps(plan, indent=2) + '\n')
     # A separate source-fingerprinted *command dispatch envelope* is not
@@ -649,6 +659,8 @@ def run_target(name, test, resolver, options):
     check_events(runtime_selected, runner_events)
     passed = all(r['passed'] for r in results)
     result = {'target': name, 'passed': passed, 'stage': options.stage,
+              'identity_sha256': identity['identity_sha256'],
+              'canonical_id': relative_path(identity).as_posix(),
               'elapsed_s': round(time.monotonic()-started, 3), 'results': results,
               'test_flow': {'status':'unmeasured','steps':0,'issues':0}}
     if test.get('report') and options.stage in ('all','run'):
