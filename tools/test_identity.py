@@ -73,6 +73,30 @@ def config_target(test):
     return slug(name, "config_target")
 
 
+def neutral_testname(value):
+    """Reject implementation names from the existing pinned IP/tool sources.
+
+    This is an enforced naming policy, not a second authoritative IP catalog.
+    AXI, SRAM, DDR and CPU are behavioral/protocol words and stay allowed.
+    """
+    slug(value, "logical_test")
+    import yaml
+    locked=yaml.safe_load((ROOT/"config/ip.lock.yaml").read_text())
+    pinned=set(locked["third_party"])
+    forbidden={item.replace("_","-") for item in pinned}
+    # Repeated package prefixes reflect the same upstream vendor (PULP).
+    heads={key.split("_",1)[0] for key in pinned if "_" in key}
+    forbidden.update(h for h in heads if sum(k.startswith(h+"_") for k in pinned)>1)
+    req=(ROOT/"csr/requirements.txt").read_text().lower()
+    if "peakrdl" in req:
+        forbidden.add("peakrdl")
+    forbidden.update(ENGINE_SIMULATOR.values())
+    for provider in forbidden:
+        if value==provider or value.startswith(provider+"-") or value.endswith("-"+provider) or "-"+provider+"-" in value:
+            raise IdentityError(f"logical_test cannot embed IP vendor or simulator: {provider}")
+    return value
+
+
 def catalog(tests):
     """Detect collisions between regression YAML entries before CI."""
     if not isinstance(tests, dict) or not tests:
@@ -80,7 +104,7 @@ def catalog(tests):
     found = {}
     for legacy, test in tests.items():
         slug(legacy, "legacy target")
-        name = slug(test.get("logical_test"), f"{legacy}.logical_test")
+        name = neutral_testname(test.get("logical_test"))
         key = (simulator(test), config_target(test), name)
         if key in found:
             raise IdentityError(f"duplicate canonical identity: {found[key]} and {legacy} -> {key}")
@@ -91,7 +115,7 @@ def catalog(tests):
 def selected(name, plan, *, filelist=None, run_id=None, env=None, root=ROOT):
     """Select immutable metadata once per invocation before simulator launch."""
     root = Path(root)
-    test_name = slug(plan.get("logical_test"), "logical_test")
+    test_name = neutral_testname(plan.get("logical_test"))
     if run_id is None:
         e = os.environ if env is None else env
         run = e.get("GITHUB_RUN_ID")
