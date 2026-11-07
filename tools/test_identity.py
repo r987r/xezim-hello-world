@@ -155,14 +155,14 @@ def selected(name, plan, *, filelist=None, run_id=None, env=None, root=ROOT):
     # Filelist paths alone do not change when a pinned upstream revision or
     # native AXI budget changes. Fingerprint the original authority as well.
     pins = {}
-    for name in SOURCE_LOCKS:
-        source = root / name
+    for lock_path in SOURCE_LOCKS:
+        source = root / lock_path
         if not source.is_file():
-            raise IdentityError(f"missing authoritative source lock: {name}")
-        pins[name] = sha(source.read_bytes())
-    for name in OPTIONAL_SOURCE_LOCKS:
-        source = root / name
-        pins[name] = sha(source.read_bytes()) if source.is_file() else None
+            raise IdentityError(f"missing authoritative source lock: {lock_path}")
+        pins[lock_path] = sha(source.read_bytes())
+    for lock_path in OPTIONAL_SOURCE_LOCKS:
+        source = root / lock_path
+        pins[lock_path] = sha(source.read_bytes()) if source.is_file() else None
     selection = {
         **declared_selection(plan),
         "soc_sha256": sha(soc.read_bytes()),
