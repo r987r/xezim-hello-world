@@ -6,7 +6,7 @@ This page describes **which RTL/model is selected**, not a rolling CI/PR status 
 | --- | --- | --- |
 | CPU/boot/SRAM | PicoRV32 and SERV execute ROM/flash-to-SRAM boot with reset coordination | Boot SRAM is not preloaded; physical SRAM macro selection is separate |
 | Data/Config NoCs | FlooGen-derived FlooNoC meshes, independent AXI monitor/NoC BFM tests | Diagram/compilation does not prove every optional IP's elaborated pins |
-| PULP iDMA | Real desc64 frontend/backend, generated Data/Config connections, CPU0 C polling or reset-isolated BFM drive | No demonstrated CPU ISR or simultaneous CPU-directed dual engines (#47) |
+| PULP iDMA | Real desc64 frontend/backend, generated Data/Config connections, CPU0 C polling or reset-isolated BFM drive | CPU interrupt service is not implemented; simultaneous CPU-directed dual engines remain #47 |
 | Ethernet | Opt-in GMII RX/TX MAC, queues, DMA, CSR/CQ; real CPU0 control test | Default chip keeps packet engines reserved; joint PCIe/real DDR not proven |
 | PCIe | Opt-in actual TLP↔AXI bridge, modeled host RC, SRAM BAR access and host-pulled completion | No physical PCIe PHY or endpoint-initiated host-RAM DMA (#76) |
 | DDR | Default bounded AXI RAM; opt-in real LiteDRAM RTL with Config-NoC init and behavioral SDRAM DFI/BankModel | No silicon PHY; DDR stress remains #35 |

@@ -11,7 +11,7 @@ The SoC uses the pinned PULP **desc64 iDMA frontend and generated AXI backend** 
 | `make dv-chip-cpu-dma` | PicoRV32 executes freestanding compiled C with bounded DMA-status polling | Actual CPU MMIO, iDMA, SRAM↔modeled DDR/HBM, independent AXI/checker evidence |
 | `make dv-chip-ddr4-real` | Real CPU0 C and iDMA, separately selected | Pinned LiteDRAM RTL with behavioral DFI/BankModel, **not** physical PHY |
 
-A BFM-initiated transfer is **not** CPU-originated. The CPU path polls status; CPU ISR/dual concurrent CPU scheduling is still under [#47](https://github.com/r987r/xezim-hello-world/issues/47).
+A BFM-initiated transfer is **not** CPU-originated. CPU interrupt service is not implemented; the CPU path polls STATUS. Dual concurrent CPU-directed DMA remains [#47](https://github.com/r987r/xezim-hello-world/issues/47).
 
 ## SRAM, descriptors and quiescence
 

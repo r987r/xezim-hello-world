@@ -40,6 +40,8 @@ See [setup and regression options](docs/regression.md), [simulator limits](docs/
 
 **A passing isolated test is not proof of the combined Ethernet → real DDR → CPU/iDMA → PCIe path.** See the [combined acceptance contract](docs/multiprotocol-integration-readiness.md) and [open epic #34](https://github.com/r987r/xezim-hello-world/issues/34). Physical link, stress, IRQ and fast-route work remain separately tracked.
 
+**DMA mode:** `DmaEnable=1` instantiates actual PULP iDMA engines and Config-NoC CSRs; `make dv-chip-dma` tests CPU-reset BFM-controlled RTL transfers separately from real CPU0 C. CPU interrupt service is not implemented; polling-based C DMA is supported.
+
 ## Architecture and generated sources
 
 <!-- BEGIN GENERATED SOC -->
