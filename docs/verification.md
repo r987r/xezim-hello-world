@@ -13,7 +13,7 @@ wrapper's source windows, leaf destinations, network paths and AXI links.
 fabric scope drives actual interconnect RTL; the connected NoC scope
 uses upstream AXI agents.
 
-The executable build/test catalog currently contains 27 named targets (24 runtime, 3 compile/lint-only); it is [regression YAML](../config/regression.yaml), not a separately maintained fixed list;
+The executable build/test catalog is resolved directly from the current regression YAML (including its runtime and compile/lint-only targets); it is [regression YAML](../config/regression.yaml), not a separately maintained fixed list;
 [Bender source sets](../Bender.yml) replace per-test shell file arrays.
 See [build and regression commands](regression.md) for the full suite,
 filelist inspection, stage separation and retained results.
@@ -42,7 +42,7 @@ physical HBM/DDR controller or PHY behavior.
 
 Every YAML regression target saves one `selected-test-plan.json` before HDL execution; it records tested source revision, resolved command arguments, selected firmware/variant, INIT/RUN/CHECK source intent, and a deterministic plan digest. The common runner records actual command start and checked outcome in `runner-events.json`. The publisher verifies the saved plan, its hash, CI provenance and observed command envelope before showing it in that exact historical test report.
 
-**This is not full stimulus migration yet.** The two SCN-2 targets reference the exact immutable source-resolved action scenario and require independent RTL-observed matching scenario evidence to qualify PASS. Three compile/lint-only targets are explicitly not executable stimulus. The remaining 22 runtime tests use a named `legacy_entrypoint_adapter` and their *internal* Python/C/SV/Xezim actions stay opaque unless separately instrumented. Temporary exceptions are source-controlled in [runtime migration policy](../config/runtime_migration.yaml); adding an unregistered legacy target fails CI instead of silently fabricating actions. [#119](https://github.com/r987r/xezim-hello-world/issues/119) owns removal of the exceptions as typed IP/driver adapters are implemented. Never interpret command completion or a planned milestone as proof that a particular AXI/TLP/GMII/DFI transaction occurred.
+**This is not full stimulus migration yet.** The two SCN-2 targets reference the exact immutable source-resolved action scenario and require independent RTL-observed matching scenario evidence to qualify PASS. Three compile/lint-only targets are explicitly not executable stimulus. The remaining 23 runtime tests use a named `legacy_entrypoint_adapter` and their *internal* Python/C/SV/Xezim actions stay opaque unless separately instrumented. Temporary exceptions are source-controlled in [runtime migration policy](../config/runtime_migration.yaml); adding an unregistered legacy target fails CI instead of silently fabricating actions. [#119](https://github.com/r987r/xezim-hello-world/issues/119) owns removal of the exceptions as typed IP/driver adapters are implemented. Never interpret command completion or a planned milestone as proof that a particular AXI/TLP/GMII/DFI transaction occurred.
 
 ## Next integration sequence
 
