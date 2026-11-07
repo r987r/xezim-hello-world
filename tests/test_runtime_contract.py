@@ -1,0 +1,132 @@
+"""Negative contracts for every regression's selected runtime plan."""
+import copy
+import json
+import tempfile
+import unittest
+from pathlib import Path
+
+import yaml
+
+from tools.runtime_contract import (
+    RunContractError, check_events, dispatch_event, load, save, selection, validate,
+)
+
+ROOT=Path(__file__).resolve().parents[1]
+
+
+class SelectedRuntimeContractTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.config=yaml.safe_load((ROOT/"config/regression.yaml").read_text())
+
+    def setUp(self):
+        self.dir=tempfile.TemporaryDirectory()
+        self.addCleanup(self.dir.cleanup)
+        self.out=Path(self.dir.name)
+
+    def plan(self, name="memory", commands=None):
+        test=copy.deepcopy(self.config["tests"][name])
+        return selection(name,{**test,"stage":"all"},self.out,
+                         commands=commands if commands is not None else
+                         [(name,["python3","tools/sim.py",name])])
+
+    def test_non_scenario_runner_is_honestly_opaque(self):
+        p=self.plan()
+        self.assertEqual(p["adapter"],"legacy_entrypoint_adapter")
+        self.assertEqual(p["intent"]["declared_actions"],0)
+        self.assertEqual(p["adapter_scope"],"legacy_internal_stimulus_opaque")
+        self.assertIsNone(p["scenario_plan_sha256"])
+        save(self.out/"selected-test-plan.json",p)
+        self.assertEqual(load(self.out/"selected-test-plan.json","memory"),p)
+
+    def test_all_regressions_require_a_selection_and_three_phase_catalog(self):
+        for name,test in self.config["tests"].items():
+            with self.subTest(target=name):
+                if test.get("firmware_mode") in ("cpu_dma_scenario","scenario_bfm"):
+                    continue
+                snapshot=self.plan(name)
+                self.assertEqual(set(snapshot["intent"]["phases"]),{"init","run","check"})
+                self.assertEqual(snapshot["target"],name)
+                self.assertEqual(snapshot["intent"]["target"],name)
+        self.assertEqual(len(self.config["tests"]),27)
+
+    def test_compile_and_lint_are_explicit_not_applicable(self):
+        for name in ("chip-xezim-compile","noc-verilator","noc-xezim"):
+            s=self.plan(name)
+            self.assertEqual(s["adapter"],"non_runtime")
+            self.assertEqual(s["intent"]["declared_actions"],0)
+            self.assertEqual(s["intent"]["detail_status"],
+                             "not_applicable_to_nonruntime_target")
+            self.assertTrue(all(not v for v in s["intent"]["phases"].values()))
+
+    def test_selected_cpu_and_bfm_scenario_are_source_resolved(self):
+        scenario={"schema_version":1,"kind":"soc_scenario_intent_only",
+                  "scenario_id":"cpu_bfm_ddr_roundtrip","seed":79,
+                  "actions":[
+                      {"action_instance_id":"alloc_source","phase":"init",
+                       "actor":"cpu0","kind":"memory.allocate",
+                       "args":{"buffer":"src"},"depends_on":[]},
+                      {"action_instance_id":"copy_out","phase":"run",
+                       "actor":"dma0","kind":"dma.copy",
+                       "args":{"src":"src","dst":"ddr"},
+                       "depends_on":["alloc_source"]},
+                      {"action_instance_id":"check_return","phase":"check",
+                       "actor":"cpu0","kind":"memory.check",
+                       "args":{"buffer":"return"},
+                       "depends_on":["copy_out"]}]}
+        for target,loc in (("chip-cpu-scenario",self.out/"variant"),
+                           ("chip-dma-scenario",self.out)):
+            with self.subTest(target=target):
+                loc.mkdir(parents=True,exist_ok=True)
+                (loc/"scenario-plan.json").write_text(json.dumps(scenario))
+                snapshot=self.plan(target)
+                self.assertEqual(snapshot["adapter"],"scenario_dispatch_adapter")
+                self.assertEqual(snapshot["intent"]["scenario_id"],
+                                 "cpu_bfm_ddr_roundtrip")
+                self.assertEqual(snapshot["intent"]["phases"]["run"][0]["label"],
+                                 "copy_out")
+                self.assertEqual(len(snapshot["scenario_plan_sha256"]),64)
+
+    def test_missing_scenario_is_never_a_legacy_fallback(self):
+        with self.assertRaisesRegex(RunContractError,"scenario plan absent"):
+            self.plan("chip-dma-scenario")
+
+    def test_mutated_snapshot_or_unowned_target_rejected(self):
+        p=self.plan()
+        bad=copy.deepcopy(p)
+        bad["intent"]["phases"]["run"].append({"label":"forged"})
+        with self.assertRaisesRegex(RunContractError,"hash mismatch"):
+            validate(bad)
+        with self.assertRaisesRegex(RunContractError,"target mismatch"):
+            load(self.out/"invalid.json","foreign")
+        save(self.out/"selected-test-plan.json",p)
+        with self.assertRaisesRegex(RunContractError,"target mismatch"):
+            load(self.out/"selected-test-plan.json","foreign")
+
+    def test_runner_events_are_not_passed_stimulus_actions(self):
+        p=self.plan(commands=[("a",["sim","-f","rtl.f"])])
+        start=dispatch_event(p,"a",status="started")
+        end=dispatch_event(p,"a",status="completed",duration_s=0.2,
+                           passed=False,reason="timeout")
+        check_events(p,[start,end])
+        self.assertEqual(start["evidence_kind"],
+                         "runner_command_status_not_internal_action_dispatch")
+        with self.assertRaisesRegex(RunContractError,"event does not match"):
+            dispatch_event(p,"foreign",status="started")
+        with self.assertRaisesRegex(RunContractError,"status missing or invented"):
+            check_events(p,[start,{**end,"passed":None}])
+        with self.assertRaisesRegex(RunContractError,"count mismatch"):
+            check_events(p,[start])
+
+    def test_selected_source_and_actual_invocation_cannot_be_reinterpreted(self):
+        p=self.plan(commands=[("chip",["xezim","--max-time","200us"])])
+        save(self.out/"selected-test-plan.json",p)
+        tampered=copy.deepcopy(p)
+        tampered["command_argv"][0]["argv"][-1]="1us"
+        (self.out/"selected-test-plan.json").write_text(json.dumps(tampered))
+        with self.assertRaisesRegex(RunContractError,"hash mismatch"):
+            load(self.out/"selected-test-plan.json")
+
+
+if __name__=="__main__":
+    unittest.main()
