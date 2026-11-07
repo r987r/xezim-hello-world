@@ -179,7 +179,8 @@ class RegressionTests(unittest.TestCase):
             rtl.write_text('module other_tb; endmodule\n')
             resolver = types.SimpleNamespace(sources=lambda test: ([str(rtl)], [], []))
             options = types.SimpleNamespace(arg=[], memory_config=None, network=[], stage='files')
-            test = {'engine': 'cocotb-verilator', 'sources': 'other', 'top': 'other_tb'}
+            test = {'engine': 'cocotb-verilator', 'sources': 'other', 'top': 'other_tb',
+                    'logical_test': 'axi-routing-smoke'}
             # New unregistered legacy targets must now fail P1's strict
             # adapter-policy gate. Reuse an approved temporary legacy target
             # to test source-closure behavior without overriding that gate.

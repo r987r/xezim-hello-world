@@ -32,6 +32,44 @@ class MergedPrEvidenceTests(unittest.TestCase):
             ]
         self.assertEqual(merged_main_pr_heads(Mock(request=response)),{('a'*40,'fabric'):15})
 
+    def test_archived_runner_commit_is_authenticated_not_renamed(self):
+        from publish_site import authenticated_runner_revisions
+        from runtime_contract import digest
+        from test_intent import plan as declared_intent
+        head='a'*40
+        merged='c'*40
+        run={'event':'pull_request','head_sha':head,
+             'head_branch':'feature/naming','verified_merged_pr':129}
+        client=Mock(repository='r987r/xezim-hello-world')
+        client.request.return_value={'parents':[{'sha':'b'*40},{'sha':head}]}
+        with tempfile.TemporaryDirectory() as tmp:
+            folder=Path(tmp)
+            payload={'engine':'cocotb-verilator','stage':'all'}
+            snapshot={'schema_version':1,'target':'chip-boot',
+                'source_revision':merged,'stage':'all','engine':'cocotb-verilator',
+                'adapter':'legacy_entrypoint_adapter',
+                'migration_owner_issue':119,
+                'adapter_scope':'legacy_internal_stimulus_opaque',
+                'selected_firmware_mode':None,'seed':None,
+                'command_argv':[], 'scenario_plan_sha256':None,
+                'intent':declared_intent('chip-boot',payload),
+                'evidence_kind':'selected_definition_not_runtime_execution'}
+            snapshot['plan_sha256']=digest(snapshot)
+            dump(folder/'selected-test-plan.json',snapshot)
+            self.assertEqual(authenticated_runner_revisions(client,run,folder),{merged})
+            self.assertEqual(authenticated_runner_revisions(client,
+                             {'head_branch':'main','head_sha':merged},folder),{merged})
+            with self.assertRaisesRegex(ValueError,'not authenticated'):
+                authenticated_runner_revisions(client,
+                    {'head_branch':'main','head_sha':'d'*40},folder)
+            client.request.return_value={'parents':[{'sha':'b'*40},{'sha':'e'*40}]}
+            with self.assertRaisesRegex(ValueError,'not authenticated'):
+                authenticated_runner_revisions(client,run,folder)
+            snapshot['source_revision']='f'*40
+            dump(folder/'selected-test-plan.json',snapshot)
+            with self.assertRaisesRegex(ValueError,'invalid selected runner snapshot'):
+                authenticated_runner_revisions(client,run,folder)
+
     def test_real_github_pr_merge_sha_requires_exact_second_parent(self):
         head='a'*40
         merged='c'*40

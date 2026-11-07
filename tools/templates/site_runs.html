@@ -246,14 +246,18 @@ function render(){
   for(const e of D.entries){
     if(fam&&suite(e.target,e.workflow)!==fam)continue;
     if(protocolFilter.value&&!(e.protocols||[]).includes(protocolFilter.value))continue;
-    if(!matchesQuery([e.target,e.workflow,e.source_sha,e.engine,(e.protocols||[]).join(" ")],q))continue;
+    if(!matchesQuery([e.target,e.testname,e.config_target,e.simulator,e.execution_id,e.workflow,e.source_sha,e.engine,(e.protocols||[]).join(" ")],q))continue;
     if(outcome&&(outcome==="pass")!==e.passed)continue;
     if(kind==="axi"&&!e.axi)continue;
     if(kind==="protocol"&&!(e.protocols||[]).length)continue;
     if(kind==="negative"&&!e.expected_failure)continue;
     // The same target can run in multiple CI workflows. Never hide a PCIe
     // host scope just because a normal CPU/DMA workflow used that name.
-    const key=e.target+"|"+e.workflow;
+    // A single legacy target can later run on several selected configurations.
+    // Never hide one simulator/config/logical-test result behind another.
+    const identityKey=e.simulator&&e.config_target&&e.testname?
+      [e.simulator,e.config_target,e.testname].join("|"):e.target;
+    const key=identityKey+"|"+e.workflow;
     if(latest&&seen.has(key))continue;
     seen.add(key);
     const tr=document.createElement("tr");
@@ -266,7 +270,10 @@ function render(){
     const openFlow=document.createElement("button");openFlow.type="button";
     openFlow.textContent="View intended flow";openFlow.style.display="block";
     openFlow.onclick=()=>markFlow(e.target,e);
-    td(tr,testLink,inspect,openFlow);
+    const named=e.canonical_id?
+      text("div","Canonical: "+e.simulator+"/"+e.config_target+"/"+e.testname,"muted"):
+      text("div","Historical run: canonical identity not archived","muted");
+    td(tr,testLink,named,e.canonical_url?link("Open canonical run",e.canonical_url):text("span","","muted"),inspect,openFlow);
     td(tr,suite(e.target,e.workflow));
     td(tr,text("span",e.passed?"PASS":"FAIL",e.passed?"good":"bad"),
       text("div",e.expected_failure?"Required negative check":"Positive / compile gate","muted"));
@@ -321,12 +328,12 @@ function render(){
     const recorded=latestTarget.get(name);
     if(protocolFilter.value&&!plannedProtocols.includes(protocolFilter.value)&&
        !(recorded?.protocols||[]).includes(protocolFilter.value))continue;
-    if(!matchesQuery([name,t.engine,t.top,t.sources,t.pass],q))continue;
+    if(!matchesQuery([name,t.logical_test,t.engine,t.top,t.sources,t.pass],q))continue;
     const tr=document.createElement("tr"),e=latestTarget.get(name);
     const flowBtn=document.createElement("button");
     flowBtn.type="button";flowBtn.textContent="View flow";
     flowBtn.onclick=()=>markFlow(name);
-    td(tr,name,flowBtn);td(tr,suite(name));
+    td(tr,name,text("div",t.logical_test||"Legacy naming not archived","muted"),flowBtn);td(tr,suite(name));
     if(e)td(tr,link(e.passed?"PASS · run #"+e.run_id:"FAIL · run #"+e.run_id,e.path));
     else td(tr,text("span","No recorded result","muted"));
     td(tr,t.engine);
