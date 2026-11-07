@@ -506,6 +506,16 @@ def run_target(name, test, resolver, options):
         commands = [(name, [sys.executable, str(ROOT/'tools/sim_cocotb.py'), str(plan_file)])]
     plan['commands'] = commands
     plan_file.write_text(json.dumps(plan, indent=2) + '\n')
+    # Resolve and archive the exact declared intent BEFORE the simulator is
+    # launched, including the selected command arguments. This is *not* a
+    # claim of dispatch, completion or PASS. Incomplete/failed runs retain it.
+    from test_intent import snapshot as snapshot_intent, validate_snapshot
+    scenario = None
+    if test.get('firmware_mode') in ('scenario_bfm', 'cpu_dma_scenario'):
+        scenario = json.loads((ROOT/'config/scenarios/cpu-bfm-ddr-roundtrip.json').read_text())
+    selected = snapshot_intent(name, plan, scenario=scenario)
+    validate_snapshot(selected, target=name)
+    (out/'planned-flow.json').write_text(json.dumps(selected, indent=2) + '\n')
     env = dict(os.environ)
     env['SOC_RUN_PLAN'] = str(plan_file)
     if test.get('firmware_mode') in ('scenario_bfm', 'cpu_dma_scenario'):
