@@ -288,6 +288,35 @@ tests:
       address_map: {config: config/soc.yaml, variant: architecture}
       context: 'Real PicoRV32/SERV CPUs coordinate boot phases with OKAY responses. Afterwards a verification AXI BFM at the reserved compute0 DMA port tests two 64-KiB SRAM stand-ins, including four intentional out-of-capacity SLVERR transactions. No DMA engine or physical HBM/DDR controller is instantiated.'
       axi: {scope: dut.u_noc, clock: clk, reset: rst_n, catalog: gen/supernoc/axi_monitors.json, actors: gen/chip/manifest.json, max_events: 500000}
+  chip-peakrdl-reset:
+    opt_in: true
+    # Real PeakRDL reset/ACK RTL through the generated independent Config NoC.
+    engine: cocotb-verilator
+    sources: noc
+    bender_targets: [chip_boot]
+    ip: [picorv32, serv, wb2axip, verilog_axi]
+    firmware_mode: peakrdl_reset
+    top: full_chip_tb
+    module: dv.full_chip.test_boot
+    seed: 1
+    test_dir: .
+    build: .tools/chip-peakrdl-reset-obj
+    env: {MAKEFLAGS: '-j2'}
+    timeout_s: 1800
+    pass: 'PASS fullchip:'
+    report:
+      address_map: {config: config/soc.yaml, variant: cold_boot, csr_map: .tools/regression/chip-peakrdl-reset/csr/csr-map.json}
+      context: 'Real PeakRDL reset/ACK over CPU0 Config NoC, PicoRV32/SERV ROM cold boot; DDR/HBM remain behavioral AXI RAM, no PHY.'
+      flow:
+        required_steps:
+          init: [cpu0.init_complete]
+          run: [cpu0.run_complete]
+          check: [cpu0.check_complete]
+        required_origins:
+          init: {cpu0.init_complete: checker}
+          run: {cpu0.run_complete: checker}
+          check: {cpu0.check_complete: checker}
+      axi: {scope: dut.u_noc, clock: clk, reset: rst_n, catalog: gen/supernoc/axi_monitors.json, actors: gen/chip/manifest.json, max_events: 500000, required_complete: true}
   chip-boot-negative:
     <<: *chip
     reuse_build: true
@@ -422,5 +451,6 @@ suites:
   scenario: [chip-cpu-scenario, chip-dma-scenario]
   # Every declared test is covered. Structural Xezim probes stay distinct
   # from the Verilator traffic gate; make test requires both toolchains.
+  csr-rtl: [chip-peakrdl-reset]
   ddr-real: [chip-ddr4-real]
   full: [xezim, noc, compatibility, diagnostics, dma, chip, scenario, chip-pcie-host, chip-ethernet, chip-ethernet-cpu]

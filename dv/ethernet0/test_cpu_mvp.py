@@ -19,6 +19,7 @@ from dv.ethernet0.gmii_trace import GmiiEvidence,RX,TX
 from dv.common.protocol_trace import open_from_plan
 from dv.common.axi_trace import attach_observers,trace_phase
 from dv.full_chip.test_boot import phase
+from dv.common.selected_aperture import selected_aperture
 
 ROOT=Path(__file__).resolve().parents[2]
 READY=0xe7000001
@@ -43,6 +44,11 @@ async def wait_cpu_marker(dut,expected):
     raise AssertionError(f'CPU0 C never emitted {expected:#x}, last={int(dut.cpu_dma_evidence.value):#x}')
 
 def verify_accepted_axi(plan):
+    # The exact selected variant owns physical windows. Queue offsets remain
+    # Ethernet controller/firmware-specific and are not a substitute CSR map.
+    eth_ctrl, ctrl_window = selected_aperture("ethernet0.ctrl", "config", plan_path=plan)
+    eth_sram, sram_window = selected_aperture("ethernet0.sram", "data", plan_path=plan)
+    assert ctrl_window>=0x100 and sram_window>=0x2160, "selected Ethernet windows too small"
     records=Path(plan).parent/'axi-events.jsonl'
     assert records.is_file(),'passive AXI observations missing'
     matched={key:0 for key in (
@@ -57,19 +63,19 @@ def verify_accepted_axi(plan):
         fields=e.get('fields',{})
         address=int(fields.get('addr','0x0'),16)
         if monitor=='compute0_local_config.cpu':
-            if channel=='aw' and 0x40050000<=address<0x40050100:
+            if channel=='aw' and eth_ctrl<=address<eth_ctrl+0x100:
                 matched['cpu_cfg_aw']+=1
-            if channel=='ar' and 0x40050000<=address<0x40050100:
+            if channel=='ar' and eth_ctrl<=address<eth_ctrl+0x100:
                 matched['cpu_cfg_ar']+=1
         if monitor=='compute0_local_data.cpu':
-            if channel=='aw' and 0x13001000<=address<0x13002160:
+            if channel=='aw' and eth_sram+0x1000<=address<eth_sram+0x2160:
                 matched['cpu_desc_aw']+=1
-            if channel=='ar' and 0x13001200<=address<0x13001620:
+            if channel=='ar' and eth_sram+0x1200<=address<eth_sram+0x1620:
                 matched['cpu_cq_ar']+=1
         if monitor=='ethernet0_local_data.packet_dma':
-            if channel=='aw' and 0x13002000<=address<0x13002100:
+            if channel=='aw' and eth_sram+0x2000<=address<eth_sram+0x2100:
                 matched['ethernet_pkt_aw']+=1
-            if channel=='ar' and 0x13002100<=address<0x13002160:
+            if channel=='ar' and eth_sram+0x2100<=address<eth_sram+0x2160:
                 matched['ethernet_pkt_ar']+=1
             if channel=='b':
                 matched['ethernet_cq_b']+=1

@@ -34,7 +34,11 @@ class TestIntentFlowTests(unittest.TestCase):
         status=Counter(v["execution_adoption"] for v in self.entries.values())
         self.assertEqual(status["not_applicable_compile_or_lint"],3)
         self.assertEqual(status["canonical_resolved_scenario"],2)
-        self.assertEqual(status["instrumented_legacy_flow"],4)
+        # New opt-in PeakRDL full-chip reset now emits real checker-observed
+        # CPU INIT/RUN/CHECK signals, not opaque or invented action events.
+        self.assertEqual(status["instrumented_legacy_flow"],5)
+        self.assertEqual(self.entries["chip-peakrdl-reset"]["execution_adoption"],
+                         "instrumented_legacy_flow")
         # Existing unmigrated test count is the strict upper bound;
         # a newly added legacy target must be migrated along with another.
         self.assertLessEqual(status["legacy_runtime_without_action_contract"],18)

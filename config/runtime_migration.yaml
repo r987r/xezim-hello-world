@@ -1,5 +1,5 @@
 # Temporary exception inventory; no UI should use this to invent actions.
-# All 22 runtime targets below delegate actual internal stimuli to existing
+# All 23 runtime targets below delegate actual internal stimuli to existing
 # Python/C/SV/Xezim code. They are NOT counted as scenario-dispatched.
 # Future targets must implement the scenario adapter or require a reviewed,
 # explicitly owned migration exception here.
@@ -57,6 +57,9 @@ legacy_runtime:
     owner_issue: 119
     status: legacy_internal_stimulus_opaque
   chip-boot:
+    owner_issue: 119
+    status: legacy_internal_stimulus_opaque
+  chip-peakrdl-reset:
     owner_issue: 119
     status: legacy_internal_stimulus_opaque
   chip-boot-negative:

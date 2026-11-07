@@ -17,10 +17,13 @@ from dv.ethernet0.gmii_trace import GmiiEvidence,RX,TX
 from dv.common.protocol_trace import open_from_plan
 from dv.common.axi_trace import attach_observers,trace_phase
 from dv.full_chip.test_dma import bounded,check_ok,write_word,read_word
+from dv.common.selected_aperture import selected_aperture
 
-ETH_SRAM=0x13000000
-ETH_CTRL=0x40050000
-DDR_BASE=0x140000000
+# Physical windows belong to the run-selected SoC config, never this BFM.
+# Descriptor/CQ offsets below are implementation-specific Ethernet policy.
+ETH_SRAM, ETH_SRAM_WINDOW = selected_aperture("ethernet0.sram", "data")
+ETH_CTRL, ETH_CTRL_WINDOW = selected_aperture("ethernet0.ctrl", "config")
+DDR_BASE, DDR_WINDOW = selected_aperture("memory0.ddr0", "data")
 RX_RING=ETH_SRAM+0x1000
 RX_CQ=ETH_SRAM+0x1200
 TX_RING=ETH_SRAM+0x1400
