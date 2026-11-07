@@ -77,6 +77,16 @@ pin connection or accepted transaction.
    quiescence and safe semantics; physical controller probes are scoped to
    the selected backend and recorded as modeled vs observed.
 
+## Cheap source-selection mutation gate
+
+`tests/test_ip_portability_contract.py` validates the **existing configured**
+NoC roles from `config/soc.yaml` and asserts that deliberately selecting an
+unimplemented NoC backend, DDR model/controller, CPU or DMA raises an
+explicit error instead of quietly reusing the default test DUT. This runs
+under ordinary `make check-config` discovery and needs no proprietary IP.
+It tests **rejection**, not the functionality of any replacement; the
+positive RTL/end-to-end gate below remains mandatory.
+
 ## Swap acceptance gates (new implementation, not implied by current green CI)
 
 - Mutation of an unsupported backend, controller, CPU, DMA or port width
