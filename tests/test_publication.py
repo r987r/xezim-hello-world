@@ -336,7 +336,7 @@ class PublicationTests(unittest.TestCase):
             self.assertEqual(entries[0]['protocols'],['axi4'])
             self.assertEqual(entries[0]['protocol_observations'],1)
             page=output/entries[0]['path']
-            self.assertIn('Unified protocol explorer',page.read_text())
+            self.assertIn('All captured protocol traffic',page.read_text())
             self.assertIn('id="all-protocol-traffic"',page.read_text())
             self.assertIn('src="protocols.html"',page.read_text())
             self.assertIn('href="protocol-transactions.json"',page.read_text())
