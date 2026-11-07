@@ -15,6 +15,7 @@ uses upstream AXI agents.
 
 The executable build/test catalog is resolved directly from the current regression YAML (including its runtime and compile/lint-only targets); it is [regression YAML](../config/regression.yaml), not a separately maintained fixed list;
 [Bender source sets](../Bender.yml) replace per-test shell file arrays.
+See [canonical test naming and run identity](test-identity.md) for simulator/configuration/logical-test/execution identifiers, legacy compatibility and source-provenance guarantees.
 See [build and regression commands](regression.md) for the full suite,
 filelist inspection, stage separation and retained results.
 
