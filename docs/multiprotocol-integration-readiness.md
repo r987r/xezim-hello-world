@@ -27,6 +27,29 @@ Historical baseline before the Ethernet merge: `main` `b91e3d3b7c4fea582fc690a7a
 - **Cross-protocol visibility:** CPU0 and PCIe host read **the same Ethernet-produced buffer and CQ** through their existing NoCs or through explicitly checked PCIe SRAM staging. Host success must be backed by an actual accepted completion TLP with correct bytes, not by backdoor copies.
 - Global Data and global Config NoCs remain independent. A simulated controller model is **not** the real LiteDRAM/DFI controller.
 
+## Reproducible failure-localization order for the combined test
+
+The combined opt-in test should be **one YAML regression target** and **one resolved scenario** under #119. Treat an INIT/RUN/CHECK milestone as *expected* until the DUT and passive monitors actually prove it. Keep per-run `plan.json`, `result.json`, `test-flow.json`, `protocol-transactions.json`, `axi-transactions.json`, `simulation.log` and any DFI summaries together under the same test/run SHA; link from Test Runs. Never splice together separately passing Ethernet, DDR and PCIe artifacts as one integration PASS.
+
+Run the independently existing baselines before blaming the combined design:
+
+```sh
+make check-generated
+python3 tools/regress.py chip-ethernet-cpu
+python3 tools/regress.py chip-pcie-host
+python3 tools/regress.py chip-ddr4-real
+```
+
+These are **separate diagnostics**, not a combined success test. For the new run, first verify its generated *variant-specific* chip manifest, connected Data/Config NoCs, RTL hierarchy/port contract, SRAM/real-DDR aperture and actor/monitor catalog (default `gen/chip` is intentionally reserved). Then inspect the earliest missing or failing observed boundary in this order:
+
+1. **GMII ingress:** actual received frame length/FCS and descriptor/queue selection; reject a pass based only on an injected frame or planned queue write.
+2. **Ethernet descriptor/DMA:** observed AXI AR/R fetch, actual payload AW/W/B to the destination, accepted completion-queue B and recorded producer/cookie/status; distinguish stalled channel from wrong address or missing responder.
+3. **Real DDR:** Config-NoC CSR/DFII init, LiteDRAM-facing AXI read/write completions, continuous full-chip DFI command stream and BankModel events; label DFI clock/time and behavioral PHY, and do not invent DFI-to-AXI-ID mapping.
+4. **CPU/iDMA:** CPU0 C program reaches named RUN/CHECK milestones, programs real DMA CSRs, issues accepted AXI transactions, verifies byte-exact payload and completion metadata from the target (not backdoor memory).
+5. **PCIe host:** Root Complex request TLP reaches the PCIe NoC/SRAM or qualified DDR staging path, real AXI read data matches, and the host observes a matching accepted completion TLP and payload. Record which hop/adapter first lost the data or tag.
+
+For every failure show **first failing milestone, source actor, expected/observed payload hash or byte mismatch, address, AXI ID or PCIe tag, earliest/last timestamp, NoC path and responsible log link** where actually captured. Distinguish configured pending budgets from measured peak outstanding; leave missing measurements explicitly *unmeasured*. A hard timeout is FAIL, not a simulated success. The canonical Test Runs viewer should show the selected run's source/attempt and the pre-simulation resolved plan alongside independent evidence; issue #119 owns that wiring.
+
 ## Order, ownership and gates
 
 1. **Address & protocol safety:** merged PCIe #60 proves the minimal host/TLP + modeled-DDR path. The local/global same-ID B/R NoC ordering defect #75 is corrected in merged #78 with its positive and negative tests; preserve those regressions. Extended stress remains separate.
