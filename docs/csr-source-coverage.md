@@ -44,7 +44,7 @@ Address Map links to that report. This is a *documentation/composition gate*:
 a new subsystem also needs its own RTL generation and connectivity
 qualification to claim functioning hardware.
 
-## Current coverage (November 6, 2026)
+## Source categories and qualification
 
 | Interface | Source / status |
 | --- | --- |

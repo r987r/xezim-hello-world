@@ -235,10 +235,10 @@ VIP with real sequence/driver/monitor tests instead of reinventing one.
 
 ## CI and debugging
 
-- `.github/workflows/dv-soc.yml` runs on pushes and pull requests,
-  installs dependencies, checks generator drift, downloads the pinned
-  checksum-verified Xezim release, then runs the RTL suites including
-  sparse/no-access checks and cold boot. A completed green GitHub
+- `.github/workflows/dv-soc.yml` runs on qualifying pull requests to
+  `main` (or manual dispatch), installs pinned tools, checks generator
+  drift, and runs selected RTL suites including sparse/denied routing
+  and cold boot. A completed green GitHub
   Actions **SHA** is needed before merging; do not infer a pass from a
   started workflow.
 - On errors, inspect the exact failing job/log and retained artifacts.
