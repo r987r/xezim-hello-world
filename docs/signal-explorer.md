@@ -84,10 +84,7 @@ source locations where the upstream graph records them. A missing
 path *under the selected depth and visit bound* is inconclusive,
 not automatically an electrically disconnected wire.
 
-The source build of slang-netlist and its exact version compatibility
-with slang v12.1 are **not yet validated** in this stacked PR. That
-compatibility gate belongs to the next implementation stream; it must
-not be represented as a completed whole-SoC signal audit.
+Slang hierarchy/netlist probes retain source-selected provenance but do not yet prove every optional subsystem's elaborated bit/driver path. Full protocol-aware binding remains [#46](https://github.com/r987r/xezim-hello-world/issues/46).
 
 ## Future protocol integration
 
@@ -100,5 +97,4 @@ For compound SV structs, do not blindly invent AW/W fields from a
 single `axi_req` port; show the struct as is until a real parser
 provides elaborated member-level information.
 
-This stream is stacked on PR #28's generic 2D explorer and is separate
-from the independent slang lint/cleanup stream in PR #30.
+Reuse the existing source-derived 2D explorer and keep lint diagnostics separate from connectivity evidence.

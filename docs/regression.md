@@ -4,7 +4,7 @@
 selects tests, simulators, configuration variants, timeouts, acceptance
 markers and suites. `tools/regress.py` is the single entry point used by
 Make and CI. Per-test shell runners have been removed.
-The connected NoC tests use explicit cocotb seed `1`, recorded in each plan/XML.
+Seed/replay choices are recorded for each executed test; no global fixed seed is required.
 
 ## Upstream conventions reviewed
 
@@ -141,71 +141,11 @@ generated NoC packages/tops; it replaces hardcoded wrapper paths.
 `mode: compile` explicitly marks the Xezim chip structural target.
 See [chip boot](full-chip-boot.md).
 
-## Minimum PCIe host + real CPU DMA functional smoke
+## Hardware-specific selections
 
-`python3 tools/regress.py chip-pcie-host` is the *existing* shared
-Cocotb/Verilator INIT/RUN/CHECK flow with opt-in `pcie_dma_host` firmware.
-The CPU programs the real PULP iDMA through the configuration NoC;
-DMA transfers move 64-byte buffers between PCIe0 SRAM, modeled DDR and
-compute SRAM across actual data NoCs. The modeled Root Complex uses BAR0
-writes/reads over pinned RTL `pcie_axi_master` and checks returned bytes.
+The existing `chip-pcie-host`, `chip-cpu-dma`, `chip-ddr4-real` and `chip-ethernet-cpu` targets select **different RTL and model boundaries**. Run them through the same `tools/regress.py`, not by combining reports from different configurations. See [PCIe](pcie0-host-phases.md), [DMA](dma-bringup.md), [real DDR](../rtl/memory/ddr4/README.md) and [Ethernet](ethernet0-closure-gate.md).
 
-The [verified PCIe CI run](https://github.com/r987r/xezim-hello-world/actions/runs/42134213227)
-passed the combined test and separate CPU/iDMA job. The combined artifact
-reports 27 complete flow steps with zero issues, 47,864 completed AXI
-transactions with no outstanding rows, 3,741 PCIe read/completion TLP pairs
-and 8 posted writes. `traffic-latency.json` has zero correlation issues,
-and measured bridge-port TLP→completion latency min/avg/max
-**130 / 130.083 / 200 ns** (10 ns simulated clock). Distinguish measured
-bridge/NoC/SRAM boundaries from modeled host callback time; physical
-PCIe PHY/link and real DDR4 controller/DFI latency remain unmeasured.
-
-Artifacts include `result.json`, `test-flow.json`, `axi-transactions.json`,
-`protocol-transactions.json`, `traffic-latency.json`, and the existing
-AXI/protocol/step HTML explorers. The TLP monitor reuses upstream
-`PcieIfFrame.to_tlp()` and does not drive the bus. The test does **not**
-claim outbound PCIe requester DMA into host RAM: DDR-to-host delivery is
-a host BAR *pull*. The opt-in CPU/iDMA-to-real-LiteDRAM controller integration is
-verified in the merged [DDR-B PR #74](https://github.com/r987r/xezim-hello-world/pull/74). The final exact-PR-head DDR-B run is [CI #42246102337](https://github.com/r987r/xezim-hello-world/actions/runs/42246102337) at `026cd1f0a14930253df27afb6c9f3a834a67f72b`. It passed compiled CPU0/PULP iDMA SRAM→DDR→SRAM, actual independent Config NoC DFII initialization, controller AXI AW/B and AR/RLAST, DFI read/write and bank writes, passive NoC traffic reporting, and required step-flow evidence. This extends the earlier positive-only [CI #42217902632](https://github.com/r987r/xezim-hello-world/actions/runs/42217902632).
-
-The **full-chip routed aperture-negative test is now RTL-verified in that run**. Following firmware CHECK and a drained iDMA, an explicit verification-only switch gives the existing compute0 DMA NoC manager port to a cocotb AXI initiator. The test writes and reads one address 32 MiB beyond the bounded controller storage, requires `BRESP/RRESP=DECERR`, checks that neither invalid request was forwarded to real LiteDRAM controller AXI pins, and then verifies the original in-range bytes were not aliased. The CI job requires the negative-test status, both response codes, zero forwarding and valid readback in its evidence JSON.
-
-The final [full-chip boot run #42246102437](https://github.com/r987r/xezim-hello-world/actions/runs/42246102437) **passed** `chip-cpu-dma`, `chip-dma`, `chip-boot`, `chip-boot-negative` and `chip-xezim-compile`, with successful artifact processing under the corrected 65-minute job budget. PCIe real NoC and shared CPU/iDMA integration also **passed** at the final head in [CI #42246102409](https://github.com/r987r/xezim-hello-world/actions/runs/42246102409). All full-chip DDR timing uses modeled SDRAMPHYModel/BankModel, **not electrical PHY timing**. Joint Ethernet/PCIe-to-real-DDR remains a separate [#34](https://github.com/r987r/xezim-hello-world/issues/34) interoperability gate.
-
-The generic `noc` / `supernoc` structural test remains an independent
-repository-wide gate. A NoBResponseIdQueue assertion in that flow is **not**
-a PCIe SRAM data-correlation failure; investigate and fix it separately.
-See [PCIe test and topology scope](pcie0-host-phases.md) and
-[step-flow contract](test-flow.md).
-
-## Pinned PULP iDMA RTL bring-up
-
-The `dma` suite is a separate **real Verilator/cocotb RTL** scope, not
-software-only descriptor-vector validation. Full-chip DMA has a distinct
-passing `chip-dma` gate (with CPU0 AXI BFMs, not executed CPU firmware). `make dv-dma` invokes the upstream-generated desc64 frontend and
-`rw_axi` backend with PULP AXI join/mux against cocotbext-axi memory targets.
-One 100-descriptor DDR transfer and one single-descriptor HBM transfer check
-payload data, descriptor writeback, final interrupt and idle-before-reclaim.
-The test's completion IRQ is combinational to AXI B-channel handshake and is
-sampled once at a stable clock phase to avoid double-counting VPI edges.
-
-`tools/idma_rtl.py` fetches only the pinned iDMA commit and uses upstream
-MARIO + PeakRDL tools to generate the RTL into ignored `.tools/pulp_idma/target/rtl`.
-The root Bender `dma` target lists those upstream sources in dependency order;
-FlooNoC's pinned AXI/APB versions provide shared bus types. Existing `gen/`
-NoC and cold-boot artifacts remain unchanged. Run the dedicated
-`.github/workflows/dma.yml` action for complete compiler and simulation logs;
-[successful 2026-11-04 head](https://github.com/r987r/xezim-hello-world/actions/runs/41860245485).
-
-For rapid PR feedback, full-chip CI first cross-links real RV32I C firmware and tests
-allocation/probe ownership without FlooNoC generation. It then runs
-`make dv-chip FAST_FAIL=1`, which starts with the CPU C DMA gate and stops
-subsequent expensive targets on the first failure while retaining logs and
-AXI traces. Run plain `make dv-chip` locally to continue all tests even if
-one fails. In CPU C mode the AXI probe BFM must *not* instantiate: its
-output pins mirror real iDMA response IDs, so the passive AXI monitor is
-the correct nonintrusive observer. Keep performance and memory-init/check
-benchmarks on the same strict/hybrid/fast scenario contract.
+The `dma-rtl` test instantiates the real PULP desc64 frontend and AXI backend generated by MARIO/PeakRDL under ignored `.tools/pulp_idma/`; it is not a software-only descriptor test. `make dv-chip FAST_FAIL=1` stops at the first failing scoped target while preserving logs. Compilation or C unit tests alone are not DMA protocol acceptance.
 
 ### Active versus passive AXI agent ownership
 

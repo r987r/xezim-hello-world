@@ -122,7 +122,7 @@ Port-aware ELK layout of arbitrary nested compound modules and bit-level
 slang-netlist path validation remain follow-on work; the explorer does not
 claim those as delivered.
 
-## Follow-on work
+## Remaining verification boundaries
 
 1. Pin and exercise compatible slang, slang-netlist and hdl-kgraph versions
    on resolved supernoc, chip-boot and chip-dma filelists.
@@ -149,16 +149,15 @@ python3 tools/design_netlist.py --profile chip-dma --mode netlist --output .tool
 The wrapper writes JSON and a metadata sidecar recording the profile, source
 list fingerprint, tool invocation and evidence provenance. If the executable is
 missing, compilation fails or JSON is missing/invalid, there is no successful
-output. This does **not** make the external toolchain installed or validated
-by this PR; cross-profile functional RTL tests remain separate.
+output. No metadata sidecar can replace actual compiler success or real RTL traffic verification.
 
-## Compiler-parsed RTL composition (PR #48)
+## Compiler-parsed RTL composition
 
 The 2D architecture explorer now additionally consumes a source-hash-bound
 `slang --parse-only --cst-json --cst-json-mode simple-tokens` report for
 `gen/chip/soc_top.sv` and `gen/supernoc/soc_noc.sv`. It reads actual
 SystemVerilog module instantiation syntax and **named port binding expressions**,
-and validates that all eight expected FlooGen NoC modules have real
+and validates that the generated FlooGen NoC modules have real
 instantiations. Data and configuration NoCs are separate module instances.
 
 The raw CST is not checked in. The normal GitHub Pages CI downloads the same
