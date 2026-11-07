@@ -50,6 +50,8 @@ PSS, OpenTitan's testplan, and riscv-dv testlists without adopting another
 runtime or vendor-specific test naming scheme.
 
 Before adding or renaming any regression test, update this file in the
-same PR. The Test Runs view uses the checked-in description before simulation
+same PR. The Test Runs view uses the checked-in description before simulation,
+derives direct links to existing Cocotb/Python driver source paths from the
+regression entrypoint (or the Bender source target and SV top for Xezim),
 and archives the exact selected intent digest in each run's immutable plan.
 Historical runs never borrow a newer spec as if it were their original plan.

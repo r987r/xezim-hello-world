@@ -26,6 +26,12 @@ class StimulusCatalogTests(unittest.TestCase):
         self.assertEqual(entries["chip-cpu-scenario"]["scenario_source"],
                          "config/scenarios/cpu-bfm-ddr-roundtrip.json")
         self.assertEqual(entries["smoke"]["execution"],"legacy_opaque")
+        self.assertIsNone(entries["smoke"]["driver_source"])
+        self.assertEqual(entries["smoke"]["rtl_top"],"hello_world_tb")
+        self.assertEqual(entries["chip-ethernet-cpu"]["driver_source"],
+                         "dv/ethernet0/test_cpu_mvp.py")
+        self.assertEqual(entries["supernoc"]["driver_source"],
+                         "dv/supernoc/test_supernoc.py")
         self.assertEqual(entries["noc-verilator"]["execution"],"non_runtime")
         self.assertFalse(entries["noc-verilator"]["phases"]["run"])
 

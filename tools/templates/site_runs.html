@@ -167,6 +167,17 @@ function renderFlow(){
       " · "+source.stimulus_source+" · SHA-256 "+source.stimulus_sha256+
       " · "+source.stimulus_execution,"muted"));
     host.append(text("p",source.stimulus_purpose||""));
+    if(source.stimulus_driver_source){
+      const sha=selected?.source_sha||D.source_sha;
+      const uri="https://github.com/"+D.repository+"/blob/"+sha+"/"+source.stimulus_driver_source;
+      const src=document.createElement("p");
+      src.append(link("Review actual Python/Cocotb driver",uri));
+      src.append(document.createTextNode(" · "+source.stimulus_driver_source));
+      host.append(src);
+    }else{
+      host.append(text("p","SV/compile top: "+(source.stimulus_rtl_top||"selected build")+
+        " · Bender source target: "+(source.stimulus_bender_source_target||"not specified"),"muted"));
+    }
     host.append(text("p","These descriptions are reviewable intended behavior; only "+
       "scenario_native executes the typed DAG. Legacy entries are not source-dispatched.", "muted"));
     for(const phase of ["init","run","check"]){

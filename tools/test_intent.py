@@ -95,6 +95,9 @@ def attach_stimulus(intent: dict, stimulus: dict | None) -> dict:
         "stimulus_logical_test":stimulus["logical_test"],
         "stimulus_purpose":stimulus["purpose"],
         "stimulus_execution":stimulus["execution"],
+        "stimulus_driver_source":stimulus["driver_source"],
+        "stimulus_rtl_top":stimulus["rtl_top"],
+        "stimulus_bender_source_target":stimulus["bender_source_target"],
         "stimulus_outline":stimulus["phases"],
         "stimulus_outline_is_not_dispatch_evidence":True,
     })
@@ -194,6 +197,14 @@ def render(flow: dict) -> str:
                    +' · spec SHA-256 <code>'+e(flow["stimulus_sha256"])+'</code>'
                    +' · '+e(flow.get("stimulus_execution"))+'</p>')
         out.append('<p>'+e(flow.get("stimulus_purpose"))+'</p>')
+        if flow.get("stimulus_driver_source"):
+            out.append('<p>Driver source: <code>'+
+                       e(flow["stimulus_driver_source"])+'</code></p>')
+        else:
+            out.append('<p>SV/compile entrypoint: <code>'+
+                       e(flow.get("stimulus_rtl_top") or "build target")+
+                       '</code> · Bender target <code>'+
+                       e(flow.get("stimulus_bender_source_target"))+'</code></p>')
         out.append('<p><small>INIT/RUN/CHECK outline below is authored intent, '
                    'not proof of internal action dispatch or observed hardware.</small></p>')
         for label in PHASES:

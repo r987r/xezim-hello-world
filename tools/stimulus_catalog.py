@@ -119,10 +119,24 @@ def load(config: dict, *, root: Path = ROOT) -> dict:
                 raise StimulusCatalogError(f"{target}: claimed stimulus execution differs from actual runner adapter")
             if mode == "scenario_native" and test.get("flow_plan") != scenario:
                 raise StimulusCatalogError(f"{target}: scenario source differs from executable plan")
+            # Derive the driver location from the *existing regression*.
+            # Do not manually duplicate the test module in stimulus YAML.
+            module = test.get("module")
+            driver = None
+            if module:
+                module_name = Path(module.replace(".", "/") + ".py")
+                source = (root / str(test.get("test_dir") or ".") / module_name).resolve()
+                if not source.is_relative_to(root) or not source.is_file():
+                    raise StimulusCatalogError(
+                        f"{target}: selected Python driver missing: {module}")
+                driver = source.relative_to(root).as_posix()
             result[target] = {"source": SOURCE, "sha256": fingerprint,
                               "logical_test": logical, "execution": mode,
                               "purpose": purpose, "phases": phases,
-                              "scenario_source": scenario}
+                              "scenario_source": scenario,
+                              "driver_source": driver,
+                              "rtl_top": test.get("top"),
+                              "bender_source_target": test.get("source_target", test.get("sources"))}
     missing, orphan = set(registered) - set(result), set(result) - set(registered)
     if missing or orphan:
         raise StimulusCatalogError(f"stimulus YAML coverage mismatch: missing={sorted(missing)}, unknown={sorted(orphan)}")
