@@ -487,9 +487,10 @@ function resize(){
   svg.style.width=Math.ceil(dims.w*zoom)+"px";svg.style.height=Math.ceil(dims.h*zoom)+"px";
 }
 function fit(){
-  // Keep data/config connection strokes visible on phones; the viewport
-  // scrolls rather than collapsing a 1,500px graph to illegible hairlines.
-  zoom=Math.max(.48,Math.min(1.2,(vp.clientWidth-12)/dims.w,(vp.clientHeight-12)/dims.h));
+  // Width is the relevant fit dimension for a tall SoC. Fitting height
+  // shrinks a 1,500px source graph to tiny text/wires even on desktop.
+  // The viewport already supports vertical and horizontal scrolling.
+  zoom=Math.min(1.2,Math.max(.65,(vp.clientWidth-20)/dims.w));
   resize();
 }
 function navigate(kind,name){

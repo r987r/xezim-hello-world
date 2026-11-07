@@ -90,7 +90,7 @@ class ArchitectureExplorerTests(unittest.TestCase):
                                     and p.endswith(f",{gy}.0") for p in points))
         self.assertIn('class="topology-pan"',(ROOT/"tools/templates/site_index.html").read_text())
         self.assertIn("min-width:1050px",(ROOT/"tools/templates/site.html").read_text())
-        self.assertIn("Math.max(.48",self.script)
+        self.assertIn("Math.max(.65",self.script)
         self.assertIn("PERIPHERAL SUBSYSTEM",self.script)
 
     def test_multi_subsystem_graph_is_not_hardcoded_in_viewer(self):

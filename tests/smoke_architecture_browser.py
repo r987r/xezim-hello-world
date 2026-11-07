@@ -35,6 +35,11 @@ def main():
         assert "GLOBAL FABRIC" in driver.find_element(By.ID,"arch-svg").text
         assert "COMPUTE0" in driver.find_element(By.ID,"arch-svg").text
         assert "MEMORY0" in driver.find_element(By.ID,"arch-svg").text
+        # The overview must not be tiny merely because the tall diagram
+        # cannot fit the viewport height. The viewport scrolls vertically.
+        visible_width=driver.execute_script(
+            "return document.getElementById('arch-svg').getBoundingClientRect().width")
+        assert visible_width>1100, f"desktop architecture scaled too small: {visible_width}"
         # The same generated topology must reflect the *selected* RTL/test
         # actor manifest, not a stale boot-only DMA placeholder.
         assert driver.find_element(By.ID,"arch-profile").get_attribute("value")=="chip-dma"
@@ -156,7 +161,23 @@ def main():
             assert "protocol=dfi" in detail and "source=memory0.ddr0.dfi" in detail
             driver.save_screenshot(str(args.screenshots/"05-ddr-nested-dfi-link.png"))
 
-        print("PASS: architecture RTL drilldown, PCIe monitor link and bounded real-evidence UI")
+        # Verify mobile visibility of the same canonical generated SVG.
+        # This is a browser layout test, not a second hand-authored image.
+        driver.set_window_size(400,850)
+        homepage=args.page.resolve().parent/"index.html"
+        driver.get(homepage.as_uri())
+        wait.until(lambda d:d.execute_script(
+            "return document.querySelector('.topology-pan img')?.naturalWidth>0"))
+        dims=driver.execute_script("""
+            const wrap=document.querySelector('.topology-pan');
+            const img=wrap.querySelector('img');
+            return {scroll:wrap.scrollWidth,client:wrap.clientWidth,
+                    image:img.getBoundingClientRect().width};
+        """)
+        assert dims["scroll"]>dims["client"], "mobile topology not horizontally pannable"
+        assert dims["image"]>=1050, "mobile topology shrank its connection strokes"
+        driver.save_screenshot(str(args.screenshots/"06-overview-topology-mobile.png"))
+        print("PASS: architecture wiring, readable desktop zoom, mobile-pan topology and drilldown")
 
 
 
