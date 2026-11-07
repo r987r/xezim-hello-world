@@ -506,6 +506,17 @@ def run_target(name, test, resolver, options):
         commands = [(name, [sys.executable, str(ROOT/'tools/sim_cocotb.py'), str(plan_file)])]
     plan['commands'] = commands
     plan_file.write_text(json.dumps(plan, indent=2) + '\n')
+    # Before simulator dispatch, audit the exact generated selected variant.
+    # These are structural claims with source-file SHA-256, NEVER an assertion
+    # that the selected RTL elaborated or emitted accepted AXI traffic.
+    if (test.get('report',{}).get('axi')
+            and plan.get('top') in ('full_chip_tb','full_chip_dma_tb')
+            and test.get('sources') == 'noc'):
+        from variant_connectivity import publish as publish_variant_connectivity
+        connectivity = publish_variant_connectivity(ROOT, name, plan, out)
+        print(f'CONNECTIVITY {name}: {connectivity["summary"]["monitors"]} '
+              f'AXI source taps, {connectivity["summary"]["declared_live_peripherals"]} '
+              'declared live packet endpoints; not elaborated/observed', flush=True)
     env = dict(os.environ)
     env['SOC_RUN_PLAN'] = str(plan_file)
     if test.get('firmware_mode') in ('scenario_bfm', 'cpu_dma_scenario'):
