@@ -6,7 +6,10 @@ scenario actions. Never infer unlisted stimulus from a module name or log.
 from __future__ import annotations
 
 from html import escape
+import hashlib
 import json
+from pathlib import Path
+import re
 
 PHASES=("init","run","check")
 
@@ -49,31 +52,98 @@ def plan(name: str, test: dict, *, scenario: dict | None = None) -> dict:
                 "expectation":None,
             })
     known=sum(len(v) for v in phases.values())
+    engine=test.get("engine")
+    is_compile=test.get("mode")=="compile" or engine in ("verilator-lint","xezim-compile")
+    execution_status=(
+        "not_applicable_compile_or_lint" if is_compile else
+        "canonical_resolved_scenario" if scenario is not None else
+        "instrumented_legacy_flow" if required else
+        "legacy_runtime_without_action_contract"
+    )
     return {
         "schema_version":1,"target":name,"engine":test.get("engine"),
         "top":test.get("top"),"module":test.get("module"),
         "seed":test.get("seed"),"variant":test.get("firmware_mode"),
+        "selected_args":list(test.get("args") or []),
         "context":(test.get("report") or {}).get("context"),
         "acceptance":test.get("expect_failure") or test.get("pass"),
         "acceptance_kind":"expected_failure" if test.get("expect_failure") else "success_or_compile",
         "scenario_id":scenario.get("scenario_id") if scenario else None,
-        "scenario_source":"config/scenarios/cpu-bfm-ddr-roundtrip.json" if scenario else None,
+        "scenario_source":test.get("flow_plan") if scenario else None,
         "phases":phases,
         "declared_actions":known,
         "detail_status":"declared_steps" if known else "no_detailed_phase_steps_declared",
+        "execution_adoption":execution_status,
+        "runtime_phases_applicable":not is_compile,
         "provenance":"configured_test_definition_not_execution",
         "evidence_required_for_display":False,
     }
 
 
+
+def snapshot(name: str, test: dict, *, scenario: dict | None = None) -> dict:
+    """Immutable declaration snapshot, not evidence that any action ran.
+
+    Hash the exact source-defined flow independently of wall clock, log text,
+    simulator result and publisher revision. Old runs must retain their own
+    archived snapshot rather than borrowing a newer mainline scenario.
+    """
+    intent = plan(name, test, scenario=scenario)
+    canonical = json.dumps(intent, sort_keys=True, separators=(",", ":"),
+                           ensure_ascii=True, allow_nan=False).encode("ascii")
+    return {
+        "schema_version": 1,
+        "kind": "source_declared_plan_not_execution",
+        "intent": intent,
+        "plan_sha256": hashlib.sha256(canonical).hexdigest(),
+    }
+
+
+def validate_snapshot(data: dict, *, target: str | None = None) -> dict:
+    """Reject missing, tampered or mislabeled archived plan snapshots."""
+    if not isinstance(data, dict) or set(data) != {
+            "schema_version", "kind", "intent", "plan_sha256"}:
+        raise ValueError("invalid declared-plan snapshot envelope")
+    if data["schema_version"] != 1 or data["kind"] != "source_declared_plan_not_execution":
+        raise ValueError("unsupported declared-plan snapshot schema")
+    intent = data["intent"]
+    if (not isinstance(intent, dict) or
+            (target is not None and intent.get("target") != target) or
+            set(intent.get("phases", {})) != set(PHASES) or
+            intent.get("provenance") != "configured_test_definition_not_execution"):
+        raise ValueError("declared-plan snapshot provenance/target mismatch")
+    canonical = json.dumps(intent, sort_keys=True, separators=(",", ":"),
+                           ensure_ascii=True, allow_nan=False).encode("ascii")
+    digest = hashlib.sha256(canonical).hexdigest()
+    if digest != data["plan_sha256"]:
+        raise ValueError("declared-plan snapshot digest mismatch")
+    return intent
+
+
 def catalog(config: dict, *, scenario: dict | None = None) -> dict:
+    """Load each explicitly registered scenario; never infer by test name.
+
+    The optional scenario parameter preserves callers that already loaded
+    this same source, but the regression's flow_plan path remains authoritative.
+    Only checked-in config/scenarios/<basename>.json may supply executable
+    source-defined action definitions.
+    """
     tests=config.get("tests")
     if not isinstance(tests,dict) or not tests:
         raise ValueError("no configured regression tests")
+    root=Path(__file__).resolve().parents[1]
     result={}
     for name,test in tests.items():
-        use_scenario=test.get("firmware_mode") in ("cpu_dma_scenario","scenario_bfm")
-        result[name]=plan(name,test,scenario=scenario if use_scenario else None)
+        path=test.get("flow_plan")
+        selected=None
+        if path is not None:
+            if not isinstance(path,str) or not re.fullmatch(
+                    r"config/scenarios/[a-zA-Z0-9_-]+\.json",path):
+                raise ValueError(f"{name}: unsafe scenario declaration")
+            selected=json.loads((root/path).read_text())
+            if scenario is not None and scenario != selected:
+                raise ValueError(f"{name}: declared scenario differs from caller source")
+        result[name]=plan(name,test,scenario=selected)
     return result
 
 
@@ -87,6 +157,11 @@ def render(flow: dict) -> str:
          'Evidence links are optional debugging tools.</p>']
     if flow.get("context"):
         out.append('<p>'+e(flow["context"])+'</p>')
+    out.append('<p><strong>Execution adoption:</strong> '+
+               e(flow.get("execution_adoption","legacy_snapshot_missing_mode"))+'</p>')
+    if flow.get("runtime_phases_applicable") is False:
+        out.append('<p>Compile/lint-only target: INIT/RUN/CHECK stimulus phases '
+                   'are not applicable; no runtime actions are claimed.</p>')
     for phase in PHASES:
         out.append('<details open><summary><strong>'+phase.upper()+'</strong></summary>')
         actions=flow["phases"][phase]

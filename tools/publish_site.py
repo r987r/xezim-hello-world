@@ -28,14 +28,16 @@ import yaml
 from axi_report import render_report
 from protocol_report import render as render_protocol_report
 from test_flow_report import render_summary as render_test_flow
-from test_intent import catalog as intended_flow_catalog, plan as intended_flow_plan, render as render_intended_flow
+from test_intent import (catalog as intended_flow_catalog, plan as intended_flow_plan,
+                         render as render_intended_flow, validate_snapshot)
 
 ROOT=Path(__file__).resolve().parents[1]
 FILES={'result.json','plan.json','sources.f','simulation.log','build.log','results.xml',
        'axi-transactions.json','axi-events.jsonl',
        'protocol-transactions.json','protocol-events.jsonl','memory-operations.json',
        'test-flow.json','test-flow-events.jsonl','traffic-latency.json',
-       'ddr-native-csr-map.json','ddr4_fullchip_evidence.json'}
+       'ddr-native-csr-map.json','ddr4_fullchip_evidence.json',
+       'planned-flow.json','memory-lifetimes.json','scenario-execution.json','scenario-plan.json'}
 
 
 def dump(path,data):
@@ -592,6 +594,28 @@ def evidence_index(evidence,output,repository):
             flow_data=json.loads(flow_path.read_text()) if flow_path.exists() else None
             latency_path=source_dir/'traffic-latency.json'
             latency_data=json.loads(latency_path.read_text()) if latency_path.exists() else None
+            # Memory lifetimes must be re-derived from actual archived RTL
+            # run inputs before being displayed. Never trust artifact HTML or
+            # an unverified memory-lifetimes.json at face value.
+            memory_view=None
+            memory_file=source_dir/'memory-lifetimes.json'
+            if memory_file.is_file():
+                from scenario_memory_trace import build as build_memory
+                mode=plan.get('firmware_mode')
+                if mode not in ('cpu_dma_scenario','scenario_bfm') or result.get('passed') is not True:
+                    raise ValueError('memory lifetime artifact from unqualified scenario')
+                original_plan=(source_dir/'variant/scenario-plan.json'
+                               if mode=='cpu_dma_scenario' else source_dir/'scenario-plan.json')
+                execution_file=source_dir/'scenario-execution.json'
+                if (not original_plan.is_file() or not execution_file.is_file()
+                        or trace is None):
+                    raise ValueError('memory lifetime artifact lacks its original run inputs')
+                memory_view=build_memory(
+                    original_plan.read_bytes(),axi=trace,
+                    execution=json.loads(execution_file.read_text()),result=result)
+                if memory_view != json.loads(memory_file.read_text()):
+                    raise ValueError('archived memory lifetime table differs from verified evidence')
+                shutil.copyfile(original_plan,destination/'scenario-plan.json')
             if flow_data is not None:
                 planned=plan.get('report',{}).get('flow',{}).get('required_steps')
                 status=result.get('test_flow',{})
@@ -601,15 +625,28 @@ def evidence_index(evidence,output,repository):
                         len(flow_data.get('rows',[])) != status.get('steps')):
                     raise ValueError('test-flow JSON disagrees with verified regression plan/result')
                 render_test_flow(flow_data,destination/'test-flow.html')
-            # Intent flow is always present, even without a simulation log,
-            # step marker, protocol monitor or passing test outcome.
-            intended = intended_flow_plan(target, plan)
-            if target in ('chip-cpu-scenario','chip-dma-scenario'):
-                scenario_source=ROOT/'config/scenarios/cpu-bfm-ddr-roundtrip.json'
-                # Run-specific plan may have a different source revision;
-                # display current configured intent, never fake execution.
-                if scenario_source.is_file():
-                    intended=intended_flow_plan(target,plan,scenario=json.loads(scenario_source.read_text()))
+            # Preserve source-selected per-run declared intent. Never load
+            # the current website's scenario definition into historical runs:
+            # the tested revision may have selected different actions/args.
+            archived=source_dir/'planned-flow.json'
+            if archived.is_file():
+                declared=json.loads(archived.read_text())
+                intended=validate_snapshot(declared,target=target)
+                snapshot_status='captured_before_simulation'
+                declared_hash=declared['plan_sha256']
+            else:
+                # Legacy archives lack selected plans. Show only the exact
+                # regression metadata present in that archive, never today's
+                # scenario actions or a fictitious dispatch record.
+                intended=intended_flow_plan(target,plan)
+                snapshot_status='legacy_run_selection_not_archived'
+                declared_hash=None
+            if flow_data is not None:
+                observed_hash=flow_data.get('planned_flow_sha256')
+                if declared_hash is not None and observed_hash != declared_hash:
+                    raise ValueError('observed test-flow evidence references a different selected plan')
+                if declared_hash is None and observed_hash is not None:
+                    raise ValueError('observed test-flow SHA lacks original archived plan')
             dump(destination/'test-intent.json',intended)
             if latency_data is not None and (
                     not protocol_data or protocol_data.get('latency')!=latency_data):
@@ -626,6 +663,9 @@ def evidence_index(evidence,output,repository):
                    'protocols':sorted({r['protocol'] for r in protocol_data.get('records',[])}) if protocol_data else [],
                    'protocol_observations':len(protocol_data['records']) if protocol_data else 0,
                    'flow_steps':len(flow_data['rows']) if flow_data else 0,
+                   'memory_lifetimes':memory_view is not None,
+                   'planned_flow_status':snapshot_status,'planned_flow_sha256':declared_hash,
+                   'planned_flow_intent':intended if declared_hash is not None else None,
                    'pcie_latency_measured':bool(latency_data and latency_data.get('passed')),
                    'result':result}
             if protocol_data:
@@ -670,6 +710,9 @@ def evidence_index(evidence,output,repository):
                         and re.fullmatch(r'[a-f0-9]{40}',fabric_matches[tested_sha])):
                     entry['verified_fabric_source_sha']=fabric_matches[tested_sha]
                 render_report(trace,destination/'report.html')
+                if memory_view is not None:
+                    from scenario_memory_trace import embed_in_run_report
+                    embed_in_run_report(destination/'report.html',memory_view)
                 html=(destination/'report.html').read_text()
                 up=os.path.relpath(output,destination).replace(os.sep,'/')
                 nav=f'<p style="margin:0 0 12px"><a href="{up}/index.html">Verification hub</a> · <a href="{up}/runs.html">All runs</a> · <a href="{escape(run["html_url"])}">CI evidence</a></p>'
@@ -694,6 +737,12 @@ def evidence_index(evidence,output,repository):
                           'style="display:block;width:100%;height:640px;'
                           'border:1px solid var(--line);border-radius:8px">'
                           '</iframe></section>')
+                nav+=('<p><strong>Selected plan:</strong> '+escape(snapshot_status)
+                      +(' · SHA-256 <code>'+escape(declared_hash[:16])+'</code>'
+                        +' · <a href="planned-flow.json">Archived pre-run plan</a>'
+                        if declared_hash else
+                        ' · no original pre-run snapshot in this historical archive')
+                      +'</p>')
                 if flow_data:
                     nav+='<p><a href="test-flow.html">INIT/RUN/CHECK verified steps</a></p>'
                 (destination/'report.html').write_text(html.replace('<main>','<main>'+nav,1))

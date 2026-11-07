@@ -131,16 +131,35 @@ for(const name of flowNames){
   const option=document.createElement("option");
   option.value=name;option.textContent=name;flowSelect.append(option);
 }
-const markFlow=target=>{
+let selectedFlowEntry=null;
+const markFlow=(target,entry=null)=>{
   if(!Object.prototype.hasOwnProperty.call(intentMap,target))return;
+  selectedFlowEntry=entry;
   flowSelect.value=target;renderFlow();byId("test-flow-plan").scrollIntoView({block:"start",behavior:"smooth"});
 };
 function renderFlow(){
-  const name=flowSelect.value,source=intentMap[name],host=byId("flow-contents");
+  const name=flowSelect.value;
+  const selected=selectedFlowEntry?.target===name?selectedFlowEntry:null;
+  const source=selected?.planned_flow_intent||intentMap[name];
+  const host=byId("flow-contents");
   host.replaceChildren();
   if(!source){host.append(text("p","No configured intent for this test.","muted"));return;}
   const detailed=source.declared_actions||0;
-  byId("flow-status").textContent=detailed?detailed+" declared actions/milestones":"Detailed phase actions not declared";
+  const compileOnly=source.runtime_phases_applicable===false;
+  const adoption=source.execution_adoption||"legacy_run_selection_unavailable";
+  byId("flow-status").textContent=compileOnly
+    ?"Compile/lint only · runtime phases N/A"
+    :((detailed?detailed+" declared actions/milestones":"Detailed phase actions not declared")+" · "+adoption);
+  host.append(text("p","Execution coverage: "+adoption+
+    (compileOnly?" · No executable stimulus phases":" · Declared intent is not execution evidence"),"muted"));
+  if(selected){
+    const matching=Boolean(selected.planned_flow_intent&&selected.planned_flow_sha256);
+    host.append(text("p",matching
+      ?"Showing original selected actions from CI #"+selected.run_id+" attempt "+selected.attempt+
+       " · tested "+selected.source_sha+" · declared plan "+selected.planned_flow_sha256.slice(0,16)
+      :"No archived selected plan for CI #"+selected.run_id+" attempt "+selected.attempt+
+       ". Showing current catalog only; it is NOT historical run intent.","muted"));
+  }
   if(source.context)host.append(text("p",source.context,"muted"));
   if(source.scenario_id)host.append(text("p","Scenario definition: "+source.scenario_id+
     " · configuration seed "+(source.seed??"not specified"),"muted"));
@@ -180,10 +199,14 @@ function renderFlow(){
     const p=document.createElement("p");
     p.append(link("Open last recorded test report",recent.path));
     if(recent.flow_steps)p.append(document.createTextNode(" · "+recent.flow_steps+" measured flow steps"));
+    if(recent.planned_flow_sha256)
+      p.append(document.createTextNode(" · Selected plan "+recent.planned_flow_sha256.slice(0,12)));
+    else if(recent.planned_flow_status==="legacy_run_selection_not_archived")
+      p.append(document.createTextNode(" · Historical run did not archive selected plan"));
     host.append(p);
   }else host.append(text("p","No recorded result yet. Planned flow remains available.","muted"));
 }
-flowSelect.addEventListener("change",renderFlow);
+flowSelect.addEventListener("change",()=>{selectedFlowEntry=null;renderFlow();});
 const latestTarget=new Map();
 for(const e of D.entries){
   if(!latestTarget.has(e.target))latestTarget.set(e.target,e);
@@ -242,7 +265,7 @@ function render(){
     inspect.onclick=()=>window.openRunTraffic?.(e);
     const openFlow=document.createElement("button");openFlow.type="button";
     openFlow.textContent="View intended flow";openFlow.style.display="block";
-    openFlow.onclick=()=>markFlow(e.target);
+    openFlow.onclick=()=>markFlow(e.target,e);
     td(tr,testLink,inspect,openFlow);
     td(tr,suite(e.target,e.workflow));
     td(tr,text("span",e.passed?"PASS":"FAIL",e.passed?"good":"bad"),
