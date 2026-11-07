@@ -236,6 +236,44 @@ def embed_in_run_report(report_path:Path, payload:dict):
     path.write_text(text.replace('<main>','<main>'+section,1),encoding='utf-8')
 
 
+
+def finalize_scenario_run(directory: Path, *, firmware_mode: str, result: dict):
+    """Opt-in post-RTL report. Called by the single canonical regression runner.
+
+    May only be invoked on passed, fully reported live CPU/BFM scenario runs.
+    Any missing or contradictory acceptance evidence raises, never fake-PASS.
+    """
+    if firmware_mode not in ("cpu_dma_scenario", "scenario_bfm"):
+        raise ActionEvidenceError("unsupported scenario memory integration target")
+    directory = Path(directory)
+    if result.get("stage") not in ("all", "run") or result.get("passed") is not True:
+        raise ActionEvidenceError("SCN-2 memory proof requires a passing real RTL run")
+    plan_path = (directory / "variant" / "scenario-plan.json"
+                 if firmware_mode == "cpu_dma_scenario"
+                 else directory / "scenario-plan.json")
+    def required_json(path):
+        if not path.is_file() or path.is_symlink():
+            raise ActionEvidenceError(f"missing/unsafe scenario evidence: {path.name}")
+        return json.loads(path.read_text(encoding="utf-8"))
+    plan_bytes = plan_path.read_bytes()
+    payload = build(
+        plan_bytes, axi=required_json(directory / "axi-transactions.json"),
+        execution=required_json(directory / "scenario-execution.json"),
+        result=result)
+    report_path = directory / "report.html"
+    if not report_path.is_file() or report_path.is_symlink():
+        raise ActionEvidenceError("canonical report.html is missing/unsafe")
+    # The static table will be incorporated into the original single report.
+    embed_in_run_report(report_path, payload)
+    target = directory / "memory-lifetimes.json"
+    if target.is_symlink():
+        raise ActionEvidenceError("unsafe memory-lifetimes output symlink")
+    target.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n",
+                      encoding="utf-8")
+    return payload
+
+
+
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--plan',type=Path,required=True)
