@@ -6,6 +6,7 @@ scenario actions. Never infer unlisted stimulus from a module name or log.
 from __future__ import annotations
 
 from html import escape
+import hashlib
 import json
 
 PHASES=("init","run","check")
@@ -64,6 +65,46 @@ def plan(name: str, test: dict, *, scenario: dict | None = None) -> dict:
         "provenance":"configured_test_definition_not_execution",
         "evidence_required_for_display":False,
     }
+
+
+
+def snapshot(name: str, test: dict, *, scenario: dict | None = None) -> dict:
+    """Immutable declaration snapshot, not evidence that any action ran.
+
+    Hash the exact source-defined flow independently of wall clock, log text,
+    simulator result and publisher revision. Old runs must retain their own
+    archived snapshot rather than borrowing a newer mainline scenario.
+    """
+    intent = plan(name, test, scenario=scenario)
+    canonical = json.dumps(intent, sort_keys=True, separators=(",", ":"),
+                           ensure_ascii=True, allow_nan=False).encode("ascii")
+    return {
+        "schema_version": 1,
+        "kind": "source_declared_plan_not_execution",
+        "intent": intent,
+        "plan_sha256": hashlib.sha256(canonical).hexdigest(),
+    }
+
+
+def validate_snapshot(data: dict, *, target: str | None = None) -> dict:
+    """Reject missing, tampered or mislabeled archived plan snapshots."""
+    if not isinstance(data, dict) or set(data) != {
+            "schema_version", "kind", "intent", "plan_sha256"}:
+        raise ValueError("invalid declared-plan snapshot envelope")
+    if data["schema_version"] != 1 or data["kind"] != "source_declared_plan_not_execution":
+        raise ValueError("unsupported declared-plan snapshot schema")
+    intent = data["intent"]
+    if (not isinstance(intent, dict) or
+            (target is not None and intent.get("target") != target) or
+            set(intent.get("phases", {})) != set(PHASES) or
+            intent.get("provenance") != "configured_test_definition_not_execution"):
+        raise ValueError("declared-plan snapshot provenance/target mismatch")
+    canonical = json.dumps(intent, sort_keys=True, separators=(",", ":"),
+                           ensure_ascii=True, allow_nan=False).encode("ascii")
+    digest = hashlib.sha256(canonical).hexdigest()
+    if digest != data["plan_sha256"]:
+        raise ValueError("declared-plan snapshot digest mismatch")
+    return intent
 
 
 def catalog(config: dict, *, scenario: dict | None = None) -> dict:
