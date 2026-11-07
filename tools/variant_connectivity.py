@@ -13,6 +13,7 @@ import hashlib
 import json
 from pathlib import Path
 import re
+from html import escape as html_escape
 from xml.sax.saxutils import escape
 
 import yaml
@@ -318,8 +319,93 @@ def collect(root: Path, target: str, plan: dict, out: Path) -> tuple[dict,dict]:
     return result,graph
 
 
+
+def render_html(view: dict, graph: dict) -> str:
+    """Trusted static source-derived per-test SVG, plus every actual AXI tap."""
+    e=lambda x:html_escape(str(x),quote=True)
+    rows=[]
+    global_data=next((n["name"] for n in view["networks"]
+                      if n["name"].startswith("global_") and n["plane"]=="data"),"global data")
+    global_config=next((n["name"] for n in view["networks"]
+                        if n["name"].startswith("global_") and n["plane"]=="config"),"global config")
+    def rect(x,y,w,h,title,description):
+        return (f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="10" '
+                'fill="#17263a" stroke="#70839d"/>'
+                f'<text x="{x+12}" y="{y+22}" fill="#f1f6ff" '
+                f'font-size="16" font-weight="bold">{e(title)}</text>'
+                f'<text x="{x+12}" y="{y+42}" fill="#c0cbdb" '
+                f'font-size="12">{e(description)}</text>')
+    def arrow(x1,y1,x2,y2,active):
+        return (f'<path d="M{x1} {y1} L{x2} {y2}" stroke="{("#6fdb9b" if active else "#bd9d73")}" '
+                f'stroke-width="3" {"stroke-dasharray=\"7 6\"" if not active else ""} '
+                'fill="none" marker-end="url(#tip)"/>')
+    periphs=sorted(view["peripherals"].items())
+    height=80+190*len(periphs)
+    rows.append(f'<svg viewBox="0 0 1020 {height}" role="img" '
+                'aria-label="Exact generated variant packet and control NoC connectivity" '
+                'style="display:block;width:100%;min-width:660px;background:#0b1524;border-radius:10px">'
+                '<defs><marker id="tip" markerWidth="9" markerHeight="9" '
+                'refX="8" refY="4" orient="auto">'
+                '<path d="M0 0 L8 4 L0 8 Z" fill="#aec8dc"/></marker></defs>')
+    for i,(name,periph) in enumerate(periphs):
+        y=42+190*i
+        live=periph["data_status"].startswith("generated_")
+        csr=periph["csr_status"].startswith("generated_")
+        rows.append(f'<text x="22" y="{y-12}" fill="#b9d6ee" font-size="13">'
+                    f'{e(name)} · {e(periph["ip"])}</text>')
+        rows.append(rect(22,y,270,56,name+" packet/host",periph["data_status"].replace("_"," ")[:36]))
+        rows.append(rect(342,y,270,56,periph["data_noc"],"generated local data NoC"))
+        rows.append(rect(672,y,320,56,global_data,"generated global data NoC"))
+        rows.append(arrow(292,y+28,342,y+28,live))
+        rows.append(arrow(612,y+28,672,y+28,True))
+        rows.append(rect(22,y+86,270,56,name+" control CSRs",periph["csr_status"].replace("_"," ")[:37]))
+        rows.append(rect(342,y+86,270,56,periph["config_noc"],"generated local control NoC"))
+        rows.append(rect(672,y+86,320,56,global_config,"generated global control NoC"))
+        rows.append(arrow(342,y+114,292,y+114,csr))
+        rows.append(arrow(672,y+114,612,y+114,True))
+    rows.append('</svg>')
+    rows.append('<p><strong>Green solid</strong>: generator-declared wiring in this selected '
+                'variant (not elaborated). <strong>Amber dashed</strong>: reserved or '
+                'unproven optional attachment. The packet/host is NOT depicted as a '
+                'configuration initiator: its control registers are a separate '
+                'target on the global/local Config NoC.</p>')
+    headers=("Boundary","Role","Plane","Actor","Address / Data / ID bits",
+             "Max read/write pending (configured budget)","Native shared MaxTxns","Monitor proof")
+    tr=['<table><thead><tr>'+''.join('<th>'+e(k)+'</th>' for k in headers)+'</tr></thead><tbody>']
+    for b in view["boundaries"]:
+        cells=(b["id"],b["role"],b["plane"],b["actor_kind"],
+               f'{b["address_bits"]} / {b["data_bits"]} / {b["axi_id_bits"]}',
+               f'{b["max_pending_reads_budget"]} / {b["max_pending_writes_budget"]}',
+               b["fabric_shared_MaxTxns"],b["monitor_provenance"])
+        tr.append('<tr>'+''.join('<td>'+e(v)+'</td>' for v in cells)+'</tr>')
+    tr.append('</tbody></table>')
+    counts=view["summary"]
+    intro=('<h1>Selected generated chip variant · '+e(view["target"])+'</h1>'
+          '<p><strong>Source-only, NOT elaborated and NOT runtime-observed.</strong> '
+          'The selected RTL, generator NoC/actor/AXI tap catalogs and interface '
+          'budgets are cross-checked before simulation. A separate run report '
+          'must establish actual accepted protocol traffic, bytes, completion, '
+          'and live bit-level connectivity.</p>'
+          f'<p>{counts["meshes"]} NoCs · {counts["routers"]} routers · '
+          f'{counts["monitors"]} passive AXI taps · {counts["initiators"]} source boundaries · '
+          f'{counts["targets"]} targets · {counts["intermesh_links"]} inter-NoC links · '
+          f'{counts["declared_live_peripherals"]} generated-source-live peripherals</p>'
+          '<p><a href="variant-connectivity.json">Inventory JSON</a> · '
+          '<a href="variant-topology.json">Exact source-derived graph JSON</a> · '
+          '<a href="variant-chip-manifest.json">Selected generated chip manifest</a> · '
+          '<a href="report.html">Back to run evidence</a></p>'
+          '<h2>Variant-aware 2D connectivity</h2>')
+    return intro + '<div style="overflow:auto">' + ''.join(rows) + '</div>' + (
+        '<h2>Selected source-bound AXI monitor / actor inventory</h2><div style="overflow:auto">'
+        + ''.join(tr) + '</div>')
+
+
 def publish(root: Path, target: str, plan: dict, out: Path) -> dict:
     result,graph=collect(root,target,plan,out)
     for filename,data in (("variant-connectivity.json",result),("variant-topology.json",graph)):
         (out/filename).write_text(json.dumps(data,indent=2,sort_keys=True)+"\n")
+    # Exact original generated manifest bytes permit a separate site-publisher
+    # integrity check without trusting unvalidated CI-supplied HTML.
+    original=root/result["source_manifest"]
+    (out/"variant-chip-manifest.json").write_bytes(original.read_bytes())
     return result
