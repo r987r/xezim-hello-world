@@ -160,7 +160,10 @@ def selection(target: str, plan: dict, directory: Path,
     selected_scenario, scenario_sha = _scenario(directory, mode)
     # Same human-authored YAML is archived in the selected runner envelope;
     # do not mistake legacy phase summaries for runtime action dispatch.
-    from .stimulus_catalog import load as load_stimuli
+    try:
+        from .stimulus_catalog import load as load_stimuli
+    except ImportError:
+        from stimulus_catalog import load as load_stimuli
     definitions = load_stimuli(yaml.safe_load(
         (Path(__file__).resolve().parents[1]/"config/regression.yaml").read_text()))
     intent = source_intent(target, plan, scenario=selected_scenario,
