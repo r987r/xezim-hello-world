@@ -194,8 +194,8 @@ def collect(root: Path, target: str, plan: dict, out: Path) -> tuple[dict,dict]:
             if (not isinstance(mod,str) or not isinstance(inst,str)
                     or not re.fullmatch(r"[A-Za-z_][A-Za-z_0-9]*",mod)
                     or not re.fullmatch(r"[A-Za-z_][A-Za-z_0-9]*",inst)
-                    or not re.search(r"\\b"+re.escape(mod)+r"\\s*#",top_text)
-                    or not re.search(r"\\b"+re.escape(inst)+r"\\s*\\(",top_text)):
+                    or not re.search(r"\b"+re.escape(mod)+r"\s*#",top_text)
+                    or not re.search(r"\b"+re.escape(inst)+r"\s*\(",top_text)):
                 raise VariantEvidenceError("selected RTL missing generator-named "
                                            "instance for "+name+" "+module_key)
         if state["data_status"].startswith("generated_"):
