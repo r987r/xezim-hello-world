@@ -116,7 +116,7 @@ def register_layout(root, aperture_size: int) -> list[dict]:
                 "description": field.get_property("desc", default="") or "",
             })
         regs.append({
-            "name": reg.inst_name,
+            "name": reg.get_path_segment(),
             "offset": f"0x{offset:x}",
             "width_bits": width,
             "size_bytes": size,
@@ -125,8 +125,10 @@ def register_layout(root, aperture_size: int) -> list[dict]:
             "description": reg.get_property("desc", default="") or "",
             "fields": fields,
         })
-    if len(regs) != 1 or regs[0]["name"] != "cpu_release" or as_int(regs[0]["offset"]) != 0:
-        raise CsrError("reset register ABI drift: expected cpu_release at offset 0")
+    expected = ["cpu_release", *[f"secondary_ack[{i}]" for i in range(root.top.parameters["SECONDARY_COUNT"])]]
+    if ([r["name"] for r in regs] != expected
+            or [as_int(r["offset"]) for r in regs] != [4*i for i in range(len(expected))]):
+        raise CsrError("reset register ABI drift: expected release plus one peer acknowledgement per secondary")
     return regs
 
 
@@ -139,7 +141,7 @@ def header(regs: list[dict]) -> str:
         "",
     ]
     for reg in regs:
-        name = identifier(reg["name"])
+        name = identifier(reg["name"].replace("[", "_").replace("]", ""))
         lines.append(f"#define SOC_BOOT_RESET_CTRL_{name}_OFFSET UINT32_C({reg['offset']})")
         for field in reg["fields"]:
             stem = f"SOC_BOOT_RESET_CTRL_{name}_{identifier(field['name'])}"
@@ -195,6 +197,7 @@ def generate(config: Path, rdl: Path, out: Path, variant: str) -> None:
         module_name="soc_boot_reset_ctrl_regblock",
         package_name="soc_boot_reset_ctrl_regblock_pkg",
         default_reset_activelow=True,
+        address_width=12,
         err_if_bad_addr=True,
         err_if_bad_rw=True,
     )
