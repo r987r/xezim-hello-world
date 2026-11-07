@@ -53,7 +53,7 @@ def simulator(test):
 
 def config_target(test):
     """Label the actual *selected* variant without a second profile registry."""
-    source = slug(test["sources"].replace("_", "-"), "sources")
+    source = slug(test.get("source_target", test["sources"]).replace("_", "-"), "sources")
     top = test.get("top", "")
     family = "soc" if top in ("full_chip_tb", "full_chip_dma_tb") else source
     qualifiers = []
@@ -106,7 +106,7 @@ def selected(name, plan, *, filelist=None, run_id=None, env=None, root=ROOT):
     if not soc.is_file():
         raise IdentityError("missing authoritative SoC configuration")
     selection = {
-        "sources": plan.get("sources") if isinstance(plan.get("sources"), str) else plan.get("source_target"),
+        "sources": plan.get("source_target", plan.get("sources")),
         "top": plan.get("top"),
         "firmware_mode": plan.get("firmware_mode"),
         "memory_config": plan.get("memory_config"),
