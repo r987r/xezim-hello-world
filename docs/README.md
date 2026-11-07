@@ -13,4 +13,6 @@ The [root README](../README.md) contains setup and the single generated whole-ch
 | DDR and registers | [DDR model/RTL](../rtl/memory/ddr4/README.md), [CSR ownership](csr-generation.md), [CSR source coverage](csr-source-coverage.md) |
 | Next combined test | [Functional acceptance contract](multiprotocol-integration-readiness.md), [epic #34](https://github.com/r987r/xezim-hello-world/issues/34) |
 
+Audit local Markdown links with `make check-docs` (also run by check-config and Pages CI).
+
 New contributors: read [AGENTS.md](../AGENTS.md). Never edit `gen/` or the generated section of README directly; use `make gen` and `make check-generated`. Documentation describes interfaces and reproducible behavior, **not** the last PR's status.
