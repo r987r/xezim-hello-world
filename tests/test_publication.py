@@ -313,6 +313,45 @@ class PublicationTests(unittest.TestCase):
             self.assertEqual((report.parent/'axi-transactions.json').read_bytes(),before)
             self.assertIn('All runs',report.read_text())
 
+    def test_archived_selected_plan_and_actual_runner_dispatch_provenance(self):
+        from runtime_contract import digest, dispatch_event
+        from test_intent import plan as intended
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);target=fixture(root/'evidence',axi=True)
+            test=json.loads((target/'plan.json').read_text())
+            test['stage']='all'
+            site.dump(target/'plan.json',test)
+            snapshot={'schema_version':1,'target':'chip-boot','source_revision':SHA,
+                      'stage':'all','engine':'cocotb-verilator',
+                      'adapter':'legacy_entrypoint_adapter',
+                      'migration_owner_issue':119,
+                      'adapter_scope':'legacy_internal_stimulus_opaque',
+                      'selected_firmware_mode':None,'seed':None,
+                      'command_argv':[{'label':'chip-boot','argv':['sim','-f','source.f']}],
+                      'scenario_plan_sha256':None,'intent':intended('chip-boot',test),
+                      'evidence_kind':'selected_definition_not_runtime_execution'}
+            snapshot['plan_sha256']=digest(snapshot)
+            site.dump(target/'selected-test-plan.json',snapshot)
+            events=[
+                dispatch_event(snapshot,'chip-boot',status='started'),
+                dispatch_event(snapshot,'chip-boot',status='completed',
+                               duration_s=1.0,passed=True,reason='PASS marker observed')]
+            site.dump(target/'runner-events.json',
+                      {'schema_version':1,'target':'chip-boot',
+                       'plan_sha256':snapshot['plan_sha256'],'events':events})
+            output=root/'site';output.mkdir()
+            _,entries,_=site.evidence_index(root/'evidence',output,'r987r/xezim-hello-world')
+            self.assertEqual(entries[0]['selected_plan_sha256'],snapshot['plan_sha256'])
+            self.assertEqual(entries[0]['runtime_adapter'],'legacy_entrypoint_adapter')
+            html=(output/entries[0]['path']).read_text()
+            self.assertIn('Selected per-run snapshot',html)
+            self.assertIn('internal steps independently instrumented only where available',html)
+            self.assertTrue((output/'runs/123-1/chip-boot/selected-test-plan.json').is_file())
+            corrupt=dict(snapshot);corrupt['source_revision']='b'*40
+            site.dump(target/'selected-test-plan.json',corrupt)
+            with self.assertRaisesRegex(ValueError,'hash mismatch'):
+                site.evidence_index(root/'evidence',output,'r987r/xezim-hello-world')
+
     def test_protocol_report_is_provenance_verified_and_html_re_rendered(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);target=fixture(root/'evidence',axi=True)

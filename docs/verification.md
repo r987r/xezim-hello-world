@@ -38,6 +38,12 @@ real endpoint boundaries; it does not attach CPUs, iDMA, AXI-Lite bridges
 or the separately tested memory crossbar. Behavioral targets do not prove
 physical HBM/DDR controller or PHY behavior.
 
+## Canonical selected-run plan and honest adapter boundary
+
+Every YAML regression target saves one `selected-test-plan.json` before HDL execution; it records tested source revision, resolved command arguments, selected firmware/variant, INIT/RUN/CHECK source intent, and a deterministic plan digest. The common runner records actual command start and checked outcome in `runner-events.json`. The publisher verifies the saved plan, its hash, CI provenance and observed command envelope before showing it in that exact historical test report.
+
+**This is not full stimulus migration yet.** The two SCN-2 targets reference the exact immutable source-resolved action scenario and require independent RTL-observed matching scenario evidence to qualify PASS. Three compile/lint-only targets are explicitly not executable stimulus. The remaining 22 runtime tests use a named `legacy_entrypoint_adapter` and their *internal* Python/C/SV/Xezim actions stay opaque unless separately instrumented. Temporary exceptions are source-controlled in [runtime migration policy](../config/runtime_migration.yaml); adding an unregistered legacy target fails CI instead of silently fabricating actions. [#119](https://github.com/r987r/xezim-hello-world/issues/119) owns removal of the exceptions as typed IP/driver adapters are implemented. Never interpret command completion or a planned milestone as proof that a particular AXI/TLP/GMII/DFI transaction occurred.
+
 ## Next integration sequence
 
 Initial Ethernet GMII/CPU-C, PCIe host/CPU-iDMA with modeled DDR, and LiteDRAM controller/CPU-iDMA are separately verified in opt-in variants. Their **single-run Ethernet → real DDR → CPU/iDMA → PCIe host** path remains the next distinct acceptance gate; do not infer it from individual passing regressions. The test plan display exists for every configured target, but only two runtime tests presently execute a common resolved scenario. Track executable adoption under [#119](https://github.com/r987r/xezim-hello-world/issues/119).

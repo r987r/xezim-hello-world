@@ -1,0 +1,73 @@
+# Temporary exception inventory; no UI should use this to invent actions.
+# All 22 runtime targets below delegate actual internal stimuli to existing
+# Python/C/SV/Xezim code. They are NOT counted as scenario-dispatched.
+# Future targets must implement the scenario adapter or require a reviewed,
+# explicitly owned migration exception here.
+schema_version: 1
+legacy_runtime:
+  memory:
+    owner_issue: 119
+    status: legacy_internal_stimulus_opaque
+  memory-full:
+    owner_issue: 119
+    status: legacy_internal_stimulus_opaque
+  memory-sparse:
+    owner_issue: 119
+    status: legacy_internal_stimulus_opaque
+  memory-negative:
+    owner_issue: 119
+    status: legacy_internal_stimulus_opaque
+  sram:
+    owner_issue: 119
+    status: legacy_internal_stimulus_opaque
+  sram-synthesis:
+    owner_issue: 119
+    status: legacy_internal_stimulus_opaque
+  serv:
+    owner_issue: 119
+    status: legacy_internal_stimulus_opaque
+  boot:
+    owner_issue: 119
+    status: legacy_internal_stimulus_opaque
+  boot-relocated:
+    owner_issue: 119
+    status: legacy_internal_stimulus_opaque
+  cpu-fetch:
+    owner_issue: 119
+    status: legacy_internal_stimulus_opaque
+  smoke:
+    owner_issue: 119
+    status: legacy_internal_stimulus_opaque
+  supernoc:
+    owner_issue: 119
+    status: legacy_internal_stimulus_opaque
+  supernoc-negative:
+    owner_issue: 119
+    status: legacy_internal_stimulus_opaque
+  dma-rtl:
+    owner_issue: 119
+    status: legacy_internal_stimulus_opaque
+  chip-dma:
+    owner_issue: 119
+    status: legacy_internal_stimulus_opaque
+  chip-cpu-dma:
+    owner_issue: 119
+    status: legacy_internal_stimulus_opaque
+  chip-ddr4-real:
+    owner_issue: 119
+    status: legacy_internal_stimulus_opaque
+  chip-boot:
+    owner_issue: 119
+    status: legacy_internal_stimulus_opaque
+  chip-boot-negative:
+    owner_issue: 119
+    status: legacy_internal_stimulus_opaque
+  chip-ethernet-cpu:
+    owner_issue: 119
+    status: legacy_internal_stimulus_opaque
+  chip-ethernet:
+    owner_issue: 119
+    status: legacy_internal_stimulus_opaque
+  chip-pcie-host:
+    owner_issue: 119
+    status: legacy_internal_stimulus_opaque
