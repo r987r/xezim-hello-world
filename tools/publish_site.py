@@ -471,7 +471,28 @@ def collect(client,config,destination):
                 if run.get('verified_merged_pr') is not None:
                     verified=set(run.get('verified_tested_shas',[]))
                     invalid=None
+                    # #129 introduced source-selected command plans in EVERY
+                    # target, including compile-only and protocol-only runs.
+                    # Their actual checkout may be GitHub's authenticated
+                    # temporary pull-request merge commit, not the PR head.
+                    # Verify the real GitHub commit/second-parent link before
+                    # accepting its SHA for this original run. Reuse the exact
+                    # same proof as AXI/DFI/TLP capture, never a filename guess.
+                    from runtime_contract import load as load_runner_selection
+                    for source_plan in target.rglob('selected-test-plan.json'):
+                        try:
+                            frozen=load_runner_selection(source_plan)
+                            tested_sha=frozen['source_revision']
+                            if not verified_pr_test_commit(client,run,tested_sha,verified_cache):
+                                invalid=f'PR runner checkout commit not verifiable: {tested_sha}'
+                                break
+                            verified.add(tested_sha)
+                        except (ValueError,TypeError,KeyError,OSError) as exc:
+                            invalid=f'runner snapshot invalid: {exc}'
+                            break
                     for trace_file in [*target.rglob('axi-transactions.json'), *target.rglob('protocol-transactions.json')]:
+                        if invalid:
+                            break
                         trace_run=json.loads(trace_file.read_text()).get('run',{})
                         tested_sha=trace_run.get('commit')
                         if not verified_pr_test_commit(client,run,tested_sha,verified_cache):
