@@ -135,6 +135,8 @@ class TestIntentFlowTests(unittest.TestCase):
         self.assertIn("dump(output/'data/test-intents.json',flow_intents)",site)
         self.assertIn("flowSelect.addEventListener",page)
         self.assertIn("View intended flow",page)
+        self.assertIn("selected?.planned_flow_intent||intentMap[name]",page)
+        self.assertIn("openFlow.onclick=()=>markFlow(e.target,e)",page)
         self.assertIn("No recorded result yet. Planned flow remains available.",page)
 
 
