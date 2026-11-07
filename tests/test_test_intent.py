@@ -8,7 +8,7 @@ from pathlib import Path
 import unittest
 import yaml
 
-from tools.test_intent import catalog, plan, render
+from tools.test_intent import catalog, plan, render, snapshot, validate_snapshot
 
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -72,6 +72,43 @@ class TestIntentFlowTests(unittest.TestCase):
         self.assertNotIn("<img",html)
         self.assertIn("&lt;script&gt;",html)
         self.assertIn("&lt;img",html)
+
+    def test_pre_run_plan_snapshot_tampering_rejected(self):
+        test=copy.deepcopy(self.config["tests"]["chip-pcie-host"])
+        test["args"]=["+CASE=0","--seed","17"]
+        original=snapshot("chip-pcie-host",test)
+        self.assertEqual(validate_snapshot(original,target="chip-pcie-host"),
+                         original["intent"])
+        self.assertEqual(original["intent"]["selected_args"],test["args"])
+        tampered=copy.deepcopy(original)
+        tampered["intent"]["selected_args"].append("+MUTATED=1")
+        with self.assertRaisesRegex(ValueError,"digest mismatch"):
+            validate_snapshot(tampered,target="chip-pcie-host")
+        with self.assertRaisesRegex(ValueError,"target mismatch"):
+            validate_snapshot(original,target="chip-ethernet-cpu")
+
+    def test_declared_plan_hash_stable_and_does_not_assert_dispatch(self):
+        test=copy.deepcopy(self.config["tests"]["chip-dma-scenario"])
+        s1=snapshot("chip-dma-scenario",test,scenario=self.scenario)
+        s2=snapshot("chip-dma-scenario",test,scenario=copy.deepcopy(self.scenario))
+        self.assertEqual(s1["plan_sha256"],s2["plan_sha256"])
+        self.assertEqual(s1["kind"],"source_declared_plan_not_execution")
+        self.assertNotIn("dispatched",s1["intent"])
+        self.assertNotIn("passed",s1["intent"])
+        changed=copy.deepcopy(test)
+        changed["seed"]=123
+        self.assertNotEqual(s1["plan_sha256"],
+            snapshot("chip-dma-scenario",changed,scenario=self.scenario)["plan_sha256"])
+
+    def test_runtime_snapshots_written_before_simulation(self):
+        source=(ROOT/"tools/regress.py").read_text()
+        write=source.index("(out/'planned-flow.json').write_text")
+        run=source.index("run_process(command",write)
+        self.assertLess(write,run)
+        site=(ROOT/"tools/publish_site.py").read_text()
+        self.assertIn("validate_snapshot(declared,target=target)",site)
+        self.assertIn("legacy_run_selection_not_archived",site)
+        self.assertNotIn("if target in ('chip-cpu-scenario','chip-dma-scenario'):",site)
 
     def test_site_uses_same_definition_catalog_not_data_from_passed_tests(self):
         site=(ROOT/"tools/publish_site.py").read_text()
