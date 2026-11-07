@@ -115,6 +115,23 @@ class VariantConnectivityTests(unittest.TestCase):
             bad=copy.deepcopy(actors);bad[packet]={"kind":"reserved_idle"}
             vc.reconcile(copy.deepcopy(self.graph),self.cfg,chip,bad,self.monitors)
 
+    def test_configured_gmii_tlp_dfi_source_metadata_is_not_observed(self):
+        spec=self.scenario()
+        spec["report"]["protocols"]={"sources":{
+            "ethernet0.gmii_rx":{
+                "protocol":"ethernet","clock_domain":"gmii_rx_clock",
+                "role":"stimulus","implementation":"cocotbext_eth",
+                "modeling":"vip_injected_to_rtl_mac"}
+        }}
+        with tempfile.TemporaryDirectory() as out:
+            view,graph=vc.collect(ROOT,"chip-boot",spec,Path(out))
+        self.assertEqual(view["summary"]["declared_non_axi_protocol_sources"],1)
+        self.assertEqual(view["protocol_sources"][0]["id"],"ethernet0.gmii_rx")
+        self.assertEqual(view["protocol_sources"][0]["source_status"],"declared_not_observed")
+        self.assertIn("Declared native protocol monitors",vc.render_html(view,graph))
+        self.assertIn("passing native protocol source differs",(
+            ROOT/"tools/publish_site.py").read_text())
+
     def test_bad_selected_filelist_fails_before_simulator(self):
         plan=self.scenario()
         plan["sources"].remove(str(self.super))
