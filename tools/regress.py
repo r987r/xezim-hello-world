@@ -25,7 +25,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ENGINES = {'xezim', 'xezim-compile', 'verilator-lint', 'cocotb-verilator'}
 FIELDS = {'engine', 'sources', 'ip', 'top', 'args', 'pass', 'expect_failure',
           'timeout_s', 'memory_config', 'boot_relocate', 'module', 'test_dir',
-          'build', 'reuse_build', 'env', 'seed', 'bender_targets', 'mode', 'report', 'firmware_mode', 'opt_in'}
+          'build', 'reuse_build', 'env', 'seed', 'bender_targets', 'mode', 'report', 'firmware_mode', 'opt_in', 'flow_plan'}
 
 
 def expand(config, names, stack=()):
@@ -73,6 +73,15 @@ def load_config(path):
             raise ValueError(f'{name}: opt_in must be boolean')
         if test.get('firmware_mode') not in (None, 'cpu_dma', 'pcie_host', 'pcie_dma_host', 'ethernet_mvp', 'ethernet_cpu', 'ddr_cpu_dma', 'cpu_dma_scenario', 'scenario_bfm'):
             raise ValueError(f'{name}: unknown compiled CPU firmware mode')
+        if 'flow_plan' in test:
+            source=test['flow_plan']
+            if (not isinstance(source,str)
+                    or not re.fullmatch(r'config/scenarios/[A-Za-z0-9_-]+\\.json',source)
+                    or not (ROOT/source).is_file()
+                    or test.get('firmware_mode') not in ('cpu_dma_scenario','scenario_bfm')):
+                raise ValueError(f'{name}: unsupported or unsafe executable scenario path')
+        if test.get('firmware_mode') in ('cpu_dma_scenario','scenario_bfm') and 'flow_plan' not in test:
+            raise ValueError(f'{name}: scenario adapter requires explicit flow_plan')
         if 'firmware_mode' in test and (
             test['engine'] != 'cocotb-verilator' or
             'chip_boot' not in test.get('bender_targets', []) or
