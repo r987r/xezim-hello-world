@@ -692,7 +692,6 @@ def evidence_index(evidence,output,repository):
             variant_graph=None
             view_file=source_dir/'variant-connectivity.json'
             if view_file.is_file():
-                import hashlib
                 from variant_connectivity import render_html as render_variant_html
                 variant_view=json.loads(view_file.read_text())
                 variant_graph=json.loads((source_dir/'variant-topology.json').read_text())
