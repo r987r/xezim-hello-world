@@ -314,6 +314,7 @@ class PublicationTests(unittest.TestCase):
             output=root/'site';output.mkdir()
             _,entries,_=site.evidence_index(root/'evidence',output,'r987r/xezim-hello-world')
             self.assertEqual(entries[0]['planned_flow_sha256'],original['plan_sha256'])
+            self.assertEqual(entries[0]['planned_flow_intent'],original['intent'])
             self.assertEqual(entries[0]['planned_flow_status'],'captured_before_simulation')
             path=output/'runs/123-1/chip-boot'
             self.assertEqual(json.loads((path/'test-intent.json').read_text())['selected_args'],
