@@ -749,9 +749,20 @@ def evidence_index(evidence,output,repository):
             if report_html.is_file():
                 html=report_html.read_text()
                 if '<main>' in html:
+                    catalog=selected.get('actor_monitor_catalog',{}) if selected else {}
+                    declared=catalog.get('monitors',{})
+                    source_count=declared.get('count')
+                    initiators=declared.get('declared_initiators',[])
+                    actors=(
+                        '<p>Selected source monitor catalog: '+escape(str(source_count))+
+                        ' boundaries, '+escape(str(len(initiators)))+
+                        ' declared initiators · '+escape(declared.get('status','not_declared'))+
+                        '. These are NOT proof of an elaborated pin or an accepted AXI transfer.</p>'
+                        if source_count is not None else
+                        '<p>Selected actor/monitor catalog not available for this run.</p>')
                     note=('<p>Selected per-run snapshot '+escape(selected['plan_sha256'][:16])+
                           ' · adapter '+escape(selected['adapter'])+
-                          ' · internal steps independently instrumented only where available.</p>'
+                          ' · internal steps independently instrumented only where available.</p>'+actors
                           if selected else
                           '<p>Historical run: pre-simulation selection snapshot unavailable; '
                           'do not infer detailed actions from current source.</p>')
