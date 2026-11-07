@@ -302,6 +302,60 @@ class PublicationTests(unittest.TestCase):
             self.assertIn('results.xml',entries[0]['assets'])
             self.assertEqual((report.parent/'simulation.log').read_text(),'actual simulator transcript')
 
+    def test_archived_canonical_identity_and_link_alias_keep_old_url(self):
+        from test_identity import selected, relative_path
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);target=fixture(root/'evidence')
+            # A *selected original run*, not reconstructed from newer catalog.
+            plan={'engine':'cocotb-verilator','sources':'noc',
+                  'top':'full_chip_tb','logical_test':'multicore-cold-boot',
+                  'stage':'all'}
+            identity=selected('chip-boot',plan,
+                run_id='ci-123-a1-012345abcdef')
+            plan['identity']=identity
+            site.dump(target/'plan.json',plan)
+            site.dump(target/'identity.json',identity)
+            site.dump(target/'result.json',{
+                'target':'chip-boot','passed':True,'stage':'all',
+                'identity_sha256':identity['identity_sha256'],
+                'canonical_id':relative_path(identity).as_posix()})
+            output=root/'site';output.mkdir()
+            _,entries,_=site.evidence_index(root/'evidence',output,
+                                               'r987r/xezim-hello-world')
+            e=entries[0]
+            self.assertEqual(e['identity_status'],'source_verified')
+            self.assertEqual(e['testname'],'multicore-cold-boot')
+            self.assertEqual(e['config_target'],'soc-default')
+            self.assertTrue((output/e['canonical_url']).is_file())
+            self.assertIn('runs/123-1/chip-boot/report.html',
+                          (output/e['canonical_url']).read_text())
+            self.assertTrue((output/'runs/123-1/chip-boot/report.html').is_file())
+            self.assertIn('Immutable identity',
+                (output/'runs/123-1/chip-boot/report.html').read_text())
+            self.assertTrue((output/'runs/123-1/chip-boot/identity.json').is_file())
+            identity['testname']='corrupt-name'
+            site.dump(target/'identity.json',identity)
+            with self.assertRaisesRegex(ValueError,'digest mismatch'):
+                site.evidence_index(root/'evidence',output,'r987r/xezim-hello-world')
+
+    def test_ci_attempt_identity_cannot_be_published_under_other_run(self):
+        from test_identity import selected,relative_path
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);target=fixture(root/'evidence')
+            plan={'engine':'cocotb-verilator','sources':'noc',
+                  'top':'full_chip_tb','logical_test':'multicore-cold-boot'}
+            identity=selected('chip-boot',plan,run_id='ci-98765-a2-012345abcdef')
+            plan['identity']=identity
+            site.dump(target/'plan.json',plan)
+            site.dump(target/'identity.json',identity)
+            site.dump(target/'result.json',{'target':'chip-boot','passed':True,
+                'identity_sha256':identity['identity_sha256'],
+                'canonical_id':relative_path(identity).as_posix()})
+            output=root/'site';output.mkdir()
+            with self.assertRaisesRegex(ValueError,'different CI attempt'):
+                site.evidence_index(root/'evidence',output,
+                                    'r987r/xezim-hello-world')
+
     def test_archived_plan_survives_history_without_current_scenario(self):
         from tools.test_intent import snapshot as capture_plan
         with tempfile.TemporaryDirectory() as tmp:
