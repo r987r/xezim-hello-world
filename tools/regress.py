@@ -477,6 +477,12 @@ def run_target(name, test, resolver, options):
             'args': args, 'results_xml': str(out/'results.xml'), 'stage': options.stage}
     plan_file = out/'plan.json'
     plan_file.write_text(json.dumps(plan, indent=2) + '\n')
+    # Snapshot source-resolved selected intent even for filelist-only runs.
+    # Opaque legacy internal stimulus must never appear as typed actions.
+    from runtime_contract import selection as select_runtime, save as save_runtime
+    from runtime_contract import dispatch_event, check_events
+    selected_path = out/'selected-test-plan.json'
+    save_runtime(selected_path, select_runtime(name,plan,out,commands=[]))
     if options.stage == 'files':
         print(f'FILES {name}: {filelist.relative_to(ROOT)}', flush=True)
         return True
@@ -506,6 +512,16 @@ def run_target(name, test, resolver, options):
         commands = [(name, [sys.executable, str(ROOT/'tools/sim_cocotb.py'), str(plan_file)])]
     plan['commands'] = commands
     plan_file.write_text(json.dumps(plan, indent=2) + '\n')
+    selected = select_runtime(name,plan,out,commands=commands)
+    save_runtime(selected_path,selected)
+    runner_events = []
+    def save_dispatch():
+        # Atomic plan fingerprint gives a human-readable, source-true
+        # reproduction even on an RTL timeout or failed expected outcome.
+        (out/'runner-events.json').write_text(
+            json.dumps({'schema_version':1,'plan_sha256':selected['plan_sha256'],
+                        'target':name,'events':runner_events},indent=2)+'\n')
+    save_dispatch()
     env = dict(os.environ)
     env['SOC_RUN_PLAN'] = str(plan_file)
     if test.get('firmware_mode') in ('scenario_bfm', 'cpu_dma_scenario'):
@@ -522,7 +538,18 @@ def run_target(name, test, resolver, options):
     results = []
     for label, command in commands:
         print(f'RUN {name}/{label} ({engine}, stage={options.stage})', flush=True)
-        code, timed_out = run_process(command, out/f'{label}.log', test.get('timeout_s', resolver.config['defaults']['timeout_s']), env)
+        runner_events.append(dispatch_event(selected,label,status='started'))
+        save_dispatch()
+        command_started = time.monotonic()
+        try:
+            code, timed_out = run_process(command, out/f'{label}.log',
+                                          test.get('timeout_s', resolver.config['defaults']['timeout_s']), env)
+        except (OSError, subprocess.SubprocessError) as exc:
+            runner_events.append(dispatch_event(
+                selected,label,status='completed',passed=False,
+                duration_s=time.monotonic()-command_started,reason=str(exc)))
+            save_dispatch()
+            raise
         text = (out/f'{label}.log').read_text(errors='replace')
         if engine == 'cocotb-verilator':
             for collateral in ('build.log', 'simulation.log'):
@@ -530,11 +557,16 @@ def run_target(name, test, resolver, options):
                     text += '\n' + (out/collateral).read_text(errors='replace')
         expectation = {} if options.stage == 'build' or test.get('mode') == 'compile' else test
         ok, reason = check_outcome(code, text, expectation, timed_out)
+        runner_events.append(dispatch_event(
+            selected,label,status='completed',passed=ok,
+            duration_s=time.monotonic()-command_started,reason=reason))
+        save_dispatch()
         warnings = sum('[xezim][warning]' in line or '%Warning-' in line for line in text.splitlines())
         results.append({'name': label, 'passed': ok, 'exit_code': code, 'reason': reason, 'reported_warning_lines': warnings})
         print(f'{"PASS" if ok else "FAIL"} {name}/{label}: {reason}; warnings={warnings}; logs={out.relative_to(ROOT)}/', flush=True)
         if not ok:
             print('\n'.join(text.splitlines()[-30:]), flush=True)
+    check_events(selected, runner_events)
     passed = all(r['passed'] for r in results)
     result = {'target': name, 'passed': passed, 'stage': options.stage,
               'elapsed_s': round(time.monotonic()-started, 3), 'results': results,
