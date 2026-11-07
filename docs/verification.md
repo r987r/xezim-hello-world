@@ -64,6 +64,19 @@ Publication checks the original manifest bytes against their SHA-256 and compare
 
 For active opt-in full-chip tests, an absent variant source or monitor inventory is a **FAIL**, not a reason to show the default chip's actors and call them live. Track actual elaborated-port/bit proof, verified cross-domain normalization and complete protocol/latency evidence under [#46](https://github.com/r987r/xezim-hello-world/issues/46) and [#34](https://github.com/r987r/xezim-hello-world/issues/34).
 
+## Optional CSR generator CI contract
+
+The default SoC, NoC, Ethernet, PCIe and memory regression toolchain installs
+`requirements.txt` only. The SystemRDL compiler and PeakRDL exporters are
+separate, pinned CSR-only dependencies in `csr/requirements.txt`. Ordinary
+unit-test discovery must not import those optional packages before tests run:
+the dedicated `csr-firmware.yml` workflow installs both requirement files and
+executes the real RDL/header, freestanding RV32I compilation and legacy-vs-
+generated ELF equivalence checks. A missing CSR compiler may skip only CSR-
+specific tests in a general no-CSR job; it must never be interpreted as
+successful CSR qualification. Use the dedicated workflow and its source SHA
+for that claim.
+
 ## Acceptance gates and present limits
 
 - Every declared route in a scope must complete against the intended target.
