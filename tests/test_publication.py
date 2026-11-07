@@ -360,6 +360,51 @@ class PublicationTests(unittest.TestCase):
             self.assertIn('Protocol Run Explorer',(output/entries[0]['path']).read_text())
             self.assertTrue((output/'runs/123-1/chip-boot/protocol-transactions.json').is_file())
 
+    def test_quarantine_wrong_historical_provenance_keeps_other_artifacts(self):
+        run={'id':123,'head_sha':SHA,'run_attempt':2}
+        def record(commit=SHA,workflow_id=123,attempt=2,dirty=False):
+            return {'schema_version':1,'run':{
+                'commit':commit,'workflow_run_id':workflow_id,
+                'workflow_attempt':attempt,'dirty':dirty},
+                'records':[]}
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            bad=root/'bad';good=root/'good'
+            bad.mkdir();good.mkdir()
+            site.dump(bad/'protocol-transactions.json',record(workflow_id=999))
+            site.dump(good/'protocol-transactions.json',record())
+            self.assertIn('workflow_run_id mismatch',
+                site.invalid_artifact_trace_provenance(bad,run))
+            self.assertIsNone(site.invalid_artifact_trace_provenance(good,run))
+            site.dump(bad/'protocol-transactions.json',record(commit='b'*40))
+            self.assertIn('tested SHA mismatch',
+                site.invalid_artifact_trace_provenance(bad,run))
+            site.dump(bad/'protocol-transactions.json',record(attempt=1))
+            self.assertIn('workflow_attempt mismatch',
+                site.invalid_artifact_trace_provenance(bad,run))
+            site.dump(bad/'protocol-transactions.json',record(dirty=True))
+            self.assertIn('dirty/missing',
+                site.invalid_artifact_trace_provenance(bad,run))
+            site.dump(bad/'protocol-transactions.json',record())
+            site.dump(bad/'axi-transactions.json',record(workflow_id=321))
+            self.assertIn('workflow_run_id mismatch',
+                site.invalid_artifact_trace_provenance(bad,run))
+            self.assertIsNone(site.invalid_artifact_trace_provenance(good,run))
+            self.assertTrue((good/'protocol-transactions.json').exists())
+
+    def test_quarantine_accepts_only_attested_pr_tested_shas(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            root.joinpath('protocol-transactions.json').write_text(json.dumps({
+                'schema_version':1,'run':{'commit':'c'*40,'dirty':False,
+                 'workflow_run_id':777,'workflow_attempt':1},'records':[]}))
+            run={'id':777,'head_sha':SHA,'run_attempt':1,
+                 'verified_tested_shas':['c'*40]}
+            self.assertIsNone(site.invalid_artifact_trace_provenance(root,run))
+            run['verified_tested_shas']=[]
+            self.assertIn('tested SHA mismatch',
+                site.invalid_artifact_trace_provenance(root,run))
+
     def test_generic_report_wrong_ci_commit_is_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);target=fixture(root/'evidence')
