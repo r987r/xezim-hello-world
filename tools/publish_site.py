@@ -619,6 +619,12 @@ def evidence_index(evidence,output,repository):
                 intended=intended_flow_plan(target,plan)
                 snapshot_status='legacy_run_selection_not_archived'
                 declared_hash=None
+            if flow_data is not None:
+                observed_hash=flow_data.get('planned_flow_sha256')
+                if declared_hash is not None and observed_hash != declared_hash:
+                    raise ValueError('observed test-flow evidence references a different selected plan')
+                if declared_hash is None and observed_hash is not None:
+                    raise ValueError('observed test-flow SHA lacks original archived plan')
             dump(destination/'test-intent.json',intended)
             if latency_data is not None and (
                     not protocol_data or protocol_data.get('latency')!=latency_data):
