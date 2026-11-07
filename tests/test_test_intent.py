@@ -8,7 +8,7 @@ from pathlib import Path
 import unittest
 import yaml
 
-from tools.test_intent import catalog, plan, render
+from tools.test_intent import catalog, plan, render, snapshot, validate_snapshot
 
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -29,12 +29,41 @@ class TestIntentFlowTests(unittest.TestCase):
             self.assertNotIn("passed",entry)
             self.assertIn(entry["detail_status"],("declared_steps","no_detailed_phase_steps_declared"))
 
+    def test_runtime_adoption_coverage_cannot_silently_regress(self):
+        from collections import Counter
+        status=Counter(v["execution_adoption"] for v in self.entries.values())
+        self.assertEqual(status["not_applicable_compile_or_lint"],3)
+        self.assertEqual(status["canonical_resolved_scenario"],2)
+        self.assertEqual(status["instrumented_legacy_flow"],4)
+        # Existing unmigrated test count is the strict upper bound;
+        # a newly added legacy target must be migrated along with another.
+        self.assertLessEqual(status["legacy_runtime_without_action_contract"],18)
+        self.assertEqual(sum(status.values()),len(self.entries))
+        for item in self.entries.values():
+            if item["execution_adoption"]=="not_applicable_compile_or_lint":
+                self.assertFalse(item["runtime_phases_applicable"])
+            else:
+                self.assertTrue(item["runtime_phases_applicable"])
+
     def test_pcie_init_run_check_are_from_regression_not_sim_logs(self):
         intent=self.entries["chip-pcie-host"]
         self.assertTrue(intent["declared_actions"]>=15)
         self.assertIn("enumerate",[a["label"] for a in intent["phases"]["init"]])
         self.assertIn("bar_roundtrip",[a["label"] for a in intent["phases"]["run"]])
         self.assertIn("final_verify",[a["label"] for a in intent["phases"]["check"]])
+
+    def test_scenario_catalog_is_selected_from_yaml_not_firmware_name(self):
+        intent=self.entries["chip-cpu-scenario"]
+        self.assertEqual(intent["scenario_source"],
+                         self.config["tests"]["chip-cpu-scenario"]["flow_plan"])
+        with self.assertRaisesRegex(ValueError,"unsafe scenario declaration"):
+            mutated=copy.deepcopy(self.config)
+            mutated["tests"]["chip-dma-scenario"]["flow_plan"]="../evil.json"
+            catalog(mutated)
+        with self.assertRaisesRegex(ValueError,"declared scenario differs"):
+            altered=copy.deepcopy(self.scenario)
+            altered["seed"]+=1
+            catalog(self.config,scenario=altered)
 
     def test_scenario_actions_expose_dependencies_and_inputs(self):
         intent=self.entries["chip-dma-scenario"]
@@ -73,6 +102,45 @@ class TestIntentFlowTests(unittest.TestCase):
         self.assertIn("&lt;script&gt;",html)
         self.assertIn("&lt;img",html)
 
+    def test_pre_run_plan_snapshot_tampering_rejected(self):
+        test=copy.deepcopy(self.config["tests"]["chip-pcie-host"])
+        test["args"]=["+CASE=0","--seed","17"]
+        original=snapshot("chip-pcie-host",test)
+        self.assertEqual(validate_snapshot(original,target="chip-pcie-host"),
+                         original["intent"])
+        self.assertEqual(original["intent"]["selected_args"],test["args"])
+        tampered=copy.deepcopy(original)
+        tampered["intent"]["selected_args"].append("+MUTATED=1")
+        with self.assertRaisesRegex(ValueError,"digest mismatch"):
+            validate_snapshot(tampered,target="chip-pcie-host")
+        with self.assertRaisesRegex(ValueError,"target mismatch"):
+            validate_snapshot(original,target="chip-ethernet-cpu")
+
+    def test_declared_plan_hash_stable_and_does_not_assert_dispatch(self):
+        test=copy.deepcopy(self.config["tests"]["chip-dma-scenario"])
+        s1=snapshot("chip-dma-scenario",test,scenario=self.scenario)
+        s2=snapshot("chip-dma-scenario",test,scenario=copy.deepcopy(self.scenario))
+        self.assertEqual(s1["plan_sha256"],s2["plan_sha256"])
+        self.assertEqual(s1["kind"],"source_declared_plan_not_execution")
+        self.assertNotIn("dispatched",s1["intent"])
+        self.assertNotIn("passed",s1["intent"])
+        changed=copy.deepcopy(test)
+        changed["seed"]=123
+        self.assertNotEqual(s1["plan_sha256"],
+            snapshot("chip-dma-scenario",changed,scenario=self.scenario)["plan_sha256"])
+
+    def test_runtime_snapshots_written_before_simulation(self):
+        source=(ROOT/"tools/regress.py").read_text()
+        write=source.index("(out/'planned-flow.json').write_text")
+        run=source.index("run_process(command",write)
+        self.assertLess(write,run)
+        site=(ROOT/"tools/publish_site.py").read_text()
+        self.assertIn("validate_snapshot(declared,target=target)",site)
+        self.assertIn("legacy_run_selection_not_archived",site)
+        self.assertNotIn("if target in ('chip-cpu-scenario','chip-dma-scenario'):",site)
+        self.assertIn("flow_result['planned_flow_sha256']=selected['plan_sha256']",source)
+        self.assertIn("observed test-flow evidence references a different selected plan",site)
+
     def test_site_uses_same_definition_catalog_not_data_from_passed_tests(self):
         site=(ROOT/"tools/publish_site.py").read_text()
         page=(ROOT/"tools/templates/site_runs.html").read_text()
@@ -80,6 +148,8 @@ class TestIntentFlowTests(unittest.TestCase):
         self.assertIn("dump(output/'data/test-intents.json',flow_intents)",site)
         self.assertIn("flowSelect.addEventListener",page)
         self.assertIn("View intended flow",page)
+        self.assertIn("selected?.planned_flow_intent||intentMap[name]",page)
+        self.assertIn("openFlow.onclick=()=>markFlow(e.target,e)",page)
         self.assertIn("No recorded result yet. Planned flow remains available.",page)
 
 
