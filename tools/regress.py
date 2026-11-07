@@ -512,7 +512,13 @@ def run_target(name, test, resolver, options):
     from test_intent import snapshot as snapshot_intent, validate_snapshot
     scenario = None
     if test.get('firmware_mode') in ('scenario_bfm', 'cpu_dma_scenario'):
-        scenario = json.loads((ROOT/'config/scenarios/cpu-bfm-ddr-roundtrip.json').read_text())
+        # Reuse the already resolved immutable plan that the C/BFM adapter
+        # consumes. Reading the authoring spec here would lose selected
+        # randomized arguments and resolved buffer addresses.
+        scenario_location = out/('variant' if test['firmware_mode']=='cpu_dma_scenario' else '')/'scenario-plan.json'
+        if not scenario_location.is_file():
+            raise ValueError('runtime-resolved scenario plan missing before pre-run snapshot')
+        scenario = json.loads(scenario_location.read_text())
     selected = snapshot_intent(name, plan, scenario=scenario)
     validate_snapshot(selected, target=name)
     (out/'planned-flow.json').write_text(json.dumps(selected, indent=2) + '\n')
