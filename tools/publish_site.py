@@ -391,6 +391,32 @@ def select_workflow_runs(client, producers, merged_heads, history, *, max_pages=
     return selected, notes
 
 
+def authenticated_runner_revisions(client, run, artifact_folder, cache=None):
+    """Attest #129's original selected commit, including no-AXI CI jobs.
+
+    PR workflows may checkout refs/pull/N/merge; the *actual Git commit*
+    must be a verified GitHub merge with the CI PR head as second parent.
+    A malformed snapshot or foreign checkout is NEVER repaired by replacing
+    its source SHA with today's main. The caller quarantines the archive.
+    """
+    from runtime_contract import load as load_runner_selection
+    verified=set()
+    for file in sorted(artifact_folder.rglob('selected-test-plan.json')):
+        try:
+            snapshot=load_runner_selection(file)
+            tested=snapshot['source_revision']
+        except (ValueError,TypeError,KeyError,OSError) as exc:
+            raise ValueError(f'invalid selected runner snapshot: {exc}') from exc
+        if run.get('head_branch')=='main':
+            accepted=tested==run.get('head_sha')
+        else:
+            accepted=verified_pr_test_commit(client,run,tested,cache)
+        if not accepted:
+            raise ValueError(f'original runner checkout not authenticated: {tested}')
+        verified.add(tested)
+    return verified
+
+
 def invalid_artifact_trace_provenance(artifact_folder, run):
     """Reject an untrustworthy capture *before* copying it into Pages.
 
@@ -468,31 +494,18 @@ def collect(client,config,destination):
                     target.mkdir(exist_ok=True)
                     extract_archive(raw,target,config,artifact.get('digest'),evidence_only=True)
                     (target/'.complete').write_text('verified\n')
+                try:
+                    runner_revisions=authenticated_runner_revisions(
+                        client,run,target,verified_cache)
+                except ValueError as exc:
+                    shutil.rmtree(target)
+                    notes.append(f'Run {run["id"]}, artifact {artifact["name"]}: '
+                                 f'excluded unverified runner source ({exc})')
+                    continue
                 if run.get('verified_merged_pr') is not None:
-                    verified=set(run.get('verified_tested_shas',[]))
+                    verified=set(run.get('verified_tested_shas',[])) | runner_revisions
                     invalid=None
-                    # #129 introduced source-selected command plans in EVERY
-                    # target, including compile-only and protocol-only runs.
-                    # Their actual checkout may be GitHub's authenticated
-                    # temporary pull-request merge commit, not the PR head.
-                    # Verify the real GitHub commit/second-parent link before
-                    # accepting its SHA for this original run. Reuse the exact
-                    # same proof as AXI/DFI/TLP capture, never a filename guess.
-                    from runtime_contract import load as load_runner_selection
-                    for source_plan in target.rglob('selected-test-plan.json'):
-                        try:
-                            frozen=load_runner_selection(source_plan)
-                            tested_sha=frozen['source_revision']
-                            if not verified_pr_test_commit(client,run,tested_sha,verified_cache):
-                                invalid=f'PR runner checkout commit not verifiable: {tested_sha}'
-                                break
-                            verified.add(tested_sha)
-                        except (ValueError,TypeError,KeyError,OSError) as exc:
-                            invalid=f'runner snapshot invalid: {exc}'
-                            break
                     for trace_file in [*target.rglob('axi-transactions.json'), *target.rglob('protocol-transactions.json')]:
-                        if invalid:
-                            break
                         trace_run=json.loads(trace_file.read_text()).get('run',{})
                         tested_sha=trace_run.get('commit')
                         if not verified_pr_test_commit(client,run,tested_sha,verified_cache):
