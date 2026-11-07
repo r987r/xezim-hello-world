@@ -6,6 +6,7 @@
 <div class="grid" id="fabric-facts"></div>
 <div class="grid" style="align-items:end"><label>Fabric plane <select id="fabric-plane"><option value="data">Data (AXI4)</option><option value="config">Configuration (AXI4 transport)</option></select></label><label>Filter by endpoint, subsystem or target <input id="fabric-search" type="search" placeholder="e.g. compute0, sram, hbm0" autocomplete="off"></label></div>
 <h2>Route-by-route latency in reference clock cycles</h2>
+<p class="muted">This is a <strong>structural route inventory first</strong>, and measured latency only where a qualified serial AXI test supplies matching RTL/DV execution evidence. <strong>Unmeasured</strong> means no valid per-stage samples were available for this source revision, never zero cycles. Historical measurements remain accessible in individual test reports. Select a route for its source, router path and evidence links.</p>
 <p id="fabric-evidence-coverage" class="muted" role="status" aria-live="polite"></p>
 <p class="muted" id="fabric-reference-clock">Reference clock: awaiting measured simulation evidence.</p>
 <p class="muted fabric-desktop-explainer">One row per initiator → target. Each NoC column covers the measured AXI ingress-to-egress request <em>plus</em> response delay; target R and W service is measured at the last observed target-facing AXI port, including any downstream crossbar/model delay. Cells show <strong>min / avg / max</strong> over serial one-beat samples, followed by n. Clock normalization uses the measured testbench period (10 ns in current simulations), <em>not</em> an assumed physical implementation frequency. — means this block is not on the route or the operation is not permitted; “unmeasured” means the route exists but eligible verified RTL-equivalent evidence is missing. Independent stage minima/maxima need not sum to end-to-end extrema (averages sum for the same paired samples).</p>
@@ -31,6 +32,13 @@
 #fabric-latency-table td:first-child,#fabric-latency-table th:first-child{min-width:13rem;max-width:13rem}
 #fabric-latency-table button{font:inherit;text-align:left;cursor:pointer;color:var(--accent);background:transparent;border:0;padding:0}
 #fabric-latency-table button[aria-pressed="true"]{text-decoration:underline;font-weight:700}
+#fabric-latency-table tr:hover td{background:var(--panel)}
+#fabric-latency-table th{position:sticky;top:0;z-index:2;white-space:normal;min-width:112px;line-height:1.4}
+#fabric-latency-table .metric-line{min-width:102px}
+#fabric-latency-table .metric-line .missing{font-style:italic}
+#fabric-latency-table td:first-child,#fabric-latency-table th:first-child{z-index:5}
+#fabric-latency-table td:nth-child(2),#fabric-latency-table th:nth-child(2){z-index:4}
+#fabric-evidence-coverage{font-weight:600;line-height:1.6}
 #fabric-latency-table .metric-line{display:block;line-height:1.5}
 #fabric-latency-table .metric-label{display:inline-block;min-width:1.2rem;color:var(--muted)}
 #fabric-latency-table .metric-n{font-size:.75rem;color:var(--muted)}
@@ -135,9 +143,9 @@ if(coverage){
     ?n+' source-verified routes measured on the current RTL/DV inputs ('+
        coverage.current_stage_observations+' qualified per-operation stage records).'
     :hist
-      ?'Current RTL latency unavailable. '+hist+
-         ' historical AXI observations are retained in past run reports, but the RTL/DV execution fingerprints do not match this published revision. A new serial one-beat NoC capture is required.'
-      :'No verified AXI baseline traces have been collected for this RTL/DV revision.';
+      ?'No current-source measured latency: '+hist+
+         ' historical AXI observations exist, but their RTL/DV execution fingerprints do not match this revision. Open the original test reports or rerun the serial one-beat NoC regression.'
+      :'No qualified serial one-beat AXI timing capture is available for this revision. Structural routes and configured pending budgets are source-derived, but timing remains unmeasured.';
 }
 const fmt=x=>Number.isInteger(x)?String(x):Number(x).toFixed(2).replace(/0+$/,'').replace(/\.$/,'');
 const ref=latency.reference_clock;
