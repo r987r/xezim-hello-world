@@ -102,7 +102,7 @@ def load(config: dict, *, root: Path = ROOT) -> dict:
             raise StimulusCatalogError(f"{logical}: only scenario-native tests may reference executable plan")
         if scenario is not None:
             if (not isinstance(scenario, str) or not re.fullmatch(
-                    r"config/scenarios/[A-Za-z0-9_-]+\\.json", scenario)
+                    r"config/scenarios/[A-Za-z0-9_-]+\.json", scenario)
                     or not (root / scenario).is_file()):
                 raise StimulusCatalogError(f"{logical}: unsafe/absent executable scenario source")
         encoded = json.dumps(item, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
