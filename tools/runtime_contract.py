@@ -14,7 +14,11 @@ from pathlib import Path
 import subprocess
 from typing import Any
 
-from test_intent import plan as source_intent
+try:
+    from .test_intent import plan as source_intent
+except ImportError:
+    # Direct "python tools/regress.py" runs with tools/ as its sys.path[0].
+    from test_intent import plan as source_intent
 
 SCHEMA = 1
 PHASES = ("init", "run", "check")
