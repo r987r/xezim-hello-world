@@ -17,7 +17,7 @@ from pathlib import Path
 import shutil
 import subprocess
 
-import yaml
+from selected_rtl_provenance import selected, public_fields
 
 ROOT = Path(__file__).resolve().parents[1]
 FORMAT = "{inst}|||{module}|||{file}"
@@ -25,15 +25,9 @@ FORMAT = "{inst}|||{module}|||{file}"
 
 def analyze(root: Path, profile: str, binary: str = "slang-hier") -> dict:
     root = root.resolve()
-    config = yaml.safe_load((root / "config/regression.yaml").read_text())
-    if profile not in config["tests"]:
-        raise ValueError(f"unknown regression profile {profile!r}")
-    top = config["tests"][profile].get("top")
-    if not isinstance(top, str) or not top:
-        raise ValueError(f"{profile}: this profile has no unique top")
-    files = root / ".tools/regression" / profile / "sources.f"
-    if not files.is_file():
-        raise ValueError(f"{profile}: no resolved filelist; run tools/regress.py {profile} --stage files")
+    attested = selected(root, profile)
+    top = attested["top"]
+    files = attested["source_list"]
     exe = shutil.which(binary)
     if not exe:
         raise ValueError(f"slang-hier executable not found: {binary}")
@@ -51,11 +45,9 @@ def analyze(root: Path, profile: str, binary: str = "slang-hier") -> dict:
                               "source": fields[2].strip()})
     if not instances:
         raise ValueError(f"{profile}: slang-hier returned no recognizable hierarchy")
-    fingerprint = hashlib.sha256(files.read_bytes()).hexdigest()
-    return {"schema_version": 1, "profile": profile, "top": top,
-            "evidence": "elaborated_slang_hier",
-            "filelist_sha256": fingerprint, "command": argv,
-            "instances": instances, "diagnostics": run.stderr.splitlines()}
+    return {**public_fields(attested), "evidence": "elaborated_slang_hier_inputs_attested",
+            "command": argv, "instances": instances,
+            "diagnostics": run.stderr.splitlines()}
 
 
 def main():

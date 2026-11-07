@@ -22,7 +22,13 @@ class ExternalAdapterTests(unittest.TestCase):
         (self.root / ".tools/regression/fake").mkdir(parents=True)
         (self.root / "config/regression.yaml").write_text(
             "schema_version: 1\ntests:\n  fake:\n    top: fake_tb\n")
+        (self.root / "fake.sv").write_text("module fake_tb(input logic clk); endmodule\n")
         (self.root / ".tools/regression/fake/sources.f").write_text("fake.sv\n")
+        (self.root / ".tools/regression/fake/plan.json").write_text(json.dumps({
+            "target":"fake", "top":"fake_tb", "source_target":"noc",
+            "sources":["fake.sv"]}))
+        (self.root / "config/regression.yaml").write_text(
+            "schema_version: 1\\ntests:\\n  fake:\\n    top: fake_tb\\n    sources: noc\\n".replace("\\n","\n"))
 
     def test_fail_closed_missing_binary(self):
         with patch("design_netlist.shutil.which", return_value=None):
@@ -43,7 +49,10 @@ class ExternalAdapterTests(unittest.TestCase):
         with patch("design_netlist.shutil.which", return_value="/mock/slang-report"), \
              patch("design_netlist.subprocess.run", side_effect=run):
             meta = design_netlist.analyze(self.root, "fake", "ports", outfile)
-        self.assertEqual(meta["evidence"], "elaborated_slang_netlist")
+        self.assertEqual(meta["evidence"], "elaborated_slang_netlist_inputs_attested")
+        self.assertIn("fake.sv",meta["selected_source_sha256"])
+        self.assertEqual(meta["source_count"],1)
+        self.assertIn("plan_sha256",meta)
         self.assertEqual(json.loads(outfile.read_text())[0]["name"], "fake_tb.clk")
         self.assertTrue((outfile.parent / (outfile.name + ".meta.json")).exists())
 
@@ -66,7 +75,32 @@ class ExternalAdapterTests(unittest.TestCase):
              patch("design_elaborate.subprocess.run", side_effect=run):
             result = design_elaborate.analyze(self.root, "fake")
         self.assertEqual(result["instances"][0]["module"], "fake_tb")
-        self.assertEqual(result["evidence"], "elaborated_slang_hier")
+        self.assertEqual(result["evidence"], "elaborated_slang_hier_inputs_attested")
+        self.assertEqual(result["source_count"],1)
+
+    def test_source_plan_and_filelist_provenance_fail_closed(self):
+        from selected_rtl_provenance import selected
+        import hashlib
+        valid=selected(self.root,"fake")
+        self.assertEqual(valid["selected_source_sha256"]["fake.sv"],
+                         hashlib.sha256((self.root/"fake.sv").read_bytes()).hexdigest())
+        planfile=self.root/".tools/regression/fake/plan.json"
+        plan=json.loads(planfile.read_text())
+        plan["top"]="another_top"
+        planfile.write_text(json.dumps(plan))
+        with self.assertRaisesRegex(ValueError,"disagrees"):
+            selected(self.root,"fake")
+        plan["top"]="fake_tb"
+        planfile.write_text(json.dumps(plan))
+        (self.root/"fake.sv").unlink()
+        with self.assertRaisesRegex(ValueError,"selected source missing"):
+            selected(self.root,"fake")
+        (self.root/"fake.sv").write_text("module fake_tb; endmodule")
+        identity={"legacy_target":"fake","selection":{"filelist_sha256":"0"*64}}
+        (self.root/".tools/regression/fake/identity.json").write_text(json.dumps(identity))
+        with self.assertRaisesRegex(ValueError,"filelist SHA mismatch"):
+            selected(self.root,"fake")
+
 
 
 if __name__ == "__main__":
