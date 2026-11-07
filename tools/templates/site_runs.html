@@ -253,7 +253,11 @@ function render(){
     if(kind==="negative"&&!e.expected_failure)continue;
     // The same target can run in multiple CI workflows. Never hide a PCIe
     // host scope just because a normal CPU/DMA workflow used that name.
-    const key=e.target+"|"+e.workflow;
+    // A single legacy target can later run on several selected configurations.
+    // Never hide one simulator/config/logical-test result behind another.
+    const identityKey=e.simulator&&e.config_target&&e.testname?
+      [e.simulator,e.config_target,e.testname].join("|"):e.target;
+    const key=identityKey+"|"+e.workflow;
     if(latest&&seen.has(key))continue;
     seen.add(key);
     const tr=document.createElement("tr");
