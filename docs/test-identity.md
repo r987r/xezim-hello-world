@@ -60,7 +60,7 @@ No later version of the YAML can relabel an archived test.
   still a private temporary compatibility detail for workflows that resolve
   source filelists by selection key. This is **not** a second public naming
   scheme. Migrating this private scratch resolver and all upload scripts is
-  tracked separately in #119; do not delete historical build evidence. 
+  tracked separately in [#139](https://github.com/r987r/xezim-hello-world/issues/139); do not delete historical build evidence. 
 - The physical memory aperture, CSR bases, NoC configuration and IP
   version still come from `config/soc.yaml`, pinned manifests and
   the actual selected source closure. Renaming a test cannot swap an IP.
