@@ -214,6 +214,7 @@ def collect(root: Path, target: str, plan: dict, out: Path) -> tuple[dict,dict]:
     known=set()
     boundaries=[]
     subsystem_names={s["name"] for s in cfg["subsystems"]}
+    intermesh={(row["from"],row["to"]) for row in super_manifest["connections"]}
     for monitor in monitors:
         mid=monitor.get("id")
         if not isinstance(mid,str) or mid in known:
@@ -227,11 +228,19 @@ def collect(root: Path, target: str, plan: dict, out: Path) -> tuple[dict,dict]:
         item=networks[network]["endpoints"][endpoint]
         pname=(item.get("mgr_port_protocol") or item.get("sbr_port_protocol"))[0]
         model=next((p for p in proto if p["name"]==pname),None)
-        if (model is None or
-                (monitor["role"]=="initiator") != bool(item.get("mgr_port_protocol")) or
+        role=monitor.get("role")
+        if role=="link":
+            endpoints=monitor.get("endpoints")
+            match=(isinstance(endpoints,list) and len(endpoints)==2 and
+                   endpoints[0]==mid and (endpoints[0],endpoints[1]) in intermesh and
+                   not item.get("mgr_port_protocol"))
+        else:
+            match=(role in ("initiator","target") and
+                   (role=="initiator")==bool(item.get("mgr_port_protocol")))
+        if (model is None or not match or
                 any(monitor.get(a)!=model[b] for a,b in (
                     ("addr_width","addr_width"),("data_width","data_width"),("id_width","id_width")))):
-            raise VariantEvidenceError("AXI monitor widths or role differ from pinned FlooGen: "+mid)
+            raise VariantEvidenceError("AXI monitor widths/role or intermesh link differ from FlooGen: "+mid)
         prefix=monitor.get("prefix")
         if not isinstance(prefix,str) or not all(
                 prefix+"_"+channel in rtl_taps for channel in ("awvalid","arvalid","bvalid","rvalid")):
@@ -248,6 +257,7 @@ def collect(root: Path, target: str, plan: dict, out: Path) -> tuple[dict,dict]:
         boundaries.append({
             "id":mid,"network":network,"subsystem":sub,
             "plane":monitor["plane"],"role":monitor["role"],
+            "rtl_port_direction":"manager" if item.get("mgr_port_protocol") else "subordinate",
             "interface_name":endpoint+"_axi_"+("in" if monitor["role"]=="initiator" else "out"),
             "address_bits":model["addr_width"],"data_bits":model["data_width"],
             "axi_id_bits":model["id_width"],
@@ -301,6 +311,7 @@ def collect(root: Path, target: str, plan: dict, out: Path) -> tuple[dict,dict]:
             "monitors":len(boundaries),
             "initiators":sum(b["role"]=="initiator" for b in boundaries),
             "targets":sum(b["role"]=="target" for b in boundaries),
+            "intermesh_links":sum(b["role"]=="link" for b in boundaries),
             "declared_live_peripherals":sum(x["data_status"].startswith("generated_") for x in states.values()),
         },
     }
