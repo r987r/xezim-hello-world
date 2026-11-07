@@ -35,7 +35,8 @@ FILES={'result.json','plan.json','sources.f','simulation.log','build.log','resul
        'axi-transactions.json','axi-events.jsonl',
        'protocol-transactions.json','protocol-events.jsonl','memory-operations.json',
        'test-flow.json','test-flow-events.jsonl','traffic-latency.json',
-       'ddr-native-csr-map.json','ddr4_fullchip_evidence.json'}
+       'ddr-native-csr-map.json','ddr4_fullchip_evidence.json',
+       'memory-lifetimes.json'}
 
 
 def dump(path,data):
@@ -590,6 +591,21 @@ def evidence_index(evidence,output,repository):
             protocol_data=json.loads(protocol_path.read_text()) if protocol_path.exists() else None
             flow_path=source_dir/'test-flow.json'
             flow_data=json.loads(flow_path.read_text()) if flow_path.exists() else None
+            lifetimes_path=source_dir/'memory-lifetimes.json'
+            lifetime_data=json.loads(lifetimes_path.read_text()) if lifetimes_path.exists() else None
+            if lifetime_data is not None:
+                # Never render a planner-only memory table as real RTL proof.
+                if (result.get('passed') is not True
+                        or target not in ('chip-cpu-scenario','chip-dma-scenario')
+                        or lifetime_data.get('scenario_id') != 'cpu_bfm_ddr_roundtrip'
+                        or not isinstance(lifetime_data.get('buffers'),list)
+                        or len(lifetime_data['buffers']) != 3
+                        or lifetime_data.get('real_allocation_tokens_proven') is not False
+                        or lifetime_data.get('release_quiescence_proven') is not False
+                        or lifetime_data.get('status') not in
+                        ('cpu_phys_correlated_lifetimes_planned_only',
+                         'bfm_traffic_observed_allocation_unmeasured')):
+                    raise ValueError('unqualified memory lifetime artifact')
             latency_path=source_dir/'traffic-latency.json'
             latency_data=json.loads(latency_path.read_text()) if latency_path.exists() else None
             if flow_data is not None:
@@ -670,6 +686,9 @@ def evidence_index(evidence,output,repository):
                         and re.fullmatch(r'[a-f0-9]{40}',fabric_matches[tested_sha])):
                     entry['verified_fabric_source_sha']=fabric_matches[tested_sha]
                 render_report(trace,destination/'report.html')
+                if lifetime_data is not None:
+                    from scenario_memory_trace import embed_in_run_report
+                    embed_in_run_report(destination/'report.html',lifetime_data)
                 html=(destination/'report.html').read_text()
                 up=os.path.relpath(output,destination).replace(os.sep,'/')
                 nav=f'<p style="margin:0 0 12px"><a href="{up}/index.html">Verification hub</a> · <a href="{up}/runs.html">All runs</a> · <a href="{escape(run["html_url"])}">CI evidence</a></p>'
