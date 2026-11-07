@@ -310,7 +310,7 @@ class PublicationTests(unittest.TestCase):
             plan={'engine':'cocotb-verilator','sources':'noc',
                   'top':'full_chip_tb','logical_test':'multicore-cold-boot',
                   'stage':'all'}
-            identity=selected('chip-boot',plan,
+            identity=selected('chip-boot',plan, filelist=target/'sources.f',
                 run_id='ci-123-a1-012345abcdef')
             plan['identity']=identity
             site.dump(target/'plan.json',plan)
@@ -333,6 +333,11 @@ class PublicationTests(unittest.TestCase):
             self.assertIn('Immutable identity',
                 (output/'runs/123-1/chip-boot/report.html').read_text())
             self.assertTrue((output/'runs/123-1/chip-boot/identity.json').is_file())
+            original=(target/'sources.f').read_bytes()
+            (target/'sources.f').write_bytes(b'foreign selected RTL filelist')
+            with self.assertRaisesRegex(ValueError,'original archived source filelist'):
+                site.evidence_index(root/'evidence',output,'r987r/xezim-hello-world')
+            (target/'sources.f').write_bytes(original)
             identity['testname']='corrupt-name'
             site.dump(target/'identity.json',identity)
             with self.assertRaisesRegex(ValueError,'digest mismatch'):
