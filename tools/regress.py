@@ -166,6 +166,8 @@ def load_config(path):
         raise ValueError('full suite must cover every non-opt-in declared test')
     if any(not any(name in expand(config, [suite]) for suite in config['suites'] if suite != 'full') for name in opt_in):
         raise ValueError('opt-in regression must remain addressable through a named suite')
+    from runtime_contract import validate_migration_inventory
+    validate_migration_inventory(config)
     return config
 
 
