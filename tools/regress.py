@@ -25,7 +25,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ENGINES = {'xezim', 'xezim-compile', 'verilator-lint', 'cocotb-verilator'}
 FIELDS = {'engine', 'sources', 'ip', 'top', 'args', 'pass', 'expect_failure',
           'timeout_s', 'memory_config', 'boot_relocate', 'module', 'test_dir',
-          'build', 'reuse_build', 'env', 'seed', 'bender_targets', 'mode', 'report', 'firmware_mode', 'opt_in'}
+          'build', 'reuse_build', 'env', 'seed', 'bender_targets', 'mode', 'report', 'firmware_mode', 'opt_in', 'flow_plan'}
 
 
 def expand(config, names, stack=()):
@@ -73,6 +73,20 @@ def load_config(path):
             raise ValueError(f'{name}: opt_in must be boolean')
         if test.get('firmware_mode') not in (None, 'cpu_dma', 'pcie_host', 'pcie_dma_host', 'ethernet_mvp', 'ethernet_cpu', 'ddr_cpu_dma', 'cpu_dma_scenario', 'scenario_bfm'):
             raise ValueError(f'{name}: unknown compiled CPU firmware mode')
+        if 'flow_plan' in test:
+            source=test['flow_plan']
+            if (not isinstance(source,str)
+                    or not re.fullmatch(r'config/scenarios/[A-Za-z0-9_-]+\.json',source)
+                    or not (ROOT/source).is_file()
+                    # Only this exact pinned scenario is supported by the
+                    # current eight-action C/BFM executor. A new scenario
+                    # must add a real adapter rather than silently driving
+                    # a different plan than the Test Runs viewer displays.
+                    or source != 'config/scenarios/cpu-bfm-ddr-roundtrip.json'
+                    or test.get('firmware_mode') not in ('cpu_dma_scenario','scenario_bfm')):
+                raise ValueError(f'{name}: unsupported or unsafe executable scenario path')
+        if test.get('firmware_mode') in ('cpu_dma_scenario','scenario_bfm') and 'flow_plan' not in test:
+            raise ValueError(f'{name}: scenario adapter requires explicit flow_plan')
         if 'firmware_mode' in test and (
             test['engine'] != 'cocotb-verilator' or
             'chip_boot' not in test.get('bender_targets', []) or
@@ -506,6 +520,22 @@ def run_target(name, test, resolver, options):
         commands = [(name, [sys.executable, str(ROOT/'tools/sim_cocotb.py'), str(plan_file)])]
     plan['commands'] = commands
     plan_file.write_text(json.dumps(plan, indent=2) + '\n')
+    # Resolve and archive the exact declared intent BEFORE the simulator is
+    # launched, including the selected command arguments. This is *not* a
+    # claim of dispatch, completion or PASS. Incomplete/failed runs retain it.
+    from test_intent import snapshot as snapshot_intent, validate_snapshot
+    scenario = None
+    if test.get('firmware_mode') in ('scenario_bfm', 'cpu_dma_scenario'):
+        # Reuse the already resolved immutable plan that the C/BFM adapter
+        # consumes. Reading the authoring spec here would lose selected
+        # randomized arguments and resolved buffer addresses.
+        scenario_location = out/('variant' if test['firmware_mode']=='cpu_dma_scenario' else '')/'scenario-plan.json'
+        if not scenario_location.is_file():
+            raise ValueError('runtime-resolved scenario plan missing before pre-run snapshot')
+        scenario = json.loads(scenario_location.read_text())
+    selected = snapshot_intent(name, plan, scenario=scenario)
+    validate_snapshot(selected, target=name)
+    (out/'planned-flow.json').write_text(json.dumps(selected, indent=2) + '\n')
     env = dict(os.environ)
     env['SOC_RUN_PLAN'] = str(plan_file)
     if test.get('firmware_mode') in ('scenario_bfm', 'cpu_dma_scenario'):
@@ -572,6 +602,11 @@ def run_target(name, test, resolver, options):
         if 'flow' in test['report']:
             from test_flow_report import write_report as write_flow
             flow_result = write_flow(out, plan)
+            # Bind real observed INIT/RUN/CHECK evidence to the immutable
+            # pre-simulation selected declaration; report parsing and the
+            # website must reject any mismatched run selection.
+            flow_result['planned_flow_sha256']=selected['plan_sha256']
+            (out/'test-flow.json').write_text(json.dumps(flow_result,indent=2)+'\n')
             result['test_flow'] = {'status':'complete' if flow_result['passed'] else 'incomplete',
                                    'passed':flow_result['passed'],
                                    'steps':len(flow_result['rows']),

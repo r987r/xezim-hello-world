@@ -65,6 +65,31 @@ class RegressionTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     regress.load_config(path)
 
+    def test_scenario_source_is_explicit_and_matches_real_executor(self):
+        self.assertEqual(self.config['tests']['chip-cpu-scenario']['flow_plan'],
+                         'config/scenarios/cpu-bfm-ddr-roundtrip.json')
+        self.assertEqual(self.config['tests']['chip-dma-scenario']['flow_plan'],
+                         'config/scenarios/cpu-bfm-ddr-roundtrip.json')
+        for mutation in ('missing','traversal','other','unregistered_mode'):
+            cfg=copy.deepcopy(self.config)
+            test=cfg['tests']['chip-cpu-scenario']
+            if mutation=='missing':
+                del test['flow_plan']
+            elif mutation=='traversal':
+                test['flow_plan']='../config/scenarios/cpu-bfm-ddr-roundtrip.json'
+            elif mutation=='other':
+                test['flow_plan']='config/scenarios/dma-roundtrip.json'
+            else:
+                test['firmware_mode']='ethernet_cpu'
+            with self.subTest(mutation=mutation),tempfile.TemporaryDirectory() as temp:
+                cfg_path=Path(temp)/'regression.yaml'
+                cfg_path.write_text(yaml.safe_dump(cfg))
+                with self.assertRaisesRegex(ValueError,
+                    'scenario adapter requires explicit flow_plan'
+                    if mutation=='missing' else
+                    'unsupported or unsafe executable scenario path'):
+                    regress.load_config(cfg_path)
+
     def test_report_configuration_fails_closed(self):
         for mutation in ('engine','clock','limit','field'):
             cfg=copy.deepcopy(self.config)
