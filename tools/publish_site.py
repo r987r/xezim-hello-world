@@ -642,6 +642,7 @@ def evidence_index(evidence,output,repository):
                    'protocol_observations':len(protocol_data['records']) if protocol_data else 0,
                    'flow_steps':len(flow_data['rows']) if flow_data else 0,
                    'planned_flow_status':snapshot_status,'planned_flow_sha256':declared_hash,
+                   'planned_flow_intent':intended if declared_hash is not None else None,
                    'pcie_latency_measured':bool(latency_data and latency_data.get('passed')),
                    'result':result}
             if protocol_data:
