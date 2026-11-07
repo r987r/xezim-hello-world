@@ -9,7 +9,7 @@ import yaml
 
 from tools.runtime_contract import (
     RunContractError, check_events, dispatch_event, load, save, selection,
-    validate, validate_migration_inventory,
+    validate, validate_migration_inventory, qualify_selected_scenario,
 )
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -98,6 +98,28 @@ class SelectedRuntimeContractTests(unittest.TestCase):
                 self.assertEqual(snapshot["intent"]["phases"]["run"][0]["label"],
                                  "copy_out")
                 self.assertEqual(len(snapshot["scenario_plan_sha256"]),64)
+
+    def test_selected_scenario_requires_independent_observed_hash(self):
+        folder=self.out/"variant"
+        folder.mkdir(parents=True,exist_ok=True)
+        resolved={"schema_version":1,"kind":"soc_scenario_intent_only",
+                  "scenario_id":"cpu_bfm_ddr_roundtrip",
+                  "actions":[{"action_instance_id":"run_copy","phase":"run",
+                              "actor":"dma0","kind":"dma.copy","args":{"src":"src","dst":"ddr"}}]}
+        (folder/"scenario-plan.json").write_text(json.dumps(resolved))
+        selected=self.plan("chip-cpu-scenario")
+        with self.assertRaisesRegex(RunContractError,"no independently observed"):
+            qualify_selected_scenario(selected,self.out,result={"passed":True})
+        evidence={"plan_sha256":selected["scenario_plan_sha256"],
+                  "scenario_id":selected["intent"]["scenario_id"],
+                  "execution_state":"rtl_observed","intent_is_not_evidence":True}
+        (self.out/"scenario-execution.json").write_text(json.dumps(evidence))
+        qualify_selected_scenario(selected,self.out,result={"passed":True})
+        evidence["plan_sha256"]="0"*64
+        (self.out/"scenario-execution.json").write_text(json.dumps(evidence))
+        with self.assertRaisesRegex(RunContractError,"do not match selected"):
+            qualify_selected_scenario(selected,self.out,result={"passed":True})
+        qualify_selected_scenario(selected,self.out,result={"passed":False})
 
     def test_missing_scenario_is_never_a_legacy_fallback(self):
         with self.assertRaisesRegex(RunContractError,"scenario plan absent"):
