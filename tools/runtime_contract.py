@@ -102,6 +102,56 @@ def _scenario(directory: Path, mode: str | None):
     return value, hashlib.sha256(raw).hexdigest()
 
 
+def catalog_provenance(plan:dict, *, root:Path|None=None) -> dict:
+    """Source/variant-bound actor and AXI monitor inventories, never activity."""
+    root=(root or Path(__file__).resolve().parents[1]).resolve()
+    axi=(plan.get("report") or {}).get("axi") or {}
+    result={}
+    for kind,path_field in (("actors","actors"),("monitors","catalog")):
+        location=axi.get(path_field)
+        if location is None:
+            result[kind]={"status":"not_declared"}
+            continue
+        if not isinstance(location,str):
+            raise RunContractError("catalog path must be a source string")
+        path=(root/location).resolve()
+        if not path.is_relative_to(root):
+            raise RunContractError("actor/monitor catalog escapes source checkout")
+        if not path.is_file():
+            result[kind]={"status":"selected_variant_catalog_missing",
+                          "source":location}
+            continue
+        raw=path.read_bytes()
+        try:
+            loaded=json.loads(raw)
+        except (ValueError,UnicodeError) as exc:
+            raise RunContractError("selected source actor/monitor catalog invalid") from exc
+        key="axi_actors" if kind=="actors" else "monitors"
+        rows=loaded.get(key)
+        if not isinstance(rows,dict if kind=="actors" else list):
+            raise RunContractError("selected source actor/monitor catalog has wrong schema")
+        if kind=="actors":
+            ids=sorted(rows)
+        else:
+            ids=[entry.get("id") for entry in rows]
+            if any(not isinstance(v,str) for v in ids) or len(set(ids))!=len(ids):
+                raise RunContractError("AXI monitor inventory duplicates or omits boundary")
+        result[kind]={"status":"source_catalog_loaded_not_runtime_bound",
+                      "source":location,
+                      "source_sha256":hashlib.sha256(raw).hexdigest(),
+                      "count":len(ids), "boundary_ids":sorted(ids)}
+        if kind=="monitors":
+            result[kind]["declared_initiators"]=sorted(
+                entry["id"] for entry in rows if entry.get("role")=="initiator")
+            result[kind]["declared_links"]=sorted(
+                entry["id"] for entry in rows if entry.get("role")=="link")
+    ids=set(result.get("actors",{}).get("boundary_ids",[]))
+    initiators=result.get("monitors",{}).get("declared_initiators",[])
+    result["unlabeled_initiators"]=sorted(set(initiators)-ids)
+    result["interpretation"]="source_catalog_not_live_pin_or_transaction_proof"
+    return result
+
+
 def selection(target: str, plan: dict, directory: Path,
               *, commands: list[tuple[str,list[str]]]) -> dict:
     if not isinstance(target, str) or not isinstance(plan, dict):
@@ -149,6 +199,7 @@ def selection(target: str, plan: dict, directory: Path,
         "command_argv": [{"label":label,"argv":command}
                          for label,command in commands],
         "scenario_plan_sha256": scenario_sha,
+        "actor_monitor_catalog":catalog_provenance(plan),
         "intent": intent,
         "evidence_kind": "selected_definition_not_runtime_execution",
     }
