@@ -5,11 +5,20 @@ import re
 import tempfile
 import unittest
 
-from tools import csr_dma_headers
+# SystemRDL is intentionally optional for the normal NoC/SoC test environment.
+# The dedicated csr-firmware workflow installs the pinned compiler and executes
+# these tests unconditionally; don't break unrelated unit-test discovery.
+try:
+    from tools import csr_dma_headers
+except ModuleNotFoundError as exc:
+    if exc.name != "systemrdl":
+        raise
+    csr_dma_headers = None
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
+@unittest.skipIf(csr_dma_headers is None, "requires pinned CSR compiler; enforced by csr-firmware CI")
 class DmaCsrTests(unittest.TestCase):
     def test_rdl_layout_and_generated_legacy_aliases(self):
         regs = csr_dma_headers.extract()
