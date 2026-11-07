@@ -61,6 +61,38 @@ class ArchitectureExplorerTests(unittest.TestCase):
         self.assertIn("navigate",self.script)
         self.assertIn("function network(",self.script)
 
+    def test_generated_peripheral_connections_visible_in_single_svg(self):
+        import math
+        import yaml
+        import xml.etree.ElementTree as ET
+
+        cfg=yaml.safe_load((ROOT/"config/soc.yaml").read_text())
+        svg=ET.parse(ROOT/"gen/diagrams/noc-hierarchy.svg").getroot()
+        lines=[e.attrib for e in svg.iter() if e.tag.endswith("polyline")]
+        points={e["points"]:e for e in lines}
+        periph=[s for s in cfg["subsystems"] if s["type"]=="peripheral"]
+        rows=math.ceil(sum(s["type"]=="compute" for s in cfg["subsystems"])/2)
+        gy=172+rows*285+32+len(periph)*270
+        for i,sub in enumerate(periph):
+            py=158+rows*285+i*270
+            with self.subTest(peripheral=sub["name"]):
+                expected=[
+                    (f"250.0,{py+122}.0 250.0,{py+145}.0",True),
+                    (f"630.0,{py+122}.0 630.0,{py+145}.0",False),
+                    (f"1180.0,{py+122}.0 1180.0,{py+145}.0",False),
+                ]
+                for point,dashed in expected:
+                    self.assertIn(point,points)
+                    self.assertEqual("stroke-dasharray" in points[point],dashed)
+                self.assertTrue(any(p.startswith(f"746.0,{py+180}.0 ")
+                                    and p.endswith(f",{gy}.0") for p in points))
+                self.assertTrue(any(p.startswith(f"830.0,{py+180}.0 ")
+                                    and p.endswith(f",{gy}.0") for p in points))
+        self.assertIn('class="topology-pan"',(ROOT/"tools/templates/site_index.html").read_text())
+        self.assertIn("min-width:1050px",(ROOT/"tools/templates/site.html").read_text())
+        self.assertIn("Math.max(.48",self.script)
+        self.assertIn("PERIPHERAL SUBSYSTEM",self.script)
+
     def test_multi_subsystem_graph_is_not_hardcoded_in_viewer(self):
         # The renderer derives subtype membership from generated groups.
         self.assertIn('endsWith("_subsystem")',self.script)

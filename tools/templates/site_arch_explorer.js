@@ -108,8 +108,10 @@ function netCard(p,name,x,y,w,h){
     {title:name,kind:"Real FlooNoC network",source:q.info?.source,status:q.info?.status,router_count:routers,interfaces}, {mode:"noc",name});
 }
 function subBox(p,name,r){
-  const mem=/memory/i.test(name),s=groups.get(name+"_subsystem");
-  const content=frame(p,r.x,r.y,r.w,r.h,name.toUpperCase(),mem?"MEMORY SUBSYSTEM":"COMPUTE SUBSYSTEM",mem?"#51a6c4":"#537db3");
+  const mem=nodes.has(name+".internal_target_crossbar"),peripheral=nodes.has(name+".ip");
+  const s=groups.get(name+"_subsystem");
+  const roleName=mem?"MEMORY SUBSYSTEM":peripheral?"PERIPHERAL SUBSYSTEM":"COMPUTE SUBSYSTEM";
+  const content=frame(p,r.x,r.y,r.w,r.h,name.toUpperCase(),roleName,mem?"#51a6c4":"#537db3");
   const local=networksOf(name).sort((a,b)=>a.includes("data")?-1:b.includes("data")?1:0);
   const blocks=g.nodes.filter(n=>memberOf.get(n.id)===name&&!networkOf(n.id));
   const kinds=["cpu","dma","sram","dma_csr","reset_ctrl","internal_target_crossbar","ctrl"];
@@ -484,7 +486,12 @@ function resize(){
   svg.setAttribute("width",Math.ceil(dims.w*zoom));svg.setAttribute("height",Math.ceil(dims.h*zoom));
   svg.style.width=Math.ceil(dims.w*zoom)+"px";svg.style.height=Math.ceil(dims.h*zoom)+"px";
 }
-function fit(){zoom=Math.max(.30,Math.min(1.2,(vp.clientWidth-12)/dims.w,(vp.clientHeight-12)/dims.h));resize()}
+function fit(){
+  // Keep data/config connection strokes visible on phones; the viewport
+  // scrolls rather than collapsing a 1,500px graph to illegible hairlines.
+  zoom=Math.max(.48,Math.min(1.2,(vp.clientWidth-12)/dims.w,(vp.clientHeight-12)/dims.h));
+  resize();
+}
 function navigate(kind,name){
   current=kind;scope=name||"";svg.replaceChildren();crumbs.replaceChildren();
   const trail=[["Full chip","chip",""]];
