@@ -21,7 +21,11 @@ xezim/boot-default/cpu-cold-boot/local-2c34a679e710
   memory-config source. Its fingerprint includes the source-selected SoC,
   configuration fields and actual compiled filelist; changing the RTL/IP
   implementation changes source provenance even if its human-readable label
-  stays the same. A configuration name does **not** independently assert
+  stays the same. The configuration digest also fingerprints the authoritative
+  `config/interface_contracts.yaml`, `config/ip.lock.yaml`, `Bender.yml`,
+  `Bender.lock` and (when present) DDR controller toolchain lock. Thus a
+  changed IP pin or configured AXI budget does not silently reuse the same
+  configuration digest even when compiled filelist paths are unchanged. A configuration name does **not** independently assert
   selected RTL elaboration or real packet attachment.
 - **testname** is declared once as `logical_test` on the original entry in
   `config/regression.yaml` and is checked against the source-owned
