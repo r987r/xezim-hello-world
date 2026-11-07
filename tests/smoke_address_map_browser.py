@@ -42,6 +42,20 @@ def check(driver):
     assert "ethernet0.ctrl" in body and "enable" in body and "irq_status" in body
     assert "SOURCE ONLY" in body, "source-only registers incorrectly labeled active"
     assert "Source-only C/RTL register references" in body
+    # Expanded CSR registers must not inherit a light background with
+    # the site's light-on-dark text (the original user-visible defect).
+    contrast = driver.execute_script("""
+      const reg=document.querySelector('#am-csr-browser .am-csr-register[open]');
+      if(!reg)throw new Error('no expanded CSR register');
+      const b=getComputedStyle(reg).backgroundColor;
+      const f=getComputedStyle(reg).color;
+      const rgb=s=>{const n=s.match(/[\\d.]+/g).slice(0,3).map(Number);
+        return n.map(v=>{v/=255;return v<=0.04045?v/12.92:((v+0.055)/1.055)**2.4})};
+      const luminosity=s=>{const [r,g,b]=rgb(s);return 0.2126*r+0.7152*g+0.0722*b};
+      const l1=luminosity(b),l2=luminosity(f);
+      return {bg:b,fg:f,ratio:(Math.max(l1,l2)+0.05)/(Math.min(l1,l2)+0.05)};
+    """)
+    assert contrast["ratio"] >= 4.5, "expanded CSR register contrast below WCAG AA: "+str(contrast)
     assert "source-only reference(s)" in driver.find_element(By.ID, "am-csr-count").text
     assert driver.find_element(By.ID, "am-csr-count").text
     assert "16 KiB" in content and "64 KiB" in content
