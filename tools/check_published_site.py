@@ -93,17 +93,50 @@ def validate(expected_sha, site, fabric, graph, rtl, bindings, intents, html):
             if fragment not in source:
                 raise ValueError(f"public {page} page missing {fragment}")
 
-    # A full-chip DFI observation must come from an actual verified artifact;
-    # report its count, never promote a source-only plan to observed PASS.
+    # Real DFI commands must be present in a *passing* verified full-chip
+    # run, not merely in a configured test plan or an incomplete monitor.
+    # Exact DFI source/operation IDs originate from the pinned DDR probe
+    # contract. Optional PRE/REF are never invented if not observed.
     dfi_runs = 0
     for entry in site.get("entries", []):
         if not SHA.fullmatch(str(entry.get("source_sha", ""))):
             raise ValueError("published regression entry lacks tested SHA")
+        if entry.get("target") != "chip-ddr4-real":
+            continue
         links = entry.get("protocol_links") or {}
-        if entry.get("target") == "chip-ddr4-real" and (
-                any(source.get("protocol") == "dfi" and source.get("count", 0) > 0
-                    for source in links.get("sources", []))):
-            dfi_runs += 1
+        dfi_sources = [source for source in links.get("sources", [])
+                       if source.get("protocol") == "dfi"]
+        if not dfi_sources:
+            continue
+        # Failed simulations can retain partial protocol evidence for
+        # debugging, but they cannot qualify a full-chip DFI success.
+        if entry.get("passed") is not True:
+            continue
+        if links.get("capture_complete") is not True:
+            raise ValueError("passing real-DDR run has incomplete DFI capture")
+        by_source = {source.get("source"): source for source in dfi_sources}
+        dfi = by_source.get("memory0.ddr0.dfi")
+        bank = by_source.get("memory0.ddr0.bankmodel")
+        if (len(by_source) != len(dfi_sources) or not dfi or not bank
+                or set(by_source) != {"memory0.ddr0.dfi",
+                                     "memory0.ddr0.bankmodel"}):
+            raise ValueError("passing real-DDR DFI source inventory incomplete")
+        for src in (dfi, bank):
+            count, operations = src.get("count"), src.get("operations")
+            if (type(count) is not int or count <= 0
+                    or not isinstance(operations, dict)
+                    or any(type(n) is not int or n < 0 for n in operations.values())
+                    or sum(operations.values()) != count):
+                raise ValueError("passing DFI source operation counts inconsistent")
+        if not all(dfi["operations"].get(op, 0) > 0
+                   for op in ("act", "rd", "wr")):
+            raise ValueError("passing real-DDR DFI missing observed ACT/RD/WR")
+        if bank["operations"].get("storage_write", 0) <= 0:
+            raise ValueError("passing real-DDR DFI lacks BankModel write proof")
+        if (dfi.get("clock_domain") != "ddr_source_clk"
+                or bank.get("clock_domain") != "ddr_source_clk"):
+            raise ValueError("real-DDR DFI observation clock is not source-qualified")
+        dfi_runs += 1
     return {
         "networks": len(networks), "routers": sum(int(v["routers"]) for v in networks.values()),
         "tests": len(tests), "evidence_entries": len(site.get("entries", [])),
