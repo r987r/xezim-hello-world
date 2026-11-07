@@ -54,6 +54,16 @@ Keep the existing independent memory/boot/NoC scopes for fault isolation.
 4. Establish Xezim functional NoC/chip execution; compile-only probes stay
    separate from Verilator's routed-traffic proof.
 
+## Selected-variant RTL, actor and monitor provenance
+
+Every qualified full-chip AXI regression now runs a **read-only selected-variant source preflight** before simulation. It retains `variant-connectivity.json`, `variant-topology.json`, and the exact `variant-chip-manifest.json` in the same CI/test artifact bundle. These are derived from the actual test's chosen `soc_top.sv`, FlooGen network manifests, named module/instance tokens, actors, source-bound AXI monitor catalog, interface budgets, and selected filelist. No extra hand-maintained Ethernet/PCIe topology drawing is authored.
+
+The original per-test report links to **Selected variant 2D NoC/initiator/monitor diagram**. Green solid packet/data or control/CSR links mean *generated source declares a live attachment*; dashed links remain reserved or absent. The canonical checked-in default diagram correctly preserves reserved PCIe/Ethernet packet engines. A separate opt-in PCIe/Ethernet test can display its **own active source attachment** without pretending the default graph had those wires.
+
+Publication checks the original manifest bytes against their SHA-256 and compares all selected source-bound monitor IDs with that run's AXI transaction report. It does **not** convert a generator-declared link into a compiler-elaborated, bit-level wired connection or an actually active transaction. The per-test protocol log, transaction/counter evidence and accepted completions are the separate *runtime-observed* tier. Per-port maximum pending read/write values are configuration **budgets**, while FlooNoC `MaxTxns` is a **shared native cap**; neither means observed peak outstanding. Source-only missing/ambiguous or contradictory actors/monitor bindings fail the preflight.
+
+For active opt-in full-chip tests, an absent variant source or monitor inventory is a **FAIL**, not a reason to show the default chip's actors and call them live. Track actual elaborated-port/bit proof, verified cross-domain normalization and complete protocol/latency evidence under [#46](https://github.com/r987r/xezim-hello-world/issues/46) and [#34](https://github.com/r987r/xezim-hello-world/issues/34).
+
 ## Acceptance gates and present limits
 
 - Every declared route in a scope must complete against the intended target.
