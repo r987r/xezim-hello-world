@@ -594,6 +594,24 @@ def run_target(name, test, resolver, options):
                 protocol_report.finalize_run(out, result)
         print(f'REPORT {name}: {summary["transactions"]} observations; {out.relative_to(ROOT)}/report.html',flush=True)
     (out/'result.json').write_text(json.dumps(result, indent=2) + '\n')
+    if (test.get('firmware_mode') in ('cpu_dma_scenario', 'scenario_bfm')
+            and options.stage in ('all', 'run') and not test.get('expect_failure')):
+        # Actual memory lifetimes require an independently passed RTL run.
+        # Keep one canonical report and fail closed on missing/mismatched AXI proof.
+        from dv.common.action_events import ActionEvidenceError
+        from scenario_memory_trace import finalize_scenario_run
+        if passed:
+            try:
+                memory_view = finalize_scenario_run(
+                    out, firmware_mode=test['firmware_mode'], result=result)
+                print(f"MEMORY_LIFETIMES {name}: {memory_view['status']}; "
+                      f"{len(memory_view['buffers'])} buffers", flush=True)
+            except (ActionEvidenceError, OSError, ValueError, TypeError, KeyError) as error:
+                passed = result['passed'] = False
+                results.append({'name': 'scenario memory lifetime evidence',
+                                'passed': False, 'reason': str(error)})
+                (out/'result.json').write_text(json.dumps(result, indent=2) + '\n')
+                print(f'FAIL {name}/memory lifetime evidence: {error}', flush=True)
     return passed
 
 
