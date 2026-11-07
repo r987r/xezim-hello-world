@@ -237,3 +237,29 @@ def check_events(snapshot:dict,events:list[dict]) -> None:
                 raise RunContractError("runner event disagrees with selected plan")
         if a.get("passed") is not None or type(b.get("passed")) is not bool:
             raise RunContractError("runner event status missing or invented")
+
+
+def qualify_selected_scenario(snapshot:dict, directory:Path, *, result:dict) -> None:
+    """Fail closed on a passing SCN-2 run without its *actual* action evidence.
+
+    The selected plan hash is NOT a proof of action execution. Independently
+    observed RTL/CPU/BFM action evidence must reference the exact resolved
+    scenario plan. This helper does not promote opaque legacy steps.
+    """
+    validate(snapshot)
+    if snapshot["adapter"]!="scenario_dispatch_adapter":
+        return
+    if result.get("passed") is not True:
+        return  # Preserve partial action events on failure for diagnosis.
+    source=Path(directory)/"scenario-execution.json"
+    if not source.is_file() or source.is_symlink():
+        raise RunContractError("passing scenario has no independently observed execution")
+    try:
+        observed=json.loads(source.read_text())
+    except (OSError,ValueError,TypeError) as exc:
+        raise RunContractError("scenario execution evidence is invalid") from exc
+    if (observed.get("plan_sha256")!=snapshot["scenario_plan_sha256"]
+            or observed.get("scenario_id")!=snapshot["intent"]["scenario_id"]
+            or observed.get("execution_state")!="rtl_observed"
+            or observed.get("intent_is_not_evidence") is not True):
+        raise RunContractError("observed scenario actions do not match selected plan")
