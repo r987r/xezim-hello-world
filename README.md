@@ -9,6 +9,15 @@ publishes this README, all documentation, the canonical topology and actual CI
 test results with tested commits, logs and AXI traffic reports.
 See [publication and retention](docs/publication.md).
 
+**Review every test's stimulus without digging through scripts:**
+[human-authored YAML stimulus catalog](config/stimulus/tests.yaml) ·
+[how specs map to drivers and selected plans](config/stimulus/README.md) ·
+[build/simulator regression selection](config/regression.yaml).
+Run `python3 tools/stimulus_catalog.py --list` or
+`python3 tools/stimulus_catalog.py --show chip-ethernet-cpu` to inspect any target.
+Descriptions for legacy tests are **not** claims that the common scenario
+executor already dispatches their internal C/Python/SV actions.
+
 ## Opt-in real LiteDRAM full-chip milestone (November 6, 2026)
 
 **Merged [DDR-B PR #74](https://github.com/r987r/xezim-hello-world/pull/74)** into `main` at [`d6f9612`](https://github.com/r987r/xezim-hello-world/commit/d6f9612a1a391593630ba49ba5384c3866faaf1a). The final exact-PR-head real-controller CPU/iDMA and routed negative RTL passed in [DDR-B CI #42246102337](https://github.com/r987r/xezim-hello-world/actions/runs/42246102337) at `026cd1f0a14930253df27afb6c9f3a834a67f72b`. The opt-in `chip-ddr4-real` variant connects the Memory0 crossbar to **pinned LiteDRAM RTL** behind a guarded 64→25-bit AXI adapter, initializes controller CSRs through the independent 16-KiB Config NoC and Wishbone path, and executes compiled PicoRV32/PULP iDMA SRAM→DDR→SRAM with real readback checks. Required evidence includes complete INIT/RUN/CHECK, matching controller AXI AW/B and AR/RLAST, DFI reads/writes, behavioral bank writes, and passive NoC traffic capture.
