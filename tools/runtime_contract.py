@@ -13,6 +13,7 @@ import json
 from pathlib import Path
 import subprocess
 from typing import Any
+import yaml
 
 try:
     from .test_intent import plan as source_intent
@@ -28,6 +29,49 @@ NON_RUNTIME = {"xezim-compile", "verilator-lint"}
 
 class RunContractError(ValueError):
     pass
+
+
+def migration_policy(root:Path|None=None) -> dict:
+    root = root or Path(__file__).resolve().parents[1]
+    file = root/"config/runtime_migration.yaml"
+    try:
+        data=yaml.safe_load(file.read_text())
+    except (OSError,yaml.YAMLError) as exc:
+        raise RunContractError("invalid legacy runtime exception inventory") from exc
+    if (not isinstance(data,dict) or set(data)!={"schema_version","legacy_runtime"}
+            or data["schema_version"]!=1
+            or not isinstance(data["legacy_runtime"],dict)):
+        raise RunContractError("invalid runtime migration policy schema")
+    for name,exception in data["legacy_runtime"].items():
+        if (not isinstance(name,str) or not isinstance(exception,dict)
+                or exception.get("status")!="legacy_internal_stimulus_opaque"
+                or exception.get("owner_issue")!=119):
+            raise RunContractError("legacy runtime migration exception missing owner/status")
+    return data["legacy_runtime"]
+
+
+def validate_migration_inventory(config:dict, *, root:Path|None=None) -> dict:
+    tests=config.get("tests")
+    if not isinstance(tests,dict) or not tests:
+        raise RunContractError("missing configured regression tests")
+    legacy=migration_policy(root)
+    actual=set()
+    kinds={}
+    for name,test in tests.items():
+        engine=test.get("engine")
+        mode=test.get("firmware_mode")
+        if test.get("mode")=="compile" or engine in NON_RUNTIME:
+            kinds[name]="not_applicable"
+        elif mode in SCENARIOS:
+            kinds[name]="resolved_scenario_adapter"
+        else:
+            kinds[name]="legacy_internal_stimulus_opaque"
+            actual.add(name)
+    if actual!=set(legacy):
+        raise RunContractError("legacy runtime exceptions differ from YAML tests: "
+                               f"unregistered={sorted(actual-set(legacy))}, "
+                               f"stale={sorted(set(legacy)-actual)}")
+    return kinds
 
 
 def encoded(data: dict) -> bytes:
@@ -65,6 +109,11 @@ def selection(target: str, plan: dict, directory: Path,
     mode = plan.get("firmware_mode")
     selected_scenario, scenario_sha = _scenario(directory, mode)
     intent = source_intent(target, plan, scenario=selected_scenario)
+    legacy=migration_policy()
+    if mode not in SCENARIOS and not (plan.get("mode") == "compile"
+            or plan["engine"] in NON_RUNTIME) and target not in legacy:
+        raise RunContractError(f"{target}: missing approved legacy runtime exception; "
+                               "new test must implement typed scenario dispatch")
     adapter = ("non_runtime" if plan.get("mode") == "compile"
                or plan["engine"] in NON_RUNTIME else
                "scenario_dispatch_adapter" if mode in SCENARIOS else
@@ -91,6 +140,7 @@ def selection(target: str, plan: dict, directory: Path,
         "stage": plan.get("stage"),
         "engine": plan["engine"],
         "adapter": adapter,
+        "migration_owner_issue":119 if adapter=="legacy_entrypoint_adapter" else None,
         "adapter_scope": ("compiler_or_lint_no_stimulus" if adapter == "non_runtime"
                           else "resolved_scenario_actions" if adapter == "scenario_dispatch_adapter"
                           else "legacy_internal_stimulus_opaque"),
