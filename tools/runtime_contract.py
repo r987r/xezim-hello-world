@@ -359,7 +359,7 @@ def qualify_observed_phase_milestones(snapshot:dict,directory:Path,*,result:dict
         actor=row.get("actor")
         step=row.get("step")
         if (phase in actual and isinstance(actor,str)
-                and isinstance(step,str) and row.get("status")=="PASS"):
+                and isinstance(step,str) and row.get("status")=="pass"):
             actual[phase].add(actor+"."+step)
     if any(not set(declared[phase]).issubset(actual[phase]) for phase in PHASES):
         raise RunContractError("observed flow PASS milestones incomplete")
