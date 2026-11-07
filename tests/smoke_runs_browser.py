@@ -20,12 +20,19 @@ PAGE=ROOT/".tools/pages-site/runs.html"
 
 
 def sample(target,workflow,sha="a"*40):
-    protocol="pcie" if "pcie" in workflow.lower() else "ethernet" if "ethernet" in workflow.lower() else "axi4"
-    source="pcie0.rx_req" if protocol=="pcie" else "ethernet0.gmii_tx" if protocol=="ethernet" else "compute0_local_data.cpu"
-    operation="mem_read" if protocol=="pcie" else "frame_tx" if protocol=="ethernet" else "read"
-    fields={"tag":"0x4","address":"0x4000","header_hex":"0x1122"} if protocol=="pcie" else (
-        {"dst_mac":"02:50:b6:00:00:22","ether_type":"0x0800","length_bytes":85}
-        if protocol=="ethernet" else {"address":"0x13000000"})
+    protocol=("dfi" if "ddr4" in workflow.lower() else
+              "pcie" if "pcie" in workflow.lower() else
+              "ethernet" if "ethernet" in workflow.lower() else "axi4")
+    source=("memory0.ddr0.dfi" if protocol=="dfi" else
+            "pcie0.rx_req" if protocol=="pcie" else
+            "ethernet0.gmii_tx" if protocol=="ethernet" else "compute0_local_data.cpu")
+    operation=("act" if protocol=="dfi" else
+               "mem_read" if protocol=="pcie" else
+               "frame_tx" if protocol=="ethernet" else "read")
+    fields=({"bank":2,"dfi_phase":0,"model_boundary":"controller_dfi"} if protocol=="dfi" else
+            {"tag":"0x4","address":"0x4000","header_hex":"0x1122"} if protocol=="pcie" else
+            {"dst_mac":"02:50:b6:00:00:22","ether_type":"0x0800","length_bytes":85}
+            if protocol=="ethernet" else {"address":"0x13000000"})
     return {
         "protocol_links":{"capture_complete":True,"sources":[{
             "source":source,"protocol":protocol,"role":"target",
@@ -59,6 +66,7 @@ def main():
     data["entries"]=[
         sample("chip-pcie-host","PCIe0 integrated test"),
         sample("chip-ethernet","Ethernet0 integrated test"),
+        sample("chip-ddr4-real","DDR4 full-chip DFI test"),
         sample("chip-cpu-dma","PCIe0 supplemental CPU test"),
         sample("chip-cpu-dma","Full-chip CPU boot test"),
     ]
@@ -123,7 +131,16 @@ def main():
             wait.until(lambda d:"frame_tx" in d.find_element(By.ID,"traffic-rows").text)
             assert "02:50:b6:00:00:22" in driver.find_element(By.ID,"traffic-rows").text
             assert "ethernet" in driver.find_element(By.ID,"traffic-protocol").text
-            print("PASS: unified Test Runs filters show actual-schema PCIe and Ethernet sample records")
+            driver.execute_script(
+                """const sel=document.getElementById("traffic-run");
+                   const found=[...sel.options].find(x=>x.textContent.includes("chip-ddr4-real"));
+                   if(!found)throw new Error("missing real-DDR fixture run");
+                   sel.value=found.value;sel.dispatchEvent(new Event("change"));""")
+            wait.until(lambda d:"act" in d.find_element(By.ID,"traffic-rows").text)
+            assert "memory0.ddr0.dfi" in driver.find_element(By.ID,"traffic-rows").text
+            assert "dfi" in driver.find_element(By.ID,"traffic-protocol").text
+            assert "chip-ddr4-real" in driver.find_element(By.ID,"traffic-provenance").text
+            print("PASS: unified Test Runs show source-native PCIe, Ethernet, DFI sample records")
 
 
 if __name__=="__main__":
