@@ -305,6 +305,15 @@ tests:
     report:
       address_map: {config: config/soc.yaml, variant: cold_boot, csr_map: .tools/regression/chip-peakrdl-reset/csr/csr-map.json}
       context: 'Real PeakRDL reset/ACK over CPU0 Config NoC, PicoRV32/SERV ROM cold boot; DDR/HBM remain behavioral AXI RAM, no PHY.'
+      flow:
+        required_steps:
+          init: [cpu0.init_complete]
+          run: [cpu0.run_complete]
+          check: [cpu0.check_complete]
+        required_origins:
+          init: {cpu0.init_complete: checker}
+          run: {cpu0.run_complete: checker}
+          check: {cpu0.check_complete: checker}
       axi: {scope: dut.u_noc, clock: clk, reset: rst_n, catalog: gen/supernoc/axi_monitors.json, actors: gen/chip/manifest.json, max_events: 500000, required_complete: true}
   chip-boot-negative:
     <<: *chip
