@@ -13,7 +13,7 @@ wrapper's source windows, leaf destinations, network paths and AXI links.
 fabric scope drives actual interconnect RTL; the connected NoC scope
 uses upstream AXI agents.
 
-The executable build/test catalog is [regression YAML](../config/regression.yaml);
+The executable build/test catalog currently contains 27 named targets (24 runtime, 3 compile/lint-only); it is [regression YAML](../config/regression.yaml), not a separately maintained fixed list;
 [Bender source sets](../Bender.yml) replace per-test shell file arrays.
 See [build and regression commands](regression.md) for the full suite,
 filelist inspection, stage separation and retained results.
@@ -29,7 +29,7 @@ filelist inspection, stage separation and retained results.
 | SERV execution | Real SERV and standalone Wishbone RAM | Three instructions execute and store the checked signature from a four-word image |
 | CPU cold boot | PicoRV32/SERV, ROM, flash, blank SRAM and reset MMIO | CPU0 copies both programs through bus stores, releases CPU1 and both produce signatures; default and relocated address maps |
 | Chip boot configuration | Real CPUs, shared NoCs, upstream WB/AXI/SRAM/reset and AXI memory stand-ins | CPU0-driven cold boot and init/run/check, every CPU greeting/peer check, missing-CPU negative, HBM/DDR model readback |
-| Connected NoC BFM | All eight real FlooGen data/config meshes | All 28 mapped source/window routes, intended storage, concurrent reused IDs with distinct stream payloads, bursts, byte guards, stalls, SLVERR and corruption detection |
+| Connected NoC BFM | All twelve generated FlooGen data/config meshes | All 28 mapped source/window routes, intended storage, concurrent reused IDs with distinct stream payloads, bursts, byte guards, stalls, SLVERR and corruption detection |
 
 The CPU fetch smoke is a request-only diagnostic included in `full` and
 CI diagnostics. [Boot details](boot.md) distinguish real instruction execution
@@ -39,6 +39,8 @@ or the separately tested memory crossbar. Behavioral targets do not prove
 physical HBM/DDR controller or PHY behavior.
 
 ## Next integration sequence
+
+Initial Ethernet GMII/CPU-C, PCIe host/CPU-iDMA with modeled DDR, and LiteDRAM controller/CPU-iDMA are separately verified in opt-in variants. Their **single-run Ethernet → real DDR → CPU/iDMA → PCIe host** path remains the next distinct acceptance gate; do not infer it from individual passing regressions. The test plan display exists for every configured target, but only two runtime tests presently execute a common resolved scenario. Track executable adoption under [#119](https://github.com/r987r/xezim-hello-world/issues/119).
 
 The [chip boot configuration](full-chip-boot.md) now attaches the CPUs,
 SRAM, upstream protocol/width adapters, reset registers and target crossbar.
@@ -64,7 +66,7 @@ Keep the existing independent memory/boot/NoC scopes for fault isolation.
   instead assert upstream `DecodeError`; mapped slave faults test SLVERR.
 - Every regression has a finite timeout, reproducible directed stimulus and
   retained diagnostics. Current-source CI must pass before merge.
-- Xezim executes boot/memory/SRAM/SERV and compiles all eight NoCs. Verilator
+- Xezim executes boot/memory/SRAM/SERV and has historical structural NoC compilation evidence; qualify all twelve NoCs for the exact tested profile before claiming full current-source compilation. Verilator
   runs the connected NoC traffic test. Xezim NoC traffic remains unverified.
 - The SRAM target also runs with `-D SYNTHESIS` to preserve registered
   reads under synthesis guards. This is functional simulation, not synthesis.

@@ -13,7 +13,7 @@ single connected BFM test's coverage and results.
 | --- | --- |
 | `memory_tb` | Real Verilog-AXI 2x2 crossbar, independent HBM/DDR behavioral windows, full/sparse route tests |
 | `boot_tb`, SRAM and SERV checks | Preserve real two-core cold boot, no SRAM preload, independent bring-up checks |
-| `supernoc_tb` | One generated wrapper, all eight real meshes, upstream AXI agents, local/remote reads/writes and stress/error checks |
+| `supernoc_tb` | One generated wrapper, all twelve current real meshes, upstream AXI agents, local/remote reads/writes and stress/error checks |
 | compute0 boot configuration | PicoRV32/SRAM/upstream adapters connected; optional real iDMA/CSR generated for DMA test mode |
 | compute1 boot configuration | SERV/Wishbone/AXI adaptation and SRAM connected; optional real iDMA generated for DMA test mode |
 | config endpoints | CPU/reset AXI-Lite boundaries connected; DMA CSR bridge generated in DMA mode; controller registers pending |
@@ -35,8 +35,7 @@ widths disagree at power-of-two depths. Never patch vendor RTL or hide
 assertions to avoid that guard. Target-only chimneys use native `NoRoB`;
 initiator chimneys retain their configured RoBs. ATOPs remain disabled.
 
-Verilator runs the NoC traffic regression. Xezim compiles all eight
-meshes and runs the independent CPU/memory checks; it has no verified
+Verilator runs the NoC traffic regression. Xezim has historical structural NoC compile evidence and runs independent CPU/memory checks; twelve-mesh exact-head compilation should be inspected in its own CI artifacts; it has no verified
 NoC transaction path yet. Preserve diagnostics in
 [simulator compatibility](simulator-compatibility.md).
 
