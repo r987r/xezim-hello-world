@@ -28,7 +28,8 @@ import yaml
 from axi_report import render_report
 from protocol_report import render as render_protocol_report
 from test_flow_report import render_summary as render_test_flow
-from test_intent import catalog as intended_flow_catalog, plan as intended_flow_plan, render as render_intended_flow
+from test_intent import (catalog as intended_flow_catalog, plan as intended_flow_plan,
+                         render as render_intended_flow, validate_snapshot)
 
 ROOT=Path(__file__).resolve().parents[1]
 FILES={'result.json','plan.json','sources.f','simulation.log','build.log','results.xml',
@@ -36,6 +37,7 @@ FILES={'result.json','plan.json','sources.f','simulation.log','build.log','resul
        'protocol-transactions.json','protocol-events.jsonl','memory-operations.json',
        'test-flow.json','test-flow-events.jsonl','traffic-latency.json',
        'ddr-native-csr-map.json','ddr4_fullchip_evidence.json',
+       'planned-flow.json','memory-lifetimes.json','scenario-execution.json','scenario-plan.json',
        'selected-test-plan.json','runner-events.json','selected-flow-correlation.json'}
 
 
@@ -591,40 +593,62 @@ def evidence_index(evidence,output,repository):
             protocol_data=json.loads(protocol_path.read_text()) if protocol_path.exists() else None
             flow_path=source_dir/'test-flow.json'
             flow_data=json.loads(flow_path.read_text()) if flow_path.exists() else None
+            # Runner dispatch is a separate factual command-bound envelope, not
+            # a competing intended-flow viewer or proof of internal actions.
             selected_correlation=source_dir/'selected-flow-correlation.json'
             selected_path=source_dir/'selected-test-plan.json'
             runner_path=source_dir/'runner-events.json'
-            # The exact plan selected before the DUT started is historical
-            # evidence, distinct from the current source's intended catalog.
-            from runtime_contract import load as load_selected_plan
-            from runtime_contract import check_events, RunContractError
-            selected=load_selected_plan(selected_path,target) if selected_path.exists() else None
+            from runtime_contract import load as load_selected_plan, check_events
+            runtime_selected=(load_selected_plan(selected_path,target)
+                              if selected_path.is_file() else None)
             if selected_correlation.is_file():
                 correlated=json.loads(selected_correlation.read_text())
-                if (selected is None or result.get('passed') is not True
+                if (runtime_selected is None or result.get('passed') is not True
                         or correlated.get('status')!='observed_required_milestones'
-                        or correlated.get('plan_sha256')!=selected.get('plan_sha256')
-                        or correlated.get('evidence_kind')!='observed_flow_milestones_not_all_internal_actions'):
+                        or correlated.get('plan_sha256')!=runtime_selected['plan_sha256']
+                        or correlated.get('evidence_kind')!=
+                           'observed_flow_milestones_not_all_internal_actions'):
                     raise ValueError('historical selected flow correlation is not source-qualified')
-            if selected is not None:
-                if (selected.get('source_revision') not in verified_shas | {run['head_sha']}
-                        or selected.get('engine')!=plan.get('engine')
-                        or selected.get('stage')!=plan.get('stage')):
-                    raise ValueError('selected historical plan disagrees with tested run')
+            if runtime_selected is not None:
+                if (runtime_selected.get('source_revision') not in verified_shas | {run['head_sha']}
+                        or runtime_selected.get('engine')!=plan.get('engine')
+                        or runtime_selected.get('stage')!=plan.get('stage')):
+                    raise ValueError('selected historical command plan disagrees with tested run')
                 if runner_path.is_file():
                     runner_data=json.loads(runner_path.read_text())
-                    if (runner_data.get('target')!=target
-                            or runner_data.get('plan_sha256')!=selected['plan_sha256']):
+                    if (runner_data.get('target')!=target or
+                            runner_data.get('plan_sha256')!=runtime_selected['plan_sha256']):
                         raise ValueError('runner dispatch fingerprint differs from selected plan')
-                    if len(runner_data.get('events',[])) == 2*len(selected['command_argv']):
-                        check_events(selected,runner_data['events'])
+                    if len(runner_data.get('events',[])) == 2*len(runtime_selected['command_argv']):
+                        check_events(runtime_selected,runner_data['events'])
                     elif result.get('passed') is True:
-                        raise ValueError('passing run lacks a complete command dispatch envelope')
-                elif result.get('passed') is True and selected['command_argv']:
+                        raise ValueError('passing run lacks complete command dispatch events')
+                elif result.get('passed') is True and runtime_selected['command_argv']:
                     raise ValueError('passing run lacks observed command dispatch')
-
             latency_path=source_dir/'traffic-latency.json'
             latency_data=json.loads(latency_path.read_text()) if latency_path.exists() else None
+            # Memory lifetimes must be re-derived from actual archived RTL
+            # run inputs before being displayed. Never trust artifact HTML or
+            # an unverified memory-lifetimes.json at face value.
+            memory_view=None
+            memory_file=source_dir/'memory-lifetimes.json'
+            if memory_file.is_file():
+                from scenario_memory_trace import build as build_memory
+                mode=plan.get('firmware_mode')
+                if mode not in ('cpu_dma_scenario','scenario_bfm') or result.get('passed') is not True:
+                    raise ValueError('memory lifetime artifact from unqualified scenario')
+                original_plan=(source_dir/'variant/scenario-plan.json'
+                               if mode=='cpu_dma_scenario' else source_dir/'scenario-plan.json')
+                execution_file=source_dir/'scenario-execution.json'
+                if (not original_plan.is_file() or not execution_file.is_file()
+                        or trace is None):
+                    raise ValueError('memory lifetime artifact lacks its original run inputs')
+                memory_view=build_memory(
+                    original_plan.read_bytes(),axi=trace,
+                    execution=json.loads(execution_file.read_text()),result=result)
+                if memory_view != json.loads(memory_file.read_text()):
+                    raise ValueError('archived memory lifetime table differs from verified evidence')
+                shutil.copyfile(original_plan,destination/'scenario-plan.json')
             if flow_data is not None:
                 planned=plan.get('report',{}).get('flow',{}).get('required_steps')
                 status=result.get('test_flow',{})
@@ -634,14 +658,28 @@ def evidence_index(evidence,output,repository):
                         len(flow_data.get('rows',[])) != status.get('steps')):
                     raise ValueError('test-flow JSON disagrees with verified regression plan/result')
                 render_test_flow(flow_data,destination/'test-flow.html')
-            # Intent flow is always present, even without a simulation log,
-            # step marker, protocol monitor or passing test outcome.
-            intended = selected['intent'] if selected else intended_flow_plan(target,plan)
-            if selected is None:
-                # Never graft today's resolved scenario actions onto a prior
-                # revision's unrelated run just because its target matches.
-                intended['historical_plan_status']='pre_run_snapshot_unavailable'
-                intended['provenance']='archived_runner_config_without_selected_snapshot'
+            # Preserve source-selected per-run declared intent. Never load
+            # the current website's scenario definition into historical runs:
+            # the tested revision may have selected different actions/args.
+            archived=source_dir/'planned-flow.json'
+            if archived.is_file():
+                declared=json.loads(archived.read_text())
+                intended=validate_snapshot(declared,target=target)
+                snapshot_status='captured_before_simulation'
+                declared_hash=declared['plan_sha256']
+            else:
+                # Legacy archives lack selected plans. Show only the exact
+                # regression metadata present in that archive, never today's
+                # scenario actions or a fictitious dispatch record.
+                intended=intended_flow_plan(target,plan)
+                snapshot_status='legacy_run_selection_not_archived'
+                declared_hash=None
+            if flow_data is not None:
+                observed_hash=flow_data.get('planned_flow_sha256')
+                if declared_hash is not None and observed_hash != declared_hash:
+                    raise ValueError('observed test-flow evidence references a different selected plan')
+                if declared_hash is None and observed_hash is not None:
+                    raise ValueError('observed test-flow SHA lacks original archived plan')
             dump(destination/'test-intent.json',intended)
             if latency_data is not None and (
                     not protocol_data or protocol_data.get('latency')!=latency_data):
@@ -658,8 +696,11 @@ def evidence_index(evidence,output,repository):
                    'protocols':sorted({r['protocol'] for r in protocol_data.get('records',[])}) if protocol_data else [],
                    'protocol_observations':len(protocol_data['records']) if protocol_data else 0,
                    'flow_steps':len(flow_data['rows']) if flow_data else 0,
-                   'selected_plan_sha256':selected['plan_sha256'] if selected else None,
-                   'runtime_adapter':selected['adapter'] if selected else 'historical_unrecorded',
+                   'memory_lifetimes':memory_view is not None,
+                   'selected_plan_sha256':runtime_selected['plan_sha256'] if runtime_selected else None,
+                   'runtime_adapter':runtime_selected['adapter'] if runtime_selected else 'historical_unrecorded',
+                   'planned_flow_status':snapshot_status,'planned_flow_sha256':declared_hash,
+                   'planned_flow_intent':intended if declared_hash is not None else None,
                    'pcie_latency_measured':bool(latency_data and latency_data.get('passed')),
                    'result':result}
             if protocol_data:
@@ -704,6 +745,9 @@ def evidence_index(evidence,output,repository):
                         and re.fullmatch(r'[a-f0-9]{40}',fabric_matches[tested_sha])):
                     entry['verified_fabric_source_sha']=fabric_matches[tested_sha]
                 render_report(trace,destination/'report.html')
+                if memory_view is not None:
+                    from scenario_memory_trace import embed_in_run_report
+                    embed_in_run_report(destination/'report.html',memory_view)
                 html=(destination/'report.html').read_text()
                 up=os.path.relpath(output,destination).replace(os.sep,'/')
                 nav=f'<p style="margin:0 0 12px"><a href="{up}/index.html">Verification hub</a> · <a href="{up}/runs.html">All runs</a> · <a href="{escape(run["html_url"])}">CI evidence</a></p>'
@@ -728,6 +772,12 @@ def evidence_index(evidence,output,repository):
                           'style="display:block;width:100%;height:640px;'
                           'border:1px solid var(--line);border-radius:8px">'
                           '</iframe></section>')
+                nav+=('<p><strong>Selected plan:</strong> '+escape(snapshot_status)
+                      +(' · SHA-256 <code>'+escape(declared_hash[:16])+'</code>'
+                        +' · <a href="planned-flow.json">Archived pre-run plan</a>'
+                        if declared_hash else
+                        ' · no original pre-run snapshot in this historical archive')
+                      +'</p>')
                 if flow_data:
                     nav+='<p><a href="test-flow.html">INIT/RUN/CHECK verified steps</a></p>'
                 (destination/'report.html').write_text(html.replace('<main>','<main>'+nav,1))
@@ -757,25 +807,26 @@ def evidence_index(evidence,output,repository):
             if report_html.is_file():
                 html=report_html.read_text()
                 if '<main>' in html:
-                    catalog=selected.get('actor_monitor_catalog',{}) if selected else {}
+                    catalog=(runtime_selected.get('actor_monitor_catalog',{})
+                             if runtime_selected else {})
                     declared=catalog.get('monitors',{})
                     source_count=declared.get('count')
                     initiators=declared.get('declared_initiators',[])
-                    actors=(
+                    actor_note=(
                         '<p>Selected source monitor catalog: '+escape(str(source_count))+
                         ' boundaries, '+escape(str(len(initiators)))+
                         ' declared initiators · '+escape(declared.get('status','not_declared'))+
-                        '. These are NOT proof of an elaborated pin or an accepted AXI transfer.</p>'
+                        '. These are NOT proof of elaborated pins or accepted AXI traffic.</p>'
                         if source_count is not None else
-                        '<p>Selected actor/monitor catalog not available for this run.</p>')
-                    note=('<p>Selected per-run snapshot '+escape(selected['plan_sha256'][:16])+
-                          ' · adapter '+escape(selected['adapter'])+
-                          ' · internal steps independently instrumented only where available.</p>'+actors
-                          if selected else
-                          '<p>Historical run: pre-simulation selection snapshot unavailable; '
-                          'do not infer detailed actions from current source.</p>')
-                    report_html.write_text(html.replace(
-                        '<main>','<main>'+note+render_intended_flow(intended),1))
+                        '<p>Selected actor/monitor catalog unavailable for this run.</p>')
+                    note=(
+                        '<p>Selected per-run snapshot '+escape(runtime_selected['plan_sha256'][:16])+
+                        ' · adapter '+escape(runtime_selected['adapter'])+
+                        ' · internal steps independently instrumented only where available.</p>'+actor_note
+                        if runtime_selected else
+                        '<p>Historical run: command dispatch snapshot unavailable; '
+                        'no unobserved actions implied.</p>')
+                    report_html.write_text(html.replace('<main>','<main>'+note+render_intended_flow(intended),1))
             entries.append(entry)
     runs.sort(key=lambda r:r['created_at'],reverse=True)
     entries.sort(key=lambda r:r['recorded_at'],reverse=True)
