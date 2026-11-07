@@ -628,6 +628,12 @@ def evidence_index(evidence,output,repository):
                         or result.get('identity_sha256')!=selected_identity['identity_sha256']
                         or result.get('canonical_id')!=canonical_path(selected_identity).as_posix()):
                     raise ValueError('archived run identity differs from original plan/result')
+                expected_filelist=selected_identity['selection'].get('filelist_sha256')
+                if expected_filelist is not None:
+                    original_list=source_dir/'sources.f'
+                    if (not original_list.is_file()
+                            or hashlib.sha256(original_list.read_bytes()).hexdigest()!=expected_filelist):
+                        raise ValueError('original archived source filelist differs from selected identity')
                 prefix=f"ci-{run['id']}-a{run.get('run_attempt',1)}-"
                 if selected_identity['run_id'].startswith('ci-') and not selected_identity['run_id'].startswith(prefix):
                     raise ValueError('canonical run ID refers to a different CI attempt')
