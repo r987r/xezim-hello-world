@@ -676,7 +676,24 @@ def evidence_index(evidence,output,repository):
                 nav+='<details><summary>Original evidence: raw events, transactions, logs, plan and filelists</summary><ul>'
                 nav+=''.join(f'<li><a href="{escape(name)}">{escape(name)}</a></li>' for name in sorted(assets))+'</ul></details>'
                 if protocol_data:
-                    nav+='<p><a href="protocols.html">Unified protocol explorer / PCIe latency</a></p>'
+                    # The canonical per-test landing page contains a visible
+                    # read-only protocol viewer for *all* observed sources,
+                    # not just a link or the AXI-only transaction table.
+                    # Protocols HTML is always re-rendered from trusted JSON.
+                    nav+=('<section class="card" id="all-protocol-traffic" '
+                          'aria-label="All captured protocol traffic">'
+                          '<h2>All captured protocol traffic</h2>'
+                          '<p>Same test and CI attempt: Ethernet, PCIe, DFI, '
+                          'AXI, APB and future monitor records, where present. '
+                          'This is the independently verified protocol capture, '
+                          'not a synthetic combined trace.</p>'
+                          '<p><a href="protocols.html">Open full protocol explorer</a>'
+                          ' · <a href="protocol-transactions.json">Raw protocol JSON</a></p>'
+                          '<iframe src="protocols.html" loading="lazy" '
+                          'title="Source-verified per-test protocol observations" '
+                          'style="display:block;width:100%;height:640px;'
+                          'border:1px solid var(--line);border-radius:8px">'
+                          '</iframe></section>')
                 if flow_data:
                     nav+='<p><a href="test-flow.html">INIT/RUN/CHECK verified steps</a></p>'
                 (destination/'report.html').write_text(html.replace('<main>','<main>'+nav,1))
