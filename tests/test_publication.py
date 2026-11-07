@@ -319,6 +319,8 @@ class PublicationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);target=fixture(root/'evidence',axi=True)
             test=json.loads((target/'plan.json').read_text())
+            test['stage']='all'
+            site.dump(target/'plan.json',test)
             snapshot={'schema_version':1,'target':'chip-boot','source_revision':SHA,
                       'stage':'all','engine':'cocotb-verilator',
                       'adapter':'legacy_entrypoint_adapter',
