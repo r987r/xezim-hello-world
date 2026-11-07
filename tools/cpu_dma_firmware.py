@@ -33,7 +33,7 @@ def require_tool(name):
 
 
 def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False, ethernet_cpu_mode=False,
-                     scenario_mode=False):
+                     scenario_mode=False, use_generated_dma_csr=False):
     directory.mkdir(parents=True, exist_ok=True)
     if scenario_mode:
         if pcie_host_mode or ethernet_cpu_mode:
@@ -85,6 +85,10 @@ def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False, ethernet_cpu
     )
     elf = directory / "cpu_dma.elf"
     raw = directory / "cpu_dma.bin"
+    if use_generated_dma_csr:
+        # Software-only schema, no generated RTL or default firmware mutation.
+        from tools.csr_dma_headers import emit as emit_dma_header
+        emit_dma_header(directory / "csr")
     args = [require_tool("clang"),
             "--target=riscv32-unknown-elf", "-march=rv32i", "-mabi=ilp32",
             "-Oz", "-ffunction-sections", "-ffreestanding", "-fno-builtin",
@@ -92,6 +96,8 @@ def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False, ethernet_cpu
             "-nostdlib", "-fuse-ld=lld", "-Wl,--no-relax",
             "-Wl,--build-id=none", f"-Wl,-T,{linker}",
             *[f"-D{name}=0x{value:x}ULL" for name, value in macros.items()],
+            *(['-DSOC_USE_GENERATED_DMA_CSR=1', '-I', str(directory / 'csr')]
+              if use_generated_dma_csr else []),
             str(ROOT / ('sw/dma/tests/scenario_dma_run.c' if scenario_mode
                         else 'sw/ethernet/tests/eth_cpu_run.c' if ethernet_cpu_mode
                         else 'sw/dma/tests/cpu_dma_run.c')),
