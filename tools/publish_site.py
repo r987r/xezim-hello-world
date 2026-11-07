@@ -628,6 +628,9 @@ def evidence_index(evidence,output,repository):
                            'observed_flow_milestones_not_all_internal_actions'):
                     raise ValueError('historical selected flow correlation is not source-qualified')
             if runtime_selected is not None:
+                if (runtime_selected.get('identity_sha256') !=
+                        (selected_identity['identity_sha256'] if selected_identity else None)):
+                    raise ValueError('selected runner plan and canonical run identity disagree')
                 if (runtime_selected.get('source_revision') not in verified_shas | {run['head_sha']}
                         or runtime_selected.get('engine')!=plan.get('engine')
                         or runtime_selected.get('stage')!=plan.get('stage')):
