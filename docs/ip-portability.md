@@ -77,6 +77,24 @@ pin connection or accepted transaction.
    quiescence and safe semantics; physical controller probes are scoped to
    the selected backend and recorded as modeled vs observed.
 
+## Testbench uniqueness / debt (confirmed in source)
+
+| Testbench or scope | Already shared | Remaining unique assumption / action |
+| --- | --- | --- |
+| `dv/supernoc/test_supernoc.py` | Uses pinned `cocotbext-axi` BFM, common passive AXI trace, allocated addresses and the generated `gen/supernoc/manifest.json`. | `dv/common` scenario/step-action runner does **not** yet own this legacy test's internal actions (#119); FlooGen-specific `soc_noc` source wrapper must move behind a backend contract before a custom NoC can execute it. |
+| `dv/memory/` + standalone memory fabric | RTL crossbar, configured routing, negative response checks and common runner. | `dv/common/axi_master_bfm.sv` is an approximately 200-line **locally authored AXI master**, and `dv/common/axi_route_monitor.sv` a ~77-line crossbar-specific checker which decodes source IDs from an extension of the native ID. This **does not meet an unconditional no-custom-BFM objective**; migrate the stimulus to a suitable pinned upstream AXI agent or a canonical language adapter when changing this scope, retaining independent route/response golden checks. The route monitor's source-ID reconstruction is valid only for its known standalone crossbar, **not** a universal NoC rule. |
+| `dv/full_chip/test_boot.py`, `dv/full_chip/test_dma.py`, `dv/pcie0/test_full_chip_host.py` | PCIe host already calls the same full-chip CPU phase coordinator; iDMA C/BFM reuse the same generated NoCs and physical allocation model. | CPU firmware ABI, boot reset, iDMA descriptors, host BAR and distinct transfer modes are still hard-coded. The per-run scenario/driver dispatch adapter must mediate device differences. |
+| `dv/ethernet0/test_chip_mvp.py` and `dv/ethernet0/test_cpu_mvp.py` | Reuse external GMII VIP, common AXI trace, common protocol trace and underlying generated Ethernet IP. | The BFM and CPU firmware tests **still encode physical addresses** such as Ethernet SRAM `0x13000000`, Ethernet CSR `0x40050000`, and modeled DDR `0x140000000` in test code or accepted-address filters, rather than deriving all base windows from that run's selected SoC address map. Move only those *aperture bases and bounds* to the existing `tools/address_map.py` / selected manifest; keep genuine queue-descriptor and packet-policy offsets owned by the Ethernet provider/driver. No new manually maintained map. |
+| `dv/full_chip/test_ddr_real.py` | Reuses full-chip boot coordinator, common AXI trace and protocol exporter. | `u_ddr_real` DFI scope and its LiteDRAM-specific init/model capacity are rightfully provider-specific. Some negative-test physical offsets and 32-MiB bounds are in Python constants; bind them to selected DDR model geometry and address contract rather than treating them as universal JEDEC values. |
+| `dv/common/scenario_dma.py` | One canonical DDR roundtrip source-plan generates both real CPU C and BFM stimuli. | The **executor supports exactly eight fixed action IDs/kinds**, `compute0.dma`, `compute0.sram.payload` and `memory0.ddr0`. This is intentionally strict, but not a generic multi-device or newly randomized action-dispatch implementation. Use a typed action-to-provider registry, not a renamed copy of the eight-action compiler. |
+
+**Priority:** keep the 2 shared canonical SCN-2 executors green while
+migrating instrumented legacy flows first. Do not rewrite all testbenches or
+add another global runner. A NoC IP change should require a new NoC-specific
+emitter and DUT/port binding, *not* new Ethernet, DMA and PCIe test narratives.
+Changing DMA changes the `dma.copy` adapter and CSR/descriptor driver,
+not the abstract test action or its pass/fail evidence schema.
+
 ## Cheap source-selection mutation gate
 
 `tests/test_ip_portability_contract.py` validates the **existing configured**
