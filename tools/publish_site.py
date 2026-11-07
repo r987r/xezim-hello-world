@@ -826,6 +826,13 @@ def build(output,evidence,repository,sha,config):
             raise ValueError("parsed RTL failed independent data/config fabric contract")
         parsed_rtl=candidate
     dump(output/'data/rtl-architecture.json', parsed_rtl)
+    # Index *actual parsed root instances* for every generic diagram
+    # boundary. Ambiguous or missing mappings remain explicitly unresolved;
+    # a source name match is never treated as selected-variant elaboration.
+    from rtl_instance_bindings import resolve as resolve_rtl_instance_bindings
+    rtl_bindings=resolve_rtl_instance_bindings(
+        design_graph, parsed_rtl, top=chip['top'])
+    dump(output/'data/rtl-instance-bindings.json', rtl_bindings)
     dataset={'schema_version':1,'title':config['title'],'source_sha':sha,'repository':repository,
              'built_at':datetime.now(timezone.utc).isoformat(),'runs':runs,'entries':entries,
              'notes':notes,'documents':docs,'networks':noc['networks'],'chip':chip,
@@ -842,6 +849,8 @@ def build(output,evidence,repository,sha,config):
             body = body.replace('__SIGNAL_DATA__', signal_data)
             parsed_data = json.dumps(parsed_rtl, separators=(',', ':')).replace('<','\\u003c')
             body = body.replace('__RTL_PARSE_DATA__', parsed_data)
+            bindings_data = json.dumps(rtl_bindings, separators=(',', ':')).replace('<','\\u003c')
+            body = body.replace('__RTL_INSTANCE_BINDINGS__', bindings_data)
             # Every protocol monitor with verified evidence is discoverable:
             # source ID, protocol and role come from the audited VIP capture,
             # not manually registered workflow names or guessed hardware.
