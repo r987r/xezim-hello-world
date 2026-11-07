@@ -224,7 +224,10 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
                 'slv_resps_o':f'c{i}_rsp','mst_req_o':f'cpu_{i}_req','mst_resp_i':f'cpu_{i}_rsp'}),
                 f'  assign fetch_valid_o[{i}] = c{i}_ic && c{i}_iack;', f'  assign fetch_addr_o[{i}*32 +: 32] = c{i}_ia;']
         if i == 0:
-            lines += [f'  {dtype(d,"req")} cpu_data_{i}_req;',
+            # The probe feeds the CPU0 mux above the DMA block; declare it
+            # before first use so slang does not create an implicit net.
+            lines += [f'  {dtype(all_ports["m_"+name+"_local_data_dma"], "req")} probe_req;',
+                      f'  {dtype(d,"req")} cpu_data_{i}_req;',
                       f'  {dtype(d,"rsp")} cpu_data_{i}_rsp;',
                       f'  {dtype(c,"req")} cpu_config_{i}_req;',
                       f'  {dtype(c,"rsp")} cpu_config_{i}_rsp;',
@@ -247,7 +250,6 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
                   f'  logic dma_{i}_apb_ready, dma_{i}_apb_error;',
                   f'  logic [63:0] dma_{i}_apb_rdata;']
         if i == 0:
-            lines += [f'  {dtype(dma,"req")} probe_req;']
             for pin, _, ch, member in probe:
                 if request_field(ch,member):
                     lines += [f'  assign {field("probe_req",ch,member)} = {pin};']

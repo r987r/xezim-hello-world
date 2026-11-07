@@ -1185,6 +1185,7 @@ module soc_top #(parameter bit ProbeEnable = 0, DmaEnable = 0, DmaTestMode = 0) 
   always @(posedge clk_i) if (cpu_reset_n[0] && cpu_0_trap) $fatal(1, "CPU0 trap");
   assign fetch_valid_o[0] = cpu_0_req.ar_valid && cpu_0_rsp.ar_ready && cpu_0_req.ar.prot[2];
   assign fetch_addr_o[0*32 +: 32] = cpu_0_req.ar.addr;
+  floo_xezim_compute0_local_data_noc_pkg::axi_in_req_t probe_req;
   floo_xezim_compute0_local_data_noc_pkg::axi_in_req_t cpu_data_0_req;
   floo_xezim_compute0_local_data_noc_pkg::axi_in_rsp_t cpu_data_0_rsp;
   floo_xezim_compute0_local_config_noc_pkg::axi_in_req_t cpu_config_0_req;
@@ -1215,7 +1216,6 @@ module soc_top #(parameter bit ProbeEnable = 0, DmaEnable = 0, DmaTestMode = 0) 
   logic dma_0_apb_write, dma_0_apb_select, dma_0_apb_enable;
   logic dma_0_apb_ready, dma_0_apb_error;
   logic [63:0] dma_0_apb_rdata;
-  floo_xezim_compute0_local_data_noc_pkg::axi_in_req_t probe_req;
   assign probe_req.aw.id = probe_awid;
   assign probe_req.aw.addr = probe_awaddr;
   assign probe_req.aw.len = probe_awlen;
