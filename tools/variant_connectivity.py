@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+import re
 from xml.sax.saxutils import escape
 
 import yaml
@@ -181,6 +182,31 @@ def collect(root: Path, target: str, plan: dict, out: Path) -> tuple[dict,dict]:
         rel(root,chip_path),rel(root,top),rel(root,super_root/"soc_noc.sv"),
         rel(root,root/"config/interface_contracts.yaml")]
     states=reconcile(graph,cfg,chip,actors,monitors)
+    # Check the *selected* generated source actually contains each
+    # generator-named module/instance token. This is stronger than merely
+    # reading an actor manifest, but still NOT compiler/elaboration proof.
+    top_text=top.read_text()
+    for name,state in states.items():
+        record=next(p for p in chip["peripheral_subsystems"] if p["name"]==name)
+        def require_instance(module_key,instance_key):
+            mod=record.get(module_key)
+            inst=record.get(instance_key)
+            if (not isinstance(mod,str) or not isinstance(inst,str)
+                    or not re.fullmatch(r"[A-Za-z_][A-Za-z_0-9]*",mod)
+                    or not re.fullmatch(r"[A-Za-z_][A-Za-z_0-9]*",inst)
+                    or not re.search(r"\\b"+re.escape(mod)+r"\\s*#",top_text)
+                    or not re.search(r"\\b"+re.escape(inst)+r"\\s*\\(",top_text)):
+                raise VariantEvidenceError("selected RTL missing generator-named "
+                                           "instance for "+name+" "+module_key)
+        if state["data_status"].startswith("generated_"):
+            require_instance("rtl_module","rtl_instance")
+            state["rtl_module"]=record["rtl_module"]
+            state["rtl_instance"]=record["rtl_instance"]
+            state["source_instance_evidence"]="generator_named_source_tokens_not_elaborated"
+        if state["csr_status"].startswith("generated_"):
+            require_instance("csr_module","csr_instance")
+            state["csr_module"]=record["csr_module"]
+            state["csr_instance"]=record["csr_instance"]
 
     # Audit the very signals that the real Cocotb AXI monitor binds in the
     # selected soc_noc RTL (not just the generator's manifest list).
