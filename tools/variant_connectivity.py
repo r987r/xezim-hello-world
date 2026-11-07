@@ -336,8 +336,10 @@ def render_html(view: dict, graph: dict) -> str:
                 f'<text x="{x+12}" y="{y+42}" fill="#c0cbdb" '
                 f'font-size="12">{e(description)}</text>')
     def arrow(x1,y1,x2,y2,active):
-        return (f'<path d="M{x1} {y1} L{x2} {y2}" stroke="{("#6fdb9b" if active else "#bd9d73")}" '
-                f'stroke-width="3" {"stroke-dasharray=\"7 6\"" if not active else ""} '
+        color="#6fdb9b" if active else "#bd9d73"
+        dash='' if active else 'stroke-dasharray="7 6"'
+        return (f'<path d="M{x1} {y1} L{x2} {y2}" stroke="{color}" '
+                f'stroke-width="3" {dash} '
                 'fill="none" marker-end="url(#tip)"/>')
     periphs=sorted(view["peripherals"].items())
     height=80+190*len(periphs)
