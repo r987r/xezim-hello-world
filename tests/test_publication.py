@@ -229,6 +229,14 @@ class PublicationTests(unittest.TestCase):
             self.assertNotIn('__FABRIC_DATA__',(output/'fabric.html').read_text())
             self.assertNotIn('__PROTOCOL_LINK_DATA__',(output/'explorer.html').read_text())
             self.assertIn('id="arch-embedded-protocol-links"',(output/'explorer.html').read_text())
+            self.assertIn('id="ex-embedded-rtl-bindings"',(output/'explorer.html').read_text())
+            self.assertNotIn('__RTL_INSTANCE_BINDINGS__',(output/'explorer.html').read_text())
+            bindings=json.loads((output/'data/rtl-instance-bindings.json').read_text())
+            self.assertIn('compute0.cpu', bindings)
+            self.assertIn(bindings['compute0.cpu']['status'],
+                          {'compiler_parse_unavailable','unique_root_instance'})
+            self.assertIn('ethernet0.ip',bindings)
+            self.assertNotIn('const preferred={',(output/'explorer.html').read_text())
             fabric=json.loads((output/'data/fabric.json').read_text())
             self.assertEqual(fabric['latency_table']['units'],
                              'simulation_reference_clock_cycles')

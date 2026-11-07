@@ -67,6 +67,10 @@ class ArchitectureExplorerTests(unittest.TestCase):
         self.assertIn('new Map(g.groups',self.script)
         self.assertIn('function fullChip()',self.script)
         self.assertIn('for(const s of subs)',self.script)
+        self.assertIn('const rtlBindings=',self.script)
+        self.assertIn('rtlBindings[id]',self.script)
+        self.assertNotIn('const preferred=',self.script)
+        self.assertNotIn('moduleCandidates=',self.script)
 
 
 if __name__=="__main__":

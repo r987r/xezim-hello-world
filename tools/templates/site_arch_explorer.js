@@ -3,6 +3,7 @@
 const g=JSON.parse(document.getElementById("ex-embedded-graph").textContent);
 const inventory=JSON.parse(document.getElementById("ex-embedded-signals").textContent);
 const parsed=JSON.parse(document.getElementById("ex-embedded-rtl").textContent);
+const rtlBindings=JSON.parse(document.getElementById("ex-embedded-rtl-bindings").textContent);
 const linkRuns=JSON.parse(document.getElementById("arch-embedded-protocol-links").textContent);
 const svg=document.getElementById("arch-svg"),vp=document.getElementById("arch-viewport"),status=document.getElementById("arch-status");
 const crumbs=document.getElementById("arch-crumbs"),profile=document.getElementById("arch-profile"),plane=document.getElementById("arch-plane");
@@ -20,21 +21,14 @@ const short=id=>String(id).split(".").slice(-1)[0];
 // Logical diagram node -> parsed module; this is a syntax-only association.
 // Preserve test-profile-dependent RTL composition as a separate concern.
 const parsedModules=new Map((parsed.modules||[]).map(m=>[m.name,m]));
-const moduleCandidates=id=>{
-  const n=nodes.get(id),ip=n?.info?.ip||"";
-  const preferred={
-    "ethernet0.ip":["ethernet0_axi_mvp","ethernet0_mvp"],
-    "pcie0.ip":["pcie_tlp_bridge"],
-    "compute0.cpu":["picorv32_cpu_adapter"],
-    "compute1.cpu":["serv_cpu_adapter"],
-    "compute0.dma":["soc_idma_engine"],"compute1.dma":["soc_idma_engine"],
-    "compute0.dma_csr":["soc_dma_regs"],"compute1.dma_csr":["soc_dma_regs"],
-    "compute0.sram":["axi_sram_target"],"compute1.sram":["axi_sram_target"],
-    "pcie0.sram":["axi_sram_target"],"ethernet0.sram":["axi_sram_target"]
-  };
-  return [...new Set([...(preferred[id]||[]),ip,n?.module].filter(Boolean))];
+// Correlation is generated from actual slang CST root instantiations.
+// No hardcoded IP/module allowlist. It is not an elaborated-variant proof.
+const ipBinding=id=>rtlBindings[id]||{status:"unindexed_boundary"};
+const ipModule=id=>{
+  const b=ipBinding(id);
+  return b.status==="unique_root_instance"&&b.parsed_module_available&&parsedModules.has(b.module)
+    ?b.module:null;
 };
-const ipModule=id=>moduleCandidates(id).find(x=>parsedModules.has(x))||null;
 const ipDestination=id=>({mode:"ip",name:id});
 
 const actorFor=n=>{
@@ -229,23 +223,32 @@ function ipView(id){
   const selected=nodes.get(id);
   const moduleName=ipModule(id);
   const m=moduleName?parsedModules.get(moduleName):null;
+  const binding=ipBinding(id);
   const children=m?.instances||[];
   const shown=Math.min(children.length,22);
   dims={w:1160,h:Math.max(500,245+shown*75)};
   const root=add(svg,elem("g"));box(root,0,0,dims.w,dims.h,C.bg,"none",0);
   text(root,38,47,id.toUpperCase()+" / IP COMPOSITION",17,C.text,760);
   text(root,38,79,(selected?.info?.ip||"RTL boundary")+" · "+(selected?.info?.status||"status not specified"),13,C.muted);
-  text(root,38,108,"Selected profile "+profile.value+" · custom RTL hierarchy is a syntax parse, not proof this variant elaborates it",12,C.planned);
+  text(root,38,108,"Selected profile "+profile.value+" · "+(binding.status==="unique_root_instance"
+    ? "slang root "+binding.instance+" ("+binding.module+"); NOT elaborated in this profile"
+    : "root mapping "+binding.status+"; no active RTL module inferred"),12,C.planned);
   if(trafficSourcesFor(id).length){
     text(root,40,137,"Verified protocol observations: select this IP to inspect run-specific link traffic",12,C.data,650);
   }
   if(!m){
-    card(root,40,153,1050,82,id,"No parsed implementation in the canonical checked-in RTL source",C.ip,{title:id,kind:"opaque / reserved IP boundary"});
+    card(root,40,153,1050,82,id,
+      binding.status==="unique_root_instance" ? "Parsed root instance "+binding.instance+" is external / opaque"
+      : "No unique root RTL instance: "+binding.status,
+      C.ip,{title:id,kind:"opaque / unresolved RTL boundary",binding_status:binding.status,
+            evidence:binding.evidence||"no_source_correlated_instance"});
     text(root,42,276,"Pinned upstream IP or opt-in variant may be external. No internal wiring is inferred.",12,C.muted);
     return {label:id,count:"Opaque boundary · no verified internal hierarchy"};
   }
   card(root,40,153,435,70,moduleName,m.source||"Parsed module",C.ip,
-       {title:moduleName,kind:"slang CST parsed RTL module",source:m.source,evidence:m.evidence});
+       {title:moduleName,kind:"slang CST parsed RTL module",source:m.source,evidence:m.evidence,
+        rtl_root_instance:binding.instance,root_source:binding.source,
+        binding_evidence:binding.evidence,profile_elaboration_proven:false});
   text(root,543,142,children.length+" parsed child instantiations",13,C.muted,650);
   children.slice(0,22).forEach((inst,i)=>{
     const y=163+i*75,more=parsedModules.has(inst.module)&&inst.module!==moduleName;
