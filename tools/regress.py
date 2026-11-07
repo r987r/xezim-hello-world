@@ -573,7 +573,9 @@ def run_target(name, test, resolver, options):
         if not scenario_location.is_file():
             raise ValueError('runtime-resolved scenario plan missing before pre-run snapshot')
         scenario = json.loads(scenario_location.read_text())
-    selected = snapshot_intent(name, plan, scenario=scenario)
+    from stimulus_catalog import load as load_stimuli
+    selected = snapshot_intent(name, plan, scenario=scenario,
+                               stimulus=load_stimuli(config)[name])
     validate_snapshot(selected, target=name)
     (out/'planned-flow.json').write_text(json.dumps(selected, indent=2) + '\n')
     # Before simulator dispatch, audit the exact generated selected variant.

@@ -158,7 +158,13 @@ def selection(target: str, plan: dict, directory: Path,
         raise RunContractError("invalid runner selection")
     mode = plan.get("firmware_mode")
     selected_scenario, scenario_sha = _scenario(directory, mode)
-    intent = source_intent(target, plan, scenario=selected_scenario)
+    # Same human-authored YAML is archived in the selected runner envelope;
+    # do not mistake legacy phase summaries for runtime action dispatch.
+    from .stimulus_catalog import load as load_stimuli
+    definitions = load_stimuli(yaml.safe_load(
+        (Path(__file__).resolve().parents[1]/"config/regression.yaml").read_text()))
+    intent = source_intent(target, plan, scenario=selected_scenario,
+                           stimulus=definitions[target])
     legacy=migration_policy()
     if mode not in SCENARIOS and not (plan.get("mode") == "compile"
             or plan["engine"] in NON_RUNTIME) and target not in legacy:
