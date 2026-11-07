@@ -25,7 +25,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ENGINES = {'xezim', 'xezim-compile', 'verilator-lint', 'cocotb-verilator'}
 FIELDS = {'engine', 'sources', 'ip', 'top', 'args', 'pass', 'expect_failure',
           'timeout_s', 'memory_config', 'boot_relocate', 'module', 'test_dir',
-          'build', 'reuse_build', 'env', 'seed', 'bender_targets', 'mode', 'report', 'firmware_mode', 'opt_in'}
+          'build', 'reuse_build', 'env', 'seed', 'bender_targets', 'mode', 'report', 'firmware_mode', 'opt_in', 'flow_plan'}
 
 
 def expand(config, names, stack=()):
@@ -73,6 +73,20 @@ def load_config(path):
             raise ValueError(f'{name}: opt_in must be boolean')
         if test.get('firmware_mode') not in (None, 'cpu_dma', 'pcie_host', 'pcie_dma_host', 'ethernet_mvp', 'ethernet_cpu', 'ddr_cpu_dma', 'cpu_dma_scenario', 'scenario_bfm'):
             raise ValueError(f'{name}: unknown compiled CPU firmware mode')
+        if 'flow_plan' in test:
+            source=test['flow_plan']
+            if (not isinstance(source,str)
+                    or not re.fullmatch(r'config/scenarios/[A-Za-z0-9_-]+\.json',source)
+                    or not (ROOT/source).is_file()
+                    # Only this exact pinned scenario is supported by the
+                    # current eight-action C/BFM executor. A new scenario
+                    # must add a real adapter rather than silently driving
+                    # a different plan than the Test Runs viewer displays.
+                    or source != 'config/scenarios/cpu-bfm-ddr-roundtrip.json'
+                    or test.get('firmware_mode') not in ('cpu_dma_scenario','scenario_bfm')):
+                raise ValueError(f'{name}: unsupported or unsafe executable scenario path')
+        if test.get('firmware_mode') in ('cpu_dma_scenario','scenario_bfm') and 'flow_plan' not in test:
+            raise ValueError(f'{name}: scenario adapter requires explicit flow_plan')
         if 'firmware_mode' in test and (
             test['engine'] != 'cocotb-verilator' or
             'chip_boot' not in test.get('bender_targets', []) or
@@ -479,8 +493,9 @@ def run_target(name, test, resolver, options):
             'args': args, 'results_xml': str(out/'results.xml'), 'stage': options.stage}
     plan_file = out/'plan.json'
     plan_file.write_text(json.dumps(plan, indent=2) + '\n')
-    # Snapshot source-resolved selected intent even for filelist-only runs.
-    # Opaque legacy internal stimulus must never appear as typed actions.
+    # A separate source-fingerprinted *command dispatch envelope* is not
+    # another INIT/RUN/CHECK scenario planner. The canonical intent remains
+    # planned-flow.json and the original scenario-plan.json for SCN-2.
     from runtime_contract import selection as select_runtime, save as save_runtime
     from runtime_contract import dispatch_event, check_events
     selected_path = out/'selected-test-plan.json'
@@ -514,15 +529,31 @@ def run_target(name, test, resolver, options):
         commands = [(name, [sys.executable, str(ROOT/'tools/sim_cocotb.py'), str(plan_file)])]
     plan['commands'] = commands
     plan_file.write_text(json.dumps(plan, indent=2) + '\n')
-    selected = select_runtime(name,plan,out,commands=commands)
-    save_runtime(selected_path,selected)
+    # Resolve and archive the exact declared intent BEFORE the simulator is
+    # launched, including the selected command arguments. This is *not* a
+    # claim of dispatch, completion or PASS. Incomplete/failed runs retain it.
+    from test_intent import snapshot as snapshot_intent, validate_snapshot
+    scenario = None
+    if test.get('firmware_mode') in ('scenario_bfm', 'cpu_dma_scenario'):
+        # Reuse the already resolved immutable plan that the C/BFM adapter
+        # consumes. Reading the authoring spec here would lose selected
+        # randomized arguments and resolved buffer addresses.
+        scenario_location = out/('variant' if test['firmware_mode']=='cpu_dma_scenario' else '')/'scenario-plan.json'
+        if not scenario_location.is_file():
+            raise ValueError('runtime-resolved scenario plan missing before pre-run snapshot')
+        scenario = json.loads(scenario_location.read_text())
+    selected = snapshot_intent(name, plan, scenario=scenario)
+    validate_snapshot(selected, target=name)
+    (out/'planned-flow.json').write_text(json.dumps(selected, indent=2) + '\n')
+    runtime_selected = select_runtime(name,plan,out,commands=commands)
+    save_runtime(selected_path,runtime_selected)
     runner_events = []
     def save_dispatch():
-        # Atomic plan fingerprint gives a human-readable, source-true
-        # reproduction even on an RTL timeout or failed expected outcome.
-        (out/'runner-events.json').write_text(
-            json.dumps({'schema_version':1,'plan_sha256':selected['plan_sha256'],
-                        'target':name,'events':runner_events},indent=2)+'\n')
+        # A command start is not a proof that its internal stimulus ran.
+        (out/'runner-events.json').write_text(json.dumps({
+            'schema_version':1,'target':name,
+            'plan_sha256':runtime_selected['plan_sha256'],
+            'events':runner_events},indent=2)+'\n')
     save_dispatch()
     env = dict(os.environ)
     env['SOC_RUN_PLAN'] = str(plan_file)
@@ -540,7 +571,7 @@ def run_target(name, test, resolver, options):
     results = []
     for label, command in commands:
         print(f'RUN {name}/{label} ({engine}, stage={options.stage})', flush=True)
-        runner_events.append(dispatch_event(selected,label,status='started'))
+        runner_events.append(dispatch_event(runtime_selected,label,status='started'))
         save_dispatch()
         command_started = time.monotonic()
         try:
@@ -548,7 +579,7 @@ def run_target(name, test, resolver, options):
                                           test.get('timeout_s', resolver.config['defaults']['timeout_s']), env)
         except (OSError, subprocess.SubprocessError) as exc:
             runner_events.append(dispatch_event(
-                selected,label,status='completed',passed=False,
+                runtime_selected,label,status='completed',passed=False,
                 duration_s=time.monotonic()-command_started,reason=str(exc)))
             save_dispatch()
             raise
@@ -560,7 +591,7 @@ def run_target(name, test, resolver, options):
         expectation = {} if options.stage == 'build' or test.get('mode') == 'compile' else test
         ok, reason = check_outcome(code, text, expectation, timed_out)
         runner_events.append(dispatch_event(
-            selected,label,status='completed',passed=ok,
+            runtime_selected,label,status='completed',passed=ok,
             duration_s=time.monotonic()-command_started,reason=reason))
         save_dispatch()
         warnings = sum('[xezim][warning]' in line or '%Warning-' in line for line in text.splitlines())
@@ -568,7 +599,7 @@ def run_target(name, test, resolver, options):
         print(f'{"PASS" if ok else "FAIL"} {name}/{label}: {reason}; warnings={warnings}; logs={out.relative_to(ROOT)}/', flush=True)
         if not ok:
             print('\n'.join(text.splitlines()[-30:]), flush=True)
-    check_events(selected, runner_events)
+    check_events(runtime_selected, runner_events)
     passed = all(r['passed'] for r in results)
     result = {'target': name, 'passed': passed, 'stage': options.stage,
               'elapsed_s': round(time.monotonic()-started, 3), 'results': results,
@@ -606,6 +637,11 @@ def run_target(name, test, resolver, options):
         if 'flow' in test['report']:
             from test_flow_report import write_report as write_flow
             flow_result = write_flow(out, plan)
+            # Bind real observed INIT/RUN/CHECK evidence to the immutable
+            # pre-simulation selected declaration; report parsing and the
+            # website must reject any mismatched run selection.
+            flow_result['planned_flow_sha256']=selected['plan_sha256']
+            (out/'test-flow.json').write_text(json.dumps(flow_result,indent=2)+'\n')
             result['test_flow'] = {'status':'complete' if flow_result['passed'] else 'incomplete',
                                    'passed':flow_result['passed'],
                                    'steps':len(flow_result['rows']),
@@ -631,24 +667,43 @@ def run_target(name, test, resolver, options):
             and options.stage in ('all','run')):
         from runtime_contract import qualify_observed_phase_milestones, RunContractError
         try:
-            milestone=qualify_observed_phase_milestones(selected,out,result=result)
+            milestone=qualify_observed_phase_milestones(runtime_selected,out,result=result)
             (out/'selected-flow-correlation.json').write_text(
                 json.dumps(milestone,indent=2)+'\n')
         except (RunContractError,OSError,ValueError,TypeError) as exc:
             passed=result['passed']=False
-            results.append({'name':'selected INIT/RUN/CHECK source contract','passed':False,
-                            'reason':str(exc)})
+            results.append({'name':'selected INIT/RUN/CHECK source contract',
+                            'passed':False,'reason':str(exc)})
             print(f'FAIL {name}/selected phase correlation: {exc}',flush=True)
-    if selected["adapter"]=="scenario_dispatch_adapter" and passed:
+    if runtime_selected["adapter"]=="scenario_dispatch_adapter" and passed:
         from runtime_contract import qualify_selected_scenario, RunContractError
         try:
-            qualify_selected_scenario(selected,out,result=result)
+            qualify_selected_scenario(runtime_selected,out,result=result)
         except (RunContractError,OSError,ValueError,TypeError) as exc:
             passed=result['passed']=False
-            results.append({'name':'selected scenario action correlation','passed':False,
-                            'reason':str(exc)})
+            results.append({'name':'selected scenario action correlation',
+                            'passed':False,'reason':str(exc)})
             print(f'FAIL {name}/selected scenario action correlation: {exc}',flush=True)
     (out/'result.json').write_text(json.dumps(result, indent=2) + '\n')
+    if (test.get('firmware_mode') in ('cpu_dma_scenario', 'scenario_bfm')
+            and options.stage in ('all', 'run') and not test.get('expect_failure')):
+        # The canonical run report exists; append the same verifiable
+        # memory-lifetime table only after actual RTL/flow success. Avoid
+        # treating the planner's allocations as observed CPU malloc tokens.
+        from dv.common.action_events import ActionEvidenceError
+        from scenario_memory_trace import finalize_scenario_run
+        if passed:
+            try:
+                memory_view = finalize_scenario_run(
+                    out, firmware_mode=test['firmware_mode'], result=result)
+                print(f"MEMORY_LIFETIMES {name}: {memory_view['status']}; "
+                      f"{len(memory_view['buffers'])} buffers", flush=True)
+            except (ActionEvidenceError, OSError, ValueError, TypeError, KeyError) as error:
+                passed = result['passed'] = False
+                results.append({'name':'scenario memory lifetime evidence',
+                                'passed':False,'reason':str(error)})
+                (out/'result.json').write_text(json.dumps(result, indent=2) + '\n')
+                print(f'FAIL {name}/memory lifetime evidence: {error}', flush=True)
     return passed
 
 
