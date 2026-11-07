@@ -88,13 +88,36 @@ class PublicSiteTests(unittest.TestCase):
     def test_valid_real_fullchip_dfi_is_reported_but_not_hardcoded(self):
         site = copy.deepcopy(self.site)
         site["entries"] = [{
-            "source_sha": self.sha,
+            "source_sha": self.sha, "passed": True,
             "target": "chip-ddr4-real",
-            "protocol_links": {
-                "sources": [{"protocol": "dfi", "count": 17}],
-            },
+            "protocol_links": {"capture_complete": True, "sources": [
+                {"protocol": "dfi", "source": "memory0.ddr0.dfi",
+                 "clock_domain": "ddr_source_clk", "count": 17,
+                 "operations": {"act": 3, "rd": 7, "wr": 7}},
+                {"protocol": "dfi", "source": "memory0.ddr0.bankmodel",
+                 "clock_domain": "ddr_source_clk", "count": 2,
+                 "operations": {"storage_write": 1, "read": 1}}
+            ]},
         }]
         self.assertEqual(self.check(site=site)["real_fullchip_dfi_runs"], 1)
+
+        incomplete = copy.deepcopy(site)
+        incomplete["entries"][0]["protocol_links"]["capture_complete"] = False
+        with self.assertRaisesRegex(ValueError, "incomplete DFI capture"):
+            self.check(site=incomplete)
+        missing_act = copy.deepcopy(site)
+        source = missing_act["entries"][0]["protocol_links"]["sources"][0]
+        source["operations"] = {"rd": 10, "wr": 7}
+        with self.assertRaisesRegex(ValueError, "ACT/RD/WR"):
+            self.check(site=missing_act)
+        missing_bank = copy.deepcopy(site)
+        source = missing_bank["entries"][0]["protocol_links"]["sources"][1]
+        source["operations"] = {"read": 2}
+        with self.assertRaisesRegex(ValueError, "BankModel write"):
+            self.check(site=missing_bank)
+        failed = copy.deepcopy(site)
+        failed["entries"][0]["passed"] = False
+        self.assertEqual(self.check(site=failed)["real_fullchip_dfi_runs"], 0)
 
     def test_reject_stale_sha(self):
         site = copy.deepcopy(self.site)
