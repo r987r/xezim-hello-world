@@ -292,6 +292,14 @@ def collect(root: Path, target: str, plan: dict, out: Path) -> tuple[dict,dict]:
     digests={rel(root,f):digest(f) for f in sources}
     graph["variant_source_manifest_sha256"]=digests[rel(root,chip_path)]
     graph["variant_top_source_sha256"]=digests[rel(root,top)]
+    # The same per-test YAML source catalog already gates native TLP/GMII/
+    # DFI recording in protocol_report; keep it independently declared here.
+    # Never treat a configured source as proof it generated an event.
+    from dv.common.protocol_trace import normalize_sources
+    protocol_cfg=(plan.get("report") or {}).get("protocols",{})
+    normalized=normalize_sources(protocol_cfg.get("sources",{}))
+    protocol_sources=[{**record,"source_status":"declared_not_observed"}
+                      for _,record in sorted(normalized.items())]
     result={
         "schema_version":1,"target":target,"firmware_mode":plan.get("firmware_mode"),
         "top":plan["top"],"chip_variant":"generated_per_test" if variant else "checked_in_default",
@@ -306,6 +314,7 @@ def collect(root: Path, target: str, plan: dict, out: Path) -> tuple[dict,dict]:
                     for name,n in sorted(networks.items())],
         "peripherals":states,
         "boundaries":boundaries,
+        "protocol_sources":protocol_sources,
         "summary":{
             "meshes":len(networks),
             "routers":sum(n["entry"]["routers"] for n in networks.values()),
@@ -313,6 +322,7 @@ def collect(root: Path, target: str, plan: dict, out: Path) -> tuple[dict,dict]:
             "initiators":sum(b["role"]=="initiator" for b in boundaries),
             "targets":sum(b["role"]=="target" for b in boundaries),
             "intermesh_links":sum(b["role"]=="link" for b in boundaries),
+            "declared_non_axi_protocol_sources":len(protocol_sources),
             "declared_live_peripherals":sum(x["data_status"].startswith("generated_") for x in states.values()),
         },
     }
@@ -381,6 +391,17 @@ def render_html(view: dict, graph: dict) -> str:
                b["fabric_shared_MaxTxns"],b["monitor_provenance"])
         tr.append('<tr>'+''.join('<td>'+e(v)+'</td>' for v in cells)+'</tr>')
     tr.append('</tbody></table>')
+    protocol_tr=[]
+    if view.get("protocol_sources"):
+        protocol_tr.append('<h2>Declared native protocol monitors (not observed by this source preflight)</h2>')
+        protocol_tr.append('<table><thead><tr><th>Source</th><th>Protocol</th>'
+                           '<th>Clock domain</th><th>Role</th><th>Model boundary</th>'
+                           '</tr></thead><tbody>')
+        for record in view["protocol_sources"]:
+            values=(record["id"],record["protocol"],record["clock_domain"],
+                    record["role"],record["modeling"])
+            protocol_tr.append('<tr>'+''.join('<td>'+e(v)+'</td>' for v in values)+'</tr>')
+        protocol_tr.append('</tbody></table>')
     counts=view["summary"]
     intro=('<h1>Selected generated chip variant · '+e(view["target"])+'</h1>'
           '<p><strong>Source-only, NOT elaborated and NOT runtime-observed.</strong> '
@@ -399,7 +420,7 @@ def render_html(view: dict, graph: dict) -> str:
           '<h2>Variant-aware 2D connectivity</h2>')
     return intro + '<div style="overflow:auto">' + ''.join(rows) + '</div>' + (
         '<h2>Selected source-bound AXI monitor / actor inventory</h2><div style="overflow:auto">'
-        + ''.join(tr) + '</div>')
+        + ''.join(tr) + '</div>' + ''.join(protocol_tr))
 
 
 def publish(root: Path, target: str, plan: dict, out: Path) -> dict:
