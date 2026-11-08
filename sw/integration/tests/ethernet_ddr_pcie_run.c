@@ -73,10 +73,16 @@ static void descriptor(uint32_t base, uint64_t phys, uint32_t length,
      * CQ status ERR_BUFFER (0xa), observed in #34 run 42453561084. */
     d[5] = region_id;
 }
-static int completion(uint32_t address, uint32_t cookie) {
+static int completion(uint32_t address, uint32_t cookie,
+                      uint32_t expected_queue_id) {
+    /* ethq_completion_t: cookie (64b), length, status, policy_id,
+     * queue_id, reserved (64b). The RTL currently encodes RX queue 0
+     * and TX queue 1 (one independent RX and one TX hardware queue).
+     * Compare exact queue identity rather than silently ignoring it.
+     */
     volatile uint32_t *q = (volatile uint32_t *)(uintptr_t)address;
     return q[0] == cookie && q[1] == 0 && q[2] == LEN &&
-           q[3] == 0 && q[4] == 0 && q[5] == 0 &&
+           q[3] == 0 && q[4] == 0 && q[5] == expected_queue_id &&
            q[6] == 0 && q[7] == 0;
 }
 static int wait_cq(uint32_t off) {
@@ -133,7 +139,7 @@ int cpu_dma_run(void) {
         return fail(evidence, flow, 202, 3);
     if (!(rd(ETHQ_REG_IRQ_STATUS) & 1u) ||
         rd(ETHQ_REG_RX_CONSUMER) != 1u ||
-        !completion(RX_CQ, RX_COOKIE))
+        !completion(RX_CQ, RX_COOKIE, 0u))
         return fail(evidence, flow, 202, 4);
     wr(ETHQ_REG_RX_CQ_CONSUMER, 1);
     wr(ETHQ_REG_IRQ_STATUS, 1);
@@ -186,7 +192,7 @@ int cpu_dma_run(void) {
         return fail(evidence, flow, 203, 11);
     if (!(rd(ETHQ_REG_IRQ_STATUS) & 2u) ||
         rd(ETHQ_REG_TX_CONSUMER) != 1u ||
-        !completion(TX_CQ, TX_COOKIE))
+        !completion(TX_CQ, TX_COOKIE, 1u))
         return fail(evidence, flow, 203, 12);
     wr(ETHQ_REG_TX_CQ_CONSUMER, 1);
     wr(ETHQ_REG_IRQ_STATUS, 2);
