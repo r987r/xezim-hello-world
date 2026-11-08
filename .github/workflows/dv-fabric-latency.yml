@@ -9,6 +9,9 @@ on:
       - 'config/stimulus/tests.yaml'
       - 'tools/fabric_benchmark.py'
       - 'dv/common/fabric_latency.py'
+      - 'dv/common/axi_outstanding.py'
+      - 'dv/common/axi_trace.py'
+      - 'tests/test_axi_outstanding.py'
       - 'dv/full_chip/test_latency.py'
       - 'tools/fabric_report.py'
       - 'tools/regress.py'
@@ -61,7 +64,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m py_compile tools/fabric_benchmark.py dv/supernoc/test_latency.py
-          python3 -m unittest tests.test_fabric_benchmark tests.test_fabric_report tests.test_stimulus_catalog -v
+          python3 -m unittest tests.test_axi_outstanding tests.test_fabric_benchmark tests.test_fabric_report tests.test_stimulus_catalog -v
           make check-generated
       - name: Reuse the exact existing SuperNoC RTL build and monitor catalog
         run: python3 tools/regress.py supernoc --stage build
@@ -101,7 +104,7 @@ jobs:
       - name: Validate source-selected benchmark and CPU-safe scope
         run: |
           set -euo pipefail
-          python3 -m unittest tests.test_fabric_benchmark tests.test_stimulus_catalog tests.test_runtime_contract -v
+          python3 -m unittest tests.test_axi_outstanding tests.test_fabric_benchmark tests.test_stimulus_catalog tests.test_runtime_contract -v
           python3 -m py_compile dv/common/fabric_latency.py dv/full_chip/test_latency.py
           make check-generated
       - name: Compile original full-chip boot RTL unchanged
