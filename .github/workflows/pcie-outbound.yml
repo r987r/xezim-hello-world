@@ -13,6 +13,12 @@ on:
       - 'tools/regress.py'
       - 'config/regression.yaml'
       - 'rtl/adapters/pcie_dma_sram_target.sv'
+      - 'rtl/adapters/pcie_requester_axi_regs.sv'
+      - 'sw/dma/tests/cpu_dma_run.c'
+      - 'sw/pcie/pcie_requester.h'
+      - 'dv/pcie0/host_adapter.py'
+      - 'dv/full_chip/test_boot.py'
+      - 'tests/test_pcie_outbound_ownership.py'
       - '.github/workflows/pcie-outbound.yml'
   workflow_dispatch:
 
@@ -83,6 +89,7 @@ jobs:
       - name: Source and source-selected regression validation
         run: |
           python3 -m py_compile tools/pcie_outbound.py tools/full_chip_gen.py tools/cpu_dma_firmware.py tools/regress.py dv/pcie0/host_adapter.py
+          python3 -m unittest tests.test_pcie_outbound_ownership -v
           python3 dv/pcie0/run_rtl_smoke.py --check-pin
           python3 tools/regress.py --check-noc
           make check-generated
