@@ -60,6 +60,23 @@ class FabricBenchmarkTests(unittest.TestCase):
             with self.subTest(mutation=mutation),self.assertRaises(BenchmarkError):
                 validate(data,self.expected)
 
+    def test_full_chip_only_live_memory_models_and_no_silent_fallback(self):
+        chip=json.loads((ROOT/"gen/chip/manifest.json").read_text())
+        models=chip["memory_models"]
+        selected=dict(self.spec,memory_offset=self.spec["full_chip_scratch_offset"])
+        cases=plan(self.manifest, selected,
+                   selected_masters=["m_compute0_local_data_dma"],
+                   writable_only=True,
+                   selected_region_bases={row["base"] for row in models})
+        self.assertEqual(len(cases),len(models)*36)
+        self.assertEqual(
+            {int(c["address"],16) // (1<<30) for c in cases},
+            {row["base"] // (1<<30) for row in models})
+        with self.assertRaises(BenchmarkError):
+            plan(self.manifest,selected,
+                 selected_masters=["m_compute0_local_data_dma"],
+                 writable_only=True,selected_region_bases={0xdead0000})
+
     def test_reject_unrepresentable_window(self):
         small=copy.deepcopy(self.manifest)
         small["masters"][0]["regions"][0]["size"]=8
