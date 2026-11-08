@@ -9,6 +9,7 @@ on:
       - 'dv/common/scenario_dma.py'
       - 'dv/full_chip/test_dma.py'
       - 'tests/test_action_runtime.py'
+      - 'tests/test_action_concurrency.py'
       - 'tools/action_evidence.py'
       - 'tools/action_sv_import.py'
       - 'tests/test_action_sv_import.py'
@@ -37,4 +38,4 @@ jobs:
       - name: Install canonical scenario configuration parser
         run: python3 -m pip install 'PyYAML==6.0.3'
       - name: Fail-closed 1200-instance and evidence provenance tests
-        run: python3 -m unittest tests.test_action_runtime tests.test_action_events tests.test_scenario_dma tests.test_action_sv_import tests.test_scenario_sv tests.test_scenario_plan tests.test_test_flow tests.test_axi_report tests.test_protocol_report -v
+        run: python3 -m unittest tests.test_action_concurrency tests.test_action_runtime tests.test_action_events tests.test_scenario_dma tests.test_action_sv_import tests.test_scenario_sv tests.test_scenario_plan tests.test_test_flow tests.test_axi_report tests.test_protocol_report -v
