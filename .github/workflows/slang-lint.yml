@@ -25,6 +25,8 @@ on:
       - 'tools/idma_rtl.py'
       - 'tools/floonoc_gen.py'
       - 'tools/supernoc_gen.py'
+      - 'tools/supernoc_interface_check.py'
+      - 'tests/test_supernoc_interface_check.py'
       - 'tools/full_chip_gen.py'
       - 'tests/test_lint_rtl.py'
       - 'tests/test_signal_paths.py'
@@ -92,6 +94,10 @@ jobs:
           .tools/bin/slang --version
       - name: Validate lint runner without vendor RTL
         run: python3 -m unittest tests.test_lint_rtl -v
+      - name: Check generated SuperNoC wrapper bindings without rebuilding netlist
+        run: |
+          python3 -m unittest tests.test_supernoc_interface_check -v
+          python3 tools/supernoc_interface_check.py --output .tools/lint/supernoc-interface.json
       - name: Validate static netlist graph and selected-source fail-closed contracts
         run: python3 -m unittest tests.test_signal_paths tests.test_design_netlist -v
       - name: Validate generated RTL and resolve positive test filelists
