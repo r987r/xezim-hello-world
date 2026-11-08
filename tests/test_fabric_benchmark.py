@@ -24,9 +24,9 @@ class FabricBenchmarkTests(unittest.TestCase):
         self.assertTrue(all(c["bytes"] in (4,8) for c in self.cases))
         self.assertEqual(self.expected["max_outstanding"],1)
 
-    def fake_capture(self):
+    def fake_capture(self, cases=None):
         records=[]
-        for c in self.cases:
+        for c in (self.cases if cases is None else cases):
             if c["warmup"]:
                 continue
             for op in c["operations"]:
@@ -46,28 +46,41 @@ class FabricBenchmarkTests(unittest.TestCase):
                          self.expected["expected_measured_transactions"])
         self.assertGreater(proof["sampled_read"],proof["sampled_write"])
 
+    def full_chip_fixture(self):
+        """The selected full-chip actor set is NOT the all-actor SuperNoC set."""
+        chip=json.loads((ROOT/"gen/chip/manifest.json").read_text())
+        selected=dict(self.spec,memory_offset=self.spec["full_chip_scratch_offset"])
+        cases=plan(self.manifest,selected,
+                   selected_masters=["m_compute0_local_data_dma"],
+                   writable_only=True,
+                   selected_region_bases={m["base"] for m in chip["memory_models"]})
+        return cases,intent(cases,self.spec,"chip-boot-latency")
+
     def test_full_chip_cpu_firmware_is_not_benchmark_actor(self):
-        data=self.fake_capture()
-        bfm_monitor=self.cases[0]["monitor"]
+        cases,expected=self.full_chip_fixture()
+        data=self.fake_capture(cases)
+        self.assertEqual({c["monitor"] for c in cases},
+                         {"compute0_local_data.dma"})
         cpu_read={"role":"initiator","phase":self.spec["phase"],
                   "monitor":"compute0_local_data.cpu","plane":"data",
                   "operation":"read","address":"0x100000d0",
                   "status":"complete","issues":[],"expected_beats":1,
                   "response":"0x0","start_ps":10,"end_ps":40}
         data["sections"]["axi"]["transactions"].extend([cpu_read]*5)
-        proof=validate(data,self.expected)
+        proof=validate(data,expected)
         self.assertEqual(proof["measured_transactions"],
-                         self.expected["expected_measured_transactions"])
+                         expected["expected_measured_transactions"])
         self.assertEqual(proof["concurrent_nonbenchmark_initiator_transactions"],5)
         self.assertEqual(proof["concurrent_nonbenchmark_initiators"],
                          {"compute0_local_data.cpu":5})
         # The exact same missing or duplicated BFM samples still fail.
         data["sections"]["axi"]["transactions"].pop(0)
         with self.assertRaises(BenchmarkError):
-            validate(data,self.expected)
+            validate(data,expected)
 
     def test_incomplete_background_cpu_read_is_fatal(self):
-        data=self.fake_capture()
+        cases,expected=self.full_chip_fixture()
+        data=self.fake_capture(cases)
         data["sections"]["axi"]["transactions"].append({
             "role":"initiator","phase":self.spec["phase"],
             "monitor":"compute1_local_data.cpu","plane":"data",
@@ -76,6 +89,20 @@ class FabricBenchmarkTests(unittest.TestCase):
             "expected_beats":1,"response":None,
             "start_ps":10,"end_ps":None})
         with self.assertRaisesRegex(BenchmarkError, "incomplete"):
+            validate(data,expected)
+
+    def test_supernoc_includes_real_cpu_ports_as_benchmark_actors(self):
+        """All-actor topology runs must reject extra CPU transactions."""
+        source={c["monitor"] for c in self.cases}
+        self.assertIn("compute0_local_data.cpu",source)
+        data=self.fake_capture()
+        owned_case=next(c for c in self.cases
+                        if not c["warmup"] and c["monitor"]=="compute0_local_data.cpu")
+        extra=next(tx for tx in data["sections"]["axi"]["transactions"]
+                   if tx["monitor"]=="compute0_local_data.cpu"
+                   and tx["address"]==owned_case["address"])
+        data["sections"]["axi"]["transactions"].append(copy.deepcopy(extra))
+        with self.assertRaisesRegex(BenchmarkError,"measured AXI source set mismatch"):
             validate(data,self.expected)
 
     def test_dropped_duplicate_or_failed_sample_rejected(self):
