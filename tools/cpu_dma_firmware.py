@@ -130,10 +130,12 @@ def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False, ethernet_cpu
 
 def prepare(cfg, noc_manifest, noc_root, output: Path, *, pcie_host_mode=False,
             ethernet_cpu_mode=False, real_ddr_mode=False, ddr_wb_base=0, ddr_wb_adr_bits=30,
-            scenario_mode=False):
+            scenario_mode=False, pcie_outbound_mode=False):
     from tools import full_chip_gen
     if scenario_mode and real_ddr_mode:
         raise ValueError('SCN-2 uses modeled DDR; real LiteDRAM requires separate scenario qualification')
+    if pcie_outbound_mode and not pcie_host_mode:
+        raise ValueError('PCIe outbound requires the real PCIe host variant')
     if pcie_host_mode:
         from tools.pcie_chip import host_variant_config
         cfg = host_variant_config(cfg)
@@ -146,6 +148,7 @@ def prepare(cfg, noc_manifest, noc_root, output: Path, *, pcie_host_mode=False,
                                   cpu0_run_hook=fw["hook"],
                                   image_prefix=image_prefix, cpu_dma_mode=True,
                                   pcie_host_mode=pcie_host_mode,
+                                  pcie_outbound_mode=pcie_outbound_mode,
                                   ethernet_mode=ethernet_cpu_mode,
                                   ethernet_cpu_mode=ethernet_cpu_mode,
                                   real_ddr_mode=real_ddr_mode,
