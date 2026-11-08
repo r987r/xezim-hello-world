@@ -653,6 +653,8 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
             actor = {'kind':'rtl_registers','label':'Pinned LiteDRAM DFII/CSR on Config NoC via Wishbone'}
         if ethernet_mode and port['network'] == ethernet[0]['name']+'_local_config' and endpoint == 'controller_regs':
             actor = {'kind':'rtl_registers','label':'Generated Ethernet queue Config NoC target and AXI-Lite CSRs'}
+        if pcie_outbound_mode and port['network'] == pcie[0]['name']+'_local_config' and endpoint == 'controller_regs':
+            actor = {'kind':'rtl_registers','label':'CPU-controlled PCIe0 requester Config-NoC AXI4-Lite descriptor CSRs'}
         if real_ddr_mode and endpoint == 'target_crossbar':
             actor = {'kind':'rtl_controller','label':'Memory0 local crossbar; pinned LiteDRAM+modeled DFI; HBM AXI SRAM'}
         actors[port['network']+'.'+endpoint]=actor
