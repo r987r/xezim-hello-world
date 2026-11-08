@@ -27,6 +27,12 @@ on:
       - 'tools/supernoc_gen.py'
       - 'tools/full_chip_gen.py'
       - 'tests/test_lint_rtl.py'
+      - 'tests/test_signal_paths.py'
+      - 'tests/test_design_netlist.py'
+      - 'tools/signal_paths.py'
+      - 'tools/design_netlist.py'
+      - 'tools/design_elaborate.py'
+      - 'tools/selected_rtl_provenance.py'
   workflow_dispatch:
 
 permissions:
@@ -86,6 +92,8 @@ jobs:
           .tools/bin/slang --version
       - name: Validate lint runner without vendor RTL
         run: python3 -m unittest tests.test_lint_rtl -v
+      - name: Validate static netlist graph and selected-source fail-closed contracts
+        run: python3 -m unittest tests.test_signal_paths tests.test_design_netlist -v
       - name: Validate generated RTL and resolve positive test filelists
         env:
           GH_TOKEN: ${{ github.token }}
