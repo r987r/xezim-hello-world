@@ -216,7 +216,7 @@ async def execute_bfm_roundtrip(dut, data_master, csr_master, contract: dict,
         if not status & 2 or status & 4:
             raise AssertionError(f"SCN-2 {suffix}: bad DMA status {status:#x}")
         writeback = await read(data_master, desc_phys, 8, "DMA descriptor writeback")
-        if writeback != b"\\xff" * 8:
+        if writeback != b"\xff" * 8:
             raise AssertionError(f"SCN-2 {suffix}: missing descriptor completion")
         await command(8, 2)
         for _ in range(300):
