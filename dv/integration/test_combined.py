@@ -51,6 +51,16 @@ class _Phase:
         return "pre_init"
 
 
+def _finish_dfi(probe, task):
+    """After the actual AXI/completion gate, finalize ONLY the DFI probe.
+    
+    The continuous AXI passive observer is never stopped or canceled.
+    """
+    probe.assert_alive(task)
+    task.kill()
+    return probe.finish("pass")
+
+
 @cocotb.test(timeout_time=30, timeout_unit="ms")
 async def ethernet_ddr_idma_pcie_single_chip(dut):
     for key in ("SOC_COMBINED34_MODE", "SOC_DDR_REAL_MODE",
@@ -150,9 +160,7 @@ async def ethernet_ddr_idma_pcie_single_chip(dut):
     assert tlp_counts.get("pcie0.tx_cpl/completion", 0) > 0
     axi_counts = check_accepted_axi(plan_file)
 
-    probe.assert_alive(dfi_task)
-    dfi_task.kill()
-    summary = probe.finish("pass")
+    summary = _finish_dfi(probe, dfi_task)
     dfi_counts = export_fullchip_probe(plan_file.parent, trace)
     controller_counts = verify_controller(dut.dut.u_ddr_real, dfi_counts)
     assert summary["sampled_cycles"] >= 1
