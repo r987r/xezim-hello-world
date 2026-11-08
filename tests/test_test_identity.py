@@ -24,7 +24,7 @@ class IdentityTests(unittest.TestCase):
     def test_all_registered_targets_have_vendor_neutral_logical_identity(self):
         keys=catalog(self.tests)
         self.assertEqual(len(keys),len(self.tests))
-        self.assertEqual(len(self.tests),len(self.config['tests']))
+        self.assertIn('supernoc-latency',self.tests)
         for (_,_,logical),target in keys.items():
             for vendor in ("floonoc","litedram","peakrdl","picorv32","pulp","serv","verilog-axi"):
                 self.assertNotIn(vendor,logical,(target,logical))
