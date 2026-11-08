@@ -154,6 +154,41 @@ def check_delegated_ddr_full_chip(module_path: Path) -> None:
         if evidence not in body:
             raise AssertionError(f"missing independently observed real DDR evidence: {evidence}")
 
+def check_delegated_latency(module_path: Path, *, expected_target: str) -> None:
+    """Audit the only two benchmark selectors against original monitor owners.
+
+    The thin selector does not attach or stop monitors, and its same-source
+    canonical owner is independently checked for pre-clock attachment.
+    """
+    rel=module_path.relative_to(ROOT).as_posix()
+    allowed={
+        "supernoc-latency":("dv/supernoc/test_latency.py","setup",
+                             "dv/supernoc/test_supernoc.py"),
+        "chip-boot-latency":("dv/full_chip/test_latency.py","execute_cold_boot",
+                             "dv/full_chip/test_boot.py"),
+    }
+    expected_path, helper_name, canonical=allowed[expected_target]
+    if rel!=expected_path:
+        raise AssertionError("fabric benchmark delegate file differs from registered target")
+    tree=ast.parse(module_path.read_text())
+    entries=[node for node in tree.body if _is_test(node)]
+    if len(entries)!=1:
+        raise AssertionError("fabric latency selector must have exactly one test")
+    entry=entries[0]
+    delegates=[n for n in ast.walk(entry) if isinstance(n,ast.Call)
+               and isinstance(n.func,ast.Name) and n.func.id==helper_name]
+    if len(delegates)!=1:
+        raise AssertionError("latency selector must delegate exactly once to canonical owner")
+    if (expected_target=="chip-boot-latency" and not any(
+            k.arg=="benchmark" and isinstance(k.value,ast.Constant)
+            and k.value.value is True for k in delegates[0].keywords)):
+        raise AssertionError("full-chip benchmark must explicitly select CPU-safe mode")
+    for forbidden in ("Clock","attach_observers"):
+        if _calls(entry,forbidden):
+            raise AssertionError("latency selector must not own AXI monitor lifecycle")
+    check_module((ROOT/canonical).read_text())
+
+
 def check_generic_module(text: str) -> None:
     """Protocol-only monitors must start before clocks and close at teardown.
 
@@ -229,6 +264,8 @@ class MonitorLifecyclePolicyTests(unittest.TestCase):
                     check_delegated_full_chip(path)
                 elif name == "chip-ddr4-real":
                     check_delegated_ddr_full_chip(path)
+                elif name in ("supernoc-latency", "chip-boot-latency"):
+                    check_delegated_latency(path, expected_target=name)
                 else:
                     if "axi" in report:
                         check_module(path.read_text())
