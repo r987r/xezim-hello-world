@@ -8,9 +8,10 @@ import os
 from pathlib import Path
 
 import cocotb
-from cocotb.triggers import Edge, RisingEdge
+from cocotb.triggers import Edge, RisingEdge, Timer
 from cocotb.utils import get_sim_time
 from cocotbext.axi import axi_channels
+from dv.common.axi_outstanding import AcceptedAxiInFlight
 
 _active = []
 
@@ -32,6 +33,7 @@ class AxiTrace:
         self.count = 0
         self.limit = options.get('max_events', 500000)
         self.monitors = []
+        self.in_flight = AcceptedAxiInFlight()
         self.emit({'channel':'reset', 'active':int(reset.value) == 0})
         # Construct all buses eagerly: a missing binding fails the test,
         # rather than producing a report with silently missing connections.
@@ -55,6 +57,7 @@ class AxiTrace:
 
     def emit(self, event):
         event['time_ps'] = int(get_sim_time(units='ps'))
+        self.in_flight.observe(event)
         self.output.write(json.dumps(event, separators=(',',':'))+'\n')
 
     async def sample_clock(self, clock):
@@ -106,3 +109,29 @@ def expect_axi_response(monitor, operation, address, response, reason):
     for observer in _active:
         observer.emit({'channel':'expect_response','monitor':monitor,'operation':operation,
                        'address':hex(address),'response':hex(int(response)),'reason':reason})
+
+
+async def wait_axi_quiescent(*, timeout_ns=1000, stable_ns=2):
+    """Bounded passive drain of all AXI monitors before test completion.
+
+    Never stops clocks, changes CPU execution, suppresses outstanding rows,
+    or substitutes for the host's strict AXI transaction correlator. This
+    is intended only for the selected benchmark with continuously polling
+    boot CPUs. Its source BFMs have already completed independently.
+    """
+    if not _active:
+        raise AssertionError('cannot qualify AXI idle without passive monitor capture')
+    if type(timeout_ns) is not int or type(stable_ns) is not int or not (0 < stable_ns < timeout_ns):
+        raise ValueError('invalid passive AXI drain timeout')
+    idle_since = None
+    for _ in range(timeout_ns):
+        await Timer(1, units='ns')
+        if all(observer.in_flight.is_idle() for observer in _active):
+            if idle_since is None:
+                idle_since = int(get_sim_time(units='ps'))
+            if int(get_sim_time(units='ps')) - idle_since >= stable_ns * 1000:
+                return
+        else:
+            idle_since = None
+    details = [observer.in_flight.summary() for observer in _active]
+    raise AssertionError('AXI passive capture did not drain: '+repr(details))
