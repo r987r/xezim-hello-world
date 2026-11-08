@@ -132,11 +132,61 @@ def archive_selected_filelist(root: Path, profile: str, definition: dict,
         if rel in selected_sources:
             raise ValueError("duplicate selected RTL file: " + rel)
         selected_sources[rel] = hashlib.sha256(path.read_bytes()).hexdigest()
+    # For structural NoC compile/lint, the simulator uses one filelist per
+    # network, not sources.f. Include those exact source packages and top
+    # modules in the attested closure and archive their separate filelists.
+    network_sets = {}
+    for network, entry in sorted(plan.get("selected_networks", {}).items()):
+        if (not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", network)
+                or not isinstance(entry, dict) or set(entry) != {"top", "filelist"}
+                or not isinstance(entry["top"], str)
+                or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_$]*", entry["top"])):
+            raise ValueError("invalid selected NoC compile target")
+        network_file = folder / (network + ".f")
+        if (Path(entry["filelist"]).resolve() != network_file.resolve()
+                or network_file.is_symlink() or not network_file.is_file()):
+            raise ValueError("selected NoC filelist is missing or foreign")
+        tokens = shlex.split(network_file.read_text())
+        if tokens[:len(expected)] != expected or len(tokens) != len(expected) + 2:
+            raise ValueError("network compiler filelist differs from selected base sources")
+        extras = []
+        for raw in tokens[len(expected):]:
+            path, rel = _relative_checked(root, raw)
+            extras.append(rel)
+            digest = hashlib.sha256(path.read_bytes()).hexdigest()
+            if rel in selected_sources and selected_sources[rel] != digest:
+                raise ValueError("conflicting selected NoC RTL: " + rel)
+            selected_sources[rel] = digest
+        network_sets[network] = {
+            "top": entry["top"],
+            "source_files": extras,
+            "filelist_sha256": hashlib.sha256(network_file.read_bytes()).hexdigest(),
+        }
     if not selected_sources:
         raise ValueError("empty selected RTL closure")
 
+    # Match the existing Verilator adapter's include-header fingerprint rule:
+    # every .svh/.vh beneath each selected include directory contributes.
+    # This is deliberately a conservative *header inventory*, not a claim of
+    # true preprocessor expansion or elaborated connectivity.
+    header_sources = {}
+    for raw in plan.get("includes", []):
+        directory = Path(raw)
+        if directory.is_symlink():
+            raise ValueError("unsafe selected include directory: " + raw)
+        directory = (directory if directory.is_absolute() else root / directory).resolve()
+        if not directory.is_relative_to(root) or not directory.is_dir():
+            raise ValueError("missing/outside selected include directory: " + raw)
+        for header in sorted(directory.rglob("*")):
+            if header.is_file() and header.suffix in (".svh", ".vh"):
+                path, rel = _relative_checked(root, str(header))
+                digest = hashlib.sha256(path.read_bytes()).hexdigest()
+                if rel in header_sources and header_sources[rel] != digest:
+                    raise ValueError("conflicting selected include header: " + rel)
+                header_sources[rel] = digest
+
     selected_top = None
-    if plan["top"] in ("full_chip_tb", "full_chip_dma_tb"):
+    if plan.get("top") in ("full_chip_tb", "full_chip_dma_tb"):
         matching = [p for p in selected_sources if p.endswith("/soc_top.sv")]
         if len(matching) != 1:
             raise ValueError("expected exactly one actually selected SoC RTL top")
@@ -146,7 +196,7 @@ def archive_selected_filelist(root: Path, profile: str, definition: dict,
     # that may be consumed indirectly through plusargs or compiler includes.
     # No run logs or third-party vendor trees are copied to this small archive.
     generated = {}
-    for rel, sha in selected_sources.items():
+    for rel, sha in {**selected_sources, **header_sources}.items():
         if rel.startswith("gen/") or rel.startswith(
                 ".tools/regression/" + profile + "/"):
             generated[rel] = sha
@@ -171,13 +221,17 @@ def archive_selected_filelist(root: Path, profile: str, definition: dict,
     # The fingerprint is stable across run IDs, scratch directory ordering
     # and Python dict ordering; the source paths are checkout-relative.
     selection = {
-        "engine": plan["engine"], "top": plan["top"],
+        "engine": plan["engine"], "top": plan.get("top"),
         "source_target": plan["source_target"],
         "firmware_mode": plan.get("firmware_mode"),
         "includes": list(plan.get("includes", [])),
         "defines": list(plan.get("defines", [])),
+        "args": list(plan.get("args", [])),
         "source_sha256": dict(sorted(selected_sources.items())),
+        "include_headers_sha256": dict(sorted(header_sources.items())),
         "filelist_sha256": filelist_sha,
+        "network_filelists": network_sets,
+        "config_sha256": identity.get("config_sha256"),
         "generated_sha256": dict(sorted(generated.items())),
     }
     build_sha = _canonical_sha(selection)
@@ -187,6 +241,9 @@ def archive_selected_filelist(root: Path, profile: str, definition: dict,
         raise ValueError("selected compiler-input archive already exists")
     archive_root.mkdir(parents=True)
     (archive_root / "sources.f").write_bytes(filelist.read_bytes())
+    for network in sorted(network_sets):
+        (archive_root / (network + ".f")).write_bytes(
+            (folder / (network + ".f")).read_bytes())
     for rel, expected_sha in sorted(generated.items()):
         path, _ = _relative_checked(root, rel)
         data = path.read_bytes()
@@ -199,16 +256,20 @@ def archive_selected_filelist(root: Path, profile: str, definition: dict,
     document = {
         "schema_version": 1,
         "profile": profile,
-        "compiled_top": plan["top"],
+        "compiled_top": plan.get("top"),
         "selected_soc_top": selected_top,
         "definition_sha256": _canonical_sha(definition),
         "compiler_input_sha256": build_sha,
         "filelist_sha256": filelist_sha,
         "source_count": len(selected_sources),
         "source_sha256": selection["source_sha256"],
+        "include_headers_sha256": selection["include_headers_sha256"],
+        "network_filelists": network_sets,
         "generated_sha256": selection["generated_sha256"],
         "includes": selection["includes"],
         "defines": selection["defines"],
+        "args": selection["args"],
+        "config_sha256": selection["config_sha256"],
         "archive": archive_rel,
         "identity_sha256": identity["identity_sha256"],
         "evidence": "selected_filelist_and_copied_generated_inputs_not_elaborated_or_observed",
@@ -251,6 +312,23 @@ def verify_selected_archive(root: Path, profile: str, definition: dict) -> dict:
     if (archived_list.is_symlink() or not archived_list.is_file()
             or archived_list.read_bytes() != source_list.read_bytes()):
         raise ValueError("archived selected Bender filelist mismatch")
+    # Every selected NoC top is compiled from its own archived filelist.
+    # Match both archived bytes and the source-side variant SHA.
+    for name, info in value.get("network_filelists", {}).items():
+        if name not in value.get("network_filelists", {}):
+            raise ValueError("missing selected NoC network")
+        original = folder / (name + ".f")
+        archived = archive / (name + ".f")
+        if (original.is_symlink() or archived.is_symlink()
+                or not original.is_file() or not archived.is_file()
+                or hashlib.sha256(original.read_bytes()).hexdigest()
+                != info["filelist_sha256"]
+                or archived.read_bytes() != original.read_bytes()):
+            raise ValueError("selected NoC filelist changed since archive")
+    for rel, expected_sha in value.get("include_headers_sha256", {}).items():
+        source, _ = _relative_checked(root, rel)
+        if hashlib.sha256(source.read_bytes()).hexdigest() != expected_sha:
+            raise ValueError("selected compiler include modified since capture: " + rel)
     for rel, expected_sha in value["source_sha256"].items():
         source, _ = _relative_checked(root, rel)
         if hashlib.sha256(source.read_bytes()).hexdigest() != expected_sha:
@@ -309,5 +387,7 @@ def explain_target(root: Path, name: str, definition: dict,
             "source_count": snapshot["source_count"],
             "compiled_soc_top": snapshot["selected_soc_top"],
             "selected_generated_files": sorted(snapshot["generated_sha256"]),
+            "network_filelists": snapshot.get("network_filelists", {}),
+            "include_header_count": len(snapshot.get("include_headers_sha256", {})),
         }
     return detail

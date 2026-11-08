@@ -123,5 +123,7 @@ jobs:
             .tools/lint/
             .tools/regression/*/sources.f
             .tools/regression/*/plan.json
+            .tools/regression/*/selected-rtl-manifest.json
+            .tools/regression/*/selected-rtl/** 
           include-hidden-files: true
           if-no-files-found: warn

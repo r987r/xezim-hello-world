@@ -78,6 +78,48 @@ class SelectedRtlArchiveTests(unittest.TestCase):
         self.assertTrue((self.root / value["archive"] /
                          ".tools/regression/example/variant/flash.hex").is_file())
 
+    def test_network_compilation_can_omit_single_top_and_records_all_networks(self):
+        self.definition.pop("top")
+        self.plan.pop("top")
+        self.plan["engine"] = self.definition["engine"] = "xezim-compile"
+        network = self.root / "gen/noc/floonoc/noc_top.sv"
+        network.parent.mkdir(parents=True)
+        network.write_text("module noc_top; endmodule\n")
+        package = network.parent / "noc_pkg.sv"
+        package.write_text("package noc_pkg; endpackage\n")
+        compiled = self.out / "local_data.f"
+        compiled.write_text(self.filelist.read_text()
+                            + str(package) + "\n" + str(network) + "\n")
+        self.plan["selected_networks"] = {
+            "local_data": {"top": "noc_top", "filelist": str(compiled)}
+        }
+        value = self.make_archive()
+        self.assertIsNone(value["compiled_top"])
+        self.assertIsNone(value["selected_soc_top"])
+        self.assertEqual(value["source_count"], 4)
+        self.assertIn("local_data", value["network_filelists"])
+        self.assertTrue((self.root / value["archive"] / "local_data.f").is_file())
+        compiled.write_text("tampered\n")
+        with self.assertRaisesRegex(ValueError, "NoC filelist"):
+            verify_selected_archive(self.root, "example", self.definition)
+
+    def test_include_headers_are_attested_and_fail_on_change(self):
+        headers = self.root / "rtl/headers"
+        headers.mkdir(parents=True)
+        header = headers / "defs.svh"
+        header.write_text("`define WIDTH 32\n")
+        self.plan["includes"] = [str(headers)]
+        self.filelist.write_text(
+            "+incdir+" + str(headers) + "\n"
+            + str(self.soc) + "\n" + str(self.tb) + "\n")
+        self.plan["identity"]["selection"]["filelist_sha256"] = hashlib.sha256(
+            self.filelist.read_bytes()).hexdigest()
+        value = self.make_archive()
+        self.assertEqual(len(value["include_headers_sha256"]), 1)
+        header.write_text("`define WIDTH 64\n")
+        with self.assertRaisesRegex(ValueError, "include modified"):
+            verify_selected_archive(self.root, "example", self.definition)
+
     def test_rejects_filelist_identity_and_profile_mismatch(self):
         for mutation in ("filelist", "identity", "top", "duplicate"):
             with self.subTest(mutation=mutation):

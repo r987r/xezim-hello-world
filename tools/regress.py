@@ -601,6 +601,12 @@ def run_target(name, test, resolver, options):
             'sources': sources, 'includes': includes, 'defines': defines,
             'args': args, 'results_xml': str(out/'results.xml'), 'stage': options.stage,
             'identity': identity}
+    if test['engine'] in {'xezim-compile', 'verilator-lint'} and networks:
+        plan['selected_networks'] = {
+            net: {'filelist': str(out/f'{net}.f'), 'top': entry['top_module']}
+            for net, entry in sorted(networks.items())
+            if not options.network or net in options.network
+        }
     plan_file = out/'plan.json'
     plan_file.write_text(json.dumps(plan, indent=2) + '\n')
     # Preserve the ACTUAL selected filelist/RTL after all runtime variant
