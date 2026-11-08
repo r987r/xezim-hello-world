@@ -25,11 +25,11 @@ class DocumentationTests(unittest.TestCase):
             root = Path(name)
             (root / "docs").mkdir()
             (root / "README.md").write_text(
-                "# Main\\n<!-- BEGIN GENERATED SOC -->\\n"
-                "<!-- END GENERATED SOC -->\\n"
+                "# Main\n<!-- BEGIN GENERATED SOC -->\n"
+                "<!-- END GENERATED SOC -->\n"
             )
             (root / "docs" / "implementation-status.md").write_text(
-                "# Status\\nPR #150 is draft; no CI proof yet.\\n"
+                "# Status\nPR #150 is draft; no CI proof yet.\n"
             )
             self.assertTrue(any("dated progress" in x for x in issues(root)))
 
