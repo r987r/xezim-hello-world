@@ -381,7 +381,15 @@ async def execute_cold_boot(dut, *, external=None, benchmark=False):
         expect_axi_response(monitor,'read',address,2,'Deliberate read beyond the 64-KiB '+target['name']+' model')
         result = await memory_transaction(dut, probe.read(address, 8))
         assert result.resp == 2, f'fullchip {target["name"]} out-of-range read must return SLVERR'
-    await Timer(1, 'ns')  # drain passive same-edge channel callbacks
+    if benchmark:
+        # Authentic CPU0 firmware keeps fetching from its SRAM after CHECK.
+        # The passive AXI report rejects even one read still in flight at
+        # simulator exit. Finish at a bounded observed idle interval, without
+        # forcing an AXI response, stopping CPU/clock or loosening reporting.
+        from dv.common.axi_trace import wait_axi_quiescent
+        await wait_axi_quiescent(timeout_ns=1000, stable_ns=2)
+    else:
+        await Timer(1, 'ns')  # drain passive same-edge channel callbacks
     if peakrdl_reset:
         close_active()
     dut._log.info('PASS fullchip: CPU phases and independent bounded AXI memory models')
