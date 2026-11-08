@@ -21,7 +21,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: connect-supernoc-\${{ github.event.pull_request.number || github.ref }}
+  group: connect-supernoc-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -35,10 +35,10 @@ jobs:
           python-version: '3.12'
       - uses: ./.github/actions/setup-bender
         env:
-          GH_TOKEN: \${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
       - name: Validate contract rejection logic before actual RTL export
         env:
-          GH_TOKEN: \${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           python3 -m pip install -r requirements.txt
@@ -47,7 +47,7 @@ jobs:
           python3 -m unittest tests.test_supernoc_netlist_contract tests.test_signal_paths -v
       - name: Resolve selected generated SuperNoC filelist and identity
         env:
-          GH_TOKEN: \${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           python3 tools/regress.py supernoc --stage files
@@ -82,7 +82,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: connect46-supernoc-\${{ github.run_id }}-\${{ github.run_attempt }}
+          name: connect46-supernoc-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             .tools/connect46/supernoc-*
             .tools/regression/supernoc/plan.json
