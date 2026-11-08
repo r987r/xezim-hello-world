@@ -77,6 +77,26 @@ def parse_plan(raw):
     for aid, action in by_id.items():
         if aid in action["depends_on"] or any(d not in by_id for d in action["depends_on"]):
             raise ActionEvidenceError(f"{aid}: unknown/self dependency")
+    # No runtime adapter may dispatch a cyclic or backward-phase action graph.
+    # Checking at plan selection prevents a stalled simulation from being the
+    # first place an impossible dependency is discovered.
+    colors = {}
+    phase_index = {name: index for index, name in enumerate(PHASES)}
+
+    def visit(aid):
+        if colors.get(aid) == 1:
+            raise ActionEvidenceError(f"{aid}: cyclic action dependency")
+        if colors.get(aid) == 2:
+            return
+        colors[aid] = 1
+        for parent in by_id[aid]["depends_on"]:
+            if phase_index[by_id[parent]["phase"]] > phase_index[by_id[aid]["phase"]]:
+                raise ActionEvidenceError(f"{aid}: dependency crosses phases backwards")
+            visit(parent)
+        colors[aid] = 2
+
+    for aid in by_id:
+        visit(aid)
     return doc, hashlib.sha256(raw).hexdigest(), by_id
 
 
@@ -156,6 +176,14 @@ class ActionEventRecorder:
             "stage": stage, "origin": origin, "evidence": evidence or {},
         }, plan=self.plan, sha=self.sha, actions=self.actions)
         phases = self.states.setdefault(action_instance_id, {})
+        if "checked" in phases:
+            raise ActionEvidenceError("action already independently checked")
+        if stage == "issued":
+            for parent in action["depends_on"]:
+                parent_stages = self.states.get(parent, {})
+                if "driver_done" not in parent_stages:
+                    raise ActionEvidenceError(
+                        f"{action_instance_id}: dependency {parent} not driver-completed")
         if stage in ("issued", "driver_done", "checked") and stage in phases:
             raise ActionEvidenceError("duplicate action stage")
         if stage != "issued" and "issued" not in phases:
