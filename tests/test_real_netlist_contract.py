@@ -78,7 +78,7 @@ class RealNetlistContractTests(unittest.TestCase):
         self.assertEqual(len(result["checks"]), len(rc.PAIRS))
         self.assertFalse(result["runtime_axi_accepted"])
         self.assertEqual(result["evidence"],
-                         "actual_elaborated_static_axichannel_dependency_only")
+                         "actual_elaborated_static_axi_lane0_directed_edges_only")
 
     def test_broken_wire_wrong_direction_and_missing_endpoint_rejected(self):
         original = list(self.graph["edges"])
@@ -95,6 +95,56 @@ class RealNetlistContractTests(unittest.TestCase):
         self.graph["nodes"][0]["path"] = "wrong.path"
         self.save()
         with self.assertRaisesRegex(rc.ConnectivityEvidenceError, "missing"):
+            rc.audit(self.netlist, selected_meta=self.meta)
+
+    def test_legitimate_split_port_replicas_keep_distinct_bit_witnesses(self):
+        # Slang v0.12 emits multiple identities for one source bit and
+        # separate IDs for packed vector slices. Never collapse by path.
+        src = next(n for n in self.graph["nodes"]
+                   if n.get("path") == "memory_tb.masters[0].u_agent.awvalid")
+        dst = next(n for n in self.graph["nodes"]
+                   if n.get("path") == "memory_tb.fabric.s_axi_awvalid")
+        duplicate = dict(src, id=9001)
+        self.graph["nodes"].append(duplicate)
+        self.graph["edges"].append({"source": 9001, "target": dst["id"],
+                                    "bounds": [0, 0], "disabled": False})
+        self.save()
+        proof = rc.audit(self.netlist, selected_meta=self.meta)
+        aw = next(check for check in proof["checks"]
+                  if check["name"] == "master_awvalid")
+        self.assertEqual(len(aw["source_nodes"]), 2)
+        self.assertEqual(len(aw["directed_bit_edges"]), 2)
+        # A missing replica wire must fail even when another replica reaches
+        # the destination: connectivity is per original graph node, not path.
+        self.graph["edges"].pop()
+        self.save()
+        with self.assertRaisesRegex(rc.ConnectivityEvidenceError, "source node 9001"):
+            rc.audit(self.netlist, selected_meta=self.meta)
+
+    def test_overlapping_nonidentical_slices_or_conflicting_port_rejected(self):
+        src = next(n for n in self.graph["nodes"]
+                   if n.get("path") == "memory_tb.masters[0].u_agent.awvalid")
+        bad = dict(src, id=9002, bounds=[0, 1])
+        self.graph["nodes"].append(bad)
+        self.save()
+        with self.assertRaisesRegex(ValueError, "overlapping elaborated port slices"):
+            rc.audit(self.netlist, selected_meta=self.meta)
+        self.graph["nodes"].pop()
+        self.graph["nodes"].append(dict(src, id=9003, direction="In"))
+        self.save()
+        with self.assertRaisesRegex(ValueError, "conflicting elaborated port identity"):
+            rc.audit(self.netlist, selected_meta=self.meta)
+
+    def test_wrong_edge_bit_and_disabled_wire_not_used(self):
+        edge = self.graph["edges"][0]
+        edge["bounds"] = [1, 1]
+        self.save()
+        with self.assertRaisesRegex(rc.ConnectivityEvidenceError, "lane 0 edge"):
+            rc.audit(self.netlist, selected_meta=self.meta)
+        edge["bounds"] = [0, 0]
+        edge["disabled"] = True
+        self.save()
+        with self.assertRaisesRegex(rc.ConnectivityEvidenceError, "lane 0 edge"):
             rc.audit(self.netlist, selected_meta=self.meta)
 
     def test_tampered_netlist_without_matching_export_hash_rejected(self):
