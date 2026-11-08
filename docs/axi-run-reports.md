@@ -169,6 +169,33 @@ max cycles on read and write separately, with sample count and the measured
 clock period. Stage minima/maxima are independent quantiles and need not
 sum to end-to-end extrema; for the same paired samples, stage averages sum.
 
+### Dedicated controlled latency benchmark (opt-in)
+
+`config/fabric_latency.yaml` owns the unloaded benchmark sweep parameters
+(four warmup + 32 measured one-beat samples per allowed source/region).
+`tools/fabric_benchmark.py` derives each case and unique address from the
+generated SuperNoC source manifest, not a hardcoded subsystem list. The
+`supernoc-latency` target uses the original upstream cocotbext-axi masters
+and passive monitor catalog, with no CPU/iDMA/packet engines substituted
+by this test. No extra dashboard or AXI correlator is introduced.
+
+```sh
+python3 -m unittest tests.test_fabric_benchmark tests.test_fabric_report -v
+python3 tools/regress.py supernoc --stage build
+python3 tools/regress.py supernoc-latency --stage run
+```
+
+The selected run retains `fabric-benchmark-plan.json` (intent only) and
+`fabric-benchmark-evidence.json` (accepted-source-AXI-qualified only after
+the normal correlator). Missing/duplicate/failed source transactions,
+unbound/dirty/overflow capture or invalid clock fail the benchmark gate.
+The regular `axi-transactions.json` remains authoritative. The Pages
+collector independently validates permitted source-equivalent per-mesh
+stage timings. An isolated local-subsystem or full-chip profile must
+use an actual compiled matching RTL variant and authorized source ports
+before its timing can be compared; this first increment does not claim
+these scopes are already measured.
+
 ## Extension points
 
 New captures record CPU/test phase markers and explicit one-request expected
