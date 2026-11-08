@@ -11,7 +11,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from signal_paths import read_graph, enumerate_ports, trace
+from signal_paths import read_graph, enumerate_ports
 
 
 class ConnectivityEvidenceError(ValueError):
@@ -30,9 +30,9 @@ PAIRS = (
     ("master_rready", ".masters[0].u_agent.rready", ".fabric.s_axi_rready", "r"),
     ("memory_awvalid", ".fabric.m_axi_awvalid", ".memories[0].u_mem.s_axi_awvalid", "aw"),
     ("memory_wvalid", ".fabric.m_axi_wvalid", ".memories[0].u_mem.s_axi_wvalid", "w"),
-    ("memory_bready", ".memories[0].u_mem.s_axi_bready", ".fabric.m_axi_bready", "b"),
+    ("memory_bready", ".fabric.m_axi_bready", ".memories[0].u_mem.s_axi_bready", "b"),
     ("memory_arvalid", ".fabric.m_axi_arvalid", ".memories[0].u_mem.s_axi_arvalid", "ar"),
-    ("memory_rready", ".memories[0].u_mem.s_axi_rready", ".fabric.m_axi_rready", "r"),
+    ("memory_rready", ".fabric.m_axi_rready", ".memories[0].u_mem.s_axi_rready", "r"),
 )
 
 
@@ -47,42 +47,68 @@ def audit(netlist: Path, *, selected_meta: Path, source_profile: str = "memory")
     actual_netlist_sha = hashlib.sha256(netlist.read_bytes()).hexdigest()
     if meta.get("output_sha256") != actual_netlist_sha:
         raise ConnectivityEvidenceError("original exported netlist hash mismatch")
-    _, nodes, _ = read_graph(netlist)
+    data, nodes, adjacency = read_graph(netlist)
     ports = enumerate_ports(nodes)
     if len(ports) < 8:
         raise ConnectivityEvidenceError("real elaborated design exposes too few ports")
-    # Keep the list of *all* matching port nodes, including duplicates across
-    # generated bank instances: proof is per selected exact hierarchy pair.
-    def unique(suffix):
-        found = [p for p in ports if str(p["path"]).endswith(suffix)]
-        if len(found) != 1:
+
+    def selected_port(suffix):
+        matches = {p["path"] for p in ports if p["path"].endswith(suffix)}
+        if len(matches) != 1:
             raise ConnectivityEvidenceError(
-                f"nonunique/missing selected RTL port suffix {suffix}: {len(found)}")
-        return found[0]
+                f"nonunique/missing selected RTL port suffix {suffix}: {len(matches)}")
+        path = next(iter(matches))
+        return path, [p for p in ports if p["path"] == path]
+
+    def covers(port, bit):
+        lo, hi = port["bounds"]
+        return min(lo, hi) <= bit <= max(lo, hi)
 
     checks = []
     for name, source_suffix, destination_suffix, channel in PAIRS:
-        src, dst = unique(source_suffix), unique(destination_suffix)
-        if str(src["direction"]).lower() not in ("out", "output"):
+        src_path, src_nodes = selected_port(source_suffix)
+        dst_path, dst_nodes = selected_port(destination_suffix)
+        # Real memory_tb fans two masters/targets into packed crossbar
+        # arrays. This first acceptance gate checks lane 0 only. Every
+        # duplicate source node for that lane must contribute a real edge.
+        bit = 0
+        source_lane = [p for p in src_nodes if covers(p, bit)]
+        dest_lane = [p for p in dst_nodes if covers(p, bit)]
+        if not source_lane or not dest_lane:
+            raise ConnectivityEvidenceError(f"{name}: missing selected AXI bit {bit}")
+        if any(p["direction"] != "Out" for p in source_lane):
             raise ConnectivityEvidenceError(f"{name}: source is not an output port")
-        if str(dst["direction"]).lower() not in ("in", "input"):
+        if any(p["direction"] != "In" for p in dest_lane):
             raise ConnectivityEvidenceError(f"{name}: sink is not an input port")
-        if not src["bounds"] or not dst["bounds"]:
-            raise ConnectivityEvidenceError(f"{name}: missing elaborated bit bounds")
-        proof = trace(netlist, src["path"], dst["path"], max_depth=64)
-        if not proof["found"]:
-            raise ConnectivityEvidenceError(
-                f"{name}: no elaborated static dependency between ports")
-        checks.append({"name": name, "channel": channel, "source": src["path"],
-                       "destination": dst["path"], "source_bounds": src["bounds"],
-                       "destination_bounds": dst["bounds"],
-                       "static_dependency_found": True,
-                       "steps": len(proof["steps"])})
+        sink_ids = {p["id"] for p in dest_lane}
+        witness = []
+        for src in source_lane:
+            exact = [
+                e for e in adjacency[src["id"]]
+                if e["target"] in sink_ids
+                and isinstance(e.get("bounds"), list) and len(e["bounds"]) == 2
+                and all(type(v) is int for v in e["bounds"])
+                and min(e["bounds"]) <= bit <= max(e["bounds"])
+            ]
+            if not exact:
+                raise ConnectivityEvidenceError(
+                    f"{name}: no directed elaborated AXI lane {bit} edge "
+                    f"for source node {src['id']}")
+            witness.extend((src["id"], e["target"]) for e in exact)
+        checks.append({
+            "name": name, "channel": channel, "source": src_path,
+            "destination": dst_path, "selected_bit": bit,
+            "source_nodes": [p["id"] for p in source_lane],
+            "destination_nodes": [p["id"] for p in dest_lane],
+            "directed_bit_edges": [list(edge) for edge in sorted(set(witness))],
+            "all_source_replicas_connected": True,
+            "static_dependency_found": True,
+        })
     return {"schema_version": 1, "profile": source_profile,
             "netlist_sha256": actual_netlist_sha,
             "selected_plan_sha256": meta["plan_sha256"],
             "selected_source_sha256": meta["selected_source_sha256"],
-            "evidence": "actual_elaborated_static_axichannel_dependency_only",
+            "evidence": "actual_elaborated_static_axi_lane0_directed_edges_only",
             "runtime_axi_accepted": False, "checks": checks}
 
 
