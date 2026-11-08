@@ -144,16 +144,28 @@ def validate(data, expected):
         (case["monitor"], case["plane"], op, int(case["address"],16))
         for case in expected["cases"] if not case["warmup"]
         for op in case["operations"])
+    # A cold-boot full-chip run has *real CPU0/CPU1* continuously reading
+    # firmware while the reserved BFM tests data paths. Those initiators are
+    # captured and must remain complete, but must not be counted as BFM cases.
+    # Actor ownership is resolved exclusively from the source-authored plan.
+    source_monitors = {key[0] for key in required}
     observed = Counter()
+    background = Counter()
     for tx in axi.get("transactions", []):
         if tx.get("phase") != phase or tx.get("role") != "initiator":
             continue
         if (tx.get("status") != "complete" or tx.get("issues")
-                or tx.get("expected_beats") != 1 or
-                int(tx.get("response") or "0", 0) != 0 or
-                tx.get("start_ps") is None or tx.get("end_ps") is None or
+                or tx.get("start_ps") is None or tx.get("end_ps") is None or
                 tx["end_ps"] < tx["start_ps"]):
-            raise BenchmarkError("failed or incomplete benchmark AXI transaction")
+            raise BenchmarkError("incomplete or inconsistent AXI source transaction in benchmark phase")
+        if tx.get("monitor") not in source_monitors:
+            # Real CPU traffic stays in the canonical AXI trace and remains
+            # subject to strict capture-wide completion/error checks.
+            background[tx["monitor"]] += 1
+            continue
+        if (tx.get("expected_beats") != 1 or
+                int(tx.get("response") or "0", 0) != 0):
+            raise BenchmarkError("failed or non-one-beat benchmark AXI transaction")
         key = (tx["monitor"], tx["plane"], tx["operation"], int(tx["address"], 0))
         observed[key] += 1
     if required != observed:
@@ -168,6 +180,8 @@ def validate(data, expected):
         "measured_transactions": sum(observed.values()),
         "sampled_read": sum(v for k,v in observed.items() if k[2]=="read"),
         "sampled_write": sum(v for k,v in observed.items() if k[2]=="write"),
+        "concurrent_nonbenchmark_initiator_transactions": sum(background.values()),
+        "concurrent_nonbenchmark_initiators": dict(sorted(background.items())),
         "proof": "original passive accepted AXI; no simulated end-to-end PASS inferred",
     }
 
