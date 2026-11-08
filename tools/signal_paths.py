@@ -21,11 +21,23 @@ def read_graph(path: Path) -> tuple[dict, dict[int, dict], dict[int, list[dict]]
             or not isinstance(data.get("fileTable"), list)):
         raise ValueError("unsupported slang-netlist JSON schema")
     nodes = {}
+    port_paths = set()
     for node in data["nodes"]:
         if not isinstance(node, dict) or not isinstance(node.get("id"), int):
             raise ValueError("invalid netlist node")
         if node["id"] in nodes:
             raise ValueError(f"duplicate netlist node ID {node['id']}")
+        if node.get("kind") == "Port":
+            port_path = node.get("path")
+            if not isinstance(port_path, str) or not port_path:
+                raise ValueError("elaborated Port node requires a nonempty path")
+            if port_path in port_paths:
+                raise ValueError(f"duplicate elaborated port path: {port_path}")
+            port_paths.add(port_path)
+            bounds = node.get("bounds")
+            if bounds is not None and (not isinstance(bounds, list)
+                    or len(bounds) != 2 or any(type(n) is not int or n < 0 for n in bounds)):
+                raise ValueError(f"{port_path}: invalid elaborated port bounds")
         nodes[node["id"]] = node
     adjacency = {n: [] for n in nodes}
     for edge in data["edges"]:
@@ -68,11 +80,16 @@ def trace(path: Path, source: str, target: str,
     seen = {src}
     q = deque([(src, 0)])
     parent: dict[int, tuple[int, dict]] = {}
+    truncated_by_depth = False
     while q:
         cur, depth = q.popleft()
         if cur == dst:
             break
         if depth >= max_depth:
+            # A bounded miss is inconclusive only if traversal actually
+            # discarded unexplored outgoing paths. A terminal leaf is exhaustive.
+            if any(edge["target"] not in seen for edge in adjacency[cur]):
+                truncated_by_depth = True
             continue
         for edge in adjacency[cur]:
             nxt = edge["target"]
@@ -102,7 +119,7 @@ def trace(path: Path, source: str, target: str,
             "tool": "slang-netlist", "evidence": "elaborated_static_data_dependency",
             "source_port": source, "target_port": target,
             "found": connected, "hop_limit": max_depth,
-            "complete_under_limits": connected,
+            "complete_under_limits": connected or not truncated_by_depth,
             "steps": steps,
             "warning": "Static data-flow reachability does not prove protocol route or simulation correctness."}
 

@@ -57,6 +57,33 @@ class SlangDependencyTests(unittest.TestCase):
         self.assertFalse(result["found"])
         self.assertFalse(result["complete_under_limits"])
 
+    def test_exhaustive_miss_is_distinct_from_depth_truncation(self):
+        # The disabled source-to-fake edge cannot be used as proof of wiring.
+        result = signal_paths.trace(self.file, "soc.u0.awvalid", "soc.u2.fake")
+        self.assertFalse(result["found"])
+        self.assertTrue(result["complete_under_limits"])
+        limited = signal_paths.trace(self.file, "soc.u0.awvalid",
+                                     "soc.u1.awvalid", max_depth=1)
+        self.assertFalse(limited["complete_under_limits"])
+
+    def test_duplicate_port_path_and_invalid_width_fail_closed(self):
+        d = graph()
+        duplicate = dict(d["nodes"][2])
+        duplicate["id"] = 99
+        duplicate["path"] = d["nodes"][0]["path"]
+        d["nodes"].append(duplicate)
+        self.file.write_text(json.dumps(d))
+        with self.assertRaisesRegex(ValueError, "duplicate elaborated port path"):
+            signal_paths.read_graph(self.file)
+        d["nodes"].pop()
+        d["nodes"][0]["bounds"] = [31, 0]  # Legal descending packed range.
+        self.file.write_text(json.dumps(d))
+        signal_paths.read_graph(self.file)
+        d["nodes"][0]["bounds"] = [2, -1]
+        self.file.write_text(json.dumps(d))
+        with self.assertRaisesRegex(ValueError, "invalid elaborated port bounds"):
+            signal_paths.read_graph(self.file)
+
     def test_fails_unknown_port_or_dangling_edges(self):
         with self.assertRaisesRegex(ValueError, "unknown elaborated port"):
             signal_paths.trace(self.file, "unknown.signal", "soc.u1.awvalid")
