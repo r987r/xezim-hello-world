@@ -71,7 +71,7 @@ def load_config(path):
             raise ValueError(f'{name}: mode=compile requires the Xezim engine')
         if 'opt_in' in test and type(test['opt_in']) is not bool:
             raise ValueError(f'{name}: opt_in must be boolean')
-        if test.get('firmware_mode') not in (None, 'cpu_dma', 'pcie_host', 'pcie_dma_host', 'ethernet_mvp', 'ethernet_cpu', 'ddr_cpu_dma', 'cpu_dma_scenario', 'scenario_bfm', 'peakrdl_reset'):
+        if test.get('firmware_mode') not in (None, 'cpu_dma', 'pcie_host', 'pcie_dma_host', 'pcie_outbound', 'ethernet_mvp', 'ethernet_cpu', 'ddr_cpu_dma', 'cpu_dma_scenario', 'scenario_bfm', 'peakrdl_reset'):
             raise ValueError(f'{name}: unknown compiled CPU firmware mode')
         if 'flow_plan' in test:
             source=test['flow_plan']
@@ -95,7 +95,7 @@ def load_config(path):
         if 'firmware_mode' in test and (
             test['engine'] != 'cocotb-verilator' or
             'chip_boot' not in test.get('bender_targets', []) or
-            (test['firmware_mode'] in ('cpu_dma','pcie_dma_host','ethernet_mvp','ethernet_cpu','ddr_cpu_dma','cpu_dma_scenario','scenario_bfm')
+            (test['firmware_mode'] in ('cpu_dma','pcie_dma_host','pcie_outbound','ethernet_mvp','ethernet_cpu','ddr_cpu_dma','cpu_dma_scenario','scenario_bfm')
              and 'dma' not in test.get('bender_targets', []))):
             raise ValueError(f'{name}: selected test needs real chip RTL and specified active IP')
         if 'report' in test:
@@ -437,7 +437,7 @@ def run_target(name, test, resolver, options):
             sources += [str(directory/name) for name in meta['modules']]
         sources += [str(ROOT/'.tools/verilog_axi/rtl'/name)
                     for name in ('axi_dma_rd.v','axi_dma_wr.v')]
-    if test.get('firmware_mode') in ('pcie_host', 'pcie_dma_host'):
+    if test.get('firmware_mode') in ('pcie_host', 'pcie_dma_host', 'pcie_outbound'):
         if str(ROOT) not in sys.path:
             sys.path.insert(0, str(ROOT))
         # Same generated SoC and CPU firmware semantics; only variant wires
@@ -450,10 +450,11 @@ def run_target(name, test, resolver, options):
         variant = out/'variant'
         vendor_pin = source_contract()
         bridge = assert_iverilog_clean()
-        if test['firmware_mode'] == 'pcie_dma_host':
+        if test['firmware_mode'] in ('pcie_dma_host', 'pcie_outbound'):
             from cpu_dma_firmware import prepare as prepare_cpu_dma
             prepare_cpu_dma(cfg, noc_manifest, ROOT/'gen/noc/floonoc', variant,
-                            pcie_host_mode=True)
+                            pcie_host_mode=True,
+                            pcie_outbound_mode=test['firmware_mode']=='pcie_outbound')
         else:
             emit_chip(cfg, noc_manifest, ROOT/'gen/noc/floonoc', variant,
                       image_prefix=variant.relative_to(ROOT).as_posix(),
@@ -467,6 +468,16 @@ def run_target(name, test, resolver, options):
         sources += [str(bridge)] + [
             str(ROOT/'.tools/verilog_pcie'/item)
             for item in vendor_pin['rtl_modules'] if item != 'rtl/pcie_axi_master.v']
+        if test['firmware_mode'] == 'pcie_outbound':
+            # Do not invoke the isolated simulation here; validate its exact
+            # reviewed source closure against the same upstream pin.
+            required = ['rtl/dma_if_pcie.v','rtl/dma_if_pcie_rd.v',
+                        'rtl/dma_if_pcie_wr.v','rtl/priority_encoder.v',
+                        'rtl/pulse_merge.v']
+            if vendor_pin.get('outbound_rtl_modules') != required:
+                raise ValueError('unreviewed pinned PCIe outbound requester source list')
+            sources += [str(ROOT/'.tools/verilog_pcie'/item) for item in required]
+            sources += [str(ROOT/'rtl/adapters/pcie_dma_sram_target.sv')]
     if test.get('firmware_mode') == 'ddr_cpu_dma':
         # Same CPU C/iDMA INIT/RUN/CHECK; opt-in generated 16KiB
         # independent Config NoC and pinned LiteDRAM memory target.
