@@ -483,10 +483,10 @@ tests:
     build: .tools/pcie0/outbound_full_chip_build
     env: {MAKEFLAGS: '-j2', SOC_PCIE_HOST_MODE: '1', SOC_CPU_DMA_MODE: '1', SOC_PCIE_DMA_HOST_MODE: '1', SOC_PCIE_OUTBOUND_MODE: '1'}
     timeout_s: 2400
-    pass: 'PASS pcieoutbound: real iDMA staged bytes and outbound PCIe TLPs verified'
+    pass: 'PASS pcieoutbound: CPU0 Config-NoC CSR initiated PCIe DMA to host verified'
     report:
       address_map: {config: config/soc.yaml, variant: architecture}
-      context: 'Opt-in real CPU0 C, real PULP iDMA moves modeled DDR bytes into physical PCIe0 shared tc_sram via FlooNoC; pinned verilog-pcie dma_if_pcie sends outbound TLP Memory Write to modeled host RAM. Reverse outbound Memory Read completions refill PCIe SRAM. Requester descriptors remain testbench-driven, not CPU CSR. Host independent exact byte proof required.'
+      context: 'Opt-in real CPU0 C, real PULP iDMA moves modeled DDR bytes into physical PCIe0 shared tc_sram via FlooNoC; pinned verilog-pcie dma_if_pcie sends outbound TLP Memory Write to modeled host RAM. Reverse outbound Memory Read completions refill PCIe SRAM. CPU0 C programs real PCIe requester descriptors through PCIe0 Config-NoC CSRs; Cocotb supplies only Root Complex IOVA/host RAM and independent byte checks. CPU MMIO + TLP + host proof required.'
       flow:
         required_steps:
           init: [host0.enumerate, host0.wait_device_ready, host0.seed_ddr_input, host0.init_ack, cpu0.init_complete, cpu0.firmware_init]
