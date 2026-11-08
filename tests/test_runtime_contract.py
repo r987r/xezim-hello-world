@@ -61,7 +61,7 @@ class SelectedRuntimeContractTests(unittest.TestCase):
                 self.assertEqual(set(snapshot["intent"]["phases"]),{"init","run","check"})
                 self.assertEqual(snapshot["target"],name)
                 self.assertEqual(snapshot["intent"]["target"],name)
-        self.assertEqual(len(self.config["tests"]),28)
+        self.assertEqual(len(self.config["tests"]),29)
 
     def test_compile_and_lint_are_explicit_not_applicable(self):
         for name in ("chip-xezim-compile","noc-verilator","noc-xezim"):
