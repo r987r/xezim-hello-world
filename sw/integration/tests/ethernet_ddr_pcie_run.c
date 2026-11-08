@@ -60,13 +60,18 @@ static inline uint32_t rd(uint32_t off) {
     return *(volatile uint32_t *)(uintptr_t)(SOC_ETH_CTRL + off);
 }
 static void descriptor(uint32_t base, uint64_t phys, uint32_t length,
-                       uint32_t cookie) {
+                       uint32_t cookie, uint32_t region_id) {
     volatile uint32_t *d = (volatile uint32_t *)(uintptr_t)base;
     for (unsigned i = 0; i < 8; ++i) d[i] = 0;
     d[0] = (uint32_t)phys;
     d[1] = (uint32_t)(phys >> 32);
     d[2] = length;
     d[3] = cookie;
+    /* ETHQ ABI: word2[63:32] selects authorized DMA buffer aperture.
+     * 0 = local Ethernet SRAM, 1 = DDR; never infer from packet header.
+     * A zero here makes the RTL correctly reject above-4GiB DDR with
+     * CQ status ERR_BUFFER (0xa), observed in #34 run 42453561084. */
+    d[5] = region_id;
 }
 static int completion(uint32_t address, uint32_t cookie) {
     volatile uint32_t *q = (volatile uint32_t *)(uintptr_t)address;
@@ -98,8 +103,8 @@ int cpu_dma_run(void) {
         rd(ETHQ_REG_VERSION) != ETHQ_ABI_VERSION)
         return fail(evidence, flow, 201, 1);
     /* Both 64-bit addresses are written by the real 32-bit CPU to SRAM. */
-    descriptor(RX_RING, DDR_RX_PHYS, 2048u, RX_COOKIE);
-    descriptor(TX_RING, (uint64_t)TX_BUF, LEN, TX_COOKIE);
+    descriptor(RX_RING, DDR_RX_PHYS, 2048u, RX_COOKIE, 1u);
+    descriptor(TX_RING, (uint64_t)TX_BUF, LEN, TX_COOKIE, 0u);
     volatile uint8_t *tx = (volatile uint8_t *)(uintptr_t)TX_BUF;
     for (unsigned i = 0; i < LEN; ++i) tx[i] = 0; /* DMA must fill it */
     wr(ETHQ_REG_QUEUE_SELECT, 0);
