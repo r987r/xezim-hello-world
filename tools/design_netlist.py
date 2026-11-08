@@ -43,8 +43,24 @@ def analyze(root: Path, profile: str, mode: str, output: Path,
     if run.returncode:
         if output.exists():
             output.unlink()
-        raise ValueError(f"{mode} failed for {profile} (exit {run.returncode}):\n"
-                         + (run.stderr + "\n" + run.stdout)[-6000:])
+        diagnostics = run.stderr + "\n" + run.stdout
+        # Preserve the first diagnostic (including actual compiler errors)
+        # as well as the tail. Large selected NoCs can emit thousands of
+        # inherited warnings; tail-only reporting obscures the fatal cause.
+        lines = diagnostics.splitlines()
+        errors = [line for line in lines
+                  if any(token in line.lower() for token in
+                         ("error:", "fatal:", "internal compiler error",
+                          "error ", "undefined module", "unknown module"))]
+        lead = "\n".join(lines[:50])
+        specific = "\n".join(errors[:30])
+        tail = "\n".join(lines[-35:])
+        raise ValueError(
+            f"{mode} failed for {profile} (exit {run.returncode}); "
+            f"{len(lines)} diagnostics lines, {len(errors)} error matches:\n"
+            f"--- initial diagnostics ---\n{lead}\n"
+            f"--- error summary ---\n{specific}\n"
+            f"--- final diagnostics ---\n{tail}")
     if mode != "netlist":
         output.write_text(run.stdout)
     if not output.is_file() or not output.stat().st_size:
