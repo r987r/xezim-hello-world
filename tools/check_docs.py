@@ -22,8 +22,8 @@ STALE = re.compile(
 # Detect assertions about an open/draft PR in source-truth guides. This is
 # intentionally a syntactic guard, not a live status/CI check.
 STALE_PR_CLAIM = re.compile(
-    r"(?im)\\bPR\\s*#\\d+\\s+is\\s+(?:still\\s+)?(?:draft|pending|open)\\b"
-    r"|\\bPR\\s*#\\d+[^\\n]{0,64}\\b(?:CI pending|not yet verified)\\b"
+    r"(?im)\bPR\s*#\d+\s+is\s+(?:still\s+)?(?:draft|pending|open)\b"
+    r"|\bPR\s*#\d+[^\n]{0,64}\b(?:CI pending|not yet verified)\b"
 )
 
 def documents(root: Path) -> list[Path]:
