@@ -246,3 +246,10 @@ IDs, addresses, read beats and missing responses. IDs may be remapped
 between local/global NoC boundaries, so do not equate their values globally.
 
 Historical stalls and follow-up experiments are retained in [the verification issue](https://github.com/r987r/xezim-hello-world/issues/34) and original CI, not in this contract. `chip-dma` uses behavioral AXI RAM; it does not exercise a DDR4 controller. The opt-in `chip-ddr4-real` test uses a LiteDRAM DDR4 controller with separate RTL/DFI evidence and a behavioral PHY/bank model, not a silicon PHY. On timeout, find the first incomplete **accepted** AXI boundary. Do not infer memory commit from BVALID or a DMA interrupt alone.
+
+The opt-in cold-boot latency path uses the existing passive AXI capture to
+wait for a **bounded true idle window** after real CPUs finish firmware
+INIT/RUN/CHECK and the benchmark BFMs finish. The CPU's post-boot polling
+may still issue AXI reads. This drain does not stop a CPU, force a bus
+completion, drop a transaction or relax `required_complete`; it fails closed
+if any AXI monitor cannot reach idle before the bounded timeout.
