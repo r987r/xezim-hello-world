@@ -137,8 +137,9 @@ const availableScopes=report.latency_scopes||{};
 const scopePicker=byId('fabric-scope'),scopeKeys=Object.keys(availableScopes);
 if(scopeKeys.length){
  byId('fabric-scope-wrap').hidden=false;
- for(const name of scopeKeys)scopePicker.append(new Option(name.replaceAll('-',' ')+' · verified RTL',name));
- scopePicker.value=scopeKeys.includes('supernoc-latency')?'supernoc-latency':scopeKeys[0];
+ const scopeLabels={connected_noc:'Connected NoC · upstream BFM',full_chip_boot_bfm:'Full chip · post-boot reserved BFM',subsystem:'Local subsystem · RTL'};
+ for(const name of scopeKeys)scopePicker.append(new Option(scopeLabels[name]||name.replaceAll('_',' ')+' · verified RTL',name));
+ scopePicker.value=scopeKeys.includes('connected_noc')?'connected_noc':scopeKeys[0];
 }
 let latency=scopePicker.value?availableScopes[scopePicker.value]:
  (report.latency_table||{mesh_columns:{data:[],config:[]},rows:[]});
@@ -294,7 +295,7 @@ function renderRoute(){const box=byId('fabric-route');box.replaceChildren();cons
  const note=E('p','Individual router/flit/NI latency is not measured. The source-matched per-mesh AXI and terminal observations, where available, appear below. Crossbar/model service is not isolated physical memory latency.','muted');box.append(note);
  if(r.one_beat_stage_observations&&r.one_beat_stage_observations.length){
   box.append(E('h4','Measured one-beat AXI boundary breakdown (serial, source-matched runs)'));
-  for(const o of r.one_beat_stage_observations.filter(o=>!scopePicker.value||o.test_scope===scopePicker.value)){
+  for(const o of r.one_beat_stage_observations.filter(o=>!scopePicker.value||o.fabric_scope===scopePicker.value)){
     const p=E('p',o.operation.toUpperCase()+' · '+o.sample_count+' isolated sample(s) · measured clock '+o.clock_period_ps+' ps · end-to-end min / avg / max '+[o.end_to_end.min_cycles,o.end_to_end.avg_cycles,o.end_to_end.max_cycles].map(fmt).join(' / ')+' cycles');
     box.append(p);
     const st=E('table',undefined,'fabric-detail-table'),thead=E('thead'),hr=E('tr');
