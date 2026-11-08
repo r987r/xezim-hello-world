@@ -21,9 +21,14 @@ def read_graph(path: Path) -> tuple[dict, dict[int, dict], dict[int, list[dict]]
             or not isinstance(data.get("fileTable"), list)):
         raise ValueError("unsupported slang-netlist JSON schema")
     nodes = {}
-    port_paths = set()
+    # slang-netlist v0.12 splits packed ports into distinct bit intervals
+    # (e.g. awready[0] and awready[1]) and can emit multiple graph nodes
+    # for the *same* bit/port where separate procedural edges exist. Keep
+    # every node ID. Coalescing or using a dict keyed by path would silently
+    # create false data dependencies between unrelated graph edges.
+    port_paths: dict[str, list[dict]] = {}
     for node in data["nodes"]:
-        if not isinstance(node, dict) or not isinstance(node.get("id"), int):
+        if not isinstance(node, dict) or type(node.get("id")) is not int:
             raise ValueError("invalid netlist node")
         if node["id"] in nodes:
             raise ValueError(f"duplicate netlist node ID {node['id']}")
@@ -31,13 +36,26 @@ def read_graph(path: Path) -> tuple[dict, dict[int, dict], dict[int, list[dict]]
             port_path = node.get("path")
             if not isinstance(port_path, str) or not port_path:
                 raise ValueError("elaborated Port node requires a nonempty path")
-            if port_path in port_paths:
-                raise ValueError(f"duplicate elaborated port path: {port_path}")
-            port_paths.add(port_path)
             bounds = node.get("bounds")
-            if bounds is not None and (not isinstance(bounds, list)
-                    or len(bounds) != 2 or any(type(n) is not int or n < 0 for n in bounds)):
+            if (not isinstance(bounds, list) or len(bounds) != 2
+                    or any(type(n) is not int or n < 0 for n in bounds)):
                 raise ValueError(f"{port_path}: invalid elaborated port bounds")
+            if node.get("direction") not in ("In", "Out"):
+                raise ValueError(f"{port_path}: invalid elaborated port direction")
+            for prior in port_paths.setdefault(port_path, []):
+                if (prior.get("direction") != node.get("direction")
+                        or prior.get("name") != node.get("name")
+                        or prior.get("location") != node.get("location")):
+                    raise ValueError(f"{port_path}: conflicting elaborated port identity")
+                # Identical slice replicas are legal and remain separate
+                # graph nodes; disjoint packed slices are also legal.
+                # Partially overlapping but nonidentical slices are ambiguous.
+                prev = prior["bounds"]
+                same = sorted(prev) == sorted(bounds)
+                overlap = max(min(prev), min(bounds)) <= min(max(prev), max(bounds))
+                if overlap and not same:
+                    raise ValueError(f"{port_path}: overlapping elaborated port slices")
+            port_paths[port_path].append(node)
         nodes[node["id"]] = node
     adjacency = {n: [] for n in nodes}
     for edge in data["edges"]:
@@ -72,18 +90,26 @@ def enumerate_ports(nodes: dict[int, dict], prefix: str = "") -> list[dict]:
 def trace(path: Path, source: str, target: str,
           *, max_depth: int = 128, max_visited: int = 200000) -> dict:
     data, nodes, adjacency = read_graph(path)
-    ports = {x["path"]: x for x in enumerate_ports(nodes)}
+    ports: dict[str, list[dict]] = {}
+    for port in enumerate_ports(nodes):
+        ports.setdefault(port["path"], []).append(port)
     if source not in ports or target not in ports:
         missing = [s for s in (source, target) if s not in ports]
         raise ValueError(f"unknown elaborated port(s): {missing}")
-    src, dst = ports[source]["id"], ports[target]["id"]
-    seen = {src}
-    q = deque([(src, 0)])
+    # A path name is a group of original bit-slice nodes, not a single ID.
+    # A path-level trace demonstrates *some* static reachability only.
+    # Use real_netlist_contract's explicit lane/edge assertions for bit proof.
+    sources = [p["id"] for p in ports[source]]
+    targets = {p["id"] for p in ports[target]}
+    seen = set(sources)
+    q = deque((src, 0) for src in sources)
     parent: dict[int, tuple[int, dict]] = {}
     truncated_by_depth = False
+    reached = None
     while q:
         cur, depth = q.popleft()
-        if cur == dst:
+        if cur in targets:
+            reached = cur
             break
         if depth >= max_depth:
             # A bounded miss is inconclusive only if traversal actually
@@ -100,11 +126,12 @@ def trace(path: Path, source: str, target: str,
             q.append((nxt, depth + 1))
             if len(seen) > max_visited:
                 raise ValueError("netlist trace exceeded explicit node visit bound")
-    connected = dst in seen
+    connected = reached is not None
     steps = []
+    source_node = None
     if connected:
-        cur = dst
-        while cur != src:
+        cur = reached
+        while cur not in sources:
             before, edge = parent[cur]
             node = nodes[cur]
             steps.append({"from": before, "to": cur,
@@ -114,14 +141,17 @@ def trace(path: Path, source: str, target: str,
                           "bit_bounds": edge.get("bounds"),
                           "source_location": locate(node, data["fileTable"])})
             cur = before
+        source_node = cur
         steps.reverse()
     return {"schema_version": 1,
             "tool": "slang-netlist", "evidence": "elaborated_static_data_dependency",
             "source_port": source, "target_port": target,
+            "source_node_id": source_node, "target_node_id": reached,
+            "candidate_source_nodes": len(sources), "candidate_target_nodes": len(targets),
             "found": connected, "hop_limit": max_depth,
             "complete_under_limits": connected or not truncated_by_depth,
             "steps": steps,
-            "warning": "Static data-flow reachability does not prove protocol route or simulation correctness."}
+            "warning": "A path-name trace proves some static reachability, not full bit coverage, protocol legality, or RTL behavior."}
 
 
 def main():
