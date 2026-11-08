@@ -67,6 +67,39 @@ class ActionEvidenceTests(unittest.TestCase):
         self.writer.close()
         return self.events.read_text().splitlines()
 
+    def test_selected_plan_rejects_cycles_and_backwards_phases(self):
+        raw, _ = fixture()
+        plan = json.loads(raw)
+        plan["actions"][0]["depends_on"] = ["copy1"]
+        plan["actions"][1]["depends_on"] = ["copy0"]
+        encoded = (json.dumps(plan, sort_keys=True, separators=(",", ":"),
+                              ensure_ascii=True) + "\n").encode("ascii")
+        with self.assertRaisesRegex(ActionEvidenceError, "cyclic"):
+            parse_plan(encoded)
+
+        plan["actions"][0]["depends_on"] = []
+        plan["actions"][1]["depends_on"] = ["copy0"]
+        plan["actions"][0]["phase"] = "check"
+        encoded = (json.dumps(plan, sort_keys=True, separators=(",", ":"),
+                              ensure_ascii=True) + "\n").encode("ascii")
+        with self.assertRaisesRegex(ActionEvidenceError, "backwards"):
+            parse_plan(encoded)
+
+    def test_runtime_dependency_requires_completed_driver_not_just_issuance(self):
+        self.writer.close()
+        plan = json.loads(fixture()[0])
+        plan["actions"][1]["depends_on"] = ["copy0"]
+        raw = (json.dumps(plan, sort_keys=True, separators=(",", ":"),
+                     ensure_ascii=True) + "\n").encode("ascii")
+        writer = ActionEventRecorder(raw, self.events, lambda: self.time)
+        writer.emit("copy0", "issued", "python_driver")
+        with self.assertRaisesRegex(ActionEvidenceError, "not driver-completed"):
+            writer.emit("copy1", "issued", "python_driver")
+        writer.emit("copy0", "driver_done", "python_driver")
+        writer.emit("copy1", "issued", "python_driver")
+        writer.emit("copy1", "driver_done", "python_driver")
+        writer.close()
+
     def test_driver_only_never_passes(self):
         self.emit("issued", time=10)
         self.emit("driver_done", time=20)
