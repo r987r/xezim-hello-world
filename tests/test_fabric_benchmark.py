@@ -46,6 +46,38 @@ class FabricBenchmarkTests(unittest.TestCase):
                          self.expected["expected_measured_transactions"])
         self.assertGreater(proof["sampled_read"],proof["sampled_write"])
 
+    def test_full_chip_cpu_firmware_is_not_benchmark_actor(self):
+        data=self.fake_capture()
+        bfm_monitor=self.cases[0]["monitor"]
+        cpu_read={"role":"initiator","phase":self.spec["phase"],
+                  "monitor":"compute0_local_data.cpu","plane":"data",
+                  "operation":"read","address":"0x100000d0",
+                  "status":"complete","issues":[],"expected_beats":1,
+                  "response":"0x0","start_ps":10,"end_ps":40}
+        data["sections"]["axi"]["transactions"].extend([cpu_read]*5)
+        proof=validate(data,self.expected)
+        self.assertEqual(proof["measured_transactions"],
+                         self.expected["expected_measured_transactions"])
+        self.assertEqual(proof["concurrent_nonbenchmark_initiator_transactions"],5)
+        self.assertEqual(proof["concurrent_nonbenchmark_initiators"],
+                         {"compute0_local_data.cpu":5})
+        # The exact same missing or duplicated BFM samples still fail.
+        data["sections"]["axi"]["transactions"].pop(0)
+        with self.assertRaises(BenchmarkError):
+            validate(data,self.expected)
+
+    def test_incomplete_background_cpu_read_is_fatal(self):
+        data=self.fake_capture()
+        data["sections"]["axi"]["transactions"].append({
+            "role":"initiator","phase":self.spec["phase"],
+            "monitor":"compute1_local_data.cpu","plane":"data",
+            "operation":"read","address":"0x11000050",
+            "status":"incomplete","issues":["unfinished"],
+            "expected_beats":1,"response":None,
+            "start_ps":10,"end_ps":None})
+        with self.assertRaisesRegex(BenchmarkError, "incomplete"):
+            validate(data,self.expected)
+
     def test_dropped_duplicate_or_failed_sample_rejected(self):
         for mutation in ("drop","duplicate","fail","wrong_phase","bad_clock","dirty","issue"):
             data=self.fake_capture()
