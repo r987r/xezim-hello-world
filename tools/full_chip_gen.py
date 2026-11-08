@@ -428,6 +428,17 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
                     'IdWidth':p['id_width'],'Base':f"64'h{region['base']:016x}",'Bytes':size,
                     'ReadOnly':int(is_rom),'InitFile':f'"{image_prefix}/{image}"' if image else '""'},
                     {'clk_i':'clk_i','rst_ni':'rst_ni','req_i':req(p),'rsp_o':rsp(p),**mon})]
+        elif pcie_outbound_mode and ep == 'controller_regs' and p['network'] == pcie[0]['name']+'_local_config':
+            pcie_csr = next(r for r in cfg['address_map']['config']
+                            if r['name'] == pcie[0]['name']+'.ctrl')
+            lines += [module('pcie_requester_axi_regs', 'u_pcie_requester_csrs', {
+                'axi_req_t':dtype(p,'req'), 'axi_rsp_t':dtype(p,'rsp'),
+                'lite_req_t':'lite_req_t', 'lite_rsp_t':'lite_resp_t',
+                'AxiIdWidth':p['id_width'],
+                'CsrBase':f"32'h{int(pcie_csr['base'],0):08x}"}, {
+                'clk_i':'clk_i', 'rst_ni':'rst_ni',
+                'cfg_req_i':req(p), 'cfg_rsp_o':rsp(p),
+                **pcie_outbound.csr_ports()})]
         elif ep == 'controller_regs' and p['network'] == 'memory0_local_config' and real_ddr_mode:
             # Live memory controller wrapper below owns this separate Config NoC target.
             pass
@@ -601,7 +612,9 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
                        {'rtl_module':'ethernet0_axi_mvp','rtl_instance':'u_ethernet_mvp',
                         'csr_module':'ethernet_queue_axi_regs','csr_instance':'u_ethernet_queue_regs'}
                        if ethernet_mode and s.get('ip') == 'ethernet_queue_mac' else {}),
-                    'csr_attachment':('live_ethernet_queue_axi4_lite' if ethernet_mode and
+                    'csr_attachment':('live_pcie_requester_axi4_lite' if pcie_outbound_mode and
+                                      s.get('ip') == 'verilog_pcie' else
+                                      'live_ethernet_queue_axi4_lite' if ethernet_mode and
                                       s.get('ip') == 'ethernet_queue_mac' else 'explicit_axi_error')}
                     for s in cfg['subsystems'] if s['type']=='peripheral'],
                 'dma':'PULP iDMA engines generated for each compute, enabled by DmaEnable=1; data ports route via local FlooNoCs and 32-bit CSRs via local/global config FlooNoCs; old boot defaults to disabled.',
@@ -653,8 +666,8 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
             'pcie_sram_monitor': 'actual_accepted_reads_and_writes'
         }
         if pcie_outbound_mode:
-            manifest['pcie0_host']['outbound_requester'] = 'live pinned dma_if_pcie + 5-port tc_sram; direct testbench descriptor control (CSR still reserved)'
-            manifest['pcie0_host']['outbound_dma_proof'] = 'requires live RTL + checked host-memory bytes; generated topology alone not evidence'
+            manifest['pcie0_host']['outbound_requester'] = 'live pinned dma_if_pcie + 5-port tc_sram; CPU0 owns requester descriptor CSRs on Config NoC'
+            manifest['pcie0_host']['outbound_dma_proof'] = 'requires actual CPU CSR AXI + RTL TLP + independent host RAM checks'
         for sub in pcie:
             key = sub['name'] + '_local_data.' + sub['data_initiator']
             actors[key] = {'kind':'rtl_pcie_bridge',
