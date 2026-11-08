@@ -43,6 +43,7 @@ class PcieHostParticipant:
         self.outbound_mode=os.environ.get('SOC_PCIE_OUTBOUND_MODE')=='1'
         if self.outbound_mode and not self.dma_exchange:
             raise ValueError('outbound PCIe test requires CPU0 C-driven iDMA staged payload')
+        self.outbound_verified=None
         self.host_mem=None
         self.host_mem_base=None
         self.outbound_counters={'posted_writes':0,'read_requests':0,'read_completions':0}
@@ -86,6 +87,10 @@ class PcieHostParticipant:
         dut.completer_id.value=int(ep.functions[0].pcie_id)
         self.bar=device.bar_window[0]
         if self.outbound_mode:
+            # Input descriptors are idle until after the C/iDMA stage has
+            # completed, never accidentally asserted at power-on.
+            dut.s_axis_read_desc_valid.value=0
+            dut.s_axis_write_desc_valid.value=0
             from cocotbext.axi.stream import define_stream
             rd_bus,rd_tx,rd_src,_,_=define_stream(
                 'PcieOutRdDesc',
@@ -273,6 +278,7 @@ class PcieHostParticipant:
             assert int(dut.pcie_sram_write_count.value)>0
             assert int(dut.pcie_sram_read_count.value)>0
         if self.outbound_mode:
+            assert self.outbound_verified is not None, 'outbound host-memory proof was never reached'
             assert self.outbound_verified['host_memory_bytes_verified']==64
             assert self.outbound_verified['reverse_host_memory_bytes_verified']==64
             self.outbound_monitor.kill()
