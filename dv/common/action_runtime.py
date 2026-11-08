@@ -27,16 +27,23 @@ class ActionDispatchError(ActionEvidenceError):
 
 @dataclass(frozen=True)
 class ResourceClaim:
-    """Version-1 driver resource intent; read/read may overlap, writes exclude."""
+    """Version-1 lock; bounded byte ranges overlap only when intervals intersect."""
     category: str
     name: str
     access: str = "write"
+    start: int | None = None
+    end: int | None = None
 
     def __post_init__(self):
         if (not isinstance(self.category, str) or not self.category or
                 not isinstance(self.name, str) or not self.name or
                 self.access not in ("read", "write")):
             raise ActionDispatchError("invalid typed resource claim")
+        if (self.start is None) != (self.end is None) or (
+                self.start is not None and (
+                    type(self.start) is not int or type(self.end) is not int
+                    or self.start < 0 or self.end <= self.start)):
+            raise ActionDispatchError("invalid resource byte interval")
 
 
 @dataclass(frozen=True)
@@ -47,12 +54,17 @@ class HandlerSpec:
     and supplementary claims are part of its registered runtime capability;
     an unknown action kind must supply its own claim provider for concurrency.
     Timeout is wall seconds for asyncio and simulation nanoseconds for cocotb.
+    precondition runs BEFORE a driver; retire runs AFTER it, keeping resource
+    locks held until an external observer reports drain. Neither is passive
+    evidence by itself; source-correlated monitor/checker proof remains external.
     """
     execute: Handler
     version: int = 1
     actors: frozenset[str] | None = None
     resources: ClaimProvider | None = None
     timeout: float | None = None
+    precondition: Handler | None = None
+    retire: Handler | None = None
 
     def __post_init__(self):
         if not callable(self.execute) or type(self.version) is not int or self.version != 1:
@@ -63,6 +75,9 @@ class HandlerSpec:
             raise ActionDispatchError("handler actors must be nonempty typed set")
         if self.resources is not None and not callable(self.resources):
             raise ActionDispatchError("resource claims must come from a registered callable")
+        if (self.precondition is not None and not callable(self.precondition)) or (
+                self.retire is not None and not callable(self.retire)):
+            raise ActionDispatchError("runtime fences must be registered async callables")
         if self.timeout is not None and (
                 type(self.timeout) not in (int, float) or
                 not math.isfinite(self.timeout) or self.timeout <= 0):
@@ -104,10 +119,52 @@ def _default_claims(action: dict) -> tuple[ResourceClaim, ...] | None:
     return None
 
 
-def _claims(action: dict, registration: HandlerSpec) -> tuple[ResourceClaim, ...]:
-    # Same actor has a single command stream unless it declares multiple
-    # separately named actors. Do not accidentally issue two DMA commands
-    # concurrently to the same CSR/descriptor slot.
+def _physical_allocations(plan: dict) -> dict[str, dict]:
+    """Validate resolved buffer spans; do not trust raw action JSON as an allocator."""
+    records = plan.get("allocations", [])
+    if not isinstance(records, list):
+        raise ActionDispatchError("selected physical allocations must be a list")
+    result = {}
+    for item in records:
+        if not isinstance(item, dict):
+            raise ActionDispatchError("malformed physical allocation")
+        name, region = item.get("buffer"), item.get("region")
+        phys, size = item.get("phys"), item.get("size")
+        if (not isinstance(name, str) or not name or name in result or
+                not isinstance(region, str) or not region or
+                type(phys) is not int or type(size) is not int or
+                phys < 0 or size <= 0 or phys + size > (1 << 64)):
+            raise ActionDispatchError("invalid or duplicate physical buffer allocation")
+        result[name] = item
+    return result
+
+
+def _buffer_interval(action: dict, name: str, size: int) -> tuple[int, int]:
+    """Use a declared subrange when unambiguous, otherwise lock the full buffer."""
+    args, kind = action["args"], action["kind"]
+    if kind == "dma.copy" and args.get("src") != args.get("dst"):
+        if name == args.get("src"):
+            offset_key = "src_offset"
+        elif name == args.get("dst"):
+            offset_key = "dst_offset"
+        else:
+            return 0, size
+    elif kind in ("memory.initialize", "memory.check") and name == args.get("buffer"):
+        offset_key = "offset"
+    else:
+        return 0, size
+    offset, length = args.get(offset_key, 0), args.get("length", size)
+    if (type(offset) is not int or type(length) is not int or
+            offset < 0 or length <= 0 or offset + length > size):
+        raise ActionDispatchError(
+            f"{action['action_instance_id']}: invalid physical byte range for {name}")
+    return offset, offset + length
+
+
+def _claims(action: dict, registration: HandlerSpec,
+            allocations: dict[str, dict]) -> tuple[ResourceClaim, ...]:
+    # Same actor has one command stream unless separately declared. Distinct
+    # handles can still map to overlapping physical addresses: lock both.
     claims = [ResourceClaim("actor", action["actor"])]
     builtin = _default_claims(action)
     if builtin is None and registration.resources is None:
@@ -122,24 +179,44 @@ def _claims(action: dict, registration: HandlerSpec) -> tuple[ResourceClaim, ...
         claims.extend(extra)
     if any(not isinstance(c, ResourceClaim) for c in claims):
         raise ActionDispatchError("resource contract returned non-typed claim")
-    # Duplicate read/write claims for a resource collapse conservatively to
-    # an exclusive write, never discard a write in favor of a shared read.
+    if allocations:
+        for claim in tuple(claims):
+            if claim.category != "buffer":
+                continue
+            info = allocations.get(claim.name)
+            if info is None:
+                raise ActionDispatchError(
+                    f"{action['action_instance_id']}: buffer {claim.name} lacks resolved allocation")
+            start, end = _buffer_interval(action, claim.name, info["size"])
+            claims.append(ResourceClaim("physical", "soc", claim.access,
+                                        info["phys"] + start, info["phys"] + end))
+    # Preserve bounded intervals when merging claims: an unbounded resource
+    # locks the entire named interface; different spans must not collapse.
     merged = {}
     for claim in claims:
-        key = claim.category, claim.name
+        key = claim.category, claim.name, claim.start, claim.end
         old = merged.get(key)
         merged[key] = ("write" if claim.access == "write" or old == "write"
                        else "read")
-    return tuple(ResourceClaim(kind, name, mode)
-                 for (kind, name), mode in sorted(merged.items()))
+    return tuple(ResourceClaim(kind, name, mode, start, end)
+                 for (kind, name, start, end), mode in sorted(
+                     merged.items(), key=lambda entry: (
+                         entry[0][0], entry[0][1],
+                         -1 if entry[0][2] is None else entry[0][2],
+                         -1 if entry[0][3] is None else entry[0][3])))
 
 
 def _conflict(a: tuple[ResourceClaim, ...],
               b: tuple[ResourceClaim, ...]) -> bool:
-    held = {(c.category, c.name): c.access for c in a}
-    return any((c.category, c.name) in held and
-               (c.access == "write" or held[c.category, c.name] == "write")
-               for c in b)
+    for left in a:
+        for right in b:
+            if (left.category != right.category or left.name != right.name or
+                    (left.access == "read" and right.access == "read")):
+                continue
+            if (left.start is None or right.start is None or
+                    left.start < right.end and right.start < left.end):
+                return True
+    return False
 
 
 def _validate_release_order(plan: dict, by_id: dict[str, dict]) -> None:
@@ -257,9 +334,15 @@ class ActionDispatcher:
             if spec.timeout is not None and task_backend is None:
                 raise ActionDispatchError("timed handler needs explicitly selected task backend")
         _validate_release_order(self.plan, self.by_id)
+        for action in self.plan["actions"]:
+            if (action["kind"] == "memory.release" and
+                    self.registrations["memory.release"].precondition is None):
+                raise ActionDispatchError(
+                    f"{action['action_instance_id']}: release requires an externally observed quiescence precondition")
+        self.allocations = _physical_allocations(self.plan)
         self.claims = ({
             action["action_instance_id"]: _claims(
-                action, self.registrations[action["kind"]])
+                action, self.registrations[action["kind"]], self.allocations)
             for action in self.plan["actions"]
         } if max_inflight > 1 else {})
         self.handlers = {kind: spec.execute for kind, spec in self.registrations.items()}
@@ -274,7 +357,13 @@ class ActionDispatcher:
 
     async def _execute(self, action: dict, context: Any):
         spec = self.registrations[action["kind"]]
-        work = spec.execute(action, context)
+        async def fenced_work():
+            if spec.precondition is not None:
+                await spec.precondition(action, context)
+            await spec.execute(action, context)
+            if spec.retire is not None:
+                await spec.retire(action, context)
+        work = fenced_work()
         if spec.timeout is None:
             return await work
         try:
