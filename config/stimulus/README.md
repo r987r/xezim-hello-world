@@ -26,7 +26,7 @@ deleted/recreated. Test intent must survive and be reviewable in Git.
 
 Every test has exactly one canonical `logical_test`; multiple selected
 regression targets can implement the same behavior (e.g. CPU C versus BFM,
-relocated boot, synthesis guard). The loader cross-checks all 28 registered
+relocated boot, synthesis guard). The loader cross-checks all registered
 targets, catches stale/missing/duplicate entries and verifies a test's
 `logical_test` against its naming source once #137 has merged.
 

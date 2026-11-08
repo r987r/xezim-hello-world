@@ -82,7 +82,8 @@ class TestIntentFlowTests(unittest.TestCase):
         from tools.stimulus_catalog import load as load_stimuli
         specs=load_stimuli(self.config)
         self.assertEqual(set(specs),set(self.entries))
-        self.assertEqual(len(specs),30)
+        self.assertEqual(len(specs),len(self.config['tests']))
+        self.assertEqual(sum(v["execution"]=="benchmark_native" for v in specs.values()),2)
         self.assertEqual(sum(v["execution"]=="scenario_native" for v in specs.values()),2)
         self.assertEqual(sum(v["execution"]=="observed_milestones" for v in specs.values()),7)
         self.assertEqual(sum(v["execution"]=="legacy_opaque" for v in specs.values()),18)

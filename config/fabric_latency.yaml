@@ -1,0 +1,13 @@
+# One benchmark contract for all selected local/connected/full-chip scopes.
+# Scope/ownership is selected by regression.yaml; never substitute BFM for RTL.
+schema_version: 1
+profiles:
+  unloaded:
+    warmup_per_route: 4
+    measured_per_route: 32
+    phase: "Fabric baseline: single-outstanding one-beat"
+    memory_offset: 128
+    full_chip_scratch_offset: 16384  # preserve CPU mailbox/firmware SRAM
+    max_outstanding: 1
+    pause_channels: false
+    operation_beats: 1

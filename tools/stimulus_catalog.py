@@ -18,7 +18,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = "config/stimulus/tests.yaml"
 PHASES = ("init", "run", "check")
-KINDS = {"scenario_native", "observed_milestones", "legacy_opaque", "non_runtime"}
+KINDS = {"scenario_native", "benchmark_native", "observed_milestones", "legacy_opaque", "non_runtime"}
 SCENARIOS = {"cpu_dma_scenario", "scenario_bfm"}
 NON_RUNTIME = {"verilator-lint", "xezim-compile"}
 SLUG = re.compile(r"^[a-z][a-z0-9-]*$")
@@ -51,6 +51,8 @@ def _type_for(test: dict) -> str:
         return "non_runtime"
     if mode in SCENARIOS:
         return "scenario_native"
+    if (test.get("report") or {}).get("fabric_benchmark"):
+        return "benchmark_native"
     if (test.get("report") or {}).get("flow", {}).get("required_steps"):
         return "observed_milestones"
     return "legacy_opaque"

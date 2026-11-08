@@ -112,6 +112,7 @@ tests:
     pass: 'PASS supernoc:'
     report:
       address_map: {config: config/soc.yaml, variant: architecture}
+      fabric_scope: connected_noc
       context: 'AXI verification BFMs drive all initiators and model every leaf target. Mapped-route and burst/stall checks are followed by deliberate target-fault tests expecting 24 read/write SLVERR pairs. No CPUs or iDMA engines are instantiated in this BFM scope.'
       axi: {scope: u_noc, clock: clk_i, reset: rst_ni, catalog: gen/supernoc/axi_monitors.json, actors: gen/supernoc/manifest.json, max_events: 500000}
       memory: {required: true, policies: [strict, fast, hybrid]}
@@ -121,6 +122,26 @@ tests:
     reuse_build: true
     env: {SUPERNOC_NEGATIVE: '1'}
     expect_failure: 'FAIL supernoc injected data mismatch detected'
+  supernoc-latency:
+    opt_in: true
+    logical_test: axi-noc-latency-baseline
+    engine: cocotb-verilator
+    sources: noc
+    bender_targets: [supernoc]
+    top: supernoc_tb
+    module: test_latency
+    test_dir: dv/supernoc
+    build: .tools/supernoc-obj
+    reuse_build: true
+    seed: 1
+    timeout_s: 1800
+    pass: 'PASS fabric-latency:'
+    report:
+      address_map: {config: config/soc.yaml, variant: architecture}
+      fabric_scope: connected_noc
+      context: 'Dedicated unloaded single-outstanding one-beat AXI benchmark; upstream BFMs at declared SuperNoC initiators and passive monitors. No CPUs, PCIe host, Ethernet MAC, real DDR controller or physical PHY.'
+      axi: {scope: u_noc, clock: clk_i, reset: rst_ni, catalog: gen/supernoc/axi_monitors.json, actors: gen/supernoc/manifest.json, max_events: 500000, required_complete: true}
+      fabric_benchmark: {profile: unloaded, spec: config/fabric_latency.yaml}
   dma-rtl:
     logical_test: dma-descriptor-chain
     engine: cocotb-verilator
@@ -310,6 +331,19 @@ tests:
       address_map: {config: config/soc.yaml, variant: architecture}
       context: 'Real PicoRV32/SERV CPUs coordinate boot phases with OKAY responses. Afterwards a verification AXI BFM at the reserved compute0 DMA port tests two 64-KiB SRAM stand-ins, including four intentional out-of-capacity SLVERR transactions. No DMA engine or physical HBM/DDR controller is instantiated.'
       axi: {scope: dut.u_noc, clock: clk, reset: rst_n, catalog: gen/supernoc/axi_monitors.json, actors: gen/chip/manifest.json, max_events: 500000}
+  chip-boot-latency:
+    <<: *chip
+    opt_in: true
+    logical_test: axi-fullchip-latency-baseline
+    module: dv.full_chip.test_latency
+    reuse_build: true
+    pass: 'PASS fabric-latency-chip:'
+    report:
+      address_map: {config: config/soc.yaml, variant: architecture}
+      fabric_scope: full_chip_boot_bfm
+      context: 'Real PicoRV32/SERV cold-boot INIT/RUN/CHECK, then an authorized upstream AXI BFM at reserved unowned compute0 DMA port measures writable SRAM/model-backed paths. This boot-only RTL has NO active iDMA, PCIe requester, Ethernet MAC or physical DDR.'
+      axi: {scope: dut.u_noc, clock: clk, reset: rst_n, catalog: gen/supernoc/axi_monitors.json, actors: gen/chip/manifest.json, max_events: 500000, required_complete: true}
+      fabric_benchmark: {profile: unloaded, spec: config/fabric_latency.yaml}
   chip-peakrdl-reset:
     logical_test: reset-ack-register-access
     opt_in: true
@@ -557,6 +591,7 @@ tests:
 suites:
   xezim: [memory, memory-full, memory-sparse, memory-negative, sram, sram-synthesis, serv, boot, boot-relocated]
   noc: [noc-verilator, supernoc, supernoc-negative]
+  fabric-latency: [supernoc-latency, chip-boot-latency]
   compatibility: [noc-xezim]
   diagnostics: [cpu-fetch, smoke]
   dma: [dma-rtl]
