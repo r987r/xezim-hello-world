@@ -199,6 +199,8 @@ class ActionEventRecorder:
             raise ActionEvidenceError("action not yet issued")
         if stage == "driver_done" and origin != phases["issued"][1]:
             raise ActionEvidenceError("driver origin changed")
+        if stage == "checked" and "driver_done" not in phases:
+            raise ActionEvidenceError("checker verdict before driver completion")
         if stage in ("observed", "accepted", "completed"):
             ref = (item["evidence"]["capture"], item["evidence"]["ref"])
             used = self.refs.setdefault((action_instance_id, stage), set())
