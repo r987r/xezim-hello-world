@@ -192,5 +192,101 @@ class ActionConcurrencyTests(unittest.IsolatedAsyncioTestCase):
             await d.run()
 
 
+    async def test_physical_alias_across_distinct_handles_serializes(self):
+        """Two named buffers may alias one real memory aperture."""
+        held = set()
+        peak = [0]
+        async def copy(item, _):
+            held.add(item["action_instance_id"])
+            peak[0] = max(peak[0], len(held))
+            await asyncio.sleep(0)
+            held.remove(item["action_instance_id"])
+
+        raw_doc = json.loads(make_plan(
+            act("a", engine="dma0", src="src_a", dst="dst_a"),
+            act("b", actor="dma1", engine="dma1", src="src_b", dst="dst_b")))
+        raw_doc["allocations"] = [
+            {"buffer": "src_a", "region": "sram", "phys": 0x1000, "size": 64},
+            {"buffer": "dst_a", "region": "sram", "phys": 0x2000, "size": 64},
+            {"buffer": "src_b", "region": "sram", "phys": 0x2020, "size": 64},
+            {"buffer": "dst_b", "region": "sram", "phys": 0x3000, "size": 64},
+        ]
+        raw = (json.dumps(raw_doc, sort_keys=True, separators=(",", ":")) + "\n").encode()
+        await ActionDispatcher(raw, {"dma.copy": copy},
+                               max_inflight=2, task_backend="asyncio").run()
+        self.assertEqual(peak, [1])
+
+        raw_doc["allocations"][2]["phys"] = 0x2100  # no overlap
+        raw = (json.dumps(raw_doc, sort_keys=True, separators=(",", ":")) + "\n").encode()
+        held.clear()
+        peak[0] = 0
+        await ActionDispatcher(raw, {"dma.copy": copy},
+                               max_inflight=2, task_backend="asyncio").run()
+        self.assertEqual(peak, [2])
+
+    async def test_retirement_fence_keeps_lock_held(self):
+        entered, drain = asyncio.Event(), asyncio.Event()
+        seen = []
+        async def drive(item, _):
+            seen.append("driver_" + item["action_instance_id"])
+        async def retire(item, _):
+            if item["action_instance_id"] == "a":
+                entered.set()
+                await drain.wait()
+        raw = make_plan(act("a", engine="dma0"),
+                        act("b", actor="dma1", engine="dma0"))
+        dispatcher = ActionDispatcher(
+            raw, {"dma.copy": HandlerSpec(drive, retire=retire, timeout=1)},
+            max_inflight=2, task_backend="asyncio")
+        task = asyncio.create_task(dispatcher.run())
+        await asyncio.wait_for(entered.wait(), 1)
+        await asyncio.sleep(0)
+        self.assertEqual(seen, ["driver_a"])
+        self.assertNotIn("a", dispatcher.completed)
+        drain.set()
+        await task
+        self.assertEqual(seen, ["driver_a", "driver_b"])
+
+    async def test_release_requires_external_quiescence_guard(self):
+        raw = make_plan(
+            act("allocate", "memory.allocate", actor="cpu0",
+                buffer="src", region="sram"),
+            act("release", "memory.release", actor="dma0",
+                deps=("allocate",), buffer="src", consumers_quiesced=True),
+        )
+        async def no_op(item, _):
+            return None
+        handlers = {"memory.allocate": no_op,
+                    "memory.release": no_op}
+        with self.assertRaisesRegex(ActionDispatchError, "externally observed quiescence"):
+            ActionDispatcher(raw, handlers)
+        async def not_quiescent(item, _):
+            raise ActionDispatchError("outstanding AXI response")
+        guarded = ActionDispatcher(
+            raw, {"memory.allocate": no_op,
+                  "memory.release": HandlerSpec(no_op, precondition=not_quiescent)})
+        with self.assertRaisesRegex(ActionDispatchError, "outstanding AXI"):
+            await guarded.run()
+        self.assertNotIn("release", guarded.completed)
+
+    async def test_missing_allocation_and_bad_byte_intervals_fail_closed(self):
+        raw_doc = json.loads(make_plan(act("a", engine="dma0", src="src", dst="dst",
+                                            length=16, src_offset=56)))
+        raw_doc["allocations"] = [
+            {"buffer": "src", "region": "sram", "phys": 0x1000, "size": 64},
+            {"buffer": "dst", "region": "sram", "phys": 0x2000, "size": 64},
+        ]
+        raw = (json.dumps(raw_doc, sort_keys=True, separators=(",", ":")) + "\n").encode()
+        with self.assertRaisesRegex(ActionDispatchError, "invalid physical byte range"):
+            ActionDispatcher(raw, {"dma.copy": lambda *_: None},
+                             max_inflight=2, task_backend="asyncio")
+        raw_doc["actions"][0]["args"]["src_offset"] = 0
+        raw_doc["allocations"].pop()
+        raw = (json.dumps(raw_doc, sort_keys=True, separators=(",", ":")) + "\n").encode()
+        with self.assertRaisesRegex(ActionDispatchError, "lacks resolved allocation"):
+            ActionDispatcher(raw, {"dma.copy": lambda *_: None},
+                             max_inflight=2, task_backend="asyncio")
+
+
 if __name__ == "__main__":
     unittest.main()
