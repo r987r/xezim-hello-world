@@ -45,6 +45,9 @@ class SelectedRtlArchiveTests(unittest.TestCase):
         }
 
     def make_archive(self):
+        (self.out / "plan.json").write_text(json.dumps(self.plan) + "\n")
+        (self.out / "identity.json").write_text(json.dumps(
+            self.plan["identity"]) + "\n")
         return archive_selected_filelist(
             self.root, "example", self.definition, self.plan, self.filelist)
 
@@ -146,6 +149,22 @@ class SelectedRtlArchiveTests(unittest.TestCase):
         archived = self.root / value["archive"] / "gen/chip/soc_top.sv"
         archived.write_text("tampered")
         with self.assertRaisesRegex(ValueError, "mismatch"):
+            verify_selected_archive(self.root, "example", self.definition)
+
+    def test_tampered_plan_or_identity_fail_after_original_archive(self):
+        self.make_archive()
+        plan_file = self.out / "plan.json"
+        plan = json.loads(plan_file.read_text())
+        plan["defines"].append("FORGED=1")
+        plan_file.write_text(json.dumps(plan) + "\n")
+        with self.assertRaisesRegex(ValueError, "plan/identity"):
+            verify_selected_archive(self.root, "example", self.definition)
+        plan_file.write_text(json.dumps(self.plan) + "\n")
+        identity_file = self.out / "identity.json"
+        bogus = json.loads(identity_file.read_text())
+        bogus["identity_sha256"] = "0" * 64
+        identity_file.write_text(json.dumps(bogus) + "\n")
+        with self.assertRaisesRegex(ValueError, "plan/identity"):
             verify_selected_archive(self.root, "example", self.definition)
 
     def test_rejects_foreign_definition_even_when_bytes_match(self):

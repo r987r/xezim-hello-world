@@ -711,6 +711,11 @@ def run_target(name, test, resolver, options):
     started = time.monotonic()
     results = []
     for label, command in commands:
+        # Revalidate the exact input manifest at the dispatch boundary, not
+        # merely when the runner resolved the filelists. This fails closed
+        # if generated RTL, a third-party source or an include header changed.
+        from selected_rtl_provenance import verify_selected_archive
+        verify_selected_archive(ROOT, name, test)
         print(f'RUN {name}/{label} ({engine}, stage={options.stage})', flush=True)
         runner_events.append(dispatch_event(runtime_selected,label,status='started'))
         save_dispatch()

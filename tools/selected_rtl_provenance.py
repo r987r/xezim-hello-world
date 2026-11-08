@@ -296,6 +296,39 @@ def verify_selected_archive(root: Path, profile: str, definition: dict) -> dict:
             or value.get("definition_sha256") != _canonical_sha(definition)
             or not isinstance(digest, str) or _canonical_sha(content) != digest):
         raise ValueError("foreign/stale/tampered selected RTL manifest")
+    plan_file = folder / "plan.json"
+    identity_file = folder / "identity.json"
+    if (plan_file.is_symlink() or not plan_file.is_file()
+            or identity_file.is_symlink() or not identity_file.is_file()):
+        raise ValueError("selected plan/identity missing or unsafe")
+    plan = json.loads(plan_file.read_text())
+    identity = json.loads(identity_file.read_text())
+    if (plan.get("target") != profile
+            or plan.get("engine") != definition.get("engine")
+            or plan.get("top") != value.get("compiled_top")
+            or plan.get("source_target") != definition.get("sources")
+            or plan.get("sources") != [
+                str(root / path) for path in value["source_sha256"]
+                if path not in {
+                    extra for net in value.get("network_filelists", {}).values()
+                    for extra in net.get("source_files", [])
+                }
+            ]
+            or plan.get("includes", []) != value.get("includes")
+            or plan.get("defines", []) != value.get("defines")
+            or plan.get("args", []) != value.get("args")
+            or identity.get("identity_sha256") != value.get("identity_sha256")
+            or identity.get("config_sha256") != value.get("config_sha256")
+            or identity.get("selection", {}).get("filelist_sha256")
+               != value.get("filelist_sha256")):
+        raise ValueError("selected plan/identity differs from recorded compiler inputs")
+    declared_networks = plan.get("selected_networks", {})
+    if set(declared_networks) != set(value.get("network_filelists", {})):
+        raise ValueError("selected NoC network selection changed since archive")
+    for name, info in value.get("network_filelists", {}).items():
+        if declared_networks[name] != {
+                "filelist": str(folder / (name + ".f")), "top": info["top"]}:
+            raise ValueError("selected NoC compiler top/plan mismatch")
     source_list = folder / "sources.f"
     if (source_list.is_symlink() or not source_list.is_file()
             or hashlib.sha256(source_list.read_bytes()).hexdigest()
@@ -315,8 +348,6 @@ def verify_selected_archive(root: Path, profile: str, definition: dict) -> dict:
     # Every selected NoC top is compiled from its own archived filelist.
     # Match both archived bytes and the source-side variant SHA.
     for name, info in value.get("network_filelists", {}).items():
-        if name not in value.get("network_filelists", {}):
-            raise ValueError("missing selected NoC network")
         original = folder / (name + ".f")
         archived = archive / (name + ".f")
         if (original.is_symlink() or archived.is_symlink()
