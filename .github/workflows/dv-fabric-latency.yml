@@ -8,6 +8,8 @@ on:
       - 'config/regression.yaml'
       - 'config/stimulus/tests.yaml'
       - 'tools/fabric_benchmark.py'
+      - 'dv/common/fabric_latency.py'
+      - 'dv/full_chip/test_latency.py'
       - 'tools/fabric_report.py'
       - 'tools/regress.py'
       - 'tools/axi_report.py'
@@ -72,6 +74,47 @@ jobs:
           name: fabric-latency-supernoc-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             .tools/regression/supernoc-latency/
+            gen/supernoc/manifest.json
+            gen/supernoc/axi_monitors.json
+          include-hidden-files: true
+          if-no-files-found: error
+  unloaded-full-chip:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: ./.github/actions/setup-bender
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Install pinned real CPU/FlooNoC toolchain and AXI monitor
+        run: |
+          set -euo pipefail
+          python3 -m pip install -r requirements.txt
+          python3 tools/ip_fetch.py floonoc
+          python3 -m pip install -e .tools/floonoc
+          python3 -m pip install 'cocotb==1.9.2' 'cocotbext-axi==0.1.24'
+          sudo apt-get update -qq
+          sudo apt-get install -y verilator
+      - name: Validate source-selected benchmark and CPU-safe scope
+        run: |
+          set -euo pipefail
+          python3 -m unittest tests.test_fabric_benchmark tests.test_stimulus_catalog tests.test_runtime_contract -v
+          python3 -m py_compile dv/common/fabric_latency.py dv/full_chip/test_latency.py
+          make check-generated
+      - name: Compile original full-chip boot RTL unchanged
+        run: python3 tools/regress.py chip-boot --stage build
+      - name: Boot real CPUs and benchmark only the unowned DMA BFM port
+        run: python3 tools/regress.py chip-boot-latency --stage run
+      - name: Retain original full-chip boot, AXI and benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fabric-latency-fullchip-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            .tools/regression/chip-boot-latency/
             gen/supernoc/manifest.json
             gen/supernoc/axi_monitors.json
           include-hidden-files: true
