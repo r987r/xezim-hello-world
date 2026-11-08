@@ -185,6 +185,18 @@ python3 tools/regress.py supernoc --stage build
 python3 tools/regress.py supernoc-latency --stage run
 ```
 
+The second `chip-boot-latency` target uses the identical benchmark plan compiler
+and execution adapter on **only** the reserved/unused compute0 DMA BFM
+port after authentic CPU0/CPU1 INIT/RUN/CHECK. Its dedicated profile
+selects writable routes and a separate high SRAM scratch offset to keep
+CPU mailbox/firmware state untouched. This is a real full-chip RTL
+NoC measurement with actual CPU boot, not a real DMA-engine measurement.
+
+```sh
+python3 tools/regress.py chip-boot --stage build
+python3 tools/regress.py chip-boot-latency --stage run
+```
+
 The selected run retains `fabric-benchmark-plan.json` (intent only) and
 `fabric-benchmark-evidence.json` (accepted-source-AXI-qualified only after
 the normal correlator). Missing/duplicate/failed source transactions,
