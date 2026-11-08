@@ -1,0 +1,50 @@
+name: PCIe outbound requester real TLP smoke (#76)
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'dv/pcie0/outbound_smoke.py'
+      - 'dv/pcie0/run_outbound_smoke.py'
+      - 'dv/pcie0/upstream.lock.json'
+      - '.github/workflows/pcie-outbound.yml'
+  workflow_dispatch:
+
+permissions: {contents: read}
+concurrency:
+  group: pcie-outbound-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  outbound-pcie-rtl:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: alexforencich/verilog-pcie
+          ref: 25156a9a162c41c60f11f41590c7d006d015ae5a
+          path: .tools/verilog_pcie
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Install pinned Cocotb and PCIe models
+        run: |
+          python3 -m pip install 'cocotb==1.9.2' 'cocotb-test==0.2.4' 'cocotb-bus==0.2.1' 'cocotbext-pcie==0.2.14' 'cocotbext-axi==0.1.24'
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends iverilog
+      - name: Compile and simulate pinned outbound PCIe requester
+        run: python3 dv/pcie0/run_outbound_smoke.py
+      - name: Keep RTL source pin and host-memory evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pcie-outbound-${{ github.run_id }}
+          path: |
+            .tools/pcie0/outbound/rtl-sources.json
+            .tools/pcie0/outbound/result.json
+            .tools/pcie0/outbound/sim_build/results.xml
+            .tools/pcie0/outbound/sim_build/*.log
+          include-hidden-files: true
+          if-no-files-found: warn
