@@ -77,6 +77,35 @@ def parse_plan(raw):
     for aid, action in by_id.items():
         if aid in action["depends_on"] or any(d not in by_id for d in action["depends_on"]):
             raise ActionEvidenceError(f"{aid}: unknown/self dependency")
+    # No runtime adapter may dispatch a cyclic or backward-phase action graph.
+    # Checking at plan selection prevents a stalled simulation from being the
+    # first place an impossible dependency is discovered.
+    colors = {}
+    phase_index = {name: index for index, name in enumerate(PHASES)}
+    for aid in by_id:
+        if colors.get(aid) == 2:
+            continue
+        # Iterative DFS: a source-declared plan may contain tens of thousands
+        # of actions, so recursive checking would overflow Python's stack.
+        stack = [(aid, False)]
+        while stack:
+            current, exiting = stack.pop()
+            if exiting:
+                colors[current] = 2
+                continue
+            if colors.get(current) == 2:
+                continue
+            if colors.get(current) == 1:
+                raise ActionEvidenceError(f"{current}: cyclic action dependency")
+            colors[current] = 1
+            stack.append((current, True))
+            for parent in reversed(by_id[current]["depends_on"]):
+                if phase_index[by_id[parent]["phase"]] > phase_index[by_id[current]["phase"]]:
+                    raise ActionEvidenceError(f"{current}: dependency crosses phases backwards")
+                if colors.get(parent) == 1:
+                    raise ActionEvidenceError(f"{current}: cyclic action dependency")
+                if colors.get(parent) != 2:
+                    stack.append((parent, False))
     return doc, hashlib.sha256(raw).hexdigest(), by_id
 
 
@@ -156,12 +185,22 @@ class ActionEventRecorder:
             "stage": stage, "origin": origin, "evidence": evidence or {},
         }, plan=self.plan, sha=self.sha, actions=self.actions)
         phases = self.states.setdefault(action_instance_id, {})
+        if "checked" in phases:
+            raise ActionEvidenceError("action already independently checked")
+        if stage == "issued":
+            for parent in action["depends_on"]:
+                parent_stages = self.states.get(parent, {})
+                if "driver_done" not in parent_stages:
+                    raise ActionEvidenceError(
+                        f"{action_instance_id}: dependency {parent} not driver-completed")
         if stage in ("issued", "driver_done", "checked") and stage in phases:
             raise ActionEvidenceError("duplicate action stage")
         if stage != "issued" and "issued" not in phases:
             raise ActionEvidenceError("action not yet issued")
         if stage == "driver_done" and origin != phases["issued"][1]:
             raise ActionEvidenceError("driver origin changed")
+        if stage == "checked" and "driver_done" not in phases:
+            raise ActionEvidenceError("checker verdict before driver completion")
         if stage in ("observed", "accepted", "completed"):
             ref = (item["evidence"]["capture"], item["evidence"]["ref"])
             used = self.refs.setdefault((action_instance_id, stage), set())
