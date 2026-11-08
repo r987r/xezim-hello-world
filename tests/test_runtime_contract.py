@@ -37,6 +37,7 @@ class SelectedRuntimeContractTests(unittest.TestCase):
         self.assertEqual(sum(v=="resolved_scenario_adapter" for v in status.values()),2)
         self.assertEqual(sum(v=="not_applicable" for v in status.values()),3)
         self.assertEqual(sum(v=="legacy_internal_stimulus_opaque" for v in status.values()),23)
+        self.assertEqual(status["supernoc-latency"],"source_benchmark_adapter")
         changed=copy.deepcopy(self.config)
         changed["tests"]["new-uninstrumented-test"] = copy.deepcopy(
             changed["tests"]["memory"])
