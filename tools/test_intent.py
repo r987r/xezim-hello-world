@@ -58,6 +58,7 @@ def plan(name: str, test: dict, *, scenario: dict | None = None,
     execution_status=(
         "not_applicable_compile_or_lint" if is_compile else
         "canonical_resolved_scenario" if scenario is not None else
+        "source_selected_benchmark" if (test.get("report") or {}).get("fabric_benchmark") else
         "instrumented_legacy_flow" if required else
         "legacy_runtime_without_action_contract"
     )

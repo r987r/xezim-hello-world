@@ -18,9 +18,9 @@ class StimulusCatalogTests(unittest.TestCase):
     def setUpClass(cls):
         cls.config=yaml.safe_load((ROOT/"config/regression.yaml").read_text())
 
-    def test_all_30_targets_and_single_shared_cpu_bfm_scenario(self):
+    def test_all_registered_targets_and_single_shared_cpu_bfm_scenario(self):
         entries=load(self.config)
-        self.assertEqual(len(entries),30)
+        self.assertEqual(len(entries),len(self.config['tests']))
         self.assertEqual(entries["chip-cpu-scenario"]["sha256"],
                          entries["chip-dma-scenario"]["sha256"])
         self.assertEqual(entries["chip-cpu-scenario"]["scenario_source"],
@@ -32,6 +32,10 @@ class StimulusCatalogTests(unittest.TestCase):
                          "dv/ethernet0/test_cpu_mvp.py")
         self.assertEqual(entries["supernoc"]["driver_source"],
                          "dv/supernoc/test_supernoc.py")
+        self.assertEqual(entries["supernoc-latency"]["driver_source"],
+                         "dv/supernoc/test_latency.py")
+        self.assertEqual(entries["chip-boot-latency"]["driver_source"],
+                         "dv/full_chip/test_latency.py")
         self.assertEqual(entries["noc-verilator"]["execution"],"non_runtime")
         self.assertFalse(entries["noc-verilator"]["phases"]["run"])
 

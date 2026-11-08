@@ -97,9 +97,11 @@ async def coordinated_cold_boot(dut):
     await execute_cold_boot(dut)
 
 
-async def execute_cold_boot(dut, *, external=None):
+async def execute_cold_boot(dut, *, external=None, benchmark=False):
     if external not in (None,"pcie0"):
         raise ValueError("unsupported shared test participant")
+    if benchmark and external is not None:
+        raise ValueError("benchmark cannot coexist with an active PCIe host owner")
     plan=os.environ.get("SOC_RUN_PLAN")
     if external:
         if not plan:
@@ -342,6 +344,46 @@ async def execute_cold_boot(dut, *, external=None):
         dut._log.info("PCIE0_ACCEPTED_TLP_REPORT_COUNTS=%s", tlp_counts)
         close_active()
         return
+    if benchmark:
+        # This boot-only topology leaves the compute0 DMA port unowned.
+        # Real CPU firmware has completed CHECK; the same original BFM is
+        # authorized for the benchmark. Do not enable for chip-dma or PCIe.
+        assert probe is not None and not cpu_dma_mode and host is None
+        from tools.fabric_benchmark import config as fabric_config, plan as fabric_plan, intent
+        from dv.common.fabric_latency import execute as run_fabric_cases
+        contract=json.loads((ROOT/"gen/supernoc/manifest.json").read_text())
+        chip_source=json.loads((ROOT/"gen/chip/manifest.json").read_text())
+        profile=fabric_config(ROOT)
+        selected=dict(profile,memory_offset=profile["full_chip_scratch_offset"])
+        boundary=manifest["coordinator"]+"_local_data.dma"
+        actor="m_"+boundary.replace(".","_")
+        if chip_source["axi_actors"][boundary]["kind"]!="verification_bfm":
+            raise AssertionError("selected boot RTL has a real DMA or no reserved BFM owner")
+        # The architecture manifest advertises more *structural* routes than
+        # the boot-variant RTL actually provides as writable storage. Only
+        # these memory_model windows are instantiated and separately qualified
+        # by the original cold-boot test. Never drive a disabled SRAM port.
+        model_windows=chip_source["memory_models"]
+        live_bases={row["base"] for row in model_windows}
+        if not model_windows or len(live_bases)!=len(model_windows):
+            raise AssertionError("boot variant lacks distinct live AXI memory models")
+        samples=profile["warmup_per_route"]+profile["measured_per_route"]
+        if any(row["modeled_bytes"] <
+               profile["full_chip_scratch_offset"]+samples*8
+               for row in model_windows):
+            raise AssertionError("benchmark scratch exceeds actual boot memory model")
+        cases=fabric_plan(contract, selected, selected_masters=[actor],
+                          writable_only=True, selected_region_bases=live_bases)
+        benchmark_plan=intent(cases,profile,"chip-boot-latency")
+        (Path(plan).parent/"fabric-benchmark-plan.json").write_text(
+            json.dumps(benchmark_plan,indent=2,sort_keys=True)+"\n")
+        warmup_count,measured_count=await run_fabric_cases(
+            cases, profile, {actor:probe}, lambda operation,context:
+            memory_transaction(dut,operation))
+        assert measured_count==benchmark_plan["measured_cases"]
+        dut._log.info("PASS fabric-latency-chip: CPU CHECK then %d warmup / %d "
+                      "measured reserved-port BFM cases with actual accepted AXI",
+                      warmup_count,measured_count)
     # Only a verification manager occupies the not-yet-integrated DMA port.
     # It never drives SRAM/boot mailboxes. Distinct values detect model aliasing.
     expected = []
@@ -370,7 +412,15 @@ async def execute_cold_boot(dut, *, external=None):
         expect_axi_response(monitor,'read',address,2,'Deliberate read beyond the 64-KiB '+target['name']+' model')
         result = await memory_transaction(dut, probe.read(address, 8))
         assert result.resp == 2, f'fullchip {target["name"]} out-of-range read must return SLVERR'
-    await Timer(1, 'ns')  # drain passive same-edge channel callbacks
+    if benchmark:
+        # Authentic CPU0 firmware keeps fetching from its SRAM after CHECK.
+        # The passive AXI report rejects even one read still in flight at
+        # simulator exit. Finish at a bounded observed idle interval, without
+        # forcing an AXI response, stopping CPU/clock or loosening reporting.
+        from dv.common.axi_trace import wait_axi_quiescent
+        await wait_axi_quiescent(timeout_ns=1000, stable_ns=2)
+    else:
+        await Timer(1, 'ns')  # drain passive same-edge channel callbacks
     if peakrdl_reset:
         close_active()
     dut._log.info('PASS fullchip: CPU phases and independent bounded AXI memory models')

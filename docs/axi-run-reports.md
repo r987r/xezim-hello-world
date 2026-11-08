@@ -169,6 +169,47 @@ max cycles on read and write separately, with sample count and the measured
 clock period. Stage minima/maxima are independent quantiles and need not
 sum to end-to-end extrema; for the same paired samples, stage averages sum.
 
+### Dedicated controlled latency benchmark (opt-in)
+
+`config/fabric_latency.yaml` owns the unloaded benchmark sweep parameters
+(four warmup + 32 measured one-beat samples per allowed source/region).
+`tools/fabric_benchmark.py` derives each case and unique address from the
+generated SuperNoC source manifest, not a hardcoded subsystem list. The
+`supernoc-latency` target uses the original upstream cocotbext-axi masters
+and passive monitor catalog, with no CPU/iDMA/packet engines substituted
+by this test. No extra dashboard or AXI correlator is introduced.
+
+```sh
+python3 -m unittest tests.test_fabric_benchmark tests.test_fabric_report -v
+python3 tools/regress.py supernoc --stage build
+python3 tools/regress.py supernoc-latency --stage run
+```
+
+The second `chip-boot-latency` target uses the identical benchmark plan compiler
+and execution adapter on **only** the reserved/unused compute0 DMA BFM
+port after authentic CPU0/CPU1 INIT/RUN/CHECK. Its dedicated profile
+selects **only the live modeled DDR/HBM memory windows declared by the
+selected boot RTL manifest** (the structural SRAM routes are not assumed
+to be usable by its reserved BFM) and a separate high memory scratch
+offset to keep CPU mailbox/firmware state untouched. This is a real full-chip RTL
+NoC measurement with actual CPU boot, not a real DMA-engine measurement.
+
+```sh
+python3 tools/regress.py chip-boot --stage build
+python3 tools/regress.py chip-boot-latency --stage run
+```
+
+The selected run retains `fabric-benchmark-plan.json` (intent only) and
+`fabric-benchmark-evidence.json` (accepted-source-AXI-qualified only after
+the normal correlator). Missing/duplicate/failed source transactions,
+unbound/dirty/overflow capture or invalid clock fail the benchmark gate.
+The regular `axi-transactions.json` remains authoritative. The Pages
+collector independently validates permitted source-equivalent per-mesh
+stage timings. An isolated local-subsystem or full-chip profile must
+use an actual compiled matching RTL variant and authorized source ports
+before its timing can be compared; this first increment does not claim
+these scopes are already measured.
+
 ## Extension points
 
 New captures record CPU/test phase markers and explicit one-request expected
@@ -205,3 +246,10 @@ IDs, addresses, read beats and missing responses. IDs may be remapped
 between local/global NoC boundaries, so do not equate their values globally.
 
 Historical stalls and follow-up experiments are retained in [the verification issue](https://github.com/r987r/xezim-hello-world/issues/34) and original CI, not in this contract. `chip-dma` uses behavioral AXI RAM; it does not exercise a DDR4 controller. The opt-in `chip-ddr4-real` test uses a LiteDRAM DDR4 controller with separate RTL/DFI evidence and a behavioral PHY/bank model, not a silicon PHY. On timeout, find the first incomplete **accepted** AXI boundary. Do not infer memory commit from BVALID or a DMA interrupt alone.
+
+The opt-in cold-boot latency path uses the existing passive AXI capture to
+wait for a **bounded true idle window** after real CPUs finish firmware
+INIT/RUN/CHECK and the benchmark BFMs finish. The CPU's post-boot polling
+may still issue AXI reads. This drain does not stop a CPU, force a bus
+completion, drop a transaction or relax `required_complete`; it fails closed
+if any AXI monitor cannot reach idle before the bounded timeout.

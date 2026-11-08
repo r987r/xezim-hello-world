@@ -40,7 +40,7 @@ FILES={'result.json','plan.json','sources.f','simulation.log','build.log','resul
        'planned-flow.json','memory-lifetimes.json','scenario-execution.json','scenario-plan.json',
        'variant-connectivity.json','variant-topology.json','variant-chip-manifest.json',
        'selected-test-plan.json','runner-events.json','selected-flow-correlation.json',
-       'identity.json'}
+       'identity.json','fabric-benchmark-plan.json','fabric-benchmark-evidence.json'}
 
 
 def dump(path,data):
@@ -222,11 +222,15 @@ FABRIC_EXCLUDED_FILES = {
 }
 # CI execution jobs (tool versions and invocation) must also be identical.
 # Trigger/scheduling-only edits do not alter simulated timing and are ignored.
-FABRIC_EXECUTION_WORKFLOWS = ('floonoc-elab.yml', 'full-chip.yml')
+FABRIC_EXECUTION_WORKFLOWS = ('floonoc-elab.yml', 'full-chip.yml', 'dv-fabric-latency.yml')
 FABRIC_REQUIRED_INPUTS = frozenset({
     'config/soc.yaml', 'config/interface_contracts.yaml',
-    'config/regression.yaml', 'config/ip.lock.yaml',
-    'dv/supernoc/test_supernoc.py', 'dv/common/axi_trace.py',
+    'config/regression.yaml', 'config/ip.lock.yaml', 'config/fabric_latency.yaml',
+    'dv/supernoc/test_supernoc.py', 'dv/supernoc/test_latency.py',
+    'dv/common/fabric_latency.py', 'dv/common/axi_outstanding.py',
+    'dv/full_chip/test_latency.py',
+    'tools/fabric_benchmark.py', 'dv/full_chip/test_boot.py',
+    'dv/common/axi_trace.py',
     'tools/memory_service.py', 'tools/memory_report.py',
     'tools/supernoc_gen.py', 'tools/floonoc_gen.py',
     'tools/axi_report.py', 'tools/regress.py', 'tools/sim_cocotb.py',
@@ -653,6 +657,20 @@ def evidence_index(evidence,output,repository):
             for item in source_dir.iterdir():
                 if item.is_file() and (item.name in FILES or item.suffix in ('.log','.f')):
                     shutil.copyfile(item,destination/item.name);assets.append(item.name)
+            # Benchmark-run publication must retain and independently check
+            # the selected cases against original passive AXI transactions.
+            # Merely emitting a planned benchmark cannot populate timing.
+            if plan.get('report',{}).get('fabric_benchmark') and result.get('passed') is True:
+                from fabric_benchmark import validate as validate_fabric
+                selected_bench=source_dir/'fabric-benchmark-plan.json'
+                verified_bench=source_dir/'fabric-benchmark-evidence.json'
+                if not selected_bench.is_file() or not verified_bench.is_file():
+                    raise ValueError('passing latency benchmark lacks complete proof')
+                stored=json.loads(verified_bench.read_text())
+                original=json.loads((source_dir/'axi-transactions.json').read_text())
+                checked=validate_fabric(original,json.loads(selected_bench.read_text()))
+                if checked!=stored or stored.get('scope')!=target:
+                    raise ValueError('archived latency benchmark proof disagrees with accepted AXI')
             trace_path=source_dir/'axi-transactions.json'
             trace=json.loads(trace_path.read_text()) if trace_path.exists() else None
             protocol_path=source_dir/'protocol-transactions.json'
@@ -806,6 +824,7 @@ def evidence_index(evidence,output,repository):
             if protocol_data and protocol_data.get('latency') and latency_data is None:
                 raise ValueError('PCIe latency evidence file missing')
             entry={'target':target,'engine':plan.get('engine','unknown'),'passed':result.get('passed') is True,
+                   'fabric_scope':(plan.get('report') or {}).get('fabric_scope','unspecified'),
                    'expected_failure':plan.get('expect_failure'),'stage':result.get('stage'),
                    'run_id':run['id'],'attempt':run.get('run_attempt',1),'source_sha':run['tested_sha'],
                    'canonical_id':canonical_path(selected_identity).as_posix() if selected_identity else None,

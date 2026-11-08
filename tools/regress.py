@@ -103,9 +103,23 @@ def load_config(path):
             required = {'scope','clock','reset','catalog'}
             if (test['engine'] != 'cocotb-verilator' or not isinstance(report, dict)
                 or not ({'axi','protocols'} & set(report))
-                or set(report) - {'axi','protocols','memory','context','flow','address_map'}
+                or set(report) - {'axi','protocols','memory','context','flow','address_map','fabric_scope','fabric_benchmark'}
                 or ('context' in report and not isinstance(report['context'],str))):
                 raise ValueError(f'{name}: invalid protocol report configuration for cocotb-verilator')
+            if 'fabric_scope' in report and report['fabric_scope'] not in (
+                    'isolated_local_noc', 'connected_noc', 'full_chip_boot_bfm'):
+                raise ValueError(f'{name}: unknown physical fabric evidence scope')
+            if 'fabric_benchmark' in report:
+                benchmark = report['fabric_benchmark']
+                if (not isinstance(benchmark,dict)
+                        or set(benchmark) != {'profile','spec'}
+                        or benchmark['profile'] != 'unloaded'
+                        or benchmark['spec'] != 'config/fabric_latency.yaml'
+                        or report.get('fabric_scope') not in
+                            ('isolated_local_noc','connected_noc','full_chip_boot_bfm')
+                        or test.get('module') not in
+                            ('test_latency', 'dv.full_chip.test_latency')):
+                    raise ValueError(f'{name}: source-selected fabric benchmark contract invalid')
             if 'address_map' in report:
                 amap = report['address_map']
                 if (not isinstance(amap, dict) or not {'config','variant'} <= set(amap)
@@ -748,6 +762,17 @@ def run_target(name, test, resolver, options):
             print(f'FAIL {name}/protocol capture: missing, incomplete or inconsistent evidence',flush=True)
             if 'axi' in test['report']:
                 write_report(out,plan,result)
+        if 'fabric_benchmark' in test['report'] and passed:
+            from fabric_benchmark import validate_files, BenchmarkError
+            try:
+                proof = validate_files(out)
+                print(f'FABRIC_BENCHMARK {name}: {proof["measured_transactions"]} '
+                      'accepted source transactions', flush=True)
+            except (BenchmarkError, OSError, ValueError, KeyError, TypeError) as error:
+                passed = result['passed'] = False
+                results.append({'name':'fabric benchmark acceptance',
+                                'passed':False,'reason':str(error)})
+                print(f'FAIL {name}/fabric benchmark: {error}',flush=True)
         if 'flow' in test['report']:
             from test_flow_report import write_report as write_flow
             flow_result = write_flow(out, plan)
