@@ -9,6 +9,7 @@ import json
 from pathlib import Path
 import chip_bootgen
 import pcie_chip
+import pcie_outbound
 from test_flow_codec import sv_event
 from supernoc_gen import AW_FIELDS, W_FIELDS, B_FIELDS, AR_FIELDS, R_FIELDS
 
@@ -61,6 +62,7 @@ def dma_params_for(cfg, core):
 
 def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
          image_prefix='gen/chip', cpu_dma_mode=False, pcie_host_mode=False,
+         pcie_outbound_mode=False,
          ethernet_mode=False, ethernet_cpu_mode=False,
          real_ddr_mode=False, ddr_wb_base=0, ddr_wb_adr_bits=30, peakrdl_reset=False):
     """Emit normal or opt-in compiled CPU Ethernet/PCIe/DMA firmware."""
@@ -72,6 +74,8 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
         raise ValueError('real DDR requires CPU/iDMA firmware mode')
     if real_ddr_mode and not (1 <= ddr_wb_adr_bits <= 30 and ddr_wb_base >= 0 and ddr_wb_base % 0x4000 == 0):
         raise ValueError('bad generated DDR Wishbone parameters')
+    if pcie_outbound_mode and not (pcie_host_mode and cpu_dma_mode):
+        raise ValueError('outbound PCIe requires real CPU/iDMA and host PCIe variant')
     if pcie_host_mode:
         cfg = pcie_chip.host_variant_config(cfg)
     ethernet = [s for s in cfg['subsystems'] if s['type']=='peripheral' and
@@ -115,6 +119,8 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
              *[p[1] for p in probe], *[p[1] for p in cfgprobe]]
     if pcie_host_mode:
         lines += pcie_chip.top_ports()
+        if pcie_outbound_mode:
+            lines += pcie_outbound.top_ports()
         lines += [
             '  output logic [31:0] pcie_sram_write_count, pcie_sram_read_count,',
             '  output logic [63:0] pcie_sram_last_write_addr, pcie_sram_last_read_addr,'
@@ -310,6 +316,8 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
         active = pcie[0]
         host = all_ports[f"m_{active['name']}_local_data_{active['data_initiator']}"]
         lines += [pcie_chip.bridge_lines(req(host), rsp(host))]
+        if pcie_outbound_mode:
+            lines += [pcie_outbound.requester_lines()]
         lines += [
             '  logic pcie_sram_valid, pcie_sram_write;',
             '  logic [63:0] pcie_sram_addr, pcie_sram_data;',
@@ -408,10 +416,29 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
                     f'mon_{k}_o': ('pcie_sram_'+k if pcie_host_mode and p['network'] ==
                                   pcie[0]['name']+'_local_data' else '')
                     for k in ('valid','write','addr','data','strb')}
-            lines += [module('axi_sram_target', 'u_'+p['name'], {'req_t':dtype(p,'req'),'rsp_t':dtype(p,'rsp'),
-                'IdWidth':p['id_width'],'Base':f"64'h{region['base']:016x}",'Bytes':size,
-                'ReadOnly':int(is_rom),'InitFile':f'"{image_prefix}/{image}"' if image else '""'},
-                {'clk_i':'clk_i','rst_ni':'rst_ni','req_i':req(p),'rsp_o':rsp(p),**mon})]
+            if pcie_outbound_mode and p['network'] == pcie[0]['name']+'_local_data':
+                lines += [module('pcie_dma_sram_target', 'u_'+p['name'], {
+                    'req_t':dtype(p,'req'),'rsp_t':dtype(p,'rsp'),
+                    'IdWidth':p['id_width'],
+                    'Base':f"64'h{region['base']:016x}",'Bytes':size}, {
+                    'clk_i':'clk_i','rst_ni':'rst_ni','req_i':req(p),
+                    'rsp_o':rsp(p),**mon,**pcie_outbound.sram_ports()})]
+            else:
+                lines += [module('axi_sram_target', 'u_'+p['name'], {'req_t':dtype(p,'req'),'rsp_t':dtype(p,'rsp'),
+                    'IdWidth':p['id_width'],'Base':f"64'h{region['base']:016x}",'Bytes':size,
+                    'ReadOnly':int(is_rom),'InitFile':f'"{image_prefix}/{image}"' if image else '""'},
+                    {'clk_i':'clk_i','rst_ni':'rst_ni','req_i':req(p),'rsp_o':rsp(p),**mon})]
+        elif pcie_outbound_mode and ep == 'controller_regs' and p['network'] == pcie[0]['name']+'_local_config':
+            pcie_csr = next(r for r in cfg['address_map']['config']
+                            if r['name'] == pcie[0]['name']+'.ctrl')
+            lines += [module('pcie_requester_axi_regs', 'u_pcie_requester_csrs', {
+                'axi_req_t':dtype(p,'req'), 'axi_rsp_t':dtype(p,'rsp'),
+                'lite_req_t':'lite_req_t', 'lite_rsp_t':'lite_resp_t',
+                'AxiIdWidth':p['id_width'],
+                'CsrBase':f"32'h{int(pcie_csr['base'],0):08x}"}, {
+                'clk_i':'clk_i', 'rst_ni':'rst_ni',
+                'cfg_req_i':req(p), 'cfg_rsp_o':rsp(p),
+                **pcie_outbound.csr_ports()})]
         elif ep == 'controller_regs' and p['network'] == 'memory0_local_config' and real_ddr_mode:
             # Live memory controller wrapper below owns this separate Config NoC target.
             pass
@@ -561,6 +588,7 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
     (out/'soc_top.sv').write_text('\n'.join(lines)+'\n')
     emit_tb(cfg, fw, out, image_prefix=image_prefix,
             cpu_dma_mode=cpu_dma_mode, pcie_host_mode=pcie_host_mode,
+            pcie_outbound_mode=pcie_outbound_mode,
             ethernet_mode=ethernet_mode, ethernet_cpu_mode=ethernet_cpu_mode,
             real_ddr_mode=real_ddr_mode)
     emit_dma_tb(cfg, fw, out, ethernet_mode=ethernet_mode)
@@ -579,12 +607,17 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
                                       s.get('ip') == 'verilog_pcie' else
                                       'live_ethernet_gmii_queue_axi_mvp' if ethernet_mode and
                                       s.get('ip') == 'ethernet_queue_mac' else 'reserved_idle'),
-                    **({'rtl_module':'pcie_axi_master','rtl_instance':'u_bridge'}
+                    **({'rtl_module':'pcie_axi_master','rtl_instance':'u_bridge',
+                         **({'csr_module':'pcie_requester_axi_regs',
+                             'csr_instance':'u_pcie_requester_csrs'}
+                            if pcie_outbound_mode else {})}
                        if pcie_host_mode and s.get('ip') == 'verilog_pcie' else
                        {'rtl_module':'ethernet0_axi_mvp','rtl_instance':'u_ethernet_mvp',
                         'csr_module':'ethernet_queue_axi_regs','csr_instance':'u_ethernet_queue_regs'}
                        if ethernet_mode and s.get('ip') == 'ethernet_queue_mac' else {}),
-                    'csr_attachment':('live_ethernet_queue_axi4_lite' if ethernet_mode and
+                    'csr_attachment':('live_pcie_requester_axi4_lite' if pcie_outbound_mode and
+                                      s.get('ip') == 'verilog_pcie' else
+                                      'live_ethernet_queue_axi4_lite' if ethernet_mode and
                                       s.get('ip') == 'ethernet_queue_mac' else 'explicit_axi_error')}
                     for s in cfg['subsystems'] if s['type']=='peripheral'],
                 'dma':'PULP iDMA engines generated for each compute, enabled by DmaEnable=1; data ports route via local FlooNoCs and 32-bit CSRs via local/global config FlooNoCs; old boot defaults to disabled.',
@@ -623,6 +656,8 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
             actor = {'kind':'rtl_registers','label':'Pinned LiteDRAM DFII/CSR on Config NoC via Wishbone'}
         if ethernet_mode and port['network'] == ethernet[0]['name']+'_local_config' and endpoint == 'controller_regs':
             actor = {'kind':'rtl_registers','label':'Generated Ethernet queue Config NoC target and AXI-Lite CSRs'}
+        if pcie_outbound_mode and port['network'] == pcie[0]['name']+'_local_config' and endpoint == 'controller_regs':
+            actor = {'kind':'rtl_registers','label':'CPU-controlled PCIe0 requester Config-NoC AXI4-Lite descriptor CSRs'}
         if real_ddr_mode and endpoint == 'target_crossbar':
             actor = {'kind':'rtl_controller','label':'Memory0 local crossbar; pinned LiteDRAM+modeled DFI; HBM AXI SRAM'}
         actors[port['network']+'.'+endpoint]=actor
@@ -635,6 +670,9 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
             'no_host_sram_preload': True,
             'pcie_sram_monitor': 'actual_accepted_reads_and_writes'
         }
+        if pcie_outbound_mode:
+            manifest['pcie0_host']['outbound_requester'] = 'live pinned dma_if_pcie + 5-port tc_sram; CPU0 owns requester descriptor CSRs on Config NoC'
+            manifest['pcie0_host']['outbound_dma_proof'] = 'requires actual CPU CSR AXI + RTL TLP + independent host RAM checks'
         for sub in pcie:
             key = sub['name'] + '_local_data.' + sub['data_initiator']
             actors[key] = {'kind':'rtl_pcie_bridge',
@@ -644,7 +682,8 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
             'mode':'opt_in_1g_gmii_mac_rx_tx_queue_dma_cq',
             'data_attachment':'single_pulp_axi_mux_six_sources_into_ethernet_local_data',
             'config_attachment':'pulp_axi_to_axi_lite_into_queue_csrs',
-            'memory':'local_ethernet_sram_and_bounded_modeled_ddr',
+            'memory':('local_ethernet_sram_and_real_litedram_behavioral_dfi' if real_ddr_mode else
+                      'local_ethernet_sram_and_bounded_modeled_ddr'),
             'gmii_test_proven':False,
             'completion_test_proven':False,
             'note':'Attachment is generated; exact-chip RTL traffic NOT yet measured',
@@ -729,7 +768,8 @@ def emit_dma_tb(cfg, fw, out, *, ethernet_mode=False):
 
 
 def emit_tb(cfg, fw, out, *, image_prefix='gen/chip', cpu_dma_mode=False,
-            pcie_host_mode=False, ethernet_mode=False, ethernet_cpu_mode=False,
+            pcie_host_mode=False, pcie_outbound_mode=False,
+            ethernet_mode=False, ethernet_cpu_mode=False,
             real_ddr_mode=False):
     n = len(fw['cores'])
     words = [len(fw['images'][c['name']]) for c in fw['cores']]
@@ -740,6 +780,11 @@ def emit_tb(cfg, fw, out, *, image_prefix='gen/chip', cpu_dma_mode=False,
     if real_ddr_mode:
         opts['timeout_cycles'] = max(opts['timeout_cycles'], 1500000)
         opts['phase_timeout_cycles'] = max(opts['phase_timeout_cycles'], 1200000)
+    if real_ddr_mode and pcie_host_mode and ethernet_mode:
+        # One full-chip route includes DFII init + serial CPU software,
+        # three actual iDMA copies, Ethernet GMII and PCIe TLP/barriers.
+        opts['timeout_cycles'] = max(opts['timeout_cycles'], 2500000)
+        opts['phase_timeout_cycles'] = max(opts['phase_timeout_cycles'], 2300000)
     if pcie_host_mode:
         opts['timeout_cycles'] = max(opts['timeout_cycles'], 600000)
         opts['phase_timeout_cycles'] = max(opts['phase_timeout_cycles'], 500000)
@@ -755,6 +800,8 @@ def emit_tb(cfg, fw, out, *, image_prefix='gen/chip', cpu_dma_mode=False,
         *([p[1] for p in cfgprobe] if real_ddr_mode else [])]
     if pcie_host_mode:
         lines += pcie_chip.top_ports()
+        if pcie_outbound_mode:
+            lines += pcie_outbound.top_ports()
     lines[-1] = lines[-1].rstrip(',')
     lines += [');', f'  localparam integer N = {n}, MAX_WORDS = {max_words};',
         f'  localparam [N*32-1:0] BASES = {bases};', f'  localparam [N*32-1:0] WORDS = {counts};',
@@ -794,6 +841,7 @@ def emit_tb(cfg, fw, out, *, image_prefix='gen/chip', cpu_dma_mode=False,
                            *(f'.{p[0]}({p[0]})' if real_ddr_mode else (f'.{p[0]}(\'0)' if request_field(p[2],p[3]) else f'.{p[0]}()')
                              for p in cfgprobe),
                              *(pcie_chip.instance_ports() if pcie_host_mode else []),
+                             *(pcie_outbound.instance_ports() if pcie_outbound_mode else []),
                              *(['.gmii_rx_clk', '.gmii_rx_rst',
                                 '.gmii_tx_clk', '.gmii_tx_rst',
                                 '.gmii_rxd', '.gmii_rx_dv', '.gmii_rx_er',

@@ -155,7 +155,7 @@ async def execute_bfm_roundtrip(dut, data_master, csr_master, contract: dict,
     from cocotb.triggers import RisingEdge, with_timeout
     from dv.common.dma_vectors import DESC, DESC_END, FLAGS_COPY, FLAGS_IRQ
     from dv.common.axi_trace import trace_phase
-    from dv.common.action_runtime import ActionDispatcher
+    from dv.common.action_runtime import ActionDispatcher, HandlerSpec
     from dv.common.action_events import ActionEventRecorder
     from tools.sram_layout import build_sram_layout
     from dv.common.scenario import canonical_json
@@ -282,9 +282,18 @@ async def execute_bfm_roundtrip(dut, data_master, csr_master, contract: dict,
             raise AssertionError("SCN-2 SRAM return expected-vs-observed byte mismatch")
         state["checked"] = True
 
-    handlers = {"memory.allocate": reserve, "memory.initialize": initialize,
-                "dma.copy": copy, "dma.wait_idle": wait_idle,
-                "memory.check": check}
+    # One source-selected capability registry for the existing real AXI
+    # BFM, not another address/sequence planner. Explicit actor ownership
+    # prevents a future mixed C/Python/SV plan dispatching CPU-only actions
+    # through the DMA adapter (or vice versa). max_inflight=1 intentionally
+    # preserves proven SCN-2 hardware traffic and original CI evidence.
+    handlers = {
+        "memory.allocate": HandlerSpec(reserve, actors=frozenset({"cpu0"})),
+        "memory.initialize": HandlerSpec(initialize, actors=frozenset({"cpu0"})),
+        "dma.copy": HandlerSpec(copy, actors=frozenset({"dma0"})),
+        "dma.wait_idle": HandlerSpec(wait_idle, actors=frozenset({"cpu0"})),
+        "memory.check": HandlerSpec(check, actors=frozenset({"checker0"})),
+    }
     # Clock and simulated command output are original-run evidence only.
     # If no canonical run context exists, permit direct bench use without a
     # transcript; never create a misleading replacement report.

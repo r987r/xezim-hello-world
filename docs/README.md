@@ -11,7 +11,7 @@ The [root README](../README.md) contains setup and the single generated whole-ch
 | CPU boot and DMA | [Boot](full-chip-boot.md), [DMA](dma-bringup.md), [memory allocation](memory-allocation.md) |
 | PCIe and Ethernet | [PCIe host](pcie0-host-phases.md), [Ethernet MVP](ethernet0-closure-gate.md) |
 | DDR and registers | [DDR model/RTL](../rtl/memory/ddr4/README.md), [CSR ownership](csr-generation.md), [CSR source coverage](csr-source-coverage.md) |
-| Next combined test | [Functional acceptance contract](multiprotocol-integration-readiness.md), [epic #34](https://github.com/r987r/xezim-hello-world/issues/34) |
+| Combined MVP and further qualification | [Functional acceptance contract](multiprotocol-integration-readiness.md), [epic #34](https://github.com/r987r/xezim-hello-world/issues/34) |
 
 Audit local Markdown links with `make check-docs` (also run by check-config and Pages CI).
 

@@ -146,7 +146,7 @@ def collect(root: Path, target: str, plan: dict, out: Path) -> tuple[dict,dict]:
     variant=selected.is_file()
     if plan.get("firmware_mode") in (
             "cpu_dma","cpu_dma_scenario","ethernet_mvp","ethernet_cpu",
-            "pcie_host","pcie_dma_host","ddr_cpu_dma") and not variant:
+            "pcie_host","pcie_dma_host","pcie_outbound","ddr_cpu_dma") and not variant:
         raise VariantEvidenceError("expected generated selected RTL variant is missing")
     chip_path=selected if variant else root/"gen/chip/manifest.json"
     chip=json.loads(chip_path.read_text())
