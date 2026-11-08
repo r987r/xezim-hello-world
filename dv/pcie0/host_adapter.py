@@ -169,7 +169,7 @@ class PcieHostParticipant:
                     assert bytes(got)==expected,"DDR to PCIe host data mismatch"
             if self.outbound_mode:
                 await self.exercise_outbound_device_dma()
-            with self.flow.step(stage,"host0","run_ack",origin="stimulus")
+            with self.flow.step(stage,"host0","run_ack",origin="stimulus"):
                 await with_timeout(self.bar.write(0x80c,self.magic["host_run_ack"].to_bytes(4,"little")),100,"us")
             trace_phase("PCIe host RUN verified four actual BAR roundtrips")
         elif stage=="check":
