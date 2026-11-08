@@ -117,7 +117,7 @@ def check_delegated_full_chip(module_path: Path) -> None:
         raise AssertionError("PCIe selector must delegate explicitly to canonical boot flow")
     if selected == "dv/pcie0/test_full_chip_outbound.py":
         participant = (ROOT/"dv/pcie0/host_adapter.py").read_text()
-        for token in ("watch_outbound(dut)", "exercise_outbound_device_dma()", "PCIE0_OUTBOUND_REAL_IDMA_HOST_PASS"):
+        for token in ("watch_outbound(dut)", "exercise_outbound_device_dma()", "PCIE0_OUTBOUND_CPU_OWNED_DMA_HOST_PASS"):
             if token not in participant:
                 raise AssertionError("PCIe outbound selector lacks independently observed requester proof")
     canonical=ROOT/"dv/full_chip/test_boot.py"
