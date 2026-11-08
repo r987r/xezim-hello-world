@@ -231,6 +231,17 @@ tests:
         - "Use CPU0 software to release the second CPU via the Config NoC."
       check: 
         - "Verify observed firmware phase milestones and actual register/bus acknowledgments."
+  - logical_test: axi-fullchip-latency-baseline
+    targets: ["chip-boot-latency"]
+    execution: benchmark_native
+    purpose: "After real CPU cold boot, measure full-chip connected NoC latency using only the unowned reserved DMA AXI BFM, without impersonating real CPUs or DMA."
+    phases:
+      init:
+        - "Boot the real CPUs and verify independent INIT/RUN/CHECK evidence before BFM traffic."
+      run:
+        - "Select writable routes for the reserved unowned compute0 DMA port and run one-beat serialized source-derived traffic."
+      check:
+        - "Check readback and strictly correlate every measured case with original accepted passive AXI captures."
   - logical_test: multicore-boot-timeout
     targets: ["chip-boot-negative"]
     execution: legacy_opaque
