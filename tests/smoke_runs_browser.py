@@ -7,6 +7,7 @@ published or represented as actual regression evidence.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 import tempfile
 
@@ -94,7 +95,7 @@ def main():
                    f.value="PCIe";f.dispatchEvent(new Event("change"));""")
             wait.until(lambda d: "chip-pcie-host" in d.find_element(By.ID,"results").text)
             assert "chip-ethernet" not in driver.find_element(By.ID,"results").text
-            assert "chip-ethernet" not in driver.find_element(By.ID,"catalog").text
+            # PCIe-filtered catalog legitimately contains the new combined\n            # chip-ethernet-ddr-pcie target. Exclude only the standalone\n            # chip-ethernet target, not its composite PCIe sibling.\n            assert not re.search(r"\\bchip-ethernet\\b(?!-)",\n                                 driver.find_element(By.ID,"catalog").text)
             assert "chip-pcie-host" in driver.find_element(By.ID,"catalog").text
 
             driver.execute_script(

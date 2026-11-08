@@ -1,5 +1,5 @@
 # Temporary exception inventory; no UI should use this to invent actions.
-# All 23 runtime targets below delegate actual internal stimuli to existing
+# All 24 runtime targets below delegate actual internal stimuli to existing
 # Python/C/SV/Xezim code. They are NOT counted as scenario-dispatched.
 # Future targets must implement the scenario adapter or require a reviewed,
 # explicitly owned migration exception here.
@@ -72,5 +72,10 @@ legacy_runtime:
     owner_issue: 119
     status: legacy_internal_stimulus_opaque
   chip-pcie-host:
+    owner_issue: 119
+    status: legacy_internal_stimulus_opaque
+  # Temporary #34 combined cocotb C/host/GMII milestone adapter. Separate
+  # #119 closure requires its complete typed action DAG, not this exception.
+  chip-ethernet-ddr-pcie:
     owner_issue: 119
     status: legacy_internal_stimulus_opaque

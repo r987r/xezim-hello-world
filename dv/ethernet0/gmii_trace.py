@@ -43,7 +43,7 @@ def frame_fields(raw: bytes, *, observed: bool, fcs_valid=None, error=None):
 class GmiiEvidence:
     def __init__(self, trace):
         self.trace=trace
-        if self.trace is None or set(self.trace.sources)!={RX,TX}:
+        if self.trace is None or not {RX,TX}.issubset(self.trace.sources):
             raise ValueError("Ethernet GMII evidence source inventory differs from regression plan")
         self.seq={RX:0,TX:0}
 
