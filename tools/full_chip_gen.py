@@ -644,7 +644,8 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
             'mode':'opt_in_1g_gmii_mac_rx_tx_queue_dma_cq',
             'data_attachment':'single_pulp_axi_mux_six_sources_into_ethernet_local_data',
             'config_attachment':'pulp_axi_to_axi_lite_into_queue_csrs',
-            'memory':'local_ethernet_sram_and_bounded_modeled_ddr',
+            'memory':('local_ethernet_sram_and_real_litedram_behavioral_dfi' if real_ddr_mode else
+                      'local_ethernet_sram_and_bounded_modeled_ddr'),
             'gmii_test_proven':False,
             'completion_test_proven':False,
             'note':'Attachment is generated; exact-chip RTL traffic NOT yet measured',
@@ -740,6 +741,11 @@ def emit_tb(cfg, fw, out, *, image_prefix='gen/chip', cpu_dma_mode=False,
     if real_ddr_mode:
         opts['timeout_cycles'] = max(opts['timeout_cycles'], 1500000)
         opts['phase_timeout_cycles'] = max(opts['phase_timeout_cycles'], 1200000)
+    if real_ddr_mode and pcie_host_mode and ethernet_mode:
+        # One full-chip route includes DFII init + serial CPU software,
+        # three actual iDMA copies, Ethernet GMII and PCIe TLP/barriers.
+        opts['timeout_cycles'] = max(opts['timeout_cycles'], 2500000)
+        opts['phase_timeout_cycles'] = max(opts['phase_timeout_cycles'], 2300000)
     if pcie_host_mode:
         opts['timeout_cycles'] = max(opts['timeout_cycles'], 600000)
         opts['phase_timeout_cycles'] = max(opts['phase_timeout_cycles'], 500000)
