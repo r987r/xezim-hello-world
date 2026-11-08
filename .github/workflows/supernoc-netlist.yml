@@ -7,6 +7,7 @@ on:
       - '.github/workflows/supernoc-netlist.yml'
       - '.github/workflows/real-netlist.yml'
       - 'tools/supernoc_netlist_contract.py'
+      - 'tools/supernoc_netlist_negative.py'
       - 'tools/signal_paths.py'
       - 'tools/design_netlist.py'
       - 'tools/selected_rtl_provenance.py'
@@ -78,6 +79,10 @@ jobs:
             --netlist .tools/connect46/supernoc-netlist.json \
             --meta .tools/connect46/supernoc-netlist.json.meta.json \
             --out .tools/connect46/supernoc-ports-proof.json
+          python3 tools/supernoc_netlist_negative.py \
+            --netlist .tools/connect46/supernoc-netlist.json \
+            --meta .tools/connect46/supernoc-netlist.json.meta.json \
+            --out .tools/connect46/supernoc-negative-proof.json
       - name: Preserve real source-selected original proof or failure
         if: always()
         uses: actions/upload-artifact@v4
