@@ -36,7 +36,7 @@ class TestIntentFlowTests(unittest.TestCase):
         self.assertEqual(status["canonical_resolved_scenario"],2)
         # New opt-in PeakRDL full-chip reset now emits real checker-observed
         # CPU INIT/RUN/CHECK signals, not opaque or invented action events.
-        self.assertEqual(status["instrumented_legacy_flow"],5)
+        self.assertEqual(status["instrumented_legacy_flow"],6)
         self.assertEqual(self.entries["chip-peakrdl-reset"]["execution_adoption"],
                          "instrumented_legacy_flow")
         # Existing unmigrated test count is the strict upper bound;
@@ -84,7 +84,7 @@ class TestIntentFlowTests(unittest.TestCase):
         self.assertEqual(set(specs),set(self.entries))
         self.assertEqual(len(specs),29)
         self.assertEqual(sum(v["execution"]=="scenario_native" for v in specs.values()),2)
-        self.assertEqual(sum(v["execution"]=="observed_milestones" for v in specs.values()),5)
+        self.assertEqual(sum(v["execution"]=="observed_milestones" for v in specs.values()),6)
         self.assertEqual(sum(v["execution"]=="legacy_opaque" for v in specs.values()),18)
         self.assertEqual(sum(v["execution"]=="non_runtime" for v in specs.values()),3)
         for target, intent in self.entries.items():
