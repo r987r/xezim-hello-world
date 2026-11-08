@@ -57,7 +57,7 @@ def _type_for(test: dict) -> str:
 
 
 def load(config: dict, *, root: Path = ROOT) -> dict:
-    """Return all 28 selected targets from one readable source; fail closed."""
+    """Return all configured targets from one readable source; fail closed."""
     root = Path(root).resolve()
     path = root / SOURCE
     try:

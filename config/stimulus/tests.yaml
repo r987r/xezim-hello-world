@@ -273,6 +273,24 @@ tests:
       check: 
         - "Require TLP/AXI completions, payload comparisons and the final host/CPU checks."
 
+  - logical_test: multiprotocol-closure
+    targets: ["chip-ethernet-ddr-pcie"]
+    execution: observed_milestones
+    purpose: "In a single elaborated SoC and source SHA, prove real GMII RX to LiteDRAM/DFI, PULP iDMA fanout, PCIe BAR host pull, GMII TX, CPU SRAM bytes, CQ and accepted AXI/TLP."
+    phases:
+      init:
+        - "Reset and cold boot real CPU0/SERV; initialize LiteDRAM DFII over the actual Config NoC."
+        - "Enumerate PCIe Root Complex over the real pinned TLP-to-AXI bridge and acknowledge host INIT."
+      run:
+        - "CPU0 C programs one RX queue descriptor directed to physical DDR, configures match policy and arms GMII RX."
+        - "Drive one known Ethernet frame from the shared VIP and require its hardware RX CQ and bytes."
+        - "Real PULP iDMA reads LiteDRAM and writes PCIe host BAR staging, Ethernet TX buffer and CPU1 SRAM."
+        - "Compare independent CPU1 bytes, wait real DMA descriptor writeback, verify GMII transmitted frame and FCS."
+        - "Modeled PCIe host BAR-pulls exactly the injected GMII frame through pinned TLP and AXI paths."
+      check:
+        - "Require real CPU cold-boot CHECK, Ethernet RX/TX CQ/IRQ acknowledgements, real controller AXI/DFI/BankModel events and complete passive AXI/TLP observations."
+        - "Publish PASS only after the one-run independent scoreboard and all outstanding transaction gates complete."
+
   - logical_test: real-idma-outbound-host-memory
     targets: ["chip-pcie-outbound"]
     execution: observed_milestones
@@ -281,6 +299,6 @@ tests:
       init:
         - "Cold boot real CPU firmware, enumerate PCIe and prepare host RAM without backdoor preloading device SRAM."
       run:
-        - "Real iDMA stages DDR bytes in physical PCIe SRAM; send outbound requester write and read TLPs via testbench descriptors."
+        - "Real iDMA stages DDR bytes in physical PCIe SRAM; submit outbound requester write and read descriptors through real CPU Config-NoC CSRs."
       check:
         - "Check accepted real AXI and PCIe handshakes, exact host and local SRAM bytes, adjacent guards, and CPU/host phase acknowledgements."

@@ -1,0 +1,149 @@
+name: DV #34 Ethernet real DDR iDMA PCIe one-chip integration
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/dv-combined34.yml'
+      - 'config/regression.yaml'
+      - 'config/stimulus/tests.yaml'
+      - 'config/runtime_migration.yaml'
+      - 'tools/regress.py'
+      - 'tools/cpu_dma_firmware.py'
+      - 'tools/full_chip_gen.py'
+      - 'dv/integration/**'
+      - 'dv/pcie0/host_adapter.py'
+      - 'dv/pcie0/tlp_trace.py'
+      - 'dv/ethernet0/gmii_trace.py'
+      - 'rtl/memory/ddr4/**'
+      - 'sw/integration/**'
+      - 'tests/test_combined34.py'
+  workflow_dispatch:
+
+concurrency:
+  group: dv-combined34-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions: {contents: read}
+
+jobs:
+  static-contract:
+    name: New source-target contract, negative scoreboards and source syntax
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Install configuration parser and C toolchain
+        run: |
+          python3 -m pip install 'PyYAML==6.0.3'
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends clang llvm lld
+      - name: Verify selected config, C ABI and independent evidence contract
+        run: |
+          set -euo pipefail
+          python3 -m py_compile tools/regress.py tools/cpu_dma_firmware.py tools/full_chip_gen.py dv/integration/test_combined.py dv/integration/combined34_scoreboard.py dv/pcie0/host_adapter.py dv/pcie0/tlp_trace.py dv/ethernet0/gmii_trace.py rtl/memory/ddr4/dfi_to_protocol.py
+          python3 -m unittest tests.test_combined34 tests.test_regression -v
+          python3 tools/stimulus_catalog.py
+          python3 tools/regress.py --list
+          clang --target=riscv32-unknown-elf -march=rv32i -mabi=ilp32 -ffreestanding -fsyntax-only \
+            -DSOC_ETH_SRAM=0x60000000ULL -DSOC_ETH_CTRL=0x40060000ULL \
+            -DSOC_DDR_BASE=0x140000000ULL -DSOC_DMA0_CSR=0x40001000ULL \
+            -DSOC_CPU0_SRAM=0x10000000ULL -DSOC_CPU1_SRAM=0x20000000ULL \
+            -DSOC_PCIE_SRAM=0x50000000ULL -DSOC_MAILBOX=0x10000000ULL \
+            sw/integration/tests/ethernet_ddr_pcie_run.c
+
+  real-combined-rtl:
+    needs: static-contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 110
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: alexforencich/verilog-pcie
+          ref: 25156a9a162c41c60f11f41590c7d006d015ae5a
+          path: .tools/verilog_pcie
+          persist-credentials: false
+      - uses: ./.github/actions/setup-bender
+        env: {GH_TOKEN: "${{ github.token }}"}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Install pinned RTL/VIP/DFII toolchains
+        run: |
+          set -euo pipefail
+          python3 -m pip install -r requirements.txt
+          python3 -m pip install 'mako==1.3.10' 'hjson==3.1.0' 'peakrdl>=1.5.0' 'peakrdl-rawheader>=0.2.8' 'peakrdl-cheader>=1.1.0'
+          python3 -m pip install 'cocotb==1.9.2' 'cocotb-bus==0.2.1' 'cocotbext-axi==0.1.28' 'cocotbext-eth==0.1.28' 'cocotbext-pcie==0.2.14' 'cocotb-test==0.2.6'
+          python3 tools/ip_fetch.py floonoc pulp_idma litedram picorv32 serv wb2axip verilog_axi
+          python3 -m pip install -e .tools/floonoc
+          python3 - <<'PY'
+          import pathlib,re,subprocess,yaml
+          lock=yaml.safe_load(pathlib.Path("rtl/memory/ddr4/toolchain.lock.yml").read_text())["litex"]
+          assert re.fullmatch(r"[0-9a-f]{40}",lock["commit"])
+          target=pathlib.Path(".tools/litex")
+          target.parent.mkdir(parents=True,exist_ok=True)
+          for argv in (["git","init","-q",str(target)],
+                       ["git","-C",str(target),"remote","add","origin",lock["git"]],
+                       ["git","-C",str(target),"fetch","-q","--depth","1","origin",lock["commit"]],
+                       ["git","-C",str(target),"checkout","-q","--detach",lock["commit"]]):
+              subprocess.run(argv,check=True)
+          assert subprocess.check_output(["git","-C",str(target),"rev-parse","HEAD"],
+                                         text=True).strip()==lock["commit"]
+          PY
+          python3 -m pip install -e .tools/litex
+          python3 -m pip install --no-deps -e .tools/litedram
+          python3 -m pip install 'pythondata-misc-tapcfg==0.0.post517'
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends verilator iverilog clang llvm lld
+      - name: Verify pinned sources, generate actual LiteDRAM and selected full-chip files
+        timeout-minutes: 15
+        run: |
+          set -euo pipefail
+          python3 rtl/memory/ddr4/bringup.py generate
+          python3 dv/pcie0/run_rtl_smoke.py --check-pin
+          python3 tools/regress.py chip-ethernet-ddr-pcie --stage files --fail-fast
+          test -s .tools/regression/chip-ethernet-ddr-pcie/variant/cpu_dma.elf
+          test -s .tools/regression/chip-ethernet-ddr-pcie/variant/flash.hex
+          test -s .tools/regression/chip-ethernet-ddr-pcie/ddr_noc/ddr4_init_script.json
+          test -s .tools/regression/chip-ethernet-ddr-pcie/sources.f
+          make check-generated
+      - name: Elaborate exact-head Ethernet LiteDRAM iDMA PCIe chip
+        timeout-minutes: 35
+        run: python3 tools/regress.py chip-ethernet-ddr-pcie --stage build --fail-fast
+      - name: Execute same-chip actual GMII DDR/DFI DMA PCIe host test
+        timeout-minutes: 65
+        run: |
+          set -euo pipefail
+          python3 tools/regress.py chip-ethernet-ddr-pcie --stage run --fail-fast
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path(".tools/regression/chip-ethernet-ddr-pcie")
+          result=json.loads((root/"result.json").read_text())
+          evidence=json.loads((root/"combined34_evidence.json").read_text())
+          protocol=json.loads((root/"protocol-transactions.json").read_text())
+          assert result["passed"],result
+          assert evidence["status"]=="pass" and evidence["one_run_only"]
+          assert evidence["gmii_frame_bytes"]==85
+          assert all(evidence["axi_accepted_counts"].values())
+          assert all(evidence["real_controller_and_behavioral_dfi"].values())
+          assert protocol["capture_complete"]
+          sources={row["source"] for row in protocol["records"]}
+          assert {"ethernet0.gmii_rx","ethernet0.gmii_tx",
+                  "pcie0.rx_req","pcie0.tx_cpl",
+                  "memory0.ddr0.dfi","memory0.ddr0.bankmodel"}<=sources,sources
+          print("PASS #34 single-chip observed hardware sources:",sorted(sources))
+          PY
+      - name: Preserve exact-head source-selected RTL, C, PCIe, AXI, GMII and DFI evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dv-combined34-single-chip-${{ github.run_id }}
+          path: |
+            .tools/regression/chip-ethernet-ddr-pcie/
+            .tools/ddr4/litedram_sim/ddr4_manifest.json
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14

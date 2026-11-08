@@ -40,6 +40,9 @@ class PcieHostParticipant:
         self.flow=flow
         self.ext=ext
         self.dma_exchange=os.environ.get('SOC_PCIE_DMA_HOST_MODE')=='1'
+        self.combined34=os.environ.get('SOC_COMBINED34_MODE')=='1'
+        if self.combined34 and not self.dma_exchange:
+            raise AssertionError('combined test requires the long-running host handshake contract')
         self.outbound_mode=os.environ.get('SOC_PCIE_OUTBOUND_MODE')=='1'
         if self.outbound_mode and not self.dma_exchange:
             raise ValueError('outbound PCIe test requires CPU0 C-driven iDMA staged payload')
@@ -113,7 +116,7 @@ class PcieHostParticipant:
             with self.flow.step(stage,"host0","wait_device_ready",origin="observed"):
                 await with_timeout(poll_bar(self.bar,0x800,self.magic["device_init_ready"]),1000,"us")
                 assert int(self.dut.init_mask.value)==3, "CPU INIT not complete when host ready"
-            if self.dma_exchange:
+            if self.dma_exchange and not self.combined34:
                 # Host -> real PCIe bridge -> SRAM first; CPU0 iDMA later
                 # copies these bytes into modeled DDR and proves via readback.
                 input_payload=bytes((0x63+13*i)&255 for i in range(64))
@@ -157,11 +160,15 @@ class PcieHostParticipant:
                 assert not int(self.dut.status_error_cor.value), "PCIe correctable status set"
                 assert not int(self.dut.status_error_uncor.value), "PCIe uncorrectable status set"
             if self.dma_exchange:
-                # DDR -> PULP iDMA -> PCIe SRAM, then actual host BAR read.
-                expected=bytes((self.source_sram+0x2000+i+0x35)&255 for i in range(64))
+                # For #34, the golden source is GMII RX instead of CPU0 SRAM.
+                if self.combined34:
+                    from dv.ethernet0.test_cpu_mvp import packet
+                    expected=packet()
+                else:
+                    expected=bytes((self.source_sram+0x2000+i+0x35)&255 for i in range(64))
                 with self.flow.step(stage,"host0","read_ddr_dma_output",origin="checker",
-                                    details={"address":hex(self.sram_base+0x600),"bytes":64}):
-                    got=await with_timeout(self.bar.read(0x600,64),100,"us")
+                                    details={"address":hex(self.sram_base+0x600),"bytes":len(expected)}):
+                    got=await with_timeout(self.bar.read(0x600,len(expected)),100,"us")
                     assert bytes(got)==expected,"DDR to PCIe host data mismatch"
             if self.outbound_mode:
                 await self.exercise_outbound_device_dma()
