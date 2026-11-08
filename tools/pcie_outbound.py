@@ -1,9 +1,7 @@
-"""Opt-in source-selected pinned dma_if_pcie requester wiring (#76).
+"""Pinned PCIe requester with CPU-owned descriptor CSR on real Config NoC.
 
-The direct Cocotb descriptor ports are an *intermediate integration gate*:
-CPU0 drives real PULP iDMA -> shared PCIe0 tc_sram, then the actual requester
-sends those SRAM bytes to modeled Root Complex RAM.  Config-NoC requester
-CSRs and firmware-owned descriptor submission are explicitly future work.
+Only PCIe TLP pins may leave the full-chip top. Descriptor valid/ready/status
+are internal nets between requester RTL and the real memory-mapped controller.
 """
 import re
 
@@ -68,12 +66,21 @@ RAM_WIRES = {
 
 
 def top_ports():
-    return ["  " + port + "," for port in OUTBOUND_PORTS]
+    return ["  " + port + "," for port in OUTBOUND_PORTS
+            if 's_axis_' not in port and 'm_axis_' not in port]
 
 
 def instance_ports():
     return [".{0}({0})".format(re.search(r"([a-z][a-z0-9_]*)$", p).group(1))
-            for p in OUTBOUND_PORTS]
+            for p in OUTBOUND_PORTS if 's_axis_' not in p and 'm_axis_' not in p]
+
+
+def csr_ports():
+    """Only internal descriptor/return-status wires, never the TLP pins."""
+    return {re.search(r"([a-z][a-z0-9_]*)$", port).group(1):
+            re.search(r"([a-z][a-z0-9_]*)$", port).group(1)
+            for port in OUTBOUND_PORTS
+            if 's_axis_' in port or 'm_axis_' in port}
 
 
 def sram_ports():
@@ -85,6 +92,8 @@ def requester_lines():
         "// PCIe requester alongside the independent host-to-device bridge.",
         "// No custom TLP serialization; upstream dma_if_pcie owns all requester TLPs.",
         *[f"  logic [{width-1}:0] {name};" for name, width in RAM_WIRES.items()],
+        *[f"  logic {port.split('logic ',1)[1]};" for port in OUTBOUND_PORTS
+          if 's_axis_' in port or 'm_axis_' in port],
         "  logic pcie_requester_error_cor, pcie_requester_error_uncor;",
     ]
     c = [
