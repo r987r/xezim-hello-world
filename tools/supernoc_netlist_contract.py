@@ -38,6 +38,8 @@ def _ports(text: str, module: str) -> dict[str, tuple[str, int]]:
         raise SupernocConnectivityError(f"unterminated module declaration {module}")
     result: dict[str, tuple[str, int]] = {}
     for line in text[start.end():end].splitlines():
+        if not line.strip():
+            continue
         match = DECL.fullmatch(line.strip())
         if not match:
             raise SupernocConnectivityError(f"{module}: unsupported port declaration {line!r}")
@@ -60,6 +62,8 @@ def _binding(text: str) -> dict[str, str]:
         raise SupernocConnectivityError("unterminated soc_noc binding")
     mapping = {}
     for line in text[needle.end():end].splitlines():
+        if not line.strip():
+            continue
         match = BIND.fullmatch(line.strip())
         if not match:
             raise SupernocConnectivityError(f"non-direct or unsupported u_noc binding {line!r}")
