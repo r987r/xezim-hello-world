@@ -35,7 +35,7 @@ def config(root=ROOT, profile="unloaded"):
     return p
 
 
-def plan(manifest, spec):
+def plan(manifest, spec, *, selected_masters=None, writable_only=False):
     """Enumerate every allowed source/window; unique address per target/case.
 
     Globally unique addresses within each target permit unambiguous pairing
@@ -48,12 +48,20 @@ def plan(manifest, spec):
         raise BenchmarkError("manifest has no AXI slaves")
     slots = defaultdict(int)
     cases = []
+    permitted = set(selected_masters) if selected_masters is not None else None
+    if permitted is not None and (
+            not permitted or permitted - {m["name"] for m in manifest["masters"]}):
+        raise BenchmarkError("requested AXI actor not in generated master catalog")
     n = spec["warmup_per_route"] + spec["measured_per_route"]
     for master in manifest["masters"]:
+        if permitted is not None and master["name"] not in permitted:
+            continue
         width = master["data_width"] // 8
         if width < 1 or master["data_width"] % 8:
             raise BenchmarkError("invalid AXI data width")
         for region in master["regions"]:
+            if writable_only and region["access"] != "read_write":
+                continue
             matches = [(slave, area) for slave in manifest["slaves"]
                        if slave["plane"] == master["plane"]
                        for area in slave["regions"]
@@ -82,6 +90,8 @@ def plan(manifest, spec):
                     "operations": (["read"] if region["access"] == "read"
                                    else ["write", "read"]),
                 })
+    if not cases:
+        raise BenchmarkError("no eligible benchmark cases for selected actors")
     if len({c["case_id"] for c in cases}) != len(cases):
         raise BenchmarkError("duplicate benchmark case identity")
     if len({(c["plane"], c["address"]) for c in cases}) != len(cases):
