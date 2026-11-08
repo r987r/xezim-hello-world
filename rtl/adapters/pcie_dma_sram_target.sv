@@ -19,14 +19,14 @@ module pcie_dma_sram_target #(
   output logic [63:0] mon_addr_o, mon_data_o,
   output logic [7:0] mon_strb_o,
 
-  input logic [1:0] ram_rd_cmd_sel,
+  input logic [3:0] ram_rd_cmd_sel,
   input logic [23:0] ram_rd_cmd_addr,
   input logic [1:0] ram_rd_cmd_valid,
   output logic [1:0] ram_rd_cmd_ready,
   output logic [127:0] ram_rd_resp_data,
   output logic [1:0] ram_rd_resp_valid,
   input logic [1:0] ram_rd_resp_ready,
-  input logic [1:0] ram_wr_cmd_sel,
+  input logic [3:0] ram_wr_cmd_sel,
   input logic [15:0] ram_wr_cmd_be,
   input logic [23:0] ram_wr_cmd_addr,
   input logic [127:0] ram_wr_cmd_data,
@@ -114,9 +114,9 @@ module pcie_dma_sram_target #(
 
     // No modulo aliasing of out-of-window requester DMA descriptors.
     always @(posedge clk_i) if (rst_ni) begin
-      if (request[1+k] && (rd_addr >= MaxSegmentAddr || ram_rd_cmd_sel[k]))
+      if (request[1+k] && (rd_addr >= MaxSegmentAddr || (|ram_rd_cmd_sel[k*2 +: 2])))
         $fatal(1, "PCIe outbound RAM read outside SRAM or invalid selection");
-      if (request[3+k] && (wr_addr >= MaxSegmentAddr || ram_wr_cmd_sel[k]))
+      if (request[3+k] && (wr_addr >= MaxSegmentAddr || (|ram_wr_cmd_sel[k*2 +: 2])))
         $fatal(1, "PCIe outbound RAM write outside SRAM or invalid selection");
       if (request[3+k] && request[0] && we[0] && address[3+k] == address[0])
         $fatal(1, "PCIe requester write collided with AXI memory write");
