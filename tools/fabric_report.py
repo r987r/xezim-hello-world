@@ -475,6 +475,7 @@ def latency_table(report, scope=None):
                         for route in report["routes"]
                         for o in route.get("one_beat_stage_observations", [])
                         if o.get("matches_site_source")
+                        and (scope is None or o.get("fabric_scope") == scope)
                         and type(o.get("clock_period_ps")) is int
                         and o["clock_period_ps"] > 0}
     common_period = next(iter(eligible_periods)) if len(eligible_periods) == 1 else None
@@ -483,10 +484,12 @@ def latency_table(report, scope=None):
     # case may populate a current-source latency metric.
     historical = [o for route in report["routes"]
                   for o in route.get("one_beat_observations", [])
-                  if not o.get("matches_site_source")]
+                  if not o.get("matches_site_source")
+                  and (scope is None or o.get("fabric_scope") == scope)]
     accepted = [o for route in report["routes"]
                 for o in route.get("one_beat_stage_observations", [])
-                if o.get("matches_site_source")]
+                if o.get("matches_site_source")
+                and (scope is None or o.get("fabric_scope") == scope)]
     measured_rows = sum(
         bool(r["end_to_end_cycles"]["read"] or r["end_to_end_cycles"]["write"])
         for r in rows)
