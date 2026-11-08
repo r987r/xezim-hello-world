@@ -328,6 +328,17 @@ tests:
       address_map: {config: config/soc.yaml, variant: architecture}
       context: 'Real PicoRV32/SERV CPUs coordinate boot phases with OKAY responses. Afterwards a verification AXI BFM at the reserved compute0 DMA port tests two 64-KiB SRAM stand-ins, including four intentional out-of-capacity SLVERR transactions. No DMA engine or physical HBM/DDR controller is instantiated.'
       axi: {scope: dut.u_noc, clock: clk, reset: rst_n, catalog: gen/supernoc/axi_monitors.json, actors: gen/chip/manifest.json, max_events: 500000}
+  chip-boot-latency:
+    <<: *chip
+    logical_test: axi-fullchip-latency-baseline
+    module: dv.full_chip.test_latency
+    reuse_build: true
+    pass: 'PASS fabric-latency-chip:'
+    report:
+      address_map: {config: config/soc.yaml, variant: architecture}
+      context: 'Real PicoRV32/SERV cold-boot INIT/RUN/CHECK, then an authorized upstream AXI BFM at reserved unowned compute0 DMA port measures writable SRAM/model-backed paths. This boot-only RTL has NO active iDMA, PCIe requester, Ethernet MAC or physical DDR.'
+      axi: {scope: dut.u_noc, clock: clk, reset: rst_n, catalog: gen/supernoc/axi_monitors.json, actors: gen/chip/manifest.json, max_events: 500000, required_complete: true}
+      fabric_benchmark: {profile: unloaded, spec: config/fabric_latency.yaml}
   chip-peakrdl-reset:
     logical_test: reset-ack-register-access
     opt_in: true
