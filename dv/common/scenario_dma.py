@@ -146,13 +146,30 @@ def load_contract_from_plan(path: Path) -> dict:
 
 async def execute_bfm_roundtrip(dut, data_master, csr_master, contract: dict,
                                 *, wait_cycles: int = 60000) -> None:
-    """Drive real NoC AXI and real PULP iDMA using the resolved CPU0 contract."""
+    """Dispatch the exact typed SCN-1 plan through genuine RTL iDMA and AXI BFMs.
+
+    This records *driver-only* action stages. The caller still requires
+    independent accepted AXI captures and byte checks for its RTL PASS.
+    """
+    import os
     from cocotb.triggers import RisingEdge, with_timeout
     from dv.common.dma_vectors import DESC, DESC_END, FLAGS_COPY, FLAGS_IRQ
-    from tools.sram_layout import build_sram_layout
     from dv.common.axi_trace import trace_phase
+    from dv.common.action_runtime import ActionDispatcher
+    from dv.common.action_events import ActionEventRecorder
+    from tools.sram_layout import build_sram_layout
+    from dv.common.scenario import canonical_json
     import yaml
 
+    selected_path = os.environ.get("SOC_SCENARIO_PLAN")
+    if not selected_path:
+        raise ScenarioError("BFM scenario requires the selected source plan")
+    raw = Path(selected_path).read_bytes()
+    selected_plan = json.loads(raw)
+    if canonical_json(selected_plan).encode("ascii") != raw:
+        raise ScenarioError("BFM scenario plan has noncanonical source bytes")
+    if compile_contract(selected_plan) != contract:
+        raise ScenarioError("BFM driver contract differs from selected scenario")
     root = Path(__file__).resolve().parents[2]
     cfg = yaml.safe_load((root / "config/soc.yaml").read_text())
     layout = build_sram_layout(cfg, "compute0", profile="boot_live")
@@ -164,11 +181,10 @@ async def execute_bfm_roundtrip(dut, data_master, csr_master, contract: dict,
     n = contract["length"]
     seed = contract["seed"]
     desc_phys = layout.descriptors.start
-
     if source < layout.payload.start or returned + n > layout.payload.end:
         raise AssertionError("SCN-2 BFM refused invalid SRAM plan")
 
-    async def write(master, phys, payload: bytes, label: str) -> None:
+    async def write(master, phys, payload: bytes, label: str):
         response = await with_timeout(master.write(phys, payload), 250, "us")
         if response.resp != 0:
             raise AssertionError(f"{label} AXI write response {response.resp}")
@@ -179,11 +195,11 @@ async def execute_bfm_roundtrip(dut, data_master, csr_master, contract: dict,
             raise AssertionError(f"{label} AXI read response {response.resp}")
         return bytes(response.data)
 
-    async def command(word: int, value: int) -> None:
+    async def command(word: int, value: int):
         await write(csr_master, csr_base + word,
                     value.to_bytes(4, "little"), "DMA CSR")
 
-    async def run_one(src: int, dst: int, suffix: str) -> None:
+    async def run_one(src: int, dst: int, suffix: str):
         descriptor = DESC.pack(n, FLAGS_COPY | FLAGS_IRQ, DESC_END, src, dst)
         trace_phase(f"SCN-2 {suffix}: descriptor source and CSR via authorized BFM")
         await write(data_master, desc_phys, descriptor, "DMA descriptor")
@@ -209,18 +225,91 @@ async def execute_bfm_roundtrip(dut, data_master, csr_master, contract: dict,
             await RisingEdge(dut.clk_i)
         else:
             raise AssertionError("SCN-2 IRQ ACK did not clear")
-        # Successful IRQ/descriptor writeback and ack are *not* AXI proof
-        # by themselves: the passive report must corroborate these transfers.
+        # Descriptor writeback and IRQ do NOT replace passive AXI correlation.
 
+    # The selected allocations specify BFM-backed model addresses, not a CPU
+    # memory-allocation or hardware mailbox operation. Strictly verify the
+    # addresses/region before dispatch, with no fabricated allocations.
+    allocations = {item["buffer"]: item for item in selected_plan["allocations"]}
+    memory = {"src": source, "ddr": target, "return": returned}
     pattern = bytes([seed & 0xff]) * n
-    await write(data_master, source, pattern, "source SRAM")
-    # No implicit return-buffer preload: only the real DMA may write it.
-    await run_one(source, target, "source-to-DDR")
-    actual_ddr = await read(data_master, target, n, "DDR readback")
-    if actual_ddr != pattern:
-        raise AssertionError("SCN-2 DDR expected-vs-observed byte mismatch")
-    await run_one(target, returned, "DDR-to-SRAM")
-    actual = await read(data_master, returned, n, "SRAM return readback")
-    if actual != pattern:
-        raise AssertionError("SCN-2 SRAM return expected-vs-observed byte mismatch")
-    trace_phase(f"SCN-2 BFM actual two-direction RTL DMA roundtrip passed; scenario={contract['scenario_id']}")
+    state = {"copied": [], "initialized": False, "checked": False}
+
+    async def reserve(action, _):
+        info = allocations[action["args"]["buffer"]]
+        buf = action["args"]["buffer"]
+        if (info["phys"] != memory[buf] or info["size"] != n or
+                info["region"] != action["args"]["region"]):
+            raise AssertionError(f"SCN-2 selected BFM reservation mismatch: {buf}")
+
+    async def initialize(action, _):
+        args = action["args"]
+        if (args["buffer"] != "src" or args["length"] != n or
+                args["pattern"]["seed"] != seed or
+                args["pattern"]["kind"] != "constant"):
+            raise AssertionError("SCN-2 unsupported source initialization")
+        await write(data_master, source, pattern, "source SRAM")
+        state["initialized"] = True
+
+    async def copy(action, _):
+        args = action["args"]
+        src, dst = args["src"], args["dst"]
+        if (args["engine"] != contract["engine"] or args["length"] != n
+                or not state["initialized"]):
+            raise AssertionError("SCN-2 unselected DMA action parameters")
+        await run_one(memory[src], memory[dst], action["action_instance_id"])
+        # Read through actual NoC AXI, never inspect a private memory object.
+        actual = await read(data_master, memory[dst], n, f"{dst} readback")
+        if actual != pattern:
+            raise AssertionError(f"SCN-2 {dst} expected-vs-observed byte mismatch")
+        state["copied"].append(action["action_instance_id"])
+
+    async def wait_idle(action, _):
+        if (action["args"]["engine"] != contract["engine"]
+                or state["copied"] != ["copy_out", "copy_back"]):
+            raise AssertionError("SCN-2 DMA wait did not follow actual transfers")
+        status = int.from_bytes(await read(csr_master, csr_base + 12, 4, "DMA idle"), "little")
+        if status & 4:
+            raise AssertionError("SCN-2 real DMA reports APB error")
+
+    async def check(action, _):
+        args = action["args"]
+        if (args["buffer"] != "return" or args["expected_from"] != "src"
+                or args["length"] != n):
+            raise AssertionError("SCN-2 unexpected independent readback recipe")
+        actual = await read(data_master, returned, n, "SRAM return readback")
+        if actual != pattern:
+            raise AssertionError("SCN-2 SRAM return expected-vs-observed byte mismatch")
+        state["checked"] = True
+
+    handlers = {"memory.allocate": reserve, "memory.initialize": initialize,
+                "dma.copy": copy, "dma.wait_idle": wait_idle,
+                "memory.check": check}
+    # Clock and simulated command output are original-run evidence only.
+    # If no canonical run context exists, permit direct bench use without a
+    # transcript; never create a misleading replacement report.
+    run_plan = os.environ.get("SOC_RUN_PLAN")
+    recorder = None
+    if run_plan:
+        from cocotb.utils import get_sim_time
+        recorder = ActionEventRecorder(
+            raw, Path(run_plan).parent / "action-events.jsonl",
+            lambda: int(get_sim_time(units="ps")))
+    try:
+        dispatcher = ActionDispatcher(raw, handlers, recorder=recorder,
+                                      expected_sha=contract["plan_sha256"])
+        await dispatcher.run()
+        if not state["checked"] or len(dispatcher.completed) != len(selected_plan["actions"]):
+            raise AssertionError("SCN-2 typed action execution incomplete")
+    except BaseException:
+        # Retain the original real RTL/BFM error. A strict close() correctly
+        # rejects unfinished actions, but must not mask the underlying cause.
+        # Incomplete driver events stay in the original failed-run artifact.
+        if recorder is not None and not recorder.closed:
+            recorder.file.close()
+            recorder.closed = True
+        raise
+    else:
+        if recorder is not None:
+            recorder.close()
+    trace_phase(f"SCN-2 BFM typed real RTL DMA plan executed; scenario={contract['scenario_id']}")
