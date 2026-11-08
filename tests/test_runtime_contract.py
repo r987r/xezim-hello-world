@@ -36,7 +36,7 @@ class SelectedRuntimeContractTests(unittest.TestCase):
         status=validate_migration_inventory(self.config)
         self.assertEqual(sum(v=="resolved_scenario_adapter" for v in status.values()),2)
         self.assertEqual(sum(v=="not_applicable" for v in status.values()),3)
-        self.assertEqual(sum(v=="legacy_internal_stimulus_opaque" for v in status.values()),23)
+        self.assertEqual(sum(v=="legacy_internal_stimulus_opaque" for v in status.values()),24)
         changed=copy.deepcopy(self.config)
         changed["tests"]["new-uninstrumented-test"] = copy.deepcopy(
             changed["tests"]["memory"])
@@ -61,7 +61,7 @@ class SelectedRuntimeContractTests(unittest.TestCase):
                 self.assertEqual(set(snapshot["intent"]["phases"]),{"init","run","check"})
                 self.assertEqual(snapshot["target"],name)
                 self.assertEqual(snapshot["intent"]["target"],name)
-        self.assertEqual(len(self.config["tests"]),28)
+        self.assertEqual(len(self.config["tests"]),29)
 
     def test_compile_and_lint_are_explicit_not_applicable(self):
         for name in ("chip-xezim-compile","noc-verilator","noc-xezim"):
