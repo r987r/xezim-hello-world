@@ -11,21 +11,15 @@
 #include <limits.h>
 
 /* Standalone RV32I C uses -nostdlib. LLVM may lower descriptor/array
- * initialization to memcpy/memset despite -ffreestanding. Supply only the
- * ISO C byte primitives here, with volatile byte accesses to prevent
- * compiler loop-idiom reconstitution or recursive libcalls. Never linked
+ * initialization to memcpy despite -ffreestanding. Provide only the
+ * missing memcpy primitive here, with volatile byte accesses to prevent
+ * compiler loop-idiom reconstitution or recursive libcalls. memset is already\n * provided by sw/common/rv32i_runtime.c. Never linked
  * into non-composite firmware or substituted for hardware transfers. */
 __attribute__((used, noinline))
 void *memcpy(void *destination, const void *source, size_t size) {
     volatile unsigned char *d = (volatile unsigned char *)destination;
     const volatile unsigned char *s = (const volatile unsigned char *)source;
     for (size_t i = 0; i < size; ++i) d[i] = s[i];
-    return destination;
-}
-__attribute__((used, noinline))
-void *memset(void *destination, int value, size_t size) {
-    volatile unsigned char *d = (volatile unsigned char *)destination;
-    for (size_t i = 0; i < size; ++i) d[i] = (unsigned char)value;
     return destination;
 }
 
