@@ -307,13 +307,15 @@ def verify_selected_archive(root: Path, profile: str, definition: dict) -> dict:
             or plan.get("engine") != definition.get("engine")
             or plan.get("top") != value.get("compiled_top")
             or plan.get("source_target") != definition.get("sources")
-            or plan.get("sources") != [
+            or not isinstance(plan.get("sources"), list)
+            or set(plan["sources"]) != {
                 str(root / path) for path in value["source_sha256"]
                 if path not in {
                     extra for net in value.get("network_filelists", {}).values()
                     for extra in net.get("source_files", [])
                 }
-            ]
+            }
+            or len(plan["sources"]) != len(set(plan["sources"]))
             or plan.get("includes", []) != value.get("includes")
             or plan.get("defines", []) != value.get("defines")
             or plan.get("args", []) != value.get("args")
@@ -334,6 +336,13 @@ def verify_selected_archive(root: Path, profile: str, definition: dict) -> dict:
             or hashlib.sha256(source_list.read_bytes()).hexdigest()
             != value.get("filelist_sha256")):
         raise ValueError("selected RTL filelist changed since archive")
+    import shlex
+    expected_tokens = (
+        ["+incdir+" + raw for raw in plan.get("includes", [])]
+        + ["+define+" + raw for raw in plan.get("defines", [])]
+        + plan["sources"])
+    if shlex.split(source_list.read_text()) != expected_tokens:
+        raise ValueError("selected compiler source order/flags differ from runner plan")
     expected_archive = (f".tools/regression/{profile}/selected-rtl/"
                         + value["compiler_input_sha256"][:20])
     if value.get("archive") != expected_archive:
