@@ -1,5 +1,5 @@
 # Temporary exception inventory; no UI should use this to invent actions.
-# All 23 runtime targets below delegate actual internal stimuli to existing
+# All 24 runtime targets below delegate actual internal stimuli to existing
 # Python/C/SV/Xezim code. They are NOT counted as scenario-dispatched.
 # Future targets must implement the scenario adapter or require a reviewed,
 # explicitly owned migration exception here.
