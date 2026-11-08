@@ -121,6 +121,24 @@ tests:
     reuse_build: true
     env: {SUPERNOC_NEGATIVE: '1'}
     expect_failure: 'FAIL supernoc injected data mismatch detected'
+  supernoc-latency:
+    logical_test: axi-noc-latency-baseline
+    engine: cocotb-verilator
+    sources: noc
+    bender_targets: [supernoc]
+    top: supernoc_tb
+    module: test_latency
+    test_dir: dv/supernoc
+    build: .tools/supernoc-obj
+    reuse_build: true
+    seed: 1
+    timeout_s: 1800
+    pass: 'PASS fabric-latency:'
+    report:
+      address_map: {config: config/soc.yaml, variant: architecture}
+      context: 'Dedicated unloaded single-outstanding one-beat AXI benchmark; upstream BFMs at declared SuperNoC initiators and passive monitors. No CPUs, PCIe host, Ethernet MAC, real DDR controller or physical PHY.'
+      axi: {scope: u_noc, clock: clk_i, reset: rst_ni, catalog: gen/supernoc/axi_monitors.json, actors: gen/supernoc/manifest.json, max_events: 500000, required_complete: true}
+      fabric_benchmark: {profile: unloaded, spec: config/fabric_latency.yaml}
   dma-rtl:
     logical_test: dma-descriptor-chain
     engine: cocotb-verilator
