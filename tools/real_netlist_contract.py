@@ -21,10 +21,18 @@ class ConnectivityEvidenceError(ValueError):
 # Select exact unambiguous elaborated port suffixes under the real checked-in
 # generated crossbar testbench. Never use a fabricated node/path fallback.
 PAIRS = (
-    ("master_awvalid", ".u_agent.awvalid", ".fabric.s_axi_awvalid", "aw"),
-    ("master_arvalid", ".u_agent.arvalid", ".fabric.s_axi_arvalid", "ar"),
-    ("memory_awvalid", ".fabric.m_axi_awvalid", ".u_mem.s_axi_awvalid", "aw"),
-    ("memory_arvalid", ".fabric.m_axi_arvalid", ".u_mem.s_axi_arvalid", "ar"),
+    # Fully named generate instance 0, never an ambiguous suffix shared
+    # by the two configured initiators and two downstream memory targets.
+    ("master_awvalid", ".masters[0].u_agent.awvalid", ".fabric.s_axi_awvalid", "aw"),
+    ("master_wvalid", ".masters[0].u_agent.wvalid", ".fabric.s_axi_wvalid", "w"),
+    ("master_bready", ".masters[0].u_agent.bready", ".fabric.s_axi_bready", "b"),
+    ("master_arvalid", ".masters[0].u_agent.arvalid", ".fabric.s_axi_arvalid", "ar"),
+    ("master_rready", ".masters[0].u_agent.rready", ".fabric.s_axi_rready", "r"),
+    ("memory_awvalid", ".fabric.m_axi_awvalid", ".memories[0].u_mem.s_axi_awvalid", "aw"),
+    ("memory_wvalid", ".fabric.m_axi_wvalid", ".memories[0].u_mem.s_axi_wvalid", "w"),
+    ("memory_bready", ".memories[0].u_mem.s_axi_bready", ".fabric.m_axi_bready", "b"),
+    ("memory_arvalid", ".fabric.m_axi_arvalid", ".memories[0].u_mem.s_axi_arvalid", "ar"),
+    ("memory_rready", ".memories[0].u_mem.s_axi_rready", ".fabric.m_axi_rready", "r"),
 )
 
 
