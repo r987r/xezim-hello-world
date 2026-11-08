@@ -73,7 +73,7 @@ class SelectedRtlArchiveTests(unittest.TestCase):
             self.filelist.read_bytes()).hexdigest()
         value = self.make_archive()
         self.assertIn("variant/soc_top.sv", value["selected_soc_top"])
-        self.assertIn("variant/flash.hex", value["generated_sha256"])
+        self.assertIn(".tools/regression/example/variant/flash.hex", value["generated_sha256"])
         self.assertNotIn("gen/chip/soc_top.sv", value["source_sha256"])
         self.assertTrue((self.root / value["archive"] /
                          ".tools/regression/example/variant/flash.hex").is_file())
