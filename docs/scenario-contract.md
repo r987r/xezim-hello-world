@@ -1,5 +1,7 @@
 # Canonical source-selected scenario actions (SCN)
 
+**P0 follow-up:** [scalable C/Cocotb/SV stimulus runtime](scalable-stimulus-runtime.md) is tracked by [#152](https://github.com/r987r/xezim-hello-world/issues/152). Closed #119 delivered partial foundations, not universal legacy adapter migration.
+
 The existing `tools/scenario_plan.py` resolves a versioned action DAG using the source-owned SoC memory configuration. It is an **intent compiler**, not a second simulator or INIT/RUN/CHECK coordinator. The shared scenario executable and observed-evidence formats are defined separately: a valid plan never implies hardware PASS. [#119](https://github.com/r987r/xezim-hello-world/issues/119) tracks the remaining general action-adapter migration.
 
 ## Reproduce and replay
