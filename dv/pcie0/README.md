@@ -35,10 +35,24 @@ accepted outbound TLPs. A reverse host-memory read produces real completion
 TLPs and refills a disjoint region of the shared device SRAM. The original
 BAR-pulled `chip-pcie-host` is not modified.
 
-**Do not call this complete until its exact selected RTL build and simulation
-pass.** The intermediate full-chip test still lets Cocotb submit requester
-descriptors directly on DUT pins; CPU/Config-NoC requester CSRs, completion
-queues, and general packet chaining remain outstanding. The 16KiB shared SRAM
+**CPU-owned requester transition (PR #149, new exact-head RTL CI pending).**
+The full-chip test no longer exposes or drives internal DMA descriptor pins.
+The host Root Complex model publishes its 64-bit DMA IOVA through actual PCIe
+BAR writes at PCIe SRAM +0x820/+0x824 and a validity word at +0x828. CPU0 C,
+after waiting for real PULP iDMA descriptor retirement, writes outbound MWr
+and MRd descriptors to `pcie0.ctrl` over the actual Config NoC. The new
+`pcie_requester_axi_regs` drives the existing pinned `dma_if_pcie` valid/ready
+interface and supplies checked status/tag/error; CPU0 polls both statuses and
+checks returned SRAM bytes. The host independently verifies Root Complex RAM,
+BAR-readback, guard bytes and passive TLP activity. The isolated requester
+unit smoke still uses a direct descriptor BFM at its isolated boundary, which
+is appropriate and does not qualify CPU-owned behavior.
+
+**This revised control path is NOT yet verified by exact-head RTL simulation.**
+A prior CI PASS at commit `469d878` proved a Cocotb-submitted descriptor
+datapath only; it must never be reused as qualification for CPU-owned control.
+PCIe PHY/LTSSM, completion queues, stress, and general packet chaining remain
+outstanding. The 16KiB shared SRAM
 adapter is bounded and intentionally fails on invalid segmented-RAM address
 or bank selections. It is a functional model, not a PCIe PHY or cache-coherent
 DMA subsystem. Only full-chip `outbound-dma-proof.json`, actual C/iDMA AXI
