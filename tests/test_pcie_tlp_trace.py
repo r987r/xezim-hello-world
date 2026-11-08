@@ -24,7 +24,8 @@ if HAS_UPSTREAM:
 else:
     PcieIfFrame = Tlp = TlpType = PcieId = None
 from dv.common.protocol_trace import ProtocolTrace
-from dv.pcie0.tlp_trace import AcceptedTlpPackets, REQUEST, COMPLETION, SOURCES
+from dv.pcie0.tlp_trace import (AcceptedTlpPackets, REQUEST, COMPLETION, SOURCES,
+    OUTBOUND_READ, OUTBOUND_WRITE, OUTBOUND_COMPLETION, OUTBOUND_SOURCES)
 import protocol_report
 
 
@@ -38,7 +39,7 @@ def packets(sink, source, tlp, start_ps):
         sink.beat(source, start_ps + index * 10000, valid=1, ready=1,
                   sop=int(index == 0), eop=int(index == beats - 1),
                   header=frame.hdr if index == 0 else 0, data=data,
-                  strobe=(1 << len(dwords)) - 1 if source == COMPLETION else None)
+                  strobe=(1 << len(dwords)) - 1 if source in (COMPLETION, OUTBOUND_COMPLETION, OUTBOUND_WRITE) else None)
     return start_ps + (beats - 1) * 10000
 
 
@@ -81,6 +82,83 @@ class TestTlpCapture(unittest.TestCase):
         self.assertTrue(result["capture_complete"])
         self.assertIn("pcie", (Path(self.tmp.name)/"protocols.html").read_text())
         self.assertEqual(result["records"][-1]["fields"]["matched_request_address"], "0x12000100")
+
+    def test_bidirectional_requesters_use_disjoint_tag_spaces(self):
+        # Outbound device and inbound host may choose the same tag value.
+        # Their completions must not be accidentally correlated across
+        # opposite directions in a full-chip PCIe test.
+        self.trace.close("pass")
+        self.output.unlink()
+        source_catalog = {**SOURCES, **OUTBOUND_SOURCES}
+        trace = ProtocolTrace(self.output, source_catalog)
+        monitor = AcceptedTlpPackets(trace, PcieIfFrame, outbound=True)
+        requester = PcieId(0, 1, 0)
+        host = PcieId(0, 0, 0)
+        host_write = Tlp()
+        host_write.fmt_type = TlpType.MEM_WRITE
+        host_write.requester_id = host
+        host_write.tag = 1
+        host_write.set_addr_be_data(0x12000100, b"HOSTBYTS")
+        packets(monitor, REQUEST, host_write, 10000)
+
+        host_read = Tlp()
+        host_read.fmt_type = TlpType.MEM_READ
+        host_read.requester_id = host
+        host_read.tag = 7
+        host_read.set_addr_be(0x12000100, 8)
+        packets(monitor, REQUEST, host_read, 20000)
+
+        outbound_write = Tlp()
+        outbound_write.fmt_type = TlpType.MEM_WRITE
+        outbound_write.requester_id = requester
+        outbound_write.tag = 9
+        outbound_write.set_addr_be_data(0x20001000, b"DEVBYTES")
+        packets(monitor, OUTBOUND_WRITE, outbound_write, 30000)
+
+        outbound_read = Tlp()
+        outbound_read.fmt_type = TlpType.MEM_READ
+        outbound_read.requester_id = requester
+        outbound_read.tag = 7
+        outbound_read.set_addr_be(0x20002000, 8)
+        packets(monitor, OUTBOUND_READ, outbound_read, 40000)
+
+        for request, source, data, when in (
+            (outbound_read, OUTBOUND_COMPLETION, b"HOSTMEM!", 50000),
+            (host_read, COMPLETION, b"SRAMDATA", 60000),
+        ):
+            cpl = Tlp.create_completion_data_for_tlp(
+                request, host if source == OUTBOUND_COMPLETION else requester)
+            cpl.set_data(data)
+            cpl.byte_count = 8
+            cpl.lower_address = request.address & 0x7f
+            packets(monitor, source, cpl, when)
+        monitor.finish()
+        parsed = protocol_report.parse_capture(self.output, source_catalog)
+        self.assertEqual(len(parsed["records"]), 6)
+        types = [(x["source"], x["operation"]) for x in parsed["records"]]
+        self.assertIn((OUTBOUND_WRITE, "mem_write"), types)
+        self.assertIn((OUTBOUND_READ, "mem_read"), types)
+        self.assertIn((OUTBOUND_COMPLETION, "completion"), types)
+        cpls = [x for x in parsed["records"] if x["operation"] == "completion"]
+        self.assertEqual({x["fields"]["matched_request_address"] for x in cpls},
+                         {"0x12000100", "0x20002000"})
+
+    def test_outbound_missing_completion_rejected(self):
+        self.trace.close("pass")
+        self.output.unlink()
+        catalog = {**SOURCES, **OUTBOUND_SOURCES}
+        trace = ProtocolTrace(self.output, catalog)
+        monitor = AcceptedTlpPackets(trace, PcieIfFrame, outbound=True)
+        rd = Tlp()
+        rd.fmt_type = TlpType.MEM_READ
+        rd.requester_id = PcieId(0, 1, 0)
+        rd.tag = 2
+        rd.set_addr_be(0x20002000, 8)
+        packets(monitor, OUTBOUND_READ, rd, 10000)
+        with self.assertRaisesRegex(AssertionError, "dangling"):
+            monitor.finish()
+        with self.assertRaisesRegex(ValueError, "ended with failure"):
+            protocol_report.parse_capture(self.output, catalog)
 
     def test_missing_completion_fails_closed(self):
         rd = Tlp()
