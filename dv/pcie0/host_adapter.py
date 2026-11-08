@@ -263,7 +263,7 @@ class PcieHostParticipant:
             assert self.outbound_verified['host_memory_bytes_verified']==64
             assert self.outbound_verified['reverse_host_memory_bytes_verified']==64
             self.outbound_monitor.kill()
-            dut._log.info("PASS pcieoutbound: real iDMA staged bytes and outbound PCIe TLPs verified")
+            dut._log.info("PASS pcieoutbound: CPU0 Config-NoC CSR initiated PCIe DMA to host verified")
         dut._log.info("PASS pciehost: real CPU0/host handshake and PCIe0 SRAM data; "
                       "writes=%d reads=%d",int(dut.pcie_sram_write_count.value),
                       int(dut.pcie_sram_read_count.value))
