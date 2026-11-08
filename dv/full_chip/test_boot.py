@@ -321,11 +321,28 @@ async def execute_cold_boot(dut, *, external=None, benchmark=False):
         from tools.fabric_benchmark import config as fabric_config, plan as fabric_plan, intent
         from dv.common.fabric_latency import execute as run_fabric_cases
         contract=json.loads((ROOT/"gen/supernoc/manifest.json").read_text())
+        chip_source=json.loads((ROOT/"gen/chip/manifest.json").read_text())
         profile=fabric_config(ROOT)
         selected=dict(profile,memory_offset=profile["full_chip_scratch_offset"])
-        actor="m_"+manifest["coordinator"]+"_local_data_dma"
+        boundary=manifest["coordinator"]+"_local_data.dma"
+        actor="m_"+boundary.replace(".","_")
+        if chip_source["axi_actors"][boundary]["kind"]!="verification_bfm":
+            raise AssertionError("selected boot RTL has a real DMA or no reserved BFM owner")
+        # The architecture manifest advertises more *structural* routes than
+        # the boot-variant RTL actually provides as writable storage. Only
+        # these memory_model windows are instantiated and separately qualified
+        # by the original cold-boot test. Never drive a disabled SRAM port.
+        model_windows=chip_source["memory_models"]
+        live_bases={row["base"] for row in model_windows}
+        if not model_windows or len(live_bases)!=len(model_windows):
+            raise AssertionError("boot variant lacks distinct live AXI memory models")
+        samples=profile["warmup_per_route"]+profile["measured_per_route"]
+        if any(row["modeled_bytes"] <
+               profile["full_chip_scratch_offset"]+samples*8
+               for row in model_windows):
+            raise AssertionError("benchmark scratch exceeds actual boot memory model")
         cases=fabric_plan(contract, selected, selected_masters=[actor],
-                          writable_only=True)
+                          writable_only=True, selected_region_bases=live_bases)
         benchmark_plan=intent(cases,profile,"chip-boot-latency")
         (Path(plan).parent/"fabric-benchmark-plan.json").write_text(
             json.dumps(benchmark_plan,indent=2,sort_keys=True)+"\n")
