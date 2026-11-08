@@ -18,9 +18,9 @@ class StimulusCatalogTests(unittest.TestCase):
     def setUpClass(cls):
         cls.config=yaml.safe_load((ROOT/"config/regression.yaml").read_text())
 
-    def test_all_28_targets_and_single_shared_cpu_bfm_scenario(self):
+    def test_all_29_targets_and_single_shared_cpu_bfm_scenario(self):
         entries=load(self.config)
-        self.assertEqual(len(entries),28)
+        self.assertEqual(len(entries),29)
         self.assertEqual(entries["chip-cpu-scenario"]["sha256"],
                          entries["chip-dma-scenario"]["sha256"])
         self.assertEqual(entries["chip-cpu-scenario"]["scenario_source"],
