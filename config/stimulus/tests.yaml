@@ -131,6 +131,17 @@ tests:
         - "Run the Cocotb BFM's mapped route and burst/stall stimuli."
       check: 
         - "Check returned payloads/responses, including deliberate target SLVERR paths."
+  - logical_test: axi-noc-latency-baseline
+    targets: ["supernoc-latency"]
+    execution: legacy_opaque
+    purpose: "Measure accepted, serialized unloaded AXI4 one-beat routes using existing upstream BFMs, with independently checked passive transaction counts."
+    phases:
+      init:
+        - "Resolve all source-permitted AXI routes and unique addresses from generated manifests."
+      run:
+        - "Drive warmup and single-outstanding benchmark reads and writes via the existing BFMs."
+      check:
+        - "Verify memory bytes and exact accepted source case counts; reject missing or duplicate AXI observations."
   - logical_test: axi-noc-route-errors
     targets: ["supernoc-negative"]
     execution: legacy_opaque
