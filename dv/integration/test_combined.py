@@ -13,7 +13,7 @@ from pathlib import Path
 
 import cocotb
 from cocotb.clock import Clock
-from cocotb.triggers import FallingEdge, Timer, with_timeout
+from cocotb.triggers import FallingEdge, RisingEdge, First, Timer, with_timeout
 from cocotb.utils import get_sim_time
 from cocotbext.eth import GmiiFrame, GmiiSink, GmiiSource
 
@@ -59,6 +59,20 @@ def _finish_dfi(probe, task):
     probe.assert_alive(task)
     task.kill()
     return probe.finish("pass")
+
+
+async def _watch_cpu_error(dut):
+    """Immediately fail on real CPU C error while waiting for external TX.
+
+    A missing TX packet is otherwise a silent cocotbext Sink wait. The
+    previous #34 run continued >65 wall minutes after CPU wrote e700f004.
+    Do not treat a timeout or the status register as PASS evidence.
+    """
+    while True:
+        await RisingEdge(dut.clk)
+        code = int(dut.cpu_dma_evidence.value)
+        if code & 0xfffff000 == 0xe700f000:
+            raise AssertionError(f"CPU0 C combined hardware failure: {code:#010x}")
 
 
 @cocotb.test(timeout_time=30, timeout_unit="ms")
@@ -132,7 +146,19 @@ async def ethernet_ddr_idma_pcie_single_chip(dut):
         gmii.packet(RX, frame)
     with flow.step("run", "gmii0", "observe_transmit", origin="checker",
                    details={"bytes":len(frame)}):
-        result = await with_timeout(sink.recv(), 12, "ms")
+        tx_task = cocotb.start_soon(sink.recv())
+        error_task = cocotb.start_soon(_watch_cpu_error(dut))
+        try:
+            await with_timeout(First(tx_task, error_task), 3, "ms")
+            if error_task.done():
+                await error_task  # raises the actual CPU failure code
+            assert tx_task.done(), "GMII TX did not finish"
+            result = tx_task.result()
+        finally:
+            if not tx_task.done():
+                tx_task.kill()
+            if not error_task.done():
+                error_task.kill()
         assert bytes(result.get_payload()) == frame, "DDR/iDMA->GMII TX byte mismatch"
         assert result.check_fcs() and result.error is None, "TX GMII FCS/error"
         gmii.packet(TX, result.get_payload(), fcs_valid=True, error=result.error)
