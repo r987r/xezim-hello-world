@@ -82,21 +82,30 @@ def parse_plan(raw):
     # first place an impossible dependency is discovered.
     colors = {}
     phase_index = {name: index for index, name in enumerate(PHASES)}
-
-    def visit(aid):
-        if colors.get(aid) == 1:
-            raise ActionEvidenceError(f"{aid}: cyclic action dependency")
-        if colors.get(aid) == 2:
-            return
-        colors[aid] = 1
-        for parent in by_id[aid]["depends_on"]:
-            if phase_index[by_id[parent]["phase"]] > phase_index[by_id[aid]["phase"]]:
-                raise ActionEvidenceError(f"{aid}: dependency crosses phases backwards")
-            visit(parent)
-        colors[aid] = 2
-
     for aid in by_id:
-        visit(aid)
+        if colors.get(aid) == 2:
+            continue
+        # Iterative DFS: a source-declared plan may contain tens of thousands
+        # of actions, so recursive checking would overflow Python's stack.
+        stack = [(aid, False)]
+        while stack:
+            current, exiting = stack.pop()
+            if exiting:
+                colors[current] = 2
+                continue
+            if colors.get(current) == 2:
+                continue
+            if colors.get(current) == 1:
+                raise ActionEvidenceError(f"{current}: cyclic action dependency")
+            colors[current] = 1
+            stack.append((current, True))
+            for parent in reversed(by_id[current]["depends_on"]):
+                if phase_index[by_id[parent]["phase"]] > phase_index[by_id[current]["phase"]]:
+                    raise ActionEvidenceError(f"{current}: dependency crosses phases backwards")
+                if colors.get(parent) == 1:
+                    raise ActionEvidenceError(f"{current}: cyclic action dependency")
+                if colors.get(parent) != 2:
+                    stack.append((parent, False))
     return doc, hashlib.sha256(raw).hexdigest(), by_id
 
 
