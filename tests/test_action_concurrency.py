@@ -211,13 +211,13 @@ class ActionConcurrencyTests(unittest.IsolatedAsyncioTestCase):
             {"buffer": "src_b", "region": "sram", "phys": 0x1020, "size": 64},
             {"buffer": "dst_b", "region": "sram", "phys": 0x3000, "size": 64},
         ]
-        raw = (json.dumps(raw_doc, sort_keys=True, separators=(",", ":")) + "\\n").encode()
+        raw = (json.dumps(raw_doc, sort_keys=True, separators=(",", ":")) + "\n").encode()
         await ActionDispatcher(raw, {"dma.copy": copy},
                                max_inflight=2, task_backend="asyncio").run()
         self.assertEqual(peak, [1])
 
         raw_doc["allocations"][2]["phys"] = 0x1100  # no overlap
-        raw = (json.dumps(raw_doc, sort_keys=True, separators=(",", ":")) + "\\n").encode()
+        raw = (json.dumps(raw_doc, sort_keys=True, separators=(",", ":")) + "\n").encode()
         held.clear()
         peak[0] = 0
         await ActionDispatcher(raw, {"dma.copy": copy},
@@ -276,13 +276,13 @@ class ActionConcurrencyTests(unittest.IsolatedAsyncioTestCase):
             {"buffer": "src", "region": "sram", "phys": 0x1000, "size": 64},
             {"buffer": "dst", "region": "sram", "phys": 0x2000, "size": 64},
         ]
-        raw = (json.dumps(raw_doc, sort_keys=True, separators=(",", ":")) + "\\n").encode()
+        raw = (json.dumps(raw_doc, sort_keys=True, separators=(",", ":")) + "\n").encode()
         with self.assertRaisesRegex(ActionDispatchError, "invalid physical byte range"):
             ActionDispatcher(raw, {"dma.copy": lambda *_: None},
                              max_inflight=2, task_backend="asyncio")
         raw_doc["actions"][0]["args"]["src_offset"] = 0
         raw_doc["allocations"].pop()
-        raw = (json.dumps(raw_doc, sort_keys=True, separators=(",", ":")) + "\\n").encode()
+        raw = (json.dumps(raw_doc, sort_keys=True, separators=(",", ":")) + "\n").encode()
         with self.assertRaisesRegex(ActionDispatchError, "lacks resolved allocation"):
             ActionDispatcher(raw, {"dma.copy": lambda *_: None},
                              max_inflight=2, task_backend="asyncio")
