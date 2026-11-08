@@ -208,7 +208,7 @@ class ActionConcurrencyTests(unittest.IsolatedAsyncioTestCase):
         raw_doc["allocations"] = [
             {"buffer": "src_a", "region": "sram", "phys": 0x1000, "size": 64},
             {"buffer": "dst_a", "region": "sram", "phys": 0x2000, "size": 64},
-            {"buffer": "src_b", "region": "sram", "phys": 0x1020, "size": 64},
+            {"buffer": "src_b", "region": "sram", "phys": 0x2020, "size": 64},
             {"buffer": "dst_b", "region": "sram", "phys": 0x3000, "size": 64},
         ]
         raw = (json.dumps(raw_doc, sort_keys=True, separators=(",", ":")) + "\n").encode()
@@ -216,7 +216,7 @@ class ActionConcurrencyTests(unittest.IsolatedAsyncioTestCase):
                                max_inflight=2, task_backend="asyncio").run()
         self.assertEqual(peak, [1])
 
-        raw_doc["allocations"][2]["phys"] = 0x1100  # no overlap
+        raw_doc["allocations"][2]["phys"] = 0x2100  # no overlap
         raw = (json.dumps(raw_doc, sort_keys=True, separators=(",", ":")) + "\n").encode()
         held.clear()
         peak[0] = 0
