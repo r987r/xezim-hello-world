@@ -1,0 +1,78 @@
+name: Fabric Explorer controlled AXI latency evidence
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'config/fabric_latency.yaml'
+      - 'config/regression.yaml'
+      - 'config/stimulus/tests.yaml'
+      - 'tools/fabric_benchmark.py'
+      - 'tools/fabric_report.py'
+      - 'tools/regress.py'
+      - 'tools/axi_report.py'
+      - 'tools/publish_site.py'
+      - 'tools/templates/site_fabric.html'
+      - 'dv/supernoc/**'
+      - 'dv/common/axi_trace.py'
+      - 'tests/test_fabric_benchmark.py'
+      - 'tests/test_fabric_report.py'
+      - 'gen/noc/floonoc/**'
+      - 'gen/supernoc/**'
+      - 'config/soc.yaml'
+      - 'config/interface_contracts.yaml'
+      - 'Bender.lock'
+      - 'Bender.yml'
+      - '.github/workflows/dv-fabric-latency.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fabric-latency-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unloaded-supernoc:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: ./.github/actions/setup-bender
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Install pinned AXI monitor/runtime and FlooNoC RTL
+        run: |
+          set -euo pipefail
+          python3 -m pip install -r requirements.txt
+          python3 tools/ip_fetch.py floonoc
+          python3 -m pip install -e .tools/floonoc
+          python3 -m pip install 'cocotb==1.9.2' 'cocotbext-axi==0.1.24'
+          sudo apt-get update -qq
+          sudo apt-get install -y verilator
+          verilator --version
+      - name: Contract, plan uniqueness, negative source-capture and reporting gates
+        run: |
+          set -euo pipefail
+          python3 -m py_compile tools/fabric_benchmark.py dv/supernoc/test_latency.py
+          python3 -m unittest tests.test_fabric_benchmark tests.test_fabric_report tests.test_stimulus_catalog -v
+          make check-generated
+      - name: Reuse the exact existing SuperNoC RTL build and monitor catalog
+        run: python3 tools/regress.py supernoc --stage build
+      - name: Controlled real FlooNoC latency benchmark
+        run: python3 tools/regress.py supernoc-latency --stage run
+      - name: Retain plans, actual passive AXI and fail-closed benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fabric-latency-supernoc-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            .tools/regression/supernoc-latency/
+            gen/supernoc/manifest.json
+            gen/supernoc/axi_monitors.json
+          include-hidden-files: true
+          if-no-files-found: error
