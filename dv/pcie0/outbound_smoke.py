@@ -136,9 +136,9 @@ async def outbound_bidirectional_real_tlps(dut):
         await with_timeout(wait_host_bytes(host, host_off, payload, dut.clk),
                            200, "us")
         assert bytes(host[host_off-1:host_off+length+1]) == (
-            b"\\xa5" + payload + b"\\xa5"), "host buffer guard overwritten"
+            bytes([0xa5]) + payload + bytes([0xa5])), "host buffer guard overwritten"
         assert ram.read(local_addr-1, length+2) == (
-            b"\\x5a" + payload + b"\\x5a"), "local source altered during DMA"
+            bytes([0x5a]) + payload + bytes([0x5a])), "local source altered during DMA"
         counts["host_bytes_verified"] += length
 
         # Replace local RAM with sentinels, then DMA back from host over
@@ -151,7 +151,7 @@ async def outbound_bidirectional_real_tlps(dut):
         assert int(read_done.tag) == 0x41+index and int(read_done.error) == 0, (
             f"read DMA status vector {index}: {read_done}")
         assert ram.read(local_addr-1, length+2) == (
-            b"\\x5a" + payload + b"\\x5a"), "DMA read bytes or RAM guard mismatch"
+            bytes([0x5a]) + payload + bytes([0x5a])), "DMA read bytes or RAM guard mismatch"
         counts["device_bytes_verified"] += length
 
     assert counts["tx_mem_write_tlps"] >= len(vectors), "no real posted outbound writes"
