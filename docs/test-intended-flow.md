@@ -1,6 +1,6 @@
 # Planned test flow first — INIT / RUN / CHECK
 
-Parent: [verification epic #34](https://github.com/r987r/xezim-hello-world/issues/34).
+Follow-on action runtime: [P0 #152](https://github.com/r987r/xezim-hello-world/issues/152) (original functional MVP #34 is closed).
 
 Every configured regression now has an **intended flow** entry on the existing GitHub Pages **Test runs** page. Select any target, including a target with no CI artifacts, to see what the test definition says it plans to do.
 
@@ -20,4 +20,4 @@ The static publisher uses the same `config/regression.yaml` test catalog that fe
 
 The CI suite enumerates every regression target, tests PCIe multi-actor phase definitions, SCN actor/action/dependency metadata, negative acceptance rules, no-evidence catalog behavior and safe HTML escaping.
 
-**Still to do:** migrate all 23 internal legacy drivers from these reviewable descriptions into the shared typed executable action runtime (#119), then show the real per-action DAG/timeline for parallel steps rather than treating a synopsis as actual internal dispatch. Evidence links to accepted transactions are a separate debugging enhancement. Keep the view useful and truthful even when execution fails or has never started.
+**Still to do:** migrate all 23 internal legacy drivers from these reviewable descriptions into the shared typed executable action runtime (#152), then show the real per-action DAG/timeline for parallel steps rather than treating a synopsis as actual internal dispatch. Evidence links to accepted transactions are a separate debugging enhancement. Keep the view useful and truthful even when execution fails or has never started.
