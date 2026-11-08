@@ -91,9 +91,18 @@ module pcie_requester_axi_regs #(
   // The host address is 64-bit and may cross a 4K PCIe boundary.
   always_comb begin
     illegal_write = w_strb_q != 4'hf;
+    // Descriptor fields must remain immutable until hardware reports
+    // completion. High bits on 16-bit addresses/lengths and 8-bit tags
+    // must be rejected rather than silently wrapping into SRAM.
+    if ((wr_offset <= 32'h10 && wr_busy_q) ||
+        (wr_offset >= 32'h20 && wr_offset <= 32'h30 && rd_busy_q))
+      illegal_write = 1'b1;
     case (wr_offset)
-      32'h00, 32'h04, 32'h08, 32'h0c, 32'h10,
-      32'h20, 32'h24, 32'h28, 32'h2c, 32'h30: ;
+      32'h00, 32'h04, 32'h20, 32'h24: ;
+      32'h08, 32'h0c, 32'h28, 32'h2c:
+        illegal_write = illegal_write || |w_data_q[31:16];
+      32'h10, 32'h30:
+        illegal_write = illegal_write || |w_data_q[31:8];
       32'h14: illegal_write = illegal_write || (w_data_q != 32'd1) ||
                         wr_busy_q || wr_host_q == 64'd0 ||
                         wr_len_q == 16'd0 ||
