@@ -24,6 +24,10 @@ def make_plan(*actions):
 
 
 def act(aid, kind="dma.copy", actor="dma0", phase="run", deps=(), **args):
+    # Real DMA actions always claim BOTH byte buffers, even when testing
+    # engine contention. Missing them must remain a production error.
+    if kind == "dma.copy":
+        args = {"src": f"{aid}.src", "dst": f"{aid}.dst", **args}
     return {"action_instance_id": aid, "kind": kind, "actor": actor,
             "phase": phase, "depends_on": list(deps), "args": args}
 
