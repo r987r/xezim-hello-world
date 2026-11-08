@@ -64,7 +64,7 @@ checker artifacts can add real accepted/completed/checked stages.
 
 The v2 row carries `scenario_id`, `plan_sha256`, `action_instance_id`, actor, phase, kind, stage, sequence, simulator timestamp (picoseconds), origin and optional evidence reference. A source-neutral `action-events.jsonl` stream is additive to current test-flow v1; it permits 1,200+ interleaved and repeated actions without the old one-required-step-per-run restriction.
 
-Follow-up PRs (still owned by #34):
+Follow-up implementations (owned by active #152, with cross-protocol matrix #158):
 - Wire each CPU/host/BFM/SV adapter to this event stream and correlate observed source/target transactions; do not presume driver-only evidence proves transfer completion.
 - Add independent byte/packet/descriptor/CQ checker artifacts, then memory allocation/lifetime and quiescence evidence.
 - Embed validated action timelines and buffer maps in the **existing per-run** `report.html` / GitHub Pages test explorer; don't make another run dashboard.

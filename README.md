@@ -34,11 +34,11 @@ See [setup and regression options](docs/regression.md), [simulator limits](docs/
 | Boot | PicoRV32 and SERV, ROM/flash-to-SRAM cold boot, reset MMIO | No writable SRAM preload in cold-boot tests |
 | NoC/iDMA | Twelve generated FlooNoC meshes, real PULP iDMA RTL and AXI/CSR paths | BFM-driven tests are not CPU firmware; route checks are not all-path bit proof |
 | Ethernet | Opt-in real GMII MAC, RX/TX queues, descriptor DMA, SRAM/CQ and CPU0 C tests | Default generated packet/management ports remain reserved |
-| PCIe | Opt-in real TLP-to-AXI bridge, modeled host RC and host BAR readback | No physical PCIe PHY or autonomous endpoint DMA to host RAM |
+| PCIe | Opt-in TLP-to-AXI bridge and separately tested CPU0/Config-NoC-controlled endpoint DMA to modeled host RAM | No physical PCIe PHY; outbound packet-level reporting and multi-tag stress remain follow-ups (#76) |
 | DDR | Opt-in pinned LiteDRAM RTL and AXI/DFI command evidence | Model SDRAM PHY/banks, not silicon DDR4 PHY; default DDR is AXI RAM |
 | HBM | Configured aperture and bounded AXI RAM stand-in | No integrated real HBM controller/PHY |
 
-**A passing isolated test is not proof of the combined Ethernet → real DDR → CPU/iDMA → PCIe path.** See the [combined acceptance contract](docs/multiprotocol-integration-readiness.md) and [open epic #34](https://github.com/r987r/xezim-hello-world/issues/34). Physical link, stress, IRQ and fast-route work remain separately tracked.
+**One combined Ethernet → real DDR/DFI → CPU/iDMA → Ethernet TX + PCIe host BAR-pull smoke has passed** on an exact tested source ([merged #150](https://github.com/r987r/xezim-hello-world/pull/150)); a separately tested CPU-controlled PCIe endpoint DMA to modeled host RAM exists ([merged #149](https://github.com/r987r/xezim-hello-world/pull/149)). These are different runs and **do not** prove a chained Ethernet → outbound host-RAM DMA case. See the [integration boundaries](docs/multiprotocol-integration-readiness.md) and [post-MVP matrix #158](https://github.com/r987r/xezim-hello-world/issues/158). Physical links, stress, IRQ and fast-route work remain separately tracked.
 
 **DMA mode:** `DmaEnable=1` instantiates actual PULP iDMA engines and Config-NoC CSRs; `make dv-chip-dma` tests CPU-reset BFM-controlled RTL transfers separately from real CPU0 C. CPU interrupt service is not implemented; polling-based C DMA is supported.
 
