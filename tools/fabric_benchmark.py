@@ -25,7 +25,7 @@ def config(root=ROOT, profile="unloaded"):
         raise BenchmarkError("unknown/unsupported latency benchmark profile")
     p = spec["profiles"][profile]
     for key in ("warmup_per_route", "measured_per_route", "memory_offset",
-                "max_outstanding", "operation_beats"):
+                "max_outstanding", "operation_beats", "full_chip_scratch_offset"):
         if type(p.get(key)) is not int or p[key] < (0 if key == "warmup_per_route" else 1):
             raise BenchmarkError("invalid benchmark setting: "+key)
     if (p["max_outstanding"] != 1 or p["operation_beats"] != 1
