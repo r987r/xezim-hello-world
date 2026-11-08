@@ -15,7 +15,7 @@ class FabricBenchmarkTests(unittest.TestCase):
         cls.manifest=json.loads((ROOT/"gen/supernoc/manifest.json").read_text())
         cls.spec=config(ROOT)
         cls.cases=plan(cls.manifest,cls.spec)
-        cls.expected=intent(cls.cases,cls.spec,"supernoc")
+        cls.expected=intent(cls.cases,cls.spec,"supernoc-latency")
 
     def test_every_legal_region_and_unique_addresses(self):
         self.assertEqual(len(self.cases),sum(len(m["regions"]) for m in self.manifest["masters"])*36)
