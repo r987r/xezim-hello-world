@@ -4,7 +4,7 @@
 <div class="notice"><strong>Timing semantics:</strong> router counts are structural, not clock-cycle delays. Where a clean controlled one-beat trace matches this site's source SHA, the measured AXI boundary deltas break down request/response time per mesh and terminal AXI service. Router-internal hop cycles and isolated DDR/HBM device latency are not measured. The real PULP iDMA engines are connected in the default generated RTL and exercised in chip-dma mode; chip-cpu-dma verifies CPU-programmed transfers. The default generated chip retains behavioral AXI RAM for DDR/HBM; the separate opt-in chip-ddr4-real full-chip variant instantiates genuine pinned LiteDRAM controller RTL and captures read-only DFI/behavioral BankModel commands (merged #117). Do not infer that Ethernet, PCIe host, and real LiteDRAM are all live in one variant or that DFI activity proves a physical PHY.</div>
 <div class="actions"><a href="explorer.html">Interactive chip → subsystem → NoC topology</a><a href="data/fabric.json">Download fabric report JSON</a><a href="config/interface_contracts.yaml">Sizing contracts</a><a href="gen/supernoc/manifest.json">Wired route manifest</a></div>
 <div class="grid" id="fabric-facts"></div>
-<div class="grid" style="align-items:end"><label>Fabric plane <select id="fabric-plane"><option value="data">Data (AXI4)</option><option value="config">Configuration (AXI4 transport)</option></select></label><label>Filter by endpoint, subsystem or target <input id="fabric-search" type="search" placeholder="e.g. compute0, sram, hbm0" autocomplete="off"></label></div>
+<div class="grid" style="align-items:end"><label>Fabric plane <select id="fabric-plane"><option value="data">Data (AXI4)</option><option value="config">Configuration (AXI4 transport)</option></select></label><label>Filter by endpoint, subsystem or target <input id="fabric-search" type="search" placeholder="e.g. compute0, sram, hbm0" autocomplete="off"></label><label id="fabric-scope-wrap" hidden>Qualified evidence scope <select id="fabric-scope"></select></label></div>
 <h2>Route-by-route latency in reference clock cycles</h2>
 <p class="muted">This is a <strong>structural route inventory first</strong>, and measured latency only where a qualified serial AXI test supplies matching RTL/DV execution evidence. <strong>Unmeasured</strong> means no valid per-stage samples were available for this source revision, never zero cycles. Historical measurements remain accessible in individual test reports. Select a route for its source, router path and evidence links.</p>
 <p id="fabric-evidence-coverage" class="muted" role="status" aria-live="polite"></p>
@@ -133,7 +133,17 @@ for(const [name,value] of Object.entries(report.summary)){
  const card=E('div',undefined,'card');card.append(E('div',value,'stat'),E('div',name.replaceAll('_',' '),'muted'));byId('fabric-facts').append(card);
 }
 function visible(s){return s.toLowerCase().includes(search.value.trim().toLowerCase())}
-const latency=report.latency_table||{mesh_columns:{data:[],config:[]},rows:[]};
+const availableScopes=report.latency_scopes||{};
+const scopePicker=byId('fabric-scope'),scopeKeys=Object.keys(availableScopes);
+if(scopeKeys.length){
+ byId('fabric-scope-wrap').hidden=false;
+ if(scopeKeys.length>1)scopePicker.append(new Option('Latest qualifying evidence (mixed scopes)','all'));
+ for(const name of scopeKeys)scopePicker.append(new Option(name.replaceAll('-',' ')+' · verified RTL',name));
+ scopePicker.value=scopeKeys.length===1?scopeKeys[0]:'all';
+}
+let latency=scopePicker.value&&scopePicker.value!=='all'?availableScopes[scopePicker.value]:
+ (report.latency_table||{mesh_columns:{data:[],config:[]},rows:[]});
+function renderCoverage(){
 const coverage=latency.evidence_coverage||null;
 if(coverage){
   const n=coverage.current_measured_routes||0;
@@ -152,6 +162,7 @@ const ref=latency.reference_clock;
 byId('fabric-reference-clock').textContent=(ref&&ref.measured_period_ps)?
  'Observed simulation reference: '+ref.signal+' ('+ref.domain+'), '+fmt(ref.measured_period_ps/1000)+' ns per cycle / '+fmt(ref.measured_frequency_hz/1000000)+' MHz. Hardware target frequency not characterized; original run periods are retained per cell.':
  'Current-source matched serial AXI clock evidence not yet available; hardware clock frequency is not configured.';
+}
 function statLine(parent,prefix,s,applicable){
  const line=E('div',undefined,'metric-line');
  if(prefix)line.append(E('span',prefix,'metric-label'));
@@ -284,7 +295,7 @@ function renderRoute(){const box=byId('fabric-route');box.replaceChildren();cons
  const note=E('p','Individual router/flit/NI latency is not measured. The source-matched per-mesh AXI and terminal observations, where available, appear below. Crossbar/model service is not isolated physical memory latency.','muted');box.append(note);
  if(r.one_beat_stage_observations&&r.one_beat_stage_observations.length){
   box.append(E('h4','Measured one-beat AXI boundary breakdown (serial, source-matched runs)'));
-  for(const o of r.one_beat_stage_observations){
+  for(const o of r.one_beat_stage_observations.filter(o=>!scopePicker.value||scopePicker.value==='all'||o.test_scope===scopePicker.value)){
     const p=E('p',o.operation.toUpperCase()+' · '+o.sample_count+' isolated sample(s) · measured clock '+o.clock_period_ps+' ps · end-to-end min / avg / max '+[o.end_to_end.min_cycles,o.end_to_end.avg_cycles,o.end_to_end.max_cycles].map(fmt).join(' / ')+' cycles');
     box.append(p);
     const st=E('table',undefined,'fabric-detail-table'),thead=E('thead'),hr=E('tr');
@@ -306,7 +317,7 @@ function renderRoute(){const box=byId('fabric-route');box.replaceChildren();cons
   }
  }
  if(r.one_beat_observations.length){box.append(E('h4','Measured end-to-end, one-beat observations'));
-  for(const o of r.one_beat_observations){const p=E('p',`${o.operation.toUpperCase()}: n=${o.count}, min ${o.min_ps} ps, median ${o.median_ps} ps, p95 ${o.p95_ps} ps · ${o.test_scope} · ${o.simulator} · ${o.source_sha.slice(0,12)}${o.source_equivalence==='verified_same_tree'?' (verified identical source tree)':o.source_equivalence==='verified_rtl_inputs'?' (verified current RTL inputs)':o.matches_site_source?' (current source)':' (historical source)'}`);const a=E('a','Open original run report');a.href=o.run_report;p.append(' · ',a);box.append(p)}
+  for(const o of r.one_beat_observations.filter(o=>!scopePicker.value||scopePicker.value==='all'||o.test_scope===scopePicker.value)){const p=E('p',`${o.operation.toUpperCase()}: n=${o.count}, min ${o.min_ps} ps, median ${o.median_ps} ps, p95 ${o.p95_ps} ps · ${o.test_scope} · ${o.simulator} · ${o.source_sha.slice(0,12)}${o.source_equivalence==='verified_same_tree'?' (verified identical source tree)':o.source_equivalence==='verified_rtl_inputs'?' (verified current RTL inputs)':o.matches_site_source?' (current source)':' (historical source)'}`);const a=E('a','Open original run report');a.href=o.run_report;p.append(' · ',a);box.append(p)}
  }else box.append(E('p','No eligible one-beat observations in the published CI evidence. Controlled per-mesh timing requires a successful capture for exactly this site source revision.','muted'));
 }
 function renderInventory(){const body=byId('fabric-interfaces').querySelector('tbody');body.replaceChildren();for(const i of report.interfaces.filter(i=>i.plane===plane.value&&(!search.value||visible(i.name)||visible(i.subsystem)||visible(i.actor)))){
@@ -315,7 +326,11 @@ function renderInventory(){const body=byId('fabric-interfaces').querySelector('t
 function renderTargets(){const body=byId('fabric-targets').querySelector('tbody');body.replaceChildren();for(const t of report.targets.filter(t=>t.plane===plane.value&&(!search.value||visible(t.name)))){
  const tr=E('tr');for(const [label,value] of [['Target',t.name],['Address base',t.address_base],['Size',t.address_size]]){addCell(tr,value).dataset.label=label}body.append(tr)}
 }
-function render(){renderLatencyTable();renderMobileRoutes();renderRoute();renderInventory();renderTargets()}
+function render(){renderCoverage();renderLatencyTable();renderMobileRoutes();renderRoute();renderInventory();renderTargets()}
+scopePicker.addEventListener('change',()=>{
+ latency=scopePicker.value&&scopePicker.value!=='all'?availableScopes[scopePicker.value]:report.latency_table;
+ selected=null;expandedMobileRoutes.clear();render();
+});
 plane.addEventListener('change',()=>{selected=null;expandedMobileRoutes.clear();render()});
 search.addEventListener('input',render);
 showUnreachable.addEventListener('change',renderMobileRoutes);
