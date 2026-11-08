@@ -36,8 +36,7 @@ def read_graph(path: Path) -> tuple[dict, dict[int, dict], dict[int, list[dict]]
             port_paths.add(port_path)
             bounds = node.get("bounds")
             if bounds is not None and (not isinstance(bounds, list)
-                    or len(bounds) != 2 or any(type(n) is not int or n < 0 for n in bounds)
-                    or bounds[0] > bounds[1]):
+                    or len(bounds) != 2 or any(type(n) is not int or n < 0 for n in bounds)):
                 raise ValueError(f"{port_path}: invalid elaborated port bounds")
         nodes[node["id"]] = node
     adjacency = {n: [] for n in nodes}
