@@ -44,6 +44,9 @@ def audit(netlist: Path, *, selected_meta: Path, source_profile: str = "memory")
             or not isinstance(meta.get("selected_source_sha256"), dict)
             or not meta["selected_source_sha256"]):
         raise ConnectivityEvidenceError("missing selected RTL netlist export provenance")
+    actual_netlist_sha = hashlib.sha256(netlist.read_bytes()).hexdigest()
+    if meta.get("output_sha256") != actual_netlist_sha:
+        raise ConnectivityEvidenceError("original exported netlist hash mismatch")
     _, nodes, _ = read_graph(netlist)
     ports = enumerate_ports(nodes)
     if len(ports) < 8:
@@ -76,7 +79,7 @@ def audit(netlist: Path, *, selected_meta: Path, source_profile: str = "memory")
                        "static_dependency_found": True,
                        "steps": len(proof["steps"])})
     return {"schema_version": 1, "profile": source_profile,
-            "netlist_sha256": hashlib.sha256(netlist.read_bytes()).hexdigest(),
+            "netlist_sha256": actual_netlist_sha,
             "selected_plan_sha256": meta["plan_sha256"],
             "selected_source_sha256": meta["selected_source_sha256"],
             "evidence": "actual_elaborated_static_axichannel_dependency_only",
