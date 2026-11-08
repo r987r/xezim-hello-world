@@ -298,6 +298,34 @@ async def execute_cold_boot(dut, *, external=None, benchmark=False):
         for target, counts in actual.items():
             assert counts["aw"] > 0 and counts["ar"] > 0, (
                 f"real CPU DMA missing full-NoC DDR/HBM accepted writes+reads: {target}, {counts}")
+        if host is not None and os.environ.get("SOC_PCIE_OUTBOUND_MODE") == "1":
+            from dv.common.selected_aperture import selected_aperture
+            csr_base, csr_bytes = selected_aperture(
+                "pcie0.ctrl", "config", plan_path=plan)
+            assert csr_bytes >= 0x40
+            seen = {"wr_doorbell":0, "rd_doorbell":0,
+                    "wr_status":0, "rd_status":0,
+                    "slave_write":0, "slave_read":0}
+            for event in events:
+                channel=event.get("channel")
+                if channel not in ("aw","ar"):
+                    continue
+                addr=int(event["fields"]["addr"],0)
+                monitor=event.get("monitor")
+                if monitor=="compute0_local_config.cpu":
+                    for key,expected_channel,offset in (
+                        ("wr_doorbell","aw",0x14),
+                        ("rd_doorbell","aw",0x34),
+                        ("wr_status","ar",0x18),
+                        ("rd_status","ar",0x38)):
+                        if channel==expected_channel and addr==csr_base+offset:
+                            seen[key]+=1
+                if monitor=="pcie0_local_config.controller_regs" and (
+                    csr_base <= addr < csr_base+0x40):
+                    seen["slave_write" if channel=="aw" else "slave_read"]+=1
+            assert all(value>0 for value in seen.values()), (
+                "missing real CPU Config-NoC CSR or target handshakes: ",seen)
+            dut._log.info("PCIE0_CPU_REQUESTER_CONFIG_NOC_AXI=%s",seen)
         trace_phase("CPU compiled C DMA complete: monitored " +
                     ("DDR + PCIe SRAM" if host is not None else "DDR + HBM"))
         dut._log.info("PASS fullchip: CPU-executed compiled C DMA, shared INIT/RUN/CHECK, "

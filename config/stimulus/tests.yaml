@@ -311,3 +311,14 @@ tests:
       check:
         - "Require real CPU cold-boot CHECK, Ethernet RX/TX CQ/IRQ acknowledgements, real controller AXI/DFI/BankModel events and complete passive AXI/TLP observations."
         - "Publish PASS only after the one-run independent scoreboard and all outstanding transaction gates complete."
+  - logical_test: real-idma-outbound-host-memory
+    targets: ["chip-pcie-outbound"]
+    execution: observed_milestones
+    purpose: "Execute real CPU0 iDMA transfers into PCIe0 SRAM through FlooNoC and prove pinned outbound requester Memory Write/Read TLPs against independently checked modeled host RAM."
+    phases:
+      init:
+        - "Cold boot real CPU firmware, enumerate PCIe and prepare host RAM without backdoor preloading device SRAM."
+      run:
+        - "Real iDMA stages DDR bytes in physical PCIe SRAM; submit outbound requester write and read descriptors through real CPU Config-NoC CSRs."
+      check:
+        - "Check accepted real AXI and PCIe handshakes, exact host and local SRAM bytes, adjacent guards, and CPU/host phase acknowledgements."

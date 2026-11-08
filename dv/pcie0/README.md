@@ -15,3 +15,45 @@ python3 tools/regress.py chip-pcie-host
 The isolated `pcie_noc_tb.sv` reuses Compute0 local NoC only as an isolated fixture; **the full-chip variant uses PCIe0's own fabrics**. Check the pinned upstream dependency and narrow Icarus port-tie-off guard before simulation; do not modify upstream RTL or globally hide compiler errors. Report-only Verilator/Slang warnings are not a clean-lint pass; [#32](https://github.com/r987r/xezim-hello-world/issues/32) owns baseline triage.
 
 Physical link, endpoint management CSRs, multi-tag/completion stress, reset and outbound host-memory DMA belong to [#76](https://github.com/r987r/xezim-hello-world/issues/76).
+
+## Opt-in outbound host-memory DMA staging (#76)
+
+`python3 dv/pcie0/run_outbound_smoke.py` exercises pinned `dma_if_pcie`
+in isolation against a modeled Root Complex. Its earlier exact-head CI
+[42451812498](https://github.com/r987r/xezim-hello-world/actions/runs/42451812498)
+passed outbound Memory Write/Read TLPs, returned completions and byte checks.
+It uses a modeled local segmented RAM, **not** CPU/iDMA/NoC attachment.
+
+`python3 tools/regress.py chip-pcie-outbound` selects the additional,
+**opt-in and separately gated** full-chip integration. The real PicoRV32 CPU0
+runs compiled C which directs upstream PULP iDMA to move data from modeled DDR
+into physically shared PCIe0 `tc_sram` through real FlooNoC. A second,
+pinned `dma_if_pcie` requester reads those same physical bytes and issues
+posted Memory Write TLPs into **modeled Root Complex host RAM**. The existing
+host participant independently checks the 64 host bytes, adjacent guards and
+accepted outbound TLPs. A reverse host-memory read produces real completion
+TLPs and refills a disjoint region of the shared device SRAM. The original
+BAR-pulled `chip-pcie-host` is not modified.
+
+**CPU-owned requester transition (PR #149, new exact-head RTL CI pending).**
+The full-chip test no longer exposes or drives internal DMA descriptor pins.
+The host Root Complex model publishes its 64-bit DMA IOVA through actual PCIe
+BAR writes at PCIe SRAM +0x820/+0x824 and a validity word at +0x828. CPU0 C,
+after waiting for real PULP iDMA descriptor retirement, writes outbound MWr
+and MRd descriptors to `pcie0.ctrl` over the actual Config NoC. The new
+`pcie_requester_axi_regs` drives the existing pinned `dma_if_pcie` valid/ready
+interface and supplies checked status/tag/error; CPU0 polls both statuses and
+checks returned SRAM bytes. The host independently verifies Root Complex RAM,
+BAR-readback, guard bytes and passive TLP activity. The isolated requester
+unit smoke still uses a direct descriptor BFM at its isolated boundary, which
+is appropriate and does not qualify CPU-owned behavior.
+
+**This revised control path is NOT yet verified by exact-head RTL simulation.**
+A prior CI PASS at commit `469d878` proved a Cocotb-submitted descriptor
+datapath only; it must never be reused as qualification for CPU-owned control.
+PCIe PHY/LTSSM, completion queues, stress, and general packet chaining remain
+outstanding. The 16KiB shared SRAM
+adapter is bounded and intentionally fails on invalid segmented-RAM address
+or bank selections. It is a functional model, not a PCIe PHY or cache-coherent
+DMA subsystem. Only full-chip `outbound-dma-proof.json`, actual C/iDMA AXI
+traces, matched PCIe TLPs, and final shared INIT/RUN/CHECK count as proof.

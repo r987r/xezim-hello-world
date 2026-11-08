@@ -101,7 +101,8 @@ def check_delegated_full_chip(module_path: Path) -> None:
     external helpers: require this exact module + canonical delegate shape and
     inspect the actual observer/clock ownership in the shared implementation.
     """
-    if module_path.relative_to(ROOT).as_posix() != "dv/pcie0/test_full_chip_host.py":
+    selected = module_path.relative_to(ROOT).as_posix()
+    if selected not in {"dv/pcie0/test_full_chip_host.py", "dv/pcie0/test_full_chip_outbound.py"}:
         raise AssertionError("unknown cross-module passive monitor delegate")
     tree=ast.parse(module_path.read_text())
     tests=[n for n in tree.body if _is_test(n)]
@@ -114,6 +115,11 @@ def check_delegated_full_chip(module_path: Path) -> None:
             k.arg=="external" and isinstance(k.value, ast.Constant)
             and k.value.value=="pcie0" for k in calls[0].keywords):
         raise AssertionError("PCIe selector must delegate explicitly to canonical boot flow")
+    if selected == "dv/pcie0/test_full_chip_outbound.py":
+        participant = (ROOT/"dv/pcie0/host_adapter.py").read_text()
+        for token in ("watch_outbound(dut)", "exercise_outbound_device_dma()", "PCIE0_OUTBOUND_CPU_OWNED_DMA_HOST_PASS"):
+            if token not in participant:
+                raise AssertionError("PCIe outbound selector lacks independently observed requester proof")
     canonical=ROOT/"dv/full_chip/test_boot.py"
     check_module(canonical.read_text())
     source=canonical.read_text()
@@ -260,7 +266,7 @@ class MonitorLifecyclePolicyTests(unittest.TestCase):
                 continue
             path = _source_path(profile)
             with self.subTest(test=name, module=str(path.relative_to(ROOT))):
-                if name == "chip-pcie-host":
+                if name in ("chip-pcie-host", "chip-pcie-outbound"):
                     check_delegated_full_chip(path)
                 elif name == "chip-ddr4-real":
                     check_delegated_ddr_full_chip(path)
