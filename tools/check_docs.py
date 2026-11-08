@@ -19,6 +19,13 @@ STALE = re.compile(
     r"|\bdraft PR #\d+\b"
 )
 
+# Detect assertions about an open/draft PR in source-truth guides. This is
+# intentionally a syntactic guard, not a live status/CI check.
+STALE_PR_CLAIM = re.compile(
+    r"(?im)\\bPR\\s*#\\d+\\s+is\\s+(?:still\\s+)?(?:draft|pending|open)\\b"
+    r"|\\bPR\\s*#\\d+[^\\n]{0,64}\\b(?:CI pending|not yet verified)\\b"
+)
+
 def documents(root: Path) -> list[Path]:
     items = [root / "README.md", root / "AGENTS.md"]
     for d in ("docs", "dv", "rtl", "gen", "config"):
@@ -33,7 +40,7 @@ def issues(root: Path) -> list[str]:
     for path in documents(root):
         data = path.read_text(encoding="utf-8")
         name = path.relative_to(root).as_posix()
-        if name in WATCHED and STALE.search(data):
+        if name in WATCHED and (STALE.search(data) or STALE_PR_CLAIM.search(data)):
             problems.append(f"{name}: dated progress/draft claim in guide")
         fenced = None
         for line_no, line in enumerate(data.splitlines(), 1):
