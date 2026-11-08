@@ -6,6 +6,7 @@ upstream source-pinned exporter and runs on a Bender-resolved real RTL profile.
 from __future__ import annotations
 
 import json
+import hashlib
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -68,6 +69,9 @@ class RealNetlistContractTests(unittest.TestCase):
 
     def save(self):
         self.netlist.write_text(json.dumps(self.graph))
+        meta = json.loads(self.meta.read_text())
+        meta["output_sha256"] = hashlib.sha256(self.netlist.read_bytes()).hexdigest()
+        self.meta.write_text(json.dumps(meta))
 
     def test_actual_schema_validator_requires_all_channel_paths(self):
         result = rc.audit(self.netlist, selected_meta=self.meta)
@@ -91,6 +95,11 @@ class RealNetlistContractTests(unittest.TestCase):
         self.graph["nodes"][0]["path"] = "wrong.path"
         self.save()
         with self.assertRaisesRegex(rc.ConnectivityEvidenceError, "missing"):
+            rc.audit(self.netlist, selected_meta=self.meta)
+
+    def test_tampered_netlist_without_matching_export_hash_rejected(self):
+        self.netlist.write_text(self.netlist.read_text() + " ")
+        with self.assertRaisesRegex(rc.ConnectivityEvidenceError, "hash mismatch"):
             rc.audit(self.netlist, selected_meta=self.meta)
 
     def test_wrong_source_and_unrecognized_export_evidence_rejected(self):
