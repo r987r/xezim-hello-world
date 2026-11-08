@@ -506,6 +506,9 @@ tests:
         sources:
           pcie0.rx_req: {protocol: pcie, clock_domain: soc_single_clock, role: target, implementation: verilog_pcie_pcieifframe, modeling: rtl_bridge_with_modeled_root_complex}
           pcie0.tx_cpl: {protocol: pcie, clock_domain: soc_single_clock, role: initiator, implementation: verilog_pcie_pcieifframe, modeling: rtl_bridge_with_modeled_root_complex}
+          pcie0.tx_wr_req: {protocol: pcie, clock_domain: soc_single_clock, role: initiator, implementation: verilog_pcie_pcieifframe, modeling: rtl_requester_with_modeled_root_complex}
+          pcie0.tx_rd_req: {protocol: pcie, clock_domain: soc_single_clock, role: initiator, implementation: verilog_pcie_pcieifframe, modeling: rtl_requester_with_modeled_root_complex}
+          pcie0.rx_cpl: {protocol: pcie, clock_domain: soc_single_clock, role: target, implementation: verilog_pcie_pcieifframe, modeling: rtl_requester_with_modeled_root_complex}
 
 suites:
   xezim: [memory, memory-full, memory-sparse, memory-negative, sram, sram-synthesis, serv, boot, boot-relocated]
