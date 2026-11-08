@@ -50,6 +50,14 @@ def migration_policy(root:Path|None=None) -> dict:
     return data["legacy_runtime"]
 
 
+def _is_benchmark(test:dict) -> bool:
+    """A selected typed benchmark with original passive-protocol acceptance."""
+    definition=(test.get("report") or {}).get("fabric_benchmark")
+    return (isinstance(definition,dict) and
+            isinstance(definition.get("spec"),str) and
+            isinstance(definition.get("profile"),str))
+
+
 def validate_migration_inventory(config:dict, *, root:Path|None=None) -> dict:
     tests=config.get("tests")
     if not isinstance(tests,dict) or not tests:
@@ -64,6 +72,8 @@ def validate_migration_inventory(config:dict, *, root:Path|None=None) -> dict:
             kinds[name]="not_applicable"
         elif mode in SCENARIOS:
             kinds[name]="resolved_scenario_adapter"
+        elif _is_benchmark(test):
+            kinds[name]="source_benchmark_adapter"
         else:
             kinds[name]="legacy_internal_stimulus_opaque"
             actual.add(name)
@@ -169,13 +179,14 @@ def selection(target: str, plan: dict, directory: Path,
     intent = source_intent(target, plan, scenario=selected_scenario,
                            stimulus=definitions[target])
     legacy=migration_policy()
-    if mode not in SCENARIOS and not (plan.get("mode") == "compile"
+    if mode not in SCENARIOS and not _is_benchmark(plan) and not (plan.get("mode") == "compile"
             or plan["engine"] in NON_RUNTIME) and target not in legacy:
         raise RunContractError(f"{target}: missing approved legacy runtime exception; "
                                "new test must implement typed scenario dispatch")
     adapter = ("non_runtime" if plan.get("mode") == "compile"
                or plan["engine"] in NON_RUNTIME else
                "scenario_dispatch_adapter" if mode in SCENARIOS else
+               "source_benchmark_adapter" if _is_benchmark(plan) else
                "legacy_entrypoint_adapter")
     if adapter == "non_runtime":
         # Don't imply lint/build have CPU INIT/RUN/CHECK stimulus.
@@ -202,12 +213,17 @@ def selection(target: str, plan: dict, directory: Path,
         "migration_owner_issue":119 if adapter=="legacy_entrypoint_adapter" else None,
         "adapter_scope": ("compiler_or_lint_no_stimulus" if adapter == "non_runtime"
                           else "resolved_scenario_actions" if adapter == "scenario_dispatch_adapter"
+                          else "selected_protocol_benchmark" if adapter == "source_benchmark_adapter"
                           else "legacy_internal_stimulus_opaque"),
         "selected_firmware_mode": mode,
         "seed": plan.get("seed"),
         "command_argv": [{"label":label,"argv":command}
                          for label,command in commands],
         "scenario_plan_sha256": scenario_sha,
+        "benchmark_contract_sha256": (
+            hashlib.sha256((Path(__file__).resolve().parents[1] /
+                            plan["report"]["fabric_benchmark"]["spec"]).read_bytes()).hexdigest()
+            if adapter == "source_benchmark_adapter" else None),
         "actor_monitor_catalog":catalog_provenance(plan),
         "intent": intent,
         "evidence_kind": "selected_definition_not_runtime_execution",
@@ -237,7 +253,7 @@ def validate(snapshot: dict, *, target: str | None = None) -> dict:
             or set(intent.get("phases",{}))!=set(PHASES)):
         raise RunContractError("selected INIT/RUN/CHECK phases not source-qualified")
     adapter=snapshot.get("adapter")
-    if adapter not in {"non_runtime","scenario_dispatch_adapter","legacy_entrypoint_adapter"}:
+    if adapter not in {"non_runtime","scenario_dispatch_adapter","source_benchmark_adapter","legacy_entrypoint_adapter"}:
         raise RunContractError("unknown runner adapter")
     if adapter=="non_runtime" and (intent.get("detail_status") !=
             "not_applicable_to_nonruntime_target"):
@@ -246,6 +262,11 @@ def validate(snapshot: dict, *, target: str | None = None) -> dict:
             not snapshot.get("scenario_plan_sha256")
             or intent.get("declared_actions",0)<1):
         raise RunContractError("selected scenario contains no executable actions")
+    if adapter=="source_benchmark_adapter" and (
+            not snapshot.get("benchmark_contract_sha256")
+            or snapshot.get("scenario_plan_sha256") is not None
+            or intent.get("stimulus_execution") != "benchmark_native"):
+        raise RunContractError("source benchmark selection is not independently qualified")
     if adapter=="legacy_entrypoint_adapter" and snapshot.get("scenario_plan_sha256"):
         raise RunContractError("legacy adapter must not claim a scenario")
     return snapshot
