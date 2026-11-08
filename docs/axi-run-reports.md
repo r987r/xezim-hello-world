@@ -204,13 +204,4 @@ requests by AXI ID at each boundary, then reports incomplete requests,
 IDs, addresses, read beats and missing responses. IDs may be remapped
 between local/global NoC boundaries, so do not equate their values globally.
 
-[Failed SS0 full-NoC run 41871175195](https://github.com/r987r/xezim-hello-world/actions/runs/41871175195)
-recorded seven accepted DDR-model write completions at the target, but
-only five DDR write responses had reached the DMA master boundary, with
-additional descriptor/payload reads outstanding. This is a real traffic
-stall, not a mere interrupt observation problem. The DDR4 controller
-under development in draft PR #13 is not part of this setup: the current
-target is a bounded behavioral `axi_ram` model. Keep DDR4 integration
-results separate until its PHY/init and AXI regression pass independently.
-
-The later [full-chip run 41885417960](https://github.com/r987r/xezim-hello-world/actions/runs/41885417960) passed all 105 descriptors with 1,902 observed AXI handshakes using the conservative two-outstanding/no-prefetch setting. This is a simulated AXI-memory-model verification, not physical DDR/HBM characterization.
+Historical stalls and follow-up experiments are retained in [the verification issue](https://github.com/r987r/xezim-hello-world/issues/34) and original CI, not in this contract. `chip-dma` uses behavioral AXI RAM; it does not exercise a DDR4 controller. The opt-in `chip-ddr4-real` test uses a LiteDRAM DDR4 controller with separate RTL/DFI evidence and a behavioral PHY/bank model, not a silicon PHY. On timeout, find the first incomplete **accepted** AXI boundary. Do not infer memory commit from BVALID or a DMA interrupt alone.

@@ -1,39 +1,5 @@
-# Ethernet0 end-to-end integration handoff
+# Ethernet0 handoff references
 
-## Verified Ethernet IP MVP
+The standalone and CPU-driven GMII/queue/DMA MVP has a stable [reproduction and acceptance contract](ethernet0-closure-gate.md). The **new multi-protocol functional test is separate**; use [combined integration acceptance](multiprotocol-integration-readiness.md) and [epic #34](https://github.com/r987r/xezim-hello-world/issues/34) for current work. Older PR timelines, failure investigations and milestone notes belong in the related issue/PR history, not a second implementation document.
 
-Ethernet issue [#64](https://github.com/r987r/xezim-hello-world/issues/64) is **closed for the scoped functional MVP** after [merged PR #73](https://github.com/r987r/xezim-hello-world/pull/73). The live bidirectional Ethernet RTL remains opt-in; this document preserves the original bring-up evidence and handoff history. The dedicated [Ethernet run #42145885849](https://github.com/r987r/xezim-hello-world/actions/runs/42145885849) at RTL SHA `3dcf2c2ef2e3480f5a4abd78dea49f2ad57a5c22` passed all three jobs: connected GMII regression, upstream six-source AXI mux elaboration, and full-chip Ethernet RX/TX through the actual generated local/global Data and independent Config FlooNoCs.
-
-The full-chip test drives real GMII frames to Ethernet SRAM and bounded modeled DDR, reads back the same 85 bytes using independent frontdoor AXI, validates 32-byte CQ records/producer positions, and sends SRAM- and modeled-DDR-sourced frames out the real MAC with valid FCS. It also checks a no-posted-buffer negative. Focused [RX](https://github.com/r987r/xezim-hello-world/actions/runs/42143412383) and [TX](https://github.com/r987r/xezim-hello-world/actions/runs/42143915021) tests independently prove stalled completion B response ordering and bad-FCS rejection.
-
-The reusable RTL is `rtl/io/ethernet0/ethernet0_mvp.v` (one pinned MAC, one RX and one TX queue), with `ethernet0_axi_mvp.sv` using the pinned PULP AXI mux for six upstream descriptor/payload/CQ masters and `ethernet_queue_axi_regs.sv` using a real AXI4-to-AXI-Lite Config NoC bridge. No in-house replacement MAC, AXI arbitration, DMA or VIP was added.
-
-## Important variant boundary
-
-The *default* committed `gen/chip/soc_top.sv` and architecture diagram still reserve Ethernet packet/CSR attachments. They are **not contradictory** to the measured opt-in variant: `tools/full_chip_gen.py::emit(..., ethernet_mode=True)` generates the live Ethernet instance. Its manifest labels the live attachment but does not mark unmeasured physical DDR controller/PHY or PCIe host as observed. Two opt-in/default source-generation tests and `make check-generated` have passed. A separate exact-variant diagram/parsed-port audit remains on the final checklist.
-
-## Completed Ethernet #64 closure gate
-
-The real PicoRV32 C program `sw/ethernet/tests/eth_cpu_run.c` executes through the existing cold-boot hook, programs actual Ethernet Config NoC CSR/policy, posts one RX and one TX descriptor and doorbell, and independently checks RX SRAM bytes, both 32-byte CQ records and producer/consumer/IRQ acknowledge. The physical GMII source/sink remains a line-level testbench peripheral, while **CPU0 uses its real AXI master**, not BFMs or memory backdoors. The companion `dv/ethernet0/test_cpu_mvp.py` requires passive accepted Data/Config NoC AXI events and the existing INIT/RUN/CHECK phases. [CI #42162107273](https://github.com/r987r/xezim-hello-world/actions/runs/42162107273) **PASS, four of four jobs**, including `chip-ethernet-cpu` against tested RTL SHA `2ae83f279f96ced2f3393dede9e34f3d174e26f5`.
-
-**Ethernet MVP criterion is met and merged.** PR #73 is merged and #64 is closed; the still-open cross-protocol test is owned by #34. Keep dedicated `chip-ethernet-cpu` and BFM `chip-ethernet` tests, focused RX/TX tests, and actual opt-in generated-source checks as continuing regressions. The committed default `gen/chip` intentionally remains reserved.
-
-## Moved to #34 multiprotocol integration (not blockers for Ethernet closure)
-
-1. Modeled PCIe Root Complex reads **Ethernet-produced** payload and CQ via real TLPs and independently checks correct host bytes and completion records. Merged PCIe #60 is a reusable foundation, not proof of this join.
-2. The five original named `ETH_RX_SRAM`, `ETH_RX_MODELED_DDR`, `ETH_TX_SRAM_GMII`, `ETH_HOST_PCIe_VISIBILITY`, `ETH_CPU_CQ_AUDIT` steps must run together under the shared `StepRecorder` with passive AXI/TLP/GMII correlation and source-true topology/latencies. Do not treat `trace_phase` as complete step records.
-3. Broader fabric concurrency assertions, real LiteDRAM, PCIe PHY/outbound DMA and stress/performance remain their independent tracks; they are not Ethernet first-MVP requirements.
-
-## Resolved NoC ordering issue and remaining fabric scope
-
-The historical generic concurrent `supernoc` failure (`NoBResponseIdQueue` at 227.52 µs in CI #42145885829) was repaired by [merged PR #78](https://github.com/r987r/xezim-hello-world/pull/78), which passed its dedicated same-ID positive and negative scenarios and is incorporated in Ethernet PR #73. [Issue #75](https://github.com/r987r/xezim-hello-world/issues/75) tracks that history. This is a functional SoC test vehicle; large-scale simultaneous traffic and performance remain further qualification, not implied by the fix.
-
-## Reproduce and hand off
-
-- `python3 tools/regress.py chip-ethernet-cpu`: **real CPU0 C** cold boot + RX/TX queue/CQ/IRQ, GMII line, passive accepted AXI and flow events (required Ethernet #64 gate).
-- `python3 tools/regress.py chip-ethernet`: generated-chip RX/TX SRAM and modeled-DDR smoke, Config NoC CSR via CPU0 BFM, passive AXI report.
-- `.github/workflows/ethernet-mvp.yml`: pinned vendor source elaboration, connected component simulation and full-chip optional variant CI.
-- `docs/ethernet0-closure-gate.md`: the scoped **CPU0 C Ethernet closure** and deferred full-system five-step checklist.
-- `docs/multiprotocol-integration-readiness.md`: the combined CPU/PCIe/Ethernet bring-up and dependencies.
-
-**Decision (historical closure):** Ethernet #64 is complete and closed after merged PR #73. Full PCIe/DDR/Ethernet cross-protocol host visibility and five-step closure remain with #34.
+Do not treat a BFM-driven Ethernet↔modeled-DDR test as real CPU firmware or an Ethernet↔real-DDR↔PCIe host completion.

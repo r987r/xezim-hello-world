@@ -1,37 +1,30 @@
-# Next-stage combined Ethernet ↔ real DDR ↔ CPU/iDMA ↔ PCIe host acceptance
+# Combined Ethernet → real DDR → CPU/iDMA → PCIe host verification
 
-Scope: first **functional** three-protocol data exchange on the **same**
-generated 12-NoC SoC. This is a plan and current exact-source evidence, **not**
-a declaration that the three-way RTL is already connected.
+**Acceptance contract, not a completed test.** Independent Ethernet, LiteDRAM and PCIe regressions do **not** establish a connected, same-source multi-protocol result. The default generated SoC retains reserved packet endpoints and modeled DDR/HBM targets; the combined test needs its own opt-in RTL variant and elaborated interface check. Work and progress: [epic #34](https://github.com/r987r/xezim-hello-world/issues/34).
 
-## Current status — November 6, 2026
+## Required configuration and evidence
 
-This document is the **next-stage combined-test plan**. Ethernet MVP PR #73 / issue #64 and real LiteDRAM full-chip DDR-B PR #74 / issue #40 are already merged/closed. PCIe host integration PR #60 is merged. Their individual test passes do **not** establish one simulation that carries the same Ethernet-produced data through real DDR and CPU/iDMA to a PCIe host completion. The canonical generated default chip still reserves Ethernet and PCIe packet endpoints and retains behavioral memory models; the combined test must explicitly generate and qualify a live opt-in configuration.
+One source-selected configuration must instantiate the Ethernet GMII/queue/DMA, real LiteDRAM controller and behavioral DFI SDRAM model, PicoRV32/iDMA, PCIe TLP-to-AXI bridge and modeled host Root Complex over the generated local/global data and independent config FlooNoCs. Use `config/regression.yaml`, `config/soc.yaml` and their generator manifests—not hand-edited RTL or a second NoC diagram.
 
-**New functional Ethernet evidence:** opt-in generated-chip [CI #42145885849](https://github.com/r987r/xezim-hello-world/actions/runs/42145885849) passed GMII RX/TX into/out of Ethernet SRAM and modeled DDR, through actual Ethernet Data/Config NoCs. This is *not* yet the one combined CPU0 C + PCIe host regression.
+Before a combined run, require actual selected variant elaboration and source-matched bit/port/clock/reset/AXI-ID checks ([#46](https://github.com/r987r/xezim-hello-world/issues/46)), a selected seedable executable INIT/RUN/CHECK action plan ([#119](https://github.com/r987r/xezim-hello-world/issues/119)), and independent Ethernet, PCIe and real-DDR baselines at the same final source revision. Authored YAML descriptions alone do not execute stimulus.
 
-Historical baseline before the Ethernet merge: `main` `b91e3d3b7c4fea582fc690a7abbd55c7e32064b4` (PCIe #60 and NoC ordering #78). Audited main baseline: `5f0a793055191c9ae926da1cafe6850f185e628a`.
+## Directed first-smoke path
 
-| Component | Available evidence | Not yet proven |
-| --- | --- | --- |
-| PCIe host to modeled DDR | [Merged PR #60](https://github.com/r987r/xezim-hello-world/pull/60), [CI 42134213227](https://github.com/r987r/xezim-hello-world/actions/runs/42134213227) passed real `chip-pcie-host`: RC TLP → PCIe SRAM → real PULP iDMA → modeled DDR → SRAM → host BAR readback; 27/27 flow steps, 47,864 complete AXI transactions and 3,741 PCIe read/completion pairs. | Direct host BAR to DDR, physical PCIe endpoint/link, endpoint-initiated host memory DMA. Initial PCIe integration is merged to `main`; advanced features remain [#76](https://github.com/r987r/xezim-hello-world/issues/76). |
-| PCIe/general full-NoC ordering | Previous failing `NoBResponseIdQueue` at 227.52 µs fixed with [merged PR #78](https://github.com/r987r/xezim-hello-world/pull/78), passing its directed local/global positive/negative same-ID regressions. | Extended stress, saturation and performance remain independent qualification; the earlier failure was not a current Ethernet regression failure. |
-| Ethernet | [PR #73](https://github.com/r987r/xezim-hello-world/pull/73), [exact-head CI #42162107273](https://github.com/r987r/xezim-hello-world/actions/runs/42162107273) **4/4 PASS**: real GMII RX/TX, SRAM/model-DDR transfers, true descriptor/packet DMA and B-gated CQs, independent Config/Data NoCs, plus **compiled real CPU0 C** configuring queues/IRQ and checking SRAM/CQ through actual PicoRV32 AXI. | Ethernet MVP #64 fulfilled. **Epic #34** still owns modeled PCIe host read of the same Ethernet-produced bytes/CQ with real TLP completion and the five combined `StepRecorder` stages. Default `gen/chip` Ethernet remains reserved; live opt-in variant uses `ethernet_mode=True`. |
-| Real DDR4 | [Merged PR #74](https://github.com/r987r/xezim-hello-world/pull/74) verifies full-chip PicoRV32/PULP iDMA → real LiteDRAM controller RTL with Config-NoC init; [merged PR #117](https://github.com/r987r/xezim-hello-world/pull/117) adds real full-chip passive DFI/BankModel command evidence (exact-head [boot attempt 2 passed](https://github.com/r987r/xezim-hello-world/actions/runs/42302961172)). | The *same-run* Ethernet and PCIe paths to that controller remain unproven; issue [#108](https://github.com/r987r/xezim-hello-world/issues/108) tracks final published DFI browser verification, not missing RTL command instrumentation. |
+| Boundary | Required independent proof |
+| --- | --- |
+| GMII ingress | Received frame length, bytes, FCS and selected RX queue/descriptor |
+| Ethernet DMA and CQ | Actual AXI AR/R descriptor fetch and AW/W/B payload write; B-gated completion record/cookie/status |
+| LiteDRAM | Config-NoC/Wishbone initialization, accepted controller AXI reads/writes, continuously captured DFI/BankModel events and byte-exact frontdoor result |
+| CPU0 and PULP iDMA | Real CPU firmware programs descriptors/CSR, polls completion, copies/checks data with independent AXI traffic |
+| PCIe host | Host BAR reads from qualified PCIe SRAM staging; actual request/completion TLP pair and byte-identical payload/CQ |
 
-## Minimal end-to-end topology
+All phases must execute **in one simulation**, with one source SHA, selected action plan, simulator/config/test/run identity, and a single independent scoreboard. Check absent/duplicate/timed-out completions, wrong IDs/tags, bad bytes and unsupported routes as failures. Do not splice individual passing artifacts into a combined PASS.
 
-- **Host to memory (proven in #60 opt-in test):** behavioral Root Complex → accepted real PCIe TLP → upstream `pcie_axi_master` → `pcie0_local_data` → `pcie0.sram` → CPU0/PULP iDMA → modeled `memory0.ddr0`, then reverse to PCIe SRAM and completion TLP.
-- **Ethernet RX (proved in dedicated optional chip test):** GMII -> upstream FCS/CDC -> whole-frame stage -> queue descriptor -> AXI DMA via Ethernet local/global Data FlooNoCs -> SRAM or modeled DDR -> independent bytes and B-gated CQ readback. [CI](https://github.com/r987r/xezim-hello-world/actions/runs/42145885849). CPU0 C + PCIe host not part of this test.
-- **Ethernet TX (proved in dedicated optional chip test):** SRAM or modeled DDR -> descriptor fetch and upstream AXI DMA -> same MAC -> GMII FCS/end -> CQ AXI B -> BFM-observed producer. [CI](https://github.com/r987r/xezim-hello-world/actions/runs/42145885849).
-- **Cross-protocol visibility:** CPU0 and PCIe host read **the same Ethernet-produced buffer and CQ** through their existing NoCs or through explicitly checked PCIe SRAM staging. Host success must be backed by an actual accepted completion TLP with correct bytes, not by backdoor copies.
-- Global Data and global Config NoCs remain independent. A simulated controller model is **not** the real LiteDRAM/DFI controller.
+**Not implied:** the PCIe host **pulling** data over BAR is not endpoint-initiated outbound PCIe DMA into host RAM ([#76](https://github.com/r987r/xezim-hello-world/issues/76)); modeled DFI is not an electrical PHY; HBM remains modeled; CPU IRQ delivery and the direct Ethernet→Compute1→PCIe bypass are separate ([#47](https://github.com/r987r/xezim-hello-world/issues/47), [#43](https://github.com/r987r/xezim-hello-world/issues/43)).
 
-## Reproducible failure-localization order for the combined test
+## Reproduction and failure localization
 
-The combined opt-in test should be **one YAML regression target** and **one resolved scenario** under #119. Treat an INIT/RUN/CHECK milestone as *expected* until the DUT and passive monitors actually prove it. Keep per-run `plan.json`, `result.json`, `test-flow.json`, `protocol-transactions.json`, `axi-transactions.json`, `simulation.log` and any DFI summaries together under the same test/run SHA; link from Test Runs. Never splice together separately passing Ethernet, DDR and PCIe artifacts as one integration PASS.
-
-Run the independently existing baselines before blaming the combined design:
+Start with the existing, **independent** baselines:
 
 ```sh
 make check-generated
@@ -40,22 +33,8 @@ python3 tools/regress.py chip-pcie-host
 python3 tools/regress.py chip-ddr4-real
 ```
 
-These are **separate diagnostics**, not a combined success test. For the new run, first verify its generated *variant-specific* chip manifest, connected Data/Config NoCs, RTL hierarchy/port contract, SRAM/real-DDR aperture and actor/monitor catalog (default `gen/chip` is intentionally reserved). Then inspect the earliest missing or failing observed boundary in this order:
+These commands are not the combined test. For the new source-selected variant, inspect its `plan.json`, `identity.json`, `result.json`, `test-flow.json`, `axi-transactions.json`, `protocol-transactions.json`, DFI summaries and `simulation.log` under one canonical run. The existing [Test Runs viewer](publication.md) must show exact selected action IDs, actors, dependencies, seed and expected checks alongside *separate* observed protocol handshakes.
 
-1. **GMII ingress:** actual received frame length/FCS and descriptor/queue selection; reject a pass based only on an injected frame or planned queue write.
-2. **Ethernet descriptor/DMA:** observed AXI AR/R fetch, actual payload AW/W/B to the destination, accepted completion-queue B and recorded producer/cookie/status; distinguish stalled channel from wrong address or missing responder.
-3. **Real DDR:** Config-NoC CSR/DFII init, LiteDRAM-facing AXI read/write completions, continuous full-chip DFI command stream and BankModel events; label DFI clock/time and behavioral PHY, and do not invent DFI-to-AXI-ID mapping.
-4. **CPU/iDMA:** CPU0 C program reaches named RUN/CHECK milestones, programs real DMA CSRs, issues accepted AXI transactions, verifies byte-exact payload and completion metadata from the target (not backdoor memory).
-5. **PCIe host:** Root Complex request TLP reaches the PCIe NoC/SRAM or qualified DDR staging path, real AXI read data matches, and the host observes a matching accepted completion TLP and payload. Record which hop/adapter first lost the data or tag.
+On failure, locate the **first unverified boundary** in the table above. Report actual address/ID/tag, actor, expected and observed bytes, first/last captured timestamp and NoC hop when available. Report unobserved timing as **unmeasured**, never estimated. Source-selected logical routes, compiled RTL and accepted traffic are distinct evidence types.
 
-For every failure show **first failing milestone, source actor, expected/observed payload hash or byte mismatch, address, AXI ID or PCIe tag, earliest/last timestamp, NoC path and responsible log link** where actually captured. Distinguish configured pending budgets from measured peak outstanding; leave missing measurements explicitly *unmeasured*. A hard timeout is FAIL, not a simulated success. The canonical Test Runs viewer should show the selected run's source/attempt and the pre-simulation resolved plan alongside independent evidence; issue #119 owns that wiring.
-
-## Order, ownership and gates
-
-1. **Address & protocol safety:** merged PCIe #60 proves the minimal host/TLP + modeled-DDR path. The local/global same-ID B/R NoC ordering defect #75 is corrected in merged #78 with its positive and negative tests; preserve those regressions. Extended stress remains separate.
-2. **Ethernet IP MVP (#73, issue #64): COMPLETE.** Merged #73 and closed #64 after four dedicated RTL jobs, including real CPU0 C, GMII, queue/descriptor/CQ/IRQ and FlooNoC routing, passed [CI #42162107273](https://github.com/r987r/xezim-hello-world/actions/runs/42162107273). The new combined run is a separate #34 deliverable. The default `gen/chip` artifact still reserves Ethernet; `ethernet_mode=True` is the live tested option.
-3. **Full-system epic #34 (after Ethernet #64):** reuse the single executable INIT→RUN→CHECK scenario/action contract owned by #119 and the existing `StepRecorder`; do not add another runner or hand-maintained UI flow. Historical scoped Ethernet steps include `ETH_RX_MODELED_DDR`, but the **new combined proof must use the real LiteDRAM-backed DDR window**. Define exact step names and prerequisites in the scenario, not the renderer. The acceptance needs the *same* Ethernet payload/cookie in real DDR, CPU/iDMA readback, and an accepted PCIe host completion, plus correctly B-gated completion queues. Check missing, duplicate, timed-out and incomplete flow steps fail closed.
-4. **Current-source truth:** `make gen` + `make check-generated`, generated `soc_top` and NoC manifest, parsed required-port audit, the single diagram, bus/clock contracts and actor labels all agree with actual optional RTL variant. Never promote reserved endpoints globally for a variant that is not instantiated on default `main`.
-5. **Real DDR controller #40: COMPLETE for initial integration.** Preserve default `axi_ram`, use the explicitly qualified `chip-ddr4-real` opt-in LiteDRAM controller, independent Config-NoC initialization, real CPU/iDMA data readback, DECERR and behavioral DFI evidence. Do not relabel model PHY as physical DDR4 or assume this controller is installed in the separate Ethernet/PCIe variants.
-
-**Next-stage policy:** Ethernet #64 and real DDR-B #40 are already closed for their scoped integration. Cross-protocol PCIe Root Complex visibility, the combined `StepRecorder` stages and source-matched unified route/latency audit remain under #34. The NoC fix #78 is merged, PCIe #41 is closed, and #76 owns advanced PCIe features. No cross-protocol route is called measured without simulation at one exact SHA. #35 DDR-A stress and #43 Ethernet fast path remain separate. Physical PCIe PHY/LTSSM, DDR silicon PHY, endpoint-initiated host-memory DMA, saturation and broad backpressure are outside the initial milestone; the already observed fatal NoC assertion is a real regression, not silently deferred by removing the failing test.
+Final epic completion additionally requires the direct fast path and broader stress gates tracked in #34; the first global-route functional smoke alone cannot close the epic.

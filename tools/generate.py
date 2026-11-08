@@ -47,11 +47,10 @@ def generated_section(cfg: dict, meta: dict, diagrams: dict[str, str], nocs: dic
         "<!-- Do not edit this section: regenerate with `make gen`. -->",
         "### Whole-SoC data and configuration NoCs",
         "",
-        "The **single architecture diagram** below includes all local/global FlooNoCs, "
-        "compute CPU/DMA/SRAM blocks and memory target crossbar. It is generated "
-        "from the same SoC configuration and FlooGen endpoint topology as the real "
-        "structural RTL. **Solid links show generated optional iDMA/CSR wiring (enabled in DMA mode); dashed links show pending physical controllers.** "
-        "The same NoC RTL serves cold boot, CPU0 C-launched DMA, and dual-engine BFM DMA.",
+        "The diagram is generated from the configured FlooGen networks and SoC endpoints. "
+        "Solid links show source-declared connections; dashed links indicate "
+        "reserved/optional attachments. It is a structural view, **not** proof of "
+        "elaborated ports or observed traffic.",
         "",
         "[![Complete hierarchical SoC and all data/config FlooNoCs](gen/diagrams/noc-hierarchy.svg)](gen/diagrams/noc-hierarchy.svg)",
         "",
@@ -67,14 +66,12 @@ def generated_section(cfg: dict, meta: dict, diagrams: dict[str, str], nocs: dic
         f"{cfg['buses']['config']['data_bits']}-bit AXI4 transport "
         "for AXI4-Lite endpoint bridges. CPU/reset adapters are attached in the boot configuration; the BFM scope uses AXI agents.",
         "",
-        "**Verification truth:** Xezim exercises separate CPU cold-boot/SRAM and "
-        "Verilog-AXI memory testbenches. Both Xezim and Verilator have compiled "
-        "the eight structural FlooNoCs. The unified `make dv-supernoc` regression "
-        "connects all meshes to upstream AXI agents and checks destinations, data, "
-        "bursts, concurrent IDs, stalls and downstream SLVERR. Xezim NoC traffic "
-        "is not verified. The `make dv-chip` boot configuration runs the real CPUs through "
-        "the shared NoCs with CPU0-coordinated init/run/check and AXI memory stand-ins. "
-        "The `make dv-chip-cpu-dma` variant also runs compiled C on real CPU0 to submit DMA through the configuration NoC, roundtrip DDR/HBM data, and compare actual CPU allocations with the Python plan (verified in CI run 41933332567). `make dv-chip-dma` independently tests both real engines with CPUs held in reset and BFM-initialized DMA SRAM. See [chip boot scope](docs/full-chip-boot.md) and [DMA integration](docs/dma-bringup.md).",
+        "**Verification boundary:** Verilator runs connected local/global NoC RTL traffic "
+        "and negative-route tests; Xezim runs independent CPU boot, SRAM and AXI memory "
+        "tests and has structural NoC compilation checks. A compile is not routed-traffic "
+        "coverage. CPU/iDMA, Ethernet, PCIe and real LiteDRAM require their separately "
+        "selected opt-in regressions; no single default generated chip proves their "
+        "combined behavior. See [verification scopes](docs/verification.md).",
         "",
         "### Generated NoC sources (no duplicate pictures)",
         "",

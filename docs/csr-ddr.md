@@ -1,6 +1,6 @@
 # DDR controller register catalog (CSR-DDR, #98)
 
-This is part of the existing [SoC address-map explorer](../address-map.html), not a second DDR verification site. **Merged DDR-B #74 provides an opt-in real LiteDRAM controller**, while the default configuration still uses fast AXI RAM. A DDR data aperture is not itself a CSR bank.
+This is part of the existing [SoC address-map explorer](https://r987r.github.io/xezim-hello-world/address-map.html), not a second DDR verification site. **Merged DDR-B #74 provides an opt-in real LiteDRAM controller**, while the default configuration still uses fast AXI RAM. A DDR data aperture is not itself a CSR bank.
 
 ## Source ownership and address spaces
 

@@ -7,14 +7,14 @@ to reintroduce the old standalone Xezim port-slice reproducer.
 
 The workflow [`floonoc-elab.yml`](../.github/workflows/floonoc-elab.yml)
 downloads **the pinned upstream FlooNoC commit and its Bender.lock**,
-compiles all eight generated local/global NoC structural tops via
-**Verilator 5.020**, and separately checks the **same eight tops
+compiles the selected generated local/global NoC structural tops via
+**Verilator 5.020**, and separately checks the **same generated tops
 and upstream file list** via the pinned **Xezim 0.11.4** binary.
 Both simulator probes discover configured networks through the shared
 [YAML regression](regression.md): `python3 tools/regress.py compatibility`
 and `python3 tools/regress.py noc-verilator`.
 
-Both structural compile/elaboration stages pass for all eight NoCs.
+Both structural compile/elaboration stages pass for the selected NoC tops.
 Those stages alone are not packet-transfer tests. The same workflow also
 runs the separate connected NoC traffic and corruption checks in Verilator. The separate [super-NoC test](supernoc-verification.md) now
 runs real routed traffic in Verilator, including concurrent IDs, stalls,
@@ -23,7 +23,7 @@ compile-only; no equivalent Xezim routed-traffic pass is claimed.
 
 ## Warnings that must not be hidden
 
-The first successful all-eight comparison:
+The first successful structural comparison:
 [run 41549692954](https://github.com/r987r/xezim-hello-world/actions/runs/41549692954).
 
 | NoC | Xezim structural compile | Reported Xezim warning lines |
@@ -78,13 +78,13 @@ this guard or suppress the error silently.
   equivalent Xezim routed-traffic path on the same pinned RTL before
   claiming cross-simulator functional agreement.
 - Preserve the chip's implemented CPU/SRAM/reset and upstream AXI-Lite
-  adapters; integrate real iDMA/CSRs next. No custom AXI-Lite NoC or new
+  adapters; retain independent qualified iDMA/CSR regression variants. No custom AXI-Lite NoC or new
   router implementation and **no per-bridge/per-router TB proliferation**.
 - Compare observed data, IDs and backpressure; if Xezim differs from
   Verilator, record the precise hierarchy, source line, configuration,
   waveform and result in this doc and an upstream issue.
 - The shared NoC assembly now serves the CPU boot configuration. Keep
-  actual CPU/bridge/SRAM/reset paths distinct from pending real iDMA and
+  actual CPU/bridge/SRAM/reset paths distinct from optional real iDMA and
   physical-controller paths in the one chip diagram.
 
 The regular [`dv-soc.yml`](../.github/workflows/dv-soc.yml)

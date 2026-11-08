@@ -94,10 +94,16 @@ class PcieHostParticipant:
             with self.flow.step(stage,"host0","wait_run_enable",origin="observed"):
                 # Real CPU C/iDMA takes ~3.2 ms before the extra PCIe
                 # exchange; poll sparingly to avoid creating bus congestion.
+                # CPU/iDMA continues executing for milliseconds while the
+                # host waits. A 1us BAR polling cadence adds thousands of
+                # simulated PCIe TLPs and can exhaust the CI wall-clock
+                # budget before firmware reaches RUN. Poll every 20us instead
+                # with the SAME 9ms simulated timeout and unchanged handshake.
+                # This is a wait optimization, not a relaxed RTL check.
                 await with_timeout(poll_bar(
                     self.bar,0x808,self.magic["run_enable"],
-                    attempts=9000 if self.dma_exchange else 5000,
-                    interval_ns=1000 if self.dma_exchange else 20),
+                    attempts=450 if self.dma_exchange else 5000,
+                    interval_ns=20000 if self.dma_exchange else 20),
                     9000 if self.dma_exchange else 1000,"us")
             self.before_write=int(self.dut.pcie_sram_write_count.value)
             self.before_read=int(self.dut.pcie_sram_read_count.value)

@@ -25,7 +25,7 @@ existing verified cold-boot and memory outputs are not invalidated.
 - These memory-fabric knobs apply to the independent 2×2 memory scope.
   The separate [chip boot configuration](full-chip-boot.md) already wires
   real CPUs, NoCs, SRAM, reset and a 1×2 memory crossbar; real DMA and CSRs are generated in optional `DmaEnable=1` mode
-   (full-NoC verification pending CI).
+   (connected NoC RTL has a separate routed-traffic regression).
   The standalone 2×2 tuning/connectivity overrides are not automatically
   applied to that 1×2 chip crossbar.
 - Generic full-SoC PULP AXI/FlooNoC backend emission. Scoped FlooGen
@@ -59,7 +59,7 @@ Reuse choices and remaining alternatives:
   Replacing the legacy boot SRAM separately still requires matching its
   asynchronous Port A read contract.
 - Fabric: upstream Verilog-AXI `axi_crossbar` already used; PULP AXI
-  `axi_xbar` remains optional; FlooGen already emits all eight local/global networks.
+  `axi_xbar` remains optional; FlooGen emits the twelve configured local/global networks; discover new meshes from the generated manifest, not a fixed count.
 - Bridge shims: only minimal protocol/width/reset adapters needed at the
   boundary; never custom arbitration or routing RTL unless no reusable
   implementation meets an explicitly documented requirement.

@@ -1,9 +1,10 @@
-.PHONY: dv-memory-service bench-memory help gen check-generated check-config dv-memory dv-memory-negative dv-cpu dv-serv dv-sram dv-boot dv-supernoc dv-chip dv-chip-dma dv-chip-cpu-dma dv-chip-ddr4-real dv-dma dv-dma-vectors smoke test test-xezim test-noc test-list
+.PHONY: dv-memory-service bench-memory help gen check-generated check-config check-docs dv-memory dv-memory-negative dv-cpu dv-serv dv-sram dv-boot dv-supernoc dv-chip dv-chip-dma dv-chip-cpu-dma dv-chip-ddr4-real dv-dma dv-dma-vectors smoke test test-xezim test-noc test-list
 
 help:
 	@echo 'make gen             Generate tracked RTL, firmware and documentation'
 	@echo 'make check-generated Check exact generated file/content drift'
 	@echo 'make check-config    Run configuration/generator/runner unit tests'
+	@echo 'make check-docs      Validate Markdown local links and stale progress claims'
 	@echo 'make dv-memory-service  Fast common INIT/CHECK and C-pattern tests'
 	@echo 'make bench-memory       Labelled synthetic service timings, not RTL performance'
 	@echo 'make test-list       List every YAML-defined regression target'
@@ -27,6 +28,9 @@ check-generated:
 
 check-config:
 	python3 -m unittest discover -s tests -v
+
+check-docs:
+	python3 tools/check_docs.py
 
 test-list:
 	python3 tools/regress.py full --list

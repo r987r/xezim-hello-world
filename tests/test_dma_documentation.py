@@ -40,8 +40,9 @@ class DmaDocumentContract(unittest.TestCase):
         for f in ('README.md','docs/full-chip-boot.md','docs/dma-bringup.md'):
             self.assertIn('DmaEnable=1', contents[f], f)
             self.assertIn('dv-chip-dma', contents[f], f)
+        # Enforce a specific hardware boundary, not an arbitrary progress word.
         for f in ('README.md','docs/implementation-status.md','docs/dma-bringup.md'):
-            self.assertTrue('pending' in contents[f].lower(), f)
+            self.assertIn('CPU interrupt service is not implemented', contents[f], f)
         report_doc=(ROOT/'docs/axi-run-reports.md').read_text()
         for required in ('BVALID && BREADY', 'RVALID && RREADY && RLAST',
                          'CPU0 AXI BFM', 'DDR4 controller'):

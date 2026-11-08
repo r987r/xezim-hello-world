@@ -16,7 +16,7 @@ single connected BFM test's coverage and results.
 | `supernoc_tb` | One generated wrapper, all twelve current real meshes, upstream AXI agents, local/remote reads/writes and stress/error checks |
 | compute0 boot configuration | PicoRV32/SRAM/upstream adapters connected; optional real iDMA/CSR generated for DMA test mode |
 | compute1 boot configuration | SERV/Wishbone/AXI adaptation and SRAM connected; optional real iDMA generated for DMA test mode |
-| config endpoints | CPU/reset AXI-Lite boundaries connected; DMA CSR bridge generated in DMA mode; controller registers pending |
+| config endpoints | CPU/reset AXI-Lite boundaries connected; DMA CSR bridge generated in DMA mode; controller CSR attachment is variant-specific; default modeled-memory and PCIe-management windows are reserved |
 | memory boot configuration | Local NoC attached to target crossbar and AXI slave models; both global memory ingress links retained |
 | full-chip boot | Real CPUs coordinate init/run/check; upstream AXI BFM checks HBM/DDR stand-ins; generated SS0/SS1 DMA and CSR connections passed the full-chip NoC RTL traffic test ([CI 41885417960](https://github.com/r987r/xezim-hello-world/actions/runs/41885417960)); CPU0 C-DMA firmware passed ([CI 41933332567](https://github.com/r987r/xezim-hello-world/actions/runs/41933332567)); CPU interrupt service, dual-engine CPU-directed stress and physical controllers pending |
 
