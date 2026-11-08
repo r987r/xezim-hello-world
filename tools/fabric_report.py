@@ -446,7 +446,7 @@ def latency_table(report, scope=None):
                 op = o["operation"]
                 if (op not in ("read", "write") or
                         not o.get("matches_site_source") or op in evidence
-                        or (scope is not None and o.get("test_scope") != scope)):
+                        or (scope is not None and o.get("fabric_scope") != scope)):
                     continue
                 evidence[op] = {"n": o["sample_count"],
                                 "clock_period_ps": o["clock_period_ps"],
@@ -584,7 +584,9 @@ def attach_one_beat_observations(report, entries, output, source_sha):
                 **_quantiles(samples), "source_sha": entry["source_sha"],
                 "matches_site_source": identity is not None,
                 "source_equivalence": identity or "historical",
-                "test_scope": entry["target"], "simulator": entry["engine"],
+                "test_scope": entry["target"],
+                "fabric_scope": entry.get("fabric_scope", "unspecified"),
+                "simulator": entry["engine"],
                 "run_report": entry["path"],
                 "scope": "initiator_end_to_end_B_or_RLAST_all_test_phases",
             })
@@ -637,13 +639,15 @@ def attach_one_beat_observations(report, entries, output, source_sha):
                 "stage_metrics": stage_stats,
                 "source_sha": entry["source_sha"], "matches_site_source": True,
                 "source_equivalence": identity,
-                "test_scope": entry["target"], "simulator": entry["engine"],
+                "test_scope": entry["target"],
+                "fabric_scope": entry.get("fabric_scope", "unspecified"),
+                "simulator": entry["engine"],
                 "run_report": entry["path"],
                 "scope": "serial_single_outstanding_AXI_tap_boundary_deltas",
             })
     report["latency_table"] = latency_table(report)
     eligible_scopes = sorted({
-        o["test_scope"] for route in report["routes"]
+        o["fabric_scope"] for route in report["routes"]
         for o in route.get("one_beat_stage_observations", [])
         if o.get("matches_site_source")
     })
