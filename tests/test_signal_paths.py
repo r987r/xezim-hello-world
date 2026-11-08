@@ -76,7 +76,10 @@ class SlangDependencyTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "duplicate elaborated port path"):
             signal_paths.read_graph(self.file)
         d["nodes"].pop()
-        d["nodes"][0]["bounds"] = [2, 0]
+        d["nodes"][0]["bounds"] = [31, 0]  # Legal descending packed range.
+        self.file.write_text(json.dumps(d))
+        signal_paths.read_graph(self.file)
+        d["nodes"][0]["bounds"] = [2, -1]
         self.file.write_text(json.dumps(d))
         with self.assertRaisesRegex(ValueError, "invalid elaborated port bounds"):
             signal_paths.read_graph(self.file)
