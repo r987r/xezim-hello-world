@@ -34,6 +34,8 @@ class StimulusCatalogTests(unittest.TestCase):
                          "dv/supernoc/test_supernoc.py")
         self.assertEqual(entries["supernoc-latency"]["driver_source"],
                          "dv/supernoc/test_latency.py")
+        self.assertEqual(entries["chip-boot-latency"]["driver_source"],
+                         "dv/full_chip/test_latency.py")
         self.assertEqual(entries["noc-verilator"]["execution"],"non_runtime")
         self.assertFalse(entries["noc-verilator"]["phases"]["run"])
 
