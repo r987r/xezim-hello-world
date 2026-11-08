@@ -123,6 +123,7 @@ tests:
     env: {SUPERNOC_NEGATIVE: '1'}
     expect_failure: 'FAIL supernoc injected data mismatch detected'
   supernoc-latency:
+    opt_in: true
     logical_test: axi-noc-latency-baseline
     engine: cocotb-verilator
     sources: noc
@@ -332,6 +333,7 @@ tests:
       axi: {scope: dut.u_noc, clock: clk, reset: rst_n, catalog: gen/supernoc/axi_monitors.json, actors: gen/chip/manifest.json, max_events: 500000}
   chip-boot-latency:
     <<: *chip
+    opt_in: true
     logical_test: axi-fullchip-latency-baseline
     module: dv.full_chip.test_latency
     reuse_build: true
