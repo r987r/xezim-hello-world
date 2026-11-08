@@ -500,6 +500,53 @@ tests:
           pcie0.rx_req: {protocol: pcie, clock_domain: soc_single_clock, role: target, implementation: verilog_pcie_pcieifframe, modeling: rtl_bridge_with_modeled_root_complex}
           pcie0.tx_cpl: {protocol: pcie, clock_domain: soc_single_clock, role: initiator, implementation: verilog_pcie_pcieifframe, modeling: rtl_bridge_with_modeled_root_complex}
 
+  chip-ethernet-ddr-pcie:
+    logical_test: multiprotocol-closure
+    opt_in: true
+    # #34 single SoC elaboration: CPU0 C, true Ethernet packet DMA and GMII,
+    # pinned real LiteDRAM/DFI, PULP iDMA and verilog-pcie TLP-to-AXI RTL.
+    # No modeled DDR substitute, CPU BFM or backdoor memory preload.
+    engine: cocotb-verilator
+    sources: noc
+    bender_targets: [chip_boot, dma]
+    ip: [picorv32, serv, wb2axip, verilog_axi, pulp_idma]
+    firmware_mode: ethernet_ddr_pcie
+    top: full_chip_tb
+    module: dv.integration.test_combined
+    seed: 1
+    test_dir: .
+    build: .tools/chip-ethernet-ddr-pcie-obj
+    env: {MAKEFLAGS: '-j2', SOC_CPU_DMA_MODE: '1', SOC_ETHERNET_CPU_MODE: '1', SOC_DDR_REAL_MODE: '1', SOC_PCIE_HOST_MODE: '1', SOC_PCIE_DMA_HOST_MODE: '1', SOC_COMBINED34_MODE: '1'}
+    timeout_s: 5400
+    pass: 'PASS COMBINED34:'
+    report:
+      address_map: {config: .tools/regression/chip-ethernet-ddr-pcie/ddr_noc/soc.yaml, variant: ddr_real, csr_map: .tools/regression/chip-ethernet-ddr-pcie/ddr-native-csr-map.json}
+      context: 'One source-revision and one RTL run: real CPU0 C configures a single Ethernet RX queue with >4GiB DDR destination, GMII RX writes real LiteDRAM/behavioral DFI, PULP iDMA copies DDR bytes to PCIe SRAM BAR staging, Ethernet TX and CPU1 SRAM, actual modeled PCIe Root Complex pulls exact original GMII frame by TLP, and GMII sink verifies TX byte/FCS. No outbound endpoint DMA, physical DDR/PCIe PHY, extra Ethernet queues or direct Ethernet bypass.'
+      flow:
+        required_steps:
+          init: [host0.enumerate, host0.wait_device_ready, host0.init_ack, cpu0.init_complete, cpu0.firmware_init]
+          run: [gmii0.inject_frame, gmii0.observe_transmit, host0.wait_run_enable, host0.bar_roundtrip, host0.bar_write_0, host0.bar_read_0, host0.bar_write_1, host0.bar_read_1, host0.bar_write_2, host0.bar_read_2, host0.bar_write_3, host0.bar_read_3, host0.read_ddr_dma_output, host0.run_ack, cpu0.run_complete, cpu0.firmware_run, cpu0.eth_queue, cpu0.eth_rx, cpu0.dma_ddr_staging, cpu0.eth_tx]
+          check: [host0.wait_check_enable, host0.check_ack, cpu0.check_complete, cpu0.firmware_check, host0.final_verify]
+        required_origins:
+          init: {host0.enumerate: stimulus, host0.wait_device_ready: observed, host0.init_ack: stimulus, cpu0.init_complete: checker, cpu0.firmware_init: rtl_observed}
+          run: {gmii0.inject_frame: stimulus, gmii0.observe_transmit: checker, host0.wait_run_enable: observed, host0.bar_roundtrip: checker, host0.bar_write_0: stimulus, host0.bar_read_0: checker, host0.bar_write_1: stimulus, host0.bar_read_1: checker, host0.bar_write_2: stimulus, host0.bar_read_2: checker, host0.bar_write_3: stimulus, host0.bar_read_3: checker, host0.read_ddr_dma_output: checker, host0.run_ack: stimulus, cpu0.run_complete: checker, cpu0.firmware_run: rtl_observed, cpu0.eth_queue: rtl_observed, cpu0.eth_rx: rtl_observed, cpu0.dma_ddr_staging: rtl_observed, cpu0.eth_tx: rtl_observed}
+          check: {host0.wait_check_enable: observed, host0.check_ack: stimulus, cpu0.check_complete: checker, cpu0.firmware_check: rtl_observed, host0.final_verify: checker}
+        firmware_mmio:
+          monitor: compute0_local_data.cpu
+          address: '0x1000045c'
+          actors: {'1': cpu0}
+          steps: {'201': eth_queue, '202': eth_rx, '203': eth_tx, '204': dma_ddr_staging}
+      axi: {scope: dut.u_noc, clock: clk, reset: rst_n, catalog: .tools/regression/chip-ethernet-ddr-pcie/ddr_noc/supernoc/axi_monitors.json, actors: .tools/regression/chip-ethernet-ddr-pcie/variant/manifest.json, max_events: 500000, required_complete: true}
+      protocols:
+        max_events: 250000
+        sources:
+          ethernet0.gmii_rx: {protocol: ethernet, clock_domain: gmii_rx_clock, role: stimulus, implementation: cocotbext_eth, modeling: vip_injected_to_rtl_mac}
+          ethernet0.gmii_tx: {protocol: ethernet, clock_domain: gmii_tx_clock, role: target, implementation: cocotbext_eth, modeling: rtl_output_observed_by_vip}
+          pcie0.rx_req: {protocol: pcie, clock_domain: soc_single_clock, role: target, implementation: verilog_pcie_pcieifframe, modeling: rtl_bridge_with_modeled_root_complex}
+          pcie0.tx_cpl: {protocol: pcie, clock_domain: soc_single_clock, role: initiator, implementation: verilog_pcie_pcieifframe, modeling: rtl_bridge_with_modeled_root_complex}
+          memory0.ddr0.dfi: {protocol: dfi, clock_domain: ddr_source_clk, role: link, implementation: litedram_flat_dfi_probe, modeling: real_controller_rtl_behavioral_phy}
+          memory0.ddr0.bankmodel: {protocol: dfi, clock_domain: ddr_source_clk, role: target, implementation: litedram_bankmodel_probe, modeling: behavioral_dram_storage}
+
 suites:
   xezim: [memory, memory-full, memory-sparse, memory-negative, sram, sram-synthesis, serv, boot, boot-relocated]
   noc: [noc-verilator, supernoc, supernoc-negative]
@@ -516,4 +563,5 @@ suites:
   # from the Verilator traffic gate; make test requires both toolchains.
   csr-rtl: [chip-peakrdl-reset]
   ddr-real: [chip-ddr4-real]
+  combined: [chip-ethernet-ddr-pcie]
   full: [xezim, noc, compatibility, diagnostics, dma, chip, scenario, chip-pcie-host, chip-ethernet, chip-ethernet-cpu]

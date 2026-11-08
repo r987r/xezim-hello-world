@@ -136,7 +136,7 @@ class AcceptedTlpPackets:
                                identifier=key, fields=fields)
         self.counts[(source, operation)] += 1
 
-    def finish(self):
+    def finish(self, *, close_trace=True):
         try:
             if any(v is not None for v in self.active.values()):
                 raise AssertionError("TLP capture ended with partial packet")
@@ -148,17 +148,19 @@ class AcceptedTlpPackets:
                 if not self.counts[key]:
                     raise AssertionError(f"PCIe TLP evidence missing {key}")
         except BaseException as exc:
-            self.trace.close("fail", exc)
+            if close_trace:
+                self.trace.close("fail", exc)
             raise
-        self.trace.close("pass")
+        if close_trace:
+            self.trace.close("pass")
 
 
 class LiveTlpCapture:
-    def __init__(self, dut, *, frame_type, plan_path=None):
+    def __init__(self, dut, *, frame_type, plan_path=None, trace=None):
         import cocotb
         self.dut = dut
-        self.trace = open_from_plan(Path(plan_path or os.environ["SOC_RUN_PLAN"]))
-        if self.trace is None or set(self.trace.sources) != set(SOURCES):
+        self.trace = trace if trace is not None else open_from_plan(Path(plan_path or os.environ["SOC_RUN_PLAN"]))
+        if self.trace is None or not set(SOURCES).issubset(self.trace.sources):
             raise ValueError("PCIe TLP catalog mismatch")
         for source in SOURCES:
             prefix = "rx_req_tlp" if source == REQUEST else "tx_cpl_tlp"
@@ -187,8 +189,8 @@ class LiveTlpCapture:
                     header=signal("hdr"), data=signal("data"),
                     strobe=signal("strb") if source == COMPLETION else None)
 
-    def finish(self):
+    def finish(self, *, close_trace=True):
         self.task.kill()
-        self.packets.finish()
+        self.packets.finish(close_trace=close_trace)
         return {f"{source}/{operation}": count
                 for (source, operation), count in self.packets.counts.items()}
