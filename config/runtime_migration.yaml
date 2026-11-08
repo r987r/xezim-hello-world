@@ -74,3 +74,8 @@ legacy_runtime:
   chip-pcie-host:
     owner_issue: 119
     status: legacy_internal_stimulus_opaque
+  # Temporary #34 combined cocotb C/host/GMII milestone adapter. Separate
+  # #119 closure requires its complete typed action DAG, not this exception.
+  chip-ethernet-ddr-pcie:
+    owner_issue: 119
+    status: legacy_internal_stimulus_opaque
