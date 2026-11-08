@@ -80,7 +80,7 @@ def plan(manifest, spec, *, selected_masters=None, writable_only=False):
                 address = region["base"] + offset + sample * width
                 if address + width > area["base"] + area["size"]:
                     raise BenchmarkError("benchmark address outside target")
-                case_id = f"{master['name']}:{slave['name']}:{sample}"
+                case_id = f"{master['name']}:{slave['name']}:{region['base']:x}:{sample}"
                 cases.append({
                     "case_id": case_id, "master": master["name"],
                     "monitor": master["network"]+"."+master["endpoint"],
