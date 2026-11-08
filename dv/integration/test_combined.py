@@ -75,6 +75,17 @@ async def _watch_cpu_error(dut):
             raise AssertionError(f"CPU0 C combined hardware failure: {code:#010x}")
 
 
+def _stop_tx_waiters(tx_task, error_task):
+    """Stop only the two temporary receive/error tasks, never AXI observers.
+
+    Lifetime of passive AXI monitoring is managed by attach_observers and
+    ends with the test; the DFI probe is finalized separately at teardown.
+    """
+    for task in (tx_task, error_task):
+        if not task.done():
+            task.kill()
+
+
 @cocotb.test(timeout_time=30, timeout_unit="ms")
 async def ethernet_ddr_idma_pcie_single_chip(dut):
     for key in ("SOC_COMBINED34_MODE", "SOC_DDR_REAL_MODE",
@@ -155,10 +166,7 @@ async def ethernet_ddr_idma_pcie_single_chip(dut):
             assert tx_task.done(), "GMII TX did not finish"
             result = tx_task.result()
         finally:
-            if not tx_task.done():
-                tx_task.kill()
-            if not error_task.done():
-                error_task.kill()
+            _stop_tx_waiters(tx_task, error_task)
         assert bytes(result.get_payload()) == frame, "DDR/iDMA->GMII TX byte mismatch"
         assert result.check_fcs() and result.error is None, "TX GMII FCS/error"
         gmii.packet(TX, result.get_payload(), fcs_valid=True, error=result.error)
