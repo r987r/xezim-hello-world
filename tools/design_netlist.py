@@ -58,6 +58,7 @@ def analyze(root: Path, profile: str, mode: str, output: Path,
         output.unlink()
         raise ValueError(f"{mode}: unexpected top-level output")
     meta = {**public_fields(attested), "mode": mode,
+            "output_sha256": hashlib.sha256(output.read_bytes()).hexdigest(),
             "evidence": "elaborated_slang_netlist_inputs_attested",
             "output": str(output), "command": args,
             "tool_diagnostics": run.stderr.splitlines()}

@@ -1,0 +1,87 @@
+name: CONNECT selected real memory RTL bit paths
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/real-netlist.yml'
+      - 'tools/design_netlist.py'
+      - 'tools/real_netlist_contract.py'
+      - 'tools/signal_paths.py'
+      - 'tests/test_real_netlist_contract.py'
+      - 'tests/test_design_netlist.py'
+      - 'gen/memory/**'
+      - 'rtl/memory/**'
+      - 'config/regression.yaml'
+      - 'Bender.yml'
+      - 'Bender.lock'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: connect-real-netlist-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  selected-memory:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 85
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: ./.github/actions/setup-bender
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Validate fail-closed graph and selected provenance contracts
+        run: |
+          python3 -m pip install -r requirements.txt
+          python3 tools/ip_fetch.py floonoc
+          python3 -m pip install -e .tools/floonoc
+          python3 -m unittest tests.test_signal_paths tests.test_design_netlist tests.test_real_netlist_contract -v
+      - name: Resolve actual pinned RTL (not a synthetic fixture)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 tools/regress.py memory --stage files
+          test -s .tools/regression/memory/sources.f
+          test -s .tools/regression/memory/plan.json
+      - name: Build the exact upstream slang-netlist v0.12.0 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          # A release tag is not an adequate mutable CI pin: use commit SHA.
+          git clone --filter=blob:none https://github.com/jameshanlon/slang-netlist.git .tools/slang-netlist-source
+          git -C .tools/slang-netlist-source checkout --detach 650cd5c76645c27697a61c11db98f2f6d969ad1a
+          test "$(git -C .tools/slang-netlist-source rev-parse HEAD)" = "650cd5c76645c27697a61c11db98f2f6d969ad1a"
+          cmake -S .tools/slang-netlist-source -B .tools/slang-netlist-build \
+            -DCMAKE_BUILD_TYPE=Release -DBUILD_DOCS=OFF -DENABLE_PY_BINDINGS=OFF
+          cmake --build .tools/slang-netlist-build -j 2 --target slang-netlist
+          test -x .tools/slang-netlist-build/tools/driver/slang-netlist
+      - name: Export real elaborated memory crossbar, qualify AXI channels
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/design_netlist.py --profile memory --mode netlist \
+            --slang-netlist "$PWD/.tools/slang-netlist-build/tools/driver/slang-netlist" \
+            --output .tools/connect46/memory-netlist.json
+          python3 tools/real_netlist_contract.py \
+            --netlist .tools/connect46/memory-netlist.json \
+            --meta .tools/connect46/memory-netlist.json.meta.json \
+            --out .tools/connect46/memory-static-paths.json
+      - name: Retain original selected source, netlist and negative diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: connect46-real-memory-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            .tools/connect46/
+            .tools/regression/memory/plan.json
+            .tools/regression/memory/sources.f
+            .tools/regression/memory/identity.json
+          include-hidden-files: true
+          if-no-files-found: warn
