@@ -73,9 +73,22 @@ class SlangDependencyTests(unittest.TestCase):
         duplicate["path"] = d["nodes"][0]["path"]
         d["nodes"].append(duplicate)
         self.file.write_text(json.dumps(d))
-        with self.assertRaisesRegex(ValueError, "duplicate elaborated port path"):
+        with self.assertRaisesRegex(ValueError, "conflicting elaborated port identity"):
             signal_paths.read_graph(self.file)
         d["nodes"].pop()
+        # A true same-bit graph replica with identical metadata is legal.
+        replica = dict(d["nodes"][0], id=99)
+        d["nodes"].append(replica)
+        d["edges"].append({"source": 99, "target": 2,
+                            "bounds": [0, 0], "disabled": False})
+        self.file.write_text(json.dumps(d))
+        data, nodes, _ = signal_paths.read_graph(self.file)
+        self.assertEqual(nodes[99]["path"], nodes[1]["path"])
+        proof = signal_paths.trace(self.file, "soc.u0.awvalid", "soc.u1.awvalid")
+        self.assertTrue(proof["found"])
+        self.assertEqual(proof["candidate_source_nodes"], 2)
+        d["nodes"].pop()
+        d["edges"].pop()
         d["nodes"][0]["bounds"] = [31, 0]  # Legal descending packed range.
         self.file.write_text(json.dumps(d))
         signal_paths.read_graph(self.file)
