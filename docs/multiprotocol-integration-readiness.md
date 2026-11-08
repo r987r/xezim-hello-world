@@ -6,7 +6,7 @@
 
 One source-selected configuration must instantiate the Ethernet GMII/queue/DMA, real LiteDRAM controller and behavioral DFI SDRAM model, PicoRV32/iDMA, PCIe TLP-to-AXI bridge and modeled host Root Complex over the generated local/global data and independent config FlooNoCs. Use `config/regression.yaml`, `config/soc.yaml` and their generator manifests—not hand-edited RTL or a second NoC diagram.
 
-Before a combined run, require actual selected variant elaboration and source-matched bit/port/clock/reset/AXI-ID checks ([#46](https://github.com/r987r/xezim-hello-world/issues/46)), a reusable seedable source-selected executable INIT/RUN/CHECK action plan ([#152](https://github.com/r987r/xezim-hello-world/issues/152)), and independent Ethernet, PCIe and real-DDR baselines at the same final source revision. Authored YAML descriptions alone do not execute stimulus.
+Before a combined run, require actual selected variant elaboration and source-matched bit/port/clock/reset/AXI-ID checks ([#46](https://github.com/r987r/xezim-hello-world/issues/46)), a reusable seedable source-selected executable INIT/RUN/CHECK action plan ([P0 #152](https://github.com/r987r/xezim-hello-world/issues/152), with [architecture contract](scalable-stimulus-runtime.md)), and independent Ethernet, PCIe and real-DDR baselines at the same final source revision. Authored YAML descriptions alone do not execute stimulus.
 
 ## Directed first-smoke path
 
