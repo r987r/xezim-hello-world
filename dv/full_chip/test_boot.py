@@ -97,9 +97,11 @@ async def coordinated_cold_boot(dut):
     await execute_cold_boot(dut)
 
 
-async def execute_cold_boot(dut, *, external=None):
+async def execute_cold_boot(dut, *, external=None, benchmark=False):
     if external not in (None,"pcie0"):
         raise ValueError("unsupported shared test participant")
+    if benchmark and external is not None:
+        raise ValueError("benchmark cannot coexist with an active PCIe host owner")
     plan=os.environ.get("SOC_RUN_PLAN")
     if external:
         if not plan:
@@ -311,6 +313,29 @@ async def execute_cold_boot(dut, *, external=None):
         dut._log.info("PCIE0_ACCEPTED_TLP_REPORT_COUNTS=%s", tlp_counts)
         close_active()
         return
+    if benchmark:
+        # This boot-only topology leaves the compute0 DMA port unowned.
+        # Real CPU firmware has completed CHECK; the same original BFM is
+        # authorized for the benchmark. Do not enable for chip-dma or PCIe.
+        assert probe is not None and not cpu_dma_mode and host is None
+        from tools.fabric_benchmark import config as fabric_config, plan as fabric_plan, intent
+        from dv.common.fabric_latency import execute as run_fabric_cases
+        contract=json.loads((ROOT/"gen/supernoc/manifest.json").read_text())
+        profile=fabric_config(ROOT)
+        selected=dict(profile,memory_offset=profile["full_chip_scratch_offset"])
+        actor="m_"+manifest["coordinator"]+"_local_data_dma"
+        cases=fabric_plan(contract, selected, selected_masters=[actor],
+                          writable_only=True)
+        benchmark_plan=intent(cases,profile,"chip-boot-latency")
+        (Path(plan).parent/"fabric-benchmark-plan.json").write_text(
+            json.dumps(benchmark_plan,indent=2,sort_keys=True)+"\n")
+        warmup_count,measured_count=await run_fabric_cases(
+            cases, profile, {actor:probe}, lambda operation,context:
+            memory_transaction(dut,operation))
+        assert measured_count==benchmark_plan["measured_cases"]
+        dut._log.info("PASS fabric-latency-chip: CPU CHECK then %d warmup / %d "
+                      "measured reserved-port BFM cases with actual accepted AXI",
+                      warmup_count,measured_count)
     # Only a verification manager occupies the not-yet-integrated DMA port.
     # It never drives SRAM/boot mailboxes. Distinct values detect model aliasing.
     expected = []
