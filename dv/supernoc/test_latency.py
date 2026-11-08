@@ -20,7 +20,7 @@ async def unloaded_fabric_latency(dut):
     manifest = json.loads((ROOT/"gen/supernoc/manifest.json").read_text())
     profile = config(ROOT)
     cases = plan(manifest, profile)
-    declaration = intent(cases, profile, "supernoc")
+    declaration = intent(cases, profile, "supernoc-latency")
     plan_file = os.environ.get("SOC_RUN_PLAN")
     if not plan_file:
         raise AssertionError("benchmark requires canonical regression plan")
