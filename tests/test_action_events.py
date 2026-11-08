@@ -100,6 +100,16 @@ class ActionEvidenceTests(unittest.TestCase):
         writer.emit("copy1", "driver_done", "python_driver")
         writer.close()
 
+    def test_checked_claim_before_driver_done_is_invalid(self):
+        self.emit("issued", time=10)
+        self.emit("accepted", origin="passive_axi", ref="dma.out:0:0", time=20)
+        self.emit("completed", origin="passive_axi", ref="dma.out:0:0", time=30)
+        with self.assertRaisesRegex(ActionEvidenceError, "before driver completion"):
+            self.emit("checked", origin="independent_checker", capture="scoreboard",
+                      ref="check0", time=31)
+        self.emit("driver_done", time=32)
+        self.lines()
+
     def test_driver_only_never_passes(self):
         self.emit("issued", time=10)
         self.emit("driver_done", time=20)
