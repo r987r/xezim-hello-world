@@ -1,6 +1,6 @@
 # PCIe0 RTL bring-up
 
-The stand-alone tests exercise pinned real `pcie_axi_master` TLP→AXI, a modeled `cocotbext-pcie` Root Complex and either AXI RAM or generated FlooNoC→real SRAM targets. The full-chip test uses dedicated PCIe0 local Data/Config fabrics and real CPU0/PULP iDMA with **modeled** DDR. See [host phase and byte-level acceptance](../../docs/pcie0-host-phases.md). The original host-pulled BAR stage is not a PCIe silicon PHY test. The separate `chip-pcie-outbound` regression now proves CPU-initiated device Memory Write/Read into modeled host RAM, but not physical-link/PCIe PHY behavior.
+The stand-alone tests exercise pinned real `pcie_axi_master` TLP→AXI, a modeled `cocotbext-pcie` Root Complex and either AXI RAM or generated FlooNoC→real SRAM targets. The full-chip test uses dedicated PCIe0 local Data/Config fabrics and real CPU0/PULP iDMA with **modeled** DDR. See [host phase and byte-level acceptance](../../docs/pcie0-host-phases.md). These original BAR-pull stages are not a PCIe silicon PHY test. The separately selected `chip-pcie-outbound` now proves CPU-owned endpoint DMA into **modeled** host RAM, not a physical link.
 
 ## Reproduction
 
@@ -14,7 +14,7 @@ python3 tools/regress.py chip-pcie-host
 
 The isolated `pcie_noc_tb.sv` reuses Compute0 local NoC only as an isolated fixture; **the full-chip variant uses PCIe0's own fabrics**. Check the pinned upstream dependency and narrow Icarus port-tie-off guard before simulation; do not modify upstream RTL or globally hide compiler errors. Report-only Verilator/Slang warnings are not a clean-lint pass; [#32](https://github.com/r987r/xezim-hello-world/issues/32) owns baseline triage.
 
-Physical link, broader endpoint configuration, multi-tag/completion stress and reset/recovery belong to [#76](https://github.com/r987r/xezim-hello-world/issues/76).
+Physical link, generalized controller management, multi-tag/completion stress, reset and advanced outbound DMA qualification remain in [#76](https://github.com/r987r/xezim-hello-world/issues/76). The dedicated requester control CSRs are implemented in the selected outbound variant.
 
 ## Opt-in outbound host-memory DMA staging (#76)
 
@@ -35,7 +35,7 @@ accepted outbound TLPs. A reverse host-memory read produces real completion
 TLPs and refills a disjoint region of the shared device SRAM. The original
 BAR-pulled `chip-pcie-host` is not modified.
 
-**CPU-owned requester transition (merged PR #149, exact-head RTL CI passed).**
+**CPU-owned requester path (merged PR #149, source-qualified exact-head RTL CI passed).**
 The full-chip test no longer exposes or drives internal DMA descriptor pins.
 The host Root Complex model publishes its 64-bit DMA IOVA through actual PCIe
 BAR writes at PCIe SRAM +0x820/+0x824 and a validity word at +0x828. CPU0 C,
@@ -48,16 +48,16 @@ BAR-readback, guard bytes and passive TLP activity. The isolated requester
 unit smoke still uses a direct descriptor BFM at its isolated boundary, which
 is appropriate and does not qualify CPU-owned behavior.
 
-**The CPU-owned control path passed [exact-head full-chip CI 42504527788](https://github.com/r987r/xezim-hello-world/actions/runs/42504527788) at merge-parent `d695dd8` and was merged as [`45b0427`](https://github.com/r987r/xezim-hello-world/commit/45b0427a06364e551673fb2f04587c666ad96f47).** A prior CI PASS at commit `469d878` proved Cocotb-injected descriptors only, not CPU-owned control. The outbound packet-level passive source capture is added in PR #154; it must pass its own exact-head CI before claiming complete TLP trace correlation.
+**This revised CPU-owned control path passed exact-head RTL CI** ([full-chip workflow](https://github.com/r987r/xezim-hello-world/actions/runs/42499056323) at commit `6a46d2345d6ca86e04346994afa94e7ec69a6fb9`).
+A prior CI PASS at commit `469d878` proved a Cocotb-submitted descriptor
+datapath only; it must never be reused as qualification for CPU-owned control.
 PCIe PHY/LTSSM, completion queues, stress, and general packet chaining remain
 outstanding. The 16KiB shared SRAM
 adapter is bounded and intentionally fails on invalid segmented-RAM address
 or bank selections. It is a functional model, not a PCIe PHY or cache-coherent
-DMA subsystem. Only full-chip `outbound-dma-proof.json`, actual C/iDMA AXI
-traces, matched PCIe TLPs, and final shared INIT/RUN/CHECK count as proof.
+DMA subsystem. Only full-chip `outbound-dma-proof.json`, actual C/iDMA AXI traces, requester handshake evidence, independent host RAM/guard readback, and final shared INIT/RUN/CHECK count as this **bounded** proof. Full outbound MWr/MRd/Cpl **passive packet-level** correlation is implemented in [PR #154](https://github.com/r987r/xezim-hello-world/pull/154) and requires source-qualified post-rebase CI before sign-off; and source-selected directed/randomized action adapters remain P0 [#152](https://github.com/r987r/xezim-hello-world/issues/152).
+
 
 ## Passive outbound TLP evidence (#154)
 
-The existing `dv/pcie0/tlp_trace.py` captures accepted request/completion packets using pinned upstream `PcieIfFrame.to_tlp()`. In `chip-pcie-outbound` it now also records the three physical requester streams: `pcie0.tx_wr_req`, `pcie0.tx_rd_req`, and `pcie0.rx_cpl`. Host→device and device→host read-tag spaces are kept independent, matching completions to actual requests. Missing/unmatched or dangling completions fail the run; a posted MWr is an observed request, **not** a completion TLP.
-
-The host model does not drive internal requester descriptors or implement an independent PCIe packet parser/counter. Exact Root Complex host-memory bytes/guard bands and CPU SRAM readback remain separate checker obligations; the same original `ProtocolTrace` emits per-run packet evidence to the existing report site. Non-outbound and #34 combined tests retain their original source catalog and shared capture lifecycle.
+The existing `dv/pcie0/tlp_trace.py` captures accepted request/completion packets using pinned upstream `PcieIfFrame.to_tlp()`. The outbound variant additionally records `pcie0.tx_wr_req`, `pcie0.tx_rd_req`, and `pcie0.rx_cpl` with independent host/device read-tag spaces and fail-closed unmatched completions. Posted Memory Writes are **observed requests**, not completion evidence. Independent host-memory byte and guard checks and CPU SRAM readback remain mandatory. No second TLP parser, AXI driver, or report page is introduced. Complete sign-off still requires exact-head CI.

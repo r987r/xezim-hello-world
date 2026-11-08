@@ -16,4 +16,4 @@ Acceptance requires actual accepted AXI AW/W/B and AR/R traffic, B-gated complet
 
 ## Beyond the MVP
 
-Combined Ethernet-produced bytes/CQ → **real LiteDRAM** → CPU/iDMA → modeled PCIe host BAR readback are under [the combined test contract](multiprotocol-integration-readiness.md). An Ethernet-to-PCIe fast hardware bypass, autonomous outbound PCIe host-RAM DMA, silicon PHY, and stress/performance are not implied by this MVP.
+Combined Ethernet-produced bytes/CQ → **real LiteDRAM** → CPU/iDMA → modeled PCIe host BAR readback passed the bounded [combined #34 functional MVP](multiprotocol-integration-readiness.md); further directed/randomized chaining remains [#158](https://github.com/r987r/xezim-hello-world/issues/158). An Ethernet-to-PCIe fast hardware bypass, autonomous outbound PCIe host-RAM DMA **in this Ethernet test** (a separate PCIe variant proves CPU-controlled outbound DMA), silicon PHY, and stress/performance are not implied by this MVP.

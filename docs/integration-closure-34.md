@@ -1,9 +1,6 @@
 # Issue #34 — one-chip multiprotocol integration closure
 
-**Current state: in progress; PR #150 is draft.** A directed test definition,
-generated firmware, RTL source-selection variant, passive monitors and CI gate
-are *implementation*, not evidence. The first composite run passes only after
-`chip-ethernet-ddr-pcie` has produced source-qualified successful artifacts.
+**Functional milestone completed:** [PR #150](https://github.com/r987r/xezim-hello-world/pull/150) merged after the one-run `chip-ethernet-ddr-pcie` source-qualified [full-chip RTL/CPU/DFI/TLP/GMII CI](https://github.com/r987r/xezim-hello-world/actions/runs/42498075763) passed. Closed #34 covers **this bounded functional MVP only**. General directed/randomized transfer chaining remains [#158](https://github.com/r987r/xezim-hello-world/issues/158) on the reusable P0 [#152](https://github.com/r987r/xezim-hello-world/issues/152) action runtime. A plan, generated variant, or separately passed subsystem run is still not proof of a new flow.
 
 ## Exact SoC boundary (single elaboration and source revision)
 
@@ -34,15 +31,15 @@ owns the 64-bit physical DDR address.
 
 | User-directed flow | #34 composite coverage | Proof / missing work |
 | --- | --- | --- |
-| Ethernet RX -> host | **Attempted, composite CI pending** | RX to real DDR, PULP DMA to PCIe SRAM, modeled Root Complex BAR-pulls matching bytes. NOT outbound endpoint DMA into host RAM |
+| Ethernet RX -> host | **MVP PASS: host BAR pull only** | Same-run RX→real DDR→PULP iDMA→PCIe SRAM→Root Complex BAR readback; **not** chained endpoint DMA into host RAM (#158) |
 | Ethernet RX -> HBM/SRAM | **Not yet** | Existing Ethernet SRAM path is separate. Real HBM controller is absent; do not equate modeled HBM SRAM with physical HBM |
-| Ethernet RX -> real DDR | **Attempted, composite CI pending** | RX queue posts DDR (>4 GiB) destination; accepted packet-DMA write + real controller AXI B + DFI storage write required |
+| Ethernet RX -> real DDR | **MVP PASS** | One-run queue destination in >4 GiB DDR with accepted AXI B and real LiteDRAM RTL/behavioral DFI bank evidence |
 | Host DMA -> Ethernet TX | **Not yet** | Would need independently host-seeded PCIe BAR -> iDMA -> real Ethernet TX and host handshake sequencing |
-| DDR/SRAM -> Ethernet TX | **Attempted from real DDR** | iDMA DDR -> Ethernet TX SRAM -> real GMII TX / FCS + B-gated CQ |
-| DDR/SRAM -> host | **Attempted from real DDR** | PULP iDMA DDR -> PCIe SRAM -> RC TLP BAR reads; not direct endpoint host RAM DMA |
-| DDR/SRAM -> DDR/SRAM | **Partially covered** | DDR -> CPU1 SRAM + Ethernet/PCIe staging from same DMA chain. General memory-to-memory combinations not covered here |
+| DDR/SRAM -> Ethernet TX | **MVP PASS from real DDR** | iDMA DDR→TX SRAM→real GMII TX, byte/FCS check and B-gated CQ |
+| DDR/SRAM -> host | **MVP PASS via host BAR pull** | Real DDR→PULP iDMA→PCIe SRAM→RC BAR read; standalone endpoint→host-RAM DMA passed separately in #149 but not chained to this ingress (#158) |
+| DDR/SRAM -> DDR/SRAM | **MVP PASS for DDR→CPU1 SRAM; matrix incomplete** | Same-run DDR→CPU1 SRAM + Ethernet/PCIe staging; arbitrary memory-to-memory combinations remain #158 |
 | Host write -> HBM/SRAM | **Not yet in this composite** | PCIe BAR write/read to PCIe SRAM occurs; next chain host BAR -> iDMA -> memory, no claim for real HBM |
-| Host read <- HBM/SRAM | **Partially covered** | Modeled host reads DDR-sourced PCIe staging SRAM; no direct host-read of HBM |
+| Host read <- HBM/SRAM | **MVP PASS for host BAR-pull of DDR-staged PCIe SRAM** | No direct host-read of HBM; standalone host-MRd/device-Cpl uses #149, different run |
 
 The single hardware RX/TX queue is a hard limit. A sequence of transfers can
 reuse the queue after CPU acknowledgements, but parallel multi-flow queue
@@ -98,7 +95,7 @@ Never publish an `unknown`/missing value as measured.
 
 ## Remaining closure gates / owners
 
-- **#119 typed directed + randomized execution:** This first composite
+- **#152 typed directed + randomized execution:** This first composite
   test has authored INIT/RUN/CHECK intent and real observed milestones,
   but the legacy C/Python runner is explicitly listed in
   `config/runtime_migration.yaml`. It is NOT an SCN-2-native action DAG.
@@ -112,14 +109,12 @@ Never publish an `unknown`/missing value as measured.
   elaborated real source-to-target netlist bit paths and live traffic.
 - **#43 low-latency direct path:** add the direct Ethernet/compute/PCIe
   route, separate from DDR-staged traffic, and prove its accepted AXI/TLP.
-- **#40 DDR qualification:** keep storage model limitations explicit and
+- **#35 DDR qualification:** keep storage model limitations explicit and
   validate adverse load, ordering and controller reset / errors.
-- **Broader #34 matrix:** one RX/one TX queue and sequential host/DDR
+- **#158 broader flow matrix:** one RX/one TX queue and sequential host/DDR
   combinations first; introduce multiple queues, arbitration and
   interleaved random transfers only after the queue RTL supports them.
   A CPU-visible event queue or hardware doorbell should own dependency
   triggering; Ethernet packets should not carry test control addresses.
 
-Do not merge or close #34 merely because independent Ethernet, DDR and
-PCIe regressions pass. Require a green **composite exact-head CI** with
-concrete artifact links and issue-owner review of the missing flows.
+The initial #34 MVP closed after the exact-head combined CI; **do not reopen it or count missing advanced paths as delivered**. Close individual #158 flow gates only with source-qualified, independently checked same-run artifacts. Preserve explicit separate ownership for #43, #46, #76 and #152.

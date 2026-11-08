@@ -1,6 +1,8 @@
 # Canonical source-selected scenario actions (SCN)
 
-The existing `tools/scenario_plan.py` resolves a versioned action DAG using the source-owned SoC memory configuration. It is an **intent compiler**, not a second simulator or INIT/RUN/CHECK coordinator. The shared scenario executable and observed-evidence formats are defined separately: a valid plan never implies hardware PASS. [#119](https://github.com/r987r/xezim-hello-world/issues/119) tracks the remaining general action-adapter migration.
+**P0 migration:** [cross-language composable actions](scalable-stimulus-runtime.md) are tracked by [#152](https://github.com/r987r/xezim-hello-world/issues/152). #119 closed after partial SCN-2 foundations; 30 registered tests are not all generic typed dispatch.
+
+The existing `tools/scenario_plan.py` resolves a versioned action DAG using the source-owned SoC memory configuration. It is an **intent compiler**, not a second simulator or INIT/RUN/CHECK coordinator. The shared scenario executable and observed-evidence formats are defined separately: a valid plan never implies hardware PASS. [#152](https://github.com/r987r/xezim-hello-world/issues/152) tracks the remaining general action-adapter migration.
 
 ## Reproduce and replay
 
@@ -25,4 +27,4 @@ The two selected regressions, `chip-cpu-scenario` and `chip-dma-scenario`, consu
 - **BFM:** CPUs are held in reset; the explicitly authorized CPU0 AXI BFMs initialize source/descriptor SRAM and drive the same actual DMA RTL. The independent read/checker uses accepted AXI/data.
 - Only after actual execution and source-compatible passive checks pass may a separate `scenario-execution.json` record completed action IDs and selected-plan hash. Neither evidence nor a shortcut to PASS is written into `scenario-plan.json`.
 
-These are narrow action adapters, not a generic C/SV/Python interpreter for all 28 regressions. Do not create another scenario engine, duplicate the action graph in a test's prose YAML, or claim all legacy internal drivers have migrated. See [test-flow evidence](test-flow.md) and [memory lifetimes](scenario-memory-lifetimes.md).
+These are narrow action adapters, not a generic C/SV/Python interpreter for all 30 regressions. Do not create another scenario engine, duplicate the action graph in a test's prose YAML, or claim all legacy internal drivers have migrated. See [test-flow evidence](test-flow.md) and [memory lifetimes](scenario-memory-lifetimes.md).

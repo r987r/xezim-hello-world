@@ -1,12 +1,12 @@
 # Combined Ethernet → real DDR → CPU/iDMA → PCIe host verification
 
-**Acceptance contract, not a completed test.** Independent Ethernet, LiteDRAM and PCIe regressions do **not** establish a connected, same-source multi-protocol result. The default generated SoC retains reserved packet endpoints and modeled DDR/HBM targets; the combined test needs its own opt-in RTL variant and elaborated interface check. Work and progress: [epic #34](https://github.com/r987r/xezim-hello-world/issues/34).
+**Functional acceptance contract with a verified MVP:** [merged #150](https://github.com/r987r/xezim-hello-world/pull/150) exercised Ethernet RX → real LiteDRAM/behavioral DFI → CPU0/iDMA → Ethernet TX and modeled PCIe host BAR readback in **one** source-qualified run ([CI](https://github.com/r987r/xezim-hello-world/actions/runs/42498075763)). The default generated SoC still retains reserved packet endpoints and modeled DDR/HBM targets; use the opt-in combined variant. Neither separate passing suites nor this first smoke qualify all transfer combinations. Remaining matrix: [#158](https://github.com/r987r/xezim-hello-world/issues/158); reusable action runtime: [#152](https://github.com/r987r/xezim-hello-world/issues/152).
 
 ## Required configuration and evidence
 
 One source-selected configuration must instantiate the Ethernet GMII/queue/DMA, real LiteDRAM controller and behavioral DFI SDRAM model, PicoRV32/iDMA, PCIe TLP-to-AXI bridge and modeled host Root Complex over the generated local/global data and independent config FlooNoCs. Use `config/regression.yaml`, `config/soc.yaml` and their generator manifests—not hand-edited RTL or a second NoC diagram.
 
-Before a combined run, require actual selected variant elaboration and source-matched bit/port/clock/reset/AXI-ID checks ([#46](https://github.com/r987r/xezim-hello-world/issues/46)), a selected seedable executable INIT/RUN/CHECK action plan ([#119](https://github.com/r987r/xezim-hello-world/issues/119)), and independent Ethernet, PCIe and real-DDR baselines at the same final source revision. Authored YAML descriptions alone do not execute stimulus.
+Before a combined run, require actual selected variant elaboration and source-matched bit/port/clock/reset/AXI-ID checks ([#46](https://github.com/r987r/xezim-hello-world/issues/46)), a reusable seedable source-selected executable INIT/RUN/CHECK action plan ([P0 #152](https://github.com/r987r/xezim-hello-world/issues/152), with [architecture contract](scalable-stimulus-runtime.md)), and independent Ethernet, PCIe and real-DDR baselines at the same final source revision. Authored YAML descriptions alone do not execute stimulus.
 
 ## Directed first-smoke path
 
@@ -20,7 +20,7 @@ Before a combined run, require actual selected variant elaboration and source-ma
 
 All phases must execute **in one simulation**, with one source SHA, selected action plan, simulator/config/test/run identity, and a single independent scoreboard. Check absent/duplicate/timed-out completions, wrong IDs/tags, bad bytes and unsupported routes as failures. Do not splice individual passing artifacts into a combined PASS.
 
-**Not implied:** the PCIe host **pulling** data over BAR is not endpoint-initiated outbound PCIe DMA into host RAM ([#76](https://github.com/r987r/xezim-hello-world/issues/76)); modeled DFI is not an electrical PHY; HBM remains modeled; CPU IRQ delivery and the direct Ethernet→Compute1→PCIe bypass are separate ([#47](https://github.com/r987r/xezim-hello-world/issues/47), [#43](https://github.com/r987r/xezim-hello-world/issues/43)).
+**Not implied by this composite:** the PCIe host **pulling** data over BAR is not endpoint-initiated outbound PCIe DMA into host RAM. CPU-controlled endpoint MWr/MRd was independently qualified in [merged #149](https://github.com/r987r/xezim-hello-world/pull/149), but a *chained* Ethernet→host-RAM transfer remains [#158](https://github.com/r987r/xezim-hello-world/issues/158). Modeled DFI is not an electrical PHY; HBM remains modeled; CPU IRQ delivery and the direct Ethernet→Compute1→PCIe bypass are separate ([#47](https://github.com/r987r/xezim-hello-world/issues/47), [#43](https://github.com/r987r/xezim-hello-world/issues/43)).
 
 ## Reproduction and failure localization
 
@@ -33,8 +33,8 @@ python3 tools/regress.py chip-pcie-host
 python3 tools/regress.py chip-ddr4-real
 ```
 
-These commands are not the combined test. For the new source-selected variant, inspect its `plan.json`, `identity.json`, `result.json`, `test-flow.json`, `axi-transactions.json`, `protocol-transactions.json`, DFI summaries and `simulation.log` under one canonical run. The existing [Test Runs viewer](publication.md) must show exact selected action IDs, actors, dependencies, seed and expected checks alongside *separate* observed protocol handshakes.
+These commands are **independent baselines**, not the already available combined test. Run `python3 tools/regress.py chip-ethernet-ddr-pcie` for the selected integrated scope. For its source-selected variant, inspect its `plan.json`, `identity.json`, `result.json`, `test-flow.json`, `axi-transactions.json`, `protocol-transactions.json`, DFI summaries and `simulation.log` under one canonical run. The existing [Test Runs viewer](publication.md) must show exact selected action IDs, actors, dependencies, seed and expected checks alongside *separate* observed protocol handshakes.
 
 On failure, locate the **first unverified boundary** in the table above. Report actual address/ID/tag, actor, expected and observed bytes, first/last captured timestamp and NoC hop when available. Report unobserved timing as **unmeasured**, never estimated. Source-selected logical routes, compiled RTL and accepted traffic are distinct evidence types.
 
-Final epic completion additionally requires the direct fast path and broader stress gates tracked in #34; the first global-route functional smoke alone cannot close the epic.
+The initial #34 functional MVP has closed. The direct fast path remains [#43](https://github.com/r987r/xezim-hello-world/issues/43), broader chained/seeded flow qualification [#158](https://github.com/r987r/xezim-hello-world/issues/158), stress [#35](https://github.com/r987r/xezim-hello-world/issues/35), and typed runtime migration [#152](https://github.com/r987r/xezim-hello-world/issues/152). Do not conflate these with the completed functional smoke.
