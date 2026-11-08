@@ -133,7 +133,7 @@ tests:
         - "Check returned payloads/responses, including deliberate target SLVERR paths."
   - logical_test: axi-noc-latency-baseline
     targets: ["supernoc-latency"]
-    execution: legacy_opaque
+    execution: benchmark_native
     purpose: "Measure accepted, serialized unloaded AXI4 one-beat routes using existing upstream BFMs, with independently checked passive transaction counts."
     phases:
       init:
