@@ -44,7 +44,7 @@ jobs:
           path: |
             .tools/pcie0/outbound/rtl-sources.json
             .tools/pcie0/outbound/result.json
-            .tools/pcie0/outbound/sim_build/results.xml
+            .tools/pcie0/outbound/sim_build/*results.xml
             .tools/pcie0/outbound/sim_build/*.log
           include-hidden-files: true
           if-no-files-found: warn
