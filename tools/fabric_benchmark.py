@@ -35,7 +35,8 @@ def config(root=ROOT, profile="unloaded"):
     return p
 
 
-def plan(manifest, spec, *, selected_masters=None, writable_only=False):
+def plan(manifest, spec, *, selected_masters=None, writable_only=False,
+         selected_region_bases=None):
     """Enumerate every allowed source/window; unique address per target/case.
 
     Globally unique addresses within each target permit unambiguous pairing
@@ -48,6 +49,11 @@ def plan(manifest, spec, *, selected_masters=None, writable_only=False):
         raise BenchmarkError("manifest has no AXI slaves")
     slots = defaultdict(int)
     cases = []
+    target_bases = set(selected_region_bases) if selected_region_bases is not None else None
+    if target_bases is not None and (
+            not target_bases or any(type(base) is not int or base < 0 for base in target_bases)):
+        raise BenchmarkError("empty or malformed selected live RTL memory regions")
+    seen_bases = set()
     permitted = set(selected_masters) if selected_masters is not None else None
     if permitted is not None and (
             not permitted or permitted - {m["name"] for m in manifest["masters"]}):
@@ -62,6 +68,10 @@ def plan(manifest, spec, *, selected_masters=None, writable_only=False):
         for region in master["regions"]:
             if writable_only and region["access"] != "read_write":
                 continue
+            if target_bases is not None and region["base"] not in target_bases:
+                continue
+            if target_bases is not None:
+                seen_bases.add(region["base"])
             matches = [(slave, area) for slave in manifest["slaves"]
                        if slave["plane"] == master["plane"]
                        for area in slave["regions"]
@@ -90,6 +100,8 @@ def plan(manifest, spec, *, selected_masters=None, writable_only=False):
                     "operations": (["read"] if region["access"] == "read"
                                    else ["write", "read"]),
                 })
+    if target_bases is not None and seen_bases != target_bases:
+        raise BenchmarkError("live RTL memory model missing from authorized AXI windows")
     if not cases:
         raise BenchmarkError("no eligible benchmark cases for selected actors")
     if len({c["case_id"] for c in cases}) != len(cases):
