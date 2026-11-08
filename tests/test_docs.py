@@ -20,6 +20,19 @@ class DocumentationTests(unittest.TestCase):
             self.assertTrue(any("broken local link" in x for x in found))
             self.assertTrue(any("dated progress" in x for x in found))
 
+    def test_stale_draft_pr_claim_in_entrypoint_rejected(self):
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            (root / "docs").mkdir()
+            (root / "README.md").write_text(
+                "# Main\\n<!-- BEGIN GENERATED SOC -->\\n"
+                "<!-- END GENERATED SOC -->\\n"
+            )
+            (root / "docs" / "implementation-status.md").write_text(
+                "# Status\\nPR #150 is draft; no CI proof yet.\\n"
+            )
+            self.assertTrue(any("dated progress" in x for x in issues(root)))
+
     def test_external_links_and_code_samples_ignored(self):
         with tempfile.TemporaryDirectory() as name:
             root = Path(name)
