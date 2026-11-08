@@ -80,11 +80,11 @@ def expected_contract(wrapper: str, core: str) -> dict[str, tuple[str, int]]:
     binding = _binding(wrapper)
     if set(outer) != set(inner) or set(binding) != set(inner):
         raise SupernocConnectivityError("supernoc wrapper and core full port inventories diverge")
-    if len(outer) < 500:
-        raise SupernocConnectivityError("incomplete supernoc source port inventory")
     for pin, (direction, width) in inner.items():
         if binding[pin] != pin or outer[pin] != (direction, width):
             raise SupernocConnectivityError(f"{pin}: RTL binding direction/width/name mismatch")
+    if len(outer) < 500:
+        raise SupernocConnectivityError("incomplete supernoc source port inventory")
     for pin in ("clk_i", "rst_ni",
                 "m_compute0_local_data_cpu_awid",
                 "m_ethernet0_local_data_packet_dma_awvalid",
