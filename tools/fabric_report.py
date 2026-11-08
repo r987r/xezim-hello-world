@@ -418,7 +418,7 @@ def _display_cycles(stats, observation):
     }
 
 
-def latency_table(report):
+def latency_table(report, scope=None):
     """Source/destination rows with independent read and write stage stats.
 
     The newest matching-source baseline run is selected per operation. Stalled
@@ -445,7 +445,8 @@ def latency_table(report):
             for o in route.get("one_beat_stage_observations", []):
                 op = o["operation"]
                 if (op not in ("read", "write") or
-                        not o.get("matches_site_source") or op in evidence):
+                        not o.get("matches_site_source") or op in evidence
+                        or (scope is not None and o.get("test_scope") != scope)):
                     continue
                 evidence[op] = {"n": o["sample_count"],
                                 "clock_period_ps": o["clock_period_ps"],
@@ -641,6 +642,14 @@ def attach_one_beat_observations(report, entries, output, source_sha):
                 "scope": "serial_single_outstanding_AXI_tap_boundary_deltas",
             })
     report["latency_table"] = latency_table(report)
+    eligible_scopes = sorted({
+        o["test_scope"] for route in report["routes"]
+        for o in route.get("one_beat_stage_observations", [])
+        if o.get("matches_site_source")
+    })
+    report["latency_scopes"] = {
+        scope: latency_table(report, scope=scope) for scope in eligible_scopes
+    }
     return report
 
 
