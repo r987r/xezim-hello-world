@@ -227,7 +227,9 @@ FABRIC_REQUIRED_INPUTS = frozenset({
     'config/soc.yaml', 'config/interface_contracts.yaml',
     'config/regression.yaml', 'config/ip.lock.yaml', 'config/fabric_latency.yaml',
     'dv/supernoc/test_supernoc.py', 'dv/supernoc/test_latency.py',
-    'tools/fabric_benchmark.py', 'dv/common/axi_trace.py',
+    'dv/common/fabric_latency.py', 'dv/full_chip/test_latency.py',
+    'tools/fabric_benchmark.py', 'dv/full_chip/test_boot.py',
+    'dv/common/axi_trace.py',
     'tools/memory_service.py', 'tools/memory_report.py',
     'tools/supernoc_gen.py', 'tools/floonoc_gen.py',
     'tools/axi_report.py', 'tools/regress.py', 'tools/sim_cocotb.py',
@@ -657,7 +659,7 @@ def evidence_index(evidence,output,repository):
             # Benchmark-run publication must retain and independently check
             # the selected cases against original passive AXI transactions.
             # Merely emitting a planned benchmark cannot populate timing.
-            if target == 'supernoc-latency' and result.get('passed') is True:
+            if plan.get('report',{}).get('fabric_benchmark') and result.get('passed') is True:
                 from fabric_benchmark import validate as validate_fabric
                 selected_bench=source_dir/'fabric-benchmark-plan.json'
                 verified_bench=source_dir/'fabric-benchmark-evidence.json'
