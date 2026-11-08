@@ -24,4 +24,4 @@ This is the existing **private** runtime scratch convention; published new repor
 - Token/generation and release/quiescence remain planned until actual firmware telemetry and independent checks exist. No inferred CPU token from a Python plan; no synthetic memory frees.
 - The DDR in these SCN-2 cases is **modeled**. Real LiteDRAM/DFI timing is captured in its separate selected test and cannot be spliced into this run.
 
-Future source-selected token, actor and lifetime timelines are tracked in [#119](https://github.com/r987r/xezim-hello-world/issues/119) and [#34](https://github.com/r987r/xezim-hello-world/issues/34).
+Future source-selected token, actor and lifetime timelines are tracked in active P0 [#152](https://github.com/r987r/xezim-hello-world/issues/152) and memory service [#39](https://github.com/r987r/xezim-hello-world/issues/39).
