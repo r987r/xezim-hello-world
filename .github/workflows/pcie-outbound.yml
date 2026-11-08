@@ -7,6 +7,12 @@ on:
       - 'dv/pcie0/outbound_smoke.py'
       - 'dv/pcie0/run_outbound_smoke.py'
       - 'dv/pcie0/upstream.lock.json'
+      - 'tools/pcie_outbound.py'
+      - 'tools/full_chip_gen.py'
+      - 'tools/cpu_dma_firmware.py'
+      - 'tools/regress.py'
+      - 'config/regression.yaml'
+      - 'rtl/adapters/pcie_dma_sram_target.sv'
       - '.github/workflows/pcie-outbound.yml'
   workflow_dispatch:
 
@@ -46,5 +52,56 @@ jobs:
             .tools/pcie0/outbound/result.json
             .tools/pcie0/outbound/sim_build/*results.xml
             .tools/pcie0/outbound/sim_build/*.log
+          include-hidden-files: true
+          if-no-files-found: warn
+
+  full-chip-outbound-idma:
+    name: Real CPU0 iDMA -> FlooNoC -> PCIe0 SRAM -> outbound TLP -> host RAM
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: alexforencich/verilog-pcie
+          ref: 25156a9a162c41c60f11f41590c7d006d015ae5a
+          path: .tools/verilog_pcie
+          persist-credentials: false
+      - uses: ./.github/actions/setup-bender
+        env: {GH_TOKEN: "${{ github.token }}"}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Install pinned SoC, CPU firmware and PCIe dependencies
+        run: |
+          python3 -m pip install -r requirements.txt
+          python3 -m pip install 'mako==1.3.10' 'hjson==3.1.0' 'peakrdl>=1.5.0' 'peakrdl-rawheader>=0.2.8' 'peakrdl-cheader>=1.1.0'
+          python3 tools/ip_fetch.py floonoc picorv32 serv wb2axip verilog_axi pulp_idma
+          python3 -m pip install -e .tools/floonoc
+          python3 -m pip install 'cocotb==1.9.2' 'cocotb-bus==0.2.1' 'cocotbext-pcie==0.2.14' 'cocotbext-axi==0.1.24'
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends verilator iverilog clang llvm lld
+      - name: Source and source-selected regression validation
+        run: |
+          python3 -m py_compile tools/pcie_outbound.py tools/full_chip_gen.py tools/cpu_dma_firmware.py tools/regress.py dv/pcie0/host_adapter.py
+          python3 dv/pcie0/run_rtl_smoke.py --check-pin
+          python3 tools/regress.py --check-noc
+          make check-generated
+      - name: Real CPU iDMA and outbound PCIe TLPs with independent host RAM proof
+        run: python3 tools/regress.py chip-pcie-outbound
+      - name: Preserve selected SoC, CPU firmware, real AXI, TLP and host memory evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pcie-outbound-fullchip-${{ github.run_id }}
+          path: |
+            .tools/regression/chip-pcie-outbound/result.json
+            .tools/regression/chip-pcie-outbound/test-flow.json
+            .tools/regression/chip-pcie-outbound/outbound-dma-proof.json
+            .tools/regression/chip-pcie-outbound/axi-transactions.json
+            .tools/regression/chip-pcie-outbound/protocol-transactions.json
+            .tools/regression/chip-pcie-outbound/build.log
+            .tools/regression/chip-pcie-outbound/simulation.log
+            .tools/regression/chip-pcie-outbound/variant/manifest.json
+            .tools/regression/chip-pcie-outbound/results.xml
           include-hidden-files: true
           if-no-files-found: warn
