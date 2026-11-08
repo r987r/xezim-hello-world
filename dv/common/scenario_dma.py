@@ -301,7 +301,15 @@ async def execute_bfm_roundtrip(dut, data_master, csr_master, contract: dict,
         await dispatcher.run()
         if not state["checked"] or len(dispatcher.completed) != len(selected_plan["actions"]):
             raise AssertionError("SCN-2 typed action execution incomplete")
-    finally:
+    except BaseException:
+        # Retain the original real RTL/BFM error. A strict close() correctly
+        # rejects unfinished actions, but must not mask the underlying cause.
+        # Incomplete driver events stay in the original failed-run artifact.
         if recorder is not None and not recorder.closed:
+            recorder.file.close()
+            recorder.closed = True
+        raise
+    else:
+        if recorder is not None:
             recorder.close()
     trace_phase(f"SCN-2 BFM typed real RTL DMA plan executed; scenario={contract['scenario_id']}")
