@@ -503,6 +503,7 @@ tests:
 suites:
   xezim: [memory, memory-full, memory-sparse, memory-negative, sram, sram-synthesis, serv, boot, boot-relocated]
   noc: [noc-verilator, supernoc, supernoc-negative]
+  fabric-latency: [supernoc-latency, chip-boot-latency]
   compatibility: [noc-xezim]
   diagnostics: [cpu-fetch, smoke]
   dma: [dma-rtl]
