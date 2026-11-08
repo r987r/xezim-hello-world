@@ -33,8 +33,11 @@ def require_tool(name):
 
 
 def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False, ethernet_cpu_mode=False,
-                     scenario_mode=False, use_generated_dma_csr=False, combined_mode=False):
+                     scenario_mode=False, use_generated_dma_csr=False,
+                     combined_mode=False, pcie_outbound_mode=False):
     directory.mkdir(parents=True, exist_ok=True)
+    if pcie_outbound_mode and (not pcie_host_mode or combined_mode or ethernet_cpu_mode):
+        raise ValueError('outbound requester firmware requires separate PCIe CPU variant')
     if combined_mode and not (pcie_host_mode and ethernet_cpu_mode) or (pcie_host_mode and ethernet_cpu_mode and not combined_mode):
         raise ValueError('combined Ethernet/PCIe firmware requires explicit combined mode and both endpoints')
     if scenario_mode:
@@ -70,6 +73,9 @@ def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False, ethernet_cpu
     }
     if pcie_host_mode:
         macros["SOC_PCIE_SRAM"] = mapping["pcie0.sram"]
+    if pcie_outbound_mode:
+        macros["SOC_PCIE_CTRL"] = mapping["pcie0.ctrl"]
+        macros["SOC_PCIE_OUTBOUND"] = 1
     if ethernet_cpu_mode:
         macros['SOC_ETH_SRAM'] = mapping['ethernet0.sram']
         macros['SOC_ETH_CTRL'] = mapping['ethernet0.ctrl']
@@ -131,8 +137,10 @@ def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False, ethernet_cpu
 
 def prepare(cfg, noc_manifest, noc_root, output: Path, *, pcie_host_mode=False,
             ethernet_cpu_mode=False, real_ddr_mode=False, ddr_wb_base=0, ddr_wb_adr_bits=30,
-            scenario_mode=False, combined_mode=False):
+            scenario_mode=False, combined_mode=False, pcie_outbound_mode=False):
     from tools import full_chip_gen
+    if pcie_outbound_mode and (not pcie_host_mode or combined_mode or real_ddr_mode or ethernet_cpu_mode or scenario_mode):
+        raise ValueError('outbound requester firmware requires isolated CPU PCIe mode')
     if combined_mode and (not pcie_host_mode or not ethernet_cpu_mode or not real_ddr_mode or scenario_mode):
         raise ValueError('combined firmware requires Ethernet CPU, PCIe host and real DDR, not modeled scenario')
     if scenario_mode and real_ddr_mode:
@@ -142,13 +150,15 @@ def prepare(cfg, noc_manifest, noc_root, output: Path, *, pcie_host_mode=False,
         cfg = host_variant_config(cfg)
     fw = compile_firmware(cfg, output, pcie_host_mode=pcie_host_mode,
                           ethernet_cpu_mode=ethernet_cpu_mode,
-                          scenario_mode=scenario_mode, combined_mode=combined_mode)
+                          scenario_mode=scenario_mode, combined_mode=combined_mode,
+                          pcie_outbound_mode=pcie_outbound_mode)
     image_prefix = output.relative_to(ROOT).as_posix()
     # Normal generated gen/chip outputs remain byte-for-byte unchanged.
     manifest = full_chip_gen.emit(cfg, noc_manifest, noc_root, output,
                                   cpu0_run_hook=fw["hook"],
                                   image_prefix=image_prefix, cpu_dma_mode=True,
                                   pcie_host_mode=pcie_host_mode,
+                                  pcie_outbound_mode=pcie_outbound_mode,
                                   ethernet_mode=ethernet_cpu_mode,
                                   ethernet_cpu_mode=ethernet_cpu_mode,
                                   real_ddr_mode=real_ddr_mode,

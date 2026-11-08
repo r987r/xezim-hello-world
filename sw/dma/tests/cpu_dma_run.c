@@ -4,6 +4,10 @@
  */
 #include "../dma.h"
 #include "../../common/memory_pool.h"
+#ifdef SOC_PCIE_OUTBOUND
+#include "../../pcie/pcie_requester.h"
+#endif
+
 #include "../../common/memory_pattern.h"
 #include "../../common/test_flow.h"
 #include <stdint.h>
@@ -153,6 +157,46 @@ int cpu_dma_run(void) {
             }
         }
         soc_dma_mmio_ack_irq(csr);
+#ifdef SOC_PCIE_OUTBOUND
+        /* The host publishes a genuine modeled Root Complex IOVA through
+         * real PCIe BAR TLPs into PCIe SRAM before ACKing INIT. Firmware
+         * owns both actual requester descriptors via the Config NoC. */
+        volatile const uint32_t *host_iova =
+            (volatile const uint32_t *)(uintptr_t)
+            ((uint64_t)SOC_PCIE_SRAM+SOC_PCIE_HOST_IOVA_LO_OFF);
+        if (host_iova[2] != SOC_PCIE_IOVA_VALID) {
+            *evidence=0xd0000016u;return 22;
+        }
+        uint64_t host_base=(uint64_t)host_iova[0] |
+                           ((uint64_t)host_iova[1]<<32);
+        if (host_base > UINT64_MAX-0x3000u) {
+            *evidence=0xd0000017u;return 23;
+        }
+        volatile uint32_t *requester =
+            (volatile uint32_t *)(uintptr_t)SOC_PCIE_CTRL;
+        soc_pcie_fence();
+        /* Actual PULP iDMA chain above has completed descriptor writeback
+         * and IRQ. Its bytes are in physical PCIe0 SRAM at offset 0x600. */
+        if (!soc_pcie_transfer(requester,false,host_base+0xff9u,
+                               0x600u,PAYLOAD_BYTES,0x25u,200000u)) {
+            *evidence=0xd0000018u;return 24;
+        }
+        /* Read from Root Complex host RAM via the same real requester,
+         * then independently check the returned device SRAM bytes with
+         * CPU loads, not Cocotb direct SRAM/pin manipulation. */
+        if (!soc_pcie_transfer(requester,true,host_base+0x2ff9u,
+                               0x700u,PAYLOAD_BYTES,0x26u,200000u)) {
+            *evidence=0xd0000019u;return 25;
+        }
+        volatile const uint8_t *returned =
+            (volatile const uint8_t *)(uintptr_t)
+            ((uint64_t)SOC_PCIE_SRAM+0x700u);
+        for (unsigned i=0;i<PAYLOAD_BYTES;++i) {
+            if (returned[i]!=(uint8_t)(0x7bu+17u*i)) {
+                *evidence=0xd000001au;return 26;
+            }
+        }
+#endif
         soc_flow_emit(flow,SOC_FLOW_RUN,SOC_FLOW_PASS,1,104);
         *evidence=0x600dc0deu;
         return 0;

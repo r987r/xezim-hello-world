@@ -25,5 +25,15 @@
     "cocotbext-axi": "0.1.24",
     "cocotbext-pcie": "0.2.14",
     "pytest": "7.2.1"
-  }
+  },
+  "outbound_rtl_modules": [
+    "rtl/dma_if_pcie.v",
+    "rtl/dma_if_pcie_rd.v",
+    "rtl/dma_if_pcie_wr.v",
+    "rtl/priority_encoder.v",
+    "rtl/pulse_merge.v"
+  ],
+  "outbound_python_models": [
+    "tb/dma_if_pcie_wr/dma_psdp_ram.py"
+  ]
 }
