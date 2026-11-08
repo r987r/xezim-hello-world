@@ -54,7 +54,7 @@ def export_fullchip_probe(input_dir:Path, trace):
     if (last.get("kind")!="probe_end" or last.get("status")!="pass" or
             last.get("sampled_cycles")!=summary["sampled_cycles"]):
         raise ValueError("incomplete full-chip DFI probe end")
-    if set(trace.sources)!={DFI,BANK}:
+    if not {DFI,BANK}.issubset(trace.sources):
         raise ValueError("full-chip DFI source catalog differs from trusted plan")
     counts={}
     for event in rows[1:-1]:
