@@ -478,6 +478,7 @@ def run_target(name, test, resolver, options):
                 raise ValueError('unreviewed pinned PCIe outbound requester source list')
             sources += [str(ROOT/'.tools/verilog_pcie'/item) for item in required]
             sources += [str(ROOT/'rtl/adapters/pcie_dma_sram_target.sv')]
+            sources += [str(ROOT/'rtl/adapters/pcie_requester_axi_regs.sv')]
     if test.get('firmware_mode') == 'ddr_cpu_dma':
         # Same CPU C/iDMA INIT/RUN/CHECK; opt-in generated 16KiB
         # independent Config NoC and pinned LiteDRAM memory target.
