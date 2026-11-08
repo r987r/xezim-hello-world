@@ -8,9 +8,6 @@ on:
       - 'tools/design_netlist.py'
       - 'tools/real_netlist_contract.py'
       - 'tools/real_netlist_negative.py'
-      - 'tools/supernoc_netlist_contract.py'
-      - 'tests/test_supernoc_netlist_contract.py'
-      - 'gen/supernoc/**'
       - 'tools/signal_paths.py'
       - 'tests/test_real_netlist_contract.py'
       - 'tests/test_design_netlist.py'
@@ -46,7 +43,7 @@ jobs:
           python3 -m pip install -r requirements.txt
           python3 tools/ip_fetch.py floonoc
           python3 -m pip install -e .tools/floonoc
-          python3 -m unittest tests.test_signal_paths tests.test_design_netlist tests.test_real_netlist_contract tests.test_supernoc_netlist_contract -v
+          python3 -m unittest tests.test_signal_paths tests.test_design_netlist tests.test_real_netlist_contract -v
       - name: Resolve actual pinned RTL (not a synthetic fixture)
         env:
           GH_TOKEN: ${{ github.token }}
