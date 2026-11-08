@@ -33,7 +33,8 @@ def require_tool(name):
 
 
 def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False, ethernet_cpu_mode=False,
-                     scenario_mode=False, use_generated_dma_csr=False):
+                     scenario_mode=False, use_generated_dma_csr=False,
+                     pcie_outbound_mode=False):
     directory.mkdir(parents=True, exist_ok=True)
     if scenario_mode:
         if pcie_host_mode or ethernet_cpu_mode:
@@ -68,6 +69,11 @@ def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False, ethernet_cpu
     }
     if pcie_host_mode:
         macros["SOC_PCIE_SRAM"] = mapping["pcie0.sram"]
+    if pcie_outbound_mode:
+        if not pcie_host_mode:
+            raise ValueError('outbound requester firmware needs PCIe host mode')
+        macros["SOC_PCIE_CTRL"] = mapping["pcie0.ctrl"]
+        macros["SOC_PCIE_OUTBOUND"] = 1
     if ethernet_cpu_mode:
         if pcie_host_mode:
             raise ValueError('Ethernet CPU MVP is separate from the PCIe host test')
@@ -141,7 +147,8 @@ def prepare(cfg, noc_manifest, noc_root, output: Path, *, pcie_host_mode=False,
         cfg = host_variant_config(cfg)
     fw = compile_firmware(cfg, output, pcie_host_mode=pcie_host_mode,
                           ethernet_cpu_mode=ethernet_cpu_mode,
-                          scenario_mode=scenario_mode)
+                          scenario_mode=scenario_mode,
+                          pcie_outbound_mode=pcie_outbound_mode)
     image_prefix = output.relative_to(ROOT).as_posix()
     # Normal generated gen/chip outputs remain byte-for-byte unchanged.
     manifest = full_chip_gen.emit(cfg, noc_manifest, noc_root, output,
