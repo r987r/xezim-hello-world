@@ -143,6 +143,39 @@ class TestTlpCapture(unittest.TestCase):
         self.assertEqual({x["fields"]["matched_request_address"] for x in cpls},
                          {"0x12000100", "0x20002000"})
 
+    def test_combined_shared_trace_retains_lifecycle(self):
+        """The #34 test owns a common GMII/DFI/TLP stream until final CHECK."""
+        self.trace.close("pass")
+        self.output.unlink()
+        catalog = {**SOURCES, "ethernet0.tx": {
+            "protocol": "ethernet", "clock_domain": "soc_single_clock",
+            "role": "initiator", "implementation": "gmii_vip"}}
+        trace = ProtocolTrace(self.output, catalog)
+        monitor = AcceptedTlpPackets(trace, PcieIfFrame)
+        wr = Tlp()
+        wr.fmt_type = TlpType.MEM_WRITE
+        wr.requester_id = PcieId(0, 1, 0)
+        wr.set_addr_be_data(0x12000100, b"ABCDEFGH")
+        packets(monitor, REQUEST, wr, 10000)
+        rd = Tlp()
+        rd.fmt_type = TlpType.MEM_READ
+        rd.requester_id = PcieId(0, 1, 0)
+        rd.tag = 2
+        rd.set_addr_be(0x12000100, 8)
+        packets(monitor, REQUEST, rd, 20000)
+        cpl = Tlp.create_completion_data_for_tlp(rd, PcieId(0, 0, 0))
+        cpl.set_data(b"ABCDEFGH")
+        cpl.byte_count = 8
+        cpl.lower_address = rd.address & 0x7f
+        packets(monitor, COMPLETION, cpl, 30000)
+        monitor.finish(close_trace=False)
+        self.assertFalse(trace.closed)
+        trace.transaction("ethernet0.tx", "frame", 40000, 50000,
+                          identifier="frame0", fields={"length": 64})
+        trace.close("pass")
+        parsed = protocol_report.parse_capture(self.output, catalog)
+        self.assertEqual(len(parsed["records"]), 4)
+
     def test_outbound_missing_completion_rejected(self):
         self.trace.close("pass")
         self.output.unlink()

@@ -7,7 +7,7 @@ PHY/LTSSM and RootComplex/Endpoint are behaviorally modeled.
 from pathlib import Path
 import os
 import sys
-from cocotb.triggers import Timer, with_timeout, RisingEdge
+from cocotb.triggers import Timer, with_timeout
 from cocotbext.pcie.core import RootComplex
 from dv.pcie0.discovery import enumerate_root_complex
 from tools.memory_service import Pattern
@@ -40,14 +40,16 @@ class PcieHostParticipant:
         self.flow=flow
         self.ext=ext
         self.dma_exchange=os.environ.get('SOC_PCIE_DMA_HOST_MODE')=='1'
+        self.combined34=os.environ.get('SOC_COMBINED34_MODE')=='1'
+        if self.combined34 and not self.dma_exchange:
+            raise AssertionError('combined test requires the long-running host handshake contract')
         self.outbound_mode=os.environ.get('SOC_PCIE_OUTBOUND_MODE')=='1'
         if self.outbound_mode and not self.dma_exchange:
             raise ValueError('outbound PCIe test requires CPU0 C-driven iDMA staged payload')
         self.outbound_verified=None
         self.host_mem=None
         self.host_mem_base=None
-        self.outbound_counters={'posted_writes':0,'read_requests':0,'read_completions':0}
-        self.outbound_monitor=None
+        self.tlp_capture=None  # Shared source-qualified packet monitor, owned by the boot test
         self.source_sram=manifest['cores'][0]['sram_base']
         self.base=ext["mailbox_base"]
         self.sram_base=self.base-0x800
@@ -87,37 +89,33 @@ class PcieHostParticipant:
         dut.completer_id.value=int(ep.functions[0].pcie_id)
         self.bar=device.bar_window[0]
         if self.outbound_mode:
-            # Input descriptors are idle until after the C/iDMA stage has
-            # completed, never accidentally asserted at power-on.
-            dut.s_axis_read_desc_valid.value=0
-            dut.s_axis_write_desc_valid.value=0
-            from cocotbext.axi.stream import define_stream
-            rd_bus,rd_tx,rd_src,_,_=define_stream(
-                'PcieOutRdDesc',
-                signals=['pcie_addr','ram_addr','len','tag','valid','ready'])
-            wr_bus,wr_tx,wr_src,_,_=define_stream(
-                'PcieOutWrDesc',
-                signals=['pcie_addr','ram_addr','len','tag','valid','ready'])
-            st_bus,_,_,st_sink,_=define_stream(
-                'PcieOutStatus',signals=['tag','error','valid'])
-            self.out_rd_tx=rd_tx
-            self.out_wr_tx=wr_tx
-            self.out_rd_desc=rd_src(rd_bus.from_prefix(dut,'s_axis_read_desc'),dut.clk,dut.rst)
-            self.out_wr_desc=wr_src(wr_bus.from_prefix(dut,'s_axis_write_desc'),dut.clk,dut.rst)
-            self.out_rd_status=st_sink(st_bus.from_prefix(dut,'m_axis_read_desc_status'),dut.clk,dut.rst)
-            self.out_wr_status=st_sink(st_bus.from_prefix(dut,'m_axis_write_desc_status'),dut.clk,dut.rst)
+            # Host-owned Root Complex memory is the external environment.
+            # Publish its 64-bit DMA IOVA through actual host BAR TLPs,
+            # then let CPU0 independently program the Config-NoC requester.
             await with_timeout(device.set_master(),100,'us')
             self.host_mem=rc.mem_pool.alloc_region(1<<20)
             self.host_mem_base=self.host_mem.get_absolute_address(0)
-            import cocotb
-            self.outbound_monitor=cocotb.start_soon(self.watch_outbound(dut))
+            reverse=bytes((0x7b+17*i)&255 for i in range(64))
+            reverse_off=0x2ff9
+            self.host_mem[reverse_off-1:reverse_off+65]=(
+                bytes([0xa5])+reverse+bytes([0xa5]))
+            host_off=0xff9
+            self.host_mem[host_off-1:host_off+65]=bytes([0xa5])*66
+            await with_timeout(self.bar.write(
+                0x820,self.host_mem_base.to_bytes(8,"little")),100,"us")
+            await with_timeout(self.bar.write(
+                0x828,(0x50434945).to_bytes(4,"little")),100,"us")
+            assert bytes(await with_timeout(self.bar.read(0x820,8),100,"us")) == (
+                self.host_mem_base.to_bytes(8,"little"))
+            if self.tlp_capture is None or not self.tlp_capture.outbound:
+                raise AssertionError("outbound PCIe run requires shared passive packet capture")
 
     async def before_phase(self,stage):
         if stage=="init":
             with self.flow.step(stage,"host0","wait_device_ready",origin="observed"):
                 await with_timeout(poll_bar(self.bar,0x800,self.magic["device_init_ready"]),1000,"us")
                 assert int(self.dut.init_mask.value)==3, "CPU INIT not complete when host ready"
-            if self.dma_exchange:
+            if self.dma_exchange and not self.combined34:
                 # Host -> real PCIe bridge -> SRAM first; CPU0 iDMA later
                 # copies these bytes into modeled DDR and proves via readback.
                 input_payload=bytes((0x63+13*i)&255 for i in range(64))
@@ -161,11 +159,15 @@ class PcieHostParticipant:
                 assert not int(self.dut.status_error_cor.value), "PCIe correctable status set"
                 assert not int(self.dut.status_error_uncor.value), "PCIe uncorrectable status set"
             if self.dma_exchange:
-                # DDR -> PULP iDMA -> PCIe SRAM, then actual host BAR read.
-                expected=bytes((self.source_sram+0x2000+i+0x35)&255 for i in range(64))
+                # For #34, the golden source is GMII RX instead of CPU0 SRAM.
+                if self.combined34:
+                    from dv.ethernet0.test_cpu_mvp import packet
+                    expected=packet()
+                else:
+                    expected=bytes((self.source_sram+0x2000+i+0x35)&255 for i in range(64))
                 with self.flow.step(stage,"host0","read_ddr_dma_output",origin="checker",
-                                    details={"address":hex(self.sram_base+0x600),"bytes":64}):
-                    got=await with_timeout(self.bar.read(0x600,64),100,"us")
+                                    details={"address":hex(self.sram_base+0x600),"bytes":len(expected)}):
+                    got=await with_timeout(self.bar.read(0x600,len(expected)),100,"us")
                     assert bytes(got)==expected,"DDR to PCIe host data mismatch"
             if self.outbound_mode:
                 await self.exercise_outbound_device_dma()
@@ -180,90 +182,71 @@ class PcieHostParticipant:
         else:
             raise ValueError("unregistered shared CPU test phase")
 
-    async def watch_outbound(self,dut):
-        # Passive accepted-handshake evidence; no extra PCIe bus driver.
-        while True:
-            await RisingEdge(dut.clk)
-            if not int(dut.rst_n.value):
-                continue
-            for signal,counter in (
-                    ('tx_wr_req_tlp','posted_writes'),
-                    ('tx_rd_req_tlp','read_requests'),
-                    ('rx_cpl_tlp','read_completions')):
-                if all(int(getattr(dut,signal+'_'+field).value)
-                       for field in ('valid','ready','sop')):
-                    self.outbound_counters[counter]+=1
-
     async def exercise_outbound_device_dma(self):
-        """The CPU has staged DDR bytes into PCIe SRAM using *real* iDMA.
+        """Check only: firmware must have programmed live Config-NoC CSR.
 
-        TLP requester descriptor submission is testbench-owned at this stage;
-        future PCIe0 Config-NoC CSRs will own it for CPU/software.
+        This host participant never generates a requester descriptor, controls
+        a device DMA internal pin, or acts as a CPU-side AXI master.
         """
         from pathlib import Path
         import json
-        source=self.source_sram+0x2000
-        expected=bytes((source+i+0x35)&255 for i in range(64))
         host=self.host_mem
         assert host is not None
-        host_offset=0xff9  # cross a 4-KiB host-memory boundary
-        host[host_offset-1:host_offset+65]=bytes([0xa5])*66
-        before=dict(self.outbound_counters)
+        from dv.pcie0.tlp_trace import (OUTBOUND_WRITE, OUTBOUND_READ,
+                                        OUTBOUND_COMPLETION)
+        if self.tlp_capture is None or not self.tlp_capture.outbound:
+            raise AssertionError("shared PCIe TLP monitor was not bound")
+        counts=self.tlp_capture.packets.counts
+        outbound_counts={
+            "posted_writes": counts[(OUTBOUND_WRITE,"mem_write")],
+            "read_requests": counts[(OUTBOUND_READ,"mem_read")],
+            "read_completions": counts[(OUTBOUND_COMPLETION,"completion")],
+        }
+        expected=bytes((self.source_sram+0x2000+i+0x35)&255 for i in range(64))
+        offset=0xff9
+        reverse_off=0x2ff9
         with self.flow.step("run","host0","pcie_dma_write_host",origin="checker",
                             details={"source":"pcie0.sram+0x600",
-                                     "host_address":hex(self.host_mem_base+host_offset),
-                                     "bytes":64}):
-            await with_timeout(self.out_wr_desc.send(self.out_wr_tx(
-                pcie_addr=self.host_mem_base+host_offset,ram_addr=0x600,
-                len=64,tag=0x25)),100,'us')
-            status=await with_timeout(self.out_wr_status.recv(),250,'us')
-            assert int(status.tag)==0x25 and int(status.error)==0, (
-                "real PCIe requester write returned error")
-            # PCIe posted writes have no completion. Read modeled RC memory
-            # independently after accepted TLP and check adjacent guards.
-            for _ in range(5000):
-                if bytes(host[host_offset:host_offset+64])==expected:
-                    break
-                await RisingEdge(self.dut.clk)
-            assert bytes(host[host_offset-1:host_offset+65])==(
+                                     "host_address":hex(self.host_mem_base+offset),
+                                     "bytes":64,
+                                     "descriptor_owner":"cpu0_config_noc_csr"}):
+            assert bytes(host[offset-1:offset+65]) == (
                 bytes([0xa5])+expected+bytes([0xa5])), (
-                "device iDMA-staged DDR->PCIe SRAM->host RAM bytes/guards mismatch")
-            assert self.outbound_counters['posted_writes']>before['posted_writes'], (
-                "PCIe requester posted no real Memory Write TLP")
-        # Opposite direction: actual outbound Memory Read into shared PCIe
-        # SRAM. BAR read is only an independent checker, NOT the transfer.
-        inbound=bytes((0x7b+17*i)&255 for i in range(64))
-        reverse_off=0x2ff9
-        host[reverse_off-1:reverse_off+65]=bytes([0xa5])+inbound+bytes([0xa5])
+                "CPU Config-NoC initiated outbound PCIe MWr did not update host RAM")
+            assert outbound_counts['posted_writes']>0, (
+                "no real PCIe posted Memory Write request accepted")
+
         with self.flow.step("run","host0","pcie_dma_read_host",origin="checker",
                             details={"destination":"pcie0.sram+0x700",
                                      "host_address":hex(self.host_mem_base+reverse_off),
-                                     "bytes":64}):
-            await with_timeout(self.out_rd_desc.send(self.out_rd_tx(
-                pcie_addr=self.host_mem_base+reverse_off,ram_addr=0x700,
-                len=64,tag=0x26)),100,'us')
-            status=await with_timeout(self.out_rd_status.recv(),250,'us')
-            assert int(status.tag)==0x26 and int(status.error)==0, (
-                "real PCIe requester read completion error")
+                                     "bytes":64,
+                                     "descriptor_owner":"cpu0_config_noc_csr"}):
+            expected_read=bytes((0x7b+17*i)&255 for i in range(64))
+            assert bytes(host[reverse_off-1:reverse_off+65]) == (
+                bytes([0xa5])+expected_read+bytes([0xa5]))
             got=bytes(await with_timeout(self.bar.read(0x700,64),100,'us'))
-            assert got==inbound, "host memory read TLP did not fill shared PCIe SRAM"
-            assert self.outbound_counters['read_requests']>before['read_requests']
-            assert self.outbound_counters['read_completions']>before['read_completions']
+            assert got==expected_read, (
+                "CPU-initiated PCIe MRd returned incorrect device SRAM bytes")
+            assert outbound_counts['read_requests']>0
+            assert outbound_counts['read_completions']>0
+
         self.outbound_verified={
+            "cpu_config_noc_csr_descriptors":True,
             "iDMA_staged_DDR_to_PCIe_SRAM":True,
             "host_memory_bytes_verified":64,
             "reverse_host_memory_bytes_verified":64,
-            "host_memory_offset":hex(host_offset),
+            "host_memory_offset":hex(offset),
             "read_host_memory_offset":hex(reverse_off),
-            "requester_descriptor_control":"cocotb_direct_until_config_noc_csr",
-            "physical_path":"real CPU0 PULP iDMA -> actual FlooNoC -> shared tc_sram -> pinned dma_if_pcie -> modeled RC RAM",
-            "accepted_tlps":{k:self.outbound_counters[k]-before[k] for k in before}
+            "requester_descriptor_control":"real_cpu0_pcie0_config_noc_csr",
+            "physical_path":"CPU0 C/iDMA -> FlooNoC -> shared tc_sram; CPU0 Config NoC CSR -> pinned PCIe requester -> modeled host RAM",
+            "accepted_tlps":outbound_counts
         }
         assert all(n>0 for n in self.outbound_verified['accepted_tlps'].values())
         plan=Path(os.environ["SOC_RUN_PLAN"])
         (plan.parent/"outbound-dma-proof.json").write_text(
             json.dumps(self.outbound_verified,indent=2,sort_keys=True)+"\\n")
-        self.dut._log.info("PCIE0_OUTBOUND_REAL_IDMA_HOST_PASS=%s",self.outbound_verified)
+        self.dut._log.info("PCIE0_OUTBOUND_CPU_OWNED_DMA_HOST_PASS=%s",
+                           self.outbound_verified)
 
     def finish(self):
         dut=self.dut
@@ -281,8 +264,7 @@ class PcieHostParticipant:
             assert self.outbound_verified is not None, 'outbound host-memory proof was never reached'
             assert self.outbound_verified['host_memory_bytes_verified']==64
             assert self.outbound_verified['reverse_host_memory_bytes_verified']==64
-            self.outbound_monitor.kill()
-            dut._log.info("PASS pcieoutbound: real iDMA staged bytes and outbound PCIe TLPs verified")
+            dut._log.info("PASS pcieoutbound: CPU0 Config-NoC CSR initiated PCIe DMA to host verified")
         dut._log.info("PASS pciehost: real CPU0/host handshake and PCIe0 SRAM data; "
                       "writes=%d reads=%d",int(dut.pcie_sram_write_count.value),
                       int(dut.pcie_sram_read_count.value))

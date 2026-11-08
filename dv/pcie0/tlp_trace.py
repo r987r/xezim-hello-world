@@ -170,7 +170,7 @@ class AcceptedTlpPackets:
                                identifier=key, fields=fields)
         self.counts[(source, operation)] += 1
 
-    def finish(self):
+    def finish(self, *, close_trace=True):
         try:
             if any(v is not None for v in self.active.values()):
                 raise AssertionError("TLP capture ended with partial packet")
@@ -187,19 +187,21 @@ class AcceptedTlpPackets:
                 if not self.counts[key]:
                     raise AssertionError(f"PCIe TLP evidence missing {key}")
         except BaseException as exc:
-            self.trace.close("fail", exc)
+            if close_trace:
+                self.trace.close("fail", exc)
             raise
-        self.trace.close("pass")
+        if close_trace:
+            self.trace.close("pass")
 
 
 class LiveTlpCapture:
-    def __init__(self, dut, *, frame_type, plan_path=None):
+    def __init__(self, dut, *, frame_type, plan_path=None, trace=None):
         import cocotb
         self.dut = dut
-        self.trace = open_from_plan(Path(plan_path or os.environ["SOC_RUN_PLAN"]))
+        self.trace = trace if trace is not None else open_from_plan(Path(plan_path or os.environ["SOC_RUN_PLAN"]))
         self.outbound = os.environ.get("SOC_PCIE_OUTBOUND_MODE") == "1"
         self.sources = {**SOURCES, **(OUTBOUND_SOURCES if self.outbound else {})}
-        if self.trace is None or set(self.trace.sources) != set(self.sources):
+        if self.trace is None or not set(self.sources).issubset(self.trace.sources):
             raise ValueError("PCIe TLP catalog mismatch")
         for source in self.sources:
             prefix = SOURCE_PREFIXES[source]
@@ -231,8 +233,8 @@ class LiveTlpCapture:
                     data=signal("data") if source != OUTBOUND_READ else 0,
                     strobe=signal("strb") if source in (COMPLETION, OUTBOUND_WRITE) else None)
 
-    def finish(self):
+    def finish(self, *, close_trace=True):
         self.task.kill()
-        self.packets.finish()
+        self.packets.finish(close_trace=close_trace)
         return {f"{source}/{operation}": count
                 for (source, operation), count in self.packets.counts.items()}

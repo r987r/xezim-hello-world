@@ -33,8 +33,13 @@ def require_tool(name):
 
 
 def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False, ethernet_cpu_mode=False,
-                     scenario_mode=False, use_generated_dma_csr=False):
+                     scenario_mode=False, use_generated_dma_csr=False,
+                     combined_mode=False, pcie_outbound_mode=False):
     directory.mkdir(parents=True, exist_ok=True)
+    if pcie_outbound_mode and (not pcie_host_mode or combined_mode or ethernet_cpu_mode):
+        raise ValueError('outbound requester firmware requires separate PCIe CPU variant')
+    if combined_mode and not (pcie_host_mode and ethernet_cpu_mode) or (pcie_host_mode and ethernet_cpu_mode and not combined_mode):
+        raise ValueError('combined Ethernet/PCIe firmware requires explicit combined mode and both endpoints')
     if scenario_mode:
         if pcie_host_mode or ethernet_cpu_mode:
             raise ValueError('scenario CPU mode cannot alias PCIe/Ethernet variants')
@@ -68,9 +73,10 @@ def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False, ethernet_cpu
     }
     if pcie_host_mode:
         macros["SOC_PCIE_SRAM"] = mapping["pcie0.sram"]
+    if pcie_outbound_mode:
+        macros["SOC_PCIE_CTRL"] = mapping["pcie0.ctrl"]
+        macros["SOC_PCIE_OUTBOUND"] = 1
     if ethernet_cpu_mode:
-        if pcie_host_mode:
-            raise ValueError('Ethernet CPU MVP is separate from the PCIe host test')
         macros['SOC_ETH_SRAM'] = mapping['ethernet0.sram']
         macros['SOC_ETH_CTRL'] = mapping['ethernet0.ctrl']
     linker = directory / "cpu_dma.ld"
@@ -98,7 +104,8 @@ def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False, ethernet_cpu
             *[f"-D{name}=0x{value:x}ULL" for name, value in macros.items()],
             *(['-DSOC_USE_GENERATED_DMA_CSR=1', '-I', str(directory / 'csr')]
               if use_generated_dma_csr else []),
-            str(ROOT / ('sw/dma/tests/scenario_dma_run.c' if scenario_mode
+            str(ROOT / ('sw/integration/tests/ethernet_ddr_pcie_run.c' if combined_mode
+                        else 'sw/dma/tests/scenario_dma_run.c' if scenario_mode
                         else 'sw/ethernet/tests/eth_cpu_run.c' if ethernet_cpu_mode
                         else 'sw/dma/tests/cpu_dma_run.c')),
             *(['-I', str(directory)] if scenario_mode else []),
@@ -130,18 +137,21 @@ def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False, ethernet_cpu
 
 def prepare(cfg, noc_manifest, noc_root, output: Path, *, pcie_host_mode=False,
             ethernet_cpu_mode=False, real_ddr_mode=False, ddr_wb_base=0, ddr_wb_adr_bits=30,
-            scenario_mode=False, pcie_outbound_mode=False):
+            scenario_mode=False, combined_mode=False, pcie_outbound_mode=False):
     from tools import full_chip_gen
+    if pcie_outbound_mode and (not pcie_host_mode or combined_mode or real_ddr_mode or ethernet_cpu_mode or scenario_mode):
+        raise ValueError('outbound requester firmware requires isolated CPU PCIe mode')
+    if combined_mode and (not pcie_host_mode or not ethernet_cpu_mode or not real_ddr_mode or scenario_mode):
+        raise ValueError('combined firmware requires Ethernet CPU, PCIe host and real DDR, not modeled scenario')
     if scenario_mode and real_ddr_mode:
         raise ValueError('SCN-2 uses modeled DDR; real LiteDRAM requires separate scenario qualification')
-    if pcie_outbound_mode and not pcie_host_mode:
-        raise ValueError('PCIe outbound requires the real PCIe host variant')
     if pcie_host_mode:
         from tools.pcie_chip import host_variant_config
         cfg = host_variant_config(cfg)
     fw = compile_firmware(cfg, output, pcie_host_mode=pcie_host_mode,
                           ethernet_cpu_mode=ethernet_cpu_mode,
-                          scenario_mode=scenario_mode)
+                          scenario_mode=scenario_mode, combined_mode=combined_mode,
+                          pcie_outbound_mode=pcie_outbound_mode)
     image_prefix = output.relative_to(ROOT).as_posix()
     # Normal generated gen/chip outputs remain byte-for-byte unchanged.
     manifest = full_chip_gen.emit(cfg, noc_manifest, noc_root, output,
@@ -167,6 +177,12 @@ def prepare(cfg, noc_manifest, noc_root, output: Path, *, pcie_host_mode=False,
         "allocation_plan": {name: r.as_dict() for name, r in
                             memory_plan.configured_regions(cfg, profile="boot_live").items()},
     }
+    if combined_mode:
+        manifest['combined34'] = {'firmware': 'one_real_cpu0_C_hook',
+                                  'ethernet_rx': 'real_GMII_to_LiteDRAM_via_packet_DMA',
+                                  'transfer': 'real_PULP_iDMA_to_cpu1_and_pcie_SRAM',
+                                  'host': 'modeled_RC_BAR_pull',
+                                  'status': 'selected_not_executed'}
     if scenario_mode:
         from dv.common.scenario_dma import load_contract_from_plan
         contract = load_contract_from_plan(output/'scenario-plan.json')
