@@ -46,8 +46,10 @@ class RealNetlistContractTests(unittest.TestCase):
                  "bounds": [0, 0]},
             ])
             data["edges"].extend([
-                {"source": left, "target": left+1},
-                {"source": left+1, "target": right},
+                # An actual top-level generated AXI wire has a direct
+                # source-port -> sink-port dependency with exact lane bits.
+                {"source": left, "target": right, "bounds": [0, 0],
+                 "disabled": False},
             ])
             self.endpoints.append((left, right))
         # In actual exported graphs the same fabric port serves multiple
@@ -84,7 +86,7 @@ class RealNetlistContractTests(unittest.TestCase):
         original = list(self.graph["edges"])
         self.graph["edges"] = original[1:]
         self.save()
-        with self.assertRaisesRegex(rc.ConnectivityEvidenceError, "no elaborated"):
+        with self.assertRaisesRegex(rc.ConnectivityEvidenceError, "no directed elaborated"):
             rc.audit(self.netlist, selected_meta=self.meta)
         self.graph["edges"] = original
         self.graph["nodes"][0]["direction"] = "In"
