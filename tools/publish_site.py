@@ -823,6 +823,7 @@ def evidence_index(evidence,output,repository):
             if protocol_data and protocol_data.get('latency') and latency_data is None:
                 raise ValueError('PCIe latency evidence file missing')
             entry={'target':target,'engine':plan.get('engine','unknown'),'passed':result.get('passed') is True,
+                   'fabric_scope':(plan.get('report') or {}).get('fabric_scope','unspecified'),
                    'expected_failure':plan.get('expect_failure'),'stage':result.get('stage'),
                    'run_id':run['id'],'attempt':run.get('run_attempt',1),'source_sha':run['tested_sha'],
                    'canonical_id':canonical_path(selected_identity).as_posix() if selected_identity else None,
