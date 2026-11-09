@@ -1,0 +1,28 @@
+name: Selected combined RTL staging contract
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'tools/stage_selected_rtl.py'
+      - 'tools/selected_rtl_provenance.py'
+      - 'tests/test_stage_selected_rtl.py'
+      - '.github/workflows/selected-rtl-stage.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  review-stage:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: python3 -m pip install 'PyYAML==6.0.3'
+      - name: Validate selected-stage negative/positive paths
+        run: python3 -m unittest tests.test_stage_selected_rtl tests.test_selected_rtl_archive -v
+      - name: Check source syntax without requiring external simulator
+        run: python3 -m py_compile tools/stage_selected_rtl.py
