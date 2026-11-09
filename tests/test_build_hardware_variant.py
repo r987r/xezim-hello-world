@@ -39,6 +39,7 @@ class HardwareVariantBuildTests(unittest.TestCase):
             "    sources: noc\n")
         self.output = self.root / ".tools/reviews"
         self.selected = {
+            "schema_version": 1,
             "project": "demo_soc",
             "hardware_variant": "soc-ethernet-ddr-pcie",
             "selected_top_sha256": "a"*64,
