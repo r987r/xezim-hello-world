@@ -66,7 +66,8 @@ def validate(expected_sha, site, fabric, graph, rtl, bindings, intents, html):
             entry.get("verified_site_source_sha"),
             entry.get("verified_fabric_source_sha"),
         }
-        and entry.get("fabric_scope") in {"connected_noc", "full_chip_boot_bfm"}
+        and isinstance(entry.get("fabric_scope"), str)
+        and entry["fabric_scope"] not in ("", "unspecified")
     }
     if qualified_scopes:
         if (latency.get("evidence_coverage", {}).get("current_measured_routes", 0) <= 0
