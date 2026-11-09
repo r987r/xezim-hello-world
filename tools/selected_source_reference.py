@@ -51,6 +51,9 @@ def validate_lock(lock: dict) -> None:
                 raise ReferenceError("malformed selected reference source/hash")
     if lock["required_generated_sha256"].get(TOP) is None:
         raise ReferenceError("missing real combined generated top SHA")
+    for key in ("compiler_input_sha256", "filelist_sha256"):
+        if not _sha(lock.get(key)):
+            raise ReferenceError("invalid qualified full compiler/filelist reference: " + key)
 
 
 def compare(lock: dict, actual: dict) -> dict:
@@ -73,8 +76,12 @@ def compare(lock: dict, actual: dict) -> dict:
             # not just a separately produced file.
             if key == "required_generated_sha256" and actual.get("source_sha256", {}).get(path) != expected:
                 raise ReferenceError("generated source missing from compiled closure: " + path)
-    if not _sha(actual.get("compiler_input_sha256")) or not _sha(actual.get("filelist_sha256")):
-        raise ReferenceError("missing actual compiler input/filelist fingerprints")
+    # The full compiler-input closure and byte-identical Bender filelist
+    # are exact-source hashes derived by the canonical archive verifier.
+    # An arbitrary *other* source may not change even if selected anchors match.
+    for key in ("compiler_input_sha256", "filelist_sha256"):
+        if actual.get(key) != lock[key]:
+            raise ReferenceError("full selected source closure changed: " + key)
     return {
         "schema_version": 1,
         "profile": lock["profile"],
