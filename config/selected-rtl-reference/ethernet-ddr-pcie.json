@@ -22,5 +22,7 @@
   },
   "required_source_sha256": {
     ".tools/ddr4/litedram_sim/gateware/soc_ddr4_sim.v": "641b2593bf12969b8f2816e6c84e6af7a25585ea970d91923b9ca6a5cfd38ec2"
-  }
+  },
+  "compiler_input_sha256": "399222eb50d3fc58244885fe39502f2ce2955ed49144a7926ff8641d82c1e24f",
+  "filelist_sha256": "d86d2bb808b2a31cb242997f2dcbca7c41acfda8f3ff39f8a74ce64f51c40a32"
 }
