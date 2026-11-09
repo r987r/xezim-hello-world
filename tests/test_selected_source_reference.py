@@ -29,8 +29,8 @@ class CombinedReferenceTests(unittest.TestCase):
                 **lock["required_source_sha256"], **lock["required_generated_sha256"]
             },
             "generated_sha256": dict(lock["required_generated_sha256"]),
-            "compiler_input_sha256": "a" * 64,
-            "filelist_sha256": "b" * 64,
+            "compiler_input_sha256": lock["compiler_input_sha256"],
+            "filelist_sha256": lock["filelist_sha256"],
             "identity_sha256": "c" * 64,
         }
 
@@ -61,6 +61,14 @@ class CombinedReferenceTests(unittest.TestCase):
                 bad = copy.deepcopy(self.manifest)
                 bad["source_sha256"][path] = "0" * 64
                 with self.assertRaisesRegex(ReferenceError, "changed"):
+                    compare(self.lock, bad)
+
+    def test_reject_other_source_mutation_via_full_compiler_closure(self):
+        for key in ("compiler_input_sha256", "filelist_sha256"):
+            with self.subTest(key=key):
+                bad = copy.deepcopy(self.manifest)
+                bad[key] = "a" * 64
+                with self.assertRaisesRegex(ReferenceError, "full selected source closure"):
                     compare(self.lock, bad)
 
     def test_reject_file_missing_from_compiler_even_if_generated(self):
