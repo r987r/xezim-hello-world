@@ -1,0 +1,30 @@
+name: Source-selected full-chip direct bit-port contracts
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'tools/soc_netlist_ports.py'
+      - 'tools/real_netlist_contract.py'
+      - 'tools/signal_paths.py'
+      - 'tools/design_netlist.py'
+      - 'tests/test_soc_netlist_ports.py'
+      - '.github/workflows/soc-netlist-ports.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  soc-direct-port-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: python3 -m pip install 'PyYAML==6.0.3'
+      - name: Shared memory/SoC direct-port algorithm and negative contracts
+        run: python3 -m unittest tests.test_soc_netlist_ports tests.test_real_netlist_contract tests.test_design_netlist -v
+      - name: Compile the generic real-netlist adapter
+        run: python3 -m py_compile tools/soc_netlist_ports.py
