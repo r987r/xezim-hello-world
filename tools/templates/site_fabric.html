@@ -127,6 +127,9 @@ const byId=id=>document.getElementById(id);
 const E=(tag,content,cls)=>{const n=document.createElement(tag);if(content!==undefined)n.textContent=String(content);if(cls)n.className=cls;return n};
 const addCell=(row,value,tag='td')=>{const el=E(tag,value);row.append(el);return el};
 const dash=v=>v===null||v===undefined?'—':v;
+// All metric renderers share one formatter. It must be in the IIFE scope;
+// measured rows invoke statLine/mobileMetric outside renderCoverage().
+const fmt=x=>Number.isInteger(x)?String(x):Number(x).toFixed(2).replace(/0+$/,'').replace(/\.$/,'');
 const plane=byId('fabric-plane'), search=byId('fabric-search');let selected=null;
 const routeById=new Map(report.routes.map(r=>[r.id,r]));
 for(const [name,value] of Object.entries(report.summary)){
@@ -157,7 +160,7 @@ if(coverage){
          ' historical AXI observations exist, but their RTL/DV execution fingerprints do not match this revision. Open the original test reports or rerun the serial one-beat NoC regression.'
       :'No qualified serial one-beat AXI timing capture is available for this revision. Structural routes and configured pending budgets are source-derived, but timing remains unmeasured.';
 }
-const fmt=x=>Number.isInteger(x)?String(x):Number(x).toFixed(2).replace(/0+$/,'').replace(/\.$/,'');
+
 const ref=latency.reference_clock;
 byId('fabric-reference-clock').textContent=(ref&&ref.measured_period_ps)?
  'Observed simulation reference: '+ref.signal+' ('+ref.domain+'), '+fmt(ref.measured_period_ps/1000)+' ns per cycle / '+fmt(ref.measured_frequency_hz/1000000)+' MHz. Hardware target frequency not characterized; original run periods are retained per cell.':
