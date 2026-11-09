@@ -87,17 +87,27 @@ static inline int soc_scn_driver_preflight(
   return SOC_SCN_ADAPTER_OK;
 }
 
-/* Serial adapter for CPU firmware's existing action order. Host callbacks
- * perform ALL physical driving and explicit acknowledgement/timeout policy.
- * No event stage named "hardware_pass", "checked", or "protocol_accepted".
+/* The caller MUST supply the selected 64-hex SHA independently of this
+ * generated header (e.g., via a CPU boot mailbox/config handshake). Merely
+ * reading SOC_SCN_PLAN_SHA256 from the same header is not an independent
+ * hardware selection proof, although it is sufficient for the C11 ABI smoke.
+ * Mismatches fail before any callbacks, firmware events or device writes.
+ * Host callbacks perform ALL physical driving and retirement policy.
+ * No event stage named "hardware_pass", "checked" or "protocol_accepted".
  */
 static inline soc_scn_driver_result_t soc_scn_driver_run(
+    const char *selected_plan_sha,
     const soc_scn_driver_registration_t *registry, size_t count,
     soc_scn_driver_event_fn record_event, void *user) {
   soc_scn_driver_result_t result = {
       SOC_SCN_ADAPTER_OK, 0u, 0u, UINT32_MAX, SOC_SCN_PLAN_SHA256
   };
   size_t i;
+  if (selected_plan_sha == NULL || strlen(selected_plan_sha) != 64u ||
+      strcmp(selected_plan_sha, SOC_SCN_PLAN_SHA256) != 0) {
+    result.status = SOC_SCN_ADAPTER_CONTRACT_ERROR;
+    return result;
+  }
   result.status = soc_scn_driver_preflight(registry, count);
   if (result.status != SOC_SCN_ADAPTER_OK) return result;
   for (i = 0; i < SOC_SCN_ACTION_COUNT; ++i) {
