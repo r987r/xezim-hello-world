@@ -55,4 +55,9 @@ PCIe PHY/LTSSM, completion queues, stress, and general packet chaining remain
 outstanding. The 16KiB shared SRAM
 adapter is bounded and intentionally fails on invalid segmented-RAM address
 or bank selections. It is a functional model, not a PCIe PHY or cache-coherent
-DMA subsystem. Only full-chip `outbound-dma-proof.json`, actual C/iDMA AXI traces, requester handshake evidence, independent host RAM/guard readback, and final shared INIT/RUN/CHECK count as this **bounded** proof. Full outbound MWr/MRd/Cpl **passive packet-level** correlation remains in draft [PR #154](https://github.com/r987r/xezim-hello-world/pull/154), and source-selected directed/randomized action adapters remain P0 [#152](https://github.com/r987r/xezim-hello-world/issues/152).
+DMA subsystem. Only full-chip `outbound-dma-proof.json`, actual C/iDMA AXI traces, requester handshake evidence, independent host RAM/guard readback, and final shared INIT/RUN/CHECK count as this **bounded** proof. Full outbound MWr/MRd/Cpl **passive packet-level** correlation is implemented in [PR #154](https://github.com/r987r/xezim-hello-world/pull/154) and requires source-qualified post-rebase CI before sign-off; and source-selected directed/randomized action adapters remain P0 [#152](https://github.com/r987r/xezim-hello-world/issues/152).
+
+
+## Passive outbound TLP evidence (#154)
+
+The existing `dv/pcie0/tlp_trace.py` captures accepted request/completion packets using pinned upstream `PcieIfFrame.to_tlp()`. The outbound variant additionally records `pcie0.tx_wr_req`, `pcie0.tx_rd_req`, and `pcie0.rx_cpl` with independent host/device read-tag spaces and fail-closed unmatched completions. Posted Memory Writes are **observed requests**, not completion evidence. Independent host-memory byte and guard checks and CPU SRAM readback remain mandatory. No second TLP parser, AXI driver, or report page is introduced. Complete sign-off still requires exact-head CI.

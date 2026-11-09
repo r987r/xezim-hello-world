@@ -1,0 +1,40 @@
+name: Canonical SoC IR source and generated topology consistency
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'config/soc.yaml'
+      - 'config/interface_contracts.yaml'
+      - 'tools/socgen.py'
+      - 'tools/soc_ir.py'
+      - 'gen/diagrams/noc-topology.json'
+      - 'tests/test_soc_ir.py'
+      - '.github/workflows/soc-ir.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-ir:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: python3 -m pip install 'PyYAML==6.0.3'
+      - name: Validate existing source SoC and generated graph
+        run: python3 -m unittest tests.test_soc_ir tests.test_design_explorer -v
+      - name: Generate and verify deterministic IR
+        run: |
+          python3 tools/soc_ir.py --out .tools/soc-ir/default.json
+          python3 tools/soc_ir.py --out .tools/soc-ir/default.json --check
+          python3 tools/soc_ir.py --out .tools/soc-ir/default-repeat.json
+          cmp .tools/soc-ir/default.json .tools/soc-ir/default-repeat.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: canonical-soc-ir-source-only
+          path: .tools/soc-ir/
+          include-hidden-files: true

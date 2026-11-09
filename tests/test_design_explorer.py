@@ -14,6 +14,51 @@ import design_explorer
 
 
 class ExplorerTests(unittest.TestCase):
+
+    def test_semantic_diff_reports_module_bus_and_link_status(self):
+        before = design_explorer.catalog(ROOT)
+        after = copy.deepcopy(before)
+        node = after["nodes"][0]
+        old_module = node["module"]
+        node["module"] = "different_soc_ip"
+        after["edges"][0]["name"] = "renamed NoC link"
+        after["edges"][0]["status"] = "reserved_idle"
+        after["configuration"]["buses"]["data"]["data_bits"] = 128
+        diff = design_explorer.difference(before, after)
+        entry = diff["semantic"]
+        self.assertEqual(entry["evidence"],
+                         "source_declared_only_not_elaborated_or_observed")
+        self.assertEqual(entry["instances"]["changed"][node["id"]]["module"],
+                         {"before": old_module, "after": "different_soc_ip"})
+        self.assertEqual(len(entry["routes"]["changed"]), 1)
+        self.assertFalse(entry["routes"]["added"])
+        self.assertFalse(entry["routes"]["removed"])
+        self.assertIn("buses", entry["soc_configuration"])
+        self.assertIn("different_soc_ip", design_explorer.markdown_diff(diff))
+
+    def test_semantic_diff_ignores_nonsemantic_order(self):
+        before = design_explorer.catalog(ROOT)
+        after = copy.deepcopy(before)
+        after["nodes"].reverse()
+        after["edges"].reverse()
+        after["groups"].reverse()
+        after["configuration"]["subsystems"].reverse()
+        after["configuration"]["address_map"]["data"].reverse()
+        # A named configuration row's position is not an SoC change.
+        after["configuration"] = design_explorer.normalized_configuration(
+            after["configuration"])
+        review = design_explorer.semantic_difference(before, after)
+        self.assertFalse(review["instances"]["changed"])
+        self.assertFalse(review["routes"]["changed"])
+        self.assertFalse(review["soc_configuration"])
+
+    def test_semantic_duplicate_route_fails_closed(self):
+        before = design_explorer.catalog(ROOT)
+        after = copy.deepcopy(before)
+        after["edges"].append({**after["edges"][0], "id": "unverified-copy"})
+        with self.assertRaisesRegex(ValueError, "duplicate semantic identity"):
+            design_explorer.semantic_difference(before, after)
+
     def test_existing_profiles_and_no_3d(self):
         graph = design_explorer.catalog(ROOT)
         self.assertEqual(graph["schema_version"], 1)

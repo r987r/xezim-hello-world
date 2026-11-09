@@ -154,6 +154,9 @@ async def execute_cold_boot(dut, *, external=None, benchmark=False):
         # The pinned helper already provides PcieIfFrame / Tlp decoding.
         from pcie_if import PcieIfFrame
         tlp_capture = LiveTlpCapture(dut, frame_type=PcieIfFrame)
+        # Host is an external Root Complex driver/checker only. The one
+        # shared accepted-TLP monitor owns both request directions.
+        host.tlp_capture = tlp_capture
         await host.setup(dut)
     for name, signal in (("init",dut.init_complete),("run",dut.run_complete),
                          ("check",dut.check_complete)):

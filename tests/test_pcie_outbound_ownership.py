@@ -70,6 +70,22 @@ class OutboundOwnershipContract(unittest.TestCase):
         self.assertNotIn("requester_descriptor_control\":\"cocotb",(
             ROOT/"dv/pcie0/host_adapter.py").read_text())
 
+    def test_one_canonical_passive_outbound_tlp_monitor(self):
+        host=(ROOT/"dv/pcie0/host_adapter.py").read_text()
+        boot=(ROOT/"dv/full_chip/test_boot.py").read_text()
+        trace=(ROOT/"dv/pcie0/tlp_trace.py").read_text()
+        self.assertNotIn("watch_outbound",host)
+        self.assertNotIn("self.outbound_counters",host)
+        self.assertNotIn("self.outbound_monitor",host)
+        self.assertIn("host.tlp_capture = tlp_capture",boot)
+        self.assertIn("self.tlp_capture.packets.counts",host)
+        for source in ("pcie0.tx_wr_req","pcie0.tx_rd_req","pcie0.rx_cpl"):
+            self.assertIn(source,trace)
+        self.assertIn("def finish(self, *, close_trace=True)",trace)
+        # The shared #34 trace is closed only by its original orchestrator.
+        combined=(ROOT/"dv/integration/test_combined.py").read_text()
+        self.assertIn("tlp.finish(close_trace=False)",combined)
+
     def test_isolated_requester_unit_test_is_allowed(self):
         smoke=(ROOT/"dv/pcie0/outbound_smoke.py").read_text()
         self.assertIn("DescSource",smoke)
