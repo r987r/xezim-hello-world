@@ -65,6 +65,26 @@ No later version of the YAML can relabel an archived test.
   version still come from `config/soc.yaml`, pinned manifests and
   the actual selected source closure. Renaming a test cannot swap an IP.
 
+## Exclusive physical run-workspace foundation (#139)
+
+`tools/run_workspace.py` reuses the **existing** immutable
+`tools/test_identity.selected()` identity. `reserve_run(root, identity)`
+atomically claims exactly one
+`<simulator>/<config_target>/<testname>/<run_id>/` directory and writes the
+validated original `identity.json`. A second writer, altered selected plan,
+reused run ID, path traversal, external/symlink target or foreign identity
+fails closed. `verify_run` checks the on-disk identity, and
+`canonical_artifact` returns a safe, not-yet-existing path for a producer.
+
+This is a *partial migration primitive*, **not** a changed default
+`regress.py` root. All existing build/filelist caches and target-named scratch
+directories remain intentionally unchanged until each producer and its CI
+upload/postprocessor are migrated together. Never silently redirect a test
+writer without moving its compiled source/verifier dependencies, and never
+relabel previous Actions artifacts as canonical. The selected path conveys no
+hardware PASS: real output still requires independent simulator/monitor
+evidence. Test with `python3 -m unittest tests.test_run_workspace -v`.
+
 ## Adding tests
 
 Add one regression YAML test entry with an explicit `logical_test`.
