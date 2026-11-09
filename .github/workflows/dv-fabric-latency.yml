@@ -122,3 +122,18 @@ jobs:
             gen/supernoc/axi_monitors.json
           include-hidden-files: true
           if-no-files-found: error
+  republish-qualified-main:
+    # The Pages job defers when its exact main revision lacks timing evidence.
+    # Only an actual main-ref benchmark (never a PR) can resume publication.
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    needs: [unloaded-supernoc, unloaded-full-chip]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - name: Rebuild Pages with newly qualified exact-main AXI timing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run pages.yml --ref main --repo "$GITHUB_REPOSITORY"
