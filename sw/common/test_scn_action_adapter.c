@@ -37,23 +37,36 @@ int main(void) {
       registrations[n++].execute=mock_driver;
     }
   }
-  r=soc_scn_driver_run(registrations, n-1, capture, NULL);
+  r=soc_scn_driver_run(SOC_SCN_PLAN_SHA256, registrations, n-1, capture, NULL);
   if (r.status != SOC_SCN_ADAPTER_UNSUPPORTED || r.issued != 0) return 2;
-  r=soc_scn_driver_run(registrations, n, capture, NULL);
+  /* A firmware mailbox advertising a foreign SHA aborts before issuing.
+   * The same plan ID emitted by the contract is NOT a passive RTL check. */
+  {
+    char foreign_sha[65];
+    memset(foreign_sha, '0', 64);
+    foreign_sha[64] = '\0';
+    r=soc_scn_driver_run(foreign_sha, registrations, n, capture, NULL);
+    if (r.status != SOC_SCN_ADAPTER_CONTRACT_ERROR || r.issued != 0 ||
+        callbacks != 0 || events_done != 0 || events_issued != 0) return 7;
+    r=soc_scn_driver_run(NULL, registrations, n, capture, NULL);
+    if (r.status != SOC_SCN_ADAPTER_CONTRACT_ERROR || r.issued != 0 ||
+        callbacks != 0) return 8;
+  }
+  r=soc_scn_driver_run(SOC_SCN_PLAN_SHA256, registrations, n, capture, NULL);
   if (r.status != SOC_SCN_ADAPTER_OK || r.driver_done != SOC_SCN_ACTION_COUNT ||
       events_done != SOC_SCN_ACTION_COUNT || events_issued != SOC_SCN_ACTION_COUNT ||
       callbacks != SOC_SCN_ACTION_COUNT || r.failure_index != UINT32_MAX) return 3;
   registrations[0].execute=mock_driver;
-  r=soc_scn_driver_run(registrations, n, NULL, NULL);
+  r=soc_scn_driver_run(SOC_SCN_PLAN_SHA256, registrations, n, NULL, NULL);
   if (r.status != SOC_SCN_ADAPTER_OK) return 4;
   /* Assert no missing/duplicated callbacks are accepted, then fail a
    * selected action without ever reporting driver_done for that action. */
   registrations[n-1].execute=NULL;
-  r=soc_scn_driver_run(registrations, n, capture, NULL);
+  r=soc_scn_driver_run(SOC_SCN_PLAN_SHA256, registrations, n, capture, NULL);
   if (r.status != SOC_SCN_ADAPTER_CONTRACT_ERROR || r.issued != 0) return 5;
   registrations[n-1].execute=mock_driver;
   callbacks=0; events_done=0; events_issued=0; fail_at=1;
-  r=soc_scn_driver_run(registrations, n, capture, NULL);
+  r=soc_scn_driver_run(SOC_SCN_PLAN_SHA256, registrations, n, capture, NULL);
   if (r.status != SOC_SCN_ADAPTER_DRIVER_FAILED || r.failure_index != 1 ||
       r.issued != 2 || r.driver_done != 1 || events_done != 1) return 6;
   puts("PASS SCN-C selected action driver adapter (driver-only, no RTL proof)");
