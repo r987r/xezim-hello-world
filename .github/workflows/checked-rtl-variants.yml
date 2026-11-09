@@ -1,0 +1,42 @@
+name: Checked-in generated SoC RTL review variants
+
+on:
+  pull_request:
+    branches: [main, 'agent/165-generator-ir-closure-gate']
+    paths:
+      - 'gen/projects/**'
+      - 'gen/manifest.json'
+      - 'gen/chip/soc_top.sv'
+      - 'tools/generate.py'
+      - 'tests/test_default_review_variant.py'
+      - '.github/workflows/checked-rtl-variants.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  generated-source-parity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: python3 -m pip install 'PyYAML==6.0.3'
+      - name: Verify checked-in top matches real generated SoC source
+        run: python3 -m unittest tests.test_default_review_variant -v
+      - name: Check source hash recorded in generator manifest
+        run: |
+          python3 - <<'PY'
+          import json,hashlib
+          from pathlib import Path
+          manifest=json.loads(Path('gen/manifest.json').read_text())
+          for name,digest in manifest['files_sha256'].items():
+              if not name.startswith('projects/'):
+                  continue
+              expected=hashlib.sha256(Path('gen',name).read_bytes()).hexdigest()
+              if expected!=digest:
+                  raise SystemExit(f'generated project variant SHA mismatch: {name}')
+          print('PASS generated RTL review manifest source hashes')
+          PY
