@@ -27,6 +27,23 @@ Frontdoor = actual CPU/BFM MMIO over Config NoC with independently accepted AXI/
 
 To bind a backdoor, combine logical IP register/field names with an exact-variant elaborated instance inventory; reject optimized-out, ambiguous, mismatched-width and stale paths. Default unknown/side-effectful fields to `frontdoor_only` or `unavailable`. Never use raw writes to simulate W1C, FIFO pops, IRQ acknowledgements or doorbells. Backend-specific Verilator/Cocotb or Xezim VPI/DPI support must be independently qualified; no global public-VPI waiver. Bulk SRAM/DDR/HBM memory injection is a distinct [#39](https://github.com/r987r/xezim-hello-world/issues/39) service.
 
+## Quiescent live-HDL snapshot (scoped #91 milestone)
+
+The existing `ReadOnlyCsrRuntime.snapshot(quiescent=True)` can export
+`csr-backdoor-map.json` **only** from validated, exact build/variant
+simulator-visible handles. It preserves `build_sha256`, elaboration inventory
+and CSR catalog digests, individual logical names, RTL paths, and explicit
+per-field read availability. It samples only `backdoor_read_only` fields.
+Side-effectful and unbound fields are recorded as unavailable, not read.
+Unresolved X/Z or non-quiescent snapshots fail closed; no API writes RTL.
+
+The dedicated Verilator/Cocotb CSR runtime workflow captures the actual
+probe's read value and uploads this source-bound JSON. Its
+`frontdoor_equivalence_proven=false` and `protocol_traffic_observed=false`
+fields are deliberate: this is a **real HDL read**, not yet the full-chip
+PeakRDL reset CSR/Config-NoC equality test, Xezim VPI, or public Pages
+field-level integration. Those original #91 acceptance gates stay open.
+
 ## Run reports and validation
 
 The existing [Address Map](publication.md) displays every configured data/config aperture and, when source-qualified, the actual selected register catalog. The [AXI report](axi-run-reports.md) may filter genuine accepted transactions by register range; no duplicate AXI reporter or invented timing. Label source-defined, elaborated RTL, observed frontdoor, safe backdoor and unavailable separately. DFI ACT/PRE/RD/WR commands are **DDR protocol evidence**, not CSRs.
