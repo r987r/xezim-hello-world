@@ -3,6 +3,27 @@
 Read this file before changing any RTL, configuration, generator, boot logic,
 documentation, CI workflow, or generated diagram.
 
+## GitHub issue completion and PR progress discipline
+
+- Use `Refs #<issue>` for partial milestones. **Never** use `Closes #<issue>`,
+  `Fixes #<issue>` or `Resolves #<issue>` in a PR/body/commit unless every
+  *original* acceptance criterion has passed on the final selected RTL/CI
+  head. Partial infrastructure and unit-fixture green checks are not end-to-end
+  hardware or protocol qualification.
+- When a scoped PR merges, check off only the milestone it actually delivered.
+  Keep the broad parent issue open and list unverified steps explicitly.
+- Actual generated default RTL is now tracked in
+  `gen/projects/xezim_soc_dv/variants/default/rtl/soc_top.sv` and remains
+  owned by the atomic generator. The Ethernet+DDR+PCIe combined selected top
+  is **not** the default source; use exact source-archive verification and
+  [#184](https://github.com/r987r/xezim-hello-world/issues/184) for its
+  generator-owned check-in gate. Stage artifacts in `.tools/` rather than
+  claiming they are reproducible `gen/` output.
+- Distinguish initial source/metadata verification from actual elaborated
+  Port-to-net proof and independent passive AXI/TLP/GMII/DFI transfers;
+  do not close [#46](https://github.com/r987r/xezim-hello-world/issues/46)
+  based on a fixture-only generic netlist checker.
+
 ## Mission and non-negotiable boundaries
 
 Build a **config-driven, hierarchical SoC** from reusable upstream RTL.

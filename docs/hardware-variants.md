@@ -17,4 +17,4 @@ After preparing real source filelists with `regress.py --stage files`, run
 to verify every source/identity/archive hash and check that two tests claiming
 one hardware variant actually select the same RTL `soc_top.sv` SHA. Missing,
 tampered or conflicting sources fail closed. Does not infer RTL elaboration,
-correct bytes or accepted traffic. The generator-owned checked-in default RTL is proposed in stacked [PR #178](https://github.com/r987r/xezim-hello-world/pull/178); it is not on `main` until the generator gate and its own checks pass. Opt-in generated snapshots require qualified separate backends and exact-source parity.
+correct bytes or accepted traffic. The generator-owned default RTL is now checked in at [gen/projects/xezim_soc_dv/variants/default/rtl/soc_top.sv](../gen/projects/xezim_soc_dv/variants/default/rtl/soc_top.sv), merged through [PR #178](https://github.com/r987r/xezim-hello-world/pull/178) with 7/7 exact-head checks. Opt-in combined RTL still requires a qualified reproducible emitter and exact selected source parity under [#184](https://github.com/r987r/xezim-hello-world/issues/184).
