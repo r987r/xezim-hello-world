@@ -1,0 +1,63 @@
+name: SCN-C canonical C action contract parity
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'tools/scenario_c.py'
+      - 'tests/test_scenario_c.py'
+      - 'tools/scenario_sv.py'
+      - 'dv/common/scenario.py'
+      - 'dv/common/action_events.py'
+      - 'config/scenarios/**'
+      - 'config/soc.yaml'
+      - '.github/workflows/dv-scenario-c.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  c-action-abi:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: python3 -m pip install 'PyYAML==6.0.3'
+      - name: Python source-plan and cross-language parity tests
+        run: python3 -m unittest tests.test_scenario_c tests.test_scenario_sv -v
+      - name: Render C and SV from SAME resolved plan bytes
+        run: |
+          python3 tools/scenario_plan.py --scenario config/scenarios/dma-roundtrip.json --out .tools/scenario-c/scenario-plan.json
+          python3 tools/scenario_c.py --plan .tools/scenario-c/scenario-plan.json --out .tools/scenario-c/soc_scenario_contract.h
+          python3 tools/scenario_sv.py generate --plan .tools/scenario-c/scenario-plan.json --out .tools/scenario-c/soc_scenario_contract_pkg.sv
+      - name: Compile a real C11 consumer using the generated action metadata
+        run: |
+          cat > .tools/scenario-c/smoke.c <<'C'
+          #include <string.h>
+          #include "soc_scenario_contract.h"
+          int main(void) {
+            const soc_scn_action_t *a = soc_scn_action_at(0);
+            if (a == NULL || SOC_SCN_ACTION_COUNT < 1 ||
+                strlen(SOC_SCN_PLAN_SHA256) != 64 ||
+                strcmp(SOC_SCN_SCENARIO_ID, "dma_roundtrip_smoke") != 0)
+              return 1;
+            if (strcmp(a->action_instance_id, "") == 0 ||
+                soc_scn_action_at(SOC_SCN_ACTION_COUNT) != NULL ||
+                soc_scn_argument_at(SOC_SCN_ARGUMENT_COUNT) != NULL)
+              return 2;
+            return 0;
+          }
+          C
+          cc -std=c11 -Wall -Wextra -Werror -I .tools/scenario-c .tools/scenario-c/smoke.c -o .tools/scenario-c/smoke
+          .tools/scenario-c/smoke
+      - uses: actions/upload-artifact@v4
+        with:
+          name: scenario-c-sv-source-contract
+          path: |
+            .tools/scenario-c/scenario-plan.json
+            .tools/scenario-c/soc_scenario_contract.h
+            .tools/scenario-c/soc_scenario_contract_pkg.sv
+          include-hidden-files: true
