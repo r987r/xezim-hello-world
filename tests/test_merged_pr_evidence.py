@@ -125,7 +125,16 @@ class MergedPrEvidenceTests(unittest.TestCase):
         base_blobs.update({'rtl/new_module.sv':'b'*40,'README.md':'1'*40,
                            'docs/publication.md':'1'*40,
                            '.github/workflows/pages.yml':'1'*40,
-                           'tools/templates/run_report.html':'1'*40})
+                           'tools/templates/run_report.html':'1'*40,
+                           # The *compiled* generated top is still an input.
+                           'gen/chip/soc_top.sv':'1'*40,
+                           # Review-only copies and metadata are not selected
+                           # by Bender or executed by the latency benchmark.
+                           'gen/projects/xezim_soc_dv/variants/default/rtl/soc_top.sv':'2'*40,
+                           'gen/projects/xezim_soc_dv/variants/default/manifest.json':'3'*40,
+                           'gen/manifest.json':'4'*40,
+                           'tools/generate.py':'5'*40,
+                           'tools/stage_selected_rtl.py':'6'*40})
         new_blobs={**base_blobs, 'docs/publication.md':'2'*40,
                    'README.md':'2'*40,'.github/workflows/pages.yml':'2'*40,
                    'tools/templates/run_report.html':'2'*40,
@@ -141,7 +150,14 @@ class MergedPrEvidenceTests(unittest.TestCase):
                    'tools/signal_inventory.py':'6'*40,
                    'tools/noc_diagrams.py':'7'*40,
                    'gen/diagrams/noc-hierarchy.svg':'8'*40,
-                   'gen/diagrams/noc-topology.json':'9'*40}
+                   'gen/diagrams/noc-topology.json':'9'*40,
+                   # Actual merge #185/#187 introduced these checked-in
+                   # source-review artifacts but did not compile them.
+                   'gen/projects/xezim_soc_dv/variants/default/rtl/soc_top.sv':'7'*40,
+                   'gen/projects/xezim_soc_dv/variants/default/manifest.json':'8'*40,
+                   'gen/manifest.json':'9'*40,
+                   'tools/generate.py':'c'*40,
+                   'tools/stage_selected_rtl.py':'d'*40}
         workflows={}
         blob_sources={}
         for name in FABRIC_EXECUTION_WORKFLOWS:
@@ -181,6 +197,12 @@ class MergedPrEvidenceTests(unittest.TestCase):
         self.assertEqual(old,new)
         self.assertEqual(old['file_count'],len(FABRIC_REQUIRED_INPUTS)+1)
         self.assertEqual(old['policy'],'fabric-execution-inputs-v2')
+        # Only the *selected* RTL source is timing-relevant. Changing a
+        # review-only copy must not cause another 20+ minute simulation.
+        next(x for x in new_rows if x['path']=='gen/chip/soc_top.sv')['sha']='f'*40
+        self.assertNotEqual(fabric_execution_fingerprint(client,previous),
+                            fabric_execution_fingerprint(client,current))
+        next(x for x in new_rows if x['path']=='gen/chip/soc_top.sv')['sha']='1'*40
         main_run={'head_branch':'main','head_sha':previous}
         self.assertTrue(verified_fabric_execution_equivalent(
             client,main_run,previous,current))
