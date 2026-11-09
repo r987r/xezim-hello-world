@@ -56,6 +56,45 @@ class ReadOnlyCsrRuntime:
             raise BindingError("live RTL signal width/value mismatch")
         return (raw >> entry["rtl_lsb"]) & ((1 << entry["width_bits"]) - 1)
 
+    def snapshot(self, *, quiescent: bool) -> dict:
+        """Emit a source-bound CSR availability/read snapshot, never an AXI PASS.
+
+        A visible storage handle is still semantically *unvalidated* until a
+        separate real frontdoor comparison. Preserve unavailable/side-effect
+        fields as unavailable and never sample them through a raw handle.
+        """
+        if not quiescent:
+            raise BindingError("CSR snapshot requires quiescent checkpoint")
+        fields = []
+        for entry in self.map["fields"]:
+            item = {
+                "logical_path": entry["logical_path"],
+                "address": entry["address"],
+                "policy": entry["policy"],
+                "binding_status": entry["status"],
+                "rtl_path": entry["rtl_path"],
+                "read_evidence": "not_available",
+                "value": None,
+            }
+            if (entry["status"] == "bound_unvalidated"
+                    and entry["policy"] == "backdoor_read_only"):
+                item["value"] = self.read(entry["logical_path"], quiescent=True)
+                item["read_evidence"] = "quiescent_live_hdl_read_not_frontdoor_verified"
+            fields.append(item)
+        return {
+            "schema_version": 1,
+            "simulator": self.map["simulator"],
+            "top": self.map["top"],
+            "variant": self.map["variant"],
+            "build_sha256": self.map["build_sha256"],
+            "inventory_sha256": self.map["inventory_sha256"],
+            "catalog_sha256": self.map["catalog_sha256"],
+            "qualification": "live_handle_snapshot_not_independent_csr_or_axi_proof",
+            "frontdoor_equivalence_proven": False,
+            "protocol_traffic_observed": False,
+            "fields": fields,
+        }
+
     def write(self, *args, **kwargs):
         raise BindingError("direct CSR backdoor writes are disabled; use frontdoor or qualified semantic hook")
 

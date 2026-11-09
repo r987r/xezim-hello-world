@@ -2,7 +2,9 @@
 
 This test-only RTL probe is distinct from real CSR/Config-NoC equivalence.
 """
+import json
 import os
+from pathlib import Path
 
 import cocotb
 from cocotb.clock import Clock
@@ -70,6 +72,17 @@ async def actual_visible_hdl_signal(dut):
     observed = int(dut.observed.value)
     assert observed == 12, f"expected actual Verilator counter 12 got {observed}"
     assert runtime.read(logical, quiescent=True) == ((observed >> 1) & 0x7f)
+    # Preserve real simulator-visible value and immutable build identity.
+    # This is a quiescent HDL read only, not a Config-NoC/AXI frontdoor
+    # comparison or proof that other chip variants expose this path.
+    snapshot = runtime.snapshot(quiescent=True)
+    assert snapshot["build_sha256"] == build_sha
+    assert snapshot["frontdoor_equivalence_proven"] is False
+    assert snapshot["protocol_traffic_observed"] is False
+    assert snapshot["fields"][0]["value"] == ((observed >> 1) & 0x7f)
+    target = Path(os.environ["CSR_PROBE_EVIDENCE_PATH"])
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(snapshot, sort_keys=True, indent=2) + "\n")
     try:
         runtime.read("probe0.status.write_sensitive", quiescent=True)
         raise AssertionError("frontdoor-only CSR backdoor read accepted")

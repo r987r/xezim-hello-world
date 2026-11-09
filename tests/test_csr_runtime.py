@@ -55,6 +55,41 @@ class CsrRuntimeTests(unittest.TestCase):
         with self.assertRaisesRegex(BindingError,"writes are disabled"):
             runtime.write(logical,1)
 
+    def test_snapshot_marks_hdl_reads_unvalidated_and_side_effects_unavailable(self):
+        catalog, inv, bindings, handles, proof = example()
+        runtime = ReadOnlyCsrRuntime(catalog, inv, bindings, handles, proof)
+        handles[next(iter(handles))].value = 3
+        evidence = runtime.snapshot(quiescent=True)
+        self.assertEqual(evidence["simulator"], "verilator")
+        self.assertEqual(evidence["variant"], "cold_boot")
+        self.assertEqual(evidence["build_sha256"], BUILD)
+        self.assertFalse(evidence["frontdoor_equivalence_proven"])
+        self.assertFalse(evidence["protocol_traffic_observed"])
+        self.assertEqual(len(evidence["inventory_sha256"]), 64)
+        self.assertEqual(evidence["fields"][0]["value"], 1)
+        self.assertEqual(evidence["fields"][0]["read_evidence"],
+                         "quiescent_live_hdl_read_not_frontdoor_verified")
+        with self.assertRaisesRegex(BindingError, "quiescent"):
+            runtime.snapshot(quiescent=False)
+        handles[next(iter(handles))].value = "X"
+        with self.assertRaisesRegex(BindingError, "unresolved"):
+            runtime.snapshot(quiescent=True)
+
+    def test_snapshot_never_reads_side_effectful_or_unbound_field(self):
+        catalog, inv, bindings, handles, proof = example()
+        catalog["instances"][0]["registers"][0]["fields"].append({
+            "name": "ack", "lsb": 1, "msb": 1,
+            "backdoor_policy": "frontdoor_only",
+        })
+        runtime = ReadOnlyCsrRuntime(catalog, inv, bindings, handles, proof)
+        snapshot = runtime.snapshot(quiescent=True)
+        fields = {x["logical_path"]: x for x in snapshot["fields"]}
+        ack = fields["boot.reset_ctrl.cpu_release.ack"]
+        self.assertIsNone(ack["value"])
+        self.assertEqual(ack["read_evidence"], "not_available")
+        self.assertEqual(ack["policy"], "frontdoor_only")
+        self.assertEqual(ack["binding_status"], "unavailable")
+
     def test_side_effect_and_missing_handles_fail_closed(self):
         catalog,inv,bindings,handles,proof=example("frontdoor_only")
         with self.assertRaisesRegex(BindingError,"prohibits"):
