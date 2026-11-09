@@ -116,6 +116,14 @@ def _default_claims(action: dict) -> tuple[ResourceClaim, ...] | None:
                 ResourceClaim("buffer", _field(action, "dst")))
     if kind == "dma.wait_idle":
         return (ResourceClaim("engine", _field(action, "engine")),)
+    if kind in ("event.emit", "event.wait"):
+        queue = _field(action, "queue")
+        token = _field(action, "token")
+        # One queue consumes one command lane. Claims are conservative;
+        # concurrent event action delivery needs a real hardware queue
+        # protocol and adapter-provided retirement fences.
+        return (ResourceClaim("event_queue", queue),
+                ResourceClaim("event_token", queue + ":" + token))
     return None
 
 
@@ -258,6 +266,50 @@ def _validate_release_order(plan: dict, by_id: dict[str, dict]) -> None:
                     f"{aid}: early release before consumer {oid} retired")
 
 
+
+def _validate_event_order(plan: dict, by_id: dict[str, dict]) -> None:
+    """Don't let externally supplied canonical JSON bypass event-causality.
+
+    Event commands are driver actions, never fabricated protocol acceptance
+    or queue retirement. This check proves only that the DAG is causally
+    schedulable, not that any device received an event.
+    """
+    producers = {}
+    for action in plan["actions"]:
+        if action["kind"] != "event.emit":
+            continue
+        aid = action["action_instance_id"]
+        args = action.get("args", {})
+        queue, token = args.get("queue"), args.get("token")
+        if not isinstance(queue, str) or not queue or not isinstance(token, str) or not token:
+            raise ActionDispatchError(f"{aid}: missing typed event queue/token")
+        pair = queue, token
+        if pair in producers:
+            raise ActionDispatchError(f"{aid}: duplicate event token")
+        producers[pair] = aid
+    for action in plan["actions"]:
+        if action["kind"] != "event.wait":
+            continue
+        aid = action["action_instance_id"]
+        args = action.get("args", {})
+        queue, token = args.get("queue"), args.get("token")
+        if not isinstance(queue, str) or not queue or not isinstance(token, str) or not token:
+            raise ActionDispatchError(f"{aid}: missing typed event queue/token")
+        source = producers.get((queue, token))
+        if source is None:
+            raise ActionDispatchError(f"{aid}: event wait has no matching producer")
+        seen = set()
+        stack = list(action["depends_on"])
+        while stack:
+            dep = stack.pop()
+            if dep in seen:
+                continue
+            seen.add(dep)
+            stack.extend(by_id[dep]["depends_on"])
+        if source not in seen:
+            raise ActionDispatchError(f"{aid}: event wait lacks causal emit dependency")
+
+
 class _Tasks:
     """Adapter for either pure Python or cocotb; no new simulation engine."""
     def __init__(self, backend: str):
@@ -334,6 +386,7 @@ class ActionDispatcher:
             if spec.timeout is not None and task_backend is None:
                 raise ActionDispatchError("timed handler needs explicitly selected task backend")
         _validate_release_order(self.plan, self.by_id)
+        _validate_event_order(self.plan, self.by_id)
         for action in self.plan["actions"]:
             if (action["kind"] == "memory.release" and
                     self.registrations["memory.release"].precondition is None):

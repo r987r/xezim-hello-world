@@ -29,6 +29,54 @@ def action(aid, kind="dma.copy", phase="run", parents=()):
 
 
 class RuntimeActionTests(unittest.TestCase):
+
+    def test_event_mailbox_actions_use_same_dispatcher_not_hardware_proof(self):
+        raw = plan([
+            {"action_instance_id": "emit", "kind": "event.emit",
+             "phase": "run", "actor": "dma0",
+             "args": {"queue": "mailbox", "token": "transfer_done"},
+             "depends_on": []},
+            {"action_instance_id": "wait", "kind": "event.wait",
+             "phase": "check", "actor": "checker0",
+             "args": {"queue": "mailbox", "token": "transfer_done"},
+             "depends_on": ["emit"]},
+        ])
+        called = []
+        async def drive(item, ctx):
+            called.append((item["kind"], item["args"]["token"]))
+        with TemporaryDirectory() as temp:
+            events = Path(temp) / "events.jsonl"
+            recorder = ActionEventRecorder(raw, events, lambda: 0)
+            d = ActionDispatcher(raw, {"event.emit": drive, "event.wait": drive},
+                                 recorder=recorder, max_inflight=2, task_backend="asyncio")
+            asyncio.run(d.run())
+            recorder.close()
+            data = [json.loads(x) for x in events.read_text().splitlines()]
+            self.assertEqual([x["stage"] for x in data],
+                             ["issued", "driver_done", "issued", "driver_done"])
+            self.assertTrue(all(x["origin"] == "python_driver"
+                                and not x["evidence"] for x in data))
+            self.assertEqual(called, [("event.emit", "transfer_done"),
+                                      ("event.wait", "transfer_done")])
+
+    def test_raw_event_plan_cannot_bypass_causal_validation(self):
+        emit = {"action_instance_id": "emit", "kind": "event.emit",
+                "phase": "run", "actor": "dma0",
+                "args": {"queue": "mailbox", "token": "one"},
+                "depends_on": []}
+        wait = {"action_instance_id": "wait", "kind": "event.wait",
+                "phase": "check", "actor": "checker0",
+                "args": {"queue": "mailbox", "token": "one"},
+                "depends_on": []}
+        with self.assertRaisesRegex(ActionDispatchError, "causal emit"):
+            ActionDispatcher(plan([emit, wait]), {
+                "event.emit": lambda *_: None, "event.wait": lambda *_: None})
+        wait["depends_on"] = ["emit"]
+        wait["args"]["token"] = "wrong"
+        with self.assertRaisesRegex(ActionDispatchError, "no matching producer"):
+            ActionDispatcher(plan([emit, wait]), {
+                "event.emit": lambda *_: None, "event.wait": lambda *_: None})
+
     def test_selected_actions_dispatch_through_real_registered_handlers(self):
         # Independent actions preserve selected order; deferred prerequisites
         # are respected, and both typed argument and phase are passed through.

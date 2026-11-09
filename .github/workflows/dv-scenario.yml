@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - 'dv/common/scenario.py'
+      - 'dv/common/action_runtime.py'
+      - 'tests/test_action_runtime.py'
       - 'dv/common/scenario_dma.py'
       - 'dv/full_chip/test_boot.py'
       - 'dv/full_chip/test_dma.py'
@@ -46,7 +48,7 @@ jobs:
       - name: Install existing configuration parser
         run: python3 -m pip install 'PyYAML==6.0.3'
       - name: Test typed scenarios, allocator contract and replay
-        run: python3 -m unittest tests.test_scenario_plan tests.test_scenario_dma tests.test_scenario_replay_audit tests.test_memory_plan tests.test_dma_vectors -v
+        run: python3 -m unittest tests.test_scenario_plan tests.test_action_runtime tests.test_scenario_dma tests.test_scenario_replay_audit tests.test_memory_plan tests.test_dma_vectors -v
       - name: Materialize intent-only manifest with source provenance
         run: |
           python3 tools/scenario_plan.py --scenario config/scenarios/dma-roundtrip.json --soc config/soc.yaml --out .tools/scenarios/smoke/scenario-plan.json --source-revision "${GITHUB_SHA}"

@@ -31,6 +31,52 @@ class ScenarioPlanTests(unittest.TestCase):
     def resolve(self):
         return resolve_scenario(self.spec, self.cfg, source_revision='a' * 40)
 
+
+    def test_event_emit_wait_is_source_selected_and_causally_ordered(self):
+        source = copy.deepcopy(self.spec)
+        source["actions"].extend([
+            {"action_instance_id": "queue_emit", "kind": "event.emit",
+             "actor": "cpu0", "phase": "run",
+             "args": {"queue": "accelerator_mailbox", "token": "dma_done"},
+             "depends_on": ["copy_to_ddr"]},
+            {"action_instance_id": "queue_wait", "kind": "event.wait",
+             "actor": "cpu0", "phase": "run",
+             "args": {"queue": "accelerator_mailbox", "token": "dma_done"},
+             "depends_on": ["queue_emit"]},
+        ])
+        plan = resolve_scenario(source, self.cfg, source_revision='a' * 40)
+        kinds = {a["action_instance_id"]: a for a in plan["actions"]}
+        self.assertEqual(kinds["queue_emit"]["kind"], "event.emit")
+        self.assertEqual(kinds["queue_wait"]["depends_on"], ["queue_emit"])
+        self.assertIsNone(plan["execution_evidence"])
+
+    def test_event_wait_without_producer_or_causal_dependency_fails_closed(self):
+        base = {"action_instance_id": "queue_wait", "kind": "event.wait",
+                "actor": "cpu0", "phase": "run",
+                "args": {"queue": "mailbox", "token": "completion"},
+                "depends_on": ["copy_to_ddr"]}
+        self.spec["actions"].append(base)
+        with self.assertRaisesRegex(ScenarioError, "causal emit"):
+            self.resolve()
+        self.spec["actions"].append({
+            "action_instance_id": "queue_emit", "kind": "event.emit",
+            "actor": "cpu0", "phase": "run",
+            "args": {"queue": "mailbox", "token": "completion"},
+            "depends_on": ["copy_to_ddr"],
+        })
+        with self.assertRaisesRegex(ScenarioError, "causal emit"):
+            self.resolve()
+        base["depends_on"].append("queue_emit")
+        self.resolve()
+        self.spec["actions"].append({
+            "action_instance_id": "queue_duplicate", "kind": "event.emit",
+            "actor": "cpu0", "phase": "run",
+            "args": {"queue": "mailbox", "token": "completion"},
+            "depends_on": ["copy_to_ddr"],
+        })
+        with self.assertRaisesRegex(ScenarioError, "duplicate event token"):
+            self.resolve()
+
     def test_configured_physical_regions_and_intent_only(self):
         plan = self.resolve()
         memory = {a['buffer']: a for a in plan['allocations']}
