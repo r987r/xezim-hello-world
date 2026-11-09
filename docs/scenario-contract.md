@@ -28,3 +28,14 @@ The two selected regressions, `chip-cpu-scenario` and `chip-dma-scenario`, consu
 - Only after actual execution and source-compatible passive checks pass may a separate `scenario-execution.json` record completed action IDs and selected-plan hash. Neither evidence nor a shortcut to PASS is written into `scenario-plan.json`.
 
 These are narrow action adapters, not a generic C/SV/Python interpreter for all 30 regressions. Do not create another scenario engine, duplicate the action graph in a test's prose YAML, or claim all legacy internal drivers have migrated. See [test-flow evidence](test-flow.md) and [memory lifetimes](scenario-memory-lifetimes.md).
+
+
+# Typed event queue commands in the common scenario ABI (#152)
+
+The existing SCN-1 resolver accepts event.emit and event.wait as typed
+source-defined intent. Both require queue and token strings. A wait must
+depend (directly or transitively) on the unique matching emit. The existing
+ActionDispatcher requires actual registered adapters and holds the queue
+resource lock through the adapter's retirement fence. This is groundwork
+for accelerator mailbox chaining: no hardware queue RTL, protocol acceptance,
+device completion, or checker-proven bytes are implied by the event.

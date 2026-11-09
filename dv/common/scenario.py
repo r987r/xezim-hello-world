@@ -18,7 +18,8 @@ SCHEMA_VERSION = 1
 RANDOM_ALGORITHM = "sha256-rejection-v1"
 PHASES = ("init", "run", "check")
 KINDS = frozenset(("memory.allocate", "memory.initialize", "memory.check",
-                   "memory.release", "dma.configure", "dma.copy", "dma.wait_idle"))
+                   "memory.release", "dma.configure", "dma.copy", "dma.wait_idle",
+                   "event.emit", "event.wait"))
 NAME = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]{0,95}$")
 PATTERNS = frozenset(("constant", "counter8", "address_xor"))
 POLICIES = frozenset(("strict", "fast", "hybrid", "auto"))
@@ -259,6 +260,10 @@ def _validate_memory(ordered: list[dict], ancestors: dict[str, set[str]],
     accesses: dict[str, set[str]] = {}
     last_region_alloc: dict[str, str] = {}
     releases: dict[str, str] = {}
+    # Event tokens are a causal *scenario contract*, not a hardware queue.
+    # The emitter's adapter must actually drive the mailbox before declaring
+    # driver_done; only a passive checker can prove device receipt.
+    emitters: dict[tuple[str, str], str] = {}
 
     def use(buffer: str, aid: str, *, offset: int = 0,
             length: int | None = None, write: bool = False, read: bool = False) -> tuple[int, int]:
@@ -380,6 +385,21 @@ def _validate_memory(ordered: list[dict], ancestors: dict[str, set[str]],
             _fields(args, {"engine"}, set(), aid)
             if args["engine"] not in available_engines:
                 raise ScenarioError(f"{aid}: unknown DMA engine")
+        elif kind in ("event.emit", "event.wait"):
+            if phase not in ("run", "check"):
+                raise ScenarioError(f"{aid}: event action outside RUN/CHECK")
+            _fields(args, {"queue", "token"}, set(), aid)
+            queue = _name(args["queue"], f"{aid}.queue")
+            token = _name(args["token"], f"{aid}.token")
+            pair = queue, token
+            if kind == "event.emit":
+                if pair in emitters:
+                    raise ScenarioError(f"{aid}: duplicate event token in queue")
+                emitters[pair] = aid
+            else:
+                source = emitters.get(pair)
+                if source is None or source not in ancestors[aid]:
+                    raise ScenarioError(f"{aid}: event wait requires causal emit dependency")
         elif kind == "memory.release":
             if phase not in ("run", "check"):
                 raise ScenarioError(f"{aid}: release outside RUN/CHECK")
