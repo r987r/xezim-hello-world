@@ -32,8 +32,9 @@ class CompositionTests(unittest.TestCase):
         self.assertEqual(subs["pcie0"]["implementation"]["ip"], "verilog_pcie")
         self.assertEqual(subs["ethernet0"]["implementation"]["ip"],
                          "ethernet_queue_mac")
-        self.assertEqual(subs["memory0"]["implementation"]["targets"][1]["name"],
-                         "memory0.ddr0")
+        self.assertEqual(
+            {target["name"] for target in subs["memory0"]["implementation"]["targets"]},
+            {"memory0.hbm0", "memory0.ddr0"})
         self.assertEqual(value, compose(self.soc, self.ir))
         self.assertIn("not_compiled_pin_binding", value["evidence"])
 
