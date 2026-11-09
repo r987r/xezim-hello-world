@@ -15,11 +15,20 @@ python3 tools/build_hardware_variant.py --profile chip-ethernet-ddr-pcie --check
 The first command resolves and regenerates selected source inputs, then
 calls the exact archive verifier and stages the selected files under
 `.tools/rtl-review-staging/<project>/<variant>/`. The second command
-regenerates to a **separate temporary review stage** and compares its full
-manifest, selected `soc_top.sv` digest and source-closure digests against
-the existing baseline without overwriting it. A compiler source, filelist,
-pinned include, firmware image or generated RTL change must be resolved and
-reviewed explicitly; it cannot be silently renamed the same hardware build.
+regenerates to a **separate temporary review stage** and compares
+the selected `soc_top.sv` digest and full compiler-input/source-closure
+digests against the existing baseline without overwriting it. Each captured
+manifest is verified for tampering first. The source manifest's full document
+SHA and the staged manifest's self-SHA can legitimately change because a new
+run has a distinct `identity_sha256`; those two *provenance-document hashes*
+are excluded from the source-equivalence comparison, while the original
+per-run SHA records stay available for audit. All source, filelist, header,
+selected RTL, firmware, configuration, and generated-file digests remain
+strictly compared, with bounded changed-path diagnostics on failure.
+
+A compiler source, filelist, pinned include, firmware image or generated
+RTL change must be resolved and reviewed explicitly; it cannot be silently
+renamed the same hardware build.
 
 **Qualification boundary:** This script is actual selected source
 *generation*, not simulation, validated bit connectivity, or generator-owned
