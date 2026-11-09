@@ -53,6 +53,32 @@ def validate(expected_sha, site, fabric, graph, rtl, bindings, intents, html):
     if len(latency.get("rows", [])) != len(fabric.get("matrix", [])):
         raise ValueError("Fabric route/latency table mismatch")
 
+    # A source-qualified *passing* benchmark with retained passive AXI proof
+    # must actually populate Fabric Explorer. The earlier public gate accepted
+    # a completely "Unmeasured" page even when qualified benchmark artifacts
+    # were listed as PASS. Historical or foreign-source runs are exempt.
+    qualified_scopes = {
+        entry.get("fabric_scope") for entry in site.get("entries", [])
+        if entry.get("passed") is True
+        and "fabric-benchmark-evidence.json" in entry.get("assets", [])
+        and expected_sha in {
+            entry.get("source_sha"),
+            entry.get("verified_site_source_sha"),
+            entry.get("verified_fabric_source_sha"),
+        }
+        and entry.get("fabric_scope") in {"connected_noc", "full_chip_boot_bfm"}
+    }
+    if qualified_scopes:
+        if (latency.get("evidence_coverage", {}).get("current_measured_routes", 0) <= 0
+                or latency.get("reference_clock", {}).get("measured_period_ps") is None):
+            raise ValueError("qualified Fabric benchmark published as Unmeasured")
+        for scope in qualified_scopes:
+            selected = fabric.get("latency_scopes", {}).get(scope, {})
+            if (selected.get("evidence_coverage", {}).get("current_measured_routes", 0) <= 0
+                    or selected.get("reference_clock", {}).get("measured_period_ps") is None):
+                raise ValueError("qualified Fabric benchmark scope published as Unmeasured: "
+                                 + scope)
+
     parsed = {m["name"]: m for m in rtl.get("modules", [])}
     contract = rtl.get("fabric_contract", {})
     if (rtl.get("producer") != "slang"
