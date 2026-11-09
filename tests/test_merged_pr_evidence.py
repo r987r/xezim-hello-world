@@ -195,7 +195,7 @@ class MergedPrEvidenceTests(unittest.TestCase):
         new=fabric_execution_fingerprint(client,current)
         self.assertIsNotNone(old)
         self.assertEqual(old,new)
-        self.assertEqual(old['file_count'],len(FABRIC_REQUIRED_INPUTS)+1)
+        self.assertEqual(old['file_count'],len(FABRIC_REQUIRED_INPUTS)+2)
         self.assertEqual(old['policy'],'fabric-execution-inputs-v2')
         # Only the *selected* RTL source is timing-relevant. Changing a
         # review-only copy must not cause another 20+ minute simulation.
