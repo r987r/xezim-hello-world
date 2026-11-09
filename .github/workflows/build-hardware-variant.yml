@@ -1,0 +1,24 @@
+name: Rebuild selected full-chip variant from source
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'tools/build_hardware_variant.py'
+      - 'tools/regress.py'
+      - 'tools/stage_selected_rtl.py'
+      - 'tests/test_build_hardware_variant.py'
+      - '.github/workflows/build-hardware-variant.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  selected-source-builder:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: python3 -m pip install 'PyYAML==6.0.3'
+      - run: python3 -m unittest tests.test_build_hardware_variant tests.test_stage_selected_rtl -v
+      - run: python3 -m py_compile tools/build_hardware_variant.py
