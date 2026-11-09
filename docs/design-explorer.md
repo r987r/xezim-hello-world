@@ -86,6 +86,22 @@ This PR does not yet pin/build slang or slang-netlist, or certify the full
 generated RTL through them. Those integration checks belong in a dedicated
 toolchain validation step with reproducible version pins.
 
+## Source-attested selected hardware comparisons
+
+After resolving both real compiler source archives, use the existing
+`tools/design_explorer.py --selected-before ... --selected-after ...`
+entrypoint; [the selected-build review guide](soc-scalability-review.md)
+documents the full source-resolution commands. Its JSON and Markdown now
+compare selected compiled tops, Bender filelist SHA, source/variant config SHA,
+selected defines/include directories, target RTL, per-network NoC source
+filelists, header inventory, firmware collateral, and bounded RTL text
+differences. It omits per-run identity/document hashes from architectural
+changes. Changed compiler contracts are separately labeled
+`compiler_source_selected_not_elaborated`; no port-level/CDC/AXI protocol
+success can be inferred from the comparison. Source archives are independently
+SHA-verified first, and modified, missing or foreign archives fail closed.
+These are comparison artifacts, not a second architecture dashboard.
+
 ## Genericity and future subsystems
 
 The explorer does not know about compute, memory, Ethernet, PCIe or DDR

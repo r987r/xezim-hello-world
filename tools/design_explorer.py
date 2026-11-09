@@ -374,9 +374,26 @@ def selected_variant_diff(root_before: Path, profile_before: str,
             tofile=profile_after + "/" + top_after, lineterm=""))
         rtl = {"changed": bool(differences), "diff_lines": differences[:500],
                "truncated": len(differences) > 500, "total": len(differences)}
+    # Compare source-selected compiler/variant semantics rather than
+    # per-invocation identity or review-stage manifest self hashes. This
+    # captures selected RTL topology/backend changes that a text diff alone
+    # cannot distinguish; each archive has already been verified above.
+    source_fields = (
+        "compiled_top", "selected_soc_top", "definition_sha256",
+        "config_sha256", "filelist_sha256", "includes", "defines", "args",
+        "network_filelists",
+    )
+    selected_contract_changes = {
+        name: {"before": a.get(name), "after": b.get(name)}
+        for name in source_fields if a.get(name) != b.get(name)
+    }
     return {
         "schema_version": 1,
         "evidence": "selected_source_sha_verified_not_elaborated_or_observed",
+        "selected_compiler_contract": {
+            "evidence": "compiler_source_selected_not_elaborated",
+            "changed": selected_contract_changes,
+        },
         "before": {"profile": profile_before, "sha": a["compiler_input_sha256"]},
         "after": {"profile": profile_after, "sha": b["compiler_input_sha256"]},
         "rtl_sources": hashes("source_sha256"),
@@ -394,6 +411,15 @@ def selected_variant_markdown(result: dict) -> str:
     for stage in ("before", "after"):
         lines.append(stage + ": " + result[stage]["profile"] + " (" +
                      result[stage]["sha"] + ")")
+    contract = result["selected_compiler_contract"]
+    if contract.get("evidence") != "compiler_source_selected_not_elaborated":
+        raise ValueError("invalid selected compiler contract evidence tier")
+    lines.extend(["", "## Selected compiler and hardware selection",
+                  "Source-attested compiler contract only; not physical pin proof."])
+    for name, delta in sorted(contract["changed"].items()):
+        lines.append("- changed " + name + ": " + json.dumps(delta, sort_keys=True))
+    if not contract["changed"]:
+        lines.append("- No compiler-selection changes")
     for group in ("rtl_sources", "include_headers", "generated_files"):
         lines.extend(["", "## " + group])
         for kind in ("added", "removed", "changed"):

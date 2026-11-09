@@ -55,6 +55,18 @@ class SelectedVariantDiffTests(unittest.TestCase):
         self.assertIn("wire b", selected_variant_markdown(v))
         self.assertIn("not elaboration", selected_variant_markdown(v))
 
+    def test_selected_compiler_contract_tracks_actual_top_and_filelist(self):
+        result = selected_variant_diff(self.a, "example", self.b, "example")
+        selected = result["selected_compiler_contract"]
+        self.assertEqual(selected["evidence"], "compiler_source_selected_not_elaborated")
+        self.assertIn("filelist_sha256", selected["changed"])
+        self.assertNotIn("identity_sha256", selected["changed"])
+        self.assertNotIn("manifest_sha256", selected["changed"])
+        md = selected_variant_markdown(result)
+        self.assertIn("Selected compiler and hardware selection", md)
+        self.assertIn("filelist_sha256", md)
+        self.assertIn("not physical pin proof", md)
+
     def test_foreign_source_fails_closed(self):
         self.src_b.write_text("module soc_top; wire forged; endmodule\n")
         with self.assertRaisesRegex(ValueError,"modified"):
