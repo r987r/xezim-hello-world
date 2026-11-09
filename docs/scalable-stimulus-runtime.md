@@ -25,6 +25,37 @@ Full-chip test writers must be able to express **what** to do using typed action
 
 **Do not create a second scenario compiler, scheduler authority, source catalog, event format, passive monitor, test viewer or report site.**
 
+## Parallel multi-seed scaling without another test framework
+
+The existing `tools/scenario_seed_matrix.py` **only resolves** many source-selected
+`scenario-plan-<seed>.json` files from the **same** JSON action spec and
+`dv/common/scenario.resolve_scenario`. It never forks a second scenario
+compiler, allocates new RTL hardware or turns `driver_done` into device
+acceptance. All cases carry the original source and SoC SHA256, plan SHA,
+exact selected seed and action count in canonical `matrix.json`.
+
+For a fixed directed/regression set:
+
+```sh
+python3 tools/scenario_seed_matrix.py \
+  --scenario config/scenarios/dma-roundtrip.json \
+  --soc config/soc.yaml --out .tools/scenarios/directed-matrix \
+  --seeds 1 22 31337 --source-revision "$(git rev-parse HEAD)"
+python3 tools/scenario_seed_matrix.py \
+  --scenario config/scenarios/dma-roundtrip.json \
+  --soc config/soc.yaml --out .tools/scenarios/directed-matrix --check
+```
+
+For fresh random selections, use `--random-runs 20` instead of `--seeds`.
+Every generated seed is recorded, so later replay uses those exact values;
+there is no fixed-seed policy. The checker rejects missing, added, altered,
+noncanonical or foreign plans and changed source files. It cannot call a
+hardware simulation and therefore **does not qualify M3/M4/M5 protocol PASS**.
+Run the selected cases through the *existing* `tools/regress.py` and
+`ActionDispatcher`, then correlate real passive AXI/TLP/GMII/DFI capture
+and independent expected/observed bytes through `tools/action_evidence.py`.
+Do not claim random hardware coverage from these intent-only CI cases.
+
 ## Target architecture
 
 ```text

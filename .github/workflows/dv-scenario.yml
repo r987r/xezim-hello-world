@@ -21,6 +21,8 @@ on:
       - 'tools/scenario_replay_audit.py'
       - 'tests/test_scenario_replay_audit.py'
       - 'tools/scenario_plan.py'
+      - 'tools/scenario_seed_matrix.py'
+      - 'tests/test_scenario_seed_matrix.py'
       - 'tools/memory_plan.py'
       - 'tools/sram_layout.py'
       - 'config/scenarios/**'
@@ -47,8 +49,18 @@ jobs:
           python-version: '3.12'
       - name: Install existing configuration parser
         run: python3 -m pip install 'PyYAML==6.0.3'
-      - name: Test typed scenarios, allocator contract and replay
-        run: python3 -m unittest tests.test_scenario_plan tests.test_action_runtime tests.test_scenario_dma tests.test_scenario_replay_audit tests.test_memory_plan tests.test_dma_vectors -v
+      - name: Test typed scenarios, allocator contract and multi-seed replay
+        run: python3 -m unittest tests.test_scenario_plan tests.test_scenario_seed_matrix tests.test_action_runtime tests.test_scenario_dma tests.test_scenario_replay_audit tests.test_memory_plan tests.test_dma_vectors -v
+      - name: Resolve and independently verify directed plus randomized SCN plan matrix
+        run: |
+          python3 tools/scenario_seed_matrix.py --scenario config/scenarios/dma-roundtrip.json --soc config/soc.yaml --out .tools/scenarios/ci-seed-matrix --seeds 1 22 31337 --source-revision "${GITHUB_SHA}"
+          python3 tools/scenario_seed_matrix.py --scenario config/scenarios/dma-roundtrip.json --soc config/soc.yaml --out .tools/scenarios/ci-seed-matrix --check
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: scenario-selected-intent-seed-matrix
+          path: .tools/scenarios/ci-seed-matrix/
+          if-no-files-found: warn
       - name: Materialize intent-only manifest with source provenance
         run: |
           python3 tools/scenario_plan.py --scenario config/scenarios/dma-roundtrip.json --soc config/soc.yaml --out .tools/scenarios/smoke/scenario-plan.json --source-revision "${GITHUB_SHA}"
