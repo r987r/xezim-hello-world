@@ -59,7 +59,7 @@ class CombinedReferenceTests(unittest.TestCase):
         actual = compare(self.lock, self.manifest)
         self.assertEqual(actual["selected_top_sha256"],
                          self.lock["required_generated_sha256"][TOP])
-        self.assertIn("not_bit_elaboration", actual["evidence"])
+        self.assertIn("not_elaboration", actual["evidence"])
         self.assertEqual(actual["checked_generated_sources"],
                          len(self.lock["required_generated_sha256"]))
 
