@@ -27,3 +27,21 @@ variant, then migrate remaining RTL/NoC/address/CSR/monitor emitters. Opt-in
 Ethernet/PCIe/DDR compositions currently depend on legacy regress.py modes:
 do not mislabel the initial default IR as the actual opt-in compiled RTL.
 Related: #162, #163, #164, #166, #46, #152.
+
+
+## Generator source-closure enforcement (#165/#166)
+
+The existing atomic \`make gen\` pipeline now validates the emitted
+\`gen/diagrams/noc-topology.json\` against the **same** canonical SoC IR and
+typed IP/subsystem contracts immediately after FlooGen+diagram generation,
+before staging is published. Unknown endpoints, missing required SoC
+instances, duplicate graph links, unsupported clock domains and mismatched IP
+declarations fail generation without replacing the previous checked-in
+\`gen/\` tree. The default RTL/firmware/diagrams have **not changed**.
+
+This is a real **consumer** of the canonical IR in the generator's acceptance
+path, but the legacy RTL emitters still accept the original SoC YAML and
+selected opt-in variant wiring has not been generalized. Follow-on #165/#166
+work must convert at least one RTL emission step to IR input and qualify
+old/new generated SV byte equivalence and actual transactions. The source
+graph is *not* slang netlist bit proof or passive traffic evidence (#46/#152).

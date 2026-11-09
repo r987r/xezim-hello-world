@@ -24,6 +24,8 @@ import socgen
 import floonoc_gen
 import supernoc_gen
 import full_chip_gen
+import soc_ir
+import soc_ip_compose
 
 ROOT = Path(__file__).resolve().parents[1]
 START = "<!-- BEGIN GENERATED SOC -->"
@@ -145,6 +147,35 @@ def dump(path: Path, obj: dict):
     path.write_text(json.dumps(obj, sort_keys=True, indent=2, ensure_ascii=False) + "\n")
 
 
+def verify_generated_source_graph(cfg: dict, out: Path) -> dict:
+    """Fail the *existing* atomic generation before publishing split hardware.
+
+    The pinned FlooGen/diagram emitter already produces topology.json.
+    Verify that the actual output is still in lockstep with the authoritative
+    SoC schema and reusable typed IP contracts (#165/#166). Neither a
+    source-derived graph nor a typed logical port is a slang-elaborated wire.
+    No second emitter, address allocator, or generated-file format is created.
+    """
+    topology_path = out / "diagrams" / "noc-topology.json"
+    if topology_path.is_symlink() or not topology_path.is_file():
+        raise GenerationError("generator failed to emit source NoC topology")
+    topology = json.loads(topology_path.read_text())
+    ir = soc_ir.compile_ir(cfg, topology)
+    composition = soc_ip_compose.compose(cfg, ir)
+    if composition["soc_ir_sha256"] != ir["ir_sha256"]:
+        raise GenerationError("generator SoC IR and IP instance contract disagreement")
+    emitted = {row["id"] for row in ir["instances"]}
+    declared = {row["name"] for row in composition["instances"]}
+    if not all(any(instance == name or instance.startswith((name + "_", name + "."))
+                   for instance in emitted) for name in declared):
+        raise GenerationError("generated topology dropped a required SoC subsystem")
+    return {"soc_ir_sha256": ir["ir_sha256"],
+            "composition_sha256": composition["composition_sha256"],
+            "source_evidence": "generated_structure_not_elaborated",
+            "instance_count": len(ir["instances"]),
+            "link_count": len(ir["links"])}
+
+
 def build(cfg_path: Path, out: Path, readme: Path) -> str:
     """Build every artifact into out; returns expected README text."""
     cfg = yaml.safe_load(cfg_path.read_text())
@@ -160,6 +191,9 @@ def build(cfg_path: Path, out: Path, readme: Path) -> str:
     noc_dv = supernoc_gen.emit(cfg, out / "noc" / "floonoc", out / "supernoc" / "supernoc_tb.sv")
     full_chip_gen.emit(cfg, noc_dv, out / "noc" / "floonoc", out / "chip")
     diagrams = diagram_gen.render(cfg, meta, out / "diagrams", out / "noc" / "floonoc")
+    # Atomic pre-publication gate: RTL emitters and the diagram/topology
+    # generator must represent the same source SoC and typed IP inventory.
+    verify_generated_source_graph(cfg, out)
     dump(out / "verification" / "plan.json", verification_plan(cfg, meta))
     dump(out / "verification" / "routes.json", route_matrix(meta))
     (out / "README.md").write_text(
