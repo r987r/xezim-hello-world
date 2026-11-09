@@ -12,10 +12,15 @@ This is **not** a manually copied replacement for an SoC generator output.
 The source-reference test locks the actually selected combined top, boot ROM
 and CPU flash images, the combined global NoC, representative local/global
 FlooNoC data/config source files, and the pinned LiteDRAM simulation backend.
-All source and include files, compiler flags and the filelist are independently
-verified by the existing `verify_selected_archive` implementation: a small set
-of historical SHA anchors is intentionally *not* misrepresented as a complete
-second 312-file lockfile. The reference is checked **after** exact selected
+The lock additionally pins the **whole compiler-input SHA256**
+(`399222eb50d3fc58244885fe39502f2ce2955ed49144a7926ff8641d82c1e24f`)
+and original selected Bender filelist SHA256
+(`d86d2bb808b2a31cb242997f2dcbca7c41acfda8f3ff39f8a74ce64f51c40a32`).
+All 312 source files and include files, selected compiler flags and filelist
+are independently verified by the existing `verify_selected_archive`
+implementation. The small set of named SHA anchors supports useful diagnostics
+while the full compiler-input SHA prevents any additional selected source from
+changing silently; this is not a second hand-authored 312-file lockfile. The reference is checked **after** exact selected
 source preparation, archival verification and independent regeneration.
 The original run-specific `identity_sha256` is not a hardware change.
 
