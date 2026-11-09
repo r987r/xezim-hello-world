@@ -41,19 +41,49 @@ def validate_lock(lock: dict) -> None:
     if (not isinstance(git_sha, str) or not re.fullmatch(r"[0-9a-f]{40}", git_sha)
             or type(lock.get("source_count")) is not int or lock["source_count"] <= 0):
         raise ReferenceError("missing original accepted PR SHA or source count")
-    for name in ("required_generated_sha256", "required_source_sha256"):
+    for name in ("required_generated_sha256", "required_source_sha256",
+                 "historical_volatile_source_sha256"):
         hashes = lock.get(name)
-        if not isinstance(hashes, dict) or not hashes:
+        if not isinstance(hashes, dict) or (name != "required_source_sha256" and not hashes):
             raise ReferenceError("missing mandatory source lock entries: " + name)
         for path, digest in hashes.items():
             if (not isinstance(path, str) or not path.startswith(".tools/")
                     or "/../" in path or not _sha(digest)):
                 raise ReferenceError("malformed selected reference source/hash")
+    variable = lock.get("volatile_source_paths")
+    if (variable != sorted(lock["historical_volatile_source_sha256"])
+            or len(variable) != 1
+            or variable[0] in lock["required_source_sha256"]
+            or not _sha(lock.get("stable_compiler_inputs_sha256"))
+            or not _sha(lock.get("historical_compiler_input_sha256"))):
+        raise ReferenceError("invalid/non-audited variable generated DDR source")
     if lock["required_generated_sha256"].get(TOP) is None:
         raise ReferenceError("missing real combined generated top SHA")
-    for key in ("compiler_input_sha256", "filelist_sha256"):
-        if not _sha(lock.get(key)):
-            raise ReferenceError("invalid qualified full compiler/filelist reference: " + key)
+    if not _sha(lock.get("filelist_sha256")):
+        raise ReferenceError("invalid qualified compiler filelist reference")
+
+
+def _stable_compiler_inputs(actual: dict, volatile: list[str]) -> str:
+    """Fingerprint stable compiler inputs, explicitly excluding generated DDR Verilog.
+
+    This is not a qualification of the variable source; its actual SHA remains
+    visible in the report and must be separately reviewed before #184 closure.
+    """
+    import hashlib
+    fields = ("filelist_sha256", "config_sha256", "definition_sha256",
+              "include_headers_sha256", "network_filelists", "defines",
+              "includes", "args", "compiled_top", "selected_soc_top")
+    source = actual.get("source_sha256")
+    if not isinstance(source, dict) or not isinstance(volatile, list):
+        raise ReferenceError("missing compiler source inventory")
+    if len(source) != 312 or set(volatile) - set(source):
+        raise ReferenceError("selected compiler source inventory changed")
+    obj = {key: actual.get(key) for key in fields}
+    obj["source_sha256"] = {k: v for k, v in source.items() if k not in volatile}
+    if any(obj.get(key) is None for key in fields):
+        raise ReferenceError("missing compiler selection metadata")
+    return hashlib.sha256(json.dumps(
+        obj, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
 
 
 def compare(lock: dict, actual: dict) -> dict:
@@ -72,16 +102,19 @@ def compare(lock: dict, actual: dict) -> dict:
         for path, expected in sorted(lock[key].items()):
             if hashes.get(path) != expected:
                 raise ReferenceError("qualified selected RTL changed: " + path)
-            # Generated RTL must also be part of the original compiler closure,
-            # not just a separately produced file.
-            if key == "required_generated_sha256" and actual.get("source_sha256", {}).get(path) != expected:
-                raise ReferenceError("generated source missing from compiled closure: " + path)
-    # The full compiler-input closure and byte-identical Bender filelist
-    # are exact-source hashes derived by the canonical archive verifier.
-    # An arbitrary *other* source may not change even if selected anchors match.
-    for key in ("compiler_input_sha256", "filelist_sha256"):
-        if actual.get(key) != lock[key]:
-            raise ReferenceError("full selected source closure changed: " + key)
+            # Verilog in the compiler closure must match its generated copy.
+            # Firmware/boot images are runtime-loaded, not SV source-list inputs.
+            if (key == "required_generated_sha256" and path.endswith(".sv")
+                    and actual.get("source_sha256", {}).get(path) != expected):
+                raise ReferenceError("generated RTL missing from compiled closure: " + path)
+    stable = _stable_compiler_inputs(actual, lock["volatile_source_paths"])
+    if stable != lock["stable_compiler_inputs_sha256"]:
+        raise ReferenceError("stable 311-source compiler closure changed")
+    if actual.get("filelist_sha256") != lock["filelist_sha256"]:
+        raise ReferenceError("full selected source closure changed: filelist_sha256")
+    for path in lock["volatile_source_paths"]:
+        if not _sha(actual.get("source_sha256", {}).get(path)):
+            raise ReferenceError("variable generated DDR source missing from compiler closure")
     return {
         "schema_version": 1,
         "profile": lock["profile"],
@@ -91,7 +124,11 @@ def compare(lock: dict, actual: dict) -> dict:
         "filelist_sha256": actual["filelist_sha256"],
         "checked_generated_sources": len(lock["required_generated_sha256"]),
         "checked_other_sources": len(lock["required_source_sha256"]),
-        "evidence": "qualified_historical_source_digest_match_not_bit_elaboration_or_simulation",
+        "stable_compiler_inputs_sha256": stable,
+        "variable_generated_ddr_sha256": {
+            path: actual["source_sha256"][path] for path in lock["volatile_source_paths"]
+        },
+        "evidence": "stable_selected_source_match_variable_ddr_unqualified_not_elaboration_or_simulation",
     }
 
 
