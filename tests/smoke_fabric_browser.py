@@ -139,6 +139,7 @@ def main() -> None:
         page.write_text(html, encoding="utf-8")
         with webdriver.Chrome(options=options) as browser:
             browser.set_window_size(1400, 920)
+            browser.get(page.resolve().as_uri())
             exercise(browser, True)
             print("PASS Fabric Explorer actual browser: desktop/mobile numerical "
                   "latency, clock, coverage and zero uncaught JS errors "
