@@ -65,6 +65,38 @@ class ExternalAdapterTests(unittest.TestCase):
                 design_netlist.analyze(self.root, "fake", "netlist", outfile)
         self.assertFalse(outfile.exists())
 
+
+    def test_selected_elaborated_hierarchy_rejects_foreign_source_and_duplicates(self):
+        import hashlib
+        selected = {"fake.sv": hashlib.sha256(
+            (self.root / "fake.sv").read_bytes()).hexdigest()}
+        def record(path="fake_tb", module="fake_tb", source="fake.sv"):
+            return {"path": path, "module": module, "source": source}
+        qualified = design_elaborate.audit_selected_hierarchy(
+            self.root, "fake_tb", [record()], selected)
+        self.assertEqual(qualified[0]["source_sha256"], selected["fake.sv"])
+        self.assertFalse("elaborated" in qualified[0]["evidence"]
+                         and qualified[0]["evidence"].endswith("hardware_proven"))
+        with self.assertRaisesRegex(ValueError, "unselected RTL"):
+            (self.root / "unselected.sv").write_text("module extra; endmodule")
+            design_elaborate.audit_selected_hierarchy(
+                self.root, "fake_tb",
+                [record(), record("fake_tb.u_other", "extra", "unselected.sv")],
+                selected)
+        with self.assertRaisesRegex(ValueError, "duplicate elaborated instance"):
+            design_elaborate.audit_selected_hierarchy(
+                self.root, "fake_tb", [record(), record()], selected)
+        with self.assertRaisesRegex(ValueError, "omitted the required root"):
+            design_elaborate.audit_selected_hierarchy(
+                self.root, "fake_tb", [record("fake_tb.u_child")], selected)
+        with self.assertRaisesRegex(ValueError, "missing required"):
+            design_elaborate.audit_selected_hierarchy(
+                self.root, "fake_tb", [record(source="")], selected)
+        with self.assertRaisesRegex(ValueError, "changed since"):
+            (self.root / "fake.sv").write_text("module fake_tb; wire changed; endmodule")
+            design_elaborate.audit_selected_hierarchy(
+                self.root, "fake_tb", [record()], selected)
+
     def test_elaboration_custom_format(self):
         def run(argv, **kwargs):
             self.assertIn("--custom-format", argv)
@@ -77,6 +109,8 @@ class ExternalAdapterTests(unittest.TestCase):
         self.assertEqual(result["instances"][0]["module"], "fake_tb")
         self.assertEqual(result["evidence"], "elaborated_slang_hier_inputs_attested")
         self.assertEqual(result["source_count"],1)
+        self.assertFalse(result["bit_level_connectivity_proven"])
+        self.assertEqual(len(result["source_hierarchy_sha256"]), 64)
 
     def test_source_plan_and_filelist_provenance_fail_closed(self):
         from selected_rtl_provenance import selected
