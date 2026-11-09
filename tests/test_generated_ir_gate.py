@@ -33,6 +33,9 @@ class GeneratorIRConsumerTests(unittest.TestCase):
         self.assertEqual(result["link_count"], len(self.topology["connections"]))
         self.assertEqual(len(result["soc_ir_sha256"]), 64)
         self.assertEqual(len(result["composition_sha256"]), 64)
+        self.assertEqual(result["project"], self.cfg["name"])
+        self.assertEqual(result["variant"], "default")
+        self.assertEqual(result["schema_version"], 1)
         self.assertIn("not_elaborated", result["source_evidence"])
 
     def test_incorrect_generated_endpoint_or_missing_peripheral_is_fatal(self):
