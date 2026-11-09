@@ -38,3 +38,5 @@ traffic, a real IRQ, controller completion, independently checked bytes, or
 SoC signoff. Actual firmware integration with a selected plan SHA handshake
 and passive evidence remains open in #152. CI compiles this header with C11
 and verifies a deliberately mocked callback smoke, including failure modes.
+
+**Selected-plan preflight:** every C callback dispatch takes a 64-hex selected-plan SHA value that must come from the host/CPU platform's *independent* boot or config handshake. The generated contract's SHA is used to reject mismatches **before any command is issued**. Current CI smoke passes the same header SHA and separately injects a foreign SHA/NULL for negative coverage; it does **not** demonstrate that a real CPU has performed this handshake or a downstream device accepted anything.
