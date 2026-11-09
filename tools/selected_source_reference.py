@@ -37,7 +37,9 @@ def validate_lock(lock: dict) -> None:
         raise ReferenceError("foreign selected-source project/profile")
     if lock.get("compiled_top") != "full_chip_tb" or lock.get("selected_soc_top") != TOP:
         raise ReferenceError("foreign selected RTL compilation or top")
-    if not _sha(lock.get("verified_pr_head")) or lock.get("source_count", 0) <= 0:
+    git_sha = lock.get("verified_pr_head")
+    if (not isinstance(git_sha, str) or not re.fullmatch(r"[0-9a-f]{40}", git_sha)
+            or type(lock.get("source_count")) is not int or lock["source_count"] <= 0):
         raise ReferenceError("missing original accepted PR SHA or source count")
     for name in ("required_generated_sha256", "required_source_sha256"):
         hashes = lock.get(name)
