@@ -185,7 +185,7 @@ def catalog(root: Path = ROOT, *, verification_reports: dict[str, Path] | None =
                 "report": payload}
         profiles[name] = item
 
-    return {"schema_version": 1, "source": {
+    return {"schema_version": 1, "configuration": normalized_configuration(soc), "source": {
                 "topology": "gen/diagrams/noc-topology.json",
                 "regression": "config/regression.yaml",
                 "structural_evidence": "generated_declared_not_slang_verified",
@@ -194,6 +194,116 @@ def catalog(root: Path = ROOT, *, verification_reports: dict[str, Path] | None =
             "groups": [{"name": g["name"], "instances": sorted(g["instances"]),
                         "info": g.get("info", {})} for g in groups],
             "profiles": profiles}
+
+
+def normalized_configuration(value: dict) -> dict:
+    """Normalize named SoC objects without silently dropping future keys."""
+    if not isinstance(value, dict):
+        raise ValueError("invalid declared SoC configuration")
+    value = json.loads(json.dumps(value, sort_keys=True))
+    for field in ("subsystems", "memory_targets"):
+        items = value.get(field)
+        if isinstance(items, list):
+            names = [v["name"] for v in items]
+            if len(set(names)) != len(names):
+                raise ValueError("duplicate declared " + field)
+            value[field] = sorted(items, key=lambda v: v["name"])
+    for plane, items in value.get("address_map", {}).items():
+        if not isinstance(items, list):
+            raise ValueError("invalid address map plane " + plane)
+        names = [v["name"] for v in items]
+        if len(set(names)) != len(names):
+            raise ValueError("duplicate address map name")
+        value["address_map"][plane] = sorted(items, key=lambda v: v["name"])
+    for item in value.get("networks", {}).values():
+        if isinstance(item, dict):
+            if isinstance(item.get("outputs"), list):
+                item["outputs"] = sorted(item["outputs"], key=lambda v: v["name"])
+            if isinstance(item.get("reachable_subsystems"), list):
+                item["reachable_subsystems"] = sorted(item["reachable_subsystems"])
+    return value
+
+
+def _index_unique(items: list, field: str) -> dict:
+    result = {}
+    for item in items:
+        name = item[field]
+        if name in result:
+            raise ValueError("duplicate semantic identity " + str(name))
+        result[name] = item
+    return result
+
+
+def _route_key(item: dict) -> str:
+    return json.dumps([item["from"]["instance"], item["from"].get("port", ""),
+                       item["to"]["instance"], item["to"].get("port", ""),
+                       item.get("type", "")], separators=(",", ":"))
+
+
+def _delta(old: dict, new: dict) -> dict:
+    return {key: {"before": old.get(key), "after": new.get(key)}
+            for key in sorted(set(old) | set(new)) if old.get(key) != new.get(key)}
+
+
+def _compare_maps(old: dict, new: dict) -> dict:
+    common = sorted(set(old) & set(new))
+    return {"added": sorted(set(new) - set(old)),
+            "removed": sorted(set(old) - set(new)),
+            "changed": {key: _delta(old[key], new[key]) for key in common
+                        if old[key] != new[key]}}
+
+
+def semantic_difference(before: dict, after: dict) -> dict:
+    """Review source-declared nodes, physical links and buses, not RTL proof."""
+    if before.get("schema_version") != 1 or after.get("schema_version") != 1:
+        raise ValueError("unsupported semantic graph schema")
+    old_edges = _index_unique([
+        {"semantic_id": _route_key(item), **item} for item in before["edges"]
+    ], "semantic_id")
+    new_edges = _index_unique([
+        {"semantic_id": _route_key(item), **item} for item in after["edges"]
+    ], "semantic_id")
+    old_config, new_config = (before.get("configuration") or {},
+                              after.get("configuration") or {})
+    if not isinstance(old_config, dict) or not isinstance(new_config, dict):
+        raise ValueError("invalid declared configuration")
+    return {
+        "schema_version": 1,
+        "evidence": "source_declared_only_not_elaborated_or_observed",
+        "instances": _compare_maps(_index_unique(before["nodes"], "id"),
+                                   _index_unique(after["nodes"], "id")),
+        "routes": _compare_maps(old_edges, new_edges),
+        "groups": _compare_maps(_index_unique(before["groups"], "name"),
+                                _index_unique(after["groups"], "name")),
+        "test_profiles": _compare_maps(before["profiles"], after["profiles"]),
+        "soc_configuration": _delta(old_config, new_config),
+    }
+
+
+def markdown_diff(diff: dict) -> str:
+    """Readable compact view of the same source-only JSON semantic changes."""
+    view = diff["semantic"]
+    lines = ["# SoC architecture diff (source declared)", "",
+             "No elaborated connectivity, simulator traffic or checker PASS implied.", ""]
+    for category in ("instances", "routes", "groups", "test_profiles"):
+        entry = view[category]
+        lines.append("## " + category.replace("_", " ").title())
+        for status in ("added", "removed"):
+            for name in entry[status]:
+                lines.append("- " + status + ": " + str(name))
+        for name, fields in entry["changed"].items():
+            lines.append("- changed: " + str(name))
+            for field, delta in fields.items():
+                lines.append("  - " + field + ": " + json.dumps(delta, sort_keys=True))
+        if not any((entry["added"], entry["removed"], entry["changed"])):
+            lines.append("- No changes")
+        lines.append("")
+    lines.append("## SoC configuration")
+    for field, change in view["soc_configuration"].items():
+        lines.append("- " + field + ": " + json.dumps(change, sort_keys=True))
+    if not view["soc_configuration"]:
+        lines.append("- No changes")
+    return "\n".join(lines) + "\n"
 
 
 def changed_items(before: dict, after: dict) -> dict:
@@ -219,6 +329,7 @@ def difference(before: dict, after: dict) -> dict:
         change = changed_items(a, b)
         if any(change.values()):
             result["actor_changes"][profile] = change
+    result["semantic"] = semantic_difference(before, after)
     return result
 
 
@@ -227,6 +338,7 @@ def main():
     parser.add_argument("--root", type=Path, default=ROOT)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--diff", type=Path, help="existing prior graph to compare")
+    parser.add_argument("--format", choices=("json", "markdown"), default="json")
     parser.add_argument("--verification-report", action="append", default=[], metavar="PROFILE=JSON",
                         help="import hdl-kgraph query uvm --json output; do not treat as runtime truth")
     args = parser.parse_args()
@@ -240,7 +352,9 @@ def main():
         reports[name] = Path(path)
     graph = catalog(args.root.resolve(), verification_reports=reports)
     data = difference(read_json(args.diff), graph) if args.diff else graph
-    result = json.dumps(data, indent=2) + "\n"
+    if args.format == "markdown" and not args.diff:
+        parser.error("--format markdown requires --diff")
+    result = markdown_diff(data) if args.format == "markdown" else json.dumps(data, indent=2) + "\n"
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(result)

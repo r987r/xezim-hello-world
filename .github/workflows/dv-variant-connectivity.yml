@@ -4,6 +4,8 @@ on:
     branches: [main]
     paths:
       - 'tools/variant_connectivity.py'
+      - 'tools/design_explorer.py'
+      - 'tests/test_design_explorer.py'
       - 'tools/full_chip_gen.py'
       - 'tools/regress.py'
       - 'tools/publish_site.py'
