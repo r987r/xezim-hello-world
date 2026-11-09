@@ -333,15 +333,109 @@ def difference(before: dict, after: dict) -> dict:
     return result
 
 
+
+def selected_variant_diff(root_before: Path, profile_before: str,
+                          root_after: Path, profile_after: str) -> dict:
+    """Source-only comparison of two independently verified selected runs."""
+    from difflib import unified_diff
+    from selected_rtl_provenance import verify_selected_archive
+
+    def read(root, profile):
+        root = Path(root).resolve()
+        tests = yaml.safe_load((root / "config/regression.yaml").read_text())["tests"]
+        if profile not in tests:
+            raise ValueError("unknown selected RTL profile")
+        return root, verify_selected_archive(root, profile, tests[profile])
+
+    root_a, a = read(root_before, profile_before)
+    root_b, b = read(root_after, profile_after)
+
+    def hashes(field):
+        before, after = a.get(field, {}), b.get(field, {})
+        return {"added": sorted(set(after) - set(before)),
+                "removed": sorted(set(before) - set(after)),
+                "changed": sorted(k for k in before.keys() & after.keys()
+                                  if before[k] != after[k])}
+
+    top_before, top_after = a.get("selected_soc_top"), b.get("selected_soc_top")
+    rtl = None
+    if top_before or top_after:
+        if not top_before or not top_after:
+            raise ValueError("selected SoC top absent in one run")
+        path_a = root_a / a["archive"] / top_before
+        path_b = root_b / b["archive"] / top_after
+        if not path_a.is_file() or not path_b.is_file():
+            raise ValueError("missing verified generated SoC top")
+        if max(path_a.stat().st_size, path_b.stat().st_size) > 2000000:
+            raise ValueError("RTL top too large for bounded text review")
+        differences = list(unified_diff(
+            path_a.read_text().splitlines(), path_b.read_text().splitlines(),
+            fromfile=profile_before + "/" + top_before,
+            tofile=profile_after + "/" + top_after, lineterm=""))
+        rtl = {"changed": bool(differences), "diff_lines": differences[:500],
+               "truncated": len(differences) > 500, "total": len(differences)}
+    return {
+        "schema_version": 1,
+        "evidence": "selected_source_sha_verified_not_elaborated_or_observed",
+        "before": {"profile": profile_before, "sha": a["compiler_input_sha256"]},
+        "after": {"profile": profile_after, "sha": b["compiler_input_sha256"]},
+        "rtl_sources": hashes("source_sha256"),
+        "include_headers": hashes("include_headers_sha256"),
+        "generated_files": hashes("generated_sha256"),
+        "selected_soc_top_text": rtl,
+    }
+
+
+def selected_variant_markdown(result: dict) -> str:
+    if result.get("evidence") != "selected_source_sha_verified_not_elaborated_or_observed":
+        raise ValueError("invalid source-diff evidence tier")
+    lines = ["# Exact selected RTL comparison", "",
+             "SHA-verified compiler input source, not elaboration or observed traffic.", ""]
+    for stage in ("before", "after"):
+        lines.append(stage + ": " + result[stage]["profile"] + " (" +
+                     result[stage]["sha"] + ")")
+    for group in ("rtl_sources", "include_headers", "generated_files"):
+        lines.extend(["", "## " + group])
+        for kind in ("added", "removed", "changed"):
+            for path in result[group][kind]:
+                lines.append(kind + ": " + path)
+    if result["selected_soc_top_text"] is not None:
+        top = result["selected_soc_top_text"]
+        lines.extend(["", "## Generated SoC top SystemVerilog diff",
+                      "Total diff lines: " + str(top["total"]),
+                      *top["diff_lines"]])
+        if top["truncated"]:
+            lines.append("TRUNCATED: see original archived generated RTL.")
+    return "\n".join(lines) + "\n"
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=ROOT)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--diff", type=Path, help="existing prior graph to compare")
+    parser.add_argument("--selected-before", metavar="PROFILE")
+    parser.add_argument("--selected-after", metavar="PROFILE")
+    parser.add_argument("--before-root", type=Path)
+    parser.add_argument("--after-root", type=Path)
     parser.add_argument("--format", choices=("json", "markdown"), default="json")
     parser.add_argument("--verification-report", action="append", default=[], metavar="PROFILE=JSON",
                         help="import hdl-kgraph query uvm --json output; do not treat as runtime truth")
     args = parser.parse_args()
+    if args.selected_before or args.selected_after:
+        if not args.selected_before or not args.selected_after or args.diff:
+            parser.error("selected comparison needs two profiles without --diff")
+        result = selected_variant_diff(
+            args.before_root or args.root, args.selected_before,
+            args.after_root or args.root, args.selected_after)
+        output = (selected_variant_markdown(result) if args.format == "markdown"
+                  else json.dumps(result, indent=2) + "\n")
+        if args.output:
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            args.output.write_text(output)
+        else:
+            print(output, end="")
+        return
     reports = {}
     for pair in args.verification_report:
         if "=" not in pair:
