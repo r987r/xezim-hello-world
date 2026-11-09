@@ -38,7 +38,7 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
-      actions: read
+      actions: write
       pull-requests: read
     steps:
       - uses: actions/checkout@v4
@@ -78,6 +78,20 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 tools/publish_site.py --collect
+      - name: Read exact-source Fabric coverage from collected site
+        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+        id: fabric_coverage
+        env:
+          PUBLISHED_MAIN_SHA: ${{ github.sha }}
+        run: python3 tools/fabric_refresh.py --report-site .tools/pages-site --sha "$PUBLISHED_MAIN_SHA"
+      - name: Require current-source Fabric latency before public deployment
+        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PUBLISHED_MAIN_SHA: ${{ github.sha }}
+          FABRIC_MEASURED: ${{ steps.fabric_coverage.outputs.measured }}
+          FABRIC_HISTORICAL: ${{ steps.fabric_coverage.outputs.historical }}
+        run: python3 tools/fabric_refresh.py --guard --sha "$PUBLISHED_MAIN_SHA" --measured "$FABRIC_MEASURED" --historical "$FABRIC_HISTORICAL"
       - name: Verify offline 2D diagram preview has embedded graph data
         run: |
           python3 - <<'PY'
