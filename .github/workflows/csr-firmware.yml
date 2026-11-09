@@ -7,6 +7,8 @@ on:
       - 'csr/rdl/soc_dma_shim.rdl'
       - 'sw/dma/dma.h'
       - 'tools/cpu_dma_firmware.py'
+      - 'tools/csrgen.py'
+      - 'config/soc.yaml'
       - 'tests/test_csr_dma_firmware_elf.py'
       - 'tools/csr_dma_headers.py'
       - 'tests/test_csr_dma_headers.py'

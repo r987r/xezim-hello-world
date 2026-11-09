@@ -34,7 +34,8 @@ def require_tool(name):
 
 def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False, ethernet_cpu_mode=False,
                      scenario_mode=False, use_generated_dma_csr=False,
-                     combined_mode=False, pcie_outbound_mode=False):
+                     combined_mode=False, pcie_outbound_mode=False,
+                     use_config_csr_header=True):
     directory.mkdir(parents=True, exist_ok=True)
     if pcie_outbound_mode and (not pcie_host_mode or combined_mode or ethernet_cpu_mode):
         raise ValueError('outbound requester firmware requires separate PCIe CPU variant')
@@ -47,6 +48,12 @@ def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False, ethernet_cpu
         materialize(cfg, directory)
     mapping = {r["name"]: int(r["base"], 0)
                for r in cfg["address_map"]["data"] + cfg["address_map"]["config"]}
+    if use_config_csr_header:
+        required = {"compute0.dma"}
+        required.update({"pcie0.ctrl"} if pcie_outbound_mode else ())
+        required.update({"ethernet0.ctrl"} if ethernet_cpu_mode else ())
+        if not required.issubset(mapping):
+            raise ValueError("missing selected SoC CSR aperture for firmware")
     flash_start = mapping["boot.flash"]
     flash_size = int(next(r["size"] for r in cfg["address_map"]["data"]
                           if r["name"] == "boot.flash"), 0)
@@ -79,6 +86,30 @@ def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False, ethernet_cpu
     if ethernet_cpu_mode:
         macros['SOC_ETH_SRAM'] = mapping['ethernet0.sram']
         macros['SOC_ETH_CTRL'] = mapping['ethernet0.ctrl']
+
+    # Compile CPU firmware against the existing SoC CSR generator's base
+    # definitions, not duplicated -D physical addresses. Keep a legacy
+    # switch temporarily for exact linked-ELF equivalence tests.
+    csr_base_hash = None
+    csr_base_macros = {
+        "SOC_DMA0_CSR": "SOC_CSR_COMPUTE0_DMA_BASE",
+        "SOC_PCIE_CTRL": "SOC_CSR_PCIE0_CTRL_BASE",
+        "SOC_ETH_CTRL": "SOC_CSR_ETHERNET0_CTRL_BASE",
+    }
+    csr_base_path = directory / "soc_variant_csr_bases.h"
+    if use_config_csr_header:
+        from tools.csrgen import bases_header
+        apertures = cfg["address_map"]["config"]
+        names = [row["name"] for row in apertures]
+        if len(names) != len(set(names)):
+            raise ValueError("duplicate SoC CSR windows in firmware header input")
+        generated = bases_header(apertures)
+        generated += "\n/* Selection aliases for existing CPU firmware ABI. */\n"
+        for key, name in csr_base_macros.items():
+            if key in macros:
+                generated += f"#define {key} {name}\n"
+        csr_base_path.write_text(generated)
+        csr_base_hash = hashlib.sha256(generated.encode("utf-8")).hexdigest()
     linker = directory / "cpu_dma.ld"
     linker.write_text(
         "ENTRY(cpu_dma_run)\nSECTIONS {\n"
@@ -101,7 +132,9 @@ def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False, ethernet_cpu
             "-fno-stack-protector", "-fno-pic", "-fno-pie",
             "-nostdlib", "-fuse-ld=lld", "-Wl,--no-relax",
             "-Wl,--build-id=none", f"-Wl,-T,{linker}",
-            *[f"-D{name}=0x{value:x}ULL" for name, value in macros.items()],
+            *[f"-D{name}=0x{value:x}ULL" for name, value in macros.items()
+              if not (use_config_csr_header and name in csr_base_macros)],
+            *(['-include', str(csr_base_path)] if use_config_csr_header else []),
             *(['-DSOC_USE_GENERATED_DMA_CSR=1', '-I', str(directory / 'csr')]
               if use_generated_dma_csr else []),
             str(ROOT / ('sw/integration/tests/ethernet_ddr_pcie_run.c' if combined_mode
@@ -132,7 +165,8 @@ def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False, ethernet_cpu
     # need not make the binary length word-aligned. Flash emission below
     # pads the final 64-bit readmemh word without changing ELF contents.
     return dict(hook=hook, data=blob, sha256=hashlib.sha256(blob).hexdigest(), compiler="clang/LLVM RV32I",
-                defines=macros, flash_limit=flash_size)
+                defines=macros, flash_limit=flash_size,
+                csr_base_header_sha256=csr_base_hash)
 
 
 def prepare(cfg, noc_manifest, noc_root, output: Path, *, pcie_host_mode=False,
@@ -174,6 +208,7 @@ def prepare(cfg, noc_manifest, noc_root, output: Path, *, pcie_host_mode=False,
     # plan and actual accepted AXI events, not a preload.
     manifest['cpu_ethernet_firmware' if ethernet_cpu_mode else 'cpu_dma_firmware'] = {
         "entry": fw["hook"], "bytes": len(blob), "sha256": fw["sha256"], "file": image_prefix + "/flash.hex",
+        "csr_base_header_sha256": fw["csr_base_header_sha256"],
         "allocation_plan": {name: r.as_dict() for name, r in
                             memory_plan.configured_regions(cfg, profile="boot_live").items()},
     }
