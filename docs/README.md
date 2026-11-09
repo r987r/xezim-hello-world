@@ -4,7 +4,7 @@ The [root README](../README.md) contains setup and the single generated whole-ch
 
 | Need | Guide / authority |
 | --- | --- |
-| Build, choose a test, run locally | [Regression](regression.md), [simulator compatibility](simulator-compatibility.md), [naming](test-identity.md), [review exact selected RTL](soc-scalability-review.md) |
+| Build, choose a test, run locally | [Regression](regression.md), [simulator compatibility](simulator-compatibility.md), [naming](test-identity.md), [review exact selected RTL](soc-scalability-review.md), [regenerate combined variant](build-hardware-variant.md) |
 | Configure subsystems and replace IP | [Architecture](architecture.md), [canonical SoC IR](soc-ir.md), [test-independent build variants](hardware-variants.md), [interface budgets](../config/interface_contracts.yaml), [IP portability](ip-portability.md) |
 | Testbench scope and stimulus | **[P0 scalable action runtime](scalable-stimulus-runtime.md)**, [Verification](verification.md), [authored test YAML](../config/stimulus/tests.yaml), [scenario actions](scenario-contract.md), [test-flow evidence](test-flow.md), [P0 runtime #152](https://github.com/r987r/xezim-hello-world/issues/152) |
 | Review CI evidence | [Pages/publication](publication.md), [AXI reports](axi-run-reports.md), [protocol reports](protocol-run-reports.md), [Fabric Explorer](design-explorer.md) |
