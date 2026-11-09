@@ -568,7 +568,7 @@ class PublicationTests(unittest.TestCase):
                  patch.object(site,'merged_main_pr_heads',return_value={}), \
                  patch.object(site,'select_workflow_runs',
                               return_value=({'full-chip.yml':[run]},[])), \
-                 patch.object(site.subprocess,'check_output',return_value=(SHA+'\\n').encode()):
+                 patch.object(site.subprocess,'check_output',return_value=(SHA+'\n').encode()):
                 site.collect(client,CONFIG,root/'evidence')
             notes=json.loads((root/'evidence/collection.json').read_text())['notes']
             self.assertEqual(len(notes),1)
