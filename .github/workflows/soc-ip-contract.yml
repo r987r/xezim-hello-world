@@ -1,0 +1,40 @@
+name: Typed IP and subsystem composition contract
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'config/soc.yaml'
+      - 'config/interface_contracts.yaml'
+      - 'tools/soc_ir.py'
+      - 'tools/soc_ip_compose.py'
+      - 'tools/subsystem_plugin_contract.py'
+      - 'tests/test_soc_ip_compose.py'
+      - '.github/workflows/soc-ip-contract.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  typed-compose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: python3 -m pip install 'PyYAML==6.0.3'
+      - name: Validate source IR and generic IP type contracts
+        run: python3 -m unittest tests.test_soc_ip_compose tests.test_soc_ir -v
+      - name: Generate reproducible manifest without mutating RTL
+        run: |
+          python3 tools/soc_ip_compose.py --out .tools/soc-compose/manifest.json
+          python3 tools/soc_ip_compose.py --out .tools/soc-compose/manifest.json --check
+          python3 tools/soc_ip_compose.py --out .tools/soc-compose/repeated.json
+          cmp .tools/soc-compose/manifest.json .tools/soc-compose/repeated.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: source-typed-ip-composition
+          path: .tools/soc-compose/
+          include-hidden-files: true
