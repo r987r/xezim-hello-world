@@ -1,0 +1,31 @@
+name: Generator-consumed typed SoC IR closure
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'tools/generate.py'
+      - 'tools/soc_ir.py'
+      - 'tools/soc_ip_compose.py'
+      - 'config/soc.yaml'
+      - 'gen/diagrams/noc-topology.json'
+      - 'tests/test_generated_ir_gate.py'
+      - '.github/workflows/soc-generated-ir.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: python3 -m pip install 'PyYAML==6.0.3'
+      - name: Validate generated default topology against canonical IR and IP contract
+        run: python3 -m unittest tests.test_generated_ir_gate tests.test_soc_ir tests.test_soc_ip_compose -v
+      - name: Confirm Python build graph unchanged
+        run: python3 -m py_compile tools/generate.py tools/soc_ir.py tools/soc_ip_compose.py
