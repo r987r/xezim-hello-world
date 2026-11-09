@@ -204,6 +204,12 @@ FABRIC_EXCLUDED_PREFIXES = (
     'docs/', 'tests/', '.github/workflows/', 'tools/templates/site_',
     # Static schematic assets are not compiled into RTL or testbench executables.
     'gen/diagrams/',
+    # The checked-in project/variant review tree contains byte-for-byte
+    # copies of generated RTL for browsing. Bender selects gen/chip/soc_top.sv,
+    # never gen/projects/**; Bender.yml and all active gen/chip/supernoc/NoC
+    # sources remain fingerprinted. A changed *compiled* top still invalidates
+    # latency, while adding a duplicate preview must not.
+    'gen/projects/',
     # Staged DDR4 generation/test *not* in the active Bender NoC or chip
     # simulation source lists. Future integration changes the included
     # Bender/config/generated RTL input hashes and invalidates old evidence.
@@ -213,6 +219,14 @@ FABRIC_EXCLUDED_FILES = {
     'README.md', 'AGENTS.md', 'tools/publish_site.py',
     'tools/fabric_report.py', 'tools/templates/site.html',
     'tools/templates/run_report.html',
+    # Generation-control metadata is not an executable simulation input.
+    # The benchmark's make check-generated gate verifies generated outputs,
+    # and the authenticated Git tree still fingerprints every selected
+    # gen/chip, gen/supernoc, NoC RTL, catalog and Bender file itself.
+    'gen/manifest.json', 'tools/generate.py',
+    # Source-selected RTL staging is a read-only review/attestation path,
+    # not invoked by dv-fabric-latency's simulator or cocotb run.
+    'tools/stage_selected_rtl.py',
     # Read-only architecture extraction and diagram rendering have no
     # simulator or AXI monitor runtime side effects.
     'tools/rtl_instance_parser.py', 'tools/design_explorer.py',
