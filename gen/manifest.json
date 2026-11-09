@@ -66,6 +66,8 @@
     "noc/floonoc/pcie0/local_data/floo_xezim_pcie0_local_data_noc.sv": "56430b2963a855feafa64a1dd77a16ab3b844a31748a03a13a7b357ef3270dda",
     "noc/floonoc/pcie0/local_data/floo_xezim_pcie0_local_data_noc_pkg.sv": "c7159a34959f310d1bd04e23d01644423ffe2122854f37fd93c116f9702ef2b6",
     "noc/floonoc/pcie0/local_data/floogen.yaml": "0a171bcdbb9dcae09753df8a003b7666472d967a40eabbd79b3332ffa3943f03",
+    "projects/xezim_soc_dv/variants/default/manifest.json": "deaf829504f0744dff2d6fb7bc036ca9ecebb8af0a73b80260b60d84afecf036",
+    "projects/xezim_soc_dv/variants/default/rtl/soc_top.sv": "d28c6f147090a7ccc5f796fdc09f909496ced4cb2d350d712af927d242389a6b",
     "supernoc/axi_monitors.json": "8cf3d9a19bdcbab10aeb235f888b0d8bb89871483ef06f3f959d672b3cb17f0c",
     "supernoc/manifest.json": "12b02d236a715b478807e48f69bb0406ef9210696008248302c5f7f2f1dee20d",
     "supernoc/soc_noc.sv": "a274de53f5301c41382375b1fc2bec6998da81073a3ae21e62364b6f25d4af43",

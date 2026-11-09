@@ -176,6 +176,33 @@ def verify_generated_source_graph(cfg: dict, out: Path) -> dict:
             "link_count": len(ir["links"])}
 
 
+def emit_default_review_variant(cfg: dict, out: Path) -> None:
+    """Keep a real, check-in review copy of default RTL in gen/projects/.
+
+    This copies the *generated* top before atomic publication, not a
+    mock/stub. Never claim it represents test-only firmware/DDR/PCIe modes.
+    """
+    import re
+    name = cfg.get("name")
+    if not isinstance(name, str) or not re.fullmatch(r"[a-z][a-z0-9_]*", name):
+        raise GenerationError("invalid SoC project name for generated review RTL")
+    source = out / "chip" / "soc_top.sv"
+    if source.is_symlink() or not source.is_file():
+        raise GenerationError("missing actual default generated soc_top.sv")
+    destination = out / "projects" / name / "variants" / "default"
+    (destination / "rtl").mkdir(parents=True, exist_ok=True)
+    payload = source.read_bytes()
+    (destination / "rtl" / "soc_top.sv").write_bytes(payload)
+    dump(destination / "manifest.json", {
+        "schema_version": 1,
+        "project": name,
+        "variant": "default",
+        "source": "gen/chip/soc_top.sv",
+        "generated_sv_sha256": sha(payload),
+        "evidence": "default_generated_reference_not_opt_in_selected_compilation",
+    })
+
+
 def build(cfg_path: Path, out: Path, readme: Path) -> str:
     """Build every artifact into out; returns expected README text."""
     cfg = yaml.safe_load(cfg_path.read_text())
@@ -190,6 +217,7 @@ def build(cfg_path: Path, out: Path, readme: Path) -> str:
     nocs = floonoc_gen.generate_all(cfg, knobs, out / "noc" / "floonoc")
     noc_dv = supernoc_gen.emit(cfg, out / "noc" / "floonoc", out / "supernoc" / "supernoc_tb.sv")
     full_chip_gen.emit(cfg, noc_dv, out / "noc" / "floonoc", out / "chip")
+    emit_default_review_variant(cfg, out)
     diagrams = diagram_gen.render(cfg, meta, out / "diagrams", out / "noc" / "floonoc")
     # Atomic pre-publication gate: RTL emitters and the diagram/topology
     # generator must represent the same source SoC and typed IP inventory.
