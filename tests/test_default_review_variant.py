@@ -53,7 +53,7 @@ class DefaultReviewVariantTests(unittest.TestCase):
             root.joinpath("chip/soc_top.sv").symlink_to(
                 ROOT / "gen/chip/soc_top.sv")
             with self.assertRaisesRegex(generate.GenerationError, "missing"):
-                generate.emit_default_review_variant(self.cfg, root)
+                generate.emit_default_review_variant(selected, root)
             (root / "chip/soc_top.sv").unlink()
             (root / "chip/soc_top.sv").write_text("module soc_top; endmodule\n")
             with self.assertRaisesRegex(generate.GenerationError, "project name"):
