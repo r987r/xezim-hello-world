@@ -10,19 +10,36 @@ The archived `soc_top.sv` was 134,133 bytes with SHA256
 This is **not** a manually copied replacement for an SoC generator output.
 
 The source-reference test locks the actually selected combined top, boot ROM
-and CPU flash images, the combined global NoC, representative local/global
-FlooNoC data/config source files, and the pinned LiteDRAM simulation backend.
-The lock additionally pins the **whole compiler-input SHA256**
-(`399222eb50d3fc58244885fe39502f2ce2955ed49144a7926ff8641d82c1e24f`)
-and original selected Bender filelist SHA256
-(`d86d2bb808b2a31cb242997f2dcbca7c41acfda8f3ff39f8a74ce64f51c40a32`).
-All 312 source files and include files, selected compiler flags and filelist
-are independently verified by the existing `verify_selected_archive`
-implementation. The small set of named SHA anchors supports useful diagnostics
-while the full compiler-input SHA prevents any additional selected source from
-changing silently; this is not a second hand-authored 312-file lockfile. The reference is checked **after** exact selected
-source preparation, archival verification and independent regeneration.
-The original run-specific `identity_sha256` is not a hardware change.
+and CPU flash **runtime images**, plus the combined global and local FlooNoC
+SystemVerilog. Image SHA checks run against the generated-image inventory;
+boot ROM and flash are **not** incorrectly required to appear in the
+SystemVerilog compiler source list. This behavior is tested by exact-head CI.
+
+Three independent successful/failed selected-source artifacts from runs
+42561215396 (#194), 42616967673 (#196), and 42661261032 (#201) expose an
+important LiteDRAM generator limitation: the pinned `soc_ddr4_sim.v`
+output SHA varied across these runs, despite source-identical top and selected
+Bender filelist, and the controller functional runs at #194/#196 passing.
+The generated DDR RTL SHA is therefore **explicitly labeled unstable and
+unqualified**; no equivalence between those three DDR RTL bytes is inferred.
+
+The historical reference pins a stable compiler-input projection SHA256
+`b5b8447bf223fa53af0e7226a68f94d0717f5328ce08956ec3a67347e5cc4578`,
+computed from **311 selected stable source digests out of 312**, the
+byte-identical Bender filelist SHA256
+`d86d2bb808b2a31cb242997f2dcbca7c41acfda8f3ff39f8a74ce64f51c40a32`,
+the exact config and selected-definition hashes, defines, args, include
+header hashes and NoC source lists. Every source and compiler-input field
+still passes the existing `verify_selected_archive` byte validation first;
+any change outside the *one explicit variable DDR source* fails the pinned
+projection check. The original complete compiler-input SHA from #194
+`399222eb50d3fc58244885fe39502f2ce2955ed49144a7926ff8641d82c1e24f`
+is preserved as a historical reference, **not** silently required to match
+later, variable DDR RTL.
+
+A separate deterministic LiteDRAM generation/equivalence gate is required
+before #184 signoff. The source checker never upgrades source matching to
+elaboration, real DFI transactions, or physical DDR4 PHY proof.
 
 Local selected source preparation (with locked Bender/FlooGen/LiteDRAM/LLVM):
 
