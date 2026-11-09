@@ -8,7 +8,7 @@
   "verified_pr": 194,
   "verified_pr_head": "190793b0b943cf3bfd44aedb8ca22f81ff1e0374",
   "verified_hardware_run": 42561215396,
-  "evidence": "historical_exact_source_sha_baseline_not_generator_owned_or_bit_elaboration",
+  "evidence": "historically_qualified_stable_source_311_of_312_compiled_source_digests_ddr4_generated_verilog_not_reproducible",
   "required_generated_sha256": {
     ".tools/regression/chip-ethernet-ddr-pcie/variant/soc_top.sv": "022d75416267777e6fcf3be8f5823dbe838116c46b722e27b8cd7f065700d3c4",
     ".tools/regression/chip-ethernet-ddr-pcie/variant/flash.hex": "ee763ab99082530693b61f0ff126e433e7688148f0e8113fc7166c8a8fba5cba",
@@ -20,9 +20,14 @@
     ".tools/regression/chip-ethernet-ddr-pcie/ddr_noc/noc/floonoc/pcie0/local_data/floo_xezim_pcie0_local_data_noc.sv": "56430b2963a855feafa64a1dd77a16ab3b844a31748a03a13a7b357ef3270dda",
     ".tools/regression/chip-ethernet-ddr-pcie/ddr_noc/noc/floonoc/memory0/local_data/floo_xezim_memory0_local_data_noc.sv": "9d073d000d769044d9d846b024d085ea0f0ef50ec2dd27615ea149d3f4c8d16e"
   },
-  "required_source_sha256": {
+  "required_source_sha256": {},
+  "filelist_sha256": "d86d2bb808b2a31cb242997f2dcbca7c41acfda8f3ff39f8a74ce64f51c40a32",
+  "historical_volatile_source_sha256": {
     ".tools/ddr4/litedram_sim/gateware/soc_ddr4_sim.v": "641b2593bf12969b8f2816e6c84e6af7a25585ea970d91923b9ca6a5cfd38ec2"
   },
-  "compiler_input_sha256": "399222eb50d3fc58244885fe39502f2ce2955ed49144a7926ff8641d82c1e24f",
-  "filelist_sha256": "d86d2bb808b2a31cb242997f2dcbca7c41acfda8f3ff39f8a74ce64f51c40a32"
+  "volatile_source_paths": [
+    ".tools/ddr4/litedram_sim/gateware/soc_ddr4_sim.v"
+  ],
+  "stable_compiler_inputs_sha256": "b5b8447bf223fa53af0e7226a68f94d0717f5328ce08956ec3a67347e5cc4578",
+  "historical_compiler_input_sha256": "399222eb50d3fc58244885fe39502f2ce2955ed49144a7926ff8641d82c1e24f"
 }
