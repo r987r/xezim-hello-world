@@ -10,6 +10,9 @@ on:
       - 'config/runtime_migration.yaml'
       - 'tools/regress.py'
       - 'tools/build_hardware_variant.py'
+      - 'tools/selected_source_reference.py'
+      - 'config/selected-rtl-reference/**'
+      - 'tests/test_selected_source_reference.py'
       - 'tools/stage_selected_rtl.py'
       - 'tools/cpu_dma_firmware.py'
       - 'tools/full_chip_gen.py'
@@ -46,7 +49,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m py_compile tools/regress.py tools/cpu_dma_firmware.py tools/full_chip_gen.py dv/integration/test_combined.py dv/integration/combined34_scoreboard.py dv/pcie0/host_adapter.py dv/pcie0/tlp_trace.py dv/ethernet0/gmii_trace.py rtl/memory/ddr4/dfi_to_protocol.py
-          python3 -m unittest tests.test_combined34 tests.test_regression -v
+          python3 -m unittest tests.test_combined34 tests.test_regression tests.test_selected_source_reference -v
           python3 tools/stimulus_catalog.py
           python3 tools/regress.py --list
           clang --target=riscv32-unknown-elf -march=rv32i -mabi=ilp32 -ffreestanding -fsyntax-only \
@@ -111,6 +114,7 @@ jobs:
           # exact selected SV, firmware image, NoC and compiler source hashes.
           python3 tools/stage_selected_rtl.py --profile chip-ethernet-ddr-pcie
           python3 tools/build_hardware_variant.py --profile chip-ethernet-ddr-pcie --check
+          python3 tools/selected_source_reference.py --profile chip-ethernet-ddr-pcie
           test -s .tools/regression/chip-ethernet-ddr-pcie/variant/cpu_dma.elf
           test -s .tools/regression/chip-ethernet-ddr-pcie/variant/flash.hex
           test -s .tools/regression/chip-ethernet-ddr-pcie/ddr_noc/ddr4_init_script.json
