@@ -48,6 +48,12 @@ def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False, ethernet_cpu
         materialize(cfg, directory)
     mapping = {r["name"]: int(r["base"], 0)
                for r in cfg["address_map"]["data"] + cfg["address_map"]["config"]}
+    if use_config_csr_header:
+        required = {"compute0.dma"}
+        required.update({"pcie0.ctrl"} if pcie_outbound_mode else ())
+        required.update({"ethernet0.ctrl"} if ethernet_cpu_mode else ())
+        if not required.issubset(mapping):
+            raise ValueError("missing selected SoC CSR aperture for firmware")
     flash_start = mapping["boot.flash"]
     flash_size = int(next(r["size"] for r in cfg["address_map"]["data"]
                           if r["name"] == "boot.flash"), 0)
@@ -97,11 +103,6 @@ def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False, ethernet_cpu
         names = [row["name"] for row in apertures]
         if len(names) != len(set(names)):
             raise ValueError("duplicate SoC CSR windows in firmware header input")
-        required = {"compute0.dma"}
-        required.update({"pcie0.ctrl"} if pcie_outbound_mode else ())
-        required.update({"ethernet0.ctrl"} if ethernet_cpu_mode else ())
-        if not required.issubset(names):
-            raise ValueError("missing selected SoC CSR aperture for firmware")
         generated = bases_header(apertures)
         generated += "\n/* Selection aliases for existing CPU firmware ABI. */\n"
         for key, name in csr_base_macros.items():
