@@ -50,3 +50,26 @@ jobs:
           python3 -m pip install 'cocotb==1.9.2'
       - name: Resolve actual elaborated HDL signal and enforce safe quiescent read
         run: python3 tools/run_csr_runtime_probe.py
+      - name: Verify true HDL snapshot stays source-selected and unqualified
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path('.tools/csr-runtime/csr-backdoor-map.json').read_text())
+          assert data['schema_version'] == 1
+          assert data['simulator'] == 'verilator'
+          assert len(data['build_sha256']) == 64
+          assert not data['frontdoor_equivalence_proven']
+          assert not data['protocol_traffic_observed']
+          assert len(data['fields']) == 2
+          assert sum(x['read_evidence'] == 'quiescent_live_hdl_read_not_frontdoor_verified'
+                     for x in data['fields']) == 1
+          assert sum(x['read_evidence'] == 'not_available'
+                     for x in data['fields']) == 1
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: csr-quiescent-hdl-source-evidence
+          path: .tools/csr-runtime/csr-backdoor-map.json
+          if-no-files-found: warn
