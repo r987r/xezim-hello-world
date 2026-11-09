@@ -214,6 +214,9 @@ FABRIC_EXCLUDED_PREFIXES = (
     # simulation source lists. Future integration changes the included
     # Bender/config/generated RTL input hashes and invalidates old evidence.
     'rtl/memory/ddr4/',
+    # The standalone CSR backdoor hierarchy probe uses its own top/Verilator
+    # workflow, not Bender's supernoc/chip_boot source selections.
+    'dv/csr_runtime/',
 )
 FABRIC_EXCLUDED_FILES = {
     'README.md', 'AGENTS.md', 'tools/publish_site.py',
@@ -231,6 +234,10 @@ FABRIC_EXCLUDED_FILES = {
     # source staging; Fabric benchmark workflows run tools/regress.py directly
     # and never invoke this wrapper.
     'tools/build_hardware_variant.py',
+    # Read-only CSR backdoor runtime and standalone opt-in probe are not
+    # imported by the serial one-beat NoC/full-chip latency tests. Their
+    # separate probe runs a distinct csr_runtime_tb top outside Bender.
+    'tools/csr_runtime.py', 'tools/run_csr_runtime_probe.py',
     # Read-only architecture extraction and diagram rendering have no
     # simulator or AXI monitor runtime side effects.
     'tools/rtl_instance_parser.py', 'tools/design_explorer.py',
