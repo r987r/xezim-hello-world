@@ -45,3 +45,18 @@ selected opt-in variant wiring has not been generalized. Follow-on #165/#166
 work must convert at least one RTL emission step to IR input and qualify
 old/new generated SV byte equivalence and actual transactions. The source
 graph is *not* slang netlist bit proof or passive traffic evidence (#46/#152).
+
+### Default review emitter's first canonical IR input
+
+The default generated RTL review copy under `gen/projects/<project>/variants/default/`
+now selects its project and variant **from the validated canonical IR result**
+after the generated FlooNoC topology and typed IP contracts have passed
+pre-publication checks. The emitted `soc_top.sv`, its manifest and the
+existing default `gen/chip/` bytes are unchanged, so `make check-generated`
+continues to require exact parity. The emitter refuses an unknown IR schema,
+a nondefault build variant, a missing source-IR SHA or an unsafe project name.
+
+This is a first **actual output consumer** of IR identity rather than a
+reimplementation of `full_chip_gen.py`. The main RTL pin/wiring generator
+still uses the existing source SoC and opt-in `regress.py` modes; arbitrary
+IP combinations and the selected combined variant remain unfinished.

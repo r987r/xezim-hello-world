@@ -26,13 +26,16 @@ class DefaultReviewVariantTests(unittest.TestCase):
         self.assertIn("module soc_top", copy.read_text())
 
     def test_generator_emits_identical_baseline_without_full_build(self):
+        selected = generate.verify_generated_source_graph(self.cfg, ROOT / "gen")
+        self.assertEqual(selected["project"], self.cfg["name"])
+        self.assertEqual(selected["variant"], "default")
         with tempfile.TemporaryDirectory() as temp:
             scratch = Path(temp)
             chip = scratch / "chip"
             chip.mkdir()
             (chip / "soc_top.sv").write_bytes(
                 (ROOT / "gen/chip/soc_top.sv").read_bytes())
-            generate.emit_default_review_variant(self.cfg, scratch)
+            generate.emit_default_review_variant(selected, scratch)
             actual = scratch / "projects" / self.cfg["name"] / "variants/default"
             expected = ROOT / "gen/projects" / self.cfg["name"] / "variants/default"
             self.assertEqual((actual / "rtl/soc_top.sv").read_bytes(),
@@ -41,10 +44,11 @@ class DefaultReviewVariantTests(unittest.TestCase):
                              (expected / "manifest.json").read_bytes())
 
     def test_missing_unsafe_or_wrong_project_fails_closed(self):
+        selected = generate.verify_generated_source_graph(self.cfg, ROOT / "gen")
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             with self.assertRaisesRegex(generate.GenerationError, "missing"):
-                generate.emit_default_review_variant(self.cfg, root)
+                generate.emit_default_review_variant(selected, root)
             root.joinpath("chip").mkdir()
             root.joinpath("chip/soc_top.sv").symlink_to(
                 ROOT / "gen/chip/soc_top.sv")
@@ -54,7 +58,13 @@ class DefaultReviewVariantTests(unittest.TestCase):
             (root / "chip/soc_top.sv").write_text("module soc_top; endmodule\n")
             with self.assertRaisesRegex(generate.GenerationError, "project name"):
                 generate.emit_default_review_variant(
-                    {**self.cfg, "name": "bad/name"}, root)
+                    {**selected, "project": "bad/name"}, root)
+            with self.assertRaisesRegex(generate.GenerationError, "source-validated IR"):
+                generate.emit_default_review_variant(
+                    {**selected, "variant": "ethernet-ddr-pcie"}, root)
+            with self.assertRaisesRegex(generate.GenerationError, "source-validated IR"):
+                generate.emit_default_review_variant(
+                    {**selected, "soc_ir_sha256": "0" * 63}, root)
 
 if __name__ == "__main__":
     unittest.main()

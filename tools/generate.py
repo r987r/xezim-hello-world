@@ -169,21 +169,28 @@ def verify_generated_source_graph(cfg: dict, out: Path) -> dict:
     if not all(any(instance == name or instance.startswith((name + "_", name + "."))
                    for instance in emitted) for name in declared):
         raise GenerationError("generated topology dropped a required SoC subsystem")
-    return {"soc_ir_sha256": ir["ir_sha256"],
+    return {"schema_version": ir["schema_version"],
+            "project": ir["project"], "variant": ir["variant"],
+            "soc_ir_sha256": ir["ir_sha256"],
             "composition_sha256": composition["composition_sha256"],
             "source_evidence": "generated_structure_not_elaborated",
             "instance_count": len(ir["instances"]),
             "link_count": len(ir["links"])}
 
 
-def emit_default_review_variant(cfg: dict, out: Path) -> None:
-    """Keep a real, check-in review copy of default RTL in gen/projects/.
+def emit_default_review_variant(ir: dict, out: Path) -> None:
+    """Emit default RTL review paths from the validated canonical SoC graph.
 
-    This copies the *generated* top before atomic publication, not a
-    mock/stub. Never claim it represents test-only firmware/DDR/PCIe modes.
+    The underlying actual SystemVerilog remains owned by full_chip_gen.emit.
+    The source-only IR is the *review artifact identity* consumer, not an
+    elaborated netlist or a source of new hardware port bindings.
     """
     import re
-    name = cfg.get("name")
+    if (ir.get("schema_version") != 1 or ir.get("variant") != "default"
+            or not isinstance(ir.get("soc_ir_sha256"), str)
+            or not re.fullmatch(r"[0-9a-f]{64}", ir["soc_ir_sha256"])):
+        raise GenerationError("invalid source-validated IR for default RTL review")
+    name = ir.get("project")
     if not isinstance(name, str) or not re.fullmatch(r"[a-z][a-z0-9_]*", name):
         raise GenerationError("invalid SoC project name for generated review RTL")
     source = out / "chip" / "soc_top.sv"
@@ -217,11 +224,12 @@ def build(cfg_path: Path, out: Path, readme: Path) -> str:
     nocs = floonoc_gen.generate_all(cfg, knobs, out / "noc" / "floonoc")
     noc_dv = supernoc_gen.emit(cfg, out / "noc" / "floonoc", out / "supernoc" / "supernoc_tb.sv")
     full_chip_gen.emit(cfg, noc_dv, out / "noc" / "floonoc", out / "chip")
-    emit_default_review_variant(cfg, out)
     diagrams = diagram_gen.render(cfg, meta, out / "diagrams", out / "noc" / "floonoc")
-    # Atomic pre-publication gate: RTL emitters and the diagram/topology
-    # generator must represent the same source SoC and typed IP inventory.
-    verify_generated_source_graph(cfg, out)
+    # Atomic pre-publication gate: validate actual emitted topology first.
+    # The default RTL review emitter consumes only this verified IR identity,
+    # avoiding a second, divergent project/variant naming source.
+    selected_ir = verify_generated_source_graph(cfg, out)
+    emit_default_review_variant(selected_ir, out)
     dump(out / "verification" / "plan.json", verification_plan(cfg, meta))
     dump(out / "verification" / "routes.json", route_matrix(meta))
     (out / "README.md").write_text(
