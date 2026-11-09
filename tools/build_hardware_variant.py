@@ -60,6 +60,49 @@ def _review_folder(root: Path, output: Path, variant: str) -> Path:
     return output.resolve() / project / variant
 
 
+def _stage_differences(before: dict, after: dict, *, limit: int = 24) -> list[str]:
+    """Show bounded exact hash/path differences; never silently accept drift."""
+    changes: list[str] = []
+
+    def walk(path: str, old, new) -> None:
+        if len(changes) >= limit:
+            return
+        if isinstance(old, dict) and isinstance(new, dict):
+            for key in sorted(set(old) | set(new)):
+                if len(changes) >= limit:
+                    return
+                name = f"{path}.{key}" if path else str(key)
+                if key not in old:
+                    changes.append(f"{name}: added")
+                elif key not in new:
+                    changes.append(f"{name}: removed")
+                else:
+                    walk(name, old[key], new[key])
+        elif old != new:
+            # Known digest fields are safe to display in CI; arbitrary path
+            # strings or metadata values are not needed for diagnosis.
+            changes.append(f"{path}: changed")
+
+    walk("", before, after)
+    return changes
+
+
+def _source_equivalent_stage(value: dict) -> dict:
+    """Compare all selected compiler bytes, not run-specific evidence identity.
+
+    selected-rtl-manifest.json attests identity_sha256, which includes the
+    individual regression invocation/run ID; its document SHA consequently
+    changes when the same exact RTL/filelist is prepared twice. Both stage
+    manifests are fully verified *before* this comparison; only their two
+    provenance/document self-hashes can differ. Every source file/hash, config,
+    compiler_input_sha256, selected top and stage inventory must still match.
+    """
+    if not isinstance(value, dict) or value.get("schema_version") != 1:
+        raise VariantBuildError("invalid selected build review stage")
+    return {k: v for k, v in value.items()
+            if k not in ("source_manifest_sha256", "manifest_sha256")}
+
+
 def rebuild(root: Path, profile: str, output: Path, *, check: bool = False,
             runner=None) -> dict:
     """Recreate actual selected RTL, then check the full staged-source digest.
@@ -90,9 +133,15 @@ def rebuild(root: Path, profile: str, output: Path, *, check: bool = False,
             expected = stage(root, profile, definition, draft)
             fresh_folder = _review_folder(root, draft, variant)
             verified = verify_stage(fresh_folder)
-            if expected != verified or verified != baseline:
+            if expected != verified:
+                raise VariantBuildError("freshly regenerated review stage failed self-verification")
+            if _source_equivalent_stage(verified) != _source_equivalent_stage(baseline):
+                details = _stage_differences(
+                    _source_equivalent_stage(baseline),
+                    _source_equivalent_stage(verified))
                 raise VariantBuildError(
-                    "regenerated selected RTL and compiler-input closure differs from review baseline")
+                    "regenerated selected RTL and compiler-input closure differs from review baseline; "
+                    "changed paths (bounded): " + ", ".join(details))
             return {"profile": profile, "variant": variant,
                     "selected_soc_top_sha256": baseline["selected_top_sha256"],
                     "compiler_input_sha256": baseline["compiler_input_sha256"],

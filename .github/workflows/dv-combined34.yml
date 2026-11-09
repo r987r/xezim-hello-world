@@ -9,6 +9,8 @@ on:
       - 'config/stimulus/tests.yaml'
       - 'config/runtime_migration.yaml'
       - 'tools/regress.py'
+      - 'tools/build_hardware_variant.py'
+      - 'tools/stage_selected_rtl.py'
       - 'tools/cpu_dma_firmware.py'
       - 'tools/full_chip_gen.py'
       - 'dv/integration/**'
@@ -97,13 +99,18 @@ jobs:
           python3 -m pip install 'pythondata-misc-tapcfg==0.0.post517'
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends verilator iverilog clang llvm lld
-      - name: Verify pinned sources, generate actual LiteDRAM and selected full-chip files
-        timeout-minutes: 15
+      - name: Verify pinned sources, generate actual LiteDRAM and replay selected source closure
+        timeout-minutes: 30
         run: |
           set -euo pipefail
           python3 rtl/memory/ddr4/bringup.py generate
           python3 dv/pcie0/run_rtl_smoke.py --check-pin
           python3 tools/regress.py chip-ethernet-ddr-pcie --stage files --fail-fast
+          # Reuse this real selected source build as the review baseline. A
+          # second independent actual source preparation must reproduce the
+          # exact selected SV, firmware image, NoC and compiler source hashes.
+          python3 tools/stage_selected_rtl.py --profile chip-ethernet-ddr-pcie
+          python3 tools/build_hardware_variant.py --profile chip-ethernet-ddr-pcie --check
           test -s .tools/regression/chip-ethernet-ddr-pcie/variant/cpu_dma.elf
           test -s .tools/regression/chip-ethernet-ddr-pcie/variant/flash.hex
           test -s .tools/regression/chip-ethernet-ddr-pcie/ddr_noc/ddr4_init_script.json
@@ -143,6 +150,7 @@ jobs:
           name: dv-combined34-single-chip-${{ github.run_id }}
           path: |
             .tools/regression/chip-ethernet-ddr-pcie/
+            .tools/rtl-review-staging/xezim_soc_dv/soc-ethernet-ddr-pcie/
             .tools/ddr4/litedram_sim/ddr4_manifest.json
           include-hidden-files: true
           if-no-files-found: warn

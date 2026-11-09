@@ -39,6 +39,7 @@ class HardwareVariantBuildTests(unittest.TestCase):
             "    sources: noc\n")
         self.output = self.root / ".tools/reviews"
         self.selected = {
+            "schema_version": 1,
             "project": "demo_soc",
             "hardware_variant": "soc-ethernet-ddr-pcie",
             "selected_top_sha256": "a"*64,
@@ -96,6 +97,33 @@ class HardwareVariantBuildTests(unittest.TestCase):
                 subject.rebuild(self.root, "chip-combined", self.output,
                                 check=True, runner=self.runner)
         self.assertEqual(self.verify(original), self.selected)
+
+    def test_drift_diagnostics_are_bounded_and_identify_source_fields(self):
+        old = {"source_sha256": {"rtl/top.sv": "a"*64},
+               "filelist_sha256": "b"*64}
+        new = {"source_sha256": {"rtl/top.sv": "c"*64},
+               "filelist_sha256": "b"*64}
+        changed = subject._stage_differences(old, new)
+        self.assertEqual(changed, ["source_sha256.rtl/top.sv: changed"])
+        self.assertEqual(subject._stage_differences(old, new, limit=0), [])
+
+    def test_run_specific_manifest_identity_is_not_a_source_replay_failure(self):
+        baseline = {**self.selected, "schema_version": 1,
+                    "manifest_sha256": "1"*64, "source_manifest_sha256": "2"*64,
+                    "source_sha256": {"rtl/top.sv": "3"*64},
+                    "filelist_sha256": "4"*64}
+        replay = {**baseline, "manifest_sha256": "5"*64,
+                  "source_manifest_sha256": "6"*64}
+        self.assertEqual(subject._source_equivalent_stage(baseline),
+                         subject._source_equivalent_stage(replay))
+        for field, value in (("selected_top_sha256", "9"*64),
+                             ("compiler_input_sha256", "8"*64),
+                             ("source_sha256", {"rtl/top.sv": "7"*64}),
+                             ("filelist_sha256", "0"*64)):
+            with self.subTest(field=field):
+                changed = {**replay, field: value}
+                self.assertNotEqual(subject._source_equivalent_stage(baseline),
+                                    subject._source_equivalent_stage(changed))
 
     def test_reject_unknown_or_default_only_profile_before_runner(self):
         for profile in ("bad/name", "missing", "chip-default"):
