@@ -142,9 +142,10 @@ class PublicSiteTests(unittest.TestCase):
         # Original capture SHA can differ from deployed main ONLY when the
         # trusted collector explicitly attested identical tested RTL inputs.
         site['entries'][0]['source_sha']='b'*40
+        self.assertEqual(self.check(site=site)['evidence_entries'],1)
+        site['entries'][0]['verified_fabric_source_sha']=self.sha
         with self.assertRaisesRegex(ValueError,'qualified Fabric benchmark'):
             self.check(site=site)
-        site['entries'][0]['verified_fabric_source_sha']=self.sha
         self.assertEqual(self.check(site=site,fabric=fabric)['evidence_entries'],1)
         # A genuine old SHA with no equivalence proof is historical, not
         # evidence of a broken current-source measurement.
