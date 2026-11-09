@@ -25,6 +25,20 @@ python3 tools/regress.py chip-ethernet-ddr-pcie --explain
 
 The selected input record is `.tools/regression/chip-ethernet-ddr-pcie/selected-rtl-manifest.json`; its SHA-named `selected-rtl/` archive contains generated inputs. The source filelist is `.tools/regression/chip-ethernet-ddr-pcie/sources.f`. View the exact compiler-resolved top named by `selected_soc_top` in that manifest, **not** an assumed path. The `--explain` recheck detects modified/foreign sources, missing generated files, identity drift and changed header/filelist inputs. Re-running `--stage files` selects sources; it does **not** execute a simulator or establish functional correctness.
 
+## Rebuild the selected combined hardware source without simulating
+
+Use the [selected variant rebuild guide](build-hardware-variant.md) to invoke
+the existing Bender/FlooGen/LLVM source-selection pipeline for a named
+opt-in configuration. The CLI runs `regress.py --stage files` and stages
+its SHA-verified actual selected RTL; `--check` independently regenerates
+the same sources into a separate temporary directory and rejects drift.
+It does not overwrite the baseline and does not imply passing a simulator.
+
+The reviewed generated **default** RTL remains checked into `gen/projects/`.
+The combined RTL is still staged under `.tools/` pending the full #184
+generator-owned promotion gate. Neither source hash nor pass-through test
+metadata proves the actual AXI/PCIe/Ethernet/DDR hardware path.
+
 ## Compare two exact selected builds
 
 Resolve both profiles into source archives, then use the **existing** Architecture Explorer diff utility:
