@@ -23,6 +23,55 @@ ROOT = Path(__file__).resolve().parents[1]
 FORMAT = "{inst}|||{module}|||{file}"
 
 
+
+def audit_selected_hierarchy(root: Path, top: str, rows: list[dict],
+                             source_hashes: dict[str, str]) -> list[dict]:
+    """Bind every slang-reported hierarchy source to the selected filelist.
+
+    Successful *syntax/elaboration* and exact-source provenance are distinct
+    from proven active netlist bit/port connections and routed traffic.
+    """
+    if not isinstance(source_hashes, dict) or not source_hashes:
+        raise ValueError("missing selected RTL source inventory")
+    if not isinstance(rows, list) or not rows:
+        raise ValueError("empty elaborated hierarchy")
+    seen = set()
+    verified = []
+    root_seen = False
+    for item in rows:
+        path = item.get("path")
+        module = item.get("module")
+        raw = item.get("source")
+        if any(not isinstance(x, str) or not x.strip()
+               for x in (path, module, raw)):
+            raise ValueError("slang hierarchy missing required identity/source")
+        if path in seen:
+            raise ValueError("duplicate elaborated instance path: " + path)
+        seen.add(path)
+        original = Path(raw)
+        if original.is_symlink():
+            raise ValueError("unsafe symlink in elaborated source: " + raw)
+        source = (original if original.is_absolute() else root / original).resolve()
+        if not source.is_relative_to(root) or not source.is_file():
+            raise ValueError("elaborated source absent/outside checkout: " + raw)
+        relative = source.relative_to(root).as_posix()
+        expected = source_hashes.get(relative)
+        if not isinstance(expected, str):
+            raise ValueError("elaborated instance uses unselected RTL: " + relative)
+        actual = hashlib.sha256(source.read_bytes()).hexdigest()
+        if actual != expected:
+            raise ValueError("selected elaborated RTL changed since source attestation")
+        if path == top and module == top:
+            root_seen = True
+        verified.append({
+            "path": path, "module": module, "source": relative,
+            "source_sha256": expected,
+            "evidence": "selected_source_hash_and_elaborator_output_not_bit_proof",
+        })
+    if not root_seen:
+        raise ValueError("selected elaboration omitted the required root top")
+    return verified
+
 def analyze(root: Path, profile: str, binary: str = "slang-hier") -> dict:
     root = root.resolve()
     attested = selected(root, profile)
@@ -45,8 +94,14 @@ def analyze(root: Path, profile: str, binary: str = "slang-hier") -> dict:
                               "source": fields[2].strip()})
     if not instances:
         raise ValueError(f"{profile}: slang-hier returned no recognizable hierarchy")
+    checked = audit_selected_hierarchy(
+        root, top, instances, attested["selected_source_sha256"])
     return {**public_fields(attested), "evidence": "elaborated_slang_hier_inputs_attested",
-            "command": argv, "instances": instances,
+            "command": argv, "instances": checked,
+            "source_hierarchy_sha256": hashlib.sha256(json.dumps(
+                checked, sort_keys=True, separators=(",", ":")).encode()).hexdigest(),
+            "bit_level_connectivity_proven": False,
+            "observed_protocol_traffic": False,
             "diagnostics": run.stderr.splitlines()}
 
 
