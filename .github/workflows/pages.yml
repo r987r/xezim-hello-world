@@ -38,7 +38,7 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
-      actions: read
+      actions: write
       pull-requests: read
     steps:
       - uses: actions/checkout@v4
@@ -69,7 +69,7 @@ jobs:
       - name: Extract RTL hierarchy and real named port bindings
         run: python3 tools/rtl_instance_parser.py --slang .tools/bin/slang --output .tools/rtl-architecture.json
       - name: Verify publication, CI trigger and report semantics
-        run: python3 -m unittest tests.test_docs tests.test_published_csr tests.test_published_site tests.test_runtime_contract tests.test_test_identity tests.test_stimulus_catalog tests.test_test_intent tests.test_ci_workflows tests.test_csr_source_references tests.test_publication tests.test_merged_pr_evidence tests.test_axi_report tests.test_fabric_report tests.test_protocol_report tests.test_design_explorer tests.test_design_netlist tests.test_signal_inventory tests.test_signal_paths tests.test_architecture_explorer tests.test_ddr_csr_catalog tests.test_ddr_csr_pages tests.test_rtl_instance_parser tests.test_rtl_instance_bindings tests.test_ethernet_protocol_trace tests.test_axi_monitor_lifecycle -v
+        run: python3 -m unittest tests.test_docs tests.test_published_csr tests.test_published_site tests.test_runtime_contract tests.test_test_identity tests.test_stimulus_catalog tests.test_test_intent tests.test_ci_workflows tests.test_csr_source_references tests.test_publication tests.test_merged_pr_evidence tests.test_fabric_refresh tests.test_axi_report tests.test_fabric_report tests.test_protocol_report tests.test_design_explorer tests.test_design_netlist tests.test_signal_inventory tests.test_signal_paths tests.test_architecture_explorer tests.test_ddr_csr_catalog tests.test_ddr_csr_pages tests.test_rtl_instance_parser tests.test_rtl_instance_bindings tests.test_ethernet_protocol_trace tests.test_axi_monitor_lifecycle -v
       - name: Build offline PR or manual branch preview
         if: (github.event_name == 'pull_request' && github.event.action != 'closed') || (github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main')
         run: python3 tools/publish_site.py
@@ -78,6 +78,20 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 tools/publish_site.py --collect
+      - name: Read exact-source Fabric coverage from collected site
+        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+        id: fabric_coverage
+        env:
+          PUBLISHED_MAIN_SHA: ${{ github.sha }}
+        run: python3 tools/fabric_refresh.py --report-site .tools/pages-site --sha "$PUBLISHED_MAIN_SHA"
+      - name: Require current-source Fabric latency before public deployment
+        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PUBLISHED_MAIN_SHA: ${{ github.sha }}
+          FABRIC_MEASURED: ${{ steps.fabric_coverage.outputs.measured }}
+          FABRIC_HISTORICAL: ${{ steps.fabric_coverage.outputs.historical }}
+        run: python3 tools/fabric_refresh.py --guard --sha "$PUBLISHED_MAIN_SHA" --measured "$FABRIC_MEASURED" --historical "$FABRIC_HISTORICAL"
       - name: Verify offline 2D diagram preview has embedded graph data
         run: |
           python3 - <<'PY'
