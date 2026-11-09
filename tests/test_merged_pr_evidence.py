@@ -135,7 +135,10 @@ class MergedPrEvidenceTests(unittest.TestCase):
                            'gen/manifest.json':'4'*40,
                            'tools/generate.py':'5'*40,
                            'tools/stage_selected_rtl.py':'6'*40,
-                           'tools/build_hardware_variant.py':'7'*40})
+                           'tools/build_hardware_variant.py':'7'*40,
+                           'tools/csr_runtime.py':'8'*40,
+                           'tools/run_csr_runtime_probe.py':'9'*40,
+                           'dv/csr_runtime/test_bind_hdl.py':'a'*40})
         new_blobs={**base_blobs, 'docs/publication.md':'2'*40,
                    'README.md':'2'*40,'.github/workflows/pages.yml':'2'*40,
                    'tools/templates/run_report.html':'2'*40,
@@ -159,7 +162,10 @@ class MergedPrEvidenceTests(unittest.TestCase):
                    'gen/manifest.json':'9'*40,
                    'tools/generate.py':'c'*40,
                    'tools/stage_selected_rtl.py':'d'*40,
-                   'tools/build_hardware_variant.py':'e'*40}
+                   'tools/build_hardware_variant.py':'e'*40,
+                   'tools/csr_runtime.py':'f'*40,
+                   'tools/run_csr_runtime_probe.py':'1'*40,
+                   'dv/csr_runtime/test_bind_hdl.py':'2'*40}
         workflows={}
         blob_sources={}
         for name in FABRIC_EXECUTION_WORKFLOWS:
