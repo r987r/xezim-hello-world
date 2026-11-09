@@ -421,6 +421,59 @@ def authenticated_runner_revisions(client, run, artifact_folder, cache=None):
     return verified
 
 
+def verify_archived_identity(source_dir, plan, result, target, run):
+    """Authenticate the original run-local identity without reconstructing it.
+
+    This single contract is checked when first collecting an archive and
+    again before publishing it, including direct/offline evidence builds.
+    Legacy runs with no claimed identity retain their historical path.
+    """
+    from test_identity import load as load_identity, relative_path as canonical_path
+    identity_file=source_dir/'identity.json'
+    selected=(load_identity(identity_file,target=target,plan=plan)
+              if identity_file.is_file() else None)
+    if selected is not None:
+        if (plan.get('identity')!=selected
+                or result.get('identity_sha256')!=selected['identity_sha256']
+                or result.get('canonical_id')!=canonical_path(selected).as_posix()):
+            raise ValueError('archived run identity differs from original plan/result')
+        expected_filelist=selected['selection'].get('filelist_sha256')
+        if expected_filelist is not None:
+            original_list=source_dir/'sources.f'
+            if (not original_list.is_file()
+                    or hashlib.sha256(original_list.read_bytes()).hexdigest()!=expected_filelist):
+                raise ValueError('original archived source filelist differs from selected identity')
+        prefix=f"ci-{run['id']}-a{run.get('run_attempt',1)}-"
+        if selected['run_id'].startswith('ci-') and not selected['run_id'].startswith(prefix):
+            raise ValueError('canonical run ID refers to a different CI attempt')
+    elif (plan.get('identity') is not None
+          or result.get('identity_sha256') is not None
+          or result.get('canonical_id') is not None):
+        raise ValueError('archived run identity source missing')
+    return selected
+
+
+def invalid_artifact_identity_provenance(artifact_folder, run):
+    """Quarantine an entire incomplete identity archive, not the whole site.
+
+    A missing identity.json cannot be synthesized from a plan/result: doing
+    so would relabel unauthenticated evidence as current-source proof.
+    """
+    for result_path in sorted(artifact_folder.rglob('result.json')):
+        relative=result_path.relative_to(artifact_folder).as_posix()
+        try:
+            result=json.loads(result_path.read_text())
+            plan_file=result_path.parent/'plan.json'
+            plan=json.loads(plan_file.read_text()) if plan_file.is_file() else {}
+            if not isinstance(result,dict) or not isinstance(plan,dict):
+                raise ValueError('archived plan/result must be JSON objects')
+            verify_archived_identity(result_path.parent,plan,result,
+                                     result.get('target'),run)
+        except (ValueError, KeyError, TypeError, UnicodeError, OSError) as exc:
+            return f'{relative}: {exc}'
+    return None
+
+
 def invalid_artifact_trace_provenance(artifact_folder, run):
     """Reject an untrustworthy capture *before* copying it into Pages.
 
@@ -498,6 +551,16 @@ def collect(client,config,destination):
                     target.mkdir(exist_ok=True)
                     extract_archive(raw,target,config,artifact.get('digest'),evidence_only=True)
                     (target/'.complete').write_text('verified\n')
+                # A partially archived immutable run identity is not a
+                # publishable legacy result. Exclude that archive while
+                # retaining other independent, source-verified CI artifacts.
+                invalid=invalid_artifact_identity_provenance(target,run)
+                if invalid:
+                    shutil.rmtree(target)
+                    notes.append(
+                        f'Run {run["id"]}, artifact {artifact["name"]}: '
+                        f'excluded unverified identity ({invalid})')
+                    continue
                 try:
                     runner_revisions=authenticated_runner_revisions(
                         client,run,target,verified_cache)
@@ -621,28 +684,10 @@ def evidence_index(evidence,output,repository):
             found.add(target)
             source_dir=result_path.parent
             plan=json.loads((source_dir/'plan.json').read_text()) if (source_dir/'plan.json').exists() else {}
-            # A recorded identity is an immutable run-local artifact, never
-            # inferred from the *current* regression YAML for old CI runs.
-            from test_identity import load as load_identity, relative_path as canonical_path
-            identity_file=source_dir/'identity.json'
-            selected_identity=(load_identity(identity_file,target=target,plan=plan)
-                               if identity_file.is_file() else None)
-            if selected_identity is not None:
-                if (plan.get('identity')!=selected_identity
-                        or result.get('identity_sha256')!=selected_identity['identity_sha256']
-                        or result.get('canonical_id')!=canonical_path(selected_identity).as_posix()):
-                    raise ValueError('archived run identity differs from original plan/result')
-                expected_filelist=selected_identity['selection'].get('filelist_sha256')
-                if expected_filelist is not None:
-                    original_list=source_dir/'sources.f'
-                    if (not original_list.is_file()
-                            or hashlib.sha256(original_list.read_bytes()).hexdigest()!=expected_filelist):
-                        raise ValueError('original archived source filelist differs from selected identity')
-                prefix=f"ci-{run['id']}-a{run.get('run_attempt',1)}-"
-                if selected_identity['run_id'].startswith('ci-') and not selected_identity['run_id'].startswith(prefix):
-                    raise ValueError('canonical run ID refers to a different CI attempt')
-            elif plan.get('identity') is not None or result.get('identity_sha256') is not None:
-                raise ValueError('archived run identity source missing')
+            # Collection and offline publication share the same strict
+            # identity verifier; no missing artifact is reconstructed.
+            from test_identity import relative_path as canonical_path
+            selected_identity=verify_archived_identity(source_dir,plan,result,target,run)
             # Canonical names are the *only* published paths for new runs.
             # Historical captures lack immutable identity and stay under their
             # original verified run/target path for explicit comparison.
