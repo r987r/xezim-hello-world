@@ -12,8 +12,12 @@ on:
 permissions:
   contents: read
 
+# Merge-dispatch runs must not share the long-lived Pages build/deploy
+# concurrency slot. A merge event only queues an exact main-ref publication;
+# blocking it for ~10min permits later events to replace its pending run.
+# PR previews get their own slot, and main deployments remain serialized.
 concurrency:
-  group: pages-${{ github.event_name == 'pull_request' && github.event.action != 'closed' && github.event.pull_request.number || 'publish' }}
+  group: pages-${{ github.event_name == 'pull_request' && github.event.action == 'closed' && format('merge-{0}', github.event.pull_request.number) || github.event_name == 'pull_request' && format('preview-{0}', github.event.pull_request.number) || 'publish-main' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
 
 jobs:
