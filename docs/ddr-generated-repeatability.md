@@ -1,0 +1,42 @@
+# Reproducing generated LiteDRAM RTL drift (#35 / #184)
+
+The repo's pinned LiteDRAM source is not itself a guarantee that two
+**generated** DDR controller Verilog files are byte-identical. We observed
+`gateware/soc_ddr4_sim.v` change SHA across the independently successful
+[combined DV run #194](https://github.com/r987r/xezim-hello-world/actions/runs/42561215396)
+and [CSR/combined DV run #196](https://github.com/r987r/xezim-hello-world/actions/runs/42616967673).
+The selected `soc_top.sv` and Bender filelist remained byte-identical.
+The generated DDR controller has not yet been qualified for repeatability.
+
+Run this *after installing the pinned LiteDRAM/LiteX toolchain*:
+
+```sh
+python3 rtl/memory/ddr4/bringup.py generate
+python3 rtl/memory/ddr4/bringup.py generate --output-dir .tools/ddr4/repeatability-second
+python3 rtl/memory/ddr4/repro_audit.py \
+  --first .tools/ddr4/litedram_sim \
+  --second .tools/ddr4/repeatability-second \
+  --out .tools/ddr4/ddr-source-repeatability.json
+```
+
+The checker verifies each original DDR manifest's paths and file SHA256
+before comparing. It emits the real source SHA, sorted changed filenames,
+and a bounded unified diff sample from the generated controller.
+Untracked sources, tampering, foreign configuration/port identities, and
+same-directory comparisons fail closed. The report deliberately labels
+`repeatable=false` as **unqualified drift**, not PASS, while leaving the
+existing full-chip functional regression's result separate. Run with
+`--require-equal` to turn byte drift into an explicit failure when the
+upstream generator nondeterminism is fixed.
+
+The existing real-controller full-chip workflow now builds into a second
+isolated `.tools/ddr4/` folder and publishes this diagnostic JSON alongside
+its previously accepted AXI/DFI evidence. It never writes to checked-in
+`gen/` or changes the first selected controller's input to simulation.
+
+Next: inspect the diff and upstream pin policy, determine whether variation
+is emitted CSR-generated names/order, unrelated metadata, or actual changed
+logic, then fix the pinned generator or prove exact source equivalence. Until
+that work is reviewed, #184 cannot classify variable DDR controller RTL as
+generator-owned deterministic output. This PR is **not** #35 DDR stress
+signoff and does not qualify DDR electrical PHY behavior.
