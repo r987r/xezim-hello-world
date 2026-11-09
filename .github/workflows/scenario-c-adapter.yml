@@ -1,0 +1,37 @@
+name: SCN-C source-selected action driver adapter
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'tools/scenario_c.py'
+      - 'tools/scenario_plan.py'
+      - 'sw/common/soc_scn_action_adapter.h'
+      - 'sw/common/test_scn_action_adapter.c'
+      - 'docs/scenario-c-contract.md'
+      - '.github/workflows/scenario-c-adapter.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  c11-adapter:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: python3 -m pip install 'PyYAML==6.0.3'
+      - name: Generate canonical plan and same-source C action ABI
+        run: |
+          python3 tools/scenario_plan.py --scenario config/scenarios/dma-roundtrip.json --out .tools/scn-c/plan.json
+          python3 tools/scenario_c.py --plan .tools/scn-c/plan.json --out .tools/scn-c/soc_scenario_contract.h
+      - name: Compile and execute selected action adapter and negative driver checks
+        run: |
+          cc -std=c11 -Wall -Wextra -Werror -pedantic -I.tools/scn-c -Isw/common \
+            sw/common/test_scn_action_adapter.c -o .tools/scn-c/test-scn-action-adapter
+          .tools/scn-c/test-scn-action-adapter
+      - name: Cross-check canonical C metadata and Python/SV schemas
+        run: python3 -m unittest tests.test_scenario_c tests.test_scenario_plan -v
