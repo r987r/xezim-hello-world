@@ -14,4 +14,4 @@ This page describes **which RTL/model is selected**, not a rolling CI/PR status 
 
 The [RTL source selection](../config/regression.yaml), [SoC configuration](../config/soc.yaml), [generated manifest](../gen/manifest.json) and [interface contracts](../config/interface_contracts.yaml) determine actual instances and address/ID widths. Variant-specific CI evidence is authoritative for what *ran*; older passing runs cannot qualify newer RTL.
 
-For execution and reporting: [regressions](regression.md), [IP substitution limits](ip-portability.md), [source-derived architecture](architecture.md), and [combined-test acceptance](multiprotocol-integration-readiness.md).
+For checking a selected build's *actual* RTL and distinguishing authored versus compiled evidence: [selected SoC source review](soc-scalability-review.md). For execution and reporting: [regressions](regression.md), [IP substitution limits](ip-portability.md), [source-derived architecture](architecture.md), and [combined-test acceptance](multiprotocol-integration-readiness.md).

@@ -1,6 +1,6 @@
 # P0: composable SoC stimulus actions across Python, C, and SV
 
-**Status:** design and implementation plan, NOT implemented system-wide. **Owner:** [P0 issue #152](https://github.com/r987r/xezim-hello-world/issues/152); predecessor [#119](https://github.com/r987r/xezim-hello-world/issues/119) closed after partial progress, but its broader legacy migration is not complete. Integration consumers: [#76](https://github.com/r987r/xezim-hello-world/issues/76), [#34](https://github.com/r987r/xezim-hello-world/issues/34).
+**Status:** M0 architecture and M1 generic Python action executor are implemented; the C11/SV source contract is implemented, while universal hardware adapters and independently checked multi-protocol chaining remain open. **Owner:** [P0 issue #152](https://github.com/r987r/xezim-hello-world/issues/152); predecessor [#119](https://github.com/r987r/xezim-hello-world/issues/119) closed after partial progress, but its broader legacy migration is not complete. Integration consumers: [#76](https://github.com/r987r/xezim-hello-world/issues/76), [#34](https://github.com/r987r/xezim-hello-world/issues/34).
 
 ## Why this is P0
 
@@ -8,18 +8,20 @@ Full-chip test writers must be able to express **what** to do using typed action
 
 **Merged [PR #149](https://github.com/r987r/xezim-hello-world/pull/149) now uses real CPU0 Config-NoC CSRs and hardware-owned requester descriptors**, rather than direct Cocotb descriptor injection; the merged-head full-chip RTL gate passed. However, the test still assumes 64-byte payloads, fixed SRAM offsets `0x600`/`0x700`, fixed RC host offsets and hard-coded C/host coordination. This is a valid controlled feature milestone, **not** the proposed reusable typed action API. Passive packet-level outbound TLP source correlation is in follow-up [#154](https://github.com/r987r/xezim-hello-world/pull/154), separate from #152's generic runtime.
 
-## Source-backed current state (after merged #149, main `45b0427` at reconciliation)
+## Source-backed capabilities and remaining integration
 
 | Existing authority | What it actually does | What it **does not** prove |
 | --- | --- | --- |
 | `config/regression.yaml`, `tools/regress.py` | Select sources, engine, variant, acceptance and artifact identity | Internal action execution by every driver |
 | `config/stimulus/tests.yaml`, `tools/test_intent.py` | Human-reviewed intended flow, exported pre-run | Execution or hardware activity |
 | `dv/common/scenario.py`, `tools/scenario_plan.py` | Resolve one canonical JSON IR with actions, dependency DAG, seed/replay, allocations | Generic device and protocol dispatch |
-| `dv/common/action_runtime.py` (merged #146) | Typed Python handler dispatcher for selected actions, currently sequential by phase | Parallel resource scheduling, universal C/SV adapters, RTL acceptance |
+| `dv/common/action_runtime.py` (merged #146/#161/#170) | Executable, capability-checked Python action dispatcher with concurrent independent actions, dependency/lifetime/resource/retirement locking, and typed event emit/wait causality | Universal hardware adapters, an actual mailbox event queue, passive RTL traffic or byte-integrity proof |
 | `dv/common/scenario_dma.py` | Existing eight-action SRAM→modeled DDR→SRAM BFM/CPU scenario | Arbitrary multi-protocol composition |
 | `tools/memory_service.py`, `tools/memory_plan.py`, `sw/common/memory_pool.[ch]` | Bound memory allocations, owner/lifetime rules, configured access providers | Automatic proof of software allocation/free or DMA drain |
 | `sw/dma/dma.[ch]` | Real PULP iDMA descriptor building, CSR submission and polling | PCIe requester submission by itself |
 | `dv/common/action_events.py`, `dv/common/test_flow.py` | Action driver events and existing INIT/RUN/CHECK evidence | Independently checked transfers without passive monitors/scoreboards |
+
+**Selected cross-language ABI:** `tools/scenario_c.py` emits a C11 action table from the same canonical selected JSON and plan SHA that the Python dispatcher and SV action package use. This is source/metadata parity; it is **not** proof that real CPU firmware has dispatched the selected actions. Draft [#180](https://github.com/r987r/xezim-hello-world/pull/180) adds a callback-based C11 adapter and explicit selected-plan SHA preflight; it is not treated as merged or as a qualified on-chip handshake until exact-head integration CI and actual hardware adapters are proven. The `issued`/`driver_done` stages are driver-only. Hardware acceptance and successful bytes require separate passive protocol evidence.
 
 **Do not create a second scenario compiler, scheduler authority, source catalog, event format, passive monitor, test viewer or report site.**
 
