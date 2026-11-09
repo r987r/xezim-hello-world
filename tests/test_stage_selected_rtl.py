@@ -67,6 +67,35 @@ class StagedSelectedRtlTests(unittest.TestCase):
         self.assertEqual((location/"snapshot"/self.source).read_bytes(),
                          self.variant.read_bytes())
 
+    def test_staged_manifest_metadata_mutations_fail_closed(self):
+        value = self.stage()
+        directory = self.out / "sample_soc" / value["hardware_variant"]
+        path = directory / "manifest.json"
+        original = json.loads(path.read_text())
+        for update in (
+            {"selected_top_sha256": "0" * 64},
+            {"filelist_sha256": "0" * 64},
+            {"generator_reproducible": True},
+            {"source_profile": "other-target"},
+            {"manifest_sha256": "0" * 64},
+        ):
+            with self.subTest(update=update):
+                altered = dict(original, **update)
+                path.write_text(json.dumps(altered))
+                with self.assertRaises(stage_mod.PromotionError):
+                    stage_mod.verify_stage(directory)
+        path.write_text(json.dumps(original))
+        self.assertEqual(stage_mod.verify_stage(directory), value)
+
+    def test_stage_cannot_replace_corrupted_previous_review(self):
+        value = self.stage()
+        path = self.out / "sample_soc" / value["hardware_variant"] / "manifest.json"
+        doc = json.loads(path.read_text())
+        doc["source_profile"] = "foreign-profile"
+        path.write_text(json.dumps(doc))
+        with self.assertRaisesRegex(stage_mod.PromotionError, "metadata SHA"):
+            self.stage(replace=True)
+
     def test_duplicate_fails_without_explicit_replace(self):
         value = self.stage()
         with self.assertRaisesRegex(stage_mod.PromotionError, "already exists"):
