@@ -18,6 +18,7 @@ from selenium import webdriver
 from selenium.webdriver import ChromeOptions
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
+from selenium.common.exceptions import TimeoutException
 
 
 def embedded(html: str) -> tuple[dict, int, int]:
@@ -60,8 +61,20 @@ def exercise(driver, require_measurement: bool) -> None:
     errors = []
     driver.get_log("browser")  # clear prior page's messages
     wait = WebDriverWait(driver, 25)
-    wait.until(lambda d: d.find_elements(By.CSS_SELECTOR,
-                                        "#fabric-latency-table tbody tr"))
+    try:
+        wait.until(lambda d: d.find_elements(By.CSS_SELECTOR,
+                                            "#fabric-latency-table tbody tr"))
+    except TimeoutException as exc:
+        evidence = driver.execute_script("""return {
+                table: document.querySelector('#fabric-latency-table')?.outerHTML.slice(0,400),
+                scope: document.querySelector('#fabric-scope')?.value,
+                coverage: document.querySelector('#fabric-evidence-coverage')?.textContent,
+                embedded: document.querySelector('#fabric-data')?.textContent.length,
+                body: document.body.innerText.slice(0,300)
+            };""")
+        raise AssertionError("Fabric desktop never rendered routes: " +
+                             repr(evidence) + " browser console=" +
+                             repr(driver.get_log("browser"))) from exc
     summary = driver.find_element(By.ID, "fabric-evidence-coverage").text
     if not summary:
         raise AssertionError("Fabric JS never rendered coverage")
@@ -79,8 +92,14 @@ def exercise(driver, require_measurement: bool) -> None:
     assert not errors, "Fabric desktop JS exception: " + repr(errors)
     driver.set_window_size(390, 850)
     driver.refresh()
-    wait.until(lambda d: d.find_elements(By.CSS_SELECTOR,
-                                        "#fabric-mobile-routes details"))
+    try:
+        wait.until(lambda d: d.find_elements(By.CSS_SELECTOR,
+                                            "#fabric-mobile-routes details"))
+    except TimeoutException as exc:
+        raise AssertionError(
+            "Fabric mobile never rendered route cards: coverage=" +
+            repr(driver.find_element(By.ID, "fabric-evidence-coverage").text) +
+            " console=" + repr(driver.get_log("browser"))) from exc
     if require_measurement:
         visible = driver.find_elements(By.CSS_SELECTOR,
                                        "#fabric-mobile-routes .fabric-mobile-metric-value")
