@@ -74,6 +74,22 @@ jobs:
           set -euo pipefail
           python3 rtl/memory/ddr4/bringup.py generate
           python3 -m unittest discover -s rtl/memory/ddr4 -p 'test_*.py'
+      - name: Audit independent pinned LiteDRAM generation for unqualified source drift
+        run: |
+          python3 rtl/memory/ddr4/bringup.py generate --output-dir .tools/ddr4/repeatability-second
+          python3 rtl/memory/ddr4/repro_audit.py \
+            --first .tools/ddr4/litedram_sim \
+            --second .tools/ddr4/repeatability-second \
+            --out .tools/ddr4/ddr-source-repeatability.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          report=json.loads(Path('.tools/ddr4/ddr-source-repeatability.json').read_text())
+          assert report['schema_version']==1
+          assert report['qualification'].endswith('not_equivalence_or_ddr_traffic')
+          print('DDR generated RTL byte repeatable:',report['repeatable'])
+          print('DDR differing paths:',report['changed_generated_paths'])
+          PY
           python3 -m unittest tests.test_ddr_csr_catalog tests.test_ddr_csr_pages -v
       - name: Build exact-head real LiteDRAM full-chip RTL
         timeout-minutes: 25
@@ -149,6 +165,7 @@ jobs:
           name: ddr4-fullchip-cpu-dma-evidence
           path: |
             .tools/ddr4/litedram_sim/ddr4_manifest.json
+            .tools/ddr4/ddr-source-repeatability.json
             .tools/ddr4/litedram_sim/csr.json
             .tools/ddr4/litedram_sim/ddr4_init_plan.json
             .tools/regression/chip-ddr4-real/
