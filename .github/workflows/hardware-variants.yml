@@ -1,0 +1,29 @@
+name: Test-independent SoC hardware variant catalog
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'config/regression.yaml'
+      - 'tools/test_identity.py'
+      - 'tools/hardware_variants.py'
+      - 'tests/test_hardware_variants.py'
+      - '.github/workflows/hardware-variants.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  catalog:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: python3 -m pip install 'PyYAML==6.0.3'
+      - run: python3 -m unittest tests.test_hardware_variants tests.test_regression -v
+      - run: python3 tools/hardware_variants.py --out .tools/variants/catalog.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: selected-variant-catalog-source-only
+          path: .tools/variants/catalog.json
+          include-hidden-files: true
