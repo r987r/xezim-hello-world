@@ -144,6 +144,15 @@ jobs:
           python3 tests/smoke_architecture_browser.py
           python3 tests/smoke_address_map_browser.py
           python3 tests/smoke_runs_browser.py
+      - name: Browser-execute Fabric latency on desktop and mobile
+        env:
+          IS_MAIN_PUBLISH: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' }}
+        run: |
+          if [ "$IS_MAIN_PUBLISH" = "true" ]; then
+            python3 tests/smoke_fabric_browser.py --main-evidence
+          else
+            python3 tests/smoke_fabric_browser.py
+          fi
       - name: Upload diagram screenshots for visual review
         if: always()
         uses: actions/upload-artifact@v4
