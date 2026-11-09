@@ -6,11 +6,13 @@ on:
       - 'tools/variant_connectivity.py'
       - 'tools/design_explorer.py'
       - 'tests/test_design_explorer.py'
+      - 'tools/selected_rtl_provenance.py'
       - 'tools/full_chip_gen.py'
       - 'tools/regress.py'
       - 'tools/publish_site.py'
       - 'tools/templates/site_runs.html'
       - 'tests/test_variant_connectivity.py'
+      - 'tests/test_selected_rtl_archive.py'
       - '.github/workflows/dv-variant-connectivity.yml'
   workflow_dispatch:
 
@@ -27,6 +29,6 @@ jobs:
         with: {python-version: '3.12'}
       - run: python3 -m pip install 'PyYAML==6.0.3'
       - name: Check default/opt-in source manifest/NoC/monitor truth
-        run: python3 -m unittest tests.test_variant_connectivity tests.test_design_explorer -v
+        run: python3 -m unittest tests.test_variant_connectivity tests.test_design_explorer tests.test_selected_rtl_archive -v
       - name: Check Python syntax for new selected-variant catalog
-        run: python3 -m py_compile tools/variant_connectivity.py tests/test_variant_connectivity.py
+        run: python3 -m py_compile tools/variant_connectivity.py tools/selected_rtl_provenance.py tests/test_variant_connectivity.py tests/test_selected_rtl_archive.py

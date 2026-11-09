@@ -112,6 +112,9 @@ jobs:
           test "${#lint_profiles[@]}" -gt 0
           printf 'Lint profiles: %s\n' "${lint_profiles[*]}"
           python3 tools/regress.py "${lint_profiles[@]}" --stage files
+          # Every selected source closure must remain explainable and
+          # independently verifiable after Bender actually resolves it.
+          python3 tools/regress.py "${lint_profiles[@]}" --explain > .tools/lint/selected-targets.json
       - name: Export per-profile slang diagnostics and module elaboration evidence
         run: python3 tools/lint_rtl.py --slang .tools/bin/slang --output .tools/lint
       - name: Attach lint JSON, logs and resolved source provenance
@@ -123,5 +126,7 @@ jobs:
             .tools/lint/
             .tools/regression/*/sources.f
             .tools/regression/*/plan.json
+            .tools/regression/*/selected-rtl-manifest.json
+            .tools/regression/*/selected-rtl/** 
           include-hidden-files: true
           if-no-files-found: warn

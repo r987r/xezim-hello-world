@@ -601,7 +601,22 @@ def run_target(name, test, resolver, options):
             'sources': sources, 'includes': includes, 'defines': defines,
             'args': args, 'results_xml': str(out/'results.xml'), 'stage': options.stage,
             'identity': identity}
+    if test['engine'] in {'xezim-compile', 'verilator-lint'} and networks:
+        plan['selected_networks'] = {
+            net: {'filelist': str(out/f'{net}.f'), 'top': entry['top_module']}
+            for net, entry in sorted(networks.items())
+            if not options.network or net in options.network
+        }
     plan_file = out/'plan.json'
+    plan_file.write_text(json.dumps(plan, indent=2) + '\n')
+    # Preserve the ACTUAL selected filelist/RTL after all runtime variant
+    # substitutions. No simulator or elaborator has executed at this point.
+    from selected_rtl_provenance import archive_selected_filelist
+    selected_inputs = archive_selected_filelist(ROOT, name, test, plan, filelist)
+    plan["selected_source_manifest"] = {
+        "path": str((out/'selected-rtl-manifest.json').relative_to(ROOT)),
+        "compiler_input_sha256": selected_inputs["compiler_input_sha256"],
+    }
     plan_file.write_text(json.dumps(plan, indent=2) + '\n')
     # A separate source-fingerprinted *command dispatch envelope* is not
     # another INIT/RUN/CHECK scenario planner. The canonical intent remains
@@ -696,6 +711,11 @@ def run_target(name, test, resolver, options):
     started = time.monotonic()
     results = []
     for label, command in commands:
+        # Revalidate the exact input manifest at the dispatch boundary, not
+        # merely when the runner resolved the filelists. This fails closed
+        # if generated RTL, a third-party source or an include header changed.
+        from selected_rtl_provenance import verify_selected_archive
+        verify_selected_archive(ROOT, name, test)
         print(f'RUN {name}/{label} ({engine}, stage={options.stage})', flush=True)
         runner_events.append(dispatch_event(runtime_selected,label,status='started'))
         save_dispatch()
@@ -851,6 +871,7 @@ def main():
     cli.add_argument('targets', nargs='*', default=['full'])
     cli.add_argument('--config', type=Path, default=ROOT/'config/regression.yaml')
     cli.add_argument('--list', action='store_true')
+    cli.add_argument('--explain', action='store_true', help='read-only test/build and selected RTL provenance (no Bender or simulator)')
     cli.add_argument('--check-noc', action='store_true')
     cli.add_argument('--fail-fast', action='store_true',
                      help='stop this suite at the first failing target (CI quick feedback)')
@@ -861,6 +882,16 @@ def main():
     options = cli.parse_args()
     config = load_config(options.config)
     targets = expand(config, options.targets)
+    if options.explain:
+        if (options.memory_config or options.network or options.arg
+                or options.stage != 'all' or options.list or options.check_noc):
+            raise ValueError('--explain is read-only; use --stage files for new exact inputs')
+        from selected_rtl_provenance import explain_target
+        explanations = [explain_target(ROOT, name, config["tests"][name], config)
+                        for name in targets]
+        print(json.dumps(explanations[0] if len(explanations) == 1
+                         else explanations, indent=2))
+        return 0
     if options.list:
         for name in targets:
             print(f'{name:22} {config["tests"][name]["engine"]}')
