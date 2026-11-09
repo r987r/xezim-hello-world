@@ -60,6 +60,33 @@ def _review_folder(root: Path, output: Path, variant: str) -> Path:
     return output.resolve() / project / variant
 
 
+def _stage_differences(before: dict, after: dict, *, limit: int = 24) -> list[str]:
+    """Show bounded exact hash/path differences; never silently accept drift."""
+    changes: list[str] = []
+
+    def walk(path: str, old, new) -> None:
+        if len(changes) >= limit:
+            return
+        if isinstance(old, dict) and isinstance(new, dict):
+            for key in sorted(set(old) | set(new)):
+                if len(changes) >= limit:
+                    return
+                name = f"{path}.{key}" if path else str(key)
+                if key not in old:
+                    changes.append(f"{name}: added")
+                elif key not in new:
+                    changes.append(f"{name}: removed")
+                else:
+                    walk(name, old[key], new[key])
+        elif old != new:
+            # Known digest fields are safe to display in CI; arbitrary path
+            # strings or metadata values are not needed for diagnosis.
+            changes.append(f"{path}: changed")
+
+    walk("", before, after)
+    return changes
+
+
 def rebuild(root: Path, profile: str, output: Path, *, check: bool = False,
             runner=None) -> dict:
     """Recreate actual selected RTL, then check the full staged-source digest.
@@ -90,9 +117,13 @@ def rebuild(root: Path, profile: str, output: Path, *, check: bool = False,
             expected = stage(root, profile, definition, draft)
             fresh_folder = _review_folder(root, draft, variant)
             verified = verify_stage(fresh_folder)
-            if expected != verified or verified != baseline:
+            if expected != verified:
+                raise VariantBuildError("freshly regenerated review stage failed self-verification")
+            if verified != baseline:
+                details = _stage_differences(baseline, verified)
                 raise VariantBuildError(
-                    "regenerated selected RTL and compiler-input closure differs from review baseline")
+                    "regenerated selected RTL and compiler-input closure differs from review baseline; "
+                    "changed paths (bounded): " + ", ".join(details))
             return {"profile": profile, "variant": variant,
                     "selected_soc_top_sha256": baseline["selected_top_sha256"],
                     "compiler_input_sha256": baseline["compiler_input_sha256"],
