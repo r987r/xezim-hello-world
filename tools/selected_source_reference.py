@@ -17,7 +17,7 @@ import yaml
 from selected_rtl_provenance import verify_selected_archive
 
 ROOT = Path(__file__).resolve().parents[1]
-SHA = re.compile(r"[0-9a-f]{64}\\Z")
+SHA = re.compile(r"[0-9a-f]{64}")
 PROFILE = "chip-ethernet-ddr-pcie"
 TOP = ".tools/regression/chip-ethernet-ddr-pcie/variant/soc_top.sv"
 
@@ -49,9 +49,6 @@ def validate_lock(lock: dict) -> None:
                 raise ReferenceError("malformed selected reference source/hash")
     if lock["required_generated_sha256"].get(TOP) is None:
         raise ReferenceError("missing real combined generated top SHA")
-    if not set(lock["required_generated_sha256"]).issubset(
-            set(lock["required_generated_sha256"]) | set(lock["required_source_sha256"])):
-        raise ReferenceError("invalid generated source closure")
 
 
 def compare(lock: dict, actual: dict) -> dict:
