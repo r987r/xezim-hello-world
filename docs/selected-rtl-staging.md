@@ -25,3 +25,15 @@ project/IP configuration, compare identical byte/source hashes, emit it
 under \`gen/projects/...\` via generator-owned outputs and run the real
 slang/combined acceptance gates. A CI run's one-time copied result is
 insufficient for \`make check-generated\` and must not be checked in as such.
+
+## Tamper-evident staged metadata
+
+The staged `manifest.json` now includes a canonical `manifest_sha256`
+for its *own* metadata, separate from the original `selected-rtl-manifest.json`
+source attestation. Rechecking the stage fails on a changed source profile,
+selected source hash, compiler filelist SHA, selected top, or stale/corrupt
+manifest—even if the SV bytes themselves are untouched. `--replace`
+requires the existing stage to verify before it can be overwritten.
+This is a deterministic self-integrity check, **not a digital signature or
+proof the compiler generated correct hardware**. The real source archive
+must still be verified against the selected regression plan.

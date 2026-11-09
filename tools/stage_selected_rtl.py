@@ -35,6 +35,14 @@ def _hash(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
+def _manifest_hash(value: dict) -> str:
+    """Canonical self-integrity field, not an external signer or hardware proof."""
+    canonical = {k: v for k, v in value.items() if k != "manifest_sha256"}
+    return _hash(json.dumps(
+        canonical, sort_keys=True, separators=(",", ":"), allow_nan=False
+    ).encode("utf-8"))
+
+
 def _path_in(root: Path, raw: str) -> Path:
     if not isinstance(raw, str) or not raw or Path(raw).is_absolute():
         raise PromotionError("promotion path must be a nonempty checkout-relative path")
@@ -128,8 +136,10 @@ def stage(root: Path, profile: str, definition: dict,
         "bit_connectivity_proven": False,
         "protocol_traffic_observed": False,
     }
+    content["manifest_sha256"] = _manifest_hash(content)
     if stage_path.exists() and replace:
-        existing = json.loads((stage_path / "manifest.json").read_text())
+        # Explicit replace cannot mask a previously corrupted or foreign stage.
+        existing = verify_stage(stage_path)
         if (existing.get("hardware_variant") != variant
                 or existing.get("project") != project):
             raise PromotionError("cannot replace foreign stage")
@@ -160,6 +170,10 @@ def verify_stage(folder: Path) -> dict:
     obj = json.loads(manifest_path.read_text())
     if obj.get("schema_version") != 1 or obj.get("generator_reproducible") is not False:
         raise PromotionError("review stage illegally promoted to generated")
+    signature = obj.get("manifest_sha256")
+    if (not isinstance(signature, str) or not HEXDIGEST.fullmatch(signature)
+            or _manifest_hash(obj) != signature):
+        raise PromotionError("staged manifest metadata SHA mismatch")
     files = obj.get("files")
     if not isinstance(files, dict) or not files:
         raise PromotionError("empty staged file inventory")
@@ -176,6 +190,13 @@ def verify_stage(folder: Path) -> dict:
     if ("snapshot/" + str(top) not in files
             or files["snapshot/" + str(top)]["sha256"] != obj.get("selected_top_sha256")):
         raise PromotionError("selected top is not an inventoried original")
+    compiler = files.get("compiler/sources.f")
+    if (not isinstance(compiler, dict)
+            or compiler.get("sha256") != obj.get("filelist_sha256")):
+        raise PromotionError("staged compiler source list digest mismatch")
+    if (not isinstance(obj.get("sources_sha256"), dict)
+            or obj["sources_sha256"].get(top) != obj.get("selected_top_sha256")):
+        raise PromotionError("staged top does not match original source selection")
     return obj
 
 
