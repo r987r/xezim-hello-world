@@ -97,6 +97,15 @@ class HardwareVariantBuildTests(unittest.TestCase):
                                 check=True, runner=self.runner)
         self.assertEqual(self.verify(original), self.selected)
 
+    def test_drift_diagnostics_are_bounded_and_identify_source_fields(self):
+        old = {"source_sha256": {"rtl/top.sv": "a"*64},
+               "filelist_sha256": "b"*64}
+        new = {"source_sha256": {"rtl/top.sv": "c"*64},
+               "filelist_sha256": "b"*64}
+        changed = subject._stage_differences(old, new)
+        self.assertEqual(changed, ["source_sha256.rtl/top.sv: changed"])
+        self.assertEqual(subject._stage_differences(old, new, limit=0), [])
+
     def test_reject_unknown_or_default_only_profile_before_runner(self):
         for profile in ("bad/name", "missing", "chip-default"):
             with self.subTest(profile=profile), self.assertRaises(subject.VariantBuildError):
