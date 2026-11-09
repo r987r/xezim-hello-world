@@ -560,6 +560,9 @@ def collect(client,config,destination):
                     notes.append(
                         f'Run {run["id"]}, artifact {artifact["name"]}: '
                         f'excluded unverified identity ({invalid})')
+                    # CI logs must show which archive was quarantined, not
+                    # just a generic downstream "Unmeasured" state.
+                    print("PUBLICATION QUARANTINE: " + notes[-1], flush=True)
                     continue
                 try:
                     runner_revisions=authenticated_runner_revisions(
@@ -1152,6 +1155,12 @@ def build(output,evidence,repository,sha,config):
     chip=json.loads((ROOT/'gen/chip/manifest.json').read_text())
     monitors=json.loads((ROOT/'gen/supernoc/axi_monitors.json').read_text())
     fabric_report.attach_one_beat_observations(fabric, entries, output, sha)
+    coverage=fabric['latency_table']['evidence_coverage']
+    print("FABRIC COVERAGE: " + json.dumps({
+        'source_sha':sha,'status':coverage['status'],
+        'measured_routes':coverage['current_measured_routes'],
+        'historical_observations':coverage['historical_observations']},
+        sort_keys=True),flush=True)
     dump(output/'data/fabric.json',fabric)
     # Config is authoritative for addresses. Optional pinned RDL output adds
     # register definitions, but never asserts active RTL or observed traffic.
