@@ -1,0 +1,28 @@
+name: Exact combined RTL source-reference contract
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'config/selected-rtl-reference/**'
+      - 'tools/selected_source_reference.py'
+      - 'tests/test_selected_source_reference.py'
+      - '.github/workflows/selected-source-reference.yml'
+  workflow_dispatch:
+
+permissions: {contents: read}
+
+jobs:
+  source-reference-unit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Install YAML reader for selected regression catalog
+        run: python3 -m pip install 'PyYAML==6.0.3'
+      - name: Require exact hardware source digests and reject mutated inputs
+        run: |
+          python3 -m py_compile tools/selected_source_reference.py
+          python3 -m unittest tests.test_selected_source_reference -v
