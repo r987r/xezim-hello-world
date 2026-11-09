@@ -87,6 +87,22 @@ def _stage_differences(before: dict, after: dict, *, limit: int = 24) -> list[st
     return changes
 
 
+def _source_equivalent_stage(value: dict) -> dict:
+    """Compare all selected compiler bytes, not run-specific evidence identity.
+
+    selected-rtl-manifest.json attests identity_sha256, which includes the
+    individual regression invocation/run ID; its document SHA consequently
+    changes when the same exact RTL/filelist is prepared twice. Both stage
+    manifests are fully verified *before* this comparison; only their two
+    provenance/document self-hashes can differ. Every source file/hash, config,
+    compiler_input_sha256, selected top and stage inventory must still match.
+    """
+    if not isinstance(value, dict) or value.get("schema_version") != 1:
+        raise VariantBuildError("invalid selected build review stage")
+    return {k: v for k, v in value.items()
+            if k not in ("source_manifest_sha256", "manifest_sha256")}
+
+
 def rebuild(root: Path, profile: str, output: Path, *, check: bool = False,
             runner=None) -> dict:
     """Recreate actual selected RTL, then check the full staged-source digest.
@@ -119,8 +135,10 @@ def rebuild(root: Path, profile: str, output: Path, *, check: bool = False,
             verified = verify_stage(fresh_folder)
             if expected != verified:
                 raise VariantBuildError("freshly regenerated review stage failed self-verification")
-            if verified != baseline:
-                details = _stage_differences(baseline, verified)
+            if _source_equivalent_stage(verified) != _source_equivalent_stage(baseline):
+                details = _stage_differences(
+                    _source_equivalent_stage(baseline),
+                    _source_equivalent_stage(verified))
                 raise VariantBuildError(
                     "regenerated selected RTL and compiler-input closure differs from review baseline; "
                     "changed paths (bounded): " + ", ".join(details))
