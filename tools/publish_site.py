@@ -227,6 +227,10 @@ FABRIC_EXCLUDED_FILES = {
     # Source-selected RTL staging is a read-only review/attestation path,
     # not invoked by dv-fabric-latency's simulator or cocotb run.
     'tools/stage_selected_rtl.py',
+    # Separate opt-in review builder. It invokes regress --stage files for
+    # source staging; Fabric benchmark workflows run tools/regress.py directly
+    # and never invoke this wrapper.
+    'tools/build_hardware_variant.py',
     # Read-only architecture extraction and diagram rendering have no
     # simulator or AXI monitor runtime side effects.
     'tools/rtl_instance_parser.py', 'tools/design_explorer.py',

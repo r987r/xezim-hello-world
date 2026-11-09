@@ -21,6 +21,16 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertIn('closed',pages['on']['pull_request']['types'])
         self.assertNotIn('push',pages['on'])
         self.assertNotIn('workflow_run',pages['on'])
+        # Separate a short merge event (which only dispatches main) from
+        # the long Pages builder. Otherwise new merges replace a pending
+        # closed-PR event before it can enqueue the measured publication.
+        group = pages['concurrency']['group']
+        self.assertIn("format('merge-{0}', github.event.pull_request.number)", group)
+        self.assertIn("format('preview-{0}', github.event.pull_request.number)", group)
+        self.assertIn("'publish-main'", group)
+        self.assertNotIn("|| 'publish' }}", group)
+        self.assertIn('github.event.action != \'closed\'',
+                      pages['concurrency']['cancel-in-progress'])
         # Pull-request runs must only preview or dispatch; they cannot deploy
         # directly because GitHub Pages restricts deployments by run ref.
         dispatch=pages['jobs']['dispatch-after-merge']
