@@ -16,6 +16,7 @@ SOURCE = ROOT / "dv/csr_runtime/probe.sv"
 def main():
     fingerprint = hashlib.sha256(SOURCE.read_bytes() + b"verilator|public-flat-rw|csr_runtime_tb").hexdigest()
     os.environ["CSR_PROBE_BUILD_SHA256"] = fingerprint
+    os.environ["CSR_PROBE_EVIDENCE_PATH"] = str(ROOT / ".tools/csr-runtime/csr-backdoor-map.json")
     runner = get_runner("verilator")
     runner.build(
         sources=[str(SOURCE)],
