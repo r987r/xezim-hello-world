@@ -2,7 +2,7 @@ name: Checked-in generated SoC RTL review variants
 
 on:
   pull_request:
-    branches: [main, 'agent/165-generator-ir-closure-gate']
+    branches: [main]
     paths:
       - 'gen/projects/**'
       - 'gen/manifest.json'
