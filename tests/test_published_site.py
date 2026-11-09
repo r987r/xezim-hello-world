@@ -119,6 +119,39 @@ class PublicSiteTests(unittest.TestCase):
         failed["entries"][0]["passed"] = False
         self.assertEqual(self.check(site=failed)["real_fullchip_dfi_runs"], 0)
 
+    def test_passing_compatible_fabric_benchmark_must_publish_measured_rows(self):
+        site=copy.deepcopy(self.site)
+        benchmark={
+            'source_sha':self.sha,'target':'supernoc-latency',
+            'passed':True,'fabric_scope':'connected_noc',
+            'assets':['fabric-benchmark-evidence.json','axi-transactions.json']}
+        site['entries']=[benchmark]
+        with self.assertRaisesRegex(ValueError,'qualified Fabric benchmark published as Unmeasured'):
+            self.check(site=site)
+        fabric=copy.deepcopy(self.fabric)
+        fabric['latency_table']['evidence_coverage']={'current_measured_routes':3}
+        fabric['latency_table']['reference_clock']={'measured_period_ps':10000}
+        with self.assertRaisesRegex(ValueError,'benchmark scope published as Unmeasured'):
+            self.check(site=site,fabric=fabric)
+        fabric['latency_scopes']={
+            'connected_noc':{
+                'evidence_coverage':{'current_measured_routes':3},
+                'reference_clock':{'measured_period_ps':10000}}}
+        self.assertEqual(self.check(site=site,fabric=fabric)['evidence_entries'],1)
+
+        # Original capture SHA can differ from deployed main ONLY when the
+        # trusted collector explicitly attested identical tested RTL inputs.
+        site['entries'][0]['source_sha']='b'*40
+        self.assertEqual(self.check(site=site)['evidence_entries'],1)
+        site['entries'][0]['verified_fabric_source_sha']=self.sha
+        with self.assertRaisesRegex(ValueError,'qualified Fabric benchmark'):
+            self.check(site=site)
+        self.assertEqual(self.check(site=site,fabric=fabric)['evidence_entries'],1)
+        # A genuine old SHA with no equivalence proof is historical, not
+        # evidence of a broken current-source measurement.
+        site['entries'][0].pop('verified_fabric_source_sha')
+        self.assertEqual(self.check(site=site)['evidence_entries'],1)
+
     def test_reject_stale_sha(self):
         site = copy.deepcopy(self.site)
         site["source_sha"] = "b" * 40

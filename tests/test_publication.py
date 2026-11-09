@@ -504,6 +504,87 @@ class PublicationTests(unittest.TestCase):
             self.assertIn('Protocol Run Explorer',(output/entries[0]['path']).read_text())
             self.assertTrue((output/'runs/123-1/chip-boot/protocol-transactions.json').is_file())
 
+    def test_missing_claimed_identity_is_never_silent_legacy_evidence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);target=fixture(root/'evidence')
+            run={'id':123,'head_sha':SHA,'run_attempt':1}
+            result=json.loads((target/'result.json').read_text())
+            result['identity_sha256']='f'*64
+            site.dump(target/'result.json',result)
+            self.assertIn('archived run identity source missing',
+                          site.invalid_artifact_identity_provenance(
+                              target.parent,run))
+            with self.assertRaisesRegex(ValueError,'archived run identity source missing'):
+                site.evidence_index(root/'evidence',root/'out',
+                                    'r987r/xezim-hello-world')
+            # The missing immutable source may not be reconstructed as a
+            # "legacy" or source-measured result, even when run PASS is true.
+            result.pop('identity_sha256')
+            site.dump(target/'result.json',result)
+            self.assertIsNone(site.invalid_artifact_identity_provenance(
+                target.parent,run))
+            result['canonical_id']='soc-default/chip-boot'
+            site.dump(target/'result.json',result)
+            self.assertIn('archived run identity source missing',
+                          site.invalid_artifact_identity_provenance(target.parent,run))
+
+    def test_collector_quarantines_incomplete_identity_but_retains_good_run(self):
+        from unittest.mock import Mock
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            def zipped(result):
+                buffer=io.BytesIO()
+                with zipfile.ZipFile(buffer,'w',compression=zipfile.ZIP_DEFLATED) as z:
+                    z.writestr('chip-boot/result.json',json.dumps(result))
+                    z.writestr('chip-boot/plan.json',json.dumps({'engine':'cocotb-verilator'}))
+                return buffer.getvalue()
+            bad=zipped({'target':'chip-boot','passed':True,
+                        'identity_sha256':'f'*64})
+            good=zipped({'target':'chip-boot','passed':True})
+            artifacts=[
+                {'id':10,'name':'ci-123-bad','size_in_bytes':len(bad),'expired':False},
+                {'id':11,'name':'ci-123-good','size_in_bytes':len(good),'expired':False}]
+            run={'id':123,'head_sha':SHA,'head_branch':'main',
+                 'event':'workflow_dispatch','run_attempt':1,
+                 'name':'Chip boot','path':'.github/workflows/full-chip.yml',
+                 'status':'completed','conclusion':'success',
+                 'created_at':'2026-11-04T00:00:00Z',
+                 'updated_at':'2026-11-04T00:01:00Z',
+                 'html_url':'https://github.com/r987r/xezim-hello-world/actions/runs/123'}
+            def request(path,binary=False):
+                if path.endswith('/artifacts?per_page=100'):
+                    return {'artifacts':artifacts}
+                if path.endswith('/artifacts/10/zip'):
+                    return bad
+                if path.endswith('/artifacts/11/zip'):
+                    return good
+                raise AssertionError('unexpected network request: '+path)
+            client=Mock(repository='r987r/xezim-hello-world',
+                        request=Mock(side_effect=request))
+            workflows={'full-chip.yml':{'file':'full-chip.yml',
+                                       'label':'Chip boot',
+                                       'artifacts':['ci-${{ github.run_id }}']}}
+            with patch.object(site,'discover_test_workflows',return_value=workflows), \
+                 patch.object(site,'merged_main_pr_heads',return_value={}), \
+                 patch.object(site,'select_workflow_runs',
+                              return_value=({'full-chip.yml':[run]},[])), \
+                 patch.object(site.subprocess,'check_output',return_value=(SHA+'\n').encode()):
+                site.collect(client,CONFIG,root/'evidence')
+            notes=json.loads((root/'evidence/collection.json').read_text())['notes']
+            self.assertEqual(len(notes),1)
+            self.assertIn('excluded unverified identity',notes[0])
+            self.assertIn('archived run identity source missing',notes[0])
+            self.assertFalse((root/'evidence/123-1/artifact-10').exists())
+            self.assertTrue((root/'evidence/123-1/artifact-11/chip-boot/result.json').exists())
+            out=root/'site'
+            out.mkdir()
+            _,entries,index_notes=site.evidence_index(root/'evidence',out,
+                                                       'r987r/xezim-hello-world')
+            self.assertEqual(len(entries),1)
+            self.assertEqual(entries[0]['target'],'chip-boot')
+            self.assertTrue(entries[0]['passed'])
+            self.assertIn('excluded unverified identity',index_notes[0])
+
     def test_quarantine_wrong_historical_provenance_keeps_other_artifacts(self):
         run={'id':123,'head_sha':SHA,'run_attempt':2}
         def record(commit=SHA,workflow_id=123,attempt=2,dirty=False):
