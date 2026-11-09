@@ -7,7 +7,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
-from selected_source_reference import ReferenceError, compare, validate_lock, TOP
+from selected_source_reference import ReferenceError, compare, validate_lock, _stable_compiler_inputs, TOP
 
 
 class CombinedReferenceTests(unittest.TestCase):
@@ -19,6 +19,16 @@ class CombinedReferenceTests(unittest.TestCase):
 
     def setUp(self):
         lock = self.lock
+        self.lock = copy.deepcopy(self.lock)
+        # A synthetic complete selected source inventory. Its fingerprint
+        # must be computed from actual selected fields, never from arbitrary
+        # literal 64-digit placeholders.
+        generated_sv = {k: v for k, v in lock["required_generated_sha256"].items()
+                        if k.endswith(".sv")}
+        variable = lock["historical_volatile_source_sha256"]
+        extra_count = lock["source_count"] - len(generated_sv) - len(variable)
+        extra = {f"rtl/pinned/test_source_{n:03d}.sv": "f" * 64
+                 for n in range(extra_count)}
         self.manifest = {
             "schema_version": 1,
             "profile": lock["profile"],
@@ -26,13 +36,23 @@ class CombinedReferenceTests(unittest.TestCase):
             "selected_soc_top": lock["selected_soc_top"],
             "source_count": lock["source_count"],
             "source_sha256": {
-                **lock["required_source_sha256"], **lock["required_generated_sha256"]
+                **extra, **generated_sv, **variable,
+                **lock["required_source_sha256"]
             },
             "generated_sha256": dict(lock["required_generated_sha256"]),
-            "compiler_input_sha256": lock["compiler_input_sha256"],
+            "compiler_input_sha256": lock["historical_compiler_input_sha256"],
+            "config_sha256": "1" * 64,
+            "definition_sha256": "2" * 64,
+            "include_headers_sha256": {},
+            "network_filelists": {},
+            "defines": [],
+            "includes": [],
+            "args": [],
             "filelist_sha256": lock["filelist_sha256"],
             "identity_sha256": "c" * 64,
         }
+        self.lock["stable_compiler_inputs_sha256"] = _stable_compiler_inputs(
+            self.manifest, self.lock["volatile_source_paths"])
 
     def test_historical_reference_matches_real_source_selection_shape(self):
         validate_lock(self.lock)
@@ -63,13 +83,25 @@ class CombinedReferenceTests(unittest.TestCase):
                 with self.assertRaisesRegex(ReferenceError, "changed"):
                     compare(self.lock, bad)
 
-    def test_reject_other_source_mutation_via_full_compiler_closure(self):
-        for key in ("compiler_input_sha256", "filelist_sha256"):
+    def test_reject_other_source_mutation_via_stable_compiler_closure(self):
+        for key in ("config_sha256", "filelist_sha256", "definition_sha256"):
             with self.subTest(key=key):
                 bad = copy.deepcopy(self.manifest)
                 bad[key] = "a" * 64
-                with self.assertRaisesRegex(ReferenceError, "full selected source closure"):
+                with self.assertRaises(ReferenceError):
                     compare(self.lock, bad)
+        bad = copy.deepcopy(self.manifest)
+        bad["source_sha256"]["rtl/pinned/test_source_000.sv"] = "a" * 64
+        with self.assertRaisesRegex(ReferenceError, "stable 311-source"):
+            compare(self.lock, bad)
+
+    def test_generated_ddr_hash_drift_is_reported_not_accepted_as_proof(self):
+        path = self.lock["volatile_source_paths"][0]
+        changed = copy.deepcopy(self.manifest)
+        changed["source_sha256"][path] = "a" * 64
+        report = compare(self.lock, changed)
+        self.assertEqual(report["variable_generated_ddr_sha256"][path], "a" * 64)
+        self.assertIn("unqualified", report["evidence"])
 
     def test_reject_file_missing_from_compiler_even_if_generated(self):
         bad = copy.deepcopy(self.manifest)
@@ -81,7 +113,7 @@ class CombinedReferenceTests(unittest.TestCase):
         for key, value in (("profile", "other"),
                            ("selected_soc_top", "fake.sv"),
                            ("source_count", 3),
-                           ("compiler_input_sha256", "not-sha")):
+                           ("filelist_sha256", "not-sha")):
             with self.subTest(key=key):
                 bad = copy.deepcopy(self.manifest)
                 bad[key] = value
