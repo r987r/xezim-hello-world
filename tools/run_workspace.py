@@ -10,9 +10,10 @@ import os
 import hashlib
 from pathlib import Path
 
-from tools.test_identity import (
-    IdentityError, relative_path, save, validate,
-)
+try:
+    from .test_identity import IdentityError, relative_path, save, validate
+except ImportError:
+    from test_identity import IdentityError, relative_path, save, validate
 
 
 def _existing_ancestors_safe(path: Path) -> None:
@@ -63,7 +64,10 @@ def verify_run(directory: Path, identity: dict, *, plan: dict | None = None) -> 
     _existing_ancestors_safe(directory)
     if tuple(directory.parts[-4:]) != expected.parts:
         raise IdentityError("run folder does not match immutable selected identity")
-    from tools.test_identity import load
+    try:
+        from .test_identity import load
+    except ImportError:
+        from test_identity import load
     recorded = load(directory / "identity.json",
                     target=identity["legacy_target"], plan=plan)
     if recorded != identity:
