@@ -98,6 +98,7 @@ jobs:
           name: heterogeneous-soc-results
           path: |
             .tools/regression/
+            .tools/runs/
             gen/boot/manifest.json
             gen/memory/manifest.json
           include-hidden-files: true
