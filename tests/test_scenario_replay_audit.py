@@ -19,7 +19,7 @@ class ScenarioReplayAuditTests(unittest.TestCase):
         self.cpu = root / "cpu"
         self.bfm = root / "bfm"
         plan = {"schema_version": 1, "kind": "soc_scenario_intent_only",
-                "scenario_id": "shared", "execution_evidence": None,
+                "scenario_id": "shared", "seed": 12345, "execution_evidence": None,
                 "allocations": [{"buffer": "src", "phys": 16},
                                 {"buffer": "return", "phys": 80},
                                 {"buffer": "ddr", "phys": 5368709120}]}
@@ -28,12 +28,12 @@ class ScenarioReplayAuditTests(unittest.TestCase):
         sha = hashlib.sha256(payload).hexdigest()
         observed = {"src_ar": 1, "ddr_aw": 1, "ddr_ar": 1, "return_aw": 1}
         self.cpu_ev = {"profile": "real_cpu0_compiled_c", "plan_sha256": sha,
-                       "scenario_id": "shared", "execution_state": "rtl_observed",
+                       "scenario_id": "shared", "scenario_seed": 12345, "execution_state": "rtl_observed",
                        "intent_is_not_evidence": True, "cpu_result_checked": True,
                        "observed_cpu_allocations": [16, 80, 5368709120],
                        "observed_dma_axi_counts": observed}
         self.bfm_ev = {"profile": "reset_isolated_cocotb_bfm", "plan_sha256": sha,
-                       "scenario_id": "shared", "execution_state": "rtl_observed",
+                       "scenario_id": "shared", "scenario_seed": 12345, "execution_state": "rtl_observed",
                        "intent_is_not_evidence": True, "independently_readback_bytes": 64,
                        "observed_dma_axi_counts": observed}
         self.cpu_result = {"passed": True, "results": [{"passed": True, "exit_code": 0}],
@@ -60,6 +60,17 @@ class ScenarioReplayAuditTests(unittest.TestCase):
         self.assertEqual(report["status"], "validated_both_real_rtl_profiles")
         self.assertEqual(report["bfm_test_flow"], "unmeasured")
         self.assertEqual(report["memory_target"], "modeled_ddr_only")
+
+    def test_random_seed_must_match_actual_cpu_and_bfm_rtl_evidence(self):
+        self.cpu_ev["scenario_seed"] = 12346
+        self.write()
+        with self.assertRaisesRegex(ReplayAuditError, "seed differs"):
+            audit(self.cpu, self.bfm)
+        self.cpu_ev["scenario_seed"] = 12345
+        self.bfm_ev["scenario_seed"] = 12346
+        self.write()
+        with self.assertRaisesRegex(ReplayAuditError, "seed differs"):
+            audit(self.cpu, self.bfm)
 
     def test_mismatched_intent_rejected_even_when_forged_hash_adjusted(self):
         different = copy.deepcopy(self.plan)
