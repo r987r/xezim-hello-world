@@ -122,13 +122,18 @@ def render_c_header(contract: dict) -> str:
             + "#endif\n")
 
 
-def materialize(cfg: dict, out: Path, *, source_revision: str | None = None) -> tuple[dict, dict]:
+def materialize(cfg: dict, out: Path, *, source_revision: str | None = None,
+                scenario_seed: int | None = None) -> tuple[dict, dict]:
     from dv.common.scenario import canonical_json
     import yaml
     # Resolve from checked-in source once; both execution profiles use the
     # same bytes, with the same optional source SHA, not separate generators.
     root = Path(__file__).resolve().parents[2]
     spec = json.loads((root / EXAMPLE).read_text())
+    if scenario_seed is not None:
+        if type(scenario_seed) is not int or not 0 <= scenario_seed <= 0xffffffff:
+            raise ScenarioError('SCN-2 scenario override must be uint32')
+        spec['seed'] = scenario_seed
     plan = resolve_scenario(spec, cfg, source_revision=source_revision)
     contract = compile_contract(plan)
     out.mkdir(parents=True, exist_ok=True)
