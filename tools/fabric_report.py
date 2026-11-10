@@ -525,6 +525,139 @@ def latency_table(report, scope=None):
     }
 
 
+
+def _comparable_stage_changes(left, right):
+    """Compare only stages identifying the same real passive AXI boundary.
+
+    Missing/incomparable mesh or terminal stages are explicitly listed. They
+    cannot invalidate a separately proven end-to-end comparison or fabricate
+    a local-only router delta.
+    """
+    def index(items):
+        result = {}
+        for row in items:
+            if row.get("kind") == "mesh":
+                key = ("mesh", row.get("network"), row.get("from_monitor"),
+                       row.get("to_monitor"))
+            elif row.get("kind") == "terminal_axi_service":
+                key = ("terminal_axi_service", row.get("monitor"))
+            else:
+                raise FabricReportError("unknown passive AXI stage kind")
+            if None in key or key in result:
+                raise FabricReportError("invalid or duplicate passive AXI stage identity")
+            result[key] = row
+        return result
+
+    a, b = index(left), index(right)
+    shared = []
+    for key in sorted(set(a) & set(b)):
+        left_stats, right_stats = a[key].get("sum_stats"), b[key].get("sum_stats")
+        if not (isinstance(left_stats, dict) and isinstance(right_stats, dict)
+                and type(left_stats.get("avg_cycles")) in (int, float)
+                and type(right_stats.get("avg_cycles")) in (int, float)):
+            raise FabricReportError("shared AXI stage lacks measured average")
+        shared.append({
+            "identity": list(key),
+            "left_avg_cycles": left_stats["avg_cycles"],
+            "right_avg_cycles": right_stats["avg_cycles"],
+            "right_minus_left_cycles":
+                right_stats["avg_cycles"] - left_stats["avg_cycles"],
+        })
+    return {
+        "matched_stage_deltas": shared,
+        "left_only_unmeasured_in_right": [list(k) for k in sorted(set(a) - set(b))],
+        "right_only_unmeasured_in_left": [list(k) for k in sorted(set(b) - set(a))],
+    }
+
+
+def compare_measured_scopes(report, left_scope: str, right_scope: str) -> dict:
+    """Pair source-equivalent actual one-beat samples, never infer a speedup.
+
+    The exact generated route, selected request addresses, operation, clock
+    and source case counts must match. Separate scopes without such a pair
+    remain UNMEASURED; no interpolation across a missing local NoC top.
+    """
+    if not isinstance(left_scope, str) or not left_scope or not isinstance(right_scope, str) or not right_scope or left_scope == right_scope:
+        raise FabricReportError("distinct nonempty benchmark scopes required")
+    rows = []
+    status_counts = defaultdict(int)
+    for route in report["routes"]:
+        observations = route.get("one_beat_stage_observations", [])
+        for op in ("read", "write"):
+            candidates = {}
+            for scope in (left_scope, right_scope):
+                found = [o for o in observations
+                         if o.get("operation") == op and o.get("fabric_scope") == scope
+                         and o.get("matches_site_source") is True]
+                candidates[scope] = found
+            status = "unmeasured_missing_scope"
+            delta = None
+            reason = "both exact-source measured route operations required"
+            first, second = candidates[left_scope], candidates[right_scope]
+            if len(first) > 1 or len(second) > 1:
+                status = "incompatible_duplicate_evidence"
+                reason = "multiple eligible observations for same route/scope/operation"
+            elif first and second:
+                a, b = first[0], second[0]
+                allowed = {"exact_sha", "verified_same_tree", "verified_rtl_inputs"}
+                # The original benchmark plan, accepted AXI actor and complete
+                # selected cases must agree. Same addresses/counts alone cannot
+                # qualify an arbitrary different initiator or test workload.
+                baseline = "Fabric baseline: single-outstanding one-beat"
+                same_inputs = (
+                    a.get("source_equivalence") in allowed
+                    and b.get("source_equivalence") in allowed
+                    and a.get("case_provenance") ==
+                        b.get("case_provenance") ==
+                        "verified_complete_benchmark_plan_and_axi"
+                    and a.get("source_actor") == b.get("source_actor") == route["source"]
+                    and a.get("benchmark_profile") == b.get("benchmark_profile") == "unloaded"
+                    and a.get("benchmark_phase") == b.get("benchmark_phase") == baseline
+                    and a.get("simulator") is not None
+                    and a.get("simulator") == b.get("simulator")
+                    and isinstance(a.get("sample_case_ids"), list)
+                    and len(a["sample_case_ids"]) == a.get("sample_count")
+                    and a["sample_case_ids"] == b.get("sample_case_ids")
+                    and len(set(a["sample_case_ids"])) == len(a["sample_case_ids"])
+                    and isinstance(a.get("sample_case_keys"), list)
+                    and a["sample_case_keys"] == b.get("sample_case_keys")
+                    and a.get("sample_count") == b.get("sample_count")
+                    and type(a.get("sample_count")) is int and a["sample_count"] > 0
+                    and type(a.get("clock_period_ps")) is int
+                    and a["clock_period_ps"] > 0
+                    and a["clock_period_ps"] == b.get("clock_period_ps")
+                )
+                if same_inputs and a.get("end_to_end") and b.get("end_to_end"):
+                    status = "measured_same_source_and_cases"
+                    reason = "matched exact source-selected cases and reference clock"
+                    delta = {
+                        "left_avg_cycles": a["end_to_end"]["avg_cycles"],
+                        "right_avg_cycles": b["end_to_end"]["avg_cycles"],
+                        "right_minus_left_cycles": (
+                            b["end_to_end"]["avg_cycles"] - a["end_to_end"]["avg_cycles"]),
+                        "n": a["sample_count"],
+                        "reference_clock_period_ps": a["clock_period_ps"],
+                        "left_run_report": a["run_report"],
+                        "right_run_report": b["run_report"],
+                        **_comparable_stage_changes(
+                            a.get("stage_metrics", []), b.get("stage_metrics", [])),
+                    }
+                else:
+                    status = "incompatible_source_clock_or_case_set"
+                    reason = "benchmark plan, actor, backend, complete cases, source or clock mismatch"
+            status_counts[status] += 1
+            rows.append({"route_id": route["id"], "operation": op,
+                         "left_scope": left_scope, "right_scope": right_scope,
+                         "status": status, "reason": reason, "comparison": delta})
+    return {
+        "schema_version": 1,
+        "left_scope": left_scope, "right_scope": right_scope,
+        "evidence": "passive_source_attested_axi_latency_not_router_or_phy_proof",
+        "counts": dict(sorted(status_counts.items())),
+        "rows": rows,
+    }
+
+
 def attach_one_beat_observations(report, entries, output, source_sha):
     """Attach source-completion timing and rigorous serial per-mesh deltas.
 
@@ -554,6 +687,34 @@ def attach_one_beat_observations(report, entries, output, source_sha):
                 or run.get("dirty") is not False):
             continue
         rows = trace["sections"]["axi"]["transactions"]
+        # Only the source-authored, fully checked benchmark plan can qualify
+        # case identity. Ordinary runs still contribute historic observations
+        # and may be shown as stages, but cannot prove cross-scope equivalence.
+        from fabric_benchmark import validate as validate_benchmark
+        benchmark_cases = {}
+        bench_path = path.parent / "fabric-benchmark-plan.json"
+        proof_path = path.parent / "fabric-benchmark-evidence.json"
+        benchmark_profile = None
+        if bench_path.is_file() or proof_path.is_file():
+            if not bench_path.is_file() or not proof_path.is_file():
+                raise FabricReportError("incomplete archived benchmark case proof")
+            bench = json.loads(bench_path.read_text())
+            proof = json.loads(proof_path.read_text())
+            if (bench.get("scope") != entry["target"]
+                    or bench.get("phase") != baseline_phase
+                    or bench.get("profile") != "unloaded"
+                    or validate_benchmark(trace, bench) != proof):
+                raise FabricReportError("archived benchmark plan/capture proof mismatch")
+            benchmark_profile = bench["profile"]
+            for case in bench["cases"]:
+                if case["warmup"]:
+                    continue
+                for operation in case["operations"]:
+                    key = (case["monitor"], case["plane"], operation,
+                           number(case["address"]))
+                    if key in benchmark_cases:
+                        raise FabricReportError("duplicate selected benchmark AXI case")
+                    benchmark_cases[key] = f"{case['case_id']}:{operation}"
         # GitHub's tested temporary PR merge commit and the final main merge
         # commit can be different SHAs for the same exact Git tree. Accept
         # that only when the trusted collector verified both trees.
@@ -626,6 +787,28 @@ def attach_one_beat_observations(report, entries, output, source_sha):
                     paired.append((source_tx, components))
             if not paired:
                 continue
+            # Never compute a deceptively fast subset when a slow, failed,
+            # duplicate or unpaired source case was silently dropped at a tap.
+            if len(paired) != len(samples):
+                continue
+            sample_case_ids = None
+            if benchmark_cases:
+                selected_keys = {
+                    key for key in benchmark_cases
+                    if key[0] == route["source"] and key[2] == operation
+                    and key[1] == route["plane"]
+                    and target_info[route["target"]]["address_base"] is not None
+                    and number(target_info[route["target"]]["address_base"]) <= key[3] <
+                        number(target_info[route["target"]]["address_base"]) +
+                        number(target_info[route["target"]]["address_size"])
+                }
+                actual_keys = {
+                    (tx["monitor"], tx["plane"], tx["operation"], number(tx["address"]))
+                    for tx, _ in paired
+                }
+                if actual_keys != selected_keys or len(paired) != len(selected_keys):
+                    continue
+                sample_case_ids = sorted(benchmark_cases[key] for key in actual_keys)
             stage_stats = []
             for index, component in enumerate(paired[0][1]):
                 metrics = ("request_ps", "response_ps", "sum_ps") if component["kind"] == "mesh" else ("sum_ps",)
@@ -638,6 +821,16 @@ def attach_one_beat_observations(report, entries, output, source_sha):
             route["one_beat_stage_observations"].append({
                 "operation": operation,
                 "sample_count": len(paired), "clock_period_ps": clock_ps,
+                "sample_case_keys": sorted(
+                    f"{tx['monitor']}:{tx['plane']}:{tx['operation']}:"
+                    f"{number(tx['address']):x}" for tx, _ in paired),
+                "sample_case_ids": sample_case_ids,
+                "case_provenance": (
+                    "verified_complete_benchmark_plan_and_axi" if sample_case_ids
+                    else "untagged_legacy_axi_stage_samples"),
+                "source_actor": route["source"],
+                "benchmark_profile": benchmark_profile,
+                "benchmark_phase": baseline_phase,
                 "end_to_end": _cycle_stats(elapsed, clock_ps),
                 "stage_metrics": stage_stats,
                 "source_sha": entry["source_sha"], "matches_site_source": True,
@@ -657,6 +850,13 @@ def attach_one_beat_observations(report, entries, output, source_sha):
     report["latency_scopes"] = {
         scope: latency_table(report, scope=scope) for scope in eligible_scopes
     }
+    # Publish real compatibility only for scopes that actually produced
+    # source-verified samples. Missing standalone local RTL stays unmeasured.
+    report["latency_scope_comparisons"] = [
+        compare_measured_scopes(report, a, b)
+        for i, a in enumerate(eligible_scopes)
+        for b in eligible_scopes[i+1:]
+    ]
     return report
 
 
