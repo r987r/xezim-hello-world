@@ -10,7 +10,7 @@ The [root README](../README.md) contains setup and the single generated whole-ch
 | Review CI evidence | [Pages/publication](publication.md), [canonical run identity](test-identity.md), [AXI reports](axi-run-reports.md), [protocol reports](protocol-run-reports.md), [Fabric Explorer](design-explorer.md) |
 | CPU boot and DMA | [Boot](full-chip-boot.md), [DMA](dma-bringup.md), [memory allocation](memory-allocation.md) |
 | PCIe and Ethernet | [PCIe host](pcie0-host-phases.md), [Ethernet MVP](ethernet0-closure-gate.md) |
-| DDR and registers | [DDR model/RTL](../rtl/memory/ddr4/README.md), [CSR ownership](csr-generation.md), [CSR firmware ABI](csr-firmware.md), [CSR source coverage](csr-source-coverage.md), [CSR runtime backdoor](csr-backdoor.md) |
+| DDR and registers | [DDR model/RTL](../rtl/memory/ddr4/README.md), [CSR ownership](csr-generation.md), [CSR firmware ABI](csr-firmware.md), [CSR source coverage](csr-source-coverage.md), [CSR runtime backdoor #91](https://github.com/r987r/xezim-hello-world/issues/91) |
 | Combined test and remaining flow matrix | [Verified functional MVP and boundaries](integration-closure-34.md), [combined acceptance](multiprotocol-integration-readiness.md), [active typed transfer matrix #152](https://github.com/r987r/xezim-hello-world/issues/152) |
 
 Audit local Markdown links with `make check-docs` (also run by check-config and Pages CI).
