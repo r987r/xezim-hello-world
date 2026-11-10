@@ -101,7 +101,7 @@ jobs:
               'scope':'real selected netlist export, no source-to-destination contract yet'
           }
           Path('.tools/connect46/chip-boot-ports.json').write_text(
-              json.dumps(result,sort_keys=True,indent=2)+'\\n')
+              json.dumps(result,sort_keys=True,indent=2)+'\n')
           print('REAL FULL-CHIP SLANG EXPORT:',len(ports),'source-attested Port nodes')
           PY
       - name: Archive original full-chip RTL netlist, port inventory, source identity and diagnostics
