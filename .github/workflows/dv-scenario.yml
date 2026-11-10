@@ -146,7 +146,7 @@ jobs:
               for folder in (cpu, bfm):
                   shutil.copytree(folder, case/folder.name)
               (case/"scenario-replay-audit.json").write_text(
-                  json.dumps(verified, indent=2, sort_keys=True)+"\\n")
+                  json.dumps(verified, indent=2, sort_keys=True)+"\n")
               # Keep each complete original run as its own compressed archive.
               # The current Pages importer accepts one result per legacy target
               # per workflow. Publishing multiple target-named result.json files
@@ -169,7 +169,7 @@ jobs:
                      "matrix_sha256":hashlib.sha256((matrix_dir/"matrix.json").read_bytes()).hexdigest(),
                      "status":"validated_two_distinct_random_real_rtl_scenarios",
                      "cases":collected}
-          (root/"executed-matrix.json").write_text(json.dumps(summary,indent=2,sort_keys=True)+"\\n")
+          (root/"executed-matrix.json").write_text(json.dumps(summary,indent=2,sort_keys=True)+"\n")
           print("PASS two distinct genuinely random SCN-2 CPU/BFM real RTL cases",flush=True)
           PY
       - name: Retain manifest, RTL traces, per-run reports, CPU and BFM evidence
