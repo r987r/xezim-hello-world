@@ -106,7 +106,7 @@ def archive_selected_filelist(root: Path, profile: str, definition: dict,
     root = Path(root).resolve()
     if not isinstance(profile, str) or not re.fullmatch(r"[a-z][a-z0-9-]*", profile):
         raise ValueError("invalid selected test profile")
-    folder = Path(directory).resolve() if directory is not None else root / ".tools/regression" / profile
+    folder = Path(directory) if directory is not None else root / ".tools/regression" / profile
     if directory is not None:
         try:
             from .run_workspace import verify_run
@@ -292,7 +292,7 @@ def archive_selected_filelist(root: Path, profile: str, definition: dict,
 def verify_selected_archive(root: Path, profile: str, definition: dict, *, directory: Path | None = None) -> dict:
     """Fail closed on stale, foreign, missing or tampered source/artifact bytes."""
     root = Path(root).resolve()
-    folder = Path(directory).resolve() if directory is not None else root / ".tools/regression" / profile
+    folder = Path(directory) if directory is not None else root / ".tools/regression" / profile
     if directory is not None:
         try:
             from .run_workspace import verify_run
