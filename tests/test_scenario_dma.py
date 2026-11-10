@@ -39,6 +39,37 @@ class ScenarioDmaTests(unittest.TestCase):
         self.assertIn("#define SOC_SCN_DDR_PHYS 0x140000100ULL", render_c_header(c))
         self.assertIsNone(self.plan["execution_evidence"])
 
+    def test_shared_random_payload_replays_identically_for_real_cpu_and_bfm(self):
+        baseline = compile_contract(self.plan)
+        self.assertEqual(baseline["seed"], 90)
+        with tempfile.TemporaryDirectory() as tmp:
+            a, ca = materialize(self.cfg, Path(tmp)/"cpu", scenario_seed=79)
+            b, cb = materialize(self.cfg, Path(tmp)/"bfm", scenario_seed=79)
+            self.assertEqual(ca, cb)
+            self.assertEqual(ca["plan_sha256"], cb["plan_sha256"])
+            self.assertEqual(ca["seed"], 90)
+            self.assertEqual(a["seed"], 79)
+            self.assertEqual(a, b)
+            alternate, alt_contract = materialize(self.cfg, Path(tmp)/"alternative",
+                                                  scenario_seed=80)
+            self.assertEqual(alternate["seed"], 80)
+            self.assertEqual(alt_contract["seed"], 91)
+            self.assertNotEqual(alt_contract["plan_sha256"], ca["plan_sha256"])
+            self.assertNotEqual(alt_contract["seed"], ca["seed"])
+            self.assertEqual(compile_contract(alternate), alt_contract)
+            for bad in (-1, 2**32, True, "79"):
+                with self.subTest(seed=bad), self.assertRaisesRegex(
+                        ScenarioError, "uint32"):
+                    materialize(self.cfg, Path(tmp)/"bad", scenario_seed=bad)
+
+    def test_shared_random_group_rejects_unequal_pattern_domains(self):
+        mismatched = copy.deepcopy(self.spec)
+        checked = next(a for a in mismatched["actions"]
+                       if a["action_instance_id"] == "check_return")
+        checked["args"]["pattern"]["seed"]["randint"]["max"] = 92
+        with self.assertRaisesRegex(ScenarioError, "incompatible bounds"):
+            resolve_scenario(mismatched, self.cfg)
+
     def test_materializes_same_bytes_and_c_head_after_repeat(self):
         with tempfile.TemporaryDirectory() as temp:
             out = Path(temp)
