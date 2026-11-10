@@ -6,6 +6,7 @@ AXI data accesses must pass against actual controller/PHY, not AXI RAM.
 from __future__ import annotations
 import json
 import os
+import itertools
 from pathlib import Path
 
 import cocotb
@@ -217,6 +218,41 @@ async def exercise_concurrent_axi_ids(master, dut, observer, monitor):
                   "128-byte independent readback and passive DFI capture")
 
 
+async def exercise_forced_read_backpressure(master, dut, observer, monitor):
+    """Real DDR RTL R-channel backpressure with continuous passive pin capture.
+
+    A source-owned pause pattern forces READY low. Completion and the exact
+    returned bytes must still match; an attempted pause that never stalls
+    a valid response fails closed rather than being called stress coverage.
+    """
+    address = 0x58000
+    length = 512
+    payload = bytes(((index * 23 + 0x51) & 255) for index in range(length))
+    wr = await with_timeout(master.write(address, payload, awid=9), 120, "us")
+    assert wr.resp == AxiResp.OKAY, "backpressure fixture write response"
+    before = observer.stall_cycles["r"]
+    master.read_if.r_channel.set_pause_generator(
+        itertools.cycle([1] * 16 + [0] * 3))
+    try:
+        result = await with_timeout(master.read(address, length, arid=9),
+                                    180, "us")
+        assert result.resp == AxiResp.OKAY, "paused R response must be OKAY"
+        assert result.data == payload, "stalled real DDR R channel changed bytes"
+    finally:
+        master.read_if.r_channel.clear_pause_generator()
+    await tick(dut, 3)
+    observer.assert_health(monitor)
+    observed = observer.stall_cycles["r"] - before
+    assert observed >= 12, (
+        f"requested RREADY backpressure not captured on actual R channel: {observed}")
+    assert observer.max_stall_streak["r"] >= 8, (
+        "no sustained valid-not-ready R-channel stall measured")
+    dut._log.info(
+        "PASS real DDR R-channel forced backpressure: stall_cycles=%d max_streak=%d "
+        "exact_bytes=%d ARID=%d with DFI observer active",
+        observed, observer.max_stall_streak["r"], length, 9)
+
+
 @cocotb.test(timeout_time=3, timeout_unit="ms")
 async def ddr4_wishbone_init_axi_readwrite(dut):
     """One always-active passive observer from before clock start to teardown."""
@@ -318,6 +354,7 @@ async def ddr4_wishbone_init_axi_readwrite(dut):
 
         await exercise_controller_stress(master, dut, observer, monitor)
         await exercise_concurrent_axi_ids(master, dut, observer, monitor)
+        await exercise_forced_read_backpressure(master, dut, observer, monitor)
         observer.assert_health(monitor)
         observer.next_phase("post_traffic")
         await tick(dut, 5)

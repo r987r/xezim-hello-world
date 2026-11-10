@@ -97,6 +97,9 @@ def main() -> int:
         # Independent post-run check: the protocol test is not enough to
         # claim a pass if passive capture was disabled, truncated or stopped.
         capture = verify_capture(output)
+        if capture.get("stall_cycles", {}).get("r", 0) < 12 or capture.get(
+                "max_stall_streak", {}).get("r", 0) < 8:
+            raise ValueError("missing real sustained RREADY backpressure evidence")
         latency = report_from_capture(output, configured_clock_period_ps())
         internal = report_from_dfi(output, configured_clock_period_ps())
         stage_digest = {
@@ -122,7 +125,9 @@ def main() -> int:
                         "monitor": {"status": capture["status"],
                                     "sampled_cycles": capture["sampled_cycles"],
                                     "phases": capture["phases"],
-                                    "channels": capture["channels"]},
+                                    "channels": capture["channels"],
+                                    "stall_cycles": capture["stall_cycles"],
+                                    "max_stall_streak": capture["max_stall_streak"]},
                         "warning": "Does not prove full-chip DDR or silicon DDR PHY"}, indent=2) + "\n"
         )
         from report_html import load, render

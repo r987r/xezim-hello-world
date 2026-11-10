@@ -38,3 +38,20 @@ python3 tools/regress.py chip-ddr4-real --stage run --fail-fast
 ```
 
 The full-chip configuration uses the real AXI `ddr_litedram_axi_bridge` (64-bit SoC physical addresses → generated 25-bit LiteDRAM local AXI) and **16 KiB** Config-NoC/Wishbone DFII initialization, with real CPU0 C/iDMA SRAM↔DDR data and passive AXI/DFI/BankModel checks. The bridge returns real `DECERR` to out-of-bounds/unsupported bursts without forwarding forbidden AW/AR; the routed negative additionally checks nonalias readback. Full-chip and standalone tests are distinct source-selected runs; they may not borrow each other's measured stage timings. See [bridge/protocol details](SOC_BRIDGE.md) and [integrated functional acceptance](../../../docs/multiprotocol-integration-readiness.md).
+
+## Real forced R-channel backpressure (partial #35 stress gate)
+
+The standalone pinned LiteDRAM functional test now uses the original
+`cocotbext-axi` master R-channel pause API to force repeated RREADY-low
+intervals during a 512-byte hardware read. The independent always-on AXI
+observer records *actual* VALID && !READY cycles and longest consecutive
+stall streak on every channel, while the DFI probe stays active. The test
+requires at least 12 real stalled R cycles and 8 consecutive stalls, then
+checks the original returned bytes and OKAY response. The post-simulation
+report verifier independently requires those measurements; simply requesting
+a pause without seeing an RTL pin stall is not a PASS.
+
+This demonstrates one bounded read-backpressure and data-integrity case,
+**not** #35 completion. Refresh/bank conflict, reset/reinit, W/B stalls,
+true measured internal controller concurrency, and silicon DDR PHY remain
+unqualified. Source-only unit tests never count as hardware stress evidence.

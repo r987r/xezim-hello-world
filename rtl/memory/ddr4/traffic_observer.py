@@ -42,6 +42,9 @@ class TrafficObserver:
         self.phase = PHASES[0]
         self.phase_cycles = Counter({p: 0 for p in PHASES})
         self.channels = Counter({c: 0 for c in CHANNELS})
+        self.stall_cycles = Counter({c: 0 for c in CHANNELS})
+        self.stall_streak = Counter({c: 0 for c in CHANNELS})
+        self.max_stall_streak = Counter({c: 0 for c in CHANNELS})
         self.wishbone = Counter()
         self.rlast_count = 0
         self.wlast_count = 0
@@ -106,6 +109,13 @@ class TrafficObserver:
             self.last_state = state
         for channel in CHANNELS:
             port = sample[channel]
+            if int(port["valid"]) and not int(port["ready"]):
+                self.stall_cycles[channel] += 1
+                self.stall_streak[channel] += 1
+                self.max_stall_streak[channel] = max(
+                    self.max_stall_streak[channel], self.stall_streak[channel])
+            else:
+                self.stall_streak[channel] = 0
             if int(port["valid"]) and int(port["ready"]):
                 self.channels[channel] += 1
                 if channel == "r" and int(port["last"]):
@@ -188,7 +198,9 @@ class TrafficObserver:
             "status": status, "error": error, "started_before_init": self.phase_cycles["pre_init"] > 0,
             "continuous_capture": all(self.phase_cycles[p] > 0 for p in PHASES),
             "sampled_cycles": self.samples, "phases": dict(self.phase_cycles),
-            "channels": dict(self.channels), "rlast_count": self.rlast_count,
+            "channels": dict(self.channels), "stall_cycles": dict(self.stall_cycles),
+            "max_stall_streak": dict(self.max_stall_streak),
+            "rlast_count": self.rlast_count,
             "wlast_count": self.wlast_count,
             "expected_write_beats": self.aw_expected_beats,
             "expected_read_beats": self.ar_expected_beats,
