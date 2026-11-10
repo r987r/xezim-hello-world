@@ -354,7 +354,7 @@ def run_target(name, test, resolver, options):
     identity = None
     if canonical:
         from test_identity import selected as select_identity
-        from tools.run_workspace import reserve_run
+        from run_workspace import reserve_run
         sources, includes, defines = resolver.sources(test)
         args = list(test.get('args', [])) + options.arg
         selected_test = {**test, 'source_target': test['sources'], 'args': args}
@@ -611,7 +611,7 @@ def run_target(name, test, resolver, options):
     # Keep legacy target artifact paths stable while old CI consumers migrate.
     from test_identity import selected as select_identity, save as save_identity, relative_path
     if canonical:
-        from tools.run_workspace import verify_run
+        from run_workspace import verify_run
         if filelist.read_bytes() != filelist_text(sources, includes, defines).encode('utf-8'):
             raise ValueError('canonical selected filelist changed after run reservation')
         verify_run(out, identity, plan=selected_test)
