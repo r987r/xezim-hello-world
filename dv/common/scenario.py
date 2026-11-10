@@ -77,7 +77,16 @@ def _draw(seed: int, action_id: str, path: str, count: int) -> int:
     raise ScenarioError("random rejection limit exceeded")
 
 
-def _resolve_choices(value: Any, seed: int, action: str, path: str) -> Any:
+def _resolve_choices(value: Any, seed: int, action: str, path: str,
+                     shared_draws: dict[str, tuple[tuple[int, int, int], int]] | None = None) -> Any:
+    """Resolve independent or explicitly shared, deterministic random arguments.
+
+    A named group reuses one seed-derived value across action arguments (e.g.
+    initialize/check patterns). Reuse with different bounds is an error, not
+    a hidden source of a mismatched golden reference.
+    """
+    if shared_draws is None:
+        shared_draws = {}
     if isinstance(value, dict):
         if "choose" in value:
             _fields(value, {"choose"}, set(), f"{action}/{path}")
@@ -88,21 +97,33 @@ def _resolve_choices(value: Any, seed: int, action: str, path: str) -> Any:
             selected = choices[idx]
             if isinstance(selected, dict) and ("choose" in selected or "randint" in selected):
                 raise ScenarioError(f"{action}/{path}: nested random choice not supported")
-            return _resolve_choices(selected, seed, action, path + "/selected")
+            return _resolve_choices(selected, seed, action, path + "/selected", shared_draws)
         if "randint" in value:
             _fields(value, {"randint"}, set(), f"{action}/{path}")
-            bounds = _fields(value["randint"], {"min", "max"}, {"step"}, f"{action}/{path}/randint")
+            bounds = _fields(value["randint"], {"min", "max"}, {"step", "group"}, f"{action}/{path}/randint")
             low = _int(bounds["min"], f"{action}/{path}/min")
             high = _int(bounds["max"], f"{action}/{path}/max")
             step = _int(bounds.get("step", 1), f"{action}/{path}/step", low=1)
             if high < low or (high - low) % step:
                 raise ScenarioError(f"{action}/{path}: invalid randint bounds/step")
+            group = bounds.get("group")
+            if group is not None:
+                group = _name(group, f"{action}/{path}/group")
+                signature = (low, high, step)
+                prior = shared_draws.get(group)
+                if prior is not None:
+                    if prior[0] != signature:
+                        raise ScenarioError(f"{action}/{path}: shared random group {group} has incompatible bounds")
+                    return prior[1]
+                value = low + step * _draw(seed, "@shared", group, (high - low) // step + 1)
+                shared_draws[group] = (signature, value)
+                return value
             return low + step * _draw(seed, action, path, (high - low) // step + 1)
-        return {k: _resolve_choices(v, seed, action, path + "/" + k)
+        return {k: _resolve_choices(v, seed, action, path + "/" + k, shared_draws)
                 for k, v in sorted(value.items()) if isinstance(k, str)} if all(
                     isinstance(k, str) for k in value) else _invalid_key(action, path)
     if isinstance(value, list):
-        return [_resolve_choices(v, seed, action, f"{path}/{i}") for i, v in enumerate(value)]
+        return [_resolve_choices(v, seed, action, f"{path}/{i}", shared_draws) for i, v in enumerate(value)]
     if value is None or type(value) in (str, int, bool):
         return value
     raise ScenarioError(f"{action}/{path}: unsupported value {value!r}")
@@ -161,6 +182,7 @@ def _ordered_actions(spec: dict, seed: int) -> tuple[list[dict], dict[str, set[s
     if not isinstance(originals, list) or not originals:
         raise ScenarioError("scenario needs nonempty actions list")
     by_id: dict[str, dict] = {}
+    shared_draws: dict[str, tuple[tuple[int, int, int], int]] = {}
     for item in originals:
         a = _fields(item, {"action_instance_id", "kind", "actor", "phase", "args"},
                     {"depends_on", "parent_action_id", "expected_result_id"}, "action")
@@ -186,7 +208,7 @@ def _ordered_actions(spec: dict, seed: int) -> tuple[list[dict], dict[str, set[s
             raise ScenarioError(f"{aid}: args must be an object")
         by_id[aid] = dict(action_instance_id=aid, kind=a["kind"],
                           actor=a["actor"], phase=a["phase"],
-                          args=_resolve_choices(a["args"], seed, aid, "args"),
+                          args=_resolve_choices(a["args"], seed, aid, "args", shared_draws),
                           depends_on=sorted(deps), parent_action_id=parent,
                           expected_result_id=expected or f"expect.{aid}")
     expected_ids = [a["expected_result_id"] for a in by_id.values()]
