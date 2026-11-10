@@ -34,21 +34,38 @@ class FabricExplorerTests(unittest.TestCase):
         self.assertTrue(all(i['fabric_shared_max_txns'] is not None
                             for i in data['interfaces'] if i['fabric']!='memory0.memory_data'))
 
-    def test_cross_scope_comparison_requires_same_real_cases_and_source(self):
+    def test_cross_scope_comparison_requires_attested_cases_and_matching_clock(self):
         graph = copy.deepcopy(self.report)
         route = graph["routes"][0]
-        def observed(scope, avg):
+        actor = route["source"]
+        def observed(scope, avg, stages=None):
             return {
                 "operation": "read", "fabric_scope": scope,
                 "matches_site_source": True, "source_equivalence": "exact_sha",
-                "sample_count": 2, "sample_case_keys": [
-                    "data:read:1000", "data:read:1008"],
-                "clock_period_ps": 10000, "run_report": f"runs/{scope}/report.html",
-                "stage_metrics": [{"kind": "mesh", "network": "compute0_local_data"}],
+                "source_actor": actor, "case_provenance":
+                    "verified_complete_benchmark_plan_and_axi",
+                "benchmark_profile": "unloaded",
+                "benchmark_phase": "Fabric baseline: single-outstanding one-beat",
+                "sample_count": 2,
+                "sample_case_ids": ["actor:target:1000:0:read",
+                                    "actor:target:1000:1:read"],
+                "sample_case_keys": [f"{actor}:data:read:1000",
+                                     f"{actor}:data:read:1008"],
+                "simulator": "cocotb-verilator",
+                "clock_period_ps": 10000,
+                "run_report": f"runs/{scope}/report.html",
+                "stage_metrics": stages if stages is not None else [
+                    {"kind": "mesh", "network": "local_net",
+                     "from_monitor": "local.in", "to_monitor": "local.out",
+                     "sum_stats": {"avg_cycles": 10}}],
                 "end_to_end": {"avg_cycles": avg},
             }
         local = observed("local", 15)
-        connected = observed("supernoc", 21)
+        connected = observed("supernoc", 21, [
+            {"kind": "mesh", "network": "global_net",
+             "from_monitor": "global.in", "to_monitor": "global.out",
+             "sum_stats": {"avg_cycles": 12}},
+        ])
         route["one_beat_stage_observations"] = [local, connected]
         result = fabric_report.compare_measured_scopes(graph, "local", "supernoc")
         item = next(x for x in result["rows"] if x["route_id"] == route["id"]
@@ -56,10 +73,32 @@ class FabricExplorerTests(unittest.TestCase):
         self.assertEqual(item["status"], "measured_same_source_and_cases")
         self.assertEqual(item["comparison"]["right_minus_left_cycles"], 6)
         self.assertEqual(item["comparison"]["n"], 2)
-        for field, wrong in (("sample_case_keys", ["data:read:1000"]),
-                             ("clock_period_ps", 20000),
-                             ("sample_count", 1),
-                             ("source_equivalence", "historical")):
+        self.assertEqual(item["comparison"]["matched_stage_deltas"], [])
+        self.assertEqual(len(item["comparison"]["left_only_unmeasured_in_right"]), 1)
+        self.assertEqual(len(item["comparison"]["right_only_unmeasured_in_left"]), 1)
+
+        # A common physical passive stage is compared, not a guessed
+        # corresponding router stage in another topology.
+        connected["stage_metrics"].append(copy.deepcopy(local["stage_metrics"][0]))
+        shared = fabric_report.compare_measured_scopes(graph, "local", "supernoc")
+        item = next(x for x in shared["rows"] if x["route_id"] == route["id"]
+                    and x["operation"] == "read")
+        self.assertEqual(len(item["comparison"]["matched_stage_deltas"]), 1)
+        self.assertEqual(item["comparison"]["matched_stage_deltas"][0][
+            "right_minus_left_cycles"], 0)
+
+        for field, wrong in (
+                ("sample_case_keys", [f"{actor}:data:read:1000"]),
+                ("sample_case_ids", ["different:target:1000:0:read",
+                                     "actor:target:1000:1:read"]),
+                ("source_actor", "unrelated.actor"),
+                ("benchmark_profile", "unqualified"),
+                ("benchmark_phase", "unrelated"),
+                ("case_provenance", "untagged_legacy_axi_stage_samples"),
+                ("simulator", "xezim"),
+                ("clock_period_ps", 20000),
+                ("sample_count", 1),
+                ("source_equivalence", "historical")):
             with self.subTest(field=field):
                 altered = copy.deepcopy(graph)
                 altered["routes"][0]["one_beat_stage_observations"][1][field] = wrong
@@ -68,8 +107,8 @@ class FabricExplorerTests(unittest.TestCase):
                     if x["route_id"] == route["id"] and x["operation"] == "read")
                 self.assertEqual(row["status"], "incompatible_source_clock_or_case_set")
                 self.assertIsNone(row["comparison"])
-        graph["routes"][0]["one_beat_stage_observations"].append(
-            observed("local", 15))
+
+        graph["routes"][0]["one_beat_stage_observations"].append(observed("local", 15))
         repeated = fabric_report.compare_measured_scopes(graph, "local", "supernoc")
         row = next(x for x in repeated["rows"] if x["route_id"] == route["id"]
                    and x["operation"] == "read")
