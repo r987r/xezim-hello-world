@@ -137,9 +137,10 @@ def require_completed_xezim_run(root: Path, target: str, plan: dict) -> dict:
     except ImportError:
         from test_identity import load
         from selected_rtl_provenance import verify_selected_archive
-    root = Path(root)
+    root = Path(root).absolute()
     if not root.is_dir() or root.is_symlink():
         raise IdentityError("missing canonical Xezim run root")
+    _existing_ancestors_safe(root)
     if plan.get("engine") != "xezim" or target not in ("smoke", "sram"):
         raise IdentityError("unexpected canonical Xezim producer selection")
     matches = []
