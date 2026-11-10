@@ -219,6 +219,18 @@ async def execute_cold_boot(dut, *, external=None, benchmark=False):
                 f"SCN-2 CPU allocations {observed} differ from resolved plan {expected}")
             events, bad = read_events(events_file)
             assert not bad, f"SCN-2 invalid real passive AXI events: {bad[:3]}"
+            # Independently reconstruct all 256 bits of the selected plan SHA
+            # from the *CPU's actual accepted W byte lanes and B responses*.
+            # Neither C's header constant nor mailbox peek can self-certify it.
+            from tools.axi_report import correlate
+            from tools.scenario_cpu_plan_witness import verify as verify_plan_witness
+            catalog = json.loads((ROOT / "gen/supernoc/axi_monitors.json").read_text())
+            correlated, correlation_issues, _ = correlate(events, catalog)
+            assert not correlation_issues, (
+                f"SCN-2 cannot attest CPU plan against incomplete AXI: {correlation_issues[:3]}")
+            selected_sha = contract["plan_sha256"]
+            verified_witness = verify_plan_witness(
+                selected_sha, contract["plan_witness_phys"], correlated)
             counts = {"src_ar": 0, "ddr_aw": 0, "ddr_ar": 0, "return_aw": 0}
             for event in events:
                 if event.get("monitor") != "compute0_local_data.dma" or event.get("channel") not in ("ar", "aw"):
@@ -249,6 +261,7 @@ async def execute_cold_boot(dut, *, external=None, benchmark=False):
                         "observed_cpu_allocations": list(observed),
                         "observed_dma_axi_counts": counts,
                         "cpu_result_checked": True,
+                        "cpu_plan_sha_axi_witness": verified_witness,
                         "intent_is_not_evidence": True}
             (Path(plan).parent / "scenario-execution.json").write_text(
                 json.dumps(evidence, indent=2, sort_keys=True) + "\n")
