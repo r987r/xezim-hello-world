@@ -51,6 +51,43 @@ class SelectedRtlArchiveTests(unittest.TestCase):
         return archive_selected_filelist(
             self.root, "example", self.definition, self.plan, self.filelist)
 
+    def test_real_canonical_run_contains_exact_selected_compiler_archive(self):
+        from test_identity import selected
+        from run_workspace import reserve_run
+        from shutil import copyfile
+        config_files = (
+            "config/soc.yaml", "config/interface_contracts.yaml",
+            "config/ip.lock.yaml", "Bender.yml", "Bender.lock")
+        for rel in config_files:
+            dest = self.root / rel
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            copyfile(ROOT / rel, dest)
+        definition = {"sources": "smoke", "engine": "xezim",
+                      "top": "hello_world_tb", "logical_test": "hello-world",
+                      "args": ["--max-time", "1us"]}
+        raw = (str(self.tb) + "\n").encode()
+        identity = selected("smoke", definition, filelist_bytes=raw,
+                            run_id="local-012345abcdef", root=self.root)
+        directory = reserve_run(self.root / ".tools/runs", identity,
+                                plan=definition)
+        filelist = directory / "sources.f"
+        filelist.write_bytes(raw)
+        plan = {**definition, "target": "smoke", "source_target": "smoke",
+                "sources": [str(self.tb)], "includes": [], "defines": [],
+                "identity": identity}
+        (directory / "plan.json").write_text(json.dumps(plan) + "\n")
+        archive = archive_selected_filelist(
+            self.root, "smoke", definition, plan, filelist, directory=directory)
+        self.assertIn(".tools/runs/xezim/smoke-default/hello-world/",
+                      archive["archive"])
+        self.assertEqual(verify_selected_archive(
+            self.root, "smoke", definition, directory=directory), archive)
+        self.assertFalse((self.root / ".tools/regression/smoke").exists())
+        filelist.write_text("forged\n")
+        with self.assertRaisesRegex(ValueError, "filelist"):
+            verify_selected_archive(self.root, "smoke", definition,
+                                    directory=directory)
+
     def test_archive_preserves_exact_generated_top_and_source_hashes(self):
         value = self.make_archive()
         self.assertEqual(value["source_count"], 2)

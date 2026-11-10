@@ -11,6 +11,8 @@ on:
       - 'tests/test_run_workspace.py'
       - 'tests/test_test_identity.py'
       - 'tools/regress.py'
+      - 'tools/selected_rtl_provenance.py'
+      - '.github/workflows/dv-soc.yml'
       - 'tests/test_runtime_contract.py'
       - 'tools/publish_site.py'
       - 'tools/templates/site_runs.html'
@@ -36,4 +38,4 @@ jobs:
           python-version: '3.12'
       - run: python3 -m pip install 'PyYAML==6.0.3'
       - name: Validate every configured test has a truthful phase-intent entry
-        run: python3 -m unittest tests.test_test_intent tests.test_runtime_contract tests.test_test_identity tests.test_run_workspace tests.test_scenario_plan -v
+        run: python3 -m unittest tests.test_test_intent tests.test_runtime_contract tests.test_test_identity tests.test_run_workspace tests.test_selected_rtl_archive tests.test_scenario_plan -v

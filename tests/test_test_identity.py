@@ -68,6 +68,21 @@ class IdentityTests(unittest.TestCase):
             with self.assertRaisesRegex(IdentityError,"digest mismatch"):
                 load(path)
 
+    def test_preselected_filelist_bytes_equal_original_file_digest(self):
+        plan = self.tests["smoke"]
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "sources.f"
+            raw = (str(ROOT / "dv/smoke/hello_world_tb.sv") + "\n").encode()
+            path.write_bytes(raw)
+            selected_args = {"run_id": "local-012345abcdef"}
+            by_path = selected("smoke", plan, filelist=path, **selected_args)
+            by_bytes = selected("smoke", plan, filelist_bytes=raw, **selected_args)
+            self.assertEqual(by_path, by_bytes)
+            with self.assertRaisesRegex(IdentityError, "mutually exclusive"):
+                selected("smoke", plan, filelist=path, filelist_bytes=raw)
+            with self.assertRaisesRegex(IdentityError, "raw bytes"):
+                selected("smoke", plan, filelist_bytes="not bytes")
+
     def test_ci_run_provenance_and_failed_duplicate_registry(self):
         plan=self.tests["memory"]
         p=selected("memory",plan,env={"GITHUB_RUN_ID":"123","GITHUB_RUN_ATTEMPT":"2"})

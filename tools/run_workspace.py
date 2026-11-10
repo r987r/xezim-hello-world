@@ -8,11 +8,13 @@ from __future__ import annotations
 
 import os
 import hashlib
+import json
 from pathlib import Path
 
-from tools.test_identity import (
-    IdentityError, relative_path, save, validate,
-)
+try:
+    from .test_identity import IdentityError, relative_path, save, validate
+except ImportError:
+    from test_identity import IdentityError, relative_path, save, validate
 
 
 def _existing_ancestors_safe(path: Path) -> None:
@@ -63,7 +65,10 @@ def verify_run(directory: Path, identity: dict, *, plan: dict | None = None) -> 
     _existing_ancestors_safe(directory)
     if tuple(directory.parts[-4:]) != expected.parts:
         raise IdentityError("run folder does not match immutable selected identity")
-    from tools.test_identity import load
+    try:
+        from .test_identity import load
+    except ImportError:
+        from test_identity import load
     recorded = load(directory / "identity.json",
                     target=identity["legacy_target"], plan=plan)
     if recorded != identity:
@@ -118,3 +123,60 @@ def verify_artifact_inventory(directory: Path, identity: dict, names: list[str],
     return {"schema_version": 1, "identity_sha256": identity["identity_sha256"],
             "status": "artifact_bytes_verified_not_execution_proof",
             "artifacts": sorted(records, key=lambda item: item["path"])}
+
+def require_completed_xezim_run(root: Path, target: str, plan: dict) -> dict:
+    """Fail closed unless a real selected Xezim producer wrote its sole PASS.
+
+    This verifies completed runner evidence; it does not turn Xezim stdout
+    into AXI/CSR/coverage evidence. The existing source provenance validator
+    independently verifies original inputs and generated collateral.
+    """
+    try:
+        from .test_identity import load
+        from .selected_rtl_provenance import verify_selected_archive
+    except ImportError:
+        from test_identity import load
+        from selected_rtl_provenance import verify_selected_archive
+    root = Path(root).absolute()
+    if not root.is_dir() or root.is_symlink():
+        raise IdentityError("missing canonical Xezim run root")
+    _existing_ancestors_safe(root)
+    if plan.get("engine") != "xezim" or target not in ("smoke", "sram"):
+        raise IdentityError("unexpected canonical Xezim producer selection")
+    matches = []
+    for identity_file in root.rglob("identity.json"):
+        try:
+            recorded = load(identity_file, target=target, plan=plan)
+        except IdentityError:
+            continue
+        verify_run(identity_file.parent, recorded, plan=plan)
+        matches.append((identity_file.parent, recorded))
+    if len(matches) != 1:
+        raise IdentityError("expected exactly one real canonical producer run")
+    folder, identity = matches[0]
+    expected_log = f"{target}.log"
+    required = ["plan.json", "sources.f", "selected-rtl-manifest.json",
+                "result.json", "runner-events.json", expected_log]
+    verify_artifact_inventory(folder, identity, required, plan=plan)
+    try:
+        record = json.loads((folder / "result.json").read_text())
+        resolved = json.loads((folder / "plan.json").read_text())
+    except (OSError, ValueError) as exc:
+        raise IdentityError("missing or invalid simulator result/plan") from exc
+    if (record.get("target") != target or record.get("passed") is not True
+            or record.get("stage") != "all"
+            or record.get("identity_sha256") != identity["identity_sha256"]
+            or record.get("canonical_id") != relative_path(identity).as_posix()
+            or resolved.get("identity") != identity
+            or len(record.get("results", [])) != 1
+            or record["results"][0].get("name") != target
+            or record["results"][0].get("passed") is not True
+            or record["results"][0].get("exit_code") != 0):
+        raise IdentityError("canonical run lacks completed selected Xezim PASS")
+    if plan.get("pass") not in (folder / expected_log).read_text(errors="replace"):
+        raise IdentityError("canonical simulator transcript missing original PASS marker")
+    if root.name != 'runs' or root.parent.name != '.tools':
+        raise IdentityError('canonical Xezim root is not the configured run root')
+    verify_selected_archive(root.parent.parent, target, plan, directory=folder)
+    return {"target": target, "canonical_id": relative_path(identity).as_posix(),
+            "status": "runner_completed_xezim_no_protocol_coverage_claim"}

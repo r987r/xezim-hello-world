@@ -91,6 +91,20 @@ jobs:
           echo "XEZIM_BIN=$GITHUB_WORKSPACE/.tools/bin/$XEZIM_ASSET_NAME" >> "$GITHUB_ENV"
       - name: Run YAML-defined Xezim profiles and relocated cold boot
         run: python3 tools/regress.py xezim diagnostics
+      - name: Verify canonical Xezim smoke/SRAM execution and source archive
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import yaml
+          from tools.run_workspace import require_completed_xezim_run
+          tests = yaml.safe_load(Path('config/regression.yaml').read_text())['tests']
+          for target in ('smoke', 'sram'):
+              result = require_completed_xezim_run(
+                  Path('.tools/runs'), target, tests[target])
+              print('PASS canonical Xezim producer:', result['canonical_id'])
+              if (Path('.tools/regression') / target).exists():
+                  raise AssertionError('legacy test alias unexpectedly written: ' + target)
+          PY
       - name: Retain resolved filelists, commands and results
         if: always()
         uses: actions/upload-artifact@v4
@@ -98,6 +112,7 @@ jobs:
           name: heterogeneous-soc-results
           path: |
             .tools/regression/
+            .tools/runs/
             gen/boot/manifest.json
             gen/memory/manifest.json
           include-hidden-files: true

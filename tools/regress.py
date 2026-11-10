@@ -347,14 +347,30 @@ def run_process(command, log, timeout, env):
 
 
 def run_target(name, test, resolver, options):
-    out = ROOT/'.tools/regression'/name
-    if out.exists():
-        shutil.rmtree(out)
-    out.mkdir(parents=True, exist_ok=True)
-    # Each attempt replaces prior logs/filelists/results. The separately
-    # fingerprinted Verilator build directory survives for explicit reuse.
-    sources, includes, defines = resolver.sources(test)
-    args = list(test.get('args', [])) + options.arg
+    # First real canonical producers: small existing Xezim smoke and SRAM
+    # tests. Other tests continue their unchanged legacy path until their
+    # own generated variants, CI upload and report consumers are migrated.
+    canonical = name in ('smoke', 'sram')
+    identity = None
+    if canonical:
+        from test_identity import selected as select_identity
+        from run_workspace import reserve_run
+        sources, includes, defines = resolver.sources(test)
+        args = list(test.get('args', [])) + options.arg
+        selected_test = {**test, 'source_target': test['sources'], 'args': args}
+        identity = select_identity(
+            name, selected_test,
+            filelist_bytes=filelist_text(sources, includes, defines).encode('utf-8'))
+        out = reserve_run(ROOT/'.tools/runs', identity, plan=selected_test)
+    else:
+        out = ROOT/'.tools/regression'/name
+        if out.exists():
+            shutil.rmtree(out)
+        out.mkdir(parents=True, exist_ok=True)
+        sources, includes, defines = resolver.sources(test)
+        args = list(test.get('args', [])) + options.arg
+    # Legacy runs replace prior artifacts. Canonical runs are exclusively
+    # reserved by immutable run_id and never delete another writer's output.
     if test.get('memory_config') or options.memory_config:
         import socgen
         config = ROOT/(options.memory_config or test['memory_config'])
@@ -594,9 +610,15 @@ def run_target(name, test, resolver, options):
     # Capture the single source-selected identity before the RTL executor runs.
     # Keep legacy target artifact paths stable while old CI consumers migrate.
     from test_identity import selected as select_identity, save as save_identity, relative_path
-    identity = select_identity(name, {**test, "source_target": test["sources"],
-                                     "args": args}, filelist=filelist)
-    save_identity(out/'identity.json', identity)
+    if canonical:
+        from run_workspace import verify_run
+        if filelist.read_bytes() != filelist_text(sources, includes, defines).encode('utf-8'):
+            raise ValueError('canonical selected filelist changed after run reservation')
+        verify_run(out, identity, plan=selected_test)
+    else:
+        identity = select_identity(name, {**test, "source_target": test["sources"],
+                                         "args": args}, filelist=filelist)
+        save_identity(out/'identity.json', identity)
     plan = {**test, 'target': name, 'source_target': test['sources'],
             'sources': sources, 'includes': includes, 'defines': defines,
             'args': args, 'results_xml': str(out/'results.xml'), 'stage': options.stage,
@@ -612,7 +634,8 @@ def run_target(name, test, resolver, options):
     # Preserve the ACTUAL selected filelist/RTL after all runtime variant
     # substitutions. No simulator or elaborator has executed at this point.
     from selected_rtl_provenance import archive_selected_filelist
-    selected_inputs = archive_selected_filelist(ROOT, name, test, plan, filelist)
+    selected_inputs = archive_selected_filelist(
+        ROOT, name, test, plan, filelist, directory=out if canonical else None)
     plan["selected_source_manifest"] = {
         "path": str((out/'selected-rtl-manifest.json').relative_to(ROOT)),
         "compiler_input_sha256": selected_inputs["compiler_input_sha256"],
@@ -715,7 +738,7 @@ def run_target(name, test, resolver, options):
         # merely when the runner resolved the filelists. This fails closed
         # if generated RTL, a third-party source or an include header changed.
         from selected_rtl_provenance import verify_selected_archive
-        verify_selected_archive(ROOT, name, test)
+        verify_selected_archive(ROOT, name, test, directory=out if canonical else None)
         print(f'RUN {name}/{label} ({engine}, stage={options.stage})', flush=True)
         runner_events.append(dispatch_event(runtime_selected,label,status='started'))
         save_dispatch()
