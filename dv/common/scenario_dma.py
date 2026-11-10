@@ -88,9 +88,21 @@ def compile_contract(plan: dict) -> dict:
                      "check_return": {"wait_idle", "init_source"}}
     if any(deps[aid] != needed for aid, needed in required_deps.items()):
         raise ScenarioError("SCN-2 dependency contract differs from executor ordering")
+    # Scenario-only CPU0 SRAM transport scratch. Explicitly outside all
+    # selected source/return allocations and iDMA descriptor pool. It is
+    # NOT a replacement CSR/mailbox IP and cannot establish completion.
+    witness_phys = src["phys"] + 0x1000
+    if (witness_phys % 8 or witness_phys + 32 > next(
+            r["base"] + r["size"] for r in plan["regions"]
+            if r["name"] == "compute0.sram.payload")
+            or any(witness_phys < x["phys"] + x["size"]
+                   and x["phys"] < witness_phys + 32
+                   for x in allocations.values())):
+        raise ScenarioError("scenario plan SHA witness overlaps a planned buffer")
     return {
         "scenario_id": plan["scenario_id"],
         "plan_sha256": hashlib.sha256(canonical_json(plan).encode("ascii")).hexdigest(),
+        "plan_witness_phys": witness_phys,
         "length": nbytes,
         "seed": init["pattern"]["seed"],
         "source_phys": src["phys"],
@@ -114,11 +126,20 @@ def render_c_header(contract: dict) -> str:
         "SOC_SCN_DDR_PHYS": contract["ddr_phys"],
         "SOC_SCN_RETURN_PHYS": contract["return_phys"],
         "SOC_SCN_SRC_POOL_PHYS": contract["source_region_base"],
+        "SOC_SCN_PLAN_WITNESS_PHYS": contract["plan_witness_phys"],
         "SOC_SCN_DDR_POOL_PHYS": contract["ddr_region_base"],
     }
+    sha = contract["plan_sha256"]
+    if (not isinstance(sha, str) or len(sha) != 64 or
+            any(ch not in "0123456789abcdef" for ch in sha)):
+        raise ScenarioError("invalid full selected scenario SHA witness")
+    # Exact byte-order contract: little-endian 32-bit words of the digest.
+    words = [int.from_bytes(bytes.fromhex(sha)[4*i:4*i+4], "little")
+             for i in range(8)]
     return ("/* Generated from canonical scenario-plan.json; never hand edit. */\n"
             "#ifndef SOC_SCENARIO_DMA_CONTRACT_H\n#define SOC_SCENARIO_DMA_CONTRACT_H\n"
             + "".join(f"#define {key} 0x{value:x}ULL\n" for key, value in names.items())
+            + "".join(f"#define SOC_SCN_PLAN_SHA_WORD_{i} 0x{word:08x}u\n" for i, word in enumerate(words))
             + "#endif\n")
 
 
