@@ -5,6 +5,12 @@ on:
     branches: [main]
     paths:
       - 'tools/soc_netlist_ports.py'
+      - 'tools/design_netlist.py'
+      - 'tools/selected_rtl_provenance.py'
+      - 'tools/signal_paths.py'
+      - 'config/regression.yaml'
+      - 'gen/chip/**'
+      - 'gen/supernoc/**'
       - 'tools/real_netlist_contract.py'
       - 'tools/signal_paths.py'
       - 'tools/design_netlist.py'
@@ -28,3 +34,85 @@ jobs:
         run: python3 -m unittest tests.test_soc_netlist_ports tests.test_real_netlist_contract tests.test_design_netlist -v
       - name: Compile the generic real-netlist adapter
         run: python3 -m py_compile tools/soc_netlist_ports.py
+
+  actual-chip-netlist-export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 85
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - uses: ./.github/actions/setup-bender
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Resolve actual selected full-chip source closure
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 -m pip install -r requirements.txt
+          python3 tools/ip_fetch.py floonoc pulp_idma
+          python3 -m pip install -e .tools/floonoc
+          python3 tools/regress.py chip-boot --stage files
+          test -s .tools/regression/chip-boot/sources.f
+          test -s .tools/regression/chip-boot/plan.json
+          python3 -m unittest tests.test_soc_netlist_ports tests.test_design_netlist -v
+      - name: Build exact pinned upstream slang-netlist v0.12.0
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --filter=blob:none https://github.com/jameshanlon/slang-netlist.git .tools/slang-netlist-source
+          git -C .tools/slang-netlist-source checkout --detach 650cd5c76645c27697a61c11db98f2f6d969ad1a
+          test "$(git -C .tools/slang-netlist-source rev-parse HEAD)" = "650cd5c76645c27697a61c11db98f2f6d969ad1a"
+          cmake -S .tools/slang-netlist-source -B .tools/slang-netlist-build \
+            -DCMAKE_BUILD_TYPE=Release -DBUILD_DOCS=OFF -DENABLE_PY_BINDINGS=OFF
+          cmake --build .tools/slang-netlist-build -j 2 --target slang-netlist
+          test -x .tools/slang-netlist-build/tools/driver/slang-netlist
+      - name: Export exact selected full-chip netlist and inventory actual elaborated Port nodes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/design_netlist.py --profile chip-boot --mode netlist \
+            --slang-netlist "$PWD/.tools/slang-netlist-build/tools/driver/slang-netlist" \
+            --output .tools/connect46/chip-boot-netlist.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          from tools.signal_paths import read_graph, enumerate_ports
+          graph=Path('.tools/connect46/chip-boot-netlist.json')
+          meta=json.loads(graph.with_name(graph.name+'.meta.json').read_text())
+          _,nodes,_=read_graph(graph)
+          ports=enumerate_ports(nodes)
+          if len(ports) < 20 or not any(x['path'].startswith('full_chip_tb') for x in ports):
+              raise RuntimeError('selected real full-chip elaboration lacked required Port inventory')
+          result={
+              'schema_version':1,
+              'profile':'chip-boot',
+              'top':meta['top'],
+              'source_provenance':{
+                  'filelist_sha256':meta['filelist_sha256'],
+                  'plan_sha256':meta['plan_sha256'],
+                  'selected_source_sha256':meta['selected_source_sha256'],
+                  'netlist_sha256':meta['output_sha256']},
+              'elaborated_port_nodes':len(ports),
+              'ports':ports,
+              'bit_level_connectivity_proven':False,
+              'runtime_traffic_observed':False,
+              'scope':'real selected netlist export, no source-to-destination contract yet'
+          }
+          Path('.tools/connect46/chip-boot-ports.json').write_text(
+              json.dumps(result,sort_keys=True,indent=2)+'\\n')
+          print('REAL FULL-CHIP SLANG EXPORT:',len(ports),'source-attested Port nodes')
+          PY
+      - name: Archive original full-chip RTL netlist, port inventory, source identity and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: connect46-real-chip-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            .tools/connect46/
+            .tools/regression/chip-boot/plan.json
+            .tools/regression/chip-boot/sources.f
+            .tools/regression/chip-boot/selected-rtl-manifest.json
+          include-hidden-files: true
+          if-no-files-found: warn
