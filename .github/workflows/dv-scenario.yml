@@ -147,12 +147,19 @@ jobs:
                   shutil.copytree(folder, case/folder.name)
               (case/"scenario-replay-audit.json").write_text(
                   json.dumps(verified, indent=2, sort_keys=True)+"\\n")
+              # Keep each complete original run as its own compressed archive.
+              # The current Pages importer accepts one result per legacy target
+              # per workflow. Publishing multiple target-named result.json files
+              # from one artifact would falsely collide until #139 canonical
+              # per-execution ingestion is fully migrated.
+              archive = shutil.make_archive(str(case), "gztar",
+                                            root_dir=root, base_dir=case.name)
+              shutil.rmtree(case)
               collected.append({"seed":seed, "plan_sha256":item["plan_sha256"],
                                 "pattern_seed":next(a for a in json.loads(expected)["actions"]
                                                     if a["action_instance_id"]=="init_source")
                                                ["args"]["pattern"]["seed"],
-                                "cpu_dir":str(case/"chip-cpu-scenario"),
-                                "bfm_dir":str(case/"chip-dma-scenario"),
+                                "archive":str(Path(archive).relative_to(root)),
                                 "evidence":"real_cpu_and_bfm_passive_AXI_and_independent_bytes",
                                 "status":verified["status"]})
           check_matrix(source, soc, matrix_dir)
