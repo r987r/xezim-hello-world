@@ -104,6 +104,7 @@ def archive_selected_filelist(root: Path, profile: str, definition: dict,
     import re
     import shlex
     root = Path(root).resolve()
+    is_canonical_run = directory is not None
     if not isinstance(profile, str) or not re.fullmatch(r"[a-z][a-z0-9-]*", profile):
         raise ValueError("invalid selected test profile")
     folder = Path(directory) if directory is not None else root / ".tools/regression" / profile
@@ -285,7 +286,7 @@ def archive_selected_filelist(root: Path, profile: str, definition: dict,
     document["manifest_sha256"] = _canonical_sha(document)
     (folder / "selected-rtl-manifest.json").write_text(
         json.dumps(document, indent=2, sort_keys=True) + "\n")
-    verify_selected_archive(root, profile, definition, directory=folder if directory is not None else None)
+    verify_selected_archive(root, profile, definition, directory=folder if is_canonical_run else None)
     return document
 
 
