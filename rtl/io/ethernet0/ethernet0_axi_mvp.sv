@@ -1,3 +1,4 @@
+`timescale 1ns/1ps
 // Ethernet0 Data NoC integration adapter.
 // SIX real AXI initiators: RX descriptor AR/R, RX packet AW/W/B, RX CQ AW/W/B,
 // TX descriptor AR/R, TX payload AR/R, TX CQ AW/W/B.

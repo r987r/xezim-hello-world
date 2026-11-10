@@ -1,3 +1,4 @@
+`timescale 1ns/1ps
 // PULP AXI responder + upstream generic SRAM, with a bounded, non-aliasing
 // window. Only immutable ROM/flash instances may specify an initialization file.
 module axi_sram_target #(
