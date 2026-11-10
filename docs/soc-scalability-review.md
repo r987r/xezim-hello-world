@@ -57,6 +57,19 @@ This compares source hashes and bounded text changes of the **selected generated
 
 The canonical IR from [tools/soc_ir.py](../tools/soc_ir.py) and typed contracts from [tools/soc_ip_compose.py](../tools/soc_ip_compose.py) are **declarative**, not yet full replacements for the legacy RTL emitters. The atomic generator's IR/IP source-consistency gate **merged in [#177](https://github.com/r987r/xezim-hello-world/pull/177)**; the default reviewable RTL **merged in [#178](https://github.com/r987r/xezim-hello-world/pull/178)**. [#193](https://github.com/r987r/xezim-hello-world/pull/193) subsequently merged IR-derived default review-artifact identity; it does **not** establish generic IR-driven RTL wiring. No generic hardware composition is established merely by generating a manifest.
 
+## Triage repeated Slang findings without hiding design errors
+
+The report-only Slang workflow also emits `.tools/lint/unique-diagnostics.json`.
+It groups original lint/elaboration diagnostics across selected profiles by
+`(code, file, line, symbol_path)` (and message when the source location/code
+are absent). Every group's originating profiles, modes, severities, original
+messages, count and original Bender filelist SHAs remain visible. The original
+per-profile `lint.raw.json`, `elaborate.raw.json`, full reports and logs are
+**retained unchanged**. Unique issue counts help identify root causes but
+are not waiver approvals, lint-clean signoff, compilation proof, or a substitute
+for the original `--enforce` gates; #32 still owns actual RTL fixes and strict
+negative tests.
+
 ## Tell planned actions from completed hardware
 
 The canonical source-selected scenario is resolved by [tools/scenario_plan.py](../tools/scenario_plan.py). The [Python action dispatcher](../dv/common/action_runtime.py) supports typed dependencies, shared resource/retirement locks and causal event actions. The [C11 action table emitter](../tools/scenario_c.py) and [SV emitter](../tools/scenario_sv.py) reuse the same plan identity. Most multi-protocol legacy tests are **not** yet fully migrated into these handlers. A driver's `issued` or `driver_done` record is not AXI/TLP/GMII/DFI protocol acceptance, independently checked bytes, or a valid mailbox hardware event.
