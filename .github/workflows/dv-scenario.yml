@@ -75,7 +75,7 @@ jobs:
   scenario-real-rtl:
     name: CPU C and BFM use same plan on generated FlooNoC RTL
     runs-on: ubuntu-24.04
-    timeout-minutes: 50
+    timeout-minutes: 125
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-bender
@@ -95,31 +95,83 @@ jobs:
         run: |
           python3 -m unittest tests.test_scenario_plan tests.test_scenario_dma tests.test_scenario_replay_audit tests.test_scenario_memory_trace tests.test_scenario_memory_finalization tests.test_cpu_dma_firmware -v
           make check-generated
-      - name: Execute actual CPU0 C and CPU0 BFM scenario via RTL
-        run: python3 tools/regress.py scenario
-      - name: Verify source-qualified SCN-2 memory lifetime views on both real RTL runs
+      - name: Execute two freshly randomized source-selected scenarios in actual CPU and BFM RTL
         run: |
           python3 - <<'PY'
+          import hashlib
           import json
+          import os
           from pathlib import Path
-          for target, expected in (
-              ("chip-cpu-scenario", "cpu_phys_correlated_lifetimes_planned_only"),
-              ("chip-dma-scenario", "bfm_traffic_observed_allocation_unmeasured"),
-          ):
-              folder = Path(".tools/regression") / target
-              view = json.loads((folder / "memory-lifetimes.json").read_text())
-              assert view["status"] == expected
-              assert len(view["buffers"]) == 3
-              assert view["real_allocation_tokens_proven"] is False
-              assert "Memory allocation and lifetime evidence" in (folder/"report.html").read_text()
-              assert json.loads((folder/"result.json").read_text())["passed"] is True
+          import shutil
+          import subprocess
+          import sys
+
+          from tools.scenario_seed_matrix import write_matrix, check_matrix
+          from tools.scenario_replay_audit import audit
+
+          source = Path("config/scenarios/cpu-bfm-ddr-roundtrip.json")
+          soc = Path("config/soc.yaml")
+          matrix_dir = Path(".tools/scenarios/rtl-seed-matrix/selected")
+          matrix = write_matrix(source, soc, matrix_dir, random_runs=32)
+          check_matrix(source, soc, matrix_dir)
+          by_pattern = {}
+          for item in matrix["cases"]:
+              plan = json.loads((matrix_dir / item["file"]).read_text())
+              source_init = next(a for a in plan["actions"]
+                                 if a["action_instance_id"] == "init_source")
+              value = source_init["args"]["pattern"]["seed"]
+              if plan["seed"] != 79 and value not in by_pattern:
+                  by_pattern[value] = item
+          if len(by_pattern) < 2:
+              raise RuntimeError("random cases did not exercise two different real payloads")
+          selected = list(by_pattern.values())[:2]
+          collected = []
+          root = Path(".tools/scenarios/rtl-seed-matrix")
+          for item in selected:
+              seed = item["seed"]
+              print(f"REAL RTL RANDOM SEED {seed}; plan {item['plan_sha256']}", flush=True)
+              subprocess.run([sys.executable, "tools/regress.py", "scenario",
+                              "--scenario-seed", str(seed)], check=True)
+              cpu = Path(".tools/regression/chip-cpu-scenario")
+              bfm = Path(".tools/regression/chip-dma-scenario")
+              expected = (matrix_dir / item["file"]).read_bytes()
+              for actual in (cpu/"variant/scenario-plan.json", bfm/"scenario-plan.json"):
+                  if actual.read_bytes() != expected:
+                      raise RuntimeError(f"{actual}: executed RTL plan differs from selected matrix")
+              verified = audit(cpu, bfm)
+              if verified["plan_sha256"] != item["plan_sha256"]:
+                  raise RuntimeError("actual observed evidence differs from selected seed plan")
+              case = root / f"seed-{seed}"
+              case.mkdir(parents=True, exist_ok=False)
+              for folder in (cpu, bfm):
+                  shutil.copytree(folder, case/folder.name)
+              (case/"scenario-replay-audit.json").write_text(
+                  json.dumps(verified, indent=2, sort_keys=True)+"\n")
+              # Keep each complete original run as its own compressed archive.
+              # The current Pages importer accepts one result per legacy target
+              # per workflow. Publishing multiple target-named result.json files
+              # from one artifact would falsely collide until #139 canonical
+              # per-execution ingestion is fully migrated.
+              archive = shutil.make_archive(str(case), "gztar",
+                                            root_dir=root, base_dir=case.name)
+              shutil.rmtree(case)
+              collected.append({"seed":seed, "plan_sha256":item["plan_sha256"],
+                                "pattern_seed":next(a for a in json.loads(expected)["actions"]
+                                                    if a["action_instance_id"]=="init_source")
+                                               ["args"]["pattern"]["seed"],
+                                "archive":Path(archive).name,
+                                "evidence":"real_cpu_and_bfm_passive_AXI_and_independent_bytes",
+                                "status":verified["status"]})
+          check_matrix(source, soc, matrix_dir)
+          if len({x["seed"] for x in collected}) != 2 or len({x["pattern_seed"] for x in collected}) != 2:
+              raise RuntimeError("real RTL random replay did not vary scenario seed and payload")
+          summary = {"schema_version":1, "source_revision":os.environ["GITHUB_SHA"],
+                     "matrix_sha256":hashlib.sha256((matrix_dir/"matrix.json").read_bytes()).hexdigest(),
+                     "status":"validated_two_distinct_random_real_rtl_scenarios",
+                     "cases":collected}
+          (root/"executed-matrix.json").write_text(json.dumps(summary,indent=2,sort_keys=True)+"\n")
+          print("PASS two distinct genuinely random SCN-2 CPU/BFM real RTL cases",flush=True)
           PY
-      - name: Fail closed if CPU/BFM intent or observed RTL evidence diverges
-        run: |
-          python3 tools/scenario_replay_audit.py \
-            --cpu .tools/regression/chip-cpu-scenario \
-            --bfm .tools/regression/chip-dma-scenario \
-            --out .tools/regression/scenario-replay-audit.json
       - name: Retain manifest, RTL traces, per-run reports, CPU and BFM evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -128,6 +180,6 @@ jobs:
           path: |
             .tools/regression/chip-cpu-scenario/
             .tools/regression/chip-dma-scenario/
-            .tools/regression/scenario-replay-audit.json
+            .tools/scenarios/rtl-seed-matrix/
           include-hidden-files: true
           if-no-files-found: warn

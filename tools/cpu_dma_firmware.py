@@ -35,7 +35,8 @@ def require_tool(name):
 def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False, ethernet_cpu_mode=False,
                      scenario_mode=False, use_generated_dma_csr=False,
                      combined_mode=False, pcie_outbound_mode=False,
-                     use_config_csr_header=True, use_legacy_dma_csr=False):
+                     use_config_csr_header=True, use_legacy_dma_csr=False,
+                     scenario_seed=None):
     directory.mkdir(parents=True, exist_ok=True)
     if pcie_outbound_mode and (not pcie_host_mode or combined_mode or ethernet_cpu_mode):
         raise ValueError('outbound requester firmware requires separate PCIe CPU variant')
@@ -45,7 +46,7 @@ def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False, ethernet_cpu
         if pcie_host_mode or ethernet_cpu_mode:
             raise ValueError('scenario CPU mode cannot alias PCIe/Ethernet variants')
         from dv.common.scenario_dma import materialize
-        materialize(cfg, directory)
+        materialize(cfg, directory, scenario_seed=scenario_seed)
     mapping = {r["name"]: int(r["base"], 0)
                for r in cfg["address_map"]["data"] + cfg["address_map"]["config"]}
     if use_config_csr_header:
@@ -179,7 +180,8 @@ def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False, ethernet_cpu
 
 def prepare(cfg, noc_manifest, noc_root, output: Path, *, pcie_host_mode=False,
             ethernet_cpu_mode=False, real_ddr_mode=False, ddr_wb_base=0, ddr_wb_adr_bits=30,
-            scenario_mode=False, combined_mode=False, pcie_outbound_mode=False):
+            scenario_mode=False, combined_mode=False, pcie_outbound_mode=False,
+            scenario_seed=None):
     from tools import full_chip_gen
     if pcie_outbound_mode and (not pcie_host_mode or combined_mode or real_ddr_mode or ethernet_cpu_mode or scenario_mode):
         raise ValueError('outbound requester firmware requires isolated CPU PCIe mode')
@@ -193,7 +195,8 @@ def prepare(cfg, noc_manifest, noc_root, output: Path, *, pcie_host_mode=False,
     fw = compile_firmware(cfg, output, pcie_host_mode=pcie_host_mode,
                           ethernet_cpu_mode=ethernet_cpu_mode,
                           scenario_mode=scenario_mode, combined_mode=combined_mode,
-                          pcie_outbound_mode=pcie_outbound_mode)
+                          pcie_outbound_mode=pcie_outbound_mode,
+                          scenario_seed=scenario_seed)
     image_prefix = output.relative_to(ROOT).as_posix()
     # Normal generated gen/chip outputs remain byte-for-byte unchanged.
     manifest = full_chip_gen.emit(cfg, noc_manifest, noc_root, output,
