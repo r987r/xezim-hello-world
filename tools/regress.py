@@ -425,7 +425,8 @@ def run_target(name, test, resolver, options):
         noc_manifest = json.loads((ROOT/'gen/supernoc/manifest.json').read_text())
         variant = out/'variant'
         prepare_cpu_dma(cfg, noc_manifest, ROOT/'gen/noc/floonoc', variant,
-                        scenario_mode=test['firmware_mode']=='cpu_dma_scenario')
+                        scenario_mode=test['firmware_mode']=='cpu_dma_scenario',
+                        scenario_seed=options.scenario_seed)
         generated_root = ROOT/'gen/chip'
         replacements = {'soc_top.sv', 'full_chip_tb.sv', 'full_chip_dma_tb.sv'}
         sources = [str(variant/Path(filename).name)
@@ -601,7 +602,7 @@ def run_target(name, test, resolver, options):
     if test.get('firmware_mode') == 'scenario_bfm':
         from dv.common.scenario_dma import materialize
         cfg = yaml.safe_load((ROOT/'config/soc.yaml').read_text())
-        materialize(cfg, out)
+        materialize(cfg, out, scenario_seed=options.scenario_seed)
     sources = list(dict.fromkeys(sources))
     includes = list(dict.fromkeys(includes))
     defines = list(dict.fromkeys(defines))
@@ -902,12 +903,21 @@ def main():
     cli.add_argument('--memory-config')
     cli.add_argument('--network', action='append', default=[])
     cli.add_argument('--arg', action='append', default=[])
+    cli.add_argument('--scenario-seed', type=int, default=None,
+                     help='execute both SCN-2 adapters using the same resolved uint32 scenario seed')
     options = cli.parse_args()
     config = load_config(options.config)
     targets = expand(config, options.targets)
+    if options.scenario_seed is not None:
+        if (not 0 <= options.scenario_seed <= 0xffffffff or
+                options.stage not in ('all','files') or
+                not targets or any(config['tests'][n].get('firmware_mode')
+                                   not in ('cpu_dma_scenario','scenario_bfm') for n in targets)):
+            raise ValueError('--scenario-seed needs uint32 and only SCN-2 RTL targets at stage all/files')
     if options.explain:
         if (options.memory_config or options.network or options.arg
-                or options.stage != 'all' or options.list or options.check_noc):
+                or options.stage != 'all' or options.list or options.check_noc
+                or options.scenario_seed is not None):
             raise ValueError('--explain is read-only; use --stage files for new exact inputs')
         from selected_rtl_provenance import explain_target
         explanations = [explain_target(ROOT, name, config["tests"][name], config)
