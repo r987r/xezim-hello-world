@@ -135,9 +135,13 @@ def declared_selection(plan):
     }
 
 
-def selected(name, plan, *, filelist=None, run_id=None, env=None, root=ROOT):
+def selected(name, plan, *, filelist=None, filelist_bytes=None, run_id=None, env=None, root=ROOT):
     """Select immutable metadata once per invocation before simulator launch."""
     root = Path(root)
+    if filelist is not None and filelist_bytes is not None:
+        raise IdentityError("filelist path and selected bytes are mutually exclusive")
+    if filelist_bytes is not None and not isinstance(filelist_bytes, bytes):
+        raise IdentityError("selected filelist must be raw bytes")
     test_name = neutral_testname(plan.get("logical_test"))
     if run_id is None:
         e = os.environ if env is None else env
@@ -167,7 +171,9 @@ def selected(name, plan, *, filelist=None, run_id=None, env=None, root=ROOT):
         **declared_selection(plan),
         "soc_sha256": sha(soc.read_bytes()),
         "source_lock_sha256": pins,
-        "filelist_sha256": sha(Path(filelist).read_bytes()) if filelist is not None else None,
+        "filelist_sha256": (
+            sha(filelist_bytes) if filelist_bytes is not None else
+            sha(Path(filelist).read_bytes()) if filelist is not None else None),
     }
     value = {
         "schema_version": SCHEMA,
