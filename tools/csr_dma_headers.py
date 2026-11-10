@@ -52,9 +52,32 @@ def extract(rdl=RDL):
         raise DmaCsrError(f"DMA register ABI mismatch: {actual}")
     if tuple(r["offset"] for r in entries) != (0, 4, 8, 12):
         raise DmaCsrError("DMA offset ABI changed")
-    allfields = {f["name"] for r in entries[2:] for f in r["fields"]}
-    if allfields != set(BITS):
-        raise DmaCsrError(f"DMA field ABI changed: {allfields}")
+    expected = {
+        "head_lo": {"value": (0, 31, "rw")},
+        "head_hi": {"value": (0, 31, "rw")},
+        "command": {"submit": (0, 0, "rw"),
+                    "irq_ack": (1, 1, "rw")},
+        "status": {"apb_busy": (0, 0, "r"),
+                   "irq_pending": (1, 1, "r"),
+                   "apb_error": (2, 2, "r"),
+                   "raw_irq": (3, 3, "r")},
+    }
+    for reg in entries:
+        if reg["size_bytes"] != 4:
+            raise DmaCsrError("DMA CSR width changed from 32 bits")
+        fields = {}
+        occupied_mask = 0
+        for field in reg["fields"]:
+            mask = int(field["mask"], 16)
+            if occupied_mask & mask:
+                raise DmaCsrError("overlapping DMA CSR field masks")
+            occupied_mask |= mask
+            if field["name"] in fields:
+                raise DmaCsrError("duplicate DMA CSR field name")
+            fields[field["name"]] = (field["lsb"], field["msb"], field["access"])
+        if fields != expected[reg["name"]]:
+            raise DmaCsrError(
+                f"DMA CSR field width/position/access ABI changed: {reg['name']} {fields}")
     return entries
 
 
