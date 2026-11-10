@@ -56,10 +56,12 @@ void soc_dma_publish(void);  /* cache clean required on noncoherent CPUs */
  * APB_BUSY covers only head submission, never full descriptor retirement.
  * Keep descriptors/source SRAM allocated until IRQ, writebacks and idle.
  */
-/* Software-only SystemRDL migration; the existing RTL owns all side effects.
- * Default firmware remains legacy until each live variant is qualified. */
-#ifdef SOC_USE_GENERATED_DMA_CSR
-#include "soc_dma_shim_regs.h"
+/* The checked-in C header is emitted from the existing SystemRDL model.
+ * Only compatibility/negative ABI tests opt into legacy literals. Vendor
+ * DMA registers, descriptors and RTL are not replaced by this header.
+ */
+#ifndef SOC_USE_LEGACY_DMA_CSR
+#include "generated/soc_dma_shim_regs.h"
 #else
 #define SOC_DMA_REG_HEAD_LO       0x00u
 #define SOC_DMA_REG_HEAD_HI       0x04u
