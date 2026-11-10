@@ -253,6 +253,72 @@ async def exercise_forced_read_backpressure(master, dut, observer, monitor):
         observed, observer.max_stall_streak["r"], length, 9)
 
 
+async def exercise_forced_write_response_backpressure(master, dut, observer, monitor):
+    """Hold the *real* DDR AXI BREADY low while BVALID is asserted.
+
+    A pause request without actually observing VALID&&!READY is not coverage.
+    We preserve the original write-completion scoreboard and independently
+    reread the exact bytes once the bounded response stall is released.
+    This is B-channel pressure, not a claim that controller WREADY stalled.
+    """
+    address = 0x5a000
+    payload = bytes(((i * 29 + 0x3b) & 255) for i in range(256))
+    before = observer.stall_cycles["b"]
+    master.write_if.b_channel.set_pause_generator(itertools.repeat(1))
+    pending = None
+    try:
+        await tick(dut, 4)  # give the source-owned pause time to drive BREADY low
+        assert int(dut.user_port_axi_0_bready.value) == 0, (
+            "B-channel backpressure generator did not lower actual BREADY")
+        pending = cocotb.start_soon(master.write(address, payload, awid=11))
+        seen_valid = False
+        for _ in range(15000):
+            await tick(dut)
+            if int(dut.user_port_axi_0_bvalid.value):
+                seen_valid = True
+                break
+        assert seen_valid, "DDR BVALID not produced under held BREADY"
+        bid = int(dut.user_port_axi_0_bid.value)
+        bresp = int(dut.user_port_axi_0_bresp.value)
+        assert bid == 11 and bresp == int(AxiResp.OKAY), (
+            "unexpected real B-channel ID/response before release")
+        for _ in range(20):
+            await tick(dut)
+            assert int(dut.user_port_axi_0_bvalid.value) == 1, (
+                "DDR dropped BVALID while BREADY was low")
+            assert int(dut.user_port_axi_0_bready.value) == 0, (
+                "BREADY unexpectedly reasserted during forced stall")
+            assert int(dut.user_port_axi_0_bid.value) == bid
+            assert int(dut.user_port_axi_0_bresp.value) == bresp
+        observer.assert_health(monitor)
+        assert observer.stall_cycles["b"] - before >= 12, (
+            "no actual AXI BVALID&&!BREADY backpressure observed")
+        assert observer.max_stall_streak["b"] >= 8, (
+            "no sustained B-channel response stall measured")
+    finally:
+        # Upstream cocotbext-axi v0.1.28 StreamPause.clear_pause_generator()
+        # stops future updates but intentionally leaves the *last* pause
+        # value latched. Explicitly resume the sink to wake its READY driver.
+        master.write_if.b_channel.clear_pause_generator()
+        master.write_if.b_channel.pause = False
+    assert pending is not None
+    await tick(dut, 3)
+    assert int(dut.user_port_axi_0_bready.value) == 1, (
+        "DDR B sink did not drive BREADY high after pause release")
+    wr = await with_timeout(pending, 120, "us")
+    assert wr.resp == AxiResp.OKAY, "stalled B response must complete OKAY"
+    rd = await with_timeout(master.read(address, len(payload), arid=11), 120, "us")
+    assert rd.resp == AxiResp.OKAY and rd.data == payload, (
+        "DDR B-channel stall corrupted write/readback payload")
+    await tick(dut, 3)
+    observer.assert_health(monitor)
+    dut._log.info(
+        "PASS real DDR B-channel forced backpressure: BVALID&&!BREADY cycles=%d "
+        "max_streak=%d, write ACK and exact readback=%d bytes ID=%d",
+        observer.stall_cycles["b"] - before, observer.max_stall_streak["b"],
+        len(payload), 11)
+
+
 @cocotb.test(timeout_time=3, timeout_unit="ms")
 async def ddr4_wishbone_init_axi_readwrite(dut):
     """One always-active passive observer from before clock start to teardown."""
@@ -355,6 +421,7 @@ async def ddr4_wishbone_init_axi_readwrite(dut):
         await exercise_controller_stress(master, dut, observer, monitor)
         await exercise_concurrent_axi_ids(master, dut, observer, monitor)
         await exercise_forced_read_backpressure(master, dut, observer, monitor)
+        await exercise_forced_write_response_backpressure(master, dut, observer, monitor)
         observer.assert_health(monitor)
         observer.next_phase("post_traffic")
         await tick(dut, 5)

@@ -55,3 +55,9 @@ This demonstrates one bounded read-backpressure and data-integrity case,
 **not** #35 completion. Refresh/bank conflict, reset/reinit, W/B stalls,
 true measured internal controller concurrency, and silicon DDR PHY remain
 unqualified. Source-only unit tests never count as hardware stress evidence.
+
+## Opt-in B-channel response stall qualification
+
+The same standalone LiteDRAM regression now also holds `BREADY` low using the pinned upstream Cocotb AXI master's response-channel pause mechanism while a real controller response asserts `BVALID`. It checks a stable ID/OKAY response through 20 held clock cycles and requires the continuously running independent passive observer to see at least 12 `BVALID && !BREADY` cycles with an 8-cycle sustained streak. After release, the normal write must complete and an independent 256-byte AXI readback must exactly match.
+
+The post-run gate requires both the previous R-channel and the new B-channel observations. This does **not** prove W-channel stalls, refresh/bank contention, reset/reinitialization, true internal outstanding-depth, full-chip physical DDR, or a silicon PHY. The user-side pause is not counted as a hardware stall unless VALID was observed simultaneously.
