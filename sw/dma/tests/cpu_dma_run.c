@@ -3,6 +3,7 @@
  * Physical pools and CSRs come from config-derived compile definitions.
  */
 #include "../dma.h"
+#include "../../common/generated/soc_boot_reset_ctrl_regs.h"
 #include "../../common/memory_pool.h"
 #ifdef SOC_PCIE_OUTBOUND
 #include "../../pcie/pcie_requester.h"
@@ -48,6 +49,22 @@ int cpu_dma_run(void) {
     volatile uint32_t * const evidence =
         (volatile uint32_t *)(uintptr_t)(SOC_MAILBOX + STATUS_OFFSET);
     *evidence = 0xd0000000u;
+    /* CPU0's real RUN phase begins only after the secondary's init ACK.
+     * Verify both actual software-visible reset-controller registers over
+     * CPU0's Config NoC, with no HDL backdoor or invented CSR behavior.
+     * The checked-in offsets/masks come solely from real boot SystemRDL.
+     */
+    volatile const uint32_t * const boot_reset =
+        (volatile const uint32_t *)(uintptr_t)SOC_RESET_CTRL_CSR;
+    const uint32_t release = boot_reset[
+        SOC_BOOT_RESET_CTRL_CPU_RELEASE_OFFSET / 4u];
+    const uint32_t peer_ack = boot_reset[
+        SOC_BOOT_RESET_CTRL_SECONDARY_ACK_0_OFFSET / 4u];
+    if ((release & SOC_BOOT_RESET_CTRL_CPU_RELEASE_SECONDARY_RELEASE_MASK) != 1u ||
+        (peer_ack & SOC_BOOT_RESET_CTRL_SECONDARY_ACK_0_ACK_MASK) != 1u) {
+        *evidence = 0xd0000025u;
+        return 37;
+    }
     /* One writer, one physical MMIO trace word, separate from runtime
      * allocator telemetry and the CPU0 DONE state. Real AXI monitor is
      * authoritative; these markers alone do not prove DMA completion. */
