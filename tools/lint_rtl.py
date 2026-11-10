@@ -186,6 +186,63 @@ def analyze(root: Path, profile: str, top: str, binary: str, outdir: Path,
     return report
 
 
+
+def deduplicate_reports(reports: list[dict]) -> dict:
+    """Summarize original slang findings without dropping any raw evidence.
+
+    Identity is code/file/line/symbol across profiles and lint/elaboration.
+    For unknown code+location, retain message identity rather than incorrectly
+    merging unrelated diagnostics. Highest severity controls the summary, but
+    all observed severities, profiles, modes and messages remain inspectable.
+    """
+    by_key = {}
+    priority = {"note": 0, "info": 0, "warning": 1, "error": 2}
+    filelists = {}
+    occurrences = 0
+    for report in reports:
+        profile = report["profile"]
+        filelists[profile] = report["filelist_sha256"]
+        for row in report["findings"]:
+            occurrences += 1
+            key = (row["code"], row["file"], row["line"], row["symbol_path"])
+            if not row["code"] and not row["file"]:
+                key = (*key, row["message"])
+            item = by_key.setdefault(key, {
+                "code": row["code"], "file": row["file"], "line": row["line"],
+                "symbol_path": row["symbol_path"], "origin": row["origin"],
+                "severity": row["severity"], "occurrences": 0,
+                "profiles": set(), "modes": set(),
+                "severities": set(), "messages": set(),
+            })
+            item["occurrences"] += 1
+            item["profiles"].add(profile)
+            item["modes"].add(row["mode"])
+            item["severities"].add(row["severity"])
+            item["messages"].add(row["message"])
+            if priority[row["severity"]] > priority[item["severity"]]:
+                item["severity"] = row["severity"]
+    findings = []
+    for item in by_key.values():
+        findings.append({
+            **item,
+            "profiles": sorted(item["profiles"]),
+            "modes": sorted(item["modes"]),
+            "severities": sorted(item["severities"]),
+            "messages": sorted(item["messages"]),
+        })
+    findings.sort(key=lambda x: (x["file"], x["line"] if x["line"] is not None else -1,
+                                 x["code"], x["symbol_path"], x["messages"]))
+    severity_counts = dict(Counter(row["severity"] for row in findings))
+    origin_counts = dict(Counter(row["origin"] for row in findings))
+    return {
+        "schema_version": 1, "source": "actual_slang_report_only_not_waived",
+        "filelist_sha256_by_profile": dict(sorted(filelists.items())),
+        "original_occurrences": occurrences, "unique_diagnostics": len(findings),
+        "deduplicated_occurrences": occurrences - len(findings),
+        "unique_severity_counts": severity_counts, "unique_origin_counts": origin_counts,
+        "findings": findings,
+    }
+
 def main() -> int:
     cli = argparse.ArgumentParser(description=__doc__)
     cli.add_argument("profiles", nargs="*")
@@ -206,11 +263,13 @@ def main() -> int:
         raise ValueError(f"slang executable not found: {args.slang}")
     out = args.output or (root / ".tools/lint")
     reports = []
+    full_reports = []
     errors = 0
     # Continue across design-level errors so all profiles have evidence.
     for profile in profiles:
         top = cfg["tests"][profile]["top"]
         report = analyze(root, profile, top, binary, out / profile, enforce=args.enforce)
+        full_reports.append(report)
         reports.append({"profile": profile, "top": top,
                         "errors": report["summary"].get("error", 0),
                         "warnings": report["summary"].get("warning", 0),
@@ -220,6 +279,11 @@ def main() -> int:
                 "profiles": reports, "total_errors": errors,
                 "total_warnings": sum(p["warnings"] for p in reports)}
     out.mkdir(parents=True, exist_ok=True)
+    unique = deduplicate_reports(full_reports)
+    (out / "unique-diagnostics.json").write_text(json.dumps(unique, indent=2) + "\n")
+    combined["unique_diagnostics"] = unique["unique_diagnostics"]
+    combined["unique_severity_counts"] = unique["unique_severity_counts"]
+    combined["unique_diagnostics_path"] = "unique-diagnostics.json"
     (out / "summary.json").write_text(json.dumps(combined, indent=2) + "\n")
     print(f"SLANG lint complete: {len(reports)} profiles, {errors} errors, "
           f"{combined['total_warnings']} warnings; policy={combined['policy']}", flush=True)
