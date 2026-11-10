@@ -11,6 +11,8 @@ on:
       - 'tests/test_run_workspace.py'
       - 'tests/test_test_identity.py'
       - 'tools/regress.py'
+      - 'tools/selected_rtl_provenance.py'
+      - '.github/workflows/dv-soc.yml'
       - 'tests/test_runtime_contract.py'
       - 'tools/publish_site.py'
       - 'tools/templates/site_runs.html'
