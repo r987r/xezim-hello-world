@@ -67,3 +67,21 @@ Reuse choices and remaining alternatives:
 The reference example is **not** a new default and cannot be treated as
 proof of a full SoC or NoC integration. Run CI and inspect upstream RTL
 simulation before merging.
+
+## Exact-case cross-scope latency comparison (#155)
+
+The existing fabric collector now records the original source-selected
+accepted AXI case keys alongside each measured stage observation. It exposes
+`latency_scope_comparisons` only for real matching-source sample scopes. For a
+given route/read-or-write comparison, it requires identical selected
+case/address keys, sample count, reference clock, source-equivalence tier and
+stage inventory. Otherwise the result is explicitly `unmeasured` or
+`incompatible`, never an inferred speedup or a zero-cycle stage. Duplicated
+or missing evidence also fails comparison.
+
+This **does not yet close #155**: the isolated local-subsystem FlooNoC RTL
+benchmark and its independent passive AXI/DMA target test are still missing.
+No local results are synthesized from full-chip or SuperNoC timings. Once
+a local top and matching exact-head test are qualified, this schema will
+publish a defensible comparison using the existing Explorer and original
+run links, not a second visualization.
