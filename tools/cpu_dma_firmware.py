@@ -50,7 +50,7 @@ def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False, ethernet_cpu
     mapping = {r["name"]: int(r["base"], 0)
                for r in cfg["address_map"]["data"] + cfg["address_map"]["config"]}
     if use_config_csr_header:
-        required = {"compute0.dma"}
+        required = {"compute0.dma", "boot.reset_ctrl"}
         required.update({"pcie0.ctrl"} if pcie_outbound_mode else ())
         required.update({"ethernet0.ctrl"} if ethernet_cpu_mode else ())
         if not required.issubset(mapping):
@@ -74,6 +74,7 @@ def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False, ethernet_cpu
         "SOC_CPU0_SRAM": mapping["compute0.sram"],
         "SOC_CPU1_SRAM": mapping["compute1.sram"],
         "SOC_DMA0_CSR": mapping["compute0.dma"],
+        "SOC_RESET_CTRL_CSR": mapping["boot.reset_ctrl"],
         "SOC_DDR_BASE": mapping["memory0.ddr0"],
         "SOC_HBM_BASE": mapping["memory0.hbm0"],
         "SOC_MODEL_BYTES": model_bytes,
@@ -100,6 +101,7 @@ def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False, ethernet_cpu
     csr_base_hash = None
     csr_base_macros = {
         "SOC_DMA0_CSR": "SOC_CSR_COMPUTE0_DMA_BASE",
+        "SOC_RESET_CTRL_CSR": "SOC_CSR_BOOT_RESET_CTRL_BASE",
         "SOC_PCIE_CTRL": "SOC_CSR_PCIE0_CTRL_BASE",
         "SOC_ETH_CTRL": "SOC_CSR_ETHERNET0_CTRL_BASE",
     }
