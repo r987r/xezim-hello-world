@@ -50,9 +50,15 @@ class CpuGeneratedCsrImageTests(unittest.TestCase):
                 self.skipTest(f"missing test-specific RV32I compiler tool: {tool}")
         cfg = yaml.safe_load((ROOT / "config/soc.yaml").read_text())
         with tempfile.TemporaryDirectory(prefix="csr-fw-") as tmp:
-            old = compile_firmware(cfg, Path(tmp)/"legacy")
+            old = compile_firmware(cfg, Path(tmp)/"legacy",
+                                   use_legacy_dma_csr=True)
             generated = compile_firmware(cfg, Path(tmp)/"generated",
                                          use_generated_dma_csr=True)
+            production = compile_firmware(cfg, Path(tmp)/"production")
+            self.assertTrue(production["generated_dma_csr_enabled"])
+            self.assertFalse(old["generated_dma_csr_enabled"])
+            self.assertEqual(len(production["generated_dma_csr_header_sha256"]), 64)
+            self.assertEqual(production["data"], generated["data"])
             self.assertEqual(old["sha256"], generated["sha256"],
                              "generated header changed real CPU firmware instructions")
             self.assertEqual(old["data"], generated["data"])
