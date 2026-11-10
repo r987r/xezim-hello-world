@@ -3,6 +3,7 @@
 These are generator/source checks, not proof of CPU MMIO or simulator access.
 The separate PeakRDL full-chip test owns real Config-NoC qualification.
 """
+from importlib.util import find_spec
 from pathlib import Path
 import tempfile
 import unittest
@@ -14,6 +15,16 @@ RDL = ROOT / "csr/rdl/boot_reset_ctrl.rdl"
 
 
 class ResetCsrAbiTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # This test exercises *real* compiled SystemRDL; lightweight generic
+        # SoC/unit workflows intentionally do not install the CSR compiler.
+        # Dedicated csr.yml and csr-firmware.yml install pinned SystemRDL and
+        # execute this whole class, without a mock generator or false PASS.
+        if find_spec("systemrdl") is None:
+            raise unittest.SkipTest(
+                "SystemRDL compiler absent (required in dedicated CSR CI)")
+
     def test_core_count_changes_field_width_but_preserves_software_register_abi(self):
         for peers in (1, 2, 7, 15):
             with self.subTest(peers=peers):
