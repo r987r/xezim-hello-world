@@ -305,9 +305,10 @@ function render(){
       text("div","Historical run: canonical identity not archived","muted");
     td(tr,testLink,named,e.canonical_url?link("Open canonical run",e.canonical_url):text("span","","muted"),inspect,openFlow);
     td(tr,suite(e.target,e.workflow));
-    const evidenceRelation=e.source_sha===D.source_sha?"Exact published SHA":
-      (e.verified_site_source_sha===D.source_sha||
-       e.verified_fabric_source_sha===D.source_sha)?"Verified equivalent inputs":"Historical source";
+    const evidenceRelation=e.source_sha===D.source_sha?"Exact tested/site SHA":
+      e.verified_site_source_sha===D.source_sha?"Verified same Git tree":
+      e.verified_fabric_source_sha===D.source_sha?"Fabric inputs equivalent only":
+      "Historical tested SHA";
     td(tr,text("span",e.passed?"PASS":"FAIL",e.passed?"good":"bad"),
       text("div",e.expected_failure?"Required negative check":"Positive / compile gate","muted"),
       text("div",evidenceRelation,"muted"));
