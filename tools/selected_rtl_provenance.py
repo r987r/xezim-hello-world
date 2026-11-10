@@ -93,7 +93,7 @@ def _relative_checked(root: Path, raw: str) -> tuple[Path, str]:
 
 
 def archive_selected_filelist(root: Path, profile: str, definition: dict,
-                              plan: dict, filelist: Path) -> dict:
+                              plan: dict, filelist: Path, *, directory: Path | None = None) -> dict:
     """Freeze the *actual* resolved Bender sources, defines and generated files.
 
     This runs after the variant substitution and before ANY simulator command.
@@ -106,7 +106,12 @@ def archive_selected_filelist(root: Path, profile: str, definition: dict,
     root = Path(root).resolve()
     if not isinstance(profile, str) or not re.fullmatch(r"[a-z][a-z0-9-]*", profile):
         raise ValueError("invalid selected test profile")
-    folder = root / ".tools/regression" / profile
+    folder = Path(directory).resolve() if directory is not None else root / ".tools/regression" / profile
+    if directory is not None:
+        from tools.run_workspace import verify_run
+        verify_run(folder, plan["identity"])
+        if not folder.is_relative_to(root / ".tools/runs"):
+            raise ValueError("canonical artifact directory outside selected run root")
     filelist = Path(filelist)
     if filelist.resolve() != (folder / "sources.f").resolve() or filelist.is_symlink():
         raise ValueError("selected source filelist is not target-owned")
@@ -198,7 +203,7 @@ def archive_selected_filelist(root: Path, profile: str, definition: dict,
     generated = {}
     for rel, sha in {**selected_sources, **header_sources}.items():
         if rel.startswith("gen/") or rel.startswith(
-                ".tools/regression/" + profile + "/"):
+                folder.relative_to(root).as_posix() + "/"):
             generated[rel] = sha
     extensions = {".sv", ".svh", ".v", ".vh", ".json", ".yaml", ".yml",
                   ".hex", ".mem", ".bin", ".elf"}
@@ -235,7 +240,7 @@ def archive_selected_filelist(root: Path, profile: str, definition: dict,
         "generated_sha256": dict(sorted(generated.items())),
     }
     build_sha = _canonical_sha(selection)
-    archive_rel = f".tools/regression/{profile}/selected-rtl/{build_sha[:20]}"
+    archive_rel = f"{folder.relative_to(root).as_posix()}/selected-rtl/{build_sha[:20]}"
     archive_root = root / archive_rel
     if archive_root.exists():
         raise ValueError("selected compiler-input archive already exists")
@@ -277,14 +282,20 @@ def archive_selected_filelist(root: Path, profile: str, definition: dict,
     document["manifest_sha256"] = _canonical_sha(document)
     (folder / "selected-rtl-manifest.json").write_text(
         json.dumps(document, indent=2, sort_keys=True) + "\n")
-    verify_selected_archive(root, profile, definition)
+    verify_selected_archive(root, profile, definition, directory=folder if directory is not None else None)
     return document
 
 
-def verify_selected_archive(root: Path, profile: str, definition: dict) -> dict:
+def verify_selected_archive(root: Path, profile: str, definition: dict, *, directory: Path | None = None) -> dict:
     """Fail closed on stale, foreign, missing or tampered source/artifact bytes."""
     root = Path(root).resolve()
-    folder = root / ".tools/regression" / profile
+    folder = Path(directory).resolve() if directory is not None else root / ".tools/regression" / profile
+    if directory is not None:
+        from tools.run_workspace import verify_run
+        from tools.test_identity import load
+        verify_run(folder, load(folder / "identity.json", target=profile))
+        if not folder.is_relative_to(root / ".tools/runs"):
+            raise ValueError("canonical artifact directory outside selected run root")
     path = folder / "selected-rtl-manifest.json"
     if path.is_symlink() or not path.is_file():
         raise ValueError("selected compiler-input manifest missing or unsafe")
@@ -343,7 +354,7 @@ def verify_selected_archive(root: Path, profile: str, definition: dict) -> dict:
         + plan["sources"])
     if shlex.split(source_list.read_text()) != expected_tokens:
         raise ValueError("selected compiler source order/flags differ from runner plan")
-    expected_archive = (f".tools/regression/{profile}/selected-rtl/"
+    expected_archive = (f"{folder.relative_to(root).as_posix()}/selected-rtl/"
                         + value["compiler_input_sha256"][:20])
     if value.get("archive") != expected_archive:
         raise ValueError("unsafe selected RTL archive location")
