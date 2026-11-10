@@ -93,7 +93,7 @@ def compile_contract(plan: dict) -> dict:
     # NOT a replacement CSR/mailbox IP and cannot establish completion.
     witness_phys = src["phys"] + 0x1000
     if (witness_phys % 8 or witness_phys + 32 > next(
-            r["base"] + r["size"] for r in plan["regions"]
+            r["base"] + r["modeled_bytes"] for r in plan["regions"]
             if r["name"] == "compute0.sram.payload")
             or any(witness_phys < x["phys"] + x["size"]
                    and x["phys"] < witness_phys + 32
