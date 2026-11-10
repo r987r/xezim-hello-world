@@ -77,6 +77,24 @@ class TrafficObserverTests(unittest.TestCase):
         self.assertEqual(len([x for x in events if x["kind"] == "axi_handshake"]), 5)
         self.assertTrue(any(x["kind"] == "heartbeat" for x in events))
 
+    def test_real_valid_not_ready_stalls_are_counted_not_inferred(self):
+        obs = self.observer
+        for _ in range(13):
+            row = sample(channel="r")
+            row["r"]["ready"] = 0
+            obs.sample(row)
+        self.assertEqual(obs.channels["r"], 0)
+        self.assertEqual(obs.stall_cycles["r"], 13)
+        self.assertEqual(obs.max_stall_streak["r"], 13)
+        obs.sample(sample(channel="r"))
+        self.assertEqual(obs.channels["r"], 1)
+        self.assertEqual(obs.stall_streak["r"], 0)
+        obs.sample(sample(channel="r"))
+        self.assertEqual(obs.max_stall_streak["r"], 13)
+        summary = obs.finish("fail", "isolated source-only test")
+        self.assertEqual(summary["stall_cycles"]["r"], 13)
+        self.assertEqual(summary["max_stall_streak"]["r"], 13)
+
     def test_verified_capture_reconciles_summary_and_actual_event_stream(self):
         obs = self.observer
         obs.sample(sample(), sim_time_ns=5)
