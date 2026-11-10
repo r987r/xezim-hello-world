@@ -149,7 +149,8 @@ class CsrRuntimeTests(unittest.TestCase):
         self.assertIn("not_coverage", success["scope"])
         for mutation in ("wrong_data", "wrong_run", "overflow",
                          "wrong_monitor", "duplicate_read", "write",
-                         "bad_response", "wrong_width", "late_completion"):
+                         "interfering_write", "bad_response", "wrong_width",
+                         "invalid_beat", "late_completion"):
             with self.subTest(mutation=mutation):
                 bad = copy.deepcopy(trace)
                 wrong_kwargs = dict(kwargs)
@@ -166,10 +167,17 @@ class CsrRuntimeTests(unittest.TestCase):
                     bad["sections"]["axi"]["transactions"].append(copy.deepcopy(row))
                 elif mutation == "write":
                     row["operation"] = "write"
+                elif mutation == "interfering_write":
+                    competitor = copy.deepcopy(row)
+                    competitor.update(monitor="compute1_local_config.cpu",
+                                      operation="write", start_ps=110)
+                    bad["sections"]["axi"]["transactions"].append(competitor)
                 elif mutation == "bad_response":
                     row["response"] = "0x2"
                 elif mutation == "wrong_width":
                     row["request"]["size"] = "0x3"
+                elif mutation == "invalid_beat":
+                    row["beats"] = [None]
                 else:
                     wrong_kwargs["snapshot_ps"] = 110
                 with self.assertRaises(BindingError):
