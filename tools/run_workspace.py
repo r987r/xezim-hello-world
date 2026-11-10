@@ -7,6 +7,7 @@ Never mirror or relabel archived output, and never infer PASS from a path.
 from __future__ import annotations
 
 import os
+import hashlib
 from pathlib import Path
 
 from tools.test_identity import (
@@ -87,3 +88,33 @@ def canonical_artifact(directory: Path, name: str) -> Path:
     # Parent directories remain explicitly owned by this run.
     target.parent.mkdir(parents=True, exist_ok=True)
     return target
+
+def verify_artifact_inventory(directory: Path, identity: dict, names: list[str],
+                              *, plan: dict | None = None) -> dict:
+    """Record exact bytes of an *already written* canonical run, never a PASS.
+
+    A partial, escaped, unbound, or duplicated artifact set fails closed.
+    Does not migrate legacy paths and does not mirror files.
+    """
+    directory = verify_run(directory, identity, plan=plan)
+    if (not isinstance(names, list) or not names
+            or len(set(names)) != len(names)):
+        raise IdentityError("missing or duplicate canonical artifact names")
+    records = []
+    for name in names:
+        if not isinstance(name, str) or not name or "\\" in name:
+            raise IdentityError("invalid canonical artifact name")
+        relative = Path(name)
+        if (relative.is_absolute() or ".." in relative.parts
+                or "." in relative.parts or len(relative.parts) < 1):
+            raise IdentityError("invalid canonical artifact path")
+        path = directory / relative
+        _existing_ancestors_safe(path)
+        if not path.is_file() or path.is_symlink():
+            raise IdentityError("missing canonical run artifact: " + name)
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        records.append({"path": relative.as_posix(), "sha256": digest,
+                        "bytes": path.stat().st_size})
+    return {"schema_version": 1, "identity_sha256": identity["identity_sha256"],
+            "status": "artifact_bytes_verified_not_execution_proof",
+            "artifacts": sorted(records, key=lambda item: item["path"])}

@@ -9,7 +9,7 @@ import unittest
 
 import yaml
 
-from tools.run_workspace import reserve_run, verify_run, canonical_artifact
+from tools.run_workspace import reserve_run, verify_run, canonical_artifact, verify_artifact_inventory
 from tools.test_identity import IdentityError, selected, relative_path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -65,6 +65,25 @@ class WorkspaceTests(unittest.TestCase):
         altered["identity_sha256"] = "0" * 64
         with self.assertRaises(IdentityError):
             reserve_run(self.root, altered)
+
+    def test_existing_run_artifact_integrity_is_recorded_not_claimed_pass(self):
+        directory = reserve_run(self.root, self.identity, plan=self.plan)
+        artifact = canonical_artifact(directory, "logs/simulation.log")
+        artifact.write_bytes(b"real simulator transcript")
+        proof = verify_artifact_inventory(
+            directory, self.identity, ["logs/simulation.log"], plan=self.plan)
+        self.assertEqual(proof["status"],
+                         "artifact_bytes_verified_not_execution_proof")
+        self.assertEqual(proof["artifacts"][0]["bytes"], 25)
+        self.assertEqual(len(proof["artifacts"][0]["sha256"]), 64)
+        for names in ([], ["logs/simulation.log", "logs/simulation.log"],
+                      ["missing.json"], ["../outside"], ["a\\\\b"]):
+            with self.subTest(names=names), self.assertRaises(IdentityError):
+                verify_artifact_inventory(directory, self.identity, names)
+        artifact.unlink()
+        with self.assertRaisesRegex(IdentityError, "missing canonical"):
+            verify_artifact_inventory(
+                directory, self.identity, ["logs/simulation.log"])
 
     def test_symlink_and_escape_rejected(self):
         outer = Path(self.temp.name)
