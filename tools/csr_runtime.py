@@ -108,8 +108,11 @@ class ReadOnlyCsrRuntime:
         effect or mismatched source/run never qualifies.
         """
         import re
-        if (not re.fullmatch(r"[a-f0-9]{40}", tested_sha)
+        if (not isinstance(tested_sha, str)
+                or not re.fullmatch(r"[a-f0-9]{40}", tested_sha)
+                or not isinstance(workflow_run_id, str)
                 or not workflow_run_id.isdecimal()
+                or not isinstance(workflow_attempt, str)
                 or not workflow_attempt.isdecimal()
                 or type(quiescent_start_ps) is not int
                 or type(snapshot_ps) is not int
@@ -124,7 +127,8 @@ class ReadOnlyCsrRuntime:
         if not isinstance(trace, dict) or trace.get("schema_version") != 2:
             raise BindingError("missing canonical passive AXI trace")
         run = trace.get("run") or {}
-        if (run.get("commit") != tested_sha
+        if (self.map["simulator"] != "verilator"
+                or run.get("commit") != tested_sha
                 or run.get("dirty") is not False
                 or run.get("engine") != "cocotb-verilator"
                 or str(run.get("workflow_run_id")) != workflow_run_id
@@ -136,7 +140,7 @@ class ReadOnlyCsrRuntime:
         if axi.get("issues") or not isinstance(axi.get("transactions"), list):
             raise BindingError("dirty or incomplete AXI transactions")
         monitors = [m for m in axi.get("monitors", [])
-                    if m.get("id") == monitor]
+                    if isinstance(m, dict) and m.get("id") == monitor]
         if (len(monitors) != 1 or monitors[0].get("plane") != "config"
                 or monitors[0].get("role") != "initiator"
                 or monitors[0].get("data_width") != 32):
@@ -157,6 +161,15 @@ class ReadOnlyCsrRuntime:
                     and numeric(tx.get("address")) == address
                     and type(tx.get("start_ps")) is int
                     and quiescent_start_ps <= tx["start_ps"] <= snapshot_ps]
+        writes = [tx for tx in axi["transactions"]
+                  if tx.get("plane") == "config"
+                  and tx.get("role") == "initiator"
+                  and tx.get("operation") == "write"
+                  and numeric(tx.get("address")) == address
+                  and type(tx.get("start_ps")) is int
+                  and quiescent_start_ps <= tx["start_ps"] <= snapshot_ps]
+        if writes:
+            raise BindingError("CSR changed by another AXI write during quiescent comparison")
         if len(relevant) != 1:
             raise BindingError("ambiguous/missing AXI CSR transaction in quiescent window")
         row = relevant[0]
@@ -167,6 +180,7 @@ class ReadOnlyCsrRuntime:
                 or row.get("issues")
                 or row.get("expected_beats") != 1
                 or not isinstance(beats, list) or len(beats) != 1
+                or not isinstance(beats[0], dict)
                 or type(row.get("end_ps")) is not int
                 or row["end_ps"] > snapshot_ps
                 or row["end_ps"] < row["start_ps"]
