@@ -1253,6 +1253,8 @@ def build(output,evidence,repository,sha,config):
         design_graph, parsed_rtl, top=chip['top'])
     dump(output/'data/rtl-instance-bindings.json', rtl_bindings)
     dataset={'schema_version':1,'title':config['title'],'source_sha':sha,'repository':repository,
+             'production_dma_header_sha256':(hashlib.sha256(
+                 (output/'data/soc_dma_shim_regs.h').read_bytes()).hexdigest() if csr_ready else None),
              'built_at':datetime.now(timezone.utc).isoformat(),'runs':runs,'entries':entries,
              'notes':notes,'documents':docs,'networks':noc['networks'],'chip':chip,
              'monitors':monitors['monitors'],'fabric':fabric['summary'],'tests':catalog['tests'],
