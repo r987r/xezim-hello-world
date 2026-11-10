@@ -34,6 +34,57 @@ class FabricExplorerTests(unittest.TestCase):
         self.assertTrue(all(i['fabric_shared_max_txns'] is not None
                             for i in data['interfaces'] if i['fabric']!='memory0.memory_data'))
 
+    def test_cross_scope_comparison_requires_same_real_cases_and_source(self):
+        graph = copy.deepcopy(self.report)
+        route = graph["routes"][0]
+        def observed(scope, avg):
+            return {
+                "operation": "read", "fabric_scope": scope,
+                "matches_site_source": True, "source_equivalence": "exact_sha",
+                "sample_count": 2, "sample_case_keys": [
+                    "data:read:1000", "data:read:1008"],
+                "clock_period_ps": 10000, "run_report": f"runs/{scope}/report.html",
+                "stage_metrics": [{"kind": "mesh", "network": "compute0_local_data"}],
+                "end_to_end": {"avg_cycles": avg},
+            }
+        local = observed("local", 15)
+        connected = observed("supernoc", 21)
+        route["one_beat_stage_observations"] = [local, connected]
+        result = fabric_report.compare_measured_scopes(graph, "local", "supernoc")
+        item = next(x for x in result["rows"] if x["route_id"] == route["id"]
+                    and x["operation"] == "read")
+        self.assertEqual(item["status"], "measured_same_source_and_cases")
+        self.assertEqual(item["comparison"]["right_minus_left_cycles"], 6)
+        self.assertEqual(item["comparison"]["n"], 2)
+        for field, wrong in (("sample_case_keys", ["data:read:1000"]),
+                             ("clock_period_ps", 20000),
+                             ("sample_count", 1),
+                             ("source_equivalence", "historical")):
+            with self.subTest(field=field):
+                altered = copy.deepcopy(graph)
+                altered["routes"][0]["one_beat_stage_observations"][1][field] = wrong
+                row = next(x for x in fabric_report.compare_measured_scopes(
+                    altered, "local", "supernoc")["rows"]
+                    if x["route_id"] == route["id"] and x["operation"] == "read")
+                self.assertEqual(row["status"], "incompatible_source_clock_or_case_set")
+                self.assertIsNone(row["comparison"])
+        graph["routes"][0]["one_beat_stage_observations"].append(
+            observed("local", 15))
+        repeated = fabric_report.compare_measured_scopes(graph, "local", "supernoc")
+        row = next(x for x in repeated["rows"] if x["route_id"] == route["id"]
+                   and x["operation"] == "read")
+        self.assertEqual(row["status"], "incompatible_duplicate_evidence")
+        self.assertIsNone(row["comparison"])
+
+    def test_no_standalone_local_rtl_is_unmeasured_not_an_improvement(self):
+        result = fabric_report.compare_measured_scopes(
+            self.report, "local", "full_chip")
+        self.assertFalse(any(row["comparison"] is not None
+                             for row in result["rows"]))
+        self.assertEqual(set(result["counts"]), {"unmeasured_missing_scope"})
+        with self.assertRaises(fabric_report.FabricReportError):
+            fabric_report.compare_measured_scopes(self.report, "local", "local")
+
     def test_reference_clock_min_average_max_and_table_coverage(self):
         stats=fabric_report._cycle_stats([100000,120000,140000],10000)
         self.assertEqual((stats['min_cycles'],stats['avg_cycles'],
