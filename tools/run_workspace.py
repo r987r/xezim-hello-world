@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import os
 import hashlib
-import json
 from pathlib import Path
 
 from tools.test_identity import (
@@ -103,7 +102,7 @@ def verify_artifact_inventory(directory: Path, identity: dict, names: list[str],
         raise IdentityError("missing or duplicate canonical artifact names")
     records = []
     for name in names:
-        if not isinstance(name, str) or not name or "\\\\" in name:
+        if not isinstance(name, str) or not name or "\\" in name:
             raise IdentityError("invalid canonical artifact name")
         relative = Path(name)
         if (relative.is_absolute() or ".." in relative.parts
