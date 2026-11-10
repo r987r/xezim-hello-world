@@ -108,7 +108,10 @@ def archive_selected_filelist(root: Path, profile: str, definition: dict,
         raise ValueError("invalid selected test profile")
     folder = Path(directory).resolve() if directory is not None else root / ".tools/regression" / profile
     if directory is not None:
-        from run_workspace import verify_run
+        try:
+            from .run_workspace import verify_run
+        except ImportError:
+            from run_workspace import verify_run
         verify_run(folder, plan["identity"])
         if not folder.is_relative_to(root / ".tools/runs"):
             raise ValueError("canonical artifact directory outside selected run root")
@@ -291,8 +294,14 @@ def verify_selected_archive(root: Path, profile: str, definition: dict, *, direc
     root = Path(root).resolve()
     folder = Path(directory).resolve() if directory is not None else root / ".tools/regression" / profile
     if directory is not None:
-        from run_workspace import verify_run
-        from test_identity import load
+        try:
+            from .run_workspace import verify_run
+        except ImportError:
+            from run_workspace import verify_run
+        try:
+            from .test_identity import load
+        except ImportError:
+            from test_identity import load
         verify_run(folder, load(folder / "identity.json", target=profile))
         if not folder.is_relative_to(root / ".tools/runs"):
             raise ValueError("canonical artifact directory outside selected run root")
