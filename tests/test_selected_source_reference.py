@@ -63,6 +63,18 @@ class CombinedReferenceTests(unittest.TestCase):
         self.assertEqual(actual["checked_generated_sources"],
                          len(self.lock["required_generated_sha256"]))
 
+    def test_source_candidate_status_is_explicitly_not_hardware_qualification(self):
+        report = self.check_candidate()
+        self.assertEqual(report["evidence"],
+                         "candidate_source_digests_match_not_hardware_qualified")
+        bad = copy.deepcopy(self.lock)
+        bad["qualification_status"] = "not-verified"
+        with self.assertRaisesRegex(ReferenceError, "qualification status"):
+            validate_lock(bad)
+
+    def check_candidate(self):
+        return compare(self.lock, self.manifest)
+
     def test_independent_run_id_never_changes_selected_source_identity(self):
         other = copy.deepcopy(self.manifest)
         other["identity_sha256"] = "d" * 64

@@ -59,6 +59,15 @@ def validate_lock(lock: dict) -> None:
         raise ReferenceError("invalid/non-audited variable generated DDR source")
     if lock["required_generated_sha256"].get(TOP) is None:
         raise ReferenceError("missing real combined generated top SHA")
+    qualification = lock.get("qualification_status", "historically_qualified")
+    if qualification not in ("historically_qualified", "candidate_source_only", "qualified"):
+        raise ReferenceError("unknown selected source qualification status")
+    if qualification == "candidate_source_only":
+        if (not isinstance(lock.get("historical_reference"), str)
+                or not lock["historical_reference"].startswith(
+                    "config/selected-rtl-reference/history/")
+                or type(lock.get("candidate_source_artifact_run")) is not int):
+            raise ReferenceError("candidate source lock missing preserved history and source run")
     if not _sha(lock.get("filelist_sha256")):
         raise ReferenceError("invalid qualified compiler filelist reference")
 
@@ -128,7 +137,7 @@ def compare(lock: dict, actual: dict) -> dict:
         "variable_generated_ddr_sha256": {
             path: actual["source_sha256"][path] for path in lock["volatile_source_paths"]
         },
-        "evidence": "stable_selected_source_match_variable_ddr_unqualified_not_elaboration_or_simulation",
+        "evidence": ("candidate_source_digests_match_not_hardware_qualified" if lock.get("qualification_status")=="candidate_source_only" else "stable_selected_source_match_variable_ddr_unqualified_not_elaboration_or_simulation"),
     }
 
 
@@ -151,7 +160,7 @@ def main() -> int:
         raise ReferenceError("missing selected regression profile")
     actual = verify_selected_archive(root, args.profile, tests[args.profile])
     report = compare(lock, actual)
-    print("PASS: selected combined RTL matches qualified historical source digests")
+    print("PASS: selected combined RTL matches exact pinned source digests; real RTL qualification remains separate")
     print(json.dumps(report, indent=2, sort_keys=True))
     return 0
 
