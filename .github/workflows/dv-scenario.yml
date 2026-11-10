@@ -159,7 +159,7 @@ jobs:
                                 "pattern_seed":next(a for a in json.loads(expected)["actions"]
                                                     if a["action_instance_id"]=="init_source")
                                                ["args"]["pattern"]["seed"],
-                                "archive":str(Path(archive).relative_to(root)),
+                                "archive":Path(archive).name,
                                 "evidence":"real_cpu_and_bfm_passive_AXI_and_independent_bytes",
                                 "status":verified["status"]})
           check_matrix(source, soc, matrix_dir)
