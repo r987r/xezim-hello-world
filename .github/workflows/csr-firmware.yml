@@ -10,6 +10,8 @@ on:
       - 'sw/dma/generated/**'
       - 'tools/cpu_dma_firmware.py'
       - 'tools/csrgen.py'
+      - 'csr/rdl/boot_reset_ctrl.rdl'
+      - 'tests/test_csr_boot_abi.py'
       - 'config/soc.yaml'
       - 'tests/test_csr_dma_firmware_elf.py'
       - 'tools/csr_dma_headers.py'
@@ -32,7 +34,7 @@ jobs:
         run: python3 -m pip install -r requirements.txt -r csr/requirements.txt
       - name: Validate real RDL data, existing C ABI and generation drift
         run: |
-          python3 -m unittest tests.test_csr_dma_headers -v
+          python3 -m unittest tests.test_csr_dma_headers tests.test_csr_boot_abi -v
           python3 tools/csr_dma_headers.py --out .tools/csr-dma
           python3 tools/csr_dma_headers.py --out .tools/csr-dma --check
           python3 - <<'PY'
