@@ -38,4 +38,4 @@ jobs:
           python-version: '3.12'
       - run: python3 -m pip install 'PyYAML==6.0.3'
       - name: Validate every configured test has a truthful phase-intent entry
-        run: python3 -m unittest tests.test_test_intent tests.test_runtime_contract tests.test_test_identity tests.test_run_workspace tests.test_scenario_plan -v
+        run: python3 -m unittest tests.test_test_intent tests.test_runtime_contract tests.test_test_identity tests.test_run_workspace tests.test_selected_rtl_archive tests.test_scenario_plan -v
