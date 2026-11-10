@@ -6,6 +6,8 @@ on:
     paths:
       - 'csr/rdl/soc_dma_shim.rdl'
       - 'sw/dma/dma.h'
+      - 'sw/dma/dma.c'
+      - 'sw/dma/generated/**'
       - 'tools/cpu_dma_firmware.py'
       - 'tools/csrgen.py'
       - 'config/soc.yaml'
@@ -33,6 +35,14 @@ jobs:
           python3 -m unittest tests.test_csr_dma_headers -v
           python3 tools/csr_dma_headers.py --out .tools/csr-dma
           python3 tools/csr_dma_headers.py --out .tools/csr-dma --check
+          python3 - <<'PY'
+          from pathlib import Path
+          from tools.csr_dma_headers import extract, header
+          production = Path('sw/dma/generated/soc_dma_shim_regs.h')
+          assert production.is_file(), 'missing generated production DMA CSR header'
+          assert production.read_text() == header(extract()), 'production header differs from authoritative RDL'
+          print('PASS real C default generated DMA header matches RDL exactly')
+          PY
       - name: Prove generated aliases compile as freestanding RV32I
         run: |
           clang --version
@@ -55,7 +65,7 @@ jobs:
         run: python3 -m unittest tests.test_csr_dma_firmware_elf -v
       - name: Compile real DMA C driver in generated and legacy ABI modes
         run: |
-          clang --target=riscv32-unknown-elf -march=rv32i -mabi=ilp32 -ffreestanding -std=c11 -Wall -Wextra -Werror -Oz -ffunction-sections -fdata-sections -DSOC_USE_GENERATED_DMA_CSR -I .tools/csr-dma -c sw/dma/dma.c -o .tools/csr-dma/dma_generated.o
-          clang --target=riscv32-unknown-elf -march=rv32i -mabi=ilp32 -ffreestanding -std=c11 -Wall -Wextra -Werror -Oz -ffunction-sections -fdata-sections -c sw/dma/dma.c -o .tools/csr-dma/dma_legacy.o
+          clang --target=riscv32-unknown-elf -march=rv32i -mabi=ilp32 -ffreestanding -std=c11 -Wall -Wextra -Werror -Oz -ffunction-sections -fdata-sections -c sw/dma/dma.c -o .tools/csr-dma/dma_generated.o
+          clang --target=riscv32-unknown-elf -march=rv32i -mabi=ilp32 -ffreestanding -std=c11 -Wall -Wextra -Werror -Oz -ffunction-sections -fdata-sections -DSOC_USE_LEGACY_DMA_CSR=1 -c sw/dma/dma.c -o .tools/csr-dma/dma_legacy.o
           test -s .tools/csr-dma/dma_generated.o
           test -s .tools/csr-dma/dma_legacy.o
