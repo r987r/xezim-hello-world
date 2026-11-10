@@ -1,4 +1,4 @@
-/* Generated from csr/rdl/boot_reset_ctrl.rdl; do not edit. */
+/* Generated from SystemRDL; do not edit. */
 #ifndef SOC_BOOT_RESET_CTRL_REGS_H
 #define SOC_BOOT_RESET_CTRL_REGS_H
 #include <stdint.h>
