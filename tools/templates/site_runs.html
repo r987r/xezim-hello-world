@@ -1,6 +1,6 @@
 <div class="eyebrow">Source-verified regression evidence</div>
 <h1>Test runs and traffic</h1>
-<p class="lede">All configured tests and discovered CI test workflows appear here automatically. Select a suite to see recorded results, actual workflow status, and which test targets have not yet published evidence.</p>
+<p class="lede">Configured regression targets, archived results and verified CI history. Each result identifies the original tested commit; source-equivalence attestations are displayed separately from literal SHA matches.</p>
 <div class="notice">A recorded PASS means the target's acceptance rule passed at its tested commit. A successful CI workflow without a target result is shown only as CI status. It is not proof that every configured test ran.</div>
 
 <section id="test-flow-plan" class="card" aria-label="Selected test intended flow">
@@ -228,7 +228,7 @@ function renderFlow(){
   if(recent){
     const p=document.createElement("p");
     p.append(link("Open last recorded test report",recent.path));
-    if(recent.flow_steps)p.append(document.createTextNode(" · "+recent.flow_steps+" measured flow steps"));
+    if(recent.flow_steps)p.append(document.createTextNode(" · "+recent.flow_steps+" recorded flow steps"));
     if(recent.planned_flow_sha256)
       p.append(document.createTextNode(" · Selected plan "+recent.planned_flow_sha256.slice(0,12)));
     else if(recent.planned_flow_status==="legacy_run_selection_not_archived")
@@ -305,8 +305,13 @@ function render(){
       text("div","Historical run: canonical identity not archived","muted");
     td(tr,testLink,named,e.canonical_url?link("Open canonical run",e.canonical_url):text("span","","muted"),inspect,openFlow);
     td(tr,suite(e.target,e.workflow));
+    const evidenceRelation=e.source_sha===D.source_sha?"Exact tested/site SHA":
+      e.verified_site_source_sha===D.source_sha?"Verified same Git tree":
+      e.verified_fabric_source_sha===D.source_sha?"Fabric inputs equivalent only":
+      "Historical tested SHA";
     td(tr,text("span",e.passed?"PASS":"FAIL",e.passed?"good":"bad"),
-      text("div",e.expected_failure?"Required negative check":"Positive / compile gate","muted"));
+      text("div",e.expected_failure?"Required negative check":"Positive / compile gate","muted"),
+      text("div",evidenceRelation,"muted"));
     td(tr,e.engine);
     const protocols=e.protocols||[];
     td(tr,protocols.length?

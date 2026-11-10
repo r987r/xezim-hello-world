@@ -1212,6 +1212,13 @@ def build(output,evidence,repository,sha,config):
             if not file.is_file():
                 raise ValueError('incomplete PeakRDL catalog: '+filename)
             shutil.copyfile(file,output/'data'/filename)
+        # Publish the header consumed by production DMA C firmware, with
+        # byte-for-byte SystemRDL source validation. This is not MMIO proof.
+        from csr_dma_headers import extract as dma_extract, header as dma_header
+        dma_source=ROOT/'sw/dma/generated/soc_dma_shim_regs.h'
+        if not dma_source.is_file() or dma_source.read_text()!=dma_header(dma_extract()):
+            raise ValueError('production DMA CSR header missing or differs from SystemRDL')
+        shutil.copyfile(dma_source,output/'data/soc_dma_shim_regs.h')
     from design_explorer import catalog as design_catalog
     design_graph = design_catalog(ROOT)
     dump(output/'data/design-graph.json', design_graph)
@@ -1246,6 +1253,8 @@ def build(output,evidence,repository,sha,config):
         design_graph, parsed_rtl, top=chip['top'])
     dump(output/'data/rtl-instance-bindings.json', rtl_bindings)
     dataset={'schema_version':1,'title':config['title'],'source_sha':sha,'repository':repository,
+             'production_dma_header_sha256':(hashlib.sha256(
+                 (output/'data/soc_dma_shim_regs.h').read_bytes()).hexdigest() if csr_ready else None),
              'built_at':datetime.now(timezone.utc).isoformat(),'runs':runs,'entries':entries,
              'notes':notes,'documents':docs,'networks':noc['networks'],'chip':chip,
              'monitors':monitors['monitors'],'fabric':fabric['summary'],'tests':catalog['tests'],
@@ -1287,13 +1296,15 @@ def build(output,evidence,repository,sha,config):
             ddr_json = json.dumps(ddr_views,separators=(',',':')).replace('<','\\u003c')
             body=body.replace('__DDR_CSR_VARIANTS__',ddr_json)
             details=('<a href="data/csr-map.json">Generated CSR metadata</a> · '
-                     '<a href="data/soc_boot_reset_ctrl_regs.h">Register C header</a> · '
+                     '<a href="data/soc_boot_reset_ctrl_regs.h">Reset CSR C header</a> · '
+                     '<a href="data/soc_dma_shim_regs.h">Production DMA CSR C header</a> · '
                      '<a href="data/soc_csr_bases.h">Instance-base C header</a>') if csr_ready else (
                      'RDL register details unavailable in this local preview')
             body=body.replace('__CSR_SOURCE_LINKS__',details)
         if page=='reference':
             body=body.replace('__CSR_SOURCE_LINKS__',
                 '<li><a href="data/csr-map.json">Generated CSR metadata</a></li>'
+                '<li><a href="data/soc_dma_shim_regs.h">Production DMA CSR C header</a></li>'
                 if csr_ready else '')
         if page=='runs':
             # Trusted static JavaScript, not CI-supplied executable HTML.

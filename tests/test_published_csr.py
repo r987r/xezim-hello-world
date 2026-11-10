@@ -1,5 +1,6 @@
 """Offline tests of the post-deploy public CSR release gate."""
 import copy
+import hashlib
 import sys
 import unittest
 from pathlib import Path
@@ -61,6 +62,16 @@ class PublishedCsrTests(unittest.TestCase):
         untrusted[0]["catalog"]["regions"][0]["registers"][0]["definition_status"] = "manual"
         with self.assertRaisesRegex(ValueError, "qualified native"):
             validate(self.site, self.html, self.coverage, untrusted)
+
+    def test_production_dma_header_is_bound_to_published_source_digest(self):
+        header = "/* generated */\\n#define SOC_DMA_SHIM_HEAD_LO_OFFSET 0\\n#define SOC_DMA_SHIM_STATUS_OFFSET 12\\n"
+        self.site["production_dma_header_sha256"] = hashlib.sha256(header.encode()).hexdigest()
+        html = self.html + ' <a href="data/soc_dma_shim_regs.h">Production DMA header</a>'
+        self.assertEqual(validate(self.site, html, self.coverage, self.ddr, header), 1)
+        with self.assertRaisesRegex(ValueError, "differs"):
+            validate(self.site, html, self.coverage, self.ddr, header + "changed")
+        with self.assertRaisesRegex(ValueError, "missing production"):
+            validate(self.site, self.html, self.coverage, self.ddr, header)
 
     def test_reject_unregistered_new_subsystem(self):
         coverage = copy.deepcopy(self.coverage)

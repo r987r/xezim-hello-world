@@ -7,6 +7,7 @@ confirm the tested source SHA and source-qualified DDR map are published.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import time
 import urllib.error
@@ -14,7 +15,7 @@ import urllib.parse
 import urllib.request
 
 
-def validate(site, address_html, coverage, ddr):
+def validate(site, address_html, coverage, ddr, dma_header=None):
     if not isinstance(site, dict) or site.get("source_sha") != validate.expected_sha:
         raise ValueError("public Pages site source SHA is not the deployed main commit")
     for fragment in (
@@ -25,6 +26,17 @@ def validate(site, address_html, coverage, ddr):
     ):
         if fragment not in address_html:
             raise ValueError("published CSR browser missing " + fragment)
+    expected_dma=site.get("production_dma_header_sha256")
+    if expected_dma is not None:
+        if (not isinstance(expected_dma, str) or len(expected_dma)!=64
+                or not isinstance(dma_header, str)
+                or hashlib.sha256(dma_header.encode("utf-8")).hexdigest()!=expected_dma):
+            raise ValueError("published DMA production header differs from verified source")
+        if ('SOC_DMA_SHIM_HEAD_LO_OFFSET' not in dma_header
+                or 'SOC_DMA_SHIM_STATUS_OFFSET' not in dma_header):
+            raise ValueError("published production DMA header lacks expected CSR offsets")
+        if 'data/soc_dma_shim_regs.h' not in address_html:
+            raise ValueError("published CSR page missing production DMA C header link")
     if coverage.get("schema_version") != 1 or coverage.get("unacknowledged"):
         raise ValueError("published CSR source coverage has missing/unknown CSR IPs")
     by_name = {entry["instance"]: entry for entry in coverage.get("instances", [])}
@@ -87,7 +99,8 @@ def main():
             html = fetch(args.base_url, "address-map.html")
             coverage = json.loads(fetch(args.base_url, "data/csr-source-coverage.json"))
             ddr = json.loads(fetch(args.base_url, "data/ddr-csr-verified-runs.json"))
-            count = validate(site, html, coverage, ddr)
+            dma = fetch(args.base_url, "data/soc_dma_shim_regs.h")
+            count = validate(site, html, coverage, ddr, dma)
             print("PASS public Pages CSR explorer: sha=" + args.sha
                   + " qualified DDR variants=" + str(count))
             return
