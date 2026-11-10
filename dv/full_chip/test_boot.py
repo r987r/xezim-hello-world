@@ -242,6 +242,7 @@ async def execute_cold_boot(dut, *, external=None, benchmark=False):
             # before asserting the actual cpu_dma_success pass signal.
             evidence = {"scenario_id": contract["scenario_id"],
                         "scenario_seed": json.loads(Path(scenario_path).read_text())["seed"],
+                        "executed_pattern_seed": contract["seed"],
                         "plan_sha256": contract["plan_sha256"],
                         "profile": "real_cpu0_compiled_c",
                         "execution_state": "rtl_observed",
