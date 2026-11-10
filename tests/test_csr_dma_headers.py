@@ -47,6 +47,24 @@ class DmaCsrTests(unittest.TestCase):
         # No claim that the generated definitions have already replaced this source:
         # the production migration is a separate, full CPU firmware regression.
 
+    def test_reject_bit_position_and_software_access_abi_drift(self):
+        original = (ROOT / "csr/rdl/soc_dma_shim.rdl").read_text()
+        mutations = (
+            ("submit[0:0]", "submit[2:2]"),
+            ("irq_pending[1:1]", "irq_pending[4:4]"),
+            ("sw = r; hw = w; reset = 0; } apb_busy",
+             "sw = rw; hw = w; reset = 0; } apb_busy"),
+            ("value[31:0]", "value[30:0]"),
+        )
+        for source, changed in mutations:
+            with self.subTest(source=source), tempfile.TemporaryDirectory() as temp:
+                self.assertIn(source, original)
+                rdl = Path(temp) / "dma.rdl"
+                rdl.write_text(original.replace(source, changed, 1))
+                with self.assertRaisesRegex(
+                    csr_dma_headers.DmaCsrError, "ABI changed"):
+                    csr_dma_headers.extract(rdl)
+
     def test_drift_check_detects_stale_generated_content(self):
         with tempfile.TemporaryDirectory() as tmp:
             csr_dma_headers.emit(tmp)
