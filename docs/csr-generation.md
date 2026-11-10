@@ -21,6 +21,10 @@ Per-IP .rdl supplies offsets, fields, widths, resets, SW/HW access and side effe
 
 Hard errors: duplicate/overlapping fields, misaligned/out-of-window registers, inconsistent base/offset, invalid access/reset width, stale variant fingerprint and missing required real RTL attachment. An unknown upstream CSR should remain **external/unavailable**, not be fabricated. Headers use namespaced compile-time offsets and per-variant base addresses; qualified transitional aliases preserve existing software ABI until tested migration. Check actual RV32I build/ELF and firmware MMIO responses before claiming generated-header adoption. Use volatile 32-bit accesses, legal byte strobes and correct W1C/RC/IRQ/doorbell semantics. A 64-bit DMA descriptor head is submitted via two 32-bit writes and a one-shot doorbell.
 
+## Reset/ACK CSR ABI rejection gate
+
+The existing SystemRDL reset bank now rejects source modifications to the release or secondary acknowledgement field widths, masks, software access, zero reset or read-only backdoor policy **even when register offsets stay unchanged**. The checked-in RV32I header fixture still compiles against the generated header. `tests/test_csr_boot_abi.py` also validates 1, 2, 7 and 15 secondary-core layouts (the supported SystemRDL parameter range). The dedicated CSR and firmware-header CI workflows execute these tests. These checks prove a source/firmware ABI contract, **not** MMIO execution; the existing `chip-peakrdl-reset` RTL/Config-NoC test remains the independent frontdoor gate.
+
 ## Frontdoor versus backdoor
 
 Frontdoor = actual CPU/BFM MMIO over Config NoC with independently accepted AXI/Wishbone transactions. Logical register metadata does not count as covered until matching traffic is observed. Backdoor = read-only or specifically safe quiescent simulator storage access; it never invokes MMIO side effects and **cannot** count as AXI coverage.

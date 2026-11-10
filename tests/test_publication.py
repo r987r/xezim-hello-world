@@ -514,6 +514,41 @@ class PublicationTests(unittest.TestCase):
             self.assertIn('Protocol Run Explorer',(output/entries[0]['path']).read_text())
             self.assertTrue((output/'runs/123-1/chip-boot/protocol-transactions.json').is_file())
 
+    def test_verified_canonical_run_id_directory_publishes_without_target_alias(self):
+        from test_identity import selected, relative_path
+        import shutil
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            original=fixture(root/'evidence')
+            plan=yaml.safe_load((ROOT/'config/regression.yaml').read_text())['tests']['chip-boot']
+            identity=selected('chip-boot',plan,run_id='ci-123-a1-012345abcdef')
+            canonical=original.parent/relative_path(identity)
+            canonical.parent.mkdir(parents=True)
+            shutil.move(str(original),str(canonical))
+            self.assertFalse(original.exists())
+            site.dump(canonical/'plan.json',{**plan,'identity':identity})
+            site.dump(canonical/'identity.json',identity)
+            site.dump(canonical/'result.json',{
+                'target':'chip-boot','passed':True,'stage':'all',
+                'identity_sha256':identity['identity_sha256'],
+                'canonical_id':relative_path(identity).as_posix()})
+            out=root/'published'
+            out.mkdir()
+            _,entries,_=site.evidence_index(root/'evidence',out,'r987r/xezim-hello-world')
+            self.assertEqual(len(entries),1)
+            self.assertEqual(entries[0]['canonical_id'],relative_path(identity).as_posix())
+            self.assertTrue((out/'runs'/relative_path(identity)/'report.html').is_file())
+            self.assertFalse((out/'runs/123-1/chip-boot').exists())
+
+            # A forged canonical-looking folder, even with valid source data,
+            # cannot be mistaken for the originally reserved run workspace.
+            swapped=canonical.with_name('ci-123-a1-ffffffffffff')
+            canonical.rename(swapped)
+            with self.assertRaisesRegex(ValueError,'invalid target in CI result artifact'):
+                site.evidence_index(root/'evidence',root/'rejected',
+                                    'r987r/xezim-hello-world')
+
     def test_missing_claimed_identity_is_never_silent_legacy_evidence(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);target=fixture(root/'evidence')
