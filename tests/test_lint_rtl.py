@@ -87,6 +87,49 @@ class SlangLintTests(unittest.TestCase):
             lint_rtl.analyze(self.root, "soc-e2e", "new_top", "/bin/slang",
                              self.root / "bad", execute=bad)
 
+    def test_deduplicates_cross_profile_and_mode_without_hiding_errors(self):
+        row = {"severity": "warning", "code": "MissingTimeScale",
+               "file": "rtl/top.sv", "line": 31, "column": 2,
+               "symbol_path": "soc_top", "message": "timescale absent",
+               "origin": "project", "mode": "lint"}
+        second = dict(row, mode="elaborate", severity="error")
+        vendor = dict(row, code="UnconnectedInputPort",
+                      file=".tools/floonoc/src/fifo.sv", line=9,
+                      origin="vendor", message="unconnected source input")
+        reports = [
+            {"profile":"chip-a","filelist_sha256":"a"*64,
+             "findings":[row,second,vendor]},
+            {"profile":"chip-b","filelist_sha256":"b"*64,
+             "findings":[dict(row, profile="chip-b"),dict(vendor,mode="elaborate")]}
+        ]
+        original = json.dumps(reports, sort_keys=True)
+        dedup = lint_rtl.deduplicate_reports(reports)
+        self.assertEqual(json.dumps(reports, sort_keys=True), original)
+        self.assertEqual(dedup["original_occurrences"], 5)
+        self.assertEqual(dedup["unique_diagnostics"], 2)
+        self.assertEqual(dedup["deduplicated_occurrences"], 3)
+        self.assertEqual(dedup["unique_severity_counts"], {"error":1,"warning":1})
+        self.assertEqual(dedup["unique_origin_counts"], {"project":1,"vendor":1})
+        self.assertEqual(dedup["filelist_sha256_by_profile"],
+                         {"chip-a":"a"*64,"chip-b":"b"*64})
+        top = next(f for f in dedup["findings"] if f["code"]=="MissingTimeScale")
+        self.assertEqual(top["occurrences"],3)
+        self.assertEqual(top["severities"],["error","warning"])
+        self.assertEqual(top["modes"],["elaborate","lint"])
+        self.assertEqual(top["profiles"],["chip-a","chip-b"])
+        self.assertEqual(top["messages"],["timescale absent"])
+        self.assertEqual(dedup, lint_rtl.deduplicate_reports(reports))
+
+    def test_missing_codes_and_paths_do_not_collapse_different_messages(self):
+        base = {"severity":"error","code":"","file":"","line":None,
+                "column":None,"symbol_path":"","origin":"project",
+                "mode":"lint","message":"first failure"}
+        report = {"profile":"chip-a","filelist_sha256":"c"*64,
+                  "findings":[base,dict(base,message="second failure")]}
+        dedup = lint_rtl.deduplicate_reports([report])
+        self.assertEqual(dedup["unique_diagnostics"],2)
+        self.assertEqual(dedup["unique_severity_counts"]["error"],2)
+
     def test_rejects_wrong_plan(self):
         (self.folder / "plan.json").write_text(
             json.dumps({"target": "other", "top": "new_top", "sources": ["fake.sv"]}))
