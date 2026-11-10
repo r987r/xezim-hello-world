@@ -61,7 +61,13 @@
         "length": 64,
         "pattern": {
           "kind": "constant",
-          "seed": 90
+          "seed": {
+            "randint": {
+              "min": 90,
+              "max": 91,
+              "group": "source_payload"
+            }
+          }
         },
         "policy": "strict"
       }
@@ -124,7 +130,13 @@
         "length": 64,
         "pattern": {
           "kind": "constant",
-          "seed": 90
+          "seed": {
+            "randint": {
+              "min": 90,
+              "max": 91,
+              "group": "source_payload"
+            }
+          }
         },
         "policy": "strict",
         "expected_from": "src"
