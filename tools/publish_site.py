@@ -705,17 +705,26 @@ def evidence_index(evidence,output,repository):
         for result_path in sorted(file.parent.glob('artifact-*/**/result.json')):
             result=json.loads(result_path.read_text())
             target=result.get('target','')
-            if (not re.fullmatch(r'[a-z][a-z0-9-]*',target) or
-                target!=result_path.parent.name and not re.fullmatch(r'artifact-[0-9]+',result_path.parent.name)):
+            if not isinstance(target,str) or not re.fullmatch(r'[a-z][a-z0-9-]*',target):
                 raise ValueError('invalid target in CI result artifact')
             if target in found:raise ValueError('duplicate target evidence in one workflow run')
             found.add(target)
             source_dir=result_path.parent
             plan=json.loads((source_dir/'plan.json').read_text()) if (source_dir/'plan.json').exists() else {}
-            # Collection and offline publication share the same strict
-            # identity verifier; no missing artifact is reconstructed.
+            # Verify immutable identity BEFORE determining the artifact layout:
+            # a canonical writer's leaf is a unique run_id, not its legacy
+            # target. Accept it only when the original identity matches both
+            # plan/result and the last four directory components. Old target-
+            # named archives retain their original acceptance policy.
             from test_identity import relative_path as canonical_path
             selected_identity=verify_archived_identity(source_dir,plan,result,target,run)
+            legacy_location=(target==source_dir.name or
+                             re.fullmatch(r'artifact-[0-9]+',source_dir.name) is not None)
+            canonical_location=(selected_identity is not None and
+                                tuple(source_dir.parts[-4:])==
+                                canonical_path(selected_identity).parts)
+            if not (legacy_location or canonical_location):
+                raise ValueError('invalid target in CI result artifact')
             # Canonical names are the *only* published paths for new runs.
             # Historical captures lack immutable identity and stay under their
             # original verified run/target path for explicit comparison.
