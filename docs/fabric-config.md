@@ -70,14 +70,20 @@ simulation before merging.
 
 ## Exact-case cross-scope latency comparison (#155)
 
-The existing fabric collector now records the original source-selected
-accepted AXI case keys alongside each measured stage observation. It exposes
-`latency_scope_comparisons` only for real matching-source sample scopes. For a
-given route/read-or-write comparison, it requires identical selected
-case/address keys, sample count, reference clock, source-equivalence tier and
-stage inventory. Otherwise the result is explicitly `unmeasured` or
-`incompatible`, never an inferred speedup or a zero-cycle stage. Duplicated
-or missing evidence also fails comparison.
+The existing fabric collector keeps the original source-selected
+benchmark plan, independently validated accepted AXI cases and reference
+clock alongside measured stages. It exposes `latency_scope_comparisons` only
+when both scopes have complete original case IDs, matching source actor,
+operation, address, simulator, benchmark phase, counts and measured clock.
+A missing, historical or incompatible scope remains `unmeasured` or
+`incompatible`, never an estimated speedup.
+
+End-to-end comparisons are valid across *different* mesh inventories when
+the executed benchmark cases genuinely match. Per-stage deltas compare only
+the same physical passive AXI boundary (including monitor identities);
+scope-only stages are explicitly left unmeasured, not assigned fake
+latencies. Source-equivalence is still independently attested against the
+site commit by the trusted collection path.
 
 This **does not yet close #155**: the isolated local-subsystem FlooNoC RTL
 benchmark and its independent passive AXI/DMA target test are still missing.
