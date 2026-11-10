@@ -174,6 +174,8 @@ def require_completed_xezim_run(root: Path, target: str, plan: dict) -> dict:
         raise IdentityError("canonical run lacks completed selected Xezim PASS")
     if plan.get("pass") not in (folder / expected_log).read_text(errors="replace"):
         raise IdentityError("canonical simulator transcript missing original PASS marker")
-    verify_selected_archive(folder.parents[4], target, plan, directory=folder)
+    if root.name != 'runs' or root.parent.name != '.tools':
+        raise IdentityError('canonical Xezim root is not the configured run root')
+    verify_selected_archive(root.parent.parent, target, plan, directory=folder)
     return {"target": target, "canonical_id": relative_path(identity).as_posix(),
             "status": "runner_completed_xezim_no_protocol_coverage_claim"}
