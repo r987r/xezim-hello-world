@@ -1,6 +1,6 @@
 {
   "evidence": "default_generated_reference_not_opt_in_selected_compilation",
-  "generated_sv_sha256": "d28c6f147090a7ccc5f796fdc09f909496ced4cb2d350d712af927d242389a6b",
+  "generated_sv_sha256": "0f9228710db1da9b5246a004ff710266f9341c8716b7b04388be752fd8ceb84c",
   "project": "xezim_soc_dv",
   "schema_version": 1,
   "source": "gen/chip/soc_top.sv",
