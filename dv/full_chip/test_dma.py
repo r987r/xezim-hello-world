@@ -186,6 +186,7 @@ async def two_compute_dmas_through_all_fabrics(dut):
             f"SCN-2 BFM has no independently accepted full-NoC DMA traffic: {observed}")
         evidence = {"scenario_id": contract["scenario_id"],
                     "scenario_seed": json.loads(Path(scenario_path).read_text())["seed"],
+                    "executed_pattern_seed": contract["seed"],
                     "plan_sha256": contract["plan_sha256"],
                     "profile": "reset_isolated_cocotb_bfm",
                     "execution_state": "rtl_observed",
