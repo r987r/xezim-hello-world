@@ -4,6 +4,7 @@ Mock handles exercise the API policy; real Xezim/Verilator evidence still
 requires a separate exact-DUT integration run.
 """
 import unittest
+import copy
 
 from tools.csr_runtime import ReadOnlyCsrRuntime, RuntimeEvidence, cocotb_handle
 from tools.csr_backdoor import BindingError
@@ -109,6 +110,81 @@ class CsrRuntimeTests(unittest.TestCase):
         inv["objects"][0]["width_bits"]=0
         with self.assertRaisesRegex(BindingError,"exceeds RTL signal"):
             ReadOnlyCsrRuntime(catalog,inv,bindings,handles,proof)
+
+    def test_exact_run_frontdoor_matches_real_live_field_at_quiescent_checkpoint(self):
+        catalog, inv, bindings, handles, proof = example()
+        handle = next(iter(handles.values()))
+        handle.value = 1
+        runtime = ReadOnlyCsrRuntime(catalog, inv, bindings, handles, proof)
+        trace = {
+            "schema_version": 2,
+            "run": {"commit": "c" * 40, "dirty": False,
+                    "engine": "cocotb-verilator", "workflow_run_id": "25",
+                    "workflow_attempt": "1", "capture_bound": True,
+                    "capture_overflow": False},
+            "sections": {"axi": {
+                "issues": [],
+                "monitors": [{"id": "compute0_local_config.cpu", "plane": "config",
+                              "role": "initiator", "data_width": 32}],
+                "transactions": [{
+                    "uid": "cfg:0:0", "monitor": "compute0_local_config.cpu",
+                    "plane": "config", "role": "initiator",
+                    "operation": "read", "address": "0x40020000",
+                    "start_ps": 100, "end_ps": 120, "status": "complete",
+                    "issues": [], "expected_beats": 1, "response": "0x0",
+                    "request": {"size": "0x2"},
+                    "beats": [{"data": "0x1", "resp": "0x0", "last": "0x1"}]
+                }]
+            }}
+        }
+        logical = "boot.reset_ctrl.cpu_release.secondary_release"
+        kwargs = {"monitor": "compute0_local_config.cpu",
+                  "tested_sha": "c" * 40, "workflow_run_id": "25",
+                  "workflow_attempt": "1", "quiescent_start_ps": 90,
+                  "snapshot_ps": 130}
+        success = runtime.compare_frontdoor_axi_read(logical, trace, **kwargs)
+        self.assertEqual(success["frontdoor_value"], 1)
+        self.assertEqual(success["backdoor_value"], 1)
+        self.assertEqual(success["axi_uid"], "cfg:0:0")
+        self.assertIn("not_coverage", success["scope"])
+        for mutation in ("wrong_data", "wrong_run", "overflow",
+                         "wrong_monitor", "duplicate_read", "write",
+                         "interfering_write", "bad_response", "wrong_width",
+                         "invalid_beat", "late_completion"):
+            with self.subTest(mutation=mutation):
+                bad = copy.deepcopy(trace)
+                wrong_kwargs = dict(kwargs)
+                row = bad["sections"]["axi"]["transactions"][0]
+                if mutation == "wrong_data":
+                    row["beats"][0]["data"] = "0x0"
+                elif mutation == "wrong_run":
+                    bad["run"]["commit"] = "d" * 40
+                elif mutation == "overflow":
+                    bad["run"]["capture_overflow"] = True
+                elif mutation == "wrong_monitor":
+                    bad["sections"]["axi"]["monitors"][0]["data_width"] = 64
+                elif mutation == "duplicate_read":
+                    bad["sections"]["axi"]["transactions"].append(copy.deepcopy(row))
+                elif mutation == "write":
+                    row["operation"] = "write"
+                elif mutation == "interfering_write":
+                    competitor = copy.deepcopy(row)
+                    competitor.update(monitor="compute1_local_config.cpu",
+                                      operation="write", start_ps=110)
+                    bad["sections"]["axi"]["transactions"].append(competitor)
+                elif mutation == "bad_response":
+                    row["response"] = "0x2"
+                elif mutation == "wrong_width":
+                    row["request"]["size"] = "0x3"
+                elif mutation == "invalid_beat":
+                    row["beats"] = [None]
+                else:
+                    wrong_kwargs["snapshot_ps"] = 110
+                with self.assertRaises(BindingError):
+                    runtime.compare_frontdoor_axi_read(logical, bad, **wrong_kwargs)
+        handle.value = "X"
+        with self.assertRaisesRegex(BindingError, "unresolved"):
+            runtime.compare_frontdoor_axi_read(logical, trace, **kwargs)
 
     def test_unknown_values_are_not_silently_zero(self):
         catalog,inv,bindings,handles,proof=example()

@@ -95,6 +95,125 @@ class ReadOnlyCsrRuntime:
             "fields": fields,
         }
 
+    def compare_frontdoor_axi_read(
+        self, logical_path: str, trace: dict, *, monitor: str,
+        tested_sha: str, workflow_run_id: str, workflow_attempt: str,
+        quiescent_start_ps: int, snapshot_ps: int,
+    ) -> dict:
+        """Compare one genuine 32-bit Config-NoC AXI read with live RTL.
+
+        Called from the original simulator process at an explicit quiescent
+        checkpoint, with its own passive trace. No extra BFM or CSR writes.
+        A historical trace, unsupported width, missing completion, side
+        effect or mismatched source/run never qualifies.
+        """
+        import re
+        if (not isinstance(tested_sha, str)
+                or not re.fullmatch(r"[a-f0-9]{40}", tested_sha)
+                or not isinstance(workflow_run_id, str)
+                or not workflow_run_id.isdecimal()
+                or not isinstance(workflow_attempt, str)
+                or not workflow_attempt.isdecimal()
+                or type(quiescent_start_ps) is not int
+                or type(snapshot_ps) is not int
+                or quiescent_start_ps < 0
+                or snapshot_ps <= quiescent_start_ps):
+            raise BindingError("unqualified frontdoor run source/checkpoint")
+        field = self._fields.get(logical_path)
+        if field is None or field["status"] != "bound_unvalidated":
+            raise BindingError("CSR field not bound for frontdoor comparison")
+        if field["policy"] != "backdoor_read_only":
+            raise BindingError("CSR has side effects or unsafe backdoor policy")
+        if not isinstance(trace, dict) or trace.get("schema_version") != 2:
+            raise BindingError("missing canonical passive AXI trace")
+        run = trace.get("run") or {}
+        if (self.map["simulator"] != "verilator"
+                or run.get("commit") != tested_sha
+                or run.get("dirty") is not False
+                or run.get("engine") != "cocotb-verilator"
+                or str(run.get("workflow_run_id")) != workflow_run_id
+                or str(run.get("workflow_attempt")) != workflow_attempt
+                or run.get("capture_bound") is not True
+                or run.get("capture_overflow") is not False):
+            raise BindingError("AXI trace provenance/capture does not match live run")
+        axi = (trace.get("sections") or {}).get("axi") or {}
+        if axi.get("issues") or not isinstance(axi.get("transactions"), list):
+            raise BindingError("dirty or incomplete AXI transactions")
+        monitors = [m for m in axi.get("monitors", [])
+                    if isinstance(m, dict) and m.get("id") == monitor]
+        if (len(monitors) != 1 or monitors[0].get("plane") != "config"
+                or monitors[0].get("role") != "initiator"
+                or monitors[0].get("data_width") != 32):
+            raise BindingError("unqualified 32-bit config initiator capture")
+        def numeric(value):
+            if type(value) is int:
+                return value
+            if isinstance(value, str):
+                try:
+                    return int(value, 0)
+                except ValueError:
+                    pass
+            raise BindingError("invalid AXI address, response or read data")
+        address = numeric(field["address"])
+        relevant = [tx for tx in axi["transactions"]
+                    if tx.get("monitor") == monitor
+                    and tx.get("plane") == "config"
+                    and numeric(tx.get("address")) == address
+                    and type(tx.get("start_ps")) is int
+                    and quiescent_start_ps <= tx["start_ps"] <= snapshot_ps]
+        writes = [tx for tx in axi["transactions"]
+                  if tx.get("plane") == "config"
+                  and tx.get("role") == "initiator"
+                  and tx.get("operation") == "write"
+                  and numeric(tx.get("address")) == address
+                  and type(tx.get("start_ps")) is int
+                  and quiescent_start_ps <= tx["start_ps"] <= snapshot_ps]
+        if writes:
+            raise BindingError("CSR changed by another AXI write during quiescent comparison")
+        if len(relevant) != 1:
+            raise BindingError("ambiguous/missing AXI CSR transaction in quiescent window")
+        row = relevant[0]
+        beats = row.get("beats")
+        if (row.get("role") != "initiator"
+                or row.get("operation") != "read"
+                or row.get("status") != "complete"
+                or row.get("issues")
+                or row.get("expected_beats") != 1
+                or not isinstance(beats, list) or len(beats) != 1
+                or not isinstance(beats[0], dict)
+                or type(row.get("end_ps")) is not int
+                or row["end_ps"] > snapshot_ps
+                or row["end_ps"] < row["start_ps"]
+                or numeric(row.get("response")) != 0
+                or numeric((row.get("request") or {}).get("size")) != 2
+                or numeric(beats[0].get("last")) != 1
+                or numeric(beats[0].get("resp")) != 0):
+            raise BindingError("CSR frontdoor read is incomplete/unsafe/not four bytes")
+        value = numeric(beats[0].get("data"))
+        if value < 0 or value >= 1 << 32:
+            raise BindingError("AXI CSR read data outside 32-bit bus width")
+        frontdoor = (value >> field["lsb"]) & ((1 << field["width_bits"]) - 1)
+        backdoor = self.read(logical_path, quiescent=True)
+        if frontdoor != backdoor:
+            raise BindingError("independently accepted AXI CSR differs from live HDL bits")
+        return {
+            "schema_version": 1,
+            "status": "matching_accepted_axi_and_quiescent_live_hdl_field",
+            "logical_path": logical_path, "address": field["address"],
+            "field_bits": field["width_bits"],
+            "frontdoor_value": frontdoor, "backdoor_value": backdoor,
+            "rtl_path": field["rtl_path"],
+            "simulator": self.map["simulator"], "top": self.map["top"],
+            "variant": self.map["variant"],
+            "build_sha256": self.map["build_sha256"],
+            "tested_sha": tested_sha, "workflow_run_id": workflow_run_id,
+            "workflow_attempt": workflow_attempt,
+            "quiescent_start_ps": quiescent_start_ps,
+            "snapshot_ps": snapshot_ps,
+            "axi_uid": row.get("uid"),
+            "scope": "one_32bit_AXI_read_and_one_live_hdl_field_not_coverage",
+        }
+
     def write(self, *args, **kwargs):
         raise BindingError("direct CSR backdoor writes are disabled; use frontdoor or qualified semantic hook")
 
