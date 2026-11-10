@@ -525,6 +525,80 @@ def latency_table(report, scope=None):
     }
 
 
+def compare_measured_scopes(report, left_scope: str, right_scope: str) -> dict:
+    """Pair source-equivalent actual one-beat samples, never infer a speedup.
+
+    The exact generated route, selected request addresses, operation, clock
+    and source case counts must match. Separate scopes without such a pair
+    remain UNMEASURED; no interpolation across a missing local NoC top.
+    """
+    if not isinstance(left_scope, str) or not left_scope or not isinstance(right_scope, str) or not right_scope or left_scope == right_scope:
+        raise FabricReportError("distinct nonempty benchmark scopes required")
+    rows = []
+    status_counts = defaultdict(int)
+    for route in report["routes"]:
+        observations = route.get("one_beat_stage_observations", [])
+        for op in ("read", "write"):
+            candidates = {}
+            for scope in (left_scope, right_scope):
+                found = [o for o in observations
+                         if o.get("operation") == op and o.get("fabric_scope") == scope
+                         and o.get("matches_site_source") is True]
+                candidates[scope] = found
+            status = "unmeasured_missing_scope"
+            delta = None
+            reason = "both exact-source measured route operations required"
+            first, second = candidates[left_scope], candidates[right_scope]
+            if len(first) > 1 or len(second) > 1:
+                status = "incompatible_duplicate_evidence"
+                reason = "multiple eligible observations for same route/scope/operation"
+            elif first and second:
+                a, b = first[0], second[0]
+                allowed = {"exact_sha", "verified_same_tree", "verified_rtl_inputs"}
+                same_inputs = (
+                    a.get("source_equivalence") in allowed
+                    and b.get("source_equivalence") in allowed
+                    and a.get("sample_case_keys") is not None
+                    and a.get("sample_case_keys") == b.get("sample_case_keys")
+                    and a.get("sample_count") == b.get("sample_count")
+                    and type(a.get("sample_count")) is int and a["sample_count"] > 0
+                    and type(a.get("clock_period_ps")) is int
+                    and a["clock_period_ps"] > 0
+                    and a["clock_period_ps"] == b.get("clock_period_ps")
+                    and [x.get("network") if x.get("kind") == "mesh" else x.get("monitor")
+                         for x in a.get("stage_metrics", [])] ==
+                        [x.get("network") if x.get("kind") == "mesh" else x.get("monitor")
+                         for x in b.get("stage_metrics", [])]
+                )
+                if same_inputs and a.get("end_to_end") and b.get("end_to_end"):
+                    status = "measured_same_source_and_cases"
+                    reason = "matched exact source-selected cases and reference clock"
+                    delta = {
+                        "left_avg_cycles": a["end_to_end"]["avg_cycles"],
+                        "right_avg_cycles": b["end_to_end"]["avg_cycles"],
+                        "right_minus_left_cycles": (
+                            b["end_to_end"]["avg_cycles"] - a["end_to_end"]["avg_cycles"]),
+                        "n": a["sample_count"],
+                        "reference_clock_period_ps": a["clock_period_ps"],
+                        "left_run_report": a["run_report"],
+                        "right_run_report": b["run_report"],
+                    }
+                else:
+                    status = "incompatible_source_clock_or_case_set"
+                    reason = "source, cases, clock, stages or sample count mismatch"
+            status_counts[status] += 1
+            rows.append({"route_id": route["id"], "operation": op,
+                         "left_scope": left_scope, "right_scope": right_scope,
+                         "status": status, "reason": reason, "comparison": delta})
+    return {
+        "schema_version": 1,
+        "left_scope": left_scope, "right_scope": right_scope,
+        "evidence": "passive_source_attested_axi_latency_not_router_or_phy_proof",
+        "counts": dict(sorted(status_counts.items())),
+        "rows": rows,
+    }
+
+
 def attach_one_beat_observations(report, entries, output, source_sha):
     """Attach source-completion timing and rigorous serial per-mesh deltas.
 
@@ -638,6 +712,9 @@ def attach_one_beat_observations(report, entries, output, source_sha):
             route["one_beat_stage_observations"].append({
                 "operation": operation,
                 "sample_count": len(paired), "clock_period_ps": clock_ps,
+                "sample_case_keys": sorted(
+                    f"{tx['plane']}:{tx['operation']}:{number(tx['address']):x}"
+                    for tx, _ in paired),
                 "end_to_end": _cycle_stats(elapsed, clock_ps),
                 "stage_metrics": stage_stats,
                 "source_sha": entry["source_sha"], "matches_site_source": True,
@@ -657,6 +734,13 @@ def attach_one_beat_observations(report, entries, output, source_sha):
     report["latency_scopes"] = {
         scope: latency_table(report, scope=scope) for scope in eligible_scopes
     }
+    # Publish real compatibility only for scopes that actually produced
+    # source-verified samples. Missing standalone local RTL stays unmeasured.
+    report["latency_scope_comparisons"] = [
+        compare_measured_scopes(report, a, b)
+        for i, a in enumerate(eligible_scopes)
+        for b in eligible_scopes[i+1:]
+    ]
     return report
 
 
