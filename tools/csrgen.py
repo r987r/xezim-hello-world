@@ -129,6 +129,23 @@ def register_layout(root, aperture_size: int) -> list[dict]:
     if ([r["name"] for r in regs] != expected
             or [as_int(r["offset"]) for r in regs] != [4*i for i in range(len(expected))]):
         raise CsrError("reset register ABI drift: expected release plus one peer acknowledgement per secondary")
+    # A source-compatible offset is not a compatible firmware ABI if the
+    # access policy, reset value or field width changes underneath software.
+    # These rules are for the existing boot/reset bank only; do not invent
+    # policies for reserved or upstream vendor CSR windows.
+    n_secondary = root.top.parameters["SECONDARY_COUNT"]
+    for index, reg in enumerate(regs):
+        fields = reg["fields"]
+        expected_name = "secondary_release" if index == 0 else "ack"
+        expected_mask = (1 << n_secondary)-1 if index == 0 else 0xffffffff
+        if (len(fields) != 1 or fields[0]["name"] != expected_name
+                or fields[0]["lsb"] != 0
+                or fields[0]["msb"] != (n_secondary-1 if index == 0 else 31)
+                or int(fields[0]["mask"], 0) != expected_mask
+                or fields[0]["access"] != "rw"
+                or int(fields[0]["reset"], 0) != 0
+                or fields[0]["backdoor_policy"] != "frontdoor_only"):
+            raise CsrError(f"{reg['name']}: reset CSR software field ABI drift")
     return regs
 
 
