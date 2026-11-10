@@ -80,6 +80,23 @@ def audit(cpu_dir: Path, bfm_dir: Path) -> dict:
     (cpu_raw, cpu_plan, cpu_ev, cpu_result), (bfm_raw, bfm_plan, bfm_ev, bfm_result) = inputs
     if cpu_raw != bfm_raw:
         raise ReplayAuditError("CPU/BFM resolved scenario plans differ byte-for-byte")
+    # The real CPU C source selected a full 256-bit plan SHA and wrote eight
+    # 32-bit words through the CPU-side AXI initiator. The live Cocotb
+    # checkpoint independently correlates original AW/W/B byte lanes.
+    witness = cpu_ev.get("cpu_plan_sha_axi_witness")
+    expected_witness = next((item["phys"] for item in cpu_plan.get("allocations", [])
+                             if item.get("buffer") == "src"), None)
+    if (not isinstance(witness, dict)
+            or witness.get("status") != "full_sha_observed_on_real_cpu_axi"
+            or witness.get("plan_sha256") != hashlib.sha256(cpu_raw).hexdigest()
+            or type(expected_witness) is not int
+            or witness.get("witness_phys") != hex(expected_witness + 0x1000)):
+        raise ReplayAuditError("CPU source-selected full SHA passive AXI witness missing or different")
+    if (witness.get("accepted_writes") != 8
+            or witness.get("checked_bytes") != 32
+            or witness.get("evidence") != "original_passive_axi_aw_w_b_not_firmware_self_report"
+            or witness.get("scenario_action_completion_proven") is not False):
+        raise ReplayAuditError("CPU plan SHA lacks full independently accepted AXI write coverage")
     if cpu_ev.get("cpu_result_checked") is not True:
         raise ReplayAuditError("CPU real C firmware did not prove returned bytes")
     if bfm_ev.get("independently_readback_bytes") != 64:
