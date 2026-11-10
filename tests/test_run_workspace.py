@@ -9,7 +9,7 @@ import unittest
 
 import yaml
 
-from tools.run_workspace import reserve_run, verify_run, canonical_artifact, verify_artifact_inventory
+from tools.run_workspace import reserve_run, verify_run, canonical_artifact, require_completed_xezim_run, verify_artifact_inventory
 from tools.test_identity import IdentityError, selected, relative_path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -84,6 +84,20 @@ class WorkspaceTests(unittest.TestCase):
         with self.assertRaisesRegex(IdentityError, "missing canonical"):
             verify_artifact_inventory(
                 directory, self.identity, ["logs/simulation.log"])
+
+    def test_real_producer_gate_refuses_unexecuted_or_missing_result(self):
+        plan = self.catalog["smoke"]
+        identity = selected("smoke", plan, run_id="local-aaaaaaaaaaaa")
+        root = Path(self.temp.name) / ".tools/runs"
+        directory = reserve_run(root, identity, plan=plan)
+        with self.assertRaisesRegex(IdentityError, "missing canonical"):
+            require_completed_xezim_run(root, "smoke", plan)
+        # Even a fabricated bare result without original source/runner logs
+        # is not a qualified real simulator regression.
+        (directory / "result.json").write_text(
+            json.dumps({"target": "smoke", "passed": True}) + "\n")
+        with self.assertRaisesRegex(IdentityError, "missing canonical"):
+            require_completed_xezim_run(root, "smoke", plan)
 
     def test_symlink_and_escape_rejected(self):
         outer = Path(self.temp.name)
