@@ -296,8 +296,15 @@ async def exercise_forced_write_response_backpressure(master, dut, observer, mon
         assert observer.max_stall_streak["b"] >= 8, (
             "no sustained B-channel response stall measured")
     finally:
+        # Upstream cocotbext-axi v0.1.28 StreamPause.clear_pause_generator()
+        # stops future updates but intentionally leaves the *last* pause
+        # value latched. Explicitly resume the sink to wake its READY driver.
         master.write_if.b_channel.clear_pause_generator()
+        master.write_if.b_channel.pause = False
     assert pending is not None
+    await tick(dut, 3)
+    assert int(dut.user_port_axi_0_bready.value) == 1, (
+        "DDR B sink did not drive BREADY high after pause release")
     wr = await with_timeout(pending, 120, "us")
     assert wr.resp == AxiResp.OKAY, "stalled B response must complete OKAY"
     rd = await with_timeout(master.read(address, len(payload), arid=11), 120, "us")
