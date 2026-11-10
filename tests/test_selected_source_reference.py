@@ -113,7 +113,7 @@ class CombinedReferenceTests(unittest.TestCase):
         changed["source_sha256"][path] = "a" * 64
         report = compare(self.lock, changed)
         self.assertEqual(report["variable_generated_ddr_sha256"][path], "a" * 64)
-        self.assertIn("unqualified", report["evidence"])
+        self.assertIn("not_hardware_qualified", report["evidence"])
 
     def test_reject_file_missing_from_compiler_even_if_generated(self):
         bad = copy.deepcopy(self.manifest)
