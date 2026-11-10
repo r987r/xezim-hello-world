@@ -6,6 +6,7 @@ on:
     paths:
       - 'csr/**'
       - 'tools/csrgen.py'
+      - 'tests/test_csr_boot_abi.py'
       - 'tools/run_csr_axi.py'
       - 'dv/csr/**'
       - 'tools/full_chip_gen.py'
@@ -45,7 +46,7 @@ jobs:
           python3 -m pip install -r requirements.txt -r csr/requirements.txt
       - name: Verify SystemRDL, CSR backdoor and physical address-map contracts
         run: |
-          python3 -m unittest tests.test_csr_source_references tests.test_csr_backdoor tests.test_address_map tests.test_ddr_csr_catalog tests.test_ddr_csr_pages tests.test_axi_report tests.test_regression -v
+          python3 -m unittest tests.test_csr_boot_abi tests.test_csr_source_references tests.test_csr_backdoor tests.test_address_map tests.test_ddr_csr_catalog tests.test_ddr_csr_pages tests.test_axi_report tests.test_regression -v
       - name: Generate and deterministically re-check CSR artifacts
         run: |
           python3 tools/csrgen.py --out .tools/csr-verified --variant cold_boot
