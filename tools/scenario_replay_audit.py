@@ -46,6 +46,24 @@ def audit(cpu_dir: Path, bfm_dir: Path) -> dict:
         sha = hashlib.sha256(raw).hexdigest()
         if evidence.get("plan_sha256") != sha or evidence.get("scenario_id") != plan.get("scenario_id"):
             raise ReplayAuditError(f"{label}: mismatched plan hash or scenario ID")
+        if (type(plan.get("seed")) is not int or not 0 <= plan["seed"] <= 0xffffffff
+                or type(evidence.get("scenario_seed")) is not int
+                or evidence["scenario_seed"] != plan["seed"]):
+            raise ReplayAuditError(f"{label}: resolved random/directed seed differs from real execution")
+        # Driver-effective fill pattern is not the scenario RNG selector.
+        # The compiled CPU C constants and the BFM executor use the resolved
+        # memory.initialize seed. Byte/readback checks independently gate PASS.
+        actions = [a for a in plan.get("actions", [])
+                   if a.get("action_instance_id") == "init_source"]
+        if len(actions) != 1:
+            raise ReplayAuditError(f"{label}: missing selected memory initialization")
+        pattern = (actions[0].get("args") or {}).get("pattern") or {}
+        expected_pattern_seed = pattern.get("seed")
+        if (type(expected_pattern_seed) is not int
+                or not 0 <= expected_pattern_seed <= 0xffffffff
+                or type(evidence.get("executed_pattern_seed")) is not int
+                or evidence["executed_pattern_seed"] != expected_pattern_seed):
+            raise ReplayAuditError(f"{label}: effective driver pattern seed differs from plan")
         if evidence.get("profile") != label or evidence.get("execution_state") != "rtl_observed":
             raise ReplayAuditError(f"{label}: missing observed execution provenance")
         if evidence.get("intent_is_not_evidence") is not True or result.get("passed") is not True:
