@@ -97,9 +97,11 @@ def main() -> int:
         # Independent post-run check: the protocol test is not enough to
         # claim a pass if passive capture was disabled, truncated or stopped.
         capture = verify_capture(output)
-        if capture.get("stall_cycles", {}).get("r", 0) < 12 or capture.get(
-                "max_stall_streak", {}).get("r", 0) < 8:
-            raise ValueError("missing real sustained RREADY backpressure evidence")
+        for channel, label in (("r", "RREADY"), ("b", "BREADY")):
+            if (capture.get("stall_cycles", {}).get(channel, 0) < 12 or
+                    capture.get("max_stall_streak", {}).get(channel, 0) < 8):
+                raise ValueError(
+                    f"missing real sustained {label} backpressure evidence")
         latency = report_from_capture(output, configured_clock_period_ps())
         internal = report_from_dfi(output, configured_clock_period_ps())
         stage_digest = {
