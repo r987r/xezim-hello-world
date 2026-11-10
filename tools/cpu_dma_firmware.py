@@ -35,7 +35,7 @@ def require_tool(name):
 def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False, ethernet_cpu_mode=False,
                      scenario_mode=False, use_generated_dma_csr=False,
                      combined_mode=False, pcie_outbound_mode=False,
-                     use_config_csr_header=True):
+                     use_config_csr_header=True, use_legacy_dma_csr=False):
     directory.mkdir(parents=True, exist_ok=True)
     if pcie_outbound_mode and (not pcie_host_mode or combined_mode or ethernet_cpu_mode):
         raise ValueError('outbound requester firmware requires separate PCIe CPU variant')
@@ -90,6 +90,12 @@ def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False, ethernet_cpu
     # Compile CPU firmware against the existing SoC CSR generator's base
     # definitions, not duplicated -D physical addresses. Keep a legacy
     # switch temporarily for exact linked-ELF equivalence tests.
+    # One source-managed generated CSR header for every real firmware mode,
+    # with a legacy-only test switch to prove unchanged machine code.
+    generated_dma_header = ROOT / "sw/dma/generated/soc_dma_shim_regs.h"
+    if not generated_dma_header.is_file():
+        raise ValueError("required generated production DMA CSR header missing")
+    generated_dma_header_sha256 = hashlib.sha256(generated_dma_header.read_bytes()).hexdigest()
     csr_base_hash = None
     csr_base_macros = {
         "SOC_DMA0_CSR": "SOC_CSR_COMPUTE0_DMA_BASE",
@@ -135,8 +141,8 @@ def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False, ethernet_cpu
             *[f"-D{name}=0x{value:x}ULL" for name, value in macros.items()
               if not (use_config_csr_header and name in csr_base_macros)],
             *(['-include', str(csr_base_path)] if use_config_csr_header else []),
-            *(['-DSOC_USE_GENERATED_DMA_CSR=1', '-I', str(directory / 'csr')]
-              if use_generated_dma_csr else []),
+            *(['-DSOC_USE_LEGACY_DMA_CSR=1'] if use_legacy_dma_csr else []),
+            *(['-I', str(directory / 'csr')] if use_generated_dma_csr else []),
             str(ROOT / ('sw/integration/tests/ethernet_ddr_pcie_run.c' if combined_mode
                         else 'sw/dma/tests/scenario_dma_run.c' if scenario_mode
                         else 'sw/ethernet/tests/eth_cpu_run.c' if ethernet_cpu_mode
@@ -166,7 +172,9 @@ def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False, ethernet_cpu
     # pads the final 64-bit readmemh word without changing ELF contents.
     return dict(hook=hook, data=blob, sha256=hashlib.sha256(blob).hexdigest(), compiler="clang/LLVM RV32I",
                 defines=macros, flash_limit=flash_size,
-                csr_base_header_sha256=csr_base_hash)
+                csr_base_header_sha256=csr_base_hash,
+                generated_dma_csr_header_sha256=generated_dma_header_sha256,
+                generated_dma_csr_enabled=not use_legacy_dma_csr)
 
 
 def prepare(cfg, noc_manifest, noc_root, output: Path, *, pcie_host_mode=False,
@@ -209,6 +217,8 @@ def prepare(cfg, noc_manifest, noc_root, output: Path, *, pcie_host_mode=False,
     manifest['cpu_ethernet_firmware' if ethernet_cpu_mode else 'cpu_dma_firmware'] = {
         "entry": fw["hook"], "bytes": len(blob), "sha256": fw["sha256"], "file": image_prefix + "/flash.hex",
         "csr_base_header_sha256": fw["csr_base_header_sha256"],
+        "generated_dma_csr_header_sha256": fw["generated_dma_csr_header_sha256"],
+        "generated_dma_csr_enabled": fw["generated_dma_csr_enabled"],
         "allocation_plan": {name: r.as_dict() for name, r in
                             memory_plan.configured_regions(cfg, profile="boot_live").items()},
     }
