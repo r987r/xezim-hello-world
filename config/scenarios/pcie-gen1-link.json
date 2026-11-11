@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "scenario_id": "pcie_gen1_x1_link_training",
+  "seed": 79,
+  "variant": "boot_live",
+  "actors": [
+    "host0"
+  ],
+  "actions": [
+    {
+      "action_instance_id": "train_link",
+      "kind": "pcie.link.train",
+      "actor": "host0",
+      "phase": "run",
+      "args": {
+        "link": "pcie0",
+        "lanes": 1,
+        "generation": 1,
+        "data_width_bits": 32
+      }
+    }
+  ]
+}
