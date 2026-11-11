@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 class PcieScenarioTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.spec = json.loads((ROOT / "config/scenarios/pcie-link-training.json").read_text())
+        cls.spec = json.loads((ROOT / "config/scenarios/pcie-gen1-link.json").read_text())
         cls.soc = yaml.safe_load((ROOT / "config/soc.yaml").read_text())
 
     def resolve(self, spec=None):
