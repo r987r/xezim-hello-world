@@ -1,0 +1,161 @@
+name: PCIe digital link - pinned endpoint/host provider qualification
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'config/ip.lock.yaml'
+      - 'config/pcie_link.yaml'
+      - 'tools/ip_fetch.py'
+      - 'tools/pcie_link.py'
+      - 'tools/generate.py'
+      - 'dv/pcie_link/**'
+      - 'gen/pcie_link/**'
+      - 'gen/manifest.json'
+      - 'tests/test_pcie_link.py'
+      - 'tests/test_ip_fetch_submodules.py'
+      - '.github/workflows/pcie-digital-link.yml'
+  workflow_dispatch:
+
+permissions: {contents: read}
+concurrency:
+  group: pcie-digital-link-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  provider-contract:
+    name: Pinned source selection and real adapter unit behavior (NOT L0)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Install only source-preflight dependencies
+        run: |
+          set -euo pipefail
+          python3 -m pip install 'PyYAML==6.0.2'
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends iverilog
+      - name: Prove profile swaps fail closed and checked-in generated selection agrees
+        run: |
+          set -euo pipefail
+          python3 -m unittest tests.test_pcie_link tests.test_ip_fetch_submodules -v
+          python3 tools/pcie_link.py --check
+          mkdir -p .tools/pcie-link
+          iverilog -g2012 -s tb_pcie_pipe_x1_adapter \
+            -o .tools/pcie-link/pipe_x1_adapter.vvp \
+            dv/pcie_link/pipe_x1_adapter.sv dv/pcie_link/tb_pipe_x1_adapter.sv
+          vvp .tools/pcie-link/pipe_x1_adapter.vvp \
+            | tee .tools/pcie-link/adapter-unit.log
+          grep -q '^PASS: Gen1 x1' .tools/pcie-link/adapter-unit.log
+      - name: Fetch three independently pinned providers and check original port names
+        run: |
+          set -euo pipefail
+          python3 tools/ip_fetch.py pcie_endpoint_openpcie pcie_host_pcievhost pcie_host_vproc
+          python3 tools/pcie_link.py --check --check-upstream
+          cp gen/pcie_link/selection.json .tools/pcie-link/selection.json
+          git -C .tools/pcie_endpoint_openpcie rev-parse HEAD \
+            > .tools/pcie-link/endpoint-head.txt
+          git -C .tools/pcie_host_pcievhost rev-parse HEAD \
+            > .tools/pcie-link/host-head.txt
+          git -C .tools/pcie_host_vproc rev-parse HEAD \
+            > .tools/pcie-link/vproc-head.txt
+      - name: Retain original selection, adapter smoke and pinned version evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pcie-digital-provider-contract-${{ github.run_id }}
+          path: |
+            gen/pcie_link/
+            .tools/pcie-link/
+          include-hidden-files: true
+          if-no-files-found: warn
+
+  generated-tree-parity:
+    name: Existing make check-generated with new checked-in PCIe manifest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-bender
+        env: {GH_TOKEN: "${{ github.token }}"}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Build original generator dependencies, do not bypass SoC drift gates
+        env:
+          GH_TOKEN: "${{ github.token }}"
+        run: |
+          set -euo pipefail
+          python3 -m pip install -r requirements.txt
+          python3 tools/ip_fetch.py floonoc
+          python3 -m pip install -e .tools/floonoc
+          python3 tools/generate.py --check
+
+  upstream-endpoint:
+    name: Original OpenPCIe FuseSoC/Verilator test (NOT connected to pcievhost)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Install pinned RTL toolchain and original upstream test dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends verilator
+          python3 -m pip install 'PyYAML==6.0.2' 'fusesoc==2.4.4' \
+            'edalize==0.6.1' 'cocotb==1.9.2' 'pyuvm==2.9.1'
+          python3 tools/ip_fetch.py pcie_endpoint_openpcie
+      - name: Run actual upstream endpoint verification target with original sources
+        run: |
+          set -euo pipefail
+          mkdir -p .tools/pcie-link
+          fusesoc --cores-root=.tools/pcie_endpoint_openpcie \
+            run --target=sim fusesoc:pcie:phy_core:1.0.0 \
+            2>&1 | tee .tools/pcie-link/openpcie-upstream.log
+      - name: Preserve upstream endpoint run evidence and failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openpcie-upstream-rtl-${{ github.run_id }}
+          path: |
+            gen/pcie_link/
+            .tools/pcie-link/
+          include-hidden-files: true
+          if-no-files-found: warn
+
+  upstream-host:
+    name: Original pcievhost x1 model smoke (NOT connected to OpenPCIe)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Fetch testbench-only GPL host and pinned VProc
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends verilator build-essential
+          python3 -m pip install 'PyYAML==6.0.2'
+          python3 tools/ip_fetch.py pcie_host_pcievhost pcie_host_vproc
+      - name: Build/run upstream x1 self-test with pinned host backend
+        run: |
+          set -euo pipefail
+          mkdir -p .tools/pcie-link
+          make -C .tools/pcie_host_pcievhost/verilog/testpipex1 \
+            -f makefile.verilator run \
+            VPROC_TOP=../../../pcie_host_vproc \
+            2>&1 | tee .tools/pcie-link/pcievhost-upstream.log
+      - name: Retain original upstream host build and test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pcievhost-upstream-bfm-${{ github.run_id }}
+          path: |
+            gen/pcie_link/
+            .tools/pcie-link/
+          include-hidden-files: true
+          if-no-files-found: warn
