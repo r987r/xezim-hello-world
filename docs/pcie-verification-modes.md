@@ -128,6 +128,20 @@ this documentation nor the diagnostic is a full-chip PASS.
    matrix with correct per-actor independent phases and source correlation.
    Do not label it `scenario_native` or full-chip verified before that is true.
 
+## Standalone upstream Cocotb qualification is separate
+
+The original OpenPCIe UVM self-test uses a hardcoded 25 µs timeout,
+too short for its normal 12 ms Detect.Quiet state. An independently
+pinned **test-only** overlay
+[`tools/pcie_upstream_test_timing.py`](../tools/pcie_upstream_test_timing.py)
+makes the original FuseSoC `sim` target explicitly compile
+`-GSIM_FAST_LINK=1` and extends the UVM test budget to 250 µs. This
+is source-hash-checked and archived as an upstream source diff;
+it does **not** force a link-up state, alter synthesizable defaults, or
+claim cross-provider BAR/TLP/AXI acceptance. A real nonempty Cocotb
+completed-test table remains mandatory. Until exact-head CI demonstrates
+this upstream PASS, issue #76 and PR #225 remain open/draft.
+
 **Policy:** default regular regressions keep their existing fast modeled
 TLP provider. Real digital link is explicit/opt-in and adds coverage; never
 delete or weaken the proven bridge-only path.
