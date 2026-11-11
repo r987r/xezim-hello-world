@@ -187,7 +187,7 @@ module test #(
   always @(posedge core_clk) if (nreset) begin
     if (!bar_committed && ep_link_up)
       $fatal(1, "endpoint L0 observed before BAR configuration commit");
-    if (bar_mem_ready && (!noc_ready || !host_mem_enable || !ep_link_up))
+    if (bar_mem_ready && (!noc_ready || !host_memory_enable || !ep_link_up))
       $fatal(1, "BAR memory gate accepted traffic before readiness");
   end
 
