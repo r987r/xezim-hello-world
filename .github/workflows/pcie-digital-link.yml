@@ -145,7 +145,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: {python-version: '3.12'}
+        with: {python-version: '3.11'}
       # Pinned official Icarus/Verilator binaries bypass unreliable APT DNS.
       - uses: YosysHQ/setup-oss-cad-suite@v4
         with:
@@ -180,6 +180,14 @@ jobs:
           fusesoc --cores-root=.tools/pcie_endpoint_openpcie \
             run --target=sim fusesoc:pcie:phy_core:1.0.0 \
             2>&1 | tee .tools/pcie-link/openpcie-upstream.log
+          # OSS-CAD's Cocotb VPI must resolve the selected Python shared
+          # runtime. The previous 3.12 job attempted libpython3.11.so and
+          # stopped before any Cocotb tests started.
+          py_libdir="$(python3 -c 'import sysconfig; print(sysconfig.get_config_var("LIBDIR"))')"
+          test -f "$py_libdir/libpython3.11.so"
+          export LD_LIBRARY_PATH="$py_libdir:${LD_LIBRARY_PATH:-}"
+          python3 --version
+          echo "Cocotb Python library: $py_libdir/libpython3.11.so"
           # FuseSoC can exit zero even when Cocotb fails test-module import.
           # Require an actual completed, nonempty and entirely passing test table.
           python3 tools/ci_require_cocotb.py .tools/pcie-link/openpcie-upstream.log
