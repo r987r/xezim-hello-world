@@ -34,7 +34,10 @@ module tb_pcie_pipe_x1_adapter;
     if (ep_rxdata_valid !== 0) $fatal(1, "unqualified host sample accepted");
     host_sample_valid = 1; ep_txdata_valid = 0;
     #1;
-    if (host_rxelecidle !== 1) $fatal(1, "endpoint TX invalid not idle");
+    if (host_rxelecidle !== 0) $fatal(1, "valid cannot falsely assert electrical idle");
+    ep_txelecidle = 1;
+    #1;
+    if (host_rxelecidle !== 1) $fatal(1, "actual endpoint electrical idle ignored");
     $display("PASS: Gen1 x1 32-bit/K physical data-boundary directions and idle gating");
     $finish;
   end
