@@ -9,6 +9,7 @@ on:
       - 'tools/ip_fetch.py'
       - 'tools/pcie_link.py'
       - 'tools/pcie_cfg_overlay.py'
+      - 'tools/pcie_link_report.py'
       - 'tools/ci_require_cocotb.py'
       - 'tools/generate.py'
       - 'dv/pcie_link/**'
@@ -17,6 +18,7 @@ on:
       - 'tests/test_pcie_link.py'
       - 'tests/test_pcie_scenario.py'
       - 'tests/test_pcie_cfg_overlay.py'
+      - 'tests/test_pcie_link_report.py'
       - 'dv/common/scenario.py'
       - 'dv/common/action_runtime.py'
       - 'config/scenarios/pcie-gen1-link.json'
@@ -56,7 +58,7 @@ jobs:
       - name: Prove profile swaps fail closed and checked-in generated selection agrees
         run: |
           set -euo pipefail
-          python3 -m unittest tests.test_pcie_link tests.test_ip_fetch_submodules tests.test_ci_require_cocotb tests.test_pcie_scenario tests.test_pcie_cfg_overlay -v
+          python3 -m unittest tests.test_pcie_link tests.test_ip_fetch_submodules tests.test_ci_require_cocotb tests.test_pcie_scenario tests.test_pcie_cfg_overlay tests.test_pcie_link_report -v
           python3 tools/pcie_link.py --check
           mkdir -p .tools/pcie-link
           iverilog -g2012 -s tb_pcie_pipe_x1_adapter \
@@ -429,6 +431,11 @@ jobs:
           export SOC_SELECTED_PLAN_SHA
           SOC_SELECTED_PLAN_SHA="$(sha256sum "$root/.tools/pcie-link/scenario/scenario-plan.json" | cut -d' ' -f1)"
           "$root/.tools/pcie-cross-obj/Vtop" 2>&1 | tee "$root/pcie-cross-run.log"
+          # One evidence adapter renders observed LTSSM/PIPE events, then
+          # deliberately labels BAR/TLP/NoC/byte results UNMEASURED.
+          # It does not create a synthetic full-chip result.json or PASS.
+          python3 "$root/tools/pcie_link_report.py" "$root/pcie-cross-run.log" \
+            --out "$root/.tools/pcie-link/observations"
           # Mode must be visibly selected, but success still requires genuine L0.
           grep -q '^PCIE_SIM_FORCE_FAST_LTSSM: ENABLED override=512x' "$root/pcie-cross-run.log"
           grep -q '^PCIE_EP_SIM_FAST_LTSSM: ENABLED timer_divider=512 min_tx_ts1=16' "$root/pcie-cross-run.log"
@@ -448,4 +455,6 @@ jobs:
             pcie-cross-build.log
             pcie-cross-run.log
             .tools/pcie-link/scenario/scenario-plan.json
+            .tools/pcie-link/observations/pcie-link-evidence.json
+            .tools/pcie-link/observations/pcie-link-report.html
           if-no-files-found: warn
