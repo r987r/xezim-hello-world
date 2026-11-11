@@ -3,6 +3,14 @@
 **Scope:** [P0 #76](https://github.com/r987r/xezim-hello-world/issues/76). An
 opt-in **Gen1 x1 digital** test experiment; not a silicon transceiver.
 
+**Current status / visual architecture:** The cross-connected original
+pcievhost RC ↔ OpenPCIe endpoint **reached L0 independently** in
+[GitHub Actions run 43099695972](https://github.com/r987r/xezim-hello-world/actions/runs/43099695972).
+This proves the isolated **digital-link** test, not BAR enumeration or a
+full-chip NoC/SRAM transfer. See [PCIe fast-versus-real-link architecture,
+evidence matrix and report integration](../../docs/pcie-verification-modes.md).
+The original modeled-link full-chip reporter remains the default.
+
 The original `chip-pcie-host` Cocotb test remains a **TLP bridge-only**
 regression and continues using the existing one common regression/action
 framework. It does **not** qualify a real PCIe physical/Data Link/LTSSM path.
@@ -18,8 +26,9 @@ framework. It does **not** qualify a real PCIe physical/Data Link/LTSSM path.
    and its immutable IP lock; it must not alter the common YAML test/action
    schema, TLP/AXI scoreboard, or NoC connector.
 3. `dv/pcie_link/pipe_x1_adapter.sv` is the explicit replaceable
-   32-bit-data / four-K-bit Gen1 x1 PIPE-boundary shim. Both sides use the
-   **same** 62.5 MHz parallel clock. pcievhost also needs its 250 MHz symbol
+   16-bit-active-data / two-K-bit Gen1 x1 PIPE-boundary shim. Both sides use the
+   **same** 125 MHz parallel clock. OpenPCIe's outer vectors remain 32-bit,
+   but upper lanes are inactive at Gen1. pcievhost also needs its 250 MHz symbol
    clock. The adapter preserves valid and electrical-idle behavior, but
    **does not** generate receiver-detect success, `phy_phystatus`, LTSSM
    advancement, or LinkUp. PHY sideband behavior needs an independent
