@@ -436,13 +436,13 @@ def _validate_memory(ordered: list[dict], ancestors: dict[str, set[str]],
             link = _name(args["link"], f"{aid}.link")
             if link not in available_pcie:
                 raise ScenarioError(f"{aid}: unknown configured PCIe link {link}")
-            # Current digital provider is exactly Gen1 x1 / 32-bit PIPE.
+            # Current digital provider is Gen1 x1 / 16-bit active PIPE per lane.
             # Changing PHY width/revision requires explicit capability
             # qualification, not silently accepting a plan parameter.
             if (_int(args["lanes"], f"{aid}.lanes", low=1, high=16) != 1
                     or _int(args["generation"], f"{aid}.generation", low=1, high=5) != 1
                     or _int(args["data_width_bits"], f"{aid}.data_width_bits",
-                            low=8, high=64) != 32):
+                            low=8, high=64) != 16):
                 raise ScenarioError(f"{aid}: unqualified PCIe link profile")
             predecessor = last_pcie_train.get(link)
             if predecessor is not None and predecessor not in ancestors[aid]:
