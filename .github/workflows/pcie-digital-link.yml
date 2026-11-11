@@ -172,7 +172,8 @@ jobs:
           set -euo pipefail
           mkdir -p .tools/pcie-link
           python3 tools/pcie_link.py --check --check-upstream --apply-selected-overlays
-          python3 tools/pcie_cfg_overlay.py --checkout .tools/pcie_endpoint_openpcie
+          # Standalone upstream FuseSoC must NOT be modified with BAR0 wrapper
+          # hooks: that isolated source target lacks our BAR0 overlay module.
           git -C .tools/pcie_endpoint_openpcie diff -- src/ltssm/pcie_ltssm_downstream.sv \
             > .tools/pcie-link/openpcie-reviewed-ltssm.diff
           test -s .tools/pcie-link/openpcie-reviewed-ltssm.diff
