@@ -136,7 +136,11 @@ static int configure_selected_bar0(const soc_scn_action_t *action, void *opaque)
                 static_cast<unsigned long long>(aperture),static_cast<unsigned>(base));
     std::fflush(stdout);
     // Real data link / credit exchange after separately completed link LTSSM.
+    std::printf("PCIE_RC_FC_INIT_BEGIN: original pcievhost DLLP InitFC after L0\n");
+    std::fflush(stdout);
     rc->initFc();
+    std::printf("PCIE_RC_FC_INIT_DONE: genuine InitFC exchange completed\n");
+    std::fflush(stdout);
     uint32_t actual = 0;
     const uint32_t mask = static_cast<uint32_t>(~(aperture-1)) & 0xfffffff0U;
     auto tag = []() { return static_cast<int>((next_tag++) & 31u); };
