@@ -105,6 +105,32 @@ standard `protocols.html` passive protocol explorer. The established
 unchanged. Neither
 this documentation nor the diagnostic is a full-chip PASS.
 
+## Over-link BAR enumeration qualification — opt-in matrix
+
+The dedicated PCIe workflow now uses a **single shared Verilator build recipe**
+with two selectable canonical action plans. The `l0` lane executes
+`config/scenarios/pcie-gen1-link.json` (one real host training action);
+the `bar0` lane executes
+`config/scenarios/pcie-gen1-bar0.json` (the same action plus dependent
+`pcie.config.bar0`). This preserves an independent L0 regression even
+if configuration TLP acceptance is broken.
+
+The BAR0 action calls the pinned pcievhost `cfgWrite`/`cfgRead` APIs.
+Its receive callback checks the **real returned completion TLP** against
+the outstanding host tag and success status. It sends the standard BAR0
+all-ones size probe, verifies the 4KiB mask, assigns host bus address
+`0x80001000` (distinct from device SRAM `0x12000000`), reads it back,
+writes COMMAND.MSE, then checks the readback. All operations time out
+and fail on missing completions. At the other end, passive endpoint RX
+and completion-TX AXI-stream handshakes are logged from original RTL.
+No testbench relay or direct host/device prelink readback exists.
+
+The `bar0` CI lane is **experimental/unqualified until its own run
+passes**. Independent L0 is already established; it does not imply
+the new config sequence succeeds. Once passed, add its correlation
+to the canonical test-flow and TLP reporter. Full-chip BAR memory
+transactions must still use pinned `pcie_axi_master` and FlooNoC.
+
 ## Still required for issue #76
 
 1. Host original VProc API must issue **real ConfigRd0/ConfigWr0** after
