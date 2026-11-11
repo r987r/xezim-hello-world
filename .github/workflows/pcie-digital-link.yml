@@ -227,6 +227,10 @@ jobs:
             2>&1 | tee .tools/pcie-link/openpcie-upstream.log
           # FuseSoC can exit zero even when Cocotb fails test-module import.
           # Require an actual completed, nonempty and entirely passing test table.
+          # Proof the original LTSSM actually received the explicit test-only
+          # 512x timing option; a source patch alone cannot pass qualification.
+          grep -q '^PCIE_EP_SIM_FAST_LTSSM: ENABLED timer_divider=512 min_tx_ts1=16' \
+            .tools/pcie-link/openpcie-upstream.log
           python3 tools/ci_require_cocotb.py .tools/pcie-link/openpcie-upstream.log
       - name: Preserve upstream endpoint run evidence and failures
         if: always()
