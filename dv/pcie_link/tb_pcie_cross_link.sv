@@ -35,6 +35,7 @@ module test #(
   integer phy_status_count = 0;
   integer ep_tx_count = 0;
   integer rc_tx_count = 0;
+  logic endpoint_l0_reported = 1'b0;
 
   // Host root complex is the original pinned GPL simulation-only model.
   pcieVHostPipex1 #(.NodeNum(0), .EndPoint(0), .DataWidth(32)) host (
@@ -120,6 +121,12 @@ module test #(
     if (!host_txelecidle) rc_tx_count <= rc_tx_count + 1;
     if (ep_link_up && phy_status_count == 0)
       $fatal(1, "Endpoint L0 without receiver detection");
+    if (ep_link_up && !endpoint_l0_reported) begin
+      if (ep_tx_count == 0 || rc_tx_count == 0)
+        $fatal(1, "Endpoint L0 without bidirectional PIPE activity");
+      endpoint_l0_reported <= 1'b1;
+      $display("PCIE_ENDPOINT_L0: original endpoint asserts link_up after receiver-detect and bidirectional PIPE traffic");
+    end
   end
   // Original GPL pcievhost hardcodes test.Fatal for fatal bridge events.
   task Fatal;
