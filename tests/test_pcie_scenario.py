@@ -20,6 +20,7 @@ class PcieScenarioTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.spec = json.loads((ROOT / "config/scenarios/pcie-gen1-link.json").read_text())
+        cls.bar_spec = json.loads((ROOT / "config/scenarios/pcie-gen1-bar0.json").read_text())
         cls.soc = yaml.safe_load((ROOT / "config/soc.yaml").read_text())
 
     def resolve(self, spec=None):
@@ -27,9 +28,11 @@ class PcieScenarioTests(unittest.TestCase):
 
     def test_exact_selected_plan_no_fake_hardware_pass(self):
         p = self.resolve()
-        self.assertEqual(len(p["actions"]), 2)
-        self.assertEqual(p["actions"][1]["kind"], "pcie.config.bar0")
-        self.assertEqual(p["actions"][1]["depends_on"], ["train_link"])
+        self.assertEqual(len(p["actions"]), 1)
+        e=self.resolve(self.bar_spec)
+        self.assertEqual(len(e["actions"]),2)
+        self.assertEqual(e["actions"][1]["kind"], "pcie.config.bar0")
+        self.assertEqual(e["actions"][1]["depends_on"],["train_link"])
         self.assertEqual(p["actions"][0]["kind"], "pcie.link.train")
         self.assertEqual(p["actions"][0]["args"]["link"], "pcie0")
         self.assertIsNone(p["execution_evidence"])
@@ -53,12 +56,12 @@ class PcieScenarioTests(unittest.TestCase):
                            ("aperture_bytes", 3000), ("aperture_bytes", 2097152),
                            ("host_bus_base", 0x80001001),
                            ("host_bus_base", 0xfffff001)):
-            spec=copy.deepcopy(self.spec)
+            spec=copy.deepcopy(self.bar_spec)
             spec["actions"][1]["args"][key]=value
             with self.subTest(key=key,value=value), self.assertRaises(ScenarioError):
                 self.resolve(spec)
         for mutation in ("no_dependency", "wrong_phase", "no_training"):
-            spec=copy.deepcopy(self.spec)
+            spec=copy.deepcopy(self.bar_spec)
             if mutation=="no_dependency":
                 spec["actions"][1]["depends_on"]=[]
             elif mutation=="wrong_phase":
@@ -69,7 +72,7 @@ class PcieScenarioTests(unittest.TestCase):
                 self.resolve(spec)
 
     def test_real_registered_handler_dispatches_same_action_and_hash(self):
-        raw = canonical_json(self.resolve()).encode("ascii")
+        raw = canonical_json(self.resolve(self.bar_spec)).encode("ascii")
         seen = []
 
         async def host_driver(action, context):
@@ -100,7 +103,7 @@ class PcieScenarioTests(unittest.TestCase):
             self.resolve(spec)
         spec["actions"][0]["depends_on"] = ["again"]
         # One directed training can be ordered after the other.
-        self.assertEqual(len(self.resolve(spec)["actions"]), 3)
+        self.assertEqual(len(self.resolve(spec)["actions"]), 2)
 
 
 if __name__ == "__main__":
