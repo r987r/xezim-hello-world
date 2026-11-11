@@ -19,7 +19,7 @@ RANDOM_ALGORITHM = "sha256-rejection-v1"
 PHASES = ("init", "run", "check")
 KINDS = frozenset(("memory.allocate", "memory.initialize", "memory.check",
                    "memory.release", "dma.configure", "dma.copy", "dma.wait_idle",
-                   "event.emit", "event.wait"))
+                   "event.emit", "event.wait", "pcie.link.train"))
 NAME = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]{0,95}$")
 PATTERNS = frozenset(("constant", "counter8", "address_xor"))
 POLICIES = frozenset(("strict", "fast", "hybrid", "auto"))
@@ -286,6 +286,10 @@ def _validate_memory(ordered: list[dict], ancestors: dict[str, set[str]],
     # The emitter's adapter must actually drive the mailbox before declaring
     # driver_done; only a passive checker can prove device receipt.
     emitters: dict[tuple[str, str], str] = {}
+    last_pcie_train: dict[str, str] = {}
+    available_pcie = {s["name"] for s in config["subsystems"]
+                      if s.get("type") == "peripheral" and s["name"].startswith("pcie")}
+
 
     def use(buffer: str, aid: str, *, offset: int = 0,
             length: int | None = None, write: bool = False, read: bool = False) -> tuple[int, int]:
@@ -422,6 +426,29 @@ def _validate_memory(ordered: list[dict], ancestors: dict[str, set[str]],
                 source = emitters.get(pair)
                 if source is None or source not in ancestors[aid]:
                     raise ScenarioError(f"{aid}: event wait requires causal emit dependency")
+        elif kind == "pcie.link.train":
+            # A source-selected host action; NOT evidence that the endpoint
+            # has reached L0. Host completion and RTL L0 remain independent.
+            if phase != "run":
+                raise ScenarioError(f"{aid}: PCIe link training is a RUN action")
+            _fields(args, {"link", "lanes", "generation", "data_width_bits"},
+                    set(), aid)
+            link = _name(args["link"], f"{aid}.link")
+            if link not in available_pcie:
+                raise ScenarioError(f"{aid}: unknown configured PCIe link {link}")
+            # Current digital provider is exactly Gen1 x1 / 32-bit PIPE.
+            # Changing PHY width/revision requires explicit capability
+            # qualification, not silently accepting a plan parameter.
+            if (_int(args["lanes"], f"{aid}.lanes", low=1, high=16) != 1
+                    or _int(args["generation"], f"{aid}.generation", low=1, high=5) != 1
+                    or _int(args["data_width_bits"], f"{aid}.data_width_bits",
+                            low=8, high=64) != 32):
+                raise ScenarioError(f"{aid}: unqualified PCIe link profile")
+            predecessor = last_pcie_train.get(link)
+            if predecessor is not None and predecessor not in ancestors[aid]:
+                raise ScenarioError(
+                    f"{aid}: unordered concurrent training on PCIe link {link}")
+            last_pcie_train[link] = aid
         elif kind == "memory.release":
             if phase not in ("run", "check"):
                 raise ScenarioError(f"{aid}: release outside RUN/CHECK")
