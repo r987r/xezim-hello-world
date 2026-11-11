@@ -18,6 +18,21 @@
         "generation": 1,
         "data_width_bits": 16
       }
+    },
+    {
+      "action_instance_id": "enumerate_bar0",
+      "kind": "pcie.config.bar0",
+      "actor": "host0",
+      "phase": "init",
+      "depends_on": [
+        "train_link"
+      ],
+      "args": {
+        "link": "pcie0",
+        "bar_index": 0,
+        "aperture_bytes": 4096,
+        "host_bus_base": 2147487744
+      }
     }
   ]
 }
