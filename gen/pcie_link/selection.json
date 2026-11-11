@@ -12,13 +12,13 @@
   "ip_lock_sha256": "37cacf84332e605648cb9a05c89c826dafaddd6cc1926f468fead7fc12fff5a4",
   "link": {
     "bar0_hardware_decode": false,
-    "data_width_bits": 32,
-    "datak_width_bits": 4,
+    "data_width_bits": 16,
+    "datak_width_bits": 2,
     "encoded_symbol_clock_mhz": 250,
     "generation": 1,
     "hardware_config_enumeration": false,
     "lanes": 1,
-    "pipe_parallel_clock_mhz": 62.5,
+    "pipe_parallel_clock_mhz": 125,
     "qualifier": "source_and_adapter_preflight_only",
     "trained_l0": false
   },
@@ -115,5 +115,5 @@
   "schema_version": 1,
   "selection": "openpcie_pcievhost_gen1_x1",
   "source": "config/pcie_link.yaml",
-  "source_sha256": "50600d801f30e6a285bfdef5dff0e941c8f5df7929e10a85e924f4f8c7c61309"
+  "source_sha256": "b2e172de460cc1bf3a6ca2b66295529a73d2c3dd1c78a6ce66796dd063bacbc2"
 }
