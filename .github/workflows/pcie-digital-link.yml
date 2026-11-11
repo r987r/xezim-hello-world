@@ -229,7 +229,7 @@ jobs:
             "$root/dv/pcie_link/pipe_x1_adapter.sv" \
             "$root/dv/pcie_link/phy_status_responder.sv" \
             "$root/dv/pcie_link/tb_pcie_cross_link.sv" \
-            --top-module tb_pcie_cross_link \
+            --top-module test \
             2>&1 | tee "$root/cross-provider-elaboration.log"
           # RTL elaboration is only a necessary precondition, never L0 proof.
       - name: Archive original compiler output even on failure
