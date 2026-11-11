@@ -16,7 +16,7 @@
         "link": "pcie0",
         "lanes": 1,
         "generation": 1,
-        "data_width_bits": 32
+        "data_width_bits": 16
       }
     }
   ]
