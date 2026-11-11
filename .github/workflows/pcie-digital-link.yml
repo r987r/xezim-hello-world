@@ -188,6 +188,14 @@ jobs:
           export LD_LIBRARY_PATH="$(cocotb-config --lib-dir):${LD_LIBRARY_PATH:-}"
           echo "Cocotb Python: $PYGPI_PYTHON_BIN"
           echo "Cocotb GPI bootstrap: $GPI_USERS"
+          # FuseSoC invokes Verilator directly instead of cocotb's runner,
+          # so we MUST set the cocotb 1.9 GPI Python bootstrap before run.
+          export GPI_USERS="$(cocotb-config --libpython);$(cocotb-config --pygpi-entry-point)"
+          export PYTHONPATH="$PWD/.tools/pcie_endpoint_openpcie/verif/tests:${PYTHONPATH:-}"
+          export MODULE=test_pcie_core
+          export TOPLEVEL=top
+          echo 'GPI_USERS bootstrap configured before FuseSoC execution'
+          python3 --version
           fusesoc --cores-root=.tools/pcie_endpoint_openpcie \
             run --target=sim fusesoc:pcie:phy_core:1.0.0 \
             2>&1 | tee .tools/pcie-link/openpcie-upstream.log
