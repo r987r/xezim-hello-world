@@ -34,7 +34,7 @@ static void on_packet(pPkt_t pkt, int, void*) {
             const int tag = GET_CPL_TAG(pkt->data);
             const int status = GET_CPL_STATUS(pkt->data);
             const unsigned bytes = pkt->ByteCount;
-            std::printf("PCIE_RC_CFG_RX_CPL: tag=%d status=%d type=%02x bytes=%u timestamp=%u\\n",
+            std::printf("PCIE_RC_CFG_RX_CPL: tag=%d status=%d type=%02x bytes=%u timestamp=%u\n",
                         tag, status, type, bytes, pkt->TimeStamp);
             std::fflush(stdout);
             if (pending_tag < 0 || tag != pending_tag || completion_seen) {
@@ -64,7 +64,7 @@ static bool wait_config_completion(pcieModelClass *rc, int tag,
     const bool ok = completion_seen && !unexpected_completion &&
                     completion_status == CPL_SUCCESS &&
                     (!data_expected || completion_byte_count >= 4);
-    std::printf("PCIE_RC_CFG_RESULT: tag=%d seen=%d status=%d bytes=%u ok=%d\\n",
+    std::printf("PCIE_RC_CFG_RESULT: tag=%d seen=%d status=%d bytes=%u ok=%d\n",
                 tag, completion_seen, completion_status, completion_byte_count, ok);
     std::fflush(stdout);
     if (ok && value) *value = completion_data;
@@ -87,7 +87,7 @@ static bool start_config_request(int tag) {
 
 static bool config_read(pcieModelClass *rc, uint32_t off, int tag, uint32_t *value) {
     if (!start_config_request(tag)) return false;
-    std::printf("PCIE_RC_CFG_TX: CfgRd0 addr=%03x tag=%d\\n", off, tag);
+    std::printf("PCIE_RC_CFG_TX: CfgRd0 addr=%03x tag=%d\n", off, tag);
     std::fflush(stdout);
     rc->cfgRead(off, 4, tag, 1);
     return wait_config_completion(rc, tag, true, value);
@@ -101,7 +101,7 @@ static bool config_write(pcieModelClass *rc, uint32_t off, uint32_t word, int ta
         static_cast<PktData_t>((word >> 16) & 0xff),
         static_cast<PktData_t>((word >> 24) & 0xff),
     };
-    std::printf("PCIE_RC_CFG_TX: CfgWr0 addr=%03x data=%08x tag=%d\\n", off, word, tag);
+    std::printf("PCIE_RC_CFG_TX: CfgWr0 addr=%03x data=%08x tag=%d\n", off, word, tag);
     std::fflush(stdout);
     rc->cfgWrite(off, bytes, 4, tag, 1);
     return wait_config_completion(rc, tag, false, nullptr);
@@ -131,7 +131,7 @@ static int configure_selected_bar0(const soc_scn_action_t *action, void *opaque)
         base + aperture > 0x100000000ULL)
         return -1;
     auto *rc = static_cast<pcieModelClass*>(opaque);
-    std::printf("PCIE_RC_CFG_BEGIN: action=%s plan=%s bar=0 aperture=%llu base=%08x\\n",
+    std::printf("PCIE_RC_CFG_BEGIN: action=%s plan=%s bar=0 aperture=%llu base=%08x\n",
                 action->action_instance_id, SOC_SCN_PLAN_SHA256,
                 static_cast<unsigned long long>(aperture),static_cast<unsigned>(base));
     std::fflush(stdout);
@@ -142,24 +142,24 @@ static int configure_selected_bar0(const soc_scn_action_t *action, void *opaque)
     auto tag = []() { return static_cast<int>((next_tag++) & 31u); };
     if (!config_write(rc, 0x10, 0xffffffffU, tag()) ||
         !config_read(rc, 0x10, tag(), &actual) || actual != mask) {
-        std::fprintf(stderr,"PCIE_RC_CFG_FAIL: BAR0 sizing actual=%08x expected=%08x\\n",
+        std::fprintf(stderr,"PCIE_RC_CFG_FAIL: BAR0 sizing actual=%08x expected=%08x\n",
                      actual,mask);
         return -1;
     }
-    std::printf("PCIE_RC_CFG_PROBE_OK: BAR0 mask=%08x\\n",actual);
+    std::printf("PCIE_RC_CFG_PROBE_OK: BAR0 mask=%08x\n",actual);
     if (!config_write(rc, 0x10, static_cast<uint32_t>(base), tag()) ||
         !config_read(rc, 0x10, tag(), &actual) || actual != base) {
-        std::fprintf(stderr,"PCIE_RC_CFG_FAIL: BAR0 readback actual=%08x expected=%08x\\n",
+        std::fprintf(stderr,"PCIE_RC_CFG_FAIL: BAR0 readback actual=%08x expected=%08x\n",
                      actual,static_cast<unsigned>(base));
         return -1;
     }
-    std::printf("PCIE_RC_CFG_BAR_ASSIGNED: BAR0 bus=%08x\\n",actual);
+    std::printf("PCIE_RC_CFG_BAR_ASSIGNED: BAR0 bus=%08x\n",actual);
     if (!config_write(rc, 0x04, 0x00000002U, tag()) ||
         !config_read(rc, 0x04, tag(), &actual) || (actual & 2) != 2) {
-        std::fprintf(stderr,"PCIE_RC_CFG_FAIL: COMMAND.MSE observed=%08x\\n",actual);
+        std::fprintf(stderr,"PCIE_RC_CFG_FAIL: COMMAND.MSE observed=%08x\n",actual);
         return -1;
     }
-    std::printf("PCIE_RC_CFG_MSE_ENABLED: command=%08x completions=%u\\n",
+    std::printf("PCIE_RC_CFG_MSE_ENABLED: command=%08x completions=%u\n",
                 actual,completed_config_packets);
     return 0;
 }
