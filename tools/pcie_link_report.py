@@ -96,8 +96,10 @@ def summarize(text: str) -> dict:
             issues.append(f"incorrect event order {a} -> {b}")
     if not states:
         issues.append("no actual endpoint LTSSM state trace")
-    elif not any(int(row["to"],16)&0xf==2 for row in states):
-        issues.append("no observed endpoint Polling state")
+    elif not any(int(row["to"],16)==0x22 for row in states):
+        issues.append("no observed endpoint Polling.Active state")
+    if states and not any(int(row["to"],16)==0x23 for row in states):
+        issues.append("no observed endpoint Configuration state")
     if any(e.get("kind")=="sim_timer_mode" and
            (e["divider"]!=512 or e["minimum_transmitted_ts1"]!=16) for e in events):
         issues.append("unexpected simulation timer acceleration")
