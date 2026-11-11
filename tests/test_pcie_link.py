@@ -29,7 +29,9 @@ class PcieLinkSelectionTests(unittest.TestCase):
         result = pcie_link.selection(ROOT)
         self.assertEqual(result["link"]["generation"], 1)
         self.assertEqual(result["link"]["lanes"], 1)
-        self.assertEqual(result["link"]["data_width_bits"], 32)
+        self.assertEqual(result["link"]["data_width_bits"], 16)
+        self.assertEqual(result["link"]["datak_width_bits"], 2)
+        self.assertEqual(result["link"]["pipe_parallel_clock_mhz"], 125)
         self.assertNotEqual(result["providers"]["host"]["commit"],
                             result["providers"]["endpoint"]["commit"])
         self.assertEqual(result["providers"]["host"]["license"], "GPL-3.0")
@@ -71,8 +73,8 @@ class PcieLinkSelectionTests(unittest.TestCase):
                 self.choose(lambda p: p["link"].update({key: True}))
 
     def test_provider_swaps_must_declared_and_have_same_pins(self):
-        for key, value in (("lanes", 2), ("data_width_bits", 16),
-                           ("datak_width_bits", 1), ("pipe_parallel_clock_mhz", 250)):
+        for key, value in (("lanes", 2), ("data_width_bits", 32),
+                           ("datak_width_bits", 4), ("pipe_parallel_clock_mhz", 62.5)):
             with self.subTest(key=key), self.assertRaisesRegex(
                     pcie_link.PcieProviderError, "clock/width"):
                 self.choose(lambda p: p["link"].update({key: value}))
