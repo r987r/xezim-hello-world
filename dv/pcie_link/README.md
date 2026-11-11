@@ -119,3 +119,60 @@ Source example: pcievhost's pinned `src/ltssm.c` explicitly describes its
 abbreviated LTSSM as intended for L0 simulation only, not full compliance.
 The upstream OpenPCIe self-test and the host standalone demo are **not**
 cross-connected. No current result establishes L0 training.
+
+## Full-chip parallel boot and PCIe link ownership (integration contract)
+
+**Architecture requirement, NOT an implemented full-chip L0 test.** One selected
+SCN action graph schedules `host0.pcie.link.train` concurrently with real
+`cpu0` reset/boot/NoC initialization, using the existing CPU/host coordination
+and `test-flow` evidence (no separate hardcoded VProc boot sequence).
+The host has an **independent** PCIe Root Complex LTSSM and the endpoint
+has an **independent** endpoint LTSSM. Their clocks, reset and PHY
+Detect/TS1/TS2/configuration ordered sets drive actual training.
+
+Two distinct barriers must never be conflated:
+
+1. **PHY/LTSSM link trained:** RC and endpoint both have *observed* L0;
+   a standalone host API returning or a timer is not enough. This may
+   happen while CPU0 firmware is still booting and NoC is not ready.
+2. **PCIe BAR transaction-ready:** the endpoint configuration/TLP ingress,
+   NoC bridges, downstream SRAM and reset/clock paths are initialized,
+   address decode has been established, and any CDC FIFOs are operational.
+   Host enumeration/configuration after L0 can proceed independently of
+   the data-path gate; host MMIO/DMA traffic must wait for an observed
+   ready handshake (or receive specified safe completion/retry behavior).
+   A CPU mailbox write alone is not hardware acceptance.
+
+**Race-resistant full-chip test requirements:**
+
+- Reset releases independently where appropriate; host begins
+  `pcie.link.train`, endpoint LTSSM advances, and CPU0 executes
+  immutable-ROM boot/initializes the NoC in parallel.
+- CPU0 configures endpoint-accessible resources via the real Config NoC
+  and publishes device readiness **only after** NoC routing, memory,
+  bridge, and relevant firmware-owned queues are actually initialized.
+  A ready flag cannot be merely synthesized by TB time.
+- Host observes L0, performs actual config reads, BAR sizing/allocation
+  and legal COMMAND settings, then waits for real device-ready capability
+  before issuing BAR memory transactions.
+- Verify one host MWr/MRd through endpoint TLP decoding -> PCIe0 local
+  NoC -> global/local fabric -> SRAM, with passive TLP and AXI completion
+  evidence plus independent byte readback. A posted MWr is verified by
+  memory visibility, not an invented completion TLP.
+- Negative scenarios: L0 before NoC-ready (no early accepted memory
+  corruption), NoC-ready before L0 (no fabricated link), absent RC,
+  endpoint reset during traffic, CPU boot timeout, and link retraining.
+  Host must not deadlock CPU boot by waiting for a transaction requiring
+  the not-yet-ready fabric.
+- The scenario graph records `actor`, selected seed, plan SHA,
+  `depends_on`, and action IDs for both host/CPU. Driver events are
+  **not** protocol PASS; passive monitors and the existing independent
+  checker must demonstrate the barriers and byte-level completion.
+
+The current `tb_pcie_cross_link.sv` does **not** instantiate the full SoC,
+run CPU firmware, or implement the NoC transaction-ready handshake.
+It remains an isolated link-training experiment. Implement the full-chip
+parallel boot only *after* actual isolated L0 evidence is green; reuse
+`tools/regress.py`, `config/regression.yaml`, original SCN-C/Python/SV
+action ABI and `dv/pcie0/host_adapter.py` instead of copying an independent
+test runner.
