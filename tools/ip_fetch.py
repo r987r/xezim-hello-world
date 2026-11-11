@@ -20,7 +20,7 @@ def hydrate_submodules(out: Path, paths: list[str]) -> None:
         raise ValueError("duplicate pinned submodule path")
     for name in paths:
         path = Path(name)
-        if not name or path.is_absolute() or ".." in path.parts or "." in path.parts:
+        if name in ("", ".", "..") or path.is_absolute() or ".." in path.parts:
             raise ValueError(f"unsafe pinned submodule path {name!r}")
     if not paths:
         return
