@@ -42,8 +42,8 @@ class PcieScenarioTests(unittest.TestCase):
                 with self.assertRaises(ScenarioError):
                     self.resolve(spec)
         spec = copy.deepcopy(self.spec)
-        spec["actions"][0]["phase"] = "init"
-        with self.assertRaisesRegex(ScenarioError, "RUN action"):
+        spec["actions"][0]["phase"] = "run"
+        with self.assertRaisesRegex(ScenarioError, "INIT action"):
             self.resolve(spec)
 
     def test_real_registered_handler_dispatches_same_action_and_hash(self):
