@@ -200,6 +200,21 @@ async def execute_cold_boot(dut, *, external=None, benchmark=False):
         assert plan, "missing shared AXI capture configuration"
         events_file = Path(plan).parent / "axi-events.jsonl"
         assert events_file.is_file(), "missing passive NoC AXI events"
+        from tools.axi_report import read_events, correlate
+        from tools.csr_reset_axi_evidence import verify as verify_reset_frontdoor
+        captured, bad_capture = read_events(events_file)
+        if bad_capture:
+            raise AssertionError(f"CPU CSR original passive AXI capture corrupt: {bad_capture[:3]}")
+        catalog = json.loads((ROOT / "gen/supernoc/axi_monitors.json").read_text())
+        rows, protocol_issues, _ = correlate(captured, catalog)
+        cfg = yaml.safe_load((ROOT / "config/soc.yaml").read_text())
+        boot_apertures = [r for r in cfg["address_map"]["config"]
+                          if r["name"] == "boot.reset_ctrl"]
+        assert len(boot_apertures) == 1, "missing real boot reset CSR aperture"
+        csr_proof = verify_reset_frontdoor(
+            rows, protocol_issues, int(boot_apertures[0]["base"], 0))
+        (Path(plan).parent / "cpu-reset-csr-accepted.json").write_text(
+            json.dumps(csr_proof, indent=2, sort_keys=True) + "\n")
         scenario_path = os.environ.get("SOC_SCENARIO_PLAN")
         if scenario_path:
             # SCN-2: actual CPU0 executes the C variant compiled from the
