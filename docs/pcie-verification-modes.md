@@ -49,7 +49,7 @@ or host/device readiness backchannel is allowed.
 | Link training | **Not present** | Independently observed host and endpoint L0 in CI run `43099695972` |
 | Configuration space | Modeled host/endpoint BAR0 enumeration, real bridge TLPs | Host-visible BAR RTL overlay compiled; real host config TLP enumeration **not yet tested** |
 | Memory traffic | Real AXI/TLP captures, RAM byte scoreboard | Not yet connected to real NoC/SRAM |
-| Reporting | Existing canonical `result.json`, `test-flow.json`, `axi-transactions.json`, `protocol-transactions.json`, HTML | `pcie-link-evidence.json` and `pcie-link-report.html` from observed Verilator transcript **only** |
+| Reporting | Existing canonical `result.json`, `test-flow.json`, `axi-transactions.json`, `protocol-transactions.json`, HTML | `pcie-link-evidence.json`, `pcie-link-report.html`, and reused `protocols.html` explorer for observed LTSSM events **only** |
 | SerDes/electrical link | No | No: behavioral digital PHY only |
 | Source selection | `config/regression.yaml`, `config/stimulus/tests.yaml` | Pinned `config/pcie_link.yaml`, single `config/scenarios/pcie-gen1-link.json`; same SCN schema |
 
@@ -65,7 +65,13 @@ Verilator log: source lines for device prelink BAR commit, real receiver
 detection, PIPE width, LTSSM transitions, independent endpoint L0, and host
 `InitLink(1)` return, with an exact selected scenario plan SHA. It emits
 `pcie-link-evidence.json` and `pcie-link-report.html` into the same CI
-artifact as `pcie-cross-run.log`. On missing/duplicate or impossible
+artifact as `pcie-cross-run.log`. It also calls the existing
+`dv.common.protocol_trace.ProtocolTrace` and
+`tools/protocol_report.py` to produce `protocol-events.jsonl`,
+`protocol-transactions.json` and the existing interactive
+`protocols.html` viewer containing **only observed endpoint LTSSM
+state-transition events** with simulator timestamps. These are not
+TLP transactions. On missing/duplicate or impossible
 milestones, it rejects the L0 diagnostic. An event without a simulator
 timestamp is rendered **unmeasured**, never assigned a fabricated time.
 
@@ -93,7 +99,10 @@ python3 tools/pcie_link_report.py pcie-cross-run.log --out .tools/pcie-link/obse
 ```
 
 The digital-link Actions artifact contains the original simulator log,
-source-selected scenario plan, JSON evidence and HTML timeline. Neither
+source-selected scenario plan, JSON evidence, isolated HTML timeline, and
+standard `protocols.html` passive protocol explorer. The established
+`chip-pcie-host` and `chip-pcie-outbound` Test Runs reports remain
+unchanged. Neither
 this documentation nor the diagnostic is a full-chip PASS.
 
 ## Still required for issue #76
