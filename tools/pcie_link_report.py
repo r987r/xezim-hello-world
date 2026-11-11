@@ -103,8 +103,9 @@ def summarize(text: str) -> dict:
     if any(e.get("kind")=="sim_timer_mode" and
            (e["divider"]!=512 or e["minimum_transmitted_ts1"]!=16) for e in events):
         issues.append("unexpected simulation timer acceleration")
-    if "host_l0" in milestones and "endpoint_l0" in milestones and
-       (milestones["host_l0"]<=milestones["receiver_detect"] if "receiver_detect" in milestones else True):
+    if ("host_l0" in milestones and "endpoint_l0" in milestones and
+            (milestones["host_l0"]<=milestones["receiver_detect"]
+             if "receiver_detect" in milestones else True)):
         issues.append("host L0 before receiver detection")
     if "endpoint_l0" in milestones and states and milestones["endpoint_l0"]<=states[-1]["line"]:
         issues.append("endpoint L0 trace before final observed state transition")
