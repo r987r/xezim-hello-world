@@ -32,7 +32,7 @@
   ],
   "phy": {
     "adapter": "dv/pcie_link/pipe_x1_adapter.sv",
-    "adapter_sha256": "c27a33a398949c005bf9299c19c1dafb9c691efb8ab93ca2fa6b7cbb48692e55",
+    "adapter_sha256": "f36ed54d4be6040eacac0af856960b670eae06b28719716c55d1182fc5c0dcfd",
     "implementation": "behavioral_digital_pipe_only",
     "status_driver": "not_connected_yet"
   },
