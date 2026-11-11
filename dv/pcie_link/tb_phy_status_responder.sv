@@ -11,7 +11,10 @@ module tb_pcie_phy_status_responder;
 
   pcie_phy_status_responder #(.RESPONSE_CYCLES(3)) dut (.*);
   always @(posedge clk) begin
-    if (phy_phystatus) begin
+    // Ignore the active-low reset interval before nonblocking outputs settle.
+    if (reset_n !== 1'b1) begin
+      // No observation until out of reset.
+    end else if (phy_phystatus) begin
       if (phy_rxstatus !== 3'b011)
         $fatal(1, "PHY receiver-detect response was not 011");
       responses <= responses + 1;
