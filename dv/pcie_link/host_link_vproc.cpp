@@ -40,7 +40,7 @@ static int train_selected_link(const soc_scn_action_t *action, void *opaque) {
     }
     // Never silently accept unsupported width/lane changes or a foreign host.
     if (!link || std::strcmp(link, "pcie0") || lanes != 1 ||
-        gen != 1 || width != 32) return -1;
+        gen != 1 || width != 16) return -1;
     auto *rc = static_cast<pcieModelClass *>(opaque);
     std::printf("PCIE_HOST_TRACE: selected action=%s kind=%s link=%s lanes=%d gen=%d width=%d plan=%s\n",
                 action->action_instance_id, action->kind, link, lanes, gen,
