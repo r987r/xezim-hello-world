@@ -239,3 +239,77 @@ jobs:
           name: pcie-cross-provider-elaboration-${{ github.run_id }}
           path: cross-provider-elaboration.log
           if-no-files-found: warn
+
+  cross-provider-training:
+    name: Independent real RC InitLink(1) to OpenPCIe endpoint L0 (NO forced link-up)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Fetch and prepare original pinned endpoint plus GPL simulation host
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends verilator build-essential
+          python3 -m pip install 'PyYAML==6.0.2' 'fusesoc==2.4.4' 'edalize==0.6.1'
+          python3 tools/ip_fetch.py pcie_endpoint_openpcie pcie_host_pcievhost pcie_host_vproc
+          python3 tools/pcie_link.py --check --check-upstream --apply-selected-overlays
+          fusesoc --cores-root=.tools/pcie_endpoint_openpcie \
+            run --setup --target=sim fusesoc:pcie:phy_core:1.0.0
+          # The upstream host makefile requires this exact pinned VProc alias.
+          test ! -e .tools/vproc
+          ln -s pcie_host_vproc .tools/vproc
+          test "$(git -C .tools/vproc rev-parse HEAD)" = \
+            "ae80e5b5cb43d4e9f82f9d45aa3b614e053f9df4"
+          host=.tools/pcie_host_pcievhost/verilog
+          cp -a "$host/testpipex1" "$host/testcross_x1"
+          cp dv/pcie_link/tb_pcie_cross_link.sv "$host/testcross_x1/test.v"
+          cp dv/pcie_link/host_link_vproc.cpp \
+            "$host/testcross_x1/usercode/VUserMain0.cpp"
+          make -C "$host/testcross_x1" -f makefile.verilator \
+            ../headers/pcie_vhost_map.v
+          # Builds original host library and only the test-owned VProc node 0.
+          make -C "$host/testcross_x1" -f makefile.verilator \
+            vproc_lib NUM_VPROC=1 USER_C=VUserMain0.cpp \
+            VPROC_TOP=../../../vproc
+      - name: Compile and execute cross-connected real host/endpoint LTSSMs
+        run: |
+          set -euo pipefail
+          root="$GITHUB_WORKSPACE"
+          host="$root/.tools/pcie_host_pcievhost/verilog"
+          vproc="$root/.tools/pcie_host_vproc"
+          sim="$root/build/fusesoc_pcie_phy_core_1.0.0/sim"
+          cd "$sim"
+          verilator --binary -sv --timing -Wno-fatal -DVPROC_SV \
+            -I"$host/headers" -I"$host/testcross_x1" -I"$vproc" \
+            -f fusesoc_pcie_phy_core_1.0.0.vc \
+            "$host/lib/Serialiser.v" "$host/lib/clkmux.v" \
+            "$host/pcieVHost/pcieVHostPipex1.v" \
+            "$host/pcieVHost/pcieVHost.v" "$vproc/f_VProc.v" \
+            "$root/dv/pcie_link/pipe_x1_adapter.sv" \
+            "$root/dv/pcie_link/phy_status_responder.sv" \
+            "$root/dv/pcie_link/tb_pcie_cross_link.sv" \
+            --top-module test -Mdir "$root/.tools/pcie-cross-obj" \
+            -CFLAGS '-std=c++17 -Wno-attributes' \
+            -LDFLAGS "-Wl,-E -lrt -rdynamic -Wl,-whole-archive \
+              -L$host/testcross_x1 -lvproc \
+              -L$root/.tools/pcie_host_pcievhost/lib -lpcievhost \
+              -Wl,-no-whole-archive -ldl" \
+            2>&1 | tee "$root/pcie-cross-build.log"
+          "$root/.tools/pcie-cross-obj/Vtest" 2>&1 | tee "$root/pcie-cross-run.log"
+          # Require independently observed actual LTSSMs, not just $finish.
+          grep -q '^PCIE_HOST_L0:' "$root/pcie-cross-run.log"
+          grep -q '^PCIE_ENDPOINT_L0:' "$root/pcie-cross-run.log"
+          grep -q '^PCIE_TRACE: receiver-detect request' "$root/pcie-cross-run.log"
+          grep -q '^PCIE_TRACE: PHY receiver present' "$root/pcie-cross-run.log"
+      - name: Retain original commands, build and independent training logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pcie-cross-provider-training-${{ github.run_id }}
+          path: |
+            pcie-cross-build.log
+            pcie-cross-run.log
+          if-no-files-found: warn
