@@ -10,6 +10,7 @@ on:
       - 'tools/pcie_link.py'
       - 'tools/pcie_cfg_overlay.py'
       - 'tools/pcie_link_report.py'
+      - 'tools/pcie_upstream_test_timing.py'
       - 'tools/ci_require_cocotb.py'
       - 'tools/generate.py'
       - 'dv/pcie_link/**'
@@ -20,6 +21,7 @@ on:
       - 'tests/test_pcie_cfg_overlay.py'
       - 'tests/test_pcie_link_report.py'
       - 'tests/test_pcie_mode_compatibility.py'
+      - 'tests/test_pcie_upstream_test_timing.py'
       - 'config/regression.yaml'
       - 'config/stimulus/tests.yaml'
       - 'dv/common/scenario.py'
@@ -61,7 +63,7 @@ jobs:
       - name: Prove profile swaps fail closed and checked-in generated selection agrees
         run: |
           set -euo pipefail
-          python3 -m unittest tests.test_pcie_link tests.test_ip_fetch_submodules tests.test_ci_require_cocotb tests.test_pcie_scenario tests.test_pcie_cfg_overlay tests.test_pcie_link_report tests.test_pcie_mode_compatibility -v
+          python3 -m unittest tests.test_pcie_link tests.test_ip_fetch_submodules tests.test_ci_require_cocotb tests.test_pcie_scenario tests.test_pcie_cfg_overlay tests.test_pcie_link_report tests.test_pcie_mode_compatibility tests.test_pcie_upstream_test_timing -v
           python3 tools/pcie_link.py --check
           mkdir -p .tools/pcie-link
           iverilog -g2012 -s tb_pcie_pipe_x1_adapter \
@@ -187,6 +189,16 @@ jobs:
           set -euo pipefail
           mkdir -p .tools/pcie-link
           python3 tools/pcie_link.py --check --check-upstream --apply-selected-overlays
+          # The original upstream UVM test hardcodes 25us but normal Detect
+          # takes 12ms. Explicitly accelerate ONLY this pinned FuseSoC sim
+          # target, and increase its test timeout to permit real TS1/TS2.
+          # This does not force LTSSM state or alter the cross-connected test.
+          python3 tools/pcie_upstream_test_timing.py \
+            --checkout .tools/pcie_endpoint_openpcie
+          git -C .tools/pcie_endpoint_openpcie diff -- \
+            pcie_phy.core verif/tests/test_pcie_core.py \
+            > .tools/pcie-link/openpcie-upstream-selftest-timing.diff
+          test -s .tools/pcie-link/openpcie-upstream-selftest-timing.diff
           # Each Actions step starts a fresh shell. Re-select the pinned
           # Python 3.11 scripts directory here as well (before FuseSoC).
           export PATH="$(python3 -c 'import sysconfig; print(sysconfig.get_path("scripts"))'):$PATH"
