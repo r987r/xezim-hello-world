@@ -460,4 +460,7 @@ jobs:
             .tools/pcie-link/scenario/scenario-plan.json
             .tools/pcie-link/observations/pcie-link-evidence.json
             .tools/pcie-link/observations/pcie-link-report.html
+            .tools/pcie-link/observations/protocol-events.jsonl
+            .tools/pcie-link/observations/protocol-transactions.json
+            .tools/pcie-link/observations/protocols.html
           if-no-files-found: warn
