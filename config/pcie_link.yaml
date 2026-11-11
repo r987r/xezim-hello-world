@@ -36,13 +36,15 @@ profiles:
       adapter: dv/pcie_link/pipe_x1_adapter.sv
       implementation: behavioral_digital_pipe_only
       status_driver: not_connected_yet
+    # Active Gen1 PIPE width: 16-bit/2 K flags @ 125 MHz. The
+    # OpenPCIe outer HDL vectors are 32 bits but only two bytes are active.
     link:
       generation: 1
       lanes: 1
-      data_width_bits: 32
-      datak_width_bits: 4
+      data_width_bits: 16
+      datak_width_bits: 2
       encoded_symbol_clock_mhz: 250
-      pipe_parallel_clock_mhz: 62.5
+      pipe_parallel_clock_mhz: 125
       qualifier: source_and_adapter_preflight_only
       trained_l0: false
       hardware_config_enumeration: false
