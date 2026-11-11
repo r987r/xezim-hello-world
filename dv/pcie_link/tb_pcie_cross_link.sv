@@ -206,6 +206,27 @@ module test #(
     .m_tlp_axis_tuser(ep_rx_tlp_user), .m_tlp_axis_tready(ep_rx_tlp_ready)
   );
 
+  // Device-local passive transaction boundary observations: the endpoint
+  // delivers accepted real-link TLP beats to its original configuration
+  // wrapper; the wrapper presents Cpl beats back to the endpoint. Never
+  // drive either path from a testbench procedure, nor infer a Cpl from intent.
+  integer observed_ep_cfg_rx_beats = 0;
+  integer observed_ep_cfg_cpl_beats = 0;
+  always @(posedge core_clk) if (nreset && ep_link_up) begin
+    if (ep_rx_tlp_valid && ep_rx_tlp_ready) begin
+      observed_ep_cfg_rx_beats <= observed_ep_cfg_rx_beats + 1;
+      if (observed_ep_cfg_rx_beats < 64)
+        $display("PCIE_EP_CFG_RX_BEAT: data=%08h keep=%h last=%b at %0t",
+                 ep_rx_tlp_data,ep_rx_tlp_keep,ep_rx_tlp_last,$time);
+    end
+    if (ep_cfg_cpl_valid && ep_cfg_cpl_ready) begin
+      observed_ep_cfg_cpl_beats <= observed_ep_cfg_cpl_beats + 1;
+      if (observed_ep_cfg_cpl_beats < 64)
+        $display("PCIE_EP_CFG_CPL_TX_BEAT: data=%08h keep=%h last=%b at %0t",
+                 ep_cfg_cpl_data,ep_cfg_cpl_keep,ep_cfg_cpl_last,$time);
+    end
+  end
+
   // Even if L0 trains before NoC boot, do not enable inbound MMIO early.
   always @(posedge core_clk) if (nreset) begin
     if (!bar_committed && ep_link_up)
