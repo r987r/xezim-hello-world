@@ -56,6 +56,21 @@ int cpu_dma_run(void) {
         (volatile uint32_t *)(uintptr_t)(SOC_MAILBOX + FLOW_OFFSET);
     volatile uint32_t * const telemetry = evidence + 1;
     *evidence = 0xd0000000u;
+    /* CPU0 writes the COMPLETE source-selected 256-bit SHA through real SRAM
+     * AXI, before any DMA dispatch. No testbench deposits or fake CSR path.
+     * The independent passive AXI monitor must verify all eight accepted
+     * writes with correct lane strobes and successful B completions.
+     */
+    volatile uint32_t * const plan_witness =
+        (volatile uint32_t *)(uintptr_t)SOC_SCN_PLAN_WITNESS_PHYS;
+    const uint32_t selected_sha_words[8] = {
+        SOC_SCN_PLAN_SHA_WORD_0, SOC_SCN_PLAN_SHA_WORD_1,
+        SOC_SCN_PLAN_SHA_WORD_2, SOC_SCN_PLAN_SHA_WORD_3,
+        SOC_SCN_PLAN_SHA_WORD_4, SOC_SCN_PLAN_SHA_WORD_5,
+        SOC_SCN_PLAN_SHA_WORD_6, SOC_SCN_PLAN_SHA_WORD_7
+    };
+    for (unsigned i = 0; i != 8u; ++i)
+        plan_witness[i] = selected_sha_words[i];
     soc_flow_emit(flow, SOC_FLOW_RUN, SOC_FLOW_START, 1, 101);
     soc_mem_region_t pool, ddr;
     soc_mem_allocation_t source={0}, returned={0}, dst={0};

@@ -33,6 +33,12 @@ class ScenarioReplayAuditTests(unittest.TestCase):
                        "scenario_id": "shared", "scenario_seed": 12345, "executed_pattern_seed": 90, "execution_state": "rtl_observed",
                        "intent_is_not_evidence": True, "cpu_result_checked": True,
                        "observed_cpu_allocations": [16, 80, 5368709120],
+                       "cpu_plan_sha_axi_witness": {
+                           "status": "full_sha_observed_on_real_cpu_axi",
+                           "plan_sha256": sha, "witness_phys": hex(16 + 0x1000),
+                           "accepted_writes": 8, "checked_bytes": 32,
+                           "evidence": "original_passive_axi_aw_w_b_not_firmware_self_report",
+                           "scenario_action_completion_proven": False},
                        "observed_dma_axi_counts": observed}
         self.bfm_ev = {"profile": "reset_isolated_cocotb_bfm", "plan_sha256": sha,
                        "scenario_id": "shared", "scenario_seed": 12345, "executed_pattern_seed": 90, "execution_state": "rtl_observed",
@@ -105,6 +111,21 @@ class ScenarioReplayAuditTests(unittest.TestCase):
         self.bfm_result["passed"] = False
         self.write()
         with self.assertRaisesRegex(ReplayAuditError, "unverified RTL"):
+            audit(self.cpu, self.bfm)
+
+    def test_missing_or_modified_full_cpu_plan_sha_axi_witness_is_rejected(self):
+        self.cpu_ev.pop("cpu_plan_sha_axi_witness")
+        self.write()
+        with self.assertRaisesRegex(ReplayAuditError, "full SHA"):
+            audit(self.cpu, self.bfm)
+        self.cpu_ev["cpu_plan_sha_axi_witness"] = {
+            "status": "full_sha_observed_on_real_cpu_axi",
+            "plan_sha256": "0"*64, "witness_phys": hex(16+0x1000),
+            "accepted_writes": 8, "checked_bytes": 32,
+            "evidence": "original_passive_axi_aw_w_b_not_firmware_self_report",
+            "scenario_action_completion_proven": False}
+        self.write()
+        with self.assertRaisesRegex(ReplayAuditError, "full SHA"):
             audit(self.cpu, self.bfm)
 
     def test_missing_cpu_mmio_or_byte_check_rejected(self):

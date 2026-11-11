@@ -36,6 +36,14 @@ class ScenarioDmaTests(unittest.TestCase):
         self.assertEqual(c["length"], 64)
         self.assertEqual(c["seed"], 90)
         self.assertEqual(c["execution_state"], "pending_real_rtl")
+        self.assertEqual(c["plan_witness_phys"], 0x10003000)
+        emitted = render_c_header(c)
+        self.assertIn("#define SOC_SCN_PLAN_WITNESS_PHYS 0x10003000ULL", emitted)
+        sha_bytes = bytes.fromhex(c["plan_sha256"])
+        for idx in range(8):
+            word = int.from_bytes(sha_bytes[idx*4:idx*4+4], "little")
+            self.assertIn(
+                f"#define SOC_SCN_PLAN_SHA_WORD_{idx} 0x{word:08x}u", emitted)
         self.assertIn("#define SOC_SCN_DDR_PHYS 0x140000100ULL", render_c_header(c))
         self.assertIsNone(self.plan["execution_evidence"])
 
