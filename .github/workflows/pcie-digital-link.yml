@@ -211,12 +211,15 @@ jobs:
           set -euo pipefail
           # Original FuseSoC resolves the complete transitive endpoint RTL.
           # No synthesized symbol-stream or LTSSM stand-in is used.
+          # The original host generates its Verilog register-map header from C.
+          make -C .tools/pcie_host_pcievhost/verilog/testpipex1 \
+            -f makefile.verilator ../headers/pcie_vhost_map.v
           cd build/fusesoc_pcie_phy_core_1.0.0/sim
           root="$GITHUB_WORKSPACE"
           rc="$root/.tools/pcie_host_pcievhost"
           vproc="$root/.tools/pcie_host_vproc"
-          verilator --lint-only --timing -Wno-fatal -DVERILATOR -DVPROC_SV \
-            -I"$rc/verilog/headers" -I"$vproc" \
+          verilator --lint-only --timing -Wno-fatal -DVPROC_SV \
+            -I"$rc/verilog/headers" -I"$rc/verilog/testpipex1" -I"$vproc" \
             -f fusesoc_pcie_phy_core_1.0.0.vc \
             "$rc/verilog/lib/Serialiser.v" \
             "$rc/verilog/lib/clkmux.v" \
