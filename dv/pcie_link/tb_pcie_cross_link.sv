@@ -76,6 +76,8 @@ module test #(
   wire [31:0] bar_host_base;
   wire host_bar_probe, host_cfg_violation;
   wire host_memory_enable;
+  pcie_config_reg_pkg::pcie_config_reg__in_t cfg_hwif_in;
+  assign cfg_hwif_in = '{default:'0};
   pcie_cfg_wrapper #(.DATA_WIDTH(32), .KEEP_WIDTH(4), .USER_WIDTH(5))
   endpoint_cfg (
     .clk_i(core_clk), .rst_i(~nreset),
@@ -91,7 +93,7 @@ module test #(
     .m_tlp_axis_tlast(), .m_tlp_axis_tuser(),
     .m_tlp_axis_tready(1'b0),
     .cfg_bus_number_o(), .cfg_device_number_o(), .cfg_function_number_o(),
-    .hwif_in('0), .hwif_out(),
+    .hwif_in(cfg_hwif_in), .hwif_out(),
     .bar0_device_committed_i(bar_committed),
     .bar0_device_aperture_i(bar_aperture),
     .bar0_host_bus_base_o(bar_host_base),
