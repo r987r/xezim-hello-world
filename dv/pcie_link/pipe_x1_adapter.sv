@@ -21,6 +21,7 @@ module pcie_pipe_x1_adapter (
   output logic [ 3:0] host_rxdatak,
   output logic        host_rxelecidle
 );
+  // PIPE data-valid is distinct from transmitter electrical idle.
   // Electrical idle is not a training shortcut. Real PHY-status response,
   // Detect/receiver presence and LTSSM state come from separate providers.
   assign ep_rxdata       = host_txdata;
@@ -29,5 +30,5 @@ module pcie_pipe_x1_adapter (
   assign ep_rxdata_valid = reset_n & host_sample_valid & ~host_txelecidle;
   assign host_rxdata     = ep_txdata;
   assign host_rxdatak    = ep_txdatak;
-  assign host_rxelecidle = ~reset_n | ep_txelecidle | ~ep_txdata_valid;
+  assign host_rxelecidle = ~reset_n | ep_txelecidle;
 endmodule
