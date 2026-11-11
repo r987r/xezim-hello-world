@@ -123,6 +123,7 @@ module test #(
 
   wire [20:0] ltssm_debug_state;
   wire ep_link_up;
+  wire ep_fc_initialized;
   wire [1:0] phy_powerdown;
   wire [2:0] phy_rate;
   wire [7:0] pipe_width;
@@ -173,7 +174,7 @@ module test #(
                  .IS_ROOT_PORT(0), .IS_UPSTREAM(1)) ep (
     .clk_i(core_clk), .rst_i(~nreset), .en_i(ltssm_permitted),
     .pipe_rx_usr_clk_i(pipe_clk), .pipe_tx_usr_clk_i(pipe_clk),
-    .fc_initialized_o(),
+    .fc_initialized_o(ep_fc_initialized),
     .phy_txdata(ep_txdata), .phy_txdata_valid(ep_txdata_valid),
     .phy_txdatak(ep_txdatak), .phy_txstart_block(), .phy_txsync_header(),
     .phy_rxdata(ep_rxdata), .phy_rxdata_valid(ep_rxdata_valid),
@@ -205,6 +206,41 @@ module test #(
     .m_tlp_axis_tvalid(ep_rx_tlp_valid), .m_tlp_axis_tlast(ep_rx_tlp_last),
     .m_tlp_axis_tuser(ep_rx_tlp_user), .m_tlp_axis_tready(ep_rx_tlp_ready)
   );
+
+  // Endpoint Data Link Layer diagnostics: pure reads of the original
+  // OpenPCIe's real accepted PHY DLLP boundaries and FC state. Do not
+  // change data, synthesize FC packets or poke the independent host.
+  integer fc_rx_beats = 0, fc_tx_beats = 0, fc_samples = 0;
+  logic fc_previously_initialized = 0;
+  always @(posedge core_clk) if (nreset) begin
+    if (ep_fc_initialized && !fc_previously_initialized)
+      $display("PCIE_EP_FC_INIT_DONE: original RTL fc_initialized_o at %0t", $time);
+    fc_previously_initialized <= ep_fc_initialized;
+    if (ep_link_up && ep.m_dllp_axis_tvalid && ep.m_dllp_axis_tready) begin
+      fc_rx_beats <= fc_rx_beats + 1;
+      if (fc_rx_beats < 24)
+        $display("PCIE_EP_DLLP_RX_BEAT: data=%08h keep=%h last=%b at %0t",
+                 ep.m_dllp_axis_tdata, ep.m_dllp_axis_tkeep,
+                 ep.m_dllp_axis_tlast,$time);
+    end
+    if (ep_link_up && ep.s_dllp_axis_tvalid && ep.s_dllp_axis_tready) begin
+      fc_tx_beats <= fc_tx_beats + 1;
+      if (fc_tx_beats < 24)
+        $display("PCIE_EP_DLLP_TX_BEAT: data=%08h keep=%h last=%b at %0t",
+                 ep.s_dllp_axis_tdata, ep.s_dllp_axis_tkeep,
+                 ep.s_dllp_axis_tlast,$time);
+    end
+    if (ep_link_up && fc_samples < 12) begin
+      $display("PCIE_EP_FC_PROGRESS: link=%b initialized=%b init=%b fc1=%b fc2=%b soft_rst=%b dl_state=%0d at %0t",
+               ep_link_up,ep_fc_initialized,
+               ep.pcie_datalink_layer_inst.init_flow_control,
+               ep.pcie_datalink_layer_inst.fc1_values_stored,
+               ep.pcie_datalink_layer_inst.fc2_values_stored,
+               ep.pcie_datalink_layer_inst.soft_reset,
+               ep.pcie_datalink_layer_inst.link_status,$time);
+      fc_samples <= fc_samples + 1;
+    end
+  end
 
   // Device-local passive transaction boundary observations: the endpoint
   // delivers accepted real-link TLP beats to its original configuration
