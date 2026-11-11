@@ -2,6 +2,9 @@
 // Experimental independent RC <-> original endpoint RTL bench.
 // This harness NEVER sets link_up_o or LTSSM state. Do not claim L0 from compile.
 module test #(
+  // OFF by default: PCIe timer reduction must be explicit in CI.
+  // This accelerates LTSSM timers only; it never drives link_up.
+  parameter bit SIM_FORCE_FAST_LTSSM = 1'b0,
   parameter bit PARTNER_PRESENT = 1'b1,
   parameter integer MAX_PIPE_CYCLES = 100000
 );
@@ -12,6 +15,12 @@ module test #(
   always #8 pipe_clk = ~pipe_clk;     // 32-bit Gen1: 62.5 MHz
   always #5 core_clk = ~core_clk;     // Endpoint core CLK_RATE=100 MHz
   logic nreset = 0;
+  initial begin
+    if (SIM_FORCE_FAST_LTSSM)
+      $display("PCIE_SIM_FORCE_FAST_LTSSM: ENABLED override=512x");
+    else
+      $display("PCIE_SIM_FORCE_FAST_LTSSM: DISABLED");
+  end
   // Test-only CPU/Config-NoC surrogate for the standalone cross-link bench.
   // Real CPU firmware and Config NoC integration remain separate proof gates.
   logic prelink_wr = 0;
@@ -150,7 +159,7 @@ module test #(
   // Original OpenPCIe endpoint RTL. Unused Gen2+ EQ inputs tied off.
   // Simulation-only acceleration of the original LTSSM's Detect.Quiet
   // timeout. State transitions and TS1/TS2 processing remain original RTL.
-  pcie_phy_top #(.SIM_FAST_LINK(1), .CLK_RATE(100), .MAX_NUM_LANES(1), .DATA_WIDTH(32),
+  pcie_phy_top #(.SIM_FAST_LINK(SIM_FORCE_FAST_LTSSM), .CLK_RATE(100), .MAX_NUM_LANES(1), .DATA_WIDTH(32),
                  .IS_ROOT_PORT(0), .IS_UPSTREAM(1)) ep (
     .clk_i(core_clk), .rst_i(~nreset), .en_i(ltssm_permitted),
     .pipe_rx_usr_clk_i(pipe_clk), .pipe_tx_usr_clk_i(pipe_clk),
