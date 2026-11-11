@@ -27,7 +27,9 @@ class PcieScenarioTests(unittest.TestCase):
 
     def test_exact_selected_plan_no_fake_hardware_pass(self):
         p = self.resolve()
-        self.assertEqual(len(p["actions"]), 1)
+        self.assertEqual(len(p["actions"]), 2)
+        self.assertEqual(p["actions"][1]["kind"], "pcie.config.bar0")
+        self.assertEqual(p["actions"][1]["depends_on"], ["train_link"])
         self.assertEqual(p["actions"][0]["kind"], "pcie.link.train")
         self.assertEqual(p["actions"][0]["args"]["link"], "pcie0")
         self.assertIsNone(p["execution_evidence"])
@@ -46,6 +48,26 @@ class PcieScenarioTests(unittest.TestCase):
         with self.assertRaisesRegex(ScenarioError, "INIT action"):
             self.resolve(spec)
 
+    def test_host_bar_enumeration_is_causal_and_bounded(self):
+        for key, value in (("link", "pcie7"), ("bar_index", 1),
+                           ("aperture_bytes", 3000), ("aperture_bytes", 2097152),
+                           ("host_bus_base", 0x80001001),
+                           ("host_bus_base", 0xfffff001)):
+            spec=copy.deepcopy(self.spec)
+            spec["actions"][1]["args"][key]=value
+            with self.subTest(key=key,value=value), self.assertRaises(ScenarioError):
+                self.resolve(spec)
+        for mutation in ("no_dependency", "wrong_phase", "no_training"):
+            spec=copy.deepcopy(self.spec)
+            if mutation=="no_dependency":
+                spec["actions"][1]["depends_on"]=[]
+            elif mutation=="wrong_phase":
+                spec["actions"][1]["phase"]="run"
+            else:
+                spec["actions"]=spec["actions"][1:]
+            with self.subTest(mutation=mutation),self.assertRaises(ScenarioError):
+                self.resolve(spec)
+
     def test_real_registered_handler_dispatches_same_action_and_hash(self):
         raw = canonical_json(self.resolve()).encode("ascii")
         seen = []
@@ -54,14 +76,18 @@ class PcieScenarioTests(unittest.TestCase):
             context.append((action["action_instance_id"], action["args"]["lanes"]))
             seen.append(action["kind"])
 
+        async def host_config(action, context):
+            context.append((action["action_instance_id"], action["args"]["bar_index"]))
+            seen.append(action["kind"])
+
         runner = ActionDispatcher(
-            raw, {"pcie.link.train": host_driver},
+            raw, {"pcie.link.train": host_driver, "pcie.config.bar0": host_config},
             expected_sha=hashlib.sha256(raw).hexdigest(),
         )
         result = []
         asyncio.run(runner.run(result))
-        self.assertEqual(result, [("train_link", 1)])
-        self.assertEqual(seen, ["pcie.link.train"])
+        self.assertEqual(result, [("train_link", 1), ("enumerate_bar0", 0)])
+        self.assertEqual(seen, ["pcie.link.train", "pcie.config.bar0"])
         with self.assertRaisesRegex(ActionDispatchError, "no registered handler"):
             ActionDispatcher(raw, {})
 
@@ -74,7 +100,7 @@ class PcieScenarioTests(unittest.TestCase):
             self.resolve(spec)
         spec["actions"][0]["depends_on"] = ["again"]
         # One directed training can be ordered after the other.
-        self.assertEqual(len(self.resolve(spec)["actions"]), 2)
+        self.assertEqual(len(self.resolve(spec)["actions"]), 3)
 
 
 if __name__ == "__main__":
