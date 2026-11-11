@@ -11,6 +11,7 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import subprocess
 
 import yaml
 
@@ -47,8 +48,10 @@ def _load(path: Path) -> dict:
     return value
 
 
-def _required(data: dict, expected: tuple[str, ...], what: str):
-    if not isinstance(data, dict) or set(data) != set(expected):
+def _required(data: dict, expected: tuple[str, ...], what: str,
+              optional: tuple[str, ...] = ()):
+    if (not isinstance(data, dict) or not set(expected).issubset(data)
+            or not set(data).issubset(set(expected) | set(optional))):
         raise PcieProviderError(f"{what}: required provider fields missing or unexpected")
     for key in expected:
         value = data[key]
@@ -70,7 +73,7 @@ def selection(root: Path = ROOT) -> dict:
     if set(p) != {"endpoint", "host", "phy", "link"}:
         raise PcieProviderError("PCIe profile missing provider boundary")
     ep, host, phy, link = p["endpoint"], p["host"], p["phy"], p["link"]
-    _required(ep, REQUIRED_ENDPOINT, "endpoint")
+    _required(ep, REQUIRED_ENDPOINT, "endpoint", optional=("patch",))
     _required(host, REQUIRED_HOST, "host")
     if (not isinstance(phy, dict)
             or set(phy) != {"adapter", "implementation", "status_driver"}
@@ -130,6 +133,22 @@ def selection(root: Path = ROOT) -> dict:
     if not adapter.is_file() or not adapter.read_text().lstrip().startswith(
             "`timescale 1ns/1ps"):
         raise PcieProviderError("no checked-in digital PHY adapter implementation")
+    overlays = []
+    if "patch" in ep:
+        patch_path = Path(ep["patch"])
+        if (patch_path.is_absolute() or ".." in patch_path.parts
+                or patch_path.suffix != ".patch"
+                or not patch_path.as_posix().startswith("dv/pcie_link/patches/")):
+            raise PcieProviderError("unsafe source-qualified PCIe provider patch")
+        patch_file = root / patch_path
+        if not patch_file.is_file() or not patch_file.read_text().startswith(
+                "diff --git a/"):
+            raise PcieProviderError("missing reviewed PCIe provider patch source")
+        overlays.append({
+            "role": "endpoint", "path": patch_path.as_posix(),
+            "sha256": digest(patch_file.read_bytes()),
+            "status": "reviewed_source_overlay_not_upstream_revision",
+        })
     return {
         "schema_version": 1,
         "selection": label,
@@ -137,6 +156,7 @@ def selection(root: Path = ROOT) -> dict:
         "source_sha256": digest((root / PROFILE).read_bytes()),
         "ip_lock_sha256": digest((root / LOCK).read_bytes()),
         "providers": providers,
+        "local_source_overlays": overlays,
         "ports": {"endpoint": ep, "host": host},
         "phy": {**phy, "adapter_sha256": digest(adapter.read_bytes())},
         "link": link,
@@ -174,7 +194,7 @@ def validate_provider_sources(root: Path, result: dict) -> None:
             raise PcieProviderError(f"{role}: missing/duplicate original top module {top}")
         source = matches[0].read_text(errors="replace")
         for label, wire in mapping.items():
-            if label in ("ip_lock", "dependency_ip_lock", "top", "config_space_rdl",
+            if label in ("ip_lock", "dependency_ip_lock", "top", "config_space_rdl", "patch",
                          "endpoint_parameter", "endpoint_parameter_value",
                          "data_width_parameter"):
                 continue
@@ -187,6 +207,30 @@ def validate_provider_sources(root: Path, result: dict) -> None:
     host = result["providers"]["host"]
     if not (root / ".tools" / host["ip_lock_key"] / "LICENSE").is_file():
         raise PcieProviderError("missing GPL testbench license at pinned host commit")
+
+
+def apply_selected_overlays(root: Path, result: dict) -> None:
+    """Apply only reviewed patches to ignored provider checkouts at exact pins.
+
+    Build overlays are never presented as upstream original clean source.
+    A moved upstream commit or repeated patch fails closed.
+    """
+    root = Path(root)
+    for patch in result["local_source_overlays"]:
+        ip = result["providers"][patch["role"]]
+        src = root / ".tools" / ip["ip_lock_key"]
+        current = subprocess.run(
+            ["git", "-C", str(src), "rev-parse", "HEAD"],
+            capture_output=True, text=True, check=True).stdout.strip()
+        if current != ip["commit"]:
+            raise PcieProviderError("overlay provider checkout is not at the exact pin")
+        patch_file = root / patch["path"]
+        if digest(patch_file.read_bytes()) != patch["sha256"]:
+            raise PcieProviderError("reviewed overlay bytes drifted")
+        subprocess.run(["git", "-C", str(src), "apply", "--check",
+                        str(patch_file.resolve())], check=True)
+        subprocess.run(["git", "-C", str(src), "apply",
+                        str(patch_file.resolve())], check=True)
 
 
 def generated_files(root: Path = ROOT) -> dict[str, str]:
@@ -203,6 +247,9 @@ def generated_files(root: Path = ROOT) -> dict[str, str]:
         f"Host testbench: `{host['ip_lock_key']}` @ `{host['commit']}` "
         "(GPL-3.0; not SoC RTL).\n\n"
         f"Digital adapter: `{row['phy']['adapter']}`.\n\n"
+        "Original endpoint may require reviewed local source overlays. "
+        "See `local_source_overlays` in `selection.json`; overlays are "
+        "not part of the upstream commit and are never silently applied.\n\n"
         "The upstream PCIe configuration-space RDL is **source-owned by "
         "the endpoint IP**, separate from SoC Config-NoC requester CSR. "
         "Do not copy BAR0 into a second hand-maintained SoC register map.\n\n"
@@ -227,10 +274,15 @@ def main() -> int:
     cli.add_argument("--out", type=Path, default=ROOT / "gen/pcie_link")
     cli.add_argument("--check", action="store_true")
     cli.add_argument("--check-upstream", action="store_true")
+    cli.add_argument("--apply-selected-overlays", action="store_true")
     args = cli.parse_args()
     result = selection(args.root)
+    if args.apply_selected_overlays and not args.check_upstream:
+        raise PcieProviderError("overlay application requires original source pin check")
     if args.check_upstream:
         validate_provider_sources(args.root, result)
+    if args.apply_selected_overlays:
+        apply_selected_overlays(args.root, result)
     contents = generated_files(args.root)
     if args.check:
         if any(not (args.out / name).is_file()
