@@ -63,6 +63,14 @@ jobs:
           vvp .tools/pcie-link/phy_status.vvp \
             | tee .tools/pcie-link/phy-status-unit.log
           grep -q '^PASS: Gen1 receiver-detect' .tools/pcie-link/phy-status-unit.log
+          # Device-owned BAR initialization must precede LTSSM start.
+          iverilog -g2012 -s tb_endpoint_prelink_ctrl \
+            -o .tools/pcie-link/prelink.vvp \
+            dv/pcie_link/endpoint_prelink_ctrl.sv \
+            dv/pcie_link/tb_endpoint_prelink_ctrl.sv
+          vvp .tools/pcie-link/prelink.vvp \
+            | tee .tools/pcie-link/prelink-unit.log
+          grep -q '^PASS: device BAR size/target' .tools/pcie-link/prelink-unit.log
       - name: Fetch three independently pinned providers and check original port names
         run: |
           set -euo pipefail
