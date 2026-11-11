@@ -11,7 +11,7 @@
       "action_instance_id": "train_link",
       "kind": "pcie.link.train",
       "actor": "host0",
-      "phase": "run",
+      "phase": "init",
       "args": {
         "link": "pcie0",
         "lanes": 1,
