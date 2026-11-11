@@ -35,7 +35,7 @@ class PcieScenarioTests(unittest.TestCase):
 
     def test_invalid_provider_and_wrong_phase_fail_closed(self):
         for field, value in (("lanes", 2), ("generation", 2),
-                             ("data_width_bits", 16), ("link", "ethernet0")):
+                             ("data_width_bits", 32), ("link", "ethernet0")):
             with self.subTest(field=field):
                 spec = copy.deepcopy(self.spec)
                 spec["actions"][0]["args"][field] = value
