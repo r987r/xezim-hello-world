@@ -8,11 +8,13 @@ on:
       - 'config/pcie_link.yaml'
       - 'tools/ip_fetch.py'
       - 'tools/pcie_link.py'
+      - 'tools/ci_require_cocotb.py'
       - 'tools/generate.py'
       - 'dv/pcie_link/**'
       - 'gen/pcie_link/**'
       - 'gen/manifest.json'
       - 'tests/test_pcie_link.py'
+      - 'tests/test_ci_require_cocotb.py'
       - 'tests/test_ip_fetch_submodules.py'
       - '.github/workflows/pcie-digital-link.yml'
   workflow_dispatch:
@@ -40,7 +42,7 @@ jobs:
       - name: Prove profile swaps fail closed and checked-in generated selection agrees
         run: |
           set -euo pipefail
-          python3 -m unittest tests.test_pcie_link tests.test_ip_fetch_submodules -v
+          python3 -m unittest tests.test_pcie_link tests.test_ip_fetch_submodules tests.test_ci_require_cocotb -v
           python3 tools/pcie_link.py --check
           mkdir -p .tools/pcie-link
           iverilog -g2012 -s tb_pcie_pipe_x1_adapter \
@@ -108,7 +110,8 @@ jobs:
           python3 -m pip install 'PyYAML==6.0.2' 'fusesoc==2.4.4' \
             'edalize==0.6.1' 'cocotb==1.9.2' 'pyuvm==3.0.0' \
             'cocotb-bus==0.2.1' 'cocotb-coverage==1.2.0' \
-            'pyvsc==0.9.5.27214109393'
+            'cocotbext-pcie==0.2.16' 'cocotbext-axi==0.1.26' \
+            'cocotb-test==0.2.5' 'pyvsc==0.9.5.27214109393'
           python3 tools/ip_fetch.py pcie_endpoint_openpcie pcie_host_pcievhost pcie_host_vproc
       - name: Apply only source-pinned, reviewed LTSSM fix and run original verification target
         run: |
@@ -121,6 +124,9 @@ jobs:
           fusesoc --cores-root=.tools/pcie_endpoint_openpcie \
             run --target=sim fusesoc:pcie:phy_core:1.0.0 \
             2>&1 | tee .tools/pcie-link/openpcie-upstream.log
+          # FuseSoC can exit zero even when Cocotb fails test-module import.
+          # Require an actual completed, nonempty and entirely passing test table.
+          python3 tools/ci_require_cocotb.py .tools/pcie-link/openpcie-upstream.log
       - name: Preserve upstream endpoint run evidence and failures
         if: always()
         uses: actions/upload-artifact@v4
