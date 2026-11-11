@@ -86,3 +86,36 @@ original upstream exit status are kept in GitHub Actions artifacts.
 Do **not** close #76 or treat an upstream self-test, pipe adapter, configuration
 header, synthetic modeled link-up, or `pcie_axi_master` alone as a trained
 endpoint link.
+
+## Current L0 bring-up investigation (NOT yet connected)
+
+1. Fix the **original upstream Cocotb execution** first. A green build previously
+   hid an import failure; the new mandatory result parser rejects zero/failed
+   tests even when FuseSoC exits 0. A later run exposed a missing `crc` package.
+2. Reuse OpenPCIe's pinned `verif/sequences/pipe_link_up_seq.py` and
+   `verif/agents/pipe_agent/pipe_driver_bfm.py` for Detect, TS1/TS2,
+   Configuration. The responder in `phy_status_responder.sv` models just
+   the PHY-side receiver-detect response (`phy_phystatus` and `3'b011`),
+   conditioned on request and remote termination; it never drives link_up.
+3. Replace the endpoint half of pcievhost's original
+   `verilog/testpipex1/test.v` back-to-back demonstration with real OpenPCIe
+   `pcie_phy_top` RTL. Keep root-complex `EndPoint=0`, select `DataWidth=32`,
+   and make the RC test software use `InitLink(1)` instead of the original
+   demonstration's hardcoded `InitLink(16)`.
+4. At Gen1 32-bit, provide the host's 250 MHz `pcieclk`, common 62.5 MHz
+   host `pclk` and endpoint PIPE clocks; correctly supply its separate core
+   clock. Wire TxData/K in each direction and distinguish electrical idle
+   from sample valid. Connect real detect/power/PHY sideband signals.
+5. Instrument both LTSSM traces, PHY detect/status, received TS1/TS2
+   ordered sets and `link_up_o`; require Detect -> Polling -> Configuration
+   -> L0, bounded timeout, no forced `link_up_o`. Negative runs must reject
+   disconnected partner, corrupted ordered sets and failed detection, and
+   validate reset/retrain.
+6. Only after actual L0, qualify host configuration writes, BAR sizing and
+   assignment, COMMAND MSE/BME and a real BAR-to-NoC SRAM byte transaction.
+   Keep the same canonical regression/action/report lifecycle.
+
+Source example: pcievhost's pinned `src/ltssm.c` explicitly describes its
+abbreviated LTSSM as intended for L0 simulation only, not full compliance.
+The upstream OpenPCIe self-test and the host standalone demo are **not**
+cross-connected. No current result establishes L0 training.
