@@ -120,6 +120,7 @@ jobs:
             'cocotb-bus==0.2.1' 'cocotb-coverage==1.2.0' \
             'cocotbext-pcie==0.2.16' 'cocotbext-axi==0.1.26' \
             'cocotb-test==0.2.5' 'crc==7.1.0' \
+            'bitstring==4.3.1' 'bitarray==3.7.2' \
             'pyvsc==0.9.5.27214109393'
           python3 tools/ip_fetch.py pcie_endpoint_openpcie pcie_host_pcievhost pcie_host_vproc
       - name: Apply only source-pinned, reviewed LTSSM fix and run original verification target
