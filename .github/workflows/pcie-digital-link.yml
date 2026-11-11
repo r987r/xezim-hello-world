@@ -51,6 +51,14 @@ jobs:
           vvp .tools/pcie-link/pipe_x1_adapter.vvp \
             | tee .tools/pcie-link/adapter-unit.log
           grep -q '^PASS: Gen1 x1' .tools/pcie-link/adapter-unit.log
+          # An actual request-driven PHY response, not a timer-generated LinkUp.
+          iverilog -g2012 -s tb_pcie_phy_status_responder \
+            -o .tools/pcie-link/phy_status.vvp \
+            dv/pcie_link/phy_status_responder.sv \
+            dv/pcie_link/tb_phy_status_responder.sv
+          vvp .tools/pcie-link/phy_status.vvp \
+            | tee .tools/pcie-link/phy-status-unit.log
+          grep -q '^PASS: Gen1 receiver-detect' .tools/pcie-link/phy-status-unit.log
       - name: Fetch three independently pinned providers and check original port names
         run: |
           set -euo pipefail
@@ -111,7 +119,8 @@ jobs:
             'edalize==0.6.1' 'cocotb==1.9.2' 'pyuvm==3.0.0' \
             'cocotb-bus==0.2.1' 'cocotb-coverage==1.2.0' \
             'cocotbext-pcie==0.2.16' 'cocotbext-axi==0.1.26' \
-            'cocotb-test==0.2.5' 'pyvsc==0.9.5.27214109393'
+            'cocotb-test==0.2.5' 'crc==7.1.0' \
+            'pyvsc==0.9.5.27214109393'
           python3 tools/ip_fetch.py pcie_endpoint_openpcie pcie_host_pcievhost pcie_host_vproc
       - name: Apply only source-pinned, reviewed LTSSM fix and run original verification target
         run: |
