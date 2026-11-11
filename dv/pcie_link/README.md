@@ -282,3 +282,26 @@ the plainly named `SIM_FORCE_FAST_LTSSM` elaboration parameter.
 Source reference: AMD Versal register manual `PL_SIM_FAST_LINK_TRAINING`
 (512x millisecond intervals, 16 TS1s in simulation, must remain disabled
 for non-simulation use).
+
+## Actual Gen1 PIPE width interoperability
+
+The pinned OpenPCIe `src/pcie_phy_core/lane_management.sv` declares
+`PipeWidthGen1 = 16`, regardless of its outer 32-bit-wide RTL vector.
+The original cross-provider simulation incorrectly clocked the 32-bit
+pcievhost at 62.5 MHz while the endpoint sent/consumed **two bytes per
+beat**. Its passive waveform confirmed host words delivered to a 16-bit
+ordered-set parser, causing 0 decoded TS1/TS2.
+
+The cross-provider harness now uses original pcievhost `DataWidth=16`,
+the matching 125 MHz Gen1 PIPE clock, exactly two data bytes and two
+K flags per physical beat, and a passive run-time check of
+`pipe_width_o == 16`. The surrounding 32-bit OpenPCIe RTL port is
+zero-extended; its inactive upper bytes must not be interpreted as
+valid PCIe symbols. The canonical SCN action's `data_width_bits`
+describes the **active PHY parallel width**, not the nominal vector
+size of `phy_txdata`.
+
+Host and endpoint still run independently, with no software-side
+crosslink. The remaining exact-head CI must demonstrate received
+ordered sets and both genuine LTSSMs in L0; width matching alone is not
+a PCIe PASS.
