@@ -429,8 +429,8 @@ def _validate_memory(ordered: list[dict], ancestors: dict[str, set[str]],
         elif kind == "pcie.link.train":
             # A source-selected host action; NOT evidence that the endpoint
             # has reached L0. Host completion and RTL L0 remain independent.
-            if phase != "run":
-                raise ScenarioError(f"{aid}: PCIe link training is a RUN action")
+            if phase != "init":
+                raise ScenarioError(f"{aid}: PCIe link training is an INIT action")
             _fields(args, {"link", "lanes", "generation", "data_width_bits"},
                     set(), aid)
             link = _name(args["link"], f"{aid}.link")
