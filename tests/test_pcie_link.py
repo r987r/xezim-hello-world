@@ -50,6 +50,20 @@ class PcieLinkSelectionTests(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertEqual((output / name).read_text(), content)
 
+    def test_exact_reviewed_overlay_is_visible_and_fails_unsafe_swaps(self):
+        row = pcie_link.selection(ROOT)
+        overlays = row["local_source_overlays"]
+        self.assertEqual(len(overlays), 1)
+        source = ROOT / overlays[0]["path"]
+        self.assertEqual(overlays[0]["sha256"],
+                         pcie_link.digest(source.read_bytes()))
+        self.assertIn("reviewed_source_overlay", overlays[0]["status"])
+        for path in ("../../tmp/forged.patch", "/tmp/unreviewed.patch",
+                     "config/ip.lock.yaml"):
+            with self.subTest(path=path), self.assertRaisesRegex(
+                    pcie_link.PcieProviderError, "unsafe source-qualified"):
+                self.choose(lambda p: p["endpoint"].update({"patch": path}))
+
     def test_l0_and_bar_may_not_be_asserted_by_declaration(self):
         for key in pcie_link.CAPABILITY_FLAGS:
             with self.subTest(field=key), self.assertRaisesRegex(
