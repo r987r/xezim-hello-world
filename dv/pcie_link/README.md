@@ -176,3 +176,45 @@ parallel boot only *after* actual isolated L0 evidence is green; reuse
 `tools/regress.py`, `config/regression.yaml`, original SCN-C/Python/SV
 action ABI and `dv/pcie0/host_adapter.py` instead of copying an independent
 test runner.
+
+## Device-programmed BAR before LTSSM (pre-link hardware milestone)
+
+The **endpoint owns BAR capabilities** (type, aperture, local target) before
+the RC enumerates it. The RC later assigns the *PCI bus address*; never
+pre-program the bus address into the device as a substitute for enumeration.
+The device-local `endpoint_prelink_ctrl.sv` now accepts proposed BAR0 aperture
+and local SRAM target via a test-owned, single-cycle configuration register
+port; after validating size/power-of-two/target bounds and alignment, a
+`COMMIT` write freezes the chosen geometry, then a separate `START`
+write can release actual OpenPCIe `en_i` and `phy_ready_en`.
+No premature LTSSM launch is permitted. Requesting START before COMMIT,
+late BAR changes, invalid size, misalignment or partial CSR writes fail
+closed. See `tb_endpoint_prelink_ctrl.sv` and dedicated source contract
+CI. BAR memory acceptance is *independently* gated by `link_up_i`,
+`noc_ready_i` and `host_mem_enable_i`; link training does not require
+the NoC to be ready.
+
+In isolated `tb_pcie_cross_link.sv` the pre-link writes are provided by an
+**explicit TB surrogate**, not by CPU0 firmware or the Config NoC. This
+proves only sequencing/gating; it does not qualify the full-chip boot path.
+The provided 4KiB/1MiB apertures are test cases, not claims that the pinned
+OpenPCIe upstream config space or PCIe host sees these values.
+
+**Upstream limitation that must be fixed before BAR enumeration is claimed:**
+the pinned OpenPCIe `src/pcie_cfg/pcie_config.rdl` defines BAR0 at 0x10
+as hardware-readable, software-read-only fields with a constant reset/mask;
+the generated `pcie_config_reg.sv` hardwires those values, and the existing
+cross-link bench instantiates `pcie_phy_top` only, *not* the upstream
+`pcie_cfg_wrapper`/TLP configuration path. The new local pre-link
+controller is **not yet wired to those actual host-visible registers**.
+Proper integration must expose a configurable BAR advertisement using
+an upstream-compatible SystemRDL/PeakRDL generation path, connect the
+actual upstream configuration TLP decoder/completion and use selected
+Config-NoC/CPU0 firmware to program/commit the endpoint BAR capabilities.
+Then host BAR sizing/read/write and local SRAM NoC translation are separate
+required real-TLP/AXI acceptance. Do not claim those from the unit gate.
+
+The original `pcie0.ctrl` SoC aperture currently belongs to the outbound
+requester CSR; pre-link controller CSRs need explicit nonoverlapping source
+ownership within it or another generated address region. Do not alias
+endpoint Type-0 configuration space with the CPU's Config-NoC CSR aperture.
