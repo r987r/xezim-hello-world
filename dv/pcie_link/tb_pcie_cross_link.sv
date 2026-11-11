@@ -12,9 +12,54 @@ module test #(
   always #8 pipe_clk = ~pipe_clk;     // 32-bit Gen1: 62.5 MHz
   always #5 core_clk = ~core_clk;     // Endpoint core CLK_RATE=100 MHz
   logic nreset = 0;
+  // Test-only CPU/Config-NoC surrogate for the standalone cross-link bench.
+  // Real CPU firmware and Config NoC integration remain separate proof gates.
+  logic prelink_wr = 0;
+  logic [3:0] prelink_addr = '0;
+  logic [31:0] prelink_wdata = '0;
+  wire [31:0] prelink_rdata, bar_aperture, bar_target, bar_mask;
+  wire prelink_error, bar_committed, ltssm_permitted, bar_mem_ready;
+  logic noc_ready = 0;
+  logic host_mem_enable = 0;
+  pcie_endpoint_prelink_ctrl prelink (
+    .clk_i(core_clk), .rst_ni(nreset), .cfg_wr_i(prelink_wr),
+    .cfg_addr_i(prelink_addr), .cfg_wdata_i(prelink_wdata),
+    .cfg_wstrb_i(4'hf), .cfg_rdata_o(prelink_rdata),
+    .cfg_error_o(prelink_error), .phy_ready_i(nreset),
+    .noc_ready_i(noc_ready), .link_up_i(ep_link_up),
+    .host_mem_enable_i(host_mem_enable),
+    .bar0_aperture_o(bar_aperture), .bar0_local_target_o(bar_target),
+    .bar0_size_mask_o(bar_mask), .bar_config_committed_o(bar_committed),
+    .ltssm_enable_o(ltssm_permitted), .bar_mem_ready_o(bar_mem_ready)
+  );
+
+  task automatic cfg_prelink(input logic [3:0] addr,
+                              input logic [31:0] data);
+    @(negedge core_clk);
+    prelink_addr = addr; prelink_wdata = data; prelink_wr = 1'b1;
+    @(negedge core_clk);
+    prelink_wr = 1'b0;
+  endtask
+
   initial begin
     repeat (16) @(negedge pipe_clk);
     nreset = 1;
+    // Host may already be running its independent root-complex model.
+    // Device decides which BAR capability to present before enabling LTSSM.
+    repeat (4) @(negedge core_clk);
+    if (ltssm_permitted || ep_link_up)
+      $fatal(1, "link started before device BAR preconfiguration");
+    cfg_prelink(4'h0, 32'h0000_1000);
+    cfg_prelink(4'h4, 32'h1200_0000);
+    cfg_prelink(4'h8, 32'h0000_0001);
+    if (!bar_committed || bar_mask != 32'hffff_f000 || prelink_error)
+      $fatal(1, "prelink BAR configuration commit did not succeed");
+    $display("PCIE_DEVICE_PRELINK: committed BAR0 size=%h target=%h mask=%h",
+             bar_aperture, bar_target, bar_mask);
+    cfg_prelink(4'h8, 32'h0000_0002);
+    if (!ltssm_permitted)
+      $fatal(1, "device did not permit LTSSM after BAR commit");
+    $display("PCIE_DEVICE_PRELINK: LTSSM enable released after BAR commit");
   end
   wire [31:0] host_txdata, host_rxdata, ep_txdata, ep_rxdata;
   wire [3:0] host_txdatak, host_rxdatak, ep_txdatak, ep_rxdatak;
@@ -70,7 +115,7 @@ module test #(
   // Original OpenPCIe endpoint RTL. Unused Gen2+ EQ inputs tied off.
   pcie_phy_top #(.CLK_RATE(100), .MAX_NUM_LANES(1), .DATA_WIDTH(32),
                  .IS_ROOT_PORT(0), .IS_UPSTREAM(1)) ep (
-    .clk_i(core_clk), .rst_i(~nreset), .en_i(nreset),
+    .clk_i(core_clk), .rst_i(~nreset), .en_i(ltssm_permitted),
     .pipe_rx_usr_clk_i(pipe_clk), .pipe_tx_usr_clk_i(pipe_clk),
     .fc_initialized_o(),
     .phy_txdata(ep_txdata), .phy_txdata_valid(ep_txdata_valid),
@@ -96,7 +141,7 @@ module test #(
     .cfg_function_number_o(ep_func),
     .as_mac_in_detect(), .as_cdr_hold_req(),
     .ltssm_debug_state(ltssm_debug_state),
-    .tx_elec_idle(1'b0), .phy_ready_en(nreset), .link_up_o(ep_link_up),
+    .tx_elec_idle(1'b0), .phy_ready_en(ltssm_permitted), .link_up_o(ep_link_up),
     .s_tlp_axis_tdata(32'b0), .s_tlp_axis_tkeep(4'b0),
     .s_tlp_axis_tvalid(1'b0), .s_tlp_axis_tlast(1'b0),
     .s_tlp_axis_tuser(5'b0), .s_tlp_axis_tready(),
@@ -104,6 +149,14 @@ module test #(
     .m_tlp_axis_tvalid(), .m_tlp_axis_tlast(),
     .m_tlp_axis_tuser(), .m_tlp_axis_tready(1'b1)
   );
+
+  // Even if L0 trains before NoC boot, do not enable inbound MMIO early.
+  always @(posedge core_clk) if (nreset) begin
+    if (!bar_committed && ep_link_up)
+      $fatal(1, "endpoint L0 observed before BAR configuration commit");
+    if (bar_mem_ready && (!noc_ready || !host_mem_enable || !ep_link_up))
+      $fatal(1, "BAR memory gate accepted traffic before readiness");
+  end
 
   // Only observations; no manual injection or forced state.
   always @(posedge pipe_clk) if (nreset) begin
