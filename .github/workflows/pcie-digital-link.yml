@@ -17,7 +17,7 @@ on:
       - 'tests/test_pcie_scenario.py'
       - 'dv/common/scenario.py'
       - 'dv/common/action_runtime.py'
-      - 'config/scenarios/pcie-link-training.json'
+      - 'config/scenarios/pcie-gen1-link.json'
       - 'tests/test_ci_require_cocotb.py'
       - 'tests/test_ip_fetch_submodules.py'
       - '.github/workflows/pcie-digital-link.yml'
@@ -319,8 +319,8 @@ jobs:
           export SOC_SELECTED_PLAN_SHA
           SOC_SELECTED_PLAN_SHA="$(sha256sum "$root/.tools/pcie-link/scenario/scenario-plan.json" | cut -d' ' -f1)"
           "$root/.tools/pcie-cross-obj/Vtop" 2>&1 | tee "$root/pcie-cross-run.log"
-          grep -Fq "PCIE_SCN_DRIVER|$SOC_SELECTED_PLAN_SHA|train_link|pcie.link.train|issued" "$root/pcie-cross-run.log"
-          grep -Fq "PCIE_SCN_DRIVER|$SOC_SELECTED_PLAN_SHA|train_link|pcie.link.train|driver_done" "$root/pcie-cross-run.log"
+          grep -Fq "PCIE_SCN_DRIVER: plan=$SOC_SELECTED_PLAN_SHA action=train_link stage=issued" "$root/pcie-cross-run.log"
+          grep -Fq "PCIE_SCN_DRIVER: plan=$SOC_SELECTED_PLAN_SHA action=train_link stage=driver_done" "$root/pcie-cross-run.log"
           # Require independently observed actual LTSSMs, not just $finish.
           grep -q '^PCIE_HOST_L0:' "$root/pcie-cross-run.log"
           grep -q '^PCIE_ENDPOINT_L0:' "$root/pcie-cross-run.log"
