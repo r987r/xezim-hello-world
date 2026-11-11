@@ -215,7 +215,16 @@ extern "C" void VUserMain0(int node) {
     pcieModelClass rc(node);
     rc.initialisePcie(on_packet, nullptr);
     VWrite(LINK_STATE, 0, 0, node);
-    rc.configurePcie(CONFIG_DISABLE_SCRAMBLING);
+    // Digital-link bring-up: unlike the old L0-only smoke, real DLLP
+    // payloads traverse OpenPCIe's active PHY descrambler. Enable the
+    // original host's Gen1 scrambler only in the BAR0 experiment.
+    // Never force training, inject FC credits, or change endpoint state.
+    const bool scramble = std::getenv("PCIE_HOST_SCRAMBLING") &&
+                          std::strcmp(std::getenv("PCIE_HOST_SCRAMBLING"),"1")==0;
+    rc.configurePcie(scramble ? CONFIG_ENABLE_SCRAMBLING : CONFIG_DISABLE_SCRAMBLING);
+    std::printf("PCIE_RC_SCRAMBLE_MODE: %s (host original PCIe model)\n",
+                scramble ? "ENABLED" : "DISABLED");
+    std::fflush(stdout);
     rc.configurePcie(CONFIG_DISABLE_8B10B);
     VRegIrq(on_reset, node);
     while (!reset_deasserted) rc.sendOs(IDL);
