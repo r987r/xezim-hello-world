@@ -240,6 +240,7 @@ jobs:
             "$vproc/f_VProc.v" \
             "$root/dv/pcie_link/pipe_x1_adapter.sv" \
             "$root/dv/pcie_link/phy_status_responder.sv" \
+            "$root/dv/pcie_link/endpoint_prelink_ctrl.sv" \
             "$root/dv/pcie_link/tb_pcie_cross_link.sv" \
             --top-module test \
             2>&1 | tee "$root/cross-provider-elaboration.log"
@@ -314,6 +315,7 @@ jobs:
             "$host/pcieVHost/pcieVHost.v" "$vproc/f_VProc.v" \
             "$root/dv/pcie_link/pipe_x1_adapter.sv" \
             "$root/dv/pcie_link/phy_status_responder.sv" \
+            "$root/dv/pcie_link/endpoint_prelink_ctrl.sv" \
             "$root/dv/pcie_link/tb_pcie_cross_link.sv" \
             --top-module test -Mdir "$root/.tools/pcie-cross-obj" \
             -CFLAGS '-std=c++17 -Wno-attributes' \
