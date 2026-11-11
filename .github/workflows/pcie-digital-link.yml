@@ -167,11 +167,25 @@ jobs:
             'bitstring==4.3.1' 'bitarray==3.7.2' \
             'pyvsc==0.9.5.27214109393'
           python3 tools/ip_fetch.py pcie_endpoint_openpcie pcie_host_pcievhost pcie_host_vproc
+          # OSS CAD bundles a different Cocotb development runtime. Prefer
+          # the cocotb-config executable from our pinned Python environment
+          # for BOTH Verilator compilation and GPI runtime initialization.
+          export PATH="$(python3 -c 'import sysconfig; print(sysconfig.get_path("scripts"))'):$PATH"
+          python3 -c 'import cocotb, pyuvm; assert cocotb.__version__ == "1.9.2"; print("Pinned Cocotb", cocotb.__version__, "pyuvm", pyuvm.__file__)'
+          cocotb-config --version
+          test "$(cocotb-config --version)" = "1.9.2"
+          echo "Selected cocotb-config: $(command -v cocotb-config)"
+          echo "Selected pip Python: $(command -v python3)"
+          echo "Pinned Cocotb libdir: $(cocotb-config --lib-dir)"
       - name: Apply only source-pinned, reviewed LTSSM fix and run original verification target
         run: |
           set -euo pipefail
           mkdir -p .tools/pcie-link
           python3 tools/pcie_link.py --check --check-upstream --apply-selected-overlays
+          # Each Actions step starts a fresh shell. Re-select the pinned
+          # Python 3.11 scripts directory here as well (before FuseSoC).
+          export PATH="$(python3 -c 'import sysconfig; print(sysconfig.get_path("scripts"))'):$PATH"
+          test "$(cocotb-config --version)" = "1.9.2"
           # Standalone upstream FuseSoC must NOT be modified with BAR0 wrapper
           # hooks: that isolated source target lacks our BAR0 overlay module.
           git -C .tools/pcie_endpoint_openpcie diff -- src/ltssm/pcie_ltssm_downstream.sv \
@@ -188,9 +202,6 @@ jobs:
           export LD_LIBRARY_PATH="$(cocotb-config --lib-dir):${LD_LIBRARY_PATH:-}"
           echo "Cocotb Python: $PYGPI_PYTHON_BIN"
           echo "Cocotb GPI bootstrap: $GPI_USERS"
-          # FuseSoC invokes Verilator directly instead of cocotb's runner,
-          # so we MUST set the cocotb 1.9 GPI Python bootstrap before run.
-          export GPI_USERS="$(cocotb-config --libpython);$(cocotb-config --pygpi-entry-point)"
           export PYTHONPATH="$PWD/.tools/pcie_endpoint_openpcie/verif/tests:${PYTHONPATH:-}"
           export MODULE=test_pcie_core
           export TOPLEVEL=top
