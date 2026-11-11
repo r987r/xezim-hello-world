@@ -165,6 +165,45 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:.55rem;b
     "The old fast bridge mode remains separate and unchanged.</p></html>")
 
 
+def export_shared_protocol_timeline(data:dict, output:Path) -> dict:
+    """Reuse the EXISTING protocol event exporter and HTML explorer.
+
+    Only endpoint LTSSM state transitions have observed simulator ps stamps;
+    host return, local BAR setup and software events without timestamps stay
+    in the separate diagnostic JSON/HTML and are never promoted to protocol
+    events or TLP completions.
+    """
+    try:
+        from . import protocol_report
+    except ImportError:
+        import protocol_report
+    from dv.common.protocol_trace import ProtocolTrace
+
+    sources={
+        "pcie0.ltssm": {
+            "protocol":"pcie",
+            "clock_domain":"pipe_125mhz",
+            "role":"link",
+            "implementation":"original_openpcie_ltssm",
+            "modeling":"behavioral_digital_phy",
+        }
+    }
+    trace=ProtocolTrace(output/"protocol-events.jsonl",sources)
+    for event in data["events"]:
+        if event["kind"]=="endpoint_ltssm":
+            trace.event(
+                "pcie0.ltssm", "ltssm_transition", event["time_ps"],
+                {"from": event["from"], "to": event["to"],
+                 "original_log_line": event["line"]})
+    trace.close("pass" if data["qualified_digital_link_l0"] else "fail",
+                "; ".join(data["issues"]) if data["issues"] else None)
+    # This is deliberately NOT a source-selected full-chip regress.py result,
+    # and produces no result.json or fake AXI/TLP transactions.
+    plan={"target":"pcie-link-isolated","engine":"verilator",
+          "report":{"protocols":{"sources":sources,"max_events":100000}}}
+    return protocol_report.build(output,plan)
+
+
 def main() -> int:
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument("log",type=Path)
@@ -176,6 +215,8 @@ def main() -> int:
     args.out.mkdir(parents=True,exist_ok=True)
     (args.out/"pcie-link-evidence.json").write_text(json.dumps(data,indent=2)+"\n")
     (args.out/"pcie-link-report.html").write_text(render(data))
+    # Same passive-protocol explorer renderer as our existing TLP/AXI reports.
+    export_shared_protocol_timeline(data,args.out)
     print(f"{'PASS' if data['qualified_digital_link_l0'] else 'FAIL'} isolated PCIe L0 diagnostic: "
           f"{len(data['events'])} observations; {data['issues']}")
     return 0 if data["qualified_digital_link_l0"] else 1
