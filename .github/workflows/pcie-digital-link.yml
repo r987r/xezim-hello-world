@@ -154,6 +154,7 @@ jobs:
           set -euo pipefail
           mkdir -p .tools/pcie-link
           python3 tools/pcie_link.py --check --check-upstream --apply-selected-overlays
+          python3 tools/pcie_cfg_overlay.py --checkout .tools/pcie_endpoint_openpcie
           git -C .tools/pcie_endpoint_openpcie diff -- src/ltssm/pcie_ltssm_downstream.sv \
             > .tools/pcie-link/openpcie-reviewed-ltssm.diff
           test -s .tools/pcie-link/openpcie-reviewed-ltssm.diff
@@ -230,6 +231,7 @@ jobs:
           python3 -m pip install 'PyYAML==6.0.2' 'fusesoc==2.4.4' 'edalize==0.6.1'
           python3 tools/ip_fetch.py pcie_endpoint_openpcie pcie_host_pcievhost pcie_host_vproc
           python3 tools/pcie_link.py --check --check-upstream --apply-selected-overlays
+          python3 tools/pcie_cfg_overlay.py --checkout .tools/pcie_endpoint_openpcie
           fusesoc --cores-root=.tools/pcie_endpoint_openpcie \
             run --setup --target=sim fusesoc:pcie:phy_core:1.0.0
       - name: Compile actual selected RC + endpoint source at shared Gen1 PIPE boundary
@@ -255,6 +257,12 @@ jobs:
             "$root/dv/pcie_link/pipe_x1_adapter.sv" \
             "$root/dv/pcie_link/phy_status_responder.sv" \
             "$root/dv/pcie_link/endpoint_prelink_ctrl.sv" \
+            "$root/dv/pcie_link/pcie_bar0_host_cfg.sv" \
+            "$root/.tools/pcie_endpoint_openpcie/src/pcie_cfg/pcie_config_decode.sv" \
+            "$root/.tools/pcie_endpoint_openpcie/src/pcie_cfg/pcie_config_handler.sv" \
+            "$root/.tools/pcie_endpoint_openpcie/src/pcie_cfg/pcie_config_mux.sv" \
+            "$root/.tools/pcie_endpoint_openpcie/src/pcie_cfg/pcie_config_reg.sv" \
+            "$root/.tools/pcie_endpoint_openpcie/src/pcie_cfg/pcie_cfg_wrapper.sv" \
             "$root/dv/pcie_link/tb_pcie_cross_link.sv" \
             --top-module test \
             2>&1 | tee "$root/cross-provider-elaboration.log"
@@ -283,6 +291,7 @@ jobs:
           python3 -m pip install 'PyYAML==6.0.2' 'fusesoc==2.4.4' 'edalize==0.6.1'
           python3 tools/ip_fetch.py pcie_endpoint_openpcie pcie_host_pcievhost pcie_host_vproc
           python3 tools/pcie_link.py --check --check-upstream --apply-selected-overlays
+          python3 tools/pcie_cfg_overlay.py --checkout .tools/pcie_endpoint_openpcie
           fusesoc --cores-root=.tools/pcie_endpoint_openpcie \
             run --setup --target=sim fusesoc:pcie:phy_core:1.0.0
           # The upstream host makefile requires this exact pinned VProc alias.
@@ -330,6 +339,12 @@ jobs:
             "$root/dv/pcie_link/pipe_x1_adapter.sv" \
             "$root/dv/pcie_link/phy_status_responder.sv" \
             "$root/dv/pcie_link/endpoint_prelink_ctrl.sv" \
+            "$root/dv/pcie_link/pcie_bar0_host_cfg.sv" \
+            "$root/.tools/pcie_endpoint_openpcie/src/pcie_cfg/pcie_config_decode.sv" \
+            "$root/.tools/pcie_endpoint_openpcie/src/pcie_cfg/pcie_config_handler.sv" \
+            "$root/.tools/pcie_endpoint_openpcie/src/pcie_cfg/pcie_config_mux.sv" \
+            "$root/.tools/pcie_endpoint_openpcie/src/pcie_cfg/pcie_config_reg.sv" \
+            "$root/.tools/pcie_endpoint_openpcie/src/pcie_cfg/pcie_cfg_wrapper.sv" \
             "$root/dv/pcie_link/tb_pcie_cross_link.sv" \
             --top-module test -Mdir "$root/.tools/pcie-cross-obj" \
             -CFLAGS '-std=c++17 -Wno-attributes' \
