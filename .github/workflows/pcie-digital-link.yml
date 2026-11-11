@@ -93,7 +93,7 @@ jobs:
           python3 tools/generate.py --check
 
   upstream-endpoint:
-    name: Original OpenPCIe FuseSoC/Verilator test (NOT connected to pcievhost)
+    name: Pinned OpenPCIe FuseSoC/Verilator + reviewed LTSSM fix (NOT yet host-connected)
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -110,10 +110,14 @@ jobs:
             'cocotb-bus==0.2.1' 'cocotb-coverage==1.2.0' \
             'pyvsc==0.9.5.27214109393'
           python3 tools/ip_fetch.py pcie_endpoint_openpcie
-      - name: Run actual upstream endpoint verification target with original sources
+      - name: Apply only source-pinned, reviewed LTSSM fix and run original verification target
         run: |
           set -euo pipefail
           mkdir -p .tools/pcie-link
+          python3 tools/pcie_link.py --check --check-upstream --apply-selected-overlays
+          git -C .tools/pcie_endpoint_openpcie diff -- src/ltssm/pcie_ltssm_downstream.sv \
+            > .tools/pcie-link/openpcie-reviewed-ltssm.diff
+          test -s .tools/pcie-link/openpcie-reviewed-ltssm.diff
           fusesoc --cores-root=.tools/pcie_endpoint_openpcie \
             run --target=sim fusesoc:pcie:phy_core:1.0.0 \
             2>&1 | tee .tools/pcie-link/openpcie-upstream.log
