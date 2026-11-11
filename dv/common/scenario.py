@@ -19,7 +19,8 @@ RANDOM_ALGORITHM = "sha256-rejection-v1"
 PHASES = ("init", "run", "check")
 KINDS = frozenset(("memory.allocate", "memory.initialize", "memory.check",
                    "memory.release", "dma.configure", "dma.copy", "dma.wait_idle",
-                   "event.emit", "event.wait", "pcie.link.train"))
+                   "event.emit", "event.wait", "pcie.link.train",
+                   "pcie.config.bar0"))
 NAME = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]{0,95}$")
 PATTERNS = frozenset(("constant", "counter8", "address_xor"))
 POLICIES = frozenset(("strict", "fast", "hybrid", "auto"))
@@ -449,6 +450,28 @@ def _validate_memory(ordered: list[dict], ancestors: dict[str, set[str]],
                 raise ScenarioError(
                     f"{aid}: unordered concurrent training on PCIe link {link}")
             last_pcie_train[link] = aid
+        elif kind == "pcie.config.bar0":
+            # Host-owned Type-0 transactions after its own link training.
+            # Device prelink BAR capability is independently configured.
+            if phase != "init":
+                raise ScenarioError(f"{aid}: PCIe host enumeration is an INIT action")
+            _fields(args, {"link", "bar_index", "aperture_bytes", "host_bus_base"},
+                    set(), aid)
+            link = _name(args["link"], f"{aid}.link")
+            if link not in available_pcie or link not in last_pcie_train:
+                raise ScenarioError(f"{aid}: PCIe BAR requires selected trained link")
+            if last_pcie_train[link] not in ancestors[aid]:
+                raise ScenarioError(f"{aid}: BAR enumeration must depend on trained link")
+            if _int(args["bar_index"], f"{aid}.bar_index", low=0, high=5) != 0:
+                raise ScenarioError(f"{aid}: only BAR0 qualified")
+            aperture = _int(args["aperture_bytes"], f"{aid}.aperture_bytes",
+                            low=4096, high=1048576)
+            host_base = _int(args["host_bus_base"], f"{aid}.host_bus_base",
+                             low=4096, high=U32)
+            if (aperture & (aperture-1)) or (host_base & (aperture-1)):
+                raise ScenarioError(f"{aid}: BAR aperture or host base misaligned")
+            if host_base + aperture > (1 << 32):
+                raise ScenarioError(f"{aid}: BAR address wraps 32-bit PCI bus space")
         elif kind == "memory.release":
             if phase not in ("run", "check"):
                 raise ScenarioError(f"{aid}: release outside RUN/CHECK")
