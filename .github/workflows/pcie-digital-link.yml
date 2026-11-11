@@ -177,17 +177,20 @@ jobs:
           git -C .tools/pcie_endpoint_openpcie diff -- src/ltssm/pcie_ltssm_downstream.sv \
             > .tools/pcie-link/openpcie-reviewed-ltssm.diff
           test -s .tools/pcie-link/openpcie-reviewed-ltssm.diff
+          # FuseSoC's upstream direct Vtop invocation does not use Cocotb's
+          # Makefile/runner, so it MUST receive the Python GPI bootstrap.
+          # Derive these from the exact cocotb-config used for compilation,
+          # rather than guessing the shared-object/Python installation.
+          export GPI_USERS="$(cocotb-config --libpython);$(cocotb-config --pygpi-entry-point)"
+          export PYGPI_PYTHON_BIN="$(cocotb-config --python-bin)"
+          export COCOTB_TEST_MODULES=test_pcie_core
+          export MODULE=test_pcie_core
+          export LD_LIBRARY_PATH="$(cocotb-config --lib-dir):${LD_LIBRARY_PATH:-}"
+          echo "Cocotb Python: $PYGPI_PYTHON_BIN"
+          echo "Cocotb GPI bootstrap: $GPI_USERS"
           fusesoc --cores-root=.tools/pcie_endpoint_openpcie \
             run --target=sim fusesoc:pcie:phy_core:1.0.0 \
             2>&1 | tee .tools/pcie-link/openpcie-upstream.log
-          # OSS-CAD's Cocotb VPI must resolve the selected Python shared
-          # runtime. The previous 3.12 job attempted libpython3.11.so and
-          # stopped before any Cocotb tests started.
-          py_libdir="$(python3 -c 'import sysconfig; print(sysconfig.get_config_var("LIBDIR"))')"
-          test -f "$py_libdir/libpython3.11.so"
-          export LD_LIBRARY_PATH="$py_libdir:${LD_LIBRARY_PATH:-}"
-          python3 --version
-          echo "Cocotb Python library: $py_libdir/libpython3.11.so"
           # FuseSoC can exit zero even when Cocotb fails test-module import.
           # Require an actual completed, nonempty and entirely passing test table.
           python3 tools/ci_require_cocotb.py .tools/pcie-link/openpcie-upstream.log
