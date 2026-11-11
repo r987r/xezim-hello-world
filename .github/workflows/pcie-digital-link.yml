@@ -106,7 +106,9 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends verilator
           python3 -m pip install 'PyYAML==6.0.2' 'fusesoc==2.4.4' \
-            'edalize==0.6.1' 'cocotb==1.9.2' 'pyuvm==2.9.1'
+            'edalize==0.6.1' 'cocotb==1.9.2' 'pyuvm==3.0.0' \
+            'cocotb-bus==0.2.1' 'cocotb-coverage==1.2.0' \
+            'pyvsc==0.9.5.27214109393'
           python3 tools/ip_fetch.py pcie_endpoint_openpcie
       - name: Run actual upstream endpoint verification target with original sources
         run: |
