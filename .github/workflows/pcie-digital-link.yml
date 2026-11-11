@@ -27,6 +27,7 @@ on:
       - 'dv/common/scenario.py'
       - 'dv/common/action_runtime.py'
       - 'config/scenarios/pcie-gen1-link.json'
+      - 'config/scenarios/pcie-gen1-bar0.json'
       - 'tests/test_ci_require_cocotb.py'
       - 'tests/test_ip_fetch_submodules.py'
       - '.github/workflows/pcie-digital-link.yml'
@@ -360,7 +361,13 @@ jobs:
           if-no-files-found: warn
 
   cross-provider-training:
-    name: Independent real RC InitLink(1) to OpenPCIe endpoint L0 (NO forced link-up)
+    name: Independent PCIe real link / ${{ matrix.mode }} (no forced state)
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {mode: l0, scenario: config/scenarios/pcie-gen1-link.json}
+          - {mode: bar0, scenario: config/scenarios/pcie-gen1-bar0.json}
     runs-on: ubuntu-24.04
     timeout-minutes: 55
     steps:
@@ -399,7 +406,7 @@ jobs:
           # Exactly one canonical SCN scenario/plan, shared with Python/C/SV.
           mkdir -p .tools/pcie-link/scenario
           python3 tools/scenario_plan.py \
-            --scenario config/scenarios/pcie-gen1-link.json \
+            --scenario "${{ matrix.scenario }}" \
             --soc config/soc.yaml \
             --out .tools/pcie-link/scenario/scenario-plan.json \
             --source-revision "$GITHUB_SHA"
@@ -463,13 +470,21 @@ jobs:
           # Require independently observed actual LTSSMs, not just $finish.
           grep -q '^PCIE_HOST_L0:' "$root/pcie-cross-run.log"
           grep -q '^PCIE_ENDPOINT_L0:' "$root/pcie-cross-run.log"
+          # The BAR0 matrix lane is strictly stronger: independent host
+          # ConfigRd0/CfgWr0 completions must return over the actual link.
+          if [[ "${{ matrix.mode }}" == "bar0" ]]; then
+            grep -q '^PCIE_RC_CFG_PROBE_OK: BAR0 mask=fffff000' "$root/pcie-cross-run.log"
+            grep -q '^PCIE_RC_CFG_BAR_ASSIGNED: BAR0 bus=80001000' "$root/pcie-cross-run.log"
+            grep -q '^PCIE_RC_CFG_MSE_ENABLED:' "$root/pcie-cross-run.log"
+            grep -Fq "PCIE_SCN_DRIVER: plan=$SOC_SELECTED_PLAN_SHA action=enumerate_bar0 stage=driver_done" "$root/pcie-cross-run.log"
+          fi
           grep -q '^PCIE_TRACE: receiver-detect request' "$root/pcie-cross-run.log"
           grep -q '^PCIE_TRACE: PHY receiver present' "$root/pcie-cross-run.log"
       - name: Retain original commands, build and independent training logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pcie-cross-provider-training-${{ github.run_id }}
+          name: pcie-cross-provider-${{ matrix.mode }}-${{ github.run_id }}
           path: |
             pcie-cross-build.log
             pcie-cross-run.log
