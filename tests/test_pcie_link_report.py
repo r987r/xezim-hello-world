@@ -1,8 +1,10 @@
 """Test isolated PCIe evidence without inventing host/device transaction proof."""
 from __future__ import annotations
 import unittest
+from tempfile import TemporaryDirectory
+from pathlib import Path
 
-from tools.pcie_link_report import summarize, render
+from tools.pcie_link_report import summarize, render, export_shared_protocol_timeline
 
 PLAN="a"*64
 GOOD=f"""PCIE_EP_SIM_FAST_LTSSM: ENABLED timer_divider=512 min_tx_ts1=16 1ms_cycles=195
@@ -63,6 +65,21 @@ class PcieLinkEvidenceTests(unittest.TestCase):
         ):
             with self.subTest(text=value[:80]):
                 self.assertFalse(summarize(value)["qualified_digital_link_l0"])
+
+    def test_reuses_existing_protocol_explorer_without_fake_tlp(self):
+        with TemporaryDirectory() as temp:
+            output=Path(temp)
+            report=export_shared_protocol_timeline(summarize(GOOD),output)
+            self.assertTrue(report["capture_complete"],report["issues"])
+            self.assertTrue((output/"protocol-events.jsonl").is_file())
+            self.assertTrue((output/"protocol-transactions.json").is_file())
+            self.assertTrue((output/"protocols.html").is_file())
+            self.assertGreater(len(report["records"]),4)
+            self.assertTrue(all(x["kind"]=="event" and x["operation"]=="ltssm_transition"
+                                for x in report["records"]))
+            self.assertTrue(all(x["source"]=="pcie0.ltssm" for x in report["records"]))
+            self.assertEqual({x["protocol"] for x in report["records"]},{"pcie"})
+            self.assertFalse(any(x["kind"]=="transaction" for x in report["records"]))
 
     def test_no_fake_protocol_timestamps_or_bar_completion(self):
         row=summarize(GOOD)
