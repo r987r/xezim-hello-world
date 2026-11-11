@@ -187,3 +187,52 @@ jobs:
             .tools/pcie-link/
           include-hidden-files: true
           if-no-files-found: warn
+
+  cross-provider-elaboration:
+    name: Cross-connected real OpenPCIe RTL and independent pcievhost (elaboration ONLY)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Fetch pinned endpoint/host/VProc and original FuseSoC RTL dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends verilator
+          python3 -m pip install 'PyYAML==6.0.2' 'fusesoc==2.4.4' 'edalize==0.6.1'
+          python3 tools/ip_fetch.py pcie_endpoint_openpcie pcie_host_pcievhost pcie_host_vproc
+          python3 tools/pcie_link.py --check --check-upstream --apply-selected-overlays
+          fusesoc --cores-root=.tools/pcie_endpoint_openpcie \
+            run --setup --target=sim fusesoc:pcie:phy_core:1.0.0
+      - name: Compile actual selected RC + endpoint source at shared Gen1 PIPE boundary
+        run: |
+          set -euo pipefail
+          # Original FuseSoC resolves the complete transitive endpoint RTL.
+          # No synthesized symbol-stream or LTSSM stand-in is used.
+          cd build/fusesoc_pcie_phy_core_1.0.0/sim
+          root="$GITHUB_WORKSPACE"
+          rc="$root/.tools/pcie_host_pcievhost"
+          vproc="$root/.tools/pcie_host_vproc"
+          verilator --lint-only --timing -Wno-fatal -DVERILATOR -DVPROC_SV \
+            -I"$rc/verilog/headers" -I"$vproc" \
+            -f fusesoc_pcie_phy_core_1.0.0.vc \
+            "$rc/verilog/lib/Serialiser.v" \
+            "$rc/verilog/lib/clkmux.v" \
+            "$rc/verilog/pcieVHost/pcieVHostPipex1.v" \
+            "$rc/verilog/pcieVHost/pcieVHost.v" \
+            "$vproc/f_VProc.v" \
+            "$root/dv/pcie_link/pipe_x1_adapter.sv" \
+            "$root/dv/pcie_link/phy_status_responder.sv" \
+            "$root/dv/pcie_link/tb_pcie_cross_link.sv" \
+            --top-module tb_pcie_cross_link \
+            2>&1 | tee "$root/cross-provider-elaboration.log"
+          # RTL elaboration is only a necessary precondition, never L0 proof.
+      - name: Archive original compiler output even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pcie-cross-provider-elaboration-${{ github.run_id }}
+          path: cross-provider-elaboration.log
+          if-no-files-found: warn
