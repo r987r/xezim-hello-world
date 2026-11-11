@@ -12,7 +12,7 @@ module test #(
   logic pipe_clk = 0;
   logic core_clk = 0;
   always #2 symbol_clk = ~symbol_clk; // Gen1 250 MHz
-  always #8 pipe_clk = ~pipe_clk;     // 32-bit Gen1: 62.5 MHz
+  always #4 pipe_clk = ~pipe_clk;     // 16-bit Gen1: 125 MHz, upstream PHY's actual PIPE width
   always #5 core_clk = ~core_clk;     // Endpoint core CLK_RATE=100 MHz
   logic nreset = 0;
   initial begin
@@ -70,8 +70,18 @@ module test #(
       $fatal(1, "device did not permit LTSSM after BAR commit");
     $display("PCIE_DEVICE_PRELINK: LTSSM enable released after BAR commit");
   end
+  // Upstream endpoint reports Gen1 PIPE_WIDTH=16, so run the RC at 16 bits
+  // rather than incorrectly presenting four host bytes per endpoint beat.
+  // The 32-bit adapter shell is zero-extended only: the physical exchange
+  // remains exactly two bytes + two K flags per 125 MHz PIPE beat.
+  wire [15:0] rc_txdata16, rc_rxdata16;
+  wire [1:0] rc_txdatak2, rc_rxdatak2;
   wire [31:0] host_txdata, host_rxdata, ep_txdata, ep_rxdata;
   wire [3:0] host_txdatak, host_rxdatak, ep_txdatak, ep_rxdatak;
+  assign host_txdata = {16'h0, rc_txdata16};
+  assign host_txdatak = {2'b00, rc_txdatak2};
+  assign rc_rxdata16 = host_rxdata[15:0];
+  assign rc_rxdatak2 = host_rxdatak[1:0];
   wire host_txelecidle, host_rxelecidle;
   wire ep_txdata_valid, ep_txelecidle, ep_rxdata_valid, ep_rxelecidle;
   wire ep_txdetectrx, phy_phystatus;
@@ -127,12 +137,12 @@ module test #(
   logic endpoint_l0_reported = 1'b0;
 
   // Host root complex is the original pinned GPL simulation-only model.
-  pcieVHostPipex1 #(.NodeNum(0), .EndPoint(0), .DataWidth(32)) host (
+  pcieVHostPipex1 #(.NodeNum(0), .EndPoint(0), .DataWidth(16)) host (
     .pcieclk(symbol_clk), .pclk(pipe_clk), .nreset(nreset),
     .Gen2ClkSel(), .ClkOut(), .ElecIdleOut(host_txelecidle),
     .ElecIdleIn(host_rxelecidle),
-    .RxData(host_rxdata), .RxDataK(host_rxdatak),
-    .TxData(host_txdata), .TxDataK(host_txdatak)
+    .RxData(rc_rxdata16), .RxDataK(rc_rxdatak2),
+    .TxData(rc_txdata16), .TxDataK(rc_txdatak2)
   );
 
   // Electrical idle and data-valid are not interchangeable.
@@ -221,6 +231,19 @@ module test #(
     ltssm_previous <= ltssm_debug_state;
     if (ep.ts1_valid[0]) ep_ts1_count <= ep_ts1_count + 1;
     if (ep.ts2_valid[0]) ep_ts2_count <= ep_ts2_count + 1;
+  end
+
+  // Never let a mismatched host width masquerade as a protocol failure.
+  // The endpoint's own lane manager chooses the PIPE width; this is an
+  // independent assertion, not an input or a forced width override.
+  logic width_verified = 1'b0;
+  always @(posedge pipe_clk) if (nreset && ltssm_permitted &&
+                                ltssm_debug_state[3:0] == 4'h2 &&
+                                !width_verified) begin
+    if (pipe_width !== 8'd16)
+      $fatal(1, "Gen1 endpoint PIPE width %0d does not match independent RC DataWidth=16", pipe_width);
+    width_verified <= 1'b1;
+    $display("PCIE_PIPE_WIDTH_MATCH: RC 16-bit and EP %0d-bit PIPE @125MHz", pipe_width);
   end
 
   // Passive PIPE diagnostics. This observes encoded lane words on each
