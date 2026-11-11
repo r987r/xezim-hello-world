@@ -218,3 +218,38 @@ The original `pcie0.ctrl` SoC aperture currently belongs to the outbound
 requester CSR; pre-link controller CSRs need explicit nonoverlapping source
 ownership within it or another generated address region. Do not alias
 endpoint Type-0 configuration space with the CPU's Config-NoC CSR aperture.
+
+## Pinned configuration-TLP BAR overlay experiment — NOT qualification
+
+To keep the upstream generator and config TLP path instead of building a
+second PCIe config model, this branch now contains:
+
+- `pcie_bar0_host_cfg.sv`: observes accepted AXI-Lite configuration writes
+  and reads from the pinned upstream `pcie_cfg_wrapper`, implements BAR0
+  all-ones size probing, RC-assigned PCI bus base and COMMAND.MSE overlay.
+- `tools/pcie_cfg_overlay.py`: checks the original upstream
+  `src/pcie_cfg/pcie_cfg_wrapper.sv` git blob and replaces only explicit
+  source-qualified handler/read taps in the ignored pinned provider checkout.
+  It keeps the original `pcie_config_decode`,
+  `pcie_config_handler`, `pcie_config_mux` and generated
+  `pcie_config_reg` intact. The overlay is experimental and must be
+  regenerated/owned through the SystemRDL/PeakRDL source path before
+  production integration; no vendor source is silently modified.
+- `tb_pcie_cross_link.sv` now connects real endpoint RX TLP to the
+  upstream config wrapper and routes generated config completions back to
+  endpoint TLP TX. Existing nonconfig TLPs are explicitly NOT connected to
+  the NoC in this standalone link experiment.
+- `bar0_noc_translate.sv` computes PCI bus-address offset -> local SRAM
+  destination under the separate L0, NoC-ready and host-MSE gate. It does
+  not accept AXI beats or synthesize completions.
+- Focused RTL unit tests cover BAR probe, assignment, command bits,
+  misconfiguration, out-of-window requests and independent AXI-Lite AW/W.
+
+**Critical acceptance still open:** source overlay elaboration must PASS,
+both real LTSSMs must reach L0, host must issue real configuration TLP
+BAR probe/assignment/MSE and independently capture received completions,
+then actual nonconfiguration BAR TLP needs a real PCIe-to-FlooNoC bridge
+and byte-checked target readback. Also verify the upstream RDL readonly
+BAR0's AXI response semantics: an overlay seeing a write is not sufficient
+if the original register block rejects it. No test in this branch claims
+the config path passes until the exact-head simulator proves it.
