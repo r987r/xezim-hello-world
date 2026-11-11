@@ -20,14 +20,14 @@ module test #(
   wire [31:0] prelink_rdata, bar_aperture, bar_target, bar_mask;
   wire prelink_error, bar_committed, ltssm_permitted, bar_mem_ready;
   logic noc_ready = 0;
-  logic host_mem_enable = 0;
+  // From actual host configuration TLP, not a TB-assigned enable.
   pcie_endpoint_prelink_ctrl prelink (
     .clk_i(core_clk), .rst_ni(nreset), .cfg_wr_i(prelink_wr),
     .cfg_addr_i(prelink_addr), .cfg_wdata_i(prelink_wdata),
     .cfg_wstrb_i(4'hf), .cfg_rdata_o(prelink_rdata),
     .cfg_error_o(prelink_error), .phy_ready_i(nreset),
     .noc_ready_i(noc_ready), .link_up_i(ep_link_up),
-    .host_mem_enable_i(host_mem_enable),
+    .host_mem_enable_i(host_memory_enable),
     .bar0_aperture_o(bar_aperture), .bar0_local_target_o(bar_target),
     .bar0_size_mask_o(bar_mask), .bar_config_committed_o(bar_committed),
     .ltssm_enable_o(ltssm_permitted), .bar_mem_ready_o(bar_mem_ready)
@@ -67,6 +67,39 @@ module test #(
   wire ep_txdata_valid, ep_txelecidle, ep_rxdata_valid, ep_rxelecidle;
   wire ep_txdetectrx, phy_phystatus;
   wire [2:0] phy_rxstatus;
+  // REAL upstream config TLP path, with source-qualified BAR overlay.
+  wire [31:0] ep_rx_tlp_data, ep_cfg_cpl_data;
+  wire [3:0] ep_rx_tlp_keep, ep_cfg_cpl_keep;
+  wire [4:0] ep_rx_tlp_user, ep_cfg_cpl_user;
+  wire ep_rx_tlp_valid, ep_rx_tlp_last, ep_rx_tlp_ready;
+  wire ep_cfg_cpl_valid, ep_cfg_cpl_last, ep_cfg_cpl_ready;
+  wire [31:0] bar_host_base;
+  wire host_bar_probe, host_cfg_violation;
+  wire host_memory_enable;
+  pcie_cfg_wrapper #(.DATA_WIDTH(32), .KEEP_WIDTH(4), .USER_WIDTH(5))
+  endpoint_cfg (
+    .clk_i(core_clk), .rst_i(~nreset),
+    .s_axis_tdata(ep_rx_tlp_data), .s_axis_tkeep(ep_rx_tlp_keep),
+    .s_axis_tvalid(ep_rx_tlp_valid), .s_axis_tlast(ep_rx_tlp_last),
+    .s_axis_tuser(ep_rx_tlp_user), .s_axis_tready(ep_rx_tlp_ready),
+    .cpl_axis_tdata(ep_cfg_cpl_data), .cpl_axis_tkeep(ep_cfg_cpl_keep),
+    .cpl_axis_tvalid(ep_cfg_cpl_valid), .cpl_axis_tlast(ep_cfg_cpl_last),
+    .cpl_axis_tuser(ep_cfg_cpl_user), .cpl_axis_tready(ep_cfg_cpl_ready),
+    // Non-configuration requests need the real NoC bridge in full-chip;
+    // the isolated L0 test never qualifies BAR memory transactions.
+    .m_tlp_axis_tdata(), .m_tlp_axis_tkeep(), .m_tlp_axis_tvalid(),
+    .m_tlp_axis_tlast(), .m_tlp_axis_tuser(),
+    .m_tlp_axis_tready(1'b0),
+    .cfg_bus_number_o(), .cfg_device_number_o(), .cfg_function_number_o(),
+    .hwif_in('0), .hwif_out(),
+    .bar0_device_committed_i(bar_committed),
+    .bar0_device_aperture_i(bar_aperture),
+    .bar0_host_bus_base_o(bar_host_base),
+    .bar0_host_memory_enable_o(host_memory_enable),
+    .bar0_probe_o(host_bar_probe),
+    .bar0_cfg_violation_o(host_cfg_violation)
+  );
+
   wire [20:0] ltssm_debug_state;
   wire ep_link_up;
   wire [1:0] phy_powerdown;
@@ -142,12 +175,12 @@ module test #(
     .as_mac_in_detect(), .as_cdr_hold_req(),
     .ltssm_debug_state(ltssm_debug_state),
     .tx_elec_idle(1'b0), .phy_ready_en(ltssm_permitted), .link_up_o(ep_link_up),
-    .s_tlp_axis_tdata(32'b0), .s_tlp_axis_tkeep(4'b0),
-    .s_tlp_axis_tvalid(1'b0), .s_tlp_axis_tlast(1'b0),
-    .s_tlp_axis_tuser(5'b0), .s_tlp_axis_tready(),
-    .m_tlp_axis_tdata(), .m_tlp_axis_tkeep(),
-    .m_tlp_axis_tvalid(), .m_tlp_axis_tlast(),
-    .m_tlp_axis_tuser(), .m_tlp_axis_tready(1'b1)
+    .s_tlp_axis_tdata(ep_cfg_cpl_data), .s_tlp_axis_tkeep(ep_cfg_cpl_keep),
+    .s_tlp_axis_tvalid(ep_cfg_cpl_valid), .s_tlp_axis_tlast(ep_cfg_cpl_last),
+    .s_tlp_axis_tuser(ep_cfg_cpl_user), .s_tlp_axis_tready(ep_cfg_cpl_ready),
+    .m_tlp_axis_tdata(ep_rx_tlp_data), .m_tlp_axis_tkeep(ep_rx_tlp_keep),
+    .m_tlp_axis_tvalid(ep_rx_tlp_valid), .m_tlp_axis_tlast(ep_rx_tlp_last),
+    .m_tlp_axis_tuser(ep_rx_tlp_user), .m_tlp_axis_tready(ep_rx_tlp_ready)
   );
 
   // Even if L0 trains before NoC boot, do not enable inbound MMIO early.
