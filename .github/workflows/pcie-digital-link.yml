@@ -147,9 +147,15 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p .tools/pcie-link
+          # Upstream files.verilator hardcodes ../../../vproc/f_VProc.v;
+          # makefile VPROC_TOP alone cannot override this ORIGINAL filelist.
+          # Alias the verified exact-pinned tree (no source copy or fork).
+          test ! -e .tools/vproc
+          ln -s pcie_host_vproc .tools/vproc
+          test "$(git -C .tools/vproc rev-parse HEAD)" = \
+            "ae80e5b5cb43d4e9f82f9d45aa3b614e053f9df4"
           make -C .tools/pcie_host_pcievhost/verilog/testpipex1 \
-            -f makefile.verilator run \
-            VPROC_TOP=../../../pcie_host_vproc \
+            -f makefile.verilator run VPROC_TOP=../../../vproc \
             2>&1 | tee .tools/pcie-link/pcievhost-upstream.log
       - name: Retain original upstream host build and test logs
         if: always()
