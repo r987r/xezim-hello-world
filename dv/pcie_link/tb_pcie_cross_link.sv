@@ -1,7 +1,7 @@
 `timescale 1ns/1ps
 // Experimental independent RC <-> original endpoint RTL bench.
 // This harness NEVER sets link_up_o or LTSSM state. Do not claim L0 from compile.
-module tb_pcie_cross_link #(
+module test #(
   parameter bit PARTNER_PRESENT = 1'b1,
   parameter integer MAX_PIPE_CYCLES = 100000
 );
@@ -121,6 +121,11 @@ module tb_pcie_cross_link #(
     if (ep_link_up && phy_status_count == 0)
       $fatal(1, "Endpoint L0 without receiver detection");
   end
+  // Original GPL pcievhost hardcodes test.Fatal for fatal bridge events.
+  task Fatal;
+    $fatal(1, "pcievhost reported a fatal root-complex error");
+  endtask
+
   initial begin
     repeat (MAX_PIPE_CYCLES) @(posedge pipe_clk);
     $display("PCIE_TRACE: timeout detect=%0d phy=%0d epTx=%0d hostTx=%0d ltssm=%h link=%b",
