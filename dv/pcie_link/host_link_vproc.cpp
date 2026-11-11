@@ -31,6 +31,7 @@ extern "C" void VUserMain0(int node) {
     rc.initLink(1);
     std::printf("PCIE_HOST_L0: InitLink(1) returned from original host LTSSM\n");
     std::fflush(stdout);
-    // Keep the link alive while endpoint proof runs; don't send fake TLPs.
-    for (;;) rc.sendOs(IDL);
+    // Original VProc termination; CI independently requires endpoint L0.
+    rc.sendIdle(100);
+    VWrite(PVH_FINISH, 0, 0, node);
 }
