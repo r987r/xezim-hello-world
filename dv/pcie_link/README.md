@@ -253,3 +253,32 @@ and byte-checked target readback. Also verify the upstream RDL readonly
 BAR0's AXI response semantics: an overlay seeing a write is not sufficient
 if the original register block rejects it. No test in this branch claims
 the config path passes until the exact-head simulator proves it.
+
+## Explicit simulation-only LTSSM acceleration
+
+Source-backed behavior follows AMD's documented fast PCIe simulation pattern:
+millisecond LTSSM watchdogs are shortened by 512x and the required number
+of **transmitted** Polling.Active TS1s is shortened from 1024 to 16. In
+the pinned OpenPCIe provider, the reviewed overlay changes the existing
+`SIM_FAST_LINK` timing parameters; the top-level cross-provider bench exposes
+the plainly named `SIM_FORCE_FAST_LTSSM` elaboration parameter.
+
+- Default **OFF** for the endpoint and all production uses. The isolated
+  cross-link CI explicitly passes `-GSIM_FORCE_FAST_LTSSM=1`.
+- Logs must include both
+  `PCIE_SIM_FORCE_FAST_LTSSM: ENABLED override=512x` and
+  `PCIE_EP_SIM_FAST_LTSSM: ENABLED timer_divider=512 min_tx_ts1=16`,
+  including effective timer cycle counts; CI validates these before calling
+  the selected run qualified.
+- Original Detect/TS receive/Configuration/L0 state machine, receiver-detect
+  requests, TS decoding, and real link wires are unchanged. Reducing
+  transmit counts **does not** fabricate received TS1/TS2. Link success
+  still requires independent RC and endpoint L0 plus observed physical
+  training from the original components.
+- This is explicitly an acceleration of PCIe wait windows for tests. Do not
+  treat it as a fix for incorrectly encoded, timed or lane-aligned PIPE
+  ordered sets, and keep slow-timing qualification for later.
+
+Source reference: AMD Versal register manual `PL_SIM_FAST_LINK_TRAINING`
+(512x millisecond intervals, 16 TS1s in simulation, must remain disabled
+for non-simulation use).
