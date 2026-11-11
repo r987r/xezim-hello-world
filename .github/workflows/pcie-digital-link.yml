@@ -78,6 +78,13 @@ jobs:
           vvp .tools/pcie-link/bar-host.vvp \
             | tee .tools/pcie-link/bar-host-unit.log
           grep -q '^PASS: real AXI-Lite host BAR0' .tools/pcie-link/bar-host-unit.log
+          iverilog -g2012 -s tb_bar0_noc_translate \
+            -o .tools/pcie-link/bar-translate.vvp \
+            dv/pcie_link/bar0_noc_translate.sv \
+            dv/pcie_link/tb_bar0_noc_translate.sv
+          vvp .tools/pcie-link/bar-translate.vvp \
+            | tee .tools/pcie-link/bar-translate-unit.log
+          grep -q '^PASS: BAR0 bus/local-NoC' .tools/pcie-link/bar-translate-unit.log
       - name: Fetch three independently pinned providers and check original port names
         run: |
           set -euo pipefail
