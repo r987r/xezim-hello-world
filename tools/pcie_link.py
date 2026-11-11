@@ -29,7 +29,7 @@ REQUIRED_HOST = (
 )
 CAPABILITY_FLAGS = ("trained_l0", "hardware_config_enumeration",
                     "bar0_hardware_decode")
-HEX_SHA = re.compile(r"[0-9a-f]{40}\\Z")
+HEX_SHA = re.compile(r"[0-9a-f]{40}\Z")
 
 
 class PcieProviderError(ValueError):
@@ -167,7 +167,7 @@ def validate_provider_sources(root: Path, result: dict) -> None:
         # interpreting a documentation string as a compiled port list.
         matches = [
             file for file in candidates
-            if re.search(r"\\bmodule\\s+" + re.escape(top) + r"\\b",
+            if re.search(r"\bmodule\s+" + re.escape(top) + r"\b",
                          file.read_text(errors="replace"))
         ]
         if len(matches) != 1:
@@ -178,11 +178,11 @@ def validate_provider_sources(root: Path, result: dict) -> None:
                          "endpoint_parameter", "endpoint_parameter_value",
                          "data_width_parameter"):
                 continue
-            if not re.search(r"\\b" + re.escape(wire) + r"\\b", source):
+            if not re.search(r"\b" + re.escape(wire) + r"\b", source):
                 raise PcieProviderError(f"{role}: no original pin {wire}")
     ep = result["providers"]["endpoint"]
     rdl = root / ".tools" / ep["ip_lock_key"] / result["ports"]["endpoint"]["config_space_rdl"]
-    if not rdl.is_file() or not re.search(r"@\\s*0x10\\s*;", rdl.read_text()):
+    if not rdl.is_file() or not re.search(r"@\s*0x10\s*;", rdl.read_text()):
         raise PcieProviderError("missing upstream PCIe config-space BAR0 SystemRDL")
     host = result["providers"]["host"]
     if not (root / ".tools" / host["ip_lock_key"] / "LICENSE").is_file():
@@ -191,25 +191,25 @@ def validate_provider_sources(root: Path, result: dict) -> None:
 
 def generated_files(root: Path = ROOT) -> dict[str, str]:
     row = selection(root)
-    payload = json.dumps(row, sort_keys=True, indent=2, allow_nan=False) + "\\n"
+    payload = json.dumps(row, sort_keys=True, indent=2, allow_nan=False) + "\n"
     ep = row["providers"]["endpoint"]
     host = row["providers"]["host"]
     readme = (
-        "# Digital PCIe provider selection (generated)\\n\\n"
+        "# Digital PCIe provider selection (generated)\n\n"
         "Do not edit. `make gen` regenerates from "
         "[config/pcie_link.yaml](../../config/pcie_link.yaml) and "
-        "[config/ip.lock.yaml](../../config/ip.lock.yaml).\\n\\n"
-        f"Endpoint: `{ep['ip_lock_key']}` @ `{ep['commit']}`\\n\\n"
+        "[config/ip.lock.yaml](../../config/ip.lock.yaml).\n\n"
+        f"Endpoint: `{ep['ip_lock_key']}` @ `{ep['commit']}`\n\n"
         f"Host testbench: `{host['ip_lock_key']}` @ `{host['commit']}` "
-        "(GPL-3.0; not SoC RTL).\\n\\n"
-        f"Digital adapter: `{row['phy']['adapter']}`.\\n\\n"
+        "(GPL-3.0; not SoC RTL).\n\n"
+        f"Digital adapter: `{row['phy']['adapter']}`.\n\n"
         "The upstream PCIe configuration-space RDL is **source-owned by "
         "the endpoint IP**, separate from SoC Config-NoC requester CSR. "
-        "Do not copy BAR0 into a second hand-maintained SoC register map.\\n\\n"
+        "Do not copy BAR0 into a second hand-maintained SoC register map.\n\n"
         "**NOT QUALIFIED:** LTSSM L0, PHY-status responder, host "
         "enumeration, programmable BAR0 decode and silicon SerDes. "
         "The existing `chip-pcie-host` remains TLP-bridge-only. "
-        "Use original pinned RTL CI evidence before changing these labels.\\n"
+        "Use original pinned RTL CI evidence before changing these labels.\n"
     )
     return {"selection.json": payload, "README.md": readme}
 
