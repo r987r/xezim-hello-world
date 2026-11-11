@@ -109,7 +109,7 @@ jobs:
             'edalize==0.6.1' 'cocotb==1.9.2' 'pyuvm==3.0.0' \
             'cocotb-bus==0.2.1' 'cocotb-coverage==1.2.0' \
             'pyvsc==0.9.5.27214109393'
-          python3 tools/ip_fetch.py pcie_endpoint_openpcie
+          python3 tools/ip_fetch.py pcie_endpoint_openpcie pcie_host_pcievhost pcie_host_vproc
       - name: Apply only source-pinned, reviewed LTSSM fix and run original verification target
         run: |
           set -euo pipefail
