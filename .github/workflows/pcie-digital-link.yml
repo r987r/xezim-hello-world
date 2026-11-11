@@ -191,21 +191,19 @@ jobs:
           git -C .tools/pcie_endpoint_openpcie diff -- src/ltssm/pcie_ltssm_downstream.sv \
             > .tools/pcie-link/openpcie-reviewed-ltssm.diff
           test -s .tools/pcie-link/openpcie-reviewed-ltssm.diff
-          # FuseSoC's upstream direct Vtop invocation does not use Cocotb's
-          # Makefile/runner, so it MUST receive the Python GPI bootstrap.
-          # Derive these from the exact cocotb-config used for compilation,
-          # rather than guessing the shared-object/Python installation.
-          export GPI_USERS="$(cocotb-config --libpython);$(cocotb-config --pygpi-entry-point)"
-          export PYGPI_PYTHON_BIN="$(cocotb-config --python-bin)"
-          export COCOTB_TEST_MODULES=test_pcie_core
-          export MODULE=test_pcie_core
-          export LD_LIBRARY_PATH="$(cocotb-config --lib-dir):${LD_LIBRARY_PATH:-}"
-          echo "Cocotb Python: $PYGPI_PYTHON_BIN"
-          echo "Cocotb GPI bootstrap: $GPI_USERS"
+          # Pinned Cocotb 1.9 initializes via the directly-linked Verilator
+          # VPI library. GPI_USERS/--pygpi-entry-point is a Cocotb 2.x API;
+          # using it here selects the wrong startup path.
+          unset GPI_USERS
+          export LIBPYTHON_LOC="$(cocotb-config --libpython)"
           export PYTHONPATH="$PWD/.tools/pcie_endpoint_openpcie/verif/tests:${PYTHONPATH:-}"
           export MODULE=test_pcie_core
-          export TOPLEVEL=top
-          echo 'GPI_USERS bootstrap configured before FuseSoC execution'
+          # The original FuseSoC target elaborates pcie_phy_top, not top.
+          export TOPLEVEL=pcie_phy_top
+          export TOPLEVEL_LANG=verilog
+          export LD_LIBRARY_PATH="$(cocotb-config --lib-dir):${LD_LIBRARY_PATH:-}"
+          echo "Pinned Cocotb: $(cocotb-config --version) TOPLEVEL=$TOPLEVEL"
+          python3 -c 'import cocotb, pyuvm; assert cocotb.__version__ == "1.9.2"'
           python3 --version
           fusesoc --cores-root=.tools/pcie_endpoint_openpcie \
             run --target=sim fusesoc:pcie:phy_core:1.0.0 \
