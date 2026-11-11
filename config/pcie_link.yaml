@@ -1,0 +1,48 @@
+schema_version: 1
+selected_profile: openpcie_pcievhost_gen1_x1
+# Provider profiles are declarative inputs to the existing source/CI framework.
+# No profile may claim a link trained until physical PIPE/LTSSM proof exists.
+profiles:
+  openpcie_pcievhost_gen1_x1:
+    endpoint:
+      ip_lock: pcie_endpoint_openpcie
+      top: pcie_phy_top
+      config_space_rdl: src/pcie_cfg/pcie_config.rdl
+      tx_data: phy_txdata
+      tx_datak: phy_txdatak
+      tx_valid: phy_txdata_valid
+      tx_electrical_idle: phy_txelecidle
+      rx_data: phy_rxdata
+      rx_datak: phy_rxdatak
+      rx_valid: phy_rxdata_valid
+      rx_electrical_idle: phy_rxelecidle
+      ltssm_state: ltssm_debug_state
+      link_up: link_up_o
+    host:
+      ip_lock: pcie_host_pcievhost
+      dependency_ip_lock: pcie_host_vproc
+      top: pcieVHostPipex1
+      tx_data: TxData
+      tx_datak: TxDataK
+      rx_data: RxData
+      rx_datak: RxDataK
+      tx_electrical_idle: ElecIdleOut
+      rx_electrical_idle: ElecIdleIn
+      endpoint_parameter: EndPoint
+      endpoint_parameter_value: 0
+      data_width_parameter: DataWidth
+    phy:
+      adapter: dv/pcie_link/pipe_x1_adapter.sv
+      implementation: behavioral_digital_pipe_only
+      status_driver: not_connected_yet
+    link:
+      generation: 1
+      lanes: 1
+      data_width_bits: 32
+      datak_width_bits: 4
+      encoded_symbol_clock_mhz: 250
+      pipe_parallel_clock_mhz: 62.5
+      qualifier: source_and_adapter_preflight_only
+      trained_l0: false
+      hardware_config_enumeration: false
+      bar0_hardware_decode: false
