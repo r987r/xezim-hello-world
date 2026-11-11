@@ -272,6 +272,18 @@ jobs:
           cp dv/pcie_link/tb_pcie_cross_link.sv "$host/testcross_x1/test.v"
           cp dv/pcie_link/host_link_vproc.cpp \
             "$host/testcross_x1/usercode/VUserMain0.cpp"
+          # Exactly one canonical SCN scenario/plan, shared with Python/C/SV.
+          mkdir -p .tools/pcie-link/scenario
+          python3 tools/scenario_plan.py \
+            --scenario config/scenarios/pcie-gen1-link.json \
+            --soc config/soc.yaml \
+            --out .tools/pcie-link/scenario/scenario-plan.json \
+            --source-revision "$GITHUB_SHA"
+          python3 tools/scenario_c.py \
+            --plan .tools/pcie-link/scenario/scenario-plan.json \
+            --out "$host/testcross_x1/usercode/soc_scenario_contract.h"
+          cp sw/common/soc_scn_action_adapter.h \
+            "$host/testcross_x1/usercode/soc_scn_action_adapter.h"
           make -C "$host/testcross_x1" -f makefile.verilator \
             ../headers/pcie_vhost_map.v
           # Builds original host library and only the test-owned VProc node 0.
@@ -302,7 +314,13 @@ jobs:
               -L$root/.tools/pcie_host_pcievhost/lib -lpcievhost \
               -Wl,-no-whole-archive -ldl" \
             2>&1 | tee "$root/pcie-cross-build.log"
-          "$root/.tools/pcie-cross-obj/Vtest" 2>&1 | tee "$root/pcie-cross-run.log"
+          # The selected plan SHA is independently computed by the runner,
+          # not copied from the same generated C header.
+          export SOC_SELECTED_PLAN_SHA
+          SOC_SELECTED_PLAN_SHA="$(sha256sum "$root/.tools/pcie-link/scenario/scenario-plan.json" | cut -d' ' -f1)"
+          "$root/.tools/pcie-cross-obj/Vtop" 2>&1 | tee "$root/pcie-cross-run.log"
+          grep -Fq "PCIE_SCN_DRIVER|$SOC_SELECTED_PLAN_SHA|train_link|pcie.link.train|issued" "$root/pcie-cross-run.log"
+          grep -Fq "PCIE_SCN_DRIVER|$SOC_SELECTED_PLAN_SHA|train_link|pcie.link.train|driver_done" "$root/pcie-cross-run.log"
           # Require independently observed actual LTSSMs, not just $finish.
           grep -q '^PCIE_HOST_L0:' "$root/pcie-cross-run.log"
           grep -q '^PCIE_ENDPOINT_L0:' "$root/pcie-cross-run.log"
@@ -316,4 +334,5 @@ jobs:
           path: |
             pcie-cross-build.log
             pcie-cross-run.log
+            .tools/pcie-link/scenario/scenario-plan.json
           if-no-files-found: warn
