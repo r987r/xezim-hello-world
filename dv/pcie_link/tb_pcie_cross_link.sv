@@ -214,6 +214,30 @@ module test #(
     if (ep.ts2_valid[0]) ep_ts2_count <= ep_ts2_count + 1;
   end
 
+  // Passive PIPE diagnostics. This observes encoded lane words on each
+  // independent participant's local PIPE port; it does not control either
+  // LTSSM, decode data into artificial TS, or relay software state.
+  integer host_pipe_words = 0, ep_pipe_words = 0;
+  integer host_pipe_samples_printed = 0, ep_pipe_samples_printed = 0;
+  always @(posedge pipe_clk) if (nreset && ltssm_permitted) begin
+    if (ep_rxdata_valid && !ep_rxelecidle) begin
+      host_pipe_words <= host_pipe_words + 1;
+      if (ltssm_debug_state[3:0] == 4'h2 && host_pipe_samples_printed < 16) begin
+        $display("PCIE_PIPE_RC_TO_EP: data=%h k=%h idle=%b valid=%b at %0t",
+                 ep_rxdata, ep_rxdatak, ep_rxelecidle, ep_rxdata_valid, $time);
+        host_pipe_samples_printed <= host_pipe_samples_printed + 1;
+      end
+    end
+    if (ep_txdata_valid && !ep_txelecidle) begin
+      ep_pipe_words <= ep_pipe_words + 1;
+      if (ltssm_debug_state[3:0] == 4'h2 && ep_pipe_samples_printed < 16) begin
+        $display("PCIE_PIPE_EP_TO_RC: data=%h k=%h idle=%b valid=%b at %0t",
+                 ep_txdata, ep_txdatak, ep_txelecidle, ep_txdata_valid, $time);
+        ep_pipe_samples_printed <= ep_pipe_samples_printed + 1;
+      end
+    end
+  end
+
   // Only observations; no manual injection or forced state.
   always @(posedge pipe_clk) if (nreset) begin
     if (ep_txdetectrx && detect_count == 0) begin
@@ -244,11 +268,12 @@ module test #(
 
   initial begin
     repeat (MAX_PIPE_CYCLES) @(posedge pipe_clk);
-    $display("PCIE_TRACE: timeout detect=%0d phy=%0d epTx=%0d hostTx=%0d ltssm=%h link=%b quiet=%0d active=%0d polling=%0d cfg=%0d ts1=%0d ts2=%0d",
+    $display("PCIE_TRACE: timeout detect=%0d phy=%0d epTx=%0d hostTx=%0d ltssm=%h link=%b quiet=%0d active=%0d polling=%0d cfg=%0d ts1=%0d ts2=%0d rcPipe=%0d epPipe=%0d",
        detect_count, phy_status_count, ep_tx_count, rc_tx_count,
        ltssm_debug_state, ep_link_up,
        detect_quiet_entries, detect_active_entries, polling_entries,
-       configuration_entries, ep_ts1_count, ep_ts2_count);
+       configuration_entries, ep_ts1_count, ep_ts2_count,
+       host_pipe_words, ep_pipe_words);
     $fatal(1, "Unqualified cross-provider link: no proven L0 handshake");
   end
 endmodule
