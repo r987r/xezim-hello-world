@@ -1,7 +1,7 @@
 diff --git a/src/ltssm/pcie_ltssm_downstream.sv b/src/ltssm/pcie_ltssm_downstream.sv
 --- a/src/ltssm/pcie_ltssm_downstream.sv
 +++ b/src/ltssm/pcie_ltssm_downstream.sv
-@@ -1608,8 +1608,8 @@
+@@ -1608,9 +1608,9 @@
                single_ts1_received_c = '1;
  
                if ((ordered_set_i[lane].link_num == PAD) && (ordered_set_i[lane].lane_num == PAD)) begin
