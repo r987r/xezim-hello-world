@@ -88,18 +88,18 @@ def selection(root: Path = ROOT) -> dict:
             or type(link["generation"]) is not int or link["generation"] != 1
             or type(link["lanes"]) is not int or link["lanes"] != 1
             or type(link["data_width_bits"]) is not int
-            or link["data_width_bits"] != 32
+            or link["data_width_bits"] != 16
             or type(link["datak_width_bits"]) is not int
-            or link["datak_width_bits"] != 4
+            or link["datak_width_bits"] != 2
             or link["encoded_symbol_clock_mhz"] != 250
-            or link["pipe_parallel_clock_mhz"] != 62.5
+            or link["pipe_parallel_clock_mhz"] != 125
             or link["qualifier"] != "source_and_adapter_preflight_only"
             or any(link.get(flag) is not False for flag in CAPABILITY_FLAGS)):
         raise PcieProviderError("unsupported x1 Gen1 physical clock/width or false qualification")
     if (type(host["endpoint_parameter_value"]) is not int
             or host["endpoint_parameter_value"] != 0
             or host["data_width_parameter"] != "DataWidth"):
-        raise PcieProviderError("host must be a 32-bit root-complex provider")
+        raise PcieProviderError("host must be an independent Gen1 x1 root-complex provider")
     if ep["ip_lock"] == host["ip_lock"]:
         raise PcieProviderError("endpoint and independent host may not be the same model")
     providers = {}
