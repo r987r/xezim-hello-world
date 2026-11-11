@@ -1,7 +1,41 @@
 diff --git a/src/ltssm/pcie_ltssm_downstream.sv b/src/ltssm/pcie_ltssm_downstream.sv
 --- a/src/ltssm/pcie_ltssm_downstream.sv
 +++ b/src/ltssm/pcie_ltssm_downstream.sv
-@@ -1608,9 +1608,9 @@
+@@ -101,13 +101,23 @@
+   localparam int ClockPeriodNs = ((10 ** 3) / CLK_RATE);
+-  localparam longint TwentyFourMsTimeOut = (24 * (10 ** 6)) / ClockPeriodNs;
+-  localparam longint FourtyEightMsTimeOut = (48 * (10 ** 6)) / ClockPeriodNs;
+-  localparam longint TwelveMsTimeOut = SIM_FAST_LINK ? (12 * (10 ** 4)) / (ClockPeriodNs *10): 
+-  (12 * (10 ** 6)) / ClockPeriodNs;
+-  localparam longint TwoMsTimeOut = (2 * (10 ** 6)) / ClockPeriodNs;
+-  localparam longint OneMsTimeOut = SIM_FAST_LINK ? (1 * (10 ** 4)) / (ClockPeriodNs *10): (1 * (10 ** 6)) / ClockPeriodNs;
+-  localparam int SixUsTimeOut = (6 * (10 ** 3)) / ClockPeriodNs;
+-  localparam int EigthHundredNanoSecondTimeOut = (800) / ClockPeriodNs;
+-  localparam int TwentyNanoSeconds = 20* (10 **0)/ ClockPeriodNs;  //(20 * (10** -9)); //)) / int'((1 / (CLK_RATE * $pow(10, 6))));
+-  localparam int MinTS1sPolling = 1024;  //24;  //1024
++  // SIM_FAST_LINK is an opt-in simulation timer override (not an LTSSM force).
++  // Follow common PCIe VIP practice: 512x for ms intervals; 16 TS1s sent
++  // during Polling.Active, while RX ordered-set validation is unchanged.
++  localparam longint SimTimerDivider = SIM_FAST_LINK ? 512 : 1;
++  localparam longint TwentyFourMsTimeOut = ((24 * (10 ** 6)) / ClockPeriodNs) / SimTimerDivider;
++  localparam longint FourtyEightMsTimeOut = ((48 * (10 ** 6)) / ClockPeriodNs) / SimTimerDivider;
++  localparam longint TwelveMsTimeOut = ((12 * (10 ** 6)) / ClockPeriodNs) / SimTimerDivider;
++  localparam longint TwoMsTimeOut = ((2 * (10 ** 6)) / ClockPeriodNs) / SimTimerDivider;
++  localparam longint OneMsTimeOut = ((1 * (10 ** 6)) / ClockPeriodNs) / SimTimerDivider;
++  localparam int SixUsTimeOut = (6 * (10 ** 3)) / ClockPeriodNs;
++  localparam int EigthHundredNanoSecondTimeOut = (800) / ClockPeriodNs;
++  localparam int TwentyNanoSeconds = 20* (10 **0)/ ClockPeriodNs;  //(20 * (10** -9)); //)) / int'((1 / (CLK_RATE * $pow(10, 6))));
++  localparam int MinTS1sPolling = SIM_FAST_LINK ? 16 : 1024;
++`ifndef SYNTHESIS
++  initial if (SIM_FAST_LINK) begin
++    $display("PCIE_EP_SIM_FAST_LTSSM: ENABLED timer_divider=%0d min_tx_ts1=%0d 1ms_cycles=%0d 2ms_cycles=%0d 12ms_cycles=%0d 24ms_cycles=%0d 48ms_cycles=%0d",
++             SimTimerDivider, MinTS1sPolling, OneMsTimeOut, TwoMsTimeOut,
++             TwelveMsTimeOut, TwentyFourMsTimeOut, FourtyEightMsTimeOut);
++  end
++`endif
+ 
+   typedef enum logic [19:0] {
+@@ -1608,9 +1618,9 @@
                single_ts1_received_c = '1;
  
                if ((ordered_set_i[lane].link_num == PAD) && (ordered_set_i[lane].lane_num == PAD)) begin
