@@ -8,6 +8,7 @@ profiles:
       ip_lock: pcie_endpoint_openpcie
       top: pcie_phy_top
       config_space_rdl: src/pcie_cfg/pcie_config.rdl
+      patch: dv/pcie_link/patches/openpcie_ltssm_comb_assignment.patch
       tx_data: phy_txdata
       tx_datak: phy_txdatak
       tx_valid: phy_txdata_valid
