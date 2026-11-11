@@ -22,6 +22,14 @@
     "qualifier": "source_and_adapter_preflight_only",
     "trained_l0": false
   },
+  "local_source_overlays": [
+    {
+      "path": "dv/pcie_link/patches/openpcie_ltssm_comb_assignment.patch",
+      "role": "endpoint",
+      "sha256": "e1a7bc1dd4d0ba250a78ff7eb04ce9d5964798e2c5f4c7fef02c9b076ba6de50",
+      "status": "reviewed_source_overlay_not_upstream_revision"
+    }
+  ],
   "phy": {
     "adapter": "dv/pcie_link/pipe_x1_adapter.sv",
     "adapter_sha256": "c27a33a398949c005bf9299c19c1dafb9c691efb8ab93ca2fa6b7cbb48692e55",
@@ -34,6 +42,7 @@
       "ip_lock": "pcie_endpoint_openpcie",
       "link_up": "link_up_o",
       "ltssm_state": "ltssm_debug_state",
+      "patch": "dv/pcie_link/patches/openpcie_ltssm_comb_assignment.patch",
       "rx_data": "phy_rxdata",
       "rx_datak": "phy_rxdatak",
       "rx_electrical_idle": "phy_rxelecidle",
@@ -106,5 +115,5 @@
   "schema_version": 1,
   "selection": "openpcie_pcievhost_gen1_x1",
   "source": "config/pcie_link.yaml",
-  "source_sha256": "d8c8e3964f897aaf3d26d657a86b2e0facd9adc8cc0a740aaab67a469949c75e"
+  "source_sha256": "50600d801f30e6a285bfdef5dff0e941c8f5df7929e10a85e924f4f8c7c61309"
 }
