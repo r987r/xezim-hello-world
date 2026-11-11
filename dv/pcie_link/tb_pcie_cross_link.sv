@@ -148,7 +148,9 @@ module test #(
   );
 
   // Original OpenPCIe endpoint RTL. Unused Gen2+ EQ inputs tied off.
-  pcie_phy_top #(.CLK_RATE(100), .MAX_NUM_LANES(1), .DATA_WIDTH(32),
+  // Simulation-only acceleration of the original LTSSM's Detect.Quiet
+  // timeout. State transitions and TS1/TS2 processing remain original RTL.
+  pcie_phy_top #(.SIM_FAST_LINK(1), .CLK_RATE(100), .MAX_NUM_LANES(1), .DATA_WIDTH(32),
                  .IS_ROOT_PORT(0), .IS_UPSTREAM(1)) ep (
     .clk_i(core_clk), .rst_i(~nreset), .en_i(ltssm_permitted),
     .pipe_rx_usr_clk_i(pipe_clk), .pipe_tx_usr_clk_i(pipe_clk),
@@ -193,6 +195,25 @@ module test #(
       $fatal(1, "BAR memory gate accepted traffic before readiness");
   end
 
+  logic [20:0] ltssm_previous = '0;
+  integer detect_quiet_entries = 0, detect_active_entries = 0;
+  integer polling_entries = 0, configuration_entries = 0;
+  integer ep_ts1_count = 0, ep_ts2_count = 0;
+  // Passive *testbench-only* monitors; these wires are never supplied to
+  // host firmware or the endpoint state machine as decision inputs.
+  always @(posedge pipe_clk) if (nreset) begin
+    if (ltssm_debug_state != ltssm_previous) begin
+      $display("PCIE_EP_STATE: %h -> %h at %0t", ltssm_previous, ltssm_debug_state, $time);
+      if (ltssm_debug_state[19:0] == 20'h041) detect_quiet_entries <= detect_quiet_entries + 1;
+      if (ltssm_debug_state[19:0] == 20'h061) detect_active_entries <= detect_active_entries + 1;
+      if (ltssm_debug_state[3:0] == 4'h2) polling_entries <= polling_entries + 1;
+      if (ltssm_debug_state[3:0] == 4'h3) configuration_entries <= configuration_entries + 1;
+    end
+    ltssm_previous <= ltssm_debug_state;
+    if (ep.ts1_valid[0]) ep_ts1_count <= ep_ts1_count + 1;
+    if (ep.ts2_valid[0]) ep_ts2_count <= ep_ts2_count + 1;
+  end
+
   // Only observations; no manual injection or forced state.
   always @(posedge pipe_clk) if (nreset) begin
     if (ep_txdetectrx && detect_count == 0) begin
@@ -223,9 +244,11 @@ module test #(
 
   initial begin
     repeat (MAX_PIPE_CYCLES) @(posedge pipe_clk);
-    $display("PCIE_TRACE: timeout detect=%0d phy=%0d epTx=%0d hostTx=%0d ltssm=%h link=%b",
+    $display("PCIE_TRACE: timeout detect=%0d phy=%0d epTx=%0d hostTx=%0d ltssm=%h link=%b quiet=%0d active=%0d polling=%0d cfg=%0d ts1=%0d ts2=%0d",
        detect_count, phy_status_count, ep_tx_count, rc_tx_count,
-       ltssm_debug_state, ep_link_up);
+       ltssm_debug_state, ep_link_up,
+       detect_quiet_entries, detect_active_entries, polling_entries,
+       configuration_entries, ep_ts1_count, ep_ts2_count);
     $fatal(1, "Unqualified cross-provider link: no proven L0 handshake");
   end
 endmodule
