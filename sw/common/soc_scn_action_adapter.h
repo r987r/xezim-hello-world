@@ -11,7 +11,6 @@
 #define SOC_SCN_ACTION_ADAPTER_H
 #include <stdint.h>
 #include <stddef.h>
-#include <string.h>
 #include "soc_scenario_contract.h"
 
 enum {
