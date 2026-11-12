@@ -53,6 +53,11 @@ def analyze(root: Path, profile: str, mode: str, output: Path,
     # errors fatal. It is not a lint waiver or wire-connectivity verdict.
     args = [executable, "--timescale", "1ns/1ps",
             "--relax-enum-conversions",
+            # Pinned tech_cells_generic tc_sram uses overlapping whole-array
+            # reset and dynamic part-select writes. Slang diagnoses them
+            # as multiple always_ff drivers; retain a visible WARNING for
+            # this specific upstream source, never globally disable checks.
+            "-Wno-error=multiple-always-assigns",
             "--top", attested["top"], "-f", str(source_list)]
     if mode == "netlist":
         args += ["--save-netlist", str(output)]
@@ -75,6 +80,19 @@ def analyze(root: Path, profile: str, mode: str, output: Path,
             summary = (run.stderr + "\n" + run.stdout)[-6000:]
         raise ValueError(f"{mode} failed for {profile} (exit {run.returncode}); "
                          f"raw logs: {stderr_log}, {stdout_log}:\n{summary}")
+    # The only tolerated downgraded always_ff diagnostic is from the pinned
+    # generic upstream SRAM simulation model. A new project-owned or other
+    # upstream instance must still fail closed; keep originals in metadata.
+    multi_driver_diags = [line for line in run.stderr.splitlines()
+                          if "[-Wmultiple-always-assigns]" in line]
+    if any(not re.search(
+            r"(?:^|\\s)\\.tools/floonoc/\\.bender/git/checkouts/"
+            r"tech_cells_generic-[^/]+/src/rtl/tc_sram\\.sv:[0-9]+:[0-9]+:"
+            r" warning:", line) for line in multi_driver_diags):
+        output.unlink(missing_ok=True)
+        stderr_log.write_text(run.stderr, encoding="utf-8")
+        raise ValueError("unexpected always_ff multi-driver warning outside pinned "
+                         f"tech_cells_generic tc_sram; raw diagnostics: {stderr_log}")
     if mode != "netlist":
         output.write_text(run.stdout)
     if not output.is_file() or not output.stat().st_size:
@@ -91,7 +109,9 @@ def analyze(root: Path, profile: str, mode: str, output: Path,
             "output_sha256": hashlib.sha256(output.read_bytes()).hexdigest(),
             "evidence": "elaborated_slang_netlist_inputs_attested",
             "output": str(output), "command": args,
-            "tool_diagnostics": run.stderr.splitlines()}
+            "tool_diagnostics": run.stderr.splitlines(),
+            "upstream_sram_multi_driver_warnings": multi_driver_diags,
+            "sram_driver_conformance_proven": not bool(multi_driver_diags)}
     (output.parent / (output.name + ".meta.json")).write_text(
         json.dumps(meta, indent=2) + "\n")
     return meta
