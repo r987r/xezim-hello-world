@@ -746,9 +746,16 @@ def append_capture_only_entries(folder, run, verified_shas, output, entries, not
                 if ((record["kind"]=="event") !=
                         (record["status"]=="observed")):
                     raise ValueError("capture-only event/transaction status mismatch")
+            # A GitHub Pages path must not inherit hidden .tools directories
+            # or arbitrary extraction internals. Keep the authenticated run,
+            # artifact and source-scope identity in a stable public-safe slug.
+            source_key=source_dir.relative_to(folder)
+            if not source_key.parts or not re.fullmatch(r"artifact-[0-9]+",source_key.parts[0]):
+                raise ValueError("unexpected archive scope for capture-only publication")
+            digest=hashlib.sha256(source_key.as_posix().encode()).hexdigest()[:12]
             relative=(Path("runs")/"capture-only"/
                       (str(run["id"])+"-"+str(run.get("run_attempt",1)))/
-                      source_dir.relative_to(folder))
+                      source_key.parts[0]/(target+"-"+digest))
             destination=output/relative
             if destination.exists():
                 raise ValueError("duplicate capture-only publication directory")
