@@ -27,6 +27,16 @@ def quoted(value: str) -> str:
     return json.dumps(value, ensure_ascii=True)
 
 
+def argument_key_hash(key: str) -> int:
+    """DJB2-xor, RV32I-friendly (shift/add only); equality resolves collisions."""
+    if not isinstance(key, str) or not key.isascii():
+        raise ValueError("invalid canonical ASCII argument key")
+    value = 5381
+    for byte in key.encode("ascii"):
+        value = (((value << 5) + value) ^ byte) & 0xffffffff
+    return value
+
+
 def render_header(raw: bytes) -> str:
     """Fail closed if C, SV and Python would select different source bytes."""
     plan, sha = load_plan(raw)
@@ -37,11 +47,21 @@ def render_header(raw: bytes) -> str:
     if not 1 <= len(actions) <= 4096:
         raise ValueError("C firmware contract supports 1..4096 actions")
     dependencies = []
+    dependency_indices = []
     arguments = []
     records = []
-    for action in actions:
+    by_action_id = {action["action_instance_id"]: i
+                    for i, action in enumerate(actions)}
+    if len(by_action_id) != len(actions):
+        raise ValueError("duplicate selected action ID")
+    for index, action in enumerate(actions):
         dep_first = len(dependencies)
-        dependencies.extend(action["depends_on"])
+        for dep in action["depends_on"]:
+            prior = by_action_id.get(dep)
+            if prior is None or prior >= index:
+                raise ValueError("source-selected dependency is missing or not earlier")
+            dependencies.append(dep)
+            dependency_indices.append(prior)
         arg_first = len(arguments)
         arguments.extend(_flatten(action["args"]))
         records.append((action, dep_first, len(action["depends_on"]),
@@ -65,6 +85,7 @@ def render_header(raw: bytes) -> str:
         "  uint64_t uint_value;",
         "  const char *text_value;",
         "  uint8_t is_text;",
+        "  uint32_t key_hash; /* source-derived filter; exact string still checked */",
         "} soc_scn_argument_t;",
         "typedef struct {",
         "  const char *action_instance_id;",
@@ -82,16 +103,21 @@ def render_header(raw: bytes) -> str:
     lines.extend("  " + quoted(dep) + "," for dep in dependencies)
     if not dependencies:
         lines.append('  "", /* sentinel only; count is zero */')
+    lines.extend(["};", "static const uint16_t soc_scn_dependency_indices[] = {"])
+    lines.extend("  UINT16_C(" + str(index) + ")," for index in dependency_indices)
+    if not dependency_indices:
+        lines.append("  UINT16_C(0), /* sentinel only; count is zero */")
     lines.extend(["};", "static const soc_scn_argument_t soc_scn_arguments[] = {"])
     for key, kind, value in arguments:
+        hashed = ", UINT32_C(" + str(argument_key_hash(key)) + ")},"
         if kind == "text":
             lines.append("  {" + quoted(key) + ", UINT64_C(0), " +
-                         quoted(value) + ", UINT8_C(1)},")
+                         quoted(value) + ", UINT8_C(1)" + hashed)
         else:
             lines.append("  {" + quoted(key) + ", UINT64_C(" +
-                         str(value) + "), NULL, UINT8_C(0)},")
+                         str(value) + "), NULL, UINT8_C(0)" + hashed)
     if not arguments:
-        lines.append('  {"", UINT64_C(0), NULL, UINT8_C(0)}, /* sentinel */')
+        lines.append('  {"", UINT64_C(0), NULL, UINT8_C(0), UINT32_C(0)}, /* sentinel */')
     lines.extend(["};", "static const soc_scn_action_t soc_scn_actions[] = {"])
     for action, di, dn, ai, an in records:
         fields = [
@@ -111,6 +137,9 @@ def render_header(raw: bytes) -> str:
         "}",
         "static inline const char *soc_scn_dependency_at(uint32_t index) {",
         "  return index < SOC_SCN_DEPENDENCY_COUNT ? soc_scn_dependencies[index] : NULL;",
+        "}",
+        "static inline uint32_t soc_scn_dependency_index_at(uint32_t index) {",
+        "  return index < SOC_SCN_DEPENDENCY_COUNT ? soc_scn_dependency_indices[index] : UINT32_MAX;",
         "}",
         "#endif /* SOC_SCENARIO_CONTRACT_V1_H */",
         "",
