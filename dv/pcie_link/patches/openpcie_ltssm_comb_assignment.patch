@@ -84,3 +84,32 @@ diff --git a/src/dllp/pcie_flow_ctrl_init.sv b/src/dllp/pcie_flow_ctrl_init.sv
            end else if (seq_count_r >= FcWaitPeriod) begin
              seq_count_c = '0;
  
+diff --git a/src/dllp/dllp2tlp.sv b/src/dllp/dllp2tlp.sv
+--- a/src/dllp/dllp2tlp.sv
++++ b/src/dllp/dllp2tlp.sv
+@@ -437,22 +437,22 @@
+         //check crc
+         if ((lcrc32d32 == crc_from_tlp_r) && (next_expected_seq_num_r == next_transmit_seq_r)) begin
+           if (tlp_is_nph_r) begin
+             nph_credits_consumed_c = nph_credits_consumed_r + 8'h1;
+           end else if (tlp_is_npd_r) begin
+             nph_credits_consumed_c = nph_credits_consumed_r + 8'h1;
+             npd_credits_consumed_c = npd_credits_consumed_r +
+-          (word_count_r >> 2 == '0 ? 1'b1 : word_count_r >> 2);
++          (word_count_r == '0 ? 12'd256 : ((word_count_r + 16'd3) >> 2));
+           end else if (tlp_is_ph_r) begin
+             ph_credits_consumed_c = ph_credits_consumed_r + 8'h1;
+           end else if (tlp_is_pd_r) begin
+             ph_credits_consumed_c = ph_credits_consumed_r + 8'h1;
+             pd_credits_consumed_c = pd_credits_consumed_r +
+-          (word_count_r >> 2 == '0 ? 1'b1 : word_count_r >> 2);
++          (word_count_r == '0 ? 12'd256 : ((word_count_r + 16'd3) >> 2));
+           end else if (tlp_is_cplh_r) begin
+             cplh_credits_consumed_c = cplh_credits_consumed_r + 8'h1;
+           end else if (tlp_is_cpld_r) begin
+             cplh_credits_consumed_c = cplh_credits_consumed_r + 8'h1;
+             cpld_credits_consumed_c = cpld_credits_consumed_r +
+-          (word_count_r >> 2 == '0 ? 1'b1 : word_count_r >> 2);
++          (word_count_r == '0 ? 12'd256 : ((word_count_r + 16'd3) >> 2));
+           end
+         end else begin

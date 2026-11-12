@@ -75,6 +75,15 @@ class PcieLinkSelectionTests(unittest.TestCase):
         self.assertIn("+            next_state        = ST_FC_COMPLETE;",source)
         self.assertNotIn("+            fc2_values_sent_o = '1;",source)
         self.assertNotIn("+            fc1_values_stored_i = '1;",source)
+        # PCIe posted-data FC is in 16-byte units: 5..8 DW must use
+        # TWO credits, and 0 in the TLP length field means 1024 DW.
+        self.assertIn("diff --git a/src/dllp/dllp2tlp.sv",source)
+        self.assertEqual(source.count("+          (word_count_r == '0 ? 12'd256 : ((word_count_r + 16'd3) >> 2));"),3)
+        self.assertNotIn("+          (word_count_r >> 2 == '0 ? 1'b1 : word_count_r >> 2);",source)
+        for dw, credits in ((1,1),(4,1),(5,2),(6,2),(8,2),(9,3),(1023,256),(0,256)):
+            effective = 1024 if dw == 0 else dw
+            self.assertEqual((effective+3)//4,credits)
+
 
     def test_l0_and_bar_may_not_be_asserted_by_declaration(self):
         for key in pcie_link.CAPABILITY_FLAGS:
