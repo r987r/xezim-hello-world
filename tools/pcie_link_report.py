@@ -358,7 +358,7 @@ def render_actions_summary(data:dict) -> str:
     return "\n".join(lines)
 
 
-def export_shared_protocol_timeline(data:dict, output:Path, *, bar_evidence=None) -> dict:
+def export_shared_protocol_timeline(data:dict, output:Path, *, bar_evidence=None, mode="l0") -> dict:
     """Reuse the EXISTING protocol event exporter and HTML explorer.
 
     Only endpoint LTSSM state transitions have observed simulator ps stamps;
@@ -385,6 +385,10 @@ def export_shared_protocol_timeline(data:dict, output:Path, *, bar_evidence=None
             "modeling":"behavioral_digital_phy",
         }
     }
+    if mode not in ("l0","bar0","mem_ingress"):
+        raise ValueError("unknown source-selected PCIe lane")
+    if (mode=="l0") != (bar_evidence is None):
+        raise ValueError("real BAR0 Config TLP evidence required for enumeration lanes")
     if bar_evidence is not None:
         transactions=bar_evidence.get("transactions")
         if (bar_evidence.get("qualified_over_link_bar0") is not True
@@ -437,7 +441,10 @@ def export_shared_protocol_timeline(data:dict, output:Path, *, bar_evidence=None
         raise
     # This is deliberately NOT a source-selected full-chip regress.py result,
     # and produces no result.json or fake AXI/TLP transactions.
-    plan={"target":"pcie-link-isolated","engine":"verilator",
+    names={"l0":"pcie-link-isolated",
+           "bar0":"pcie-bar0-isolated",
+           "mem_ingress":"pcie-mem-ingress-isolated"}
+    plan={"target":names[mode],"engine":"verilator",
           "report":{"protocols":{"sources":sources,"max_events":100000}}}
     return protocol_report.build(output,plan)
 
@@ -449,6 +456,8 @@ def main() -> int:
     p.add_argument("--github-summary",type=Path,help="Append browser-visible Actions summary")
     p.add_argument("--bar-evidence",type=Path,
                    help="Source-verified real BAR0 ConfigRd/ConfigWr evidence JSON")
+    p.add_argument("--mode",choices=["l0","bar0","mem_ingress"],default="l0",
+                   help="Use a unique source-qualified target per CI lane")
     args=p.parse_args()
     if not args.log.is_file():
         p.error("simulation log not found")
@@ -461,7 +470,7 @@ def main() -> int:
             handle.write(render_actions_summary(data))
     # Same passive-protocol explorer renderer as our existing TLP/AXI reports.
     bar_evidence=json.loads(args.bar_evidence.read_text()) if args.bar_evidence else None
-    export_shared_protocol_timeline(data,args.out,bar_evidence=bar_evidence)
+    export_shared_protocol_timeline(data,args.out,bar_evidence=bar_evidence,mode=args.mode)
     print(f"{'PASS' if data['qualified_digital_link_l0'] else 'FAIL'} isolated PCIe L0 diagnostic: "
           f"{len(data['events'])} observations; {data['issues']}")
     return 0 if data["qualified_digital_link_l0"] else 1
