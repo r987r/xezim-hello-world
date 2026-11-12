@@ -33,7 +33,12 @@ def analyze(root: Path, profile: str, mode: str, output: Path,
     output.parent.mkdir(parents=True, exist_ok=True)
     if output.exists():
         output.unlink()  # Prevent stale successful output after tool failure.
-    args = [executable, "--top", attested["top"], "-f", str(source_list)]
+    # Pinned third-party tech_cells_generic includes modules without local
+    # timescale declarations. Slang requires a deterministic default in a
+    # mixed-timescale compilation. This is an explicit compiler input, NOT
+    # suppression of width/port/CDC or other elaboration diagnostics.
+    args = [executable, "--timescale", "1ns/1ps",
+            "--top", attested["top"], "-f", str(source_list)]
     if mode == "netlist":
         args += ["--save-netlist", str(output)]
     else:
