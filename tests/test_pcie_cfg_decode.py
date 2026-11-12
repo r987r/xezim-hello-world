@@ -57,7 +57,10 @@ class OpenPcieCfgDecodeTests(unittest.TestCase):
         self.assertIn("D.word_count             = '0;", patched)
         self.assertIn("if (skid_axis_tvalid) begin", patched)
         self.assertIn("if (skid_axis_tlast) begin", patched)
-        self.assertIn("D.tlp_data[Q.word_count*32+:32] = tlp_byte_swapped;", patched)
+        # Header is byte-swapped upstream; payload must NOT be swapped again.
+        # This discriminates 0x80001000 from the corrupted 0x00100080.
+        self.assertIn("D.tlp_data[Q.word_count*32+:32] = skid_axis_tdata;", patched)
+        self.assertNotIn("D.tlp_data[Q.word_count*32+:32] = tlp_byte_swapped;", patched)
         self.assertIn("tlp_tdata = Q.tlp_data[DATA_WIDTH-1:0];", patched)
         self.assertIn("tlp_strb  = Q.tlp_is_pd ? '1 : '0;", patched)
         self.assertLess(
