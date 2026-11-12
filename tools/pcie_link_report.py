@@ -226,38 +226,100 @@ def summarize(text: str) -> dict:
 
 
 def render(data:dict) -> str:
+    """Two observed, independent LTSSM lanes; no invented host timestamps."""
     rows=[]
+    host_rows=[]
+    device_rows=[]
     for e in data["events"]:
         t=e.get("time_ps")
-        label=e["kind"]
-        if label=="endpoint_ltssm":
-            label+=f' {e["from"]} -> {e["to"]}'
-        elif label=="sim_timer_mode":
+        kind=e["kind"]
+        label=kind
+        if kind=="endpoint_ltssm":
+            label=f'Endpoint: {e["stage"]} (0x{int(e["to"],16):03x})'
+            device_rows.append(
+                f'<tr><td>{e["line"]}</td><td>{escape(e["stage"])}</td>'
+                f'<td>{e["time_ps"]/1000:.3f}</td></tr>')
+        elif kind=="host_ltssm":
+            label="Root Complex: "+e["stage"]
+            host_rows.append(
+                f'<tr><td>{e["line"]}</td><td>{escape(e["stage"])}</td>'
+                '<td>Not emitted</td></tr>')
+        elif kind=="host_active_lanes":
+            label=f'Root Complex: active lanes 0x{e["lane_mask"]:04x}'
+        elif kind=="sim_timer_mode":
             label+=f' {e["divider"]}x / {e["minimum_transmitted_ts1"]} TS1'
-        elif label=="device_prelink_bar_commit":
+        elif kind=="device_prelink_bar_commit":
             label+=f' {e["bar_size_bytes"]} bytes -> {e["local_target"]}'
-        rows.append(f"<tr><td>{e['line']}</td><td>{escape(label)}</td>"
-                    f"<td>{escape(str(t) if t is not None else 'unmeasured')}</td></tr>")
+        rows.append(
+            f"<tr><td>{e['line']}</td><td>{escape(label)}</td>"
+            f"<td>{escape(str(t) if t is not None else 'unmeasured')}</td></tr>")
     qual="L0 OBSERVED" if data["qualified_digital_link_l0"] else "UNQUALIFIED"
-    issues="".join(f"<li>{escape(s)}</li>" for s in data["issues"])
+    issues="".join(f"<li>{escape(v)}</li>" for v in data["issues"])
+    pipe=data.get("pipe_samples",[])
+    directions=(("RC_TO_EP","Host → Device"),("EP_TO_RC","Device → Host"))
+    stream=[]
+    for key,title in directions:
+        samples=[x for x in pipe if x["direction"]==key]
+        stream.append(
+            '<section class="card"><h3>'+escape(title)+
+            f'</h3><strong>{len(samples)} observed PIPE samples</strong>'
+            '<div class="wrap"><table><thead><tr><th>Sim ns</th>'
+            '<th>Data</th><th>K flags</th><th>Valid</th><th>Idle</th>'
+            '</tr></thead><tbody>'+
+            "".join(
+                f'<tr><td>{x["time_ps"]/1000:.3f}</td>'
+                f'<td>{escape(x["data"])}</td><td>{escape(x["k"])}</td>'
+                f'<td>{x["valid"]}</td><td>{x["idle"]}</td></tr>'
+                for x in samples)+
+            '</tbody></table></div></section>')
     return """<!doctype html><html lang="en"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>PCIe digital-link diagnostic</title>
-<style>body{background:#10151e;color:#e9ecf0;font:15px system-ui;max-width:900px;margin:auto;padding:1rem}
+<title>PCIe host and device LTSSM link-training evidence</title>
+<style>
+body{background:#10151e;color:#e9ecf0;font:15px system-ui;max-width:1150px;margin:auto;padding:1rem}
 table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:.55rem;border-bottom:1px solid #384453}
-.wrap{overflow-x:auto}a{color:#91caff}small{color:#a9b7c7}</style>
-<h1>PCIe Gen1 x1 — isolated digital-link diagnostic</h1>""" + (
-    f"<p><strong>{qual}</strong></p><p>Host L0: {data['host_l0_observed']}; "
-    f"endpoint L0: {data['endpoint_l0_observed']}</p>"
-    "<p><small>Original simulator transcript only. Timestamp 'unmeasured' means "
-    "no simulator timestamp was emitted for that event. No invented timings.</small></p>"
-    "<div class='wrap'><table><thead><tr><th>Log line</th><th>Observed event</th><th>Time (ps)</th>"
-    "</tr></thead><tbody>"+"".join(rows)+"</tbody></table></div>"
-    "<h2>Unqualified interfaces</h2><p>Host BAR enumeration, TLP completions, "
-    "NoC AXI transfer, memory bytes, and physical SerDes are NOT qualified by this test.</p>"
-    "<h2>Issues</h2><ul>"+(issues or "<li>None for isolated L0</li>")+"</ul>"
-    "<p>Use the existing tools/regress.py / Test Runs hub for full-chip TLP and AXI results. "
-    "The old fast bridge mode remains separate and unchanged.</p></html>")
+.wrap{overflow-x:auto;max-height:520px}a{color:#91caff}small{color:#a9b7c7}
+.lanes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.card{min-width:0;border:1px solid #384453;border-radius:10px;padding:12px;background:#17212d}
+h1{font-size:clamp(1.35rem,3.5vw,2rem)}h2{font-size:1.15rem}
+h3{font-size:1rem;margin:.3rem 0 1rem}
+.pass{color:#92e1b6}.fail{color:#ffc08c}
+@media(max-width:750px){.lanes{grid-template-columns:1fr}body{padding:10px}}
+</style>
+<h1>PCIe Gen1 x1 — host and device link-training evidence</h1>""" + (
+    f'<p class="{("pass" if data["qualified_digital_link_l0"] else "fail")}">'
+    f"<strong>{qual}</strong></p>"
+    f"<p>Host InitLink returned: <strong>{data['host_l0_observed']}</strong>; "
+    f"Endpoint link_up observed: <strong>{data['endpoint_l0_observed']}</strong>; "
+    f"Endpoint actual ST_L0: <strong>{data['endpoint_ltssm_l0_observed']}</strong></p>"
+    "<p><small>Both participants independently train over physical PIPE. "
+    "The host's original C LTSSM prints ordered stages without simulation timestamps; "
+    "we show log line rather than inventing host times. Endpoint RTL transitions carry "
+    "actual simulator timestamps. link_up may assert before endpoint ST_L0. "
+    "No invented timings.</small></p>"
+    '<div class="lanes"><section class="card"><h2>Root Complex / host LTSSM</h2>'
+    '<p>Original pcievhost src/ltssm.c VPrint (node 0)</p>'
+    '<div class="wrap"><table><thead><tr><th>Log line</th><th>Actual stage</th>'
+    '<th>Simulator time</th></tr></thead><tbody>'+''.join(host_rows)+
+    '</tbody></table></div></section><section class="card"><h2>Endpoint RTL LTSSM</h2>'
+    '<p>Original OpenPCIe ltssm_debug_state transitions</p>'
+    '<div class="wrap"><table><thead><tr><th>Log line</th><th>Decoded stage</th>'
+    '<th>Sim ns</th></tr></thead><tbody>'+''.join(device_rows)+
+    '</tbody></table></div></section></div>'
+    '<h2>Bidirectional observed PIPE data (not inferred TS packets)</h2>'
+    '<p><small>Real sampled 16-bit PHY words on each participant’s PIPE port; '
+    'K flags and idle/valid are retained. No TS1/TS2 decoding is fabricated.</small></p>'
+    '<div class="lanes">'+''.join(stream)+'</div>'
+    '<h2>Full ordered simulator evidence</h2><div class="wrap"><table><thead>'
+    '<tr><th>Log line</th><th>Observed event</th><th>Time (ps)</th>'
+    '</tr></thead><tbody>'+''.join(rows)+'</tbody></table></div>'
+    '<h2>Unqualified interfaces</h2><p>Host BAR enumeration, TLP completions, '
+    'NoC AXI transfer, memory bytes, and analog SerDes are NOT qualified '
+    'by this isolated L0 test.</p><h2>Issues</h2><ul>'+
+    (issues or '<li>None for isolated L0</li>')+'</ul>'
+    '<p>Existing Test Runs hub remains authoritative for full-chip TLP/AXI results. '
+    'The original modeled-TLP fast bridge mode remains distinct and unchanged.</p></html>'
+)
 
 
 def export_shared_protocol_timeline(data:dict, output:Path) -> dict:
