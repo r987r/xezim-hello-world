@@ -299,6 +299,13 @@ async def execute_cold_boot(dut, *, external=None, benchmark=False):
                 json.dumps(evidence, indent=2, sort_keys=True) + "\n")
             trace_phase("SCN-2 CPU C real NoC DDR roundtrip: " +
                         contract["scenario_id"])
+            # Give same-edge passive monitor tasks a bounded clock edge to
+            # report accepted bus channels, then persist the exact bytes
+            # BEFORE Cocotb test teardown. No AXI completion is synthesized;
+            # the original post-run correlator still rejects dangling AR/AW.
+            await Timer(1, 'ns')
+            from dv.common.axi_trace import flush_active
+            flush_active()
             dut._log.info("PASS scenario-cpu: CPU0 C + iDMA real DDR modeled AXI, %s", counts)
             return
         regions = configured_regions(yaml.safe_load(
