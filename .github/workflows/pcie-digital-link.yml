@@ -563,6 +563,7 @@ jobs:
           # No fake result.json, original non-config bridge or CPU boot PASS.
           report_args=("$root/pcie-cross-run.log"
                        --out "$root/.tools/pcie-link/observations"
+                       --mode "${{ matrix.mode }}"
                        --github-summary "$GITHUB_STEP_SUMMARY")
           if [[ "${{ matrix.mode }}" != "l0" ]]; then
             report_args+=(--bar-evidence "$root/.tools/pcie-link/observations/pcie-bar0-evidence.json")
