@@ -90,6 +90,39 @@ time/monitor chart and filterable table.
 - Raw JSONL and versioned JSON remain downloadable; historical AXI report
   files are not rewritten in-place.
 
+## Automatic capture publication, including new controllers
+
+A new PCIe, DDR/DFI, Ethernet or other monitor must use the **same**
+versioned `protocol-events.jsonl` / `protocol-transactions.json` exporter.
+The CI workflow must upload the original `protocol-transactions.json`
+explicitly (or use the canonical `.tools/regression/` artifact). The Pages
+collector discovers the filename in workflow YAML; there is **no list of
+controller or protocol names to update**. Adding a new protocol requires a
+source-verified run, not a new HTML renderer.
+
+Publication has two distinct paths:
+
+- **Canonical regression:** original `result.json` plus plan, immutable
+  identity and protocol capture. Preserve the existing PASS/FAIL test gates.
+- **Standalone capture-only:** protocol JSON, event log and CI metadata only.
+  The unified viewer displays the observed events/transactions with
+  **OBSERVED** status, never an invented `result.json`, completed full-chip
+  transfer or PASS. A failing parent workflow remains visibly failed.
+
+Both paths require an authenticated main/merged-PR source, clean checked-out
+SHA, matching workflow run/attempt, a complete monitor catalog and records,
+and successful source-level capture validation. Missing or corrupt evidence is
+quarantined with a publication note; it cannot silently become a PASS. Open
+unmerged PRs have offline previews/artifacts only. A public Pages refresh
+requires a trusted `main` publication after merge.
+
+**DDR-specific safeguard:** a newly introduced DFI command, mode-register
+write/read, or DDR-controller CSR operation appears only if a passive hardware
+observer emits it with real timestamps and source-owned fields. The RDL
+register catalog and planned initialization are not evidence that a command
+was actually issued. CI tests exercise synthetic PCIe, DFI and Ethernet
+source catalogs to prevent omissions when a new protocol is added.
+
 ## Unified Test Runs traffic explorer
 
 The primary UI is **Test Runs → Protocol traffic · all tests**. It offers
