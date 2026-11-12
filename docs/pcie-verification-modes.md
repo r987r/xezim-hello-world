@@ -340,7 +340,9 @@ A second opt-in `dv/pcie0/run_noc_smoke.py` Verilator build now uses a
 *modeled-TLP Root Complex* with 4KiB host BAR0 at 0x80001000. The original
 pinned `pcie_axi_master` produces 64-bit AXI AW/AR addresses and real
 completions; full AW/AR burst spans are checked with the same
-`pcie_bar0_noc_translate` contract, relocated to 0x12000000 and routed over
+`pcie_bar0_noc_translate` contract, while write-data W beats are gated until
+an authorized AW handshake (including the case where AW and final W complete
+in one cycle). Addresses are relocated to 0x12000000 and routed over
 the generated PCIe0 FlooNoC to actual SRAM. The existing direct BAR mode runs
 unchanged first. The new case checks byte readback and an exact-window-edge
 vector. Illegal requests fatal this fixture; no completion is forged.
