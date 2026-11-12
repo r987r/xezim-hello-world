@@ -88,7 +88,14 @@ def check(text: str) -> dict:
         xop, xaddr, xword, xread = expected[index]
         if (op,addr,val)!=(xop,xaddr,xword):
             issues.append(f"request {index} host values mismatch: {(op,addr,val)} != {(xop,xaddr,xword)}")
-        ep_words=[(int(m[1],16),int(m[2],16)) for s in window if (m:=EP_RX.fullmatch(s)) and m[3]=="1"]
+        # Timestamp only *accepted endpoint pins* in the original RTL
+        # clock domain. The root complex callback's native timestamp has
+        # a different timebase, and is retained separately without guessing.
+        rx_beats=[(int(m[1],16),int(m[2],16),int(m[4]))
+                  for s in window if (m:=EP_RX.fullmatch(s))]
+        ep_words=[(int(m[1],16),int(m[2],16)) for s in window
+                  if (m:=EP_RX.fullmatch(s)) and m[3]=="1"]
+        row["endpoint_first_rx_ps"]=rx_beats[0][2] if rx_beats else None
         if len(ep_words)!=1:
             issues.append(f"tag {tag}: expected one genuine endpoint final RX beat, got {len(ep_words)}")
         # AXI-Lite AW/W/AR may handshake independently: compare only
@@ -100,8 +107,17 @@ def check(text: str) -> dict:
         ar=[x for x in ax if x[2]]
         rx_cpl=[m for s in window if (m:=RC_CPL.fullmatch(s))]
         rx_result=[m for s in window if (m:=RC_RESULT.fullmatch(s))]
+        cpl_beats=[(int(m[1],16),int(m[2],16),int(m[4]))
+                   for s in window if (m:=EP_CPL.fullmatch(s))]
         ep_cpl=[(int(m[1],16),int(m[2],16)) for s in window
                 if (m:=EP_CPL.fullmatch(s)) and m[3]=="1"]
+        row["endpoint_last_cpl_ps"]=cpl_beats[-1][2] if cpl_beats else None
+        row["root_complex_cpl_timestamp_native"]=(
+            int(rx_cpl[0][5]) if len(rx_cpl)==1 else None)
+        if (row["endpoint_first_rx_ps"] is None
+                or row["endpoint_last_cpl_ps"] is None
+                or row["endpoint_last_cpl_ps"] < row["endpoint_first_rx_ps"]):
+            issues.append(f"tag {tag}: invalid source-observed completion timing")
         if len(rx_cpl)!=1 or len(rx_result)!=1:
             issues.append(f"tag {tag}: missing/duplicate host completion or result")
         else:
