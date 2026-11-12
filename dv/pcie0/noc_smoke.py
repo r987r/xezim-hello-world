@@ -28,15 +28,21 @@ async def host_to_real_floonoc_tc_sram(dut):
     # mapping, so BAR accesses fail before any TLP is sent. Install the
     # address-qualified outbound TLP region inside its low-address mem_pool.
     # This is RC BFM setup, not an RTL address-translation shortcut.
-    rc.mem_pool.register_region(rc.mem_region, 0x12000000, 0x100000, offset=None)
-    rc.mem_base = 0x12000000
+    relocated = bool(int(dut.bar0_relocation_enabled.value))
+    if relocated:
+        # Real host PCIe BAR bus address is distinct from SRAM NoC address.
+        rc.mem_pool.register_region(rc.mem_region, 0x80000000, 0x100000, offset=None)
+        rc.mem_base = 0x80001000
+    else:
+        rc.mem_pool.register_region(rc.mem_region, 0x12000000, 0x100000, offset=None)
+        rc.mem_base = 0x12000000
     dev = PcieIfDevice(
         clk=dut.clk, rst=dut.rst,
         rx_req_tlp_bus=PcieIfRxBus.from_prefix(dut, "rx_req_tlp"),
         tx_cpl_tlp_bus=PcieIfTxBus.from_prefix(dut, "tx_cpl_tlp"),
         cfg_max_payload=dut.max_payload_size,
     )
-    dev.functions[0].configure_bar(0, 1024 * 1024)
+    dev.functions[0].configure_bar(0, 4096 if relocated else 1024 * 1024)
     rc.make_port().connect(dev)
     for _ in range(12):
         await RisingEdge(dut.clk)
@@ -55,6 +61,12 @@ async def host_to_real_floonoc_tc_sram(dut):
         (0x125, bytes((i * 7 + 3) & 255 for i in range(17))),
         (0x200, bytes((i * 13 + 9) & 255 for i in range(64))),
     ]
+    if relocated:
+        # Upper edge completes exactly at the end of the 4KiB BAR.
+        vectors.append((0xff0, bytes((i * 11 + 1) & 255 for i in range(16))))
+    dut._log.info("PCIE0_BAR_MODE=%s host_base=%#x sram_base=%#x",
+                  "relocated" if relocated else "legacy",
+                  0x80001000 if relocated else 0x12000000, 0x12000000)
     for offset, payload in vectors:
         before_w = int(dut.sram_write_count.value)
         before_r = int(dut.sram_read_count.value)
@@ -69,6 +81,7 @@ async def host_to_real_floonoc_tc_sram(dut):
     assert not int(dut.status_error_cor.value)
     assert not int(dut.status_error_uncor.value)
     dut._log.info(
-        "PCIE0_REAL_NOC_SRAM_PASS vectors=%d SRAM_WRITES=%d SRAM_READS=%d",
-        len(vectors), int(dut.sram_write_count.value), int(dut.sram_read_count.value)
+        "PCIE0_REAL_NOC_SRAM_PASS mode=%s vectors=%d SRAM_WRITES=%d SRAM_READS=%d",
+        "relocated" if relocated else "legacy", len(vectors),
+        int(dut.sram_write_count.value), int(dut.sram_read_count.value)
     )

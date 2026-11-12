@@ -13,7 +13,7 @@ from prepare_rtl import assert_iverilog_clean
 from run_rtl_smoke import source_contract
 
 
-def run():
+def run(*, bar_relocate: bool = False):
     pin = source_contract()
     patched = assert_iverilog_clean()
     cfg = regress.load_config(ROOT / "config/regression.yaml")
@@ -27,7 +27,9 @@ def run():
                  for key in ("package", "top")]
     vendor = ROOT / ".tools/verilog_pcie"
     files = list(dict.fromkeys(
-        noc_files + generated + [str(ROOT / "rtl/adapters/axi_sram_target.sv"), str(patched)]
+        noc_files + generated + [str(ROOT / "rtl/adapters/axi_sram_target.sv"),
+                                 str(ROOT / "dv/pcie_link/bar0_noc_translate.sv"),
+                                 str(patched)]
         + [str(vendor / p) for p in pin["rtl_modules"]
            if p != "rtl/pcie_axi_master.v"]
         + [str(ROOT / "dv/pcie0/pcie_noc_tb.sv")]
@@ -43,7 +45,8 @@ def run():
     )
     os.environ["MAKEFLAGS"] = "-j2"
     from cocotb.runner import get_runner
-    output = ROOT / ".tools/pcie0/noc_build"
+    output = ROOT / (".tools/pcie0/noc_relocated_build" if bar_relocate
+                     else ".tools/pcie0/noc_build")
     output.mkdir(parents=True, exist_ok=True)
     simulator = get_runner("verilator")
     # Compile generated package before its NoC module.
@@ -52,6 +55,7 @@ def run():
         simulator.build(
             sources=files, includes=includes, defines=defs,
             hdl_toplevel="pcie_noc_tb", build_dir=output,
+            parameters={"BAR0_RELOCATE": int(bar_relocate)},
             build_args=["--timing", "--assert", "-Wno-fatal"],
             always=True, waves=False, log_file=output / "build.log"
         )
@@ -80,8 +84,10 @@ def run():
         for t in tests
     ):
         raise RuntimeError("real NoC/SRAM regression failed")
-    print("PCIE0_REAL_NOC_SRAM_REGRESSION_PASS")
+    print("PCIE0_BAR_RELOCATED_NOC_SRAM_PASS" if bar_relocate
+          else "PCIE0_REAL_NOC_SRAM_REGRESSION_PASS")
 
 
 if __name__ == "__main__":
-    run()
+    run(bar_relocate=False)  # preserve established fast TLP-only mode
+    run(bar_relocate=True)   # independent host-BAR->FlooNoC byte proof

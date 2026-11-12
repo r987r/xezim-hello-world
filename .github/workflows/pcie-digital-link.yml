@@ -20,6 +20,10 @@ on:
       - 'tools/ci_require_cocotb.py'
       - 'tools/generate.py'
       - 'dv/pcie_link/**'
+      - 'dv/pcie0/pcie_noc_tb.sv'
+      - 'dv/pcie0/noc_smoke.py'
+      - 'dv/pcie0/run_noc_smoke.py'
+      - 'tests/test_pcie_bar0_relocation_contract.py'
       - 'gen/pcie_link/**'
       - 'gen/manifest.json'
       - 'tests/test_pcie_link.py'
@@ -111,7 +115,7 @@ jobs:
       - name: Prove profile swaps fail closed and checked-in generated selection agrees
         run: |
           set -euo pipefail
-          python3 -m unittest tests.test_pcie_link tests.test_ip_fetch_submodules tests.test_ci_require_cocotb tests.test_pcie_scenario tests.test_pcie_cfg_overlay tests.test_pcie_cfg_decode tests.test_pcie_link_report tests.test_pcie_bar0_evidence tests.test_pcie_mode_compatibility tests.test_pcie_upstream_test_timing -v
+          python3 -m unittest tests.test_pcie_link tests.test_ip_fetch_submodules tests.test_ci_require_cocotb tests.test_pcie_scenario tests.test_pcie_cfg_overlay tests.test_pcie_cfg_decode tests.test_pcie_link_report tests.test_pcie_bar0_evidence tests.test_pcie_mode_compatibility tests.test_pcie_upstream_test_timing tests.test_pcie_bar0_relocation_contract -v
           python3 tools/pcie_link.py --check
           mkdir -p .tools/pcie-link
           iverilog -g2012 -s tb_pcie_pipe_x1_adapter \
