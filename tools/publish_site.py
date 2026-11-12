@@ -960,12 +960,23 @@ def evidence_index(evidence,output,repository):
                 if protocol_data.get('schema_version')!=1:
                     raise ValueError('unsupported protocol publication schema')
                 entry['source_sha']=protocol_sha
-                link_catalog = protocol_link_catalog(protocol_data)
+                # Keep original CI protocol JSON byte-exact; generate a
+                # distinct, read-only decoded view only after the separate
+                # MR scoreboard has been reconciled to captured DFI pins.
+                visible_protocol = protocol_data
+                if mr_view is not None:
+                    from ddr_mr_report import annotate_protocol
+                    visible_protocol = annotate_protocol(protocol_data, mr_view)
+                    dump(destination/'protocol-transactions-decoded.json',
+                         visible_protocol)
+                    entry['protocol_decode_href'] = (
+                        relative/'protocol-transactions-decoded.json').as_posix()
+                link_catalog = protocol_link_catalog(visible_protocol)
                 if link_catalog:
                     entry['protocol_links'] = link_catalog
-                # Do not publish artifact-supplied HTML. Re-render the trusted
-                # JSON through the site source's audited escaping/textContent UI.
-                render_protocol_report(protocol_data, destination/'protocols.html')
+                # Do not publish artifact-supplied HTML. Render from verified
+                # protocol JSON; never mutate the original CI capture.
+                render_protocol_report(visible_protocol, destination/'protocols.html')
             if variant_view is not None:
                 page=render_variant_html(variant_view,variant_graph)
                 (destination/'variant-architecture.html').write_text(

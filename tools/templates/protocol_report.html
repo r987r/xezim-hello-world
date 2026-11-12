@@ -33,7 +33,9 @@ canvas{width:100%;display:block}pre{font-size:12px;white-space:pre-wrap;overflow
 <p id="decoded-count" class="muted"></p></div>
 <div class="card"><h2>All observations</h2><div class="tools"><button id="csv">Export filtered CSV</button><button id="json">Export filtered JSON</button></div>
 <div class="tablewrap"><table><thead><tr><th>Time ns</th><th>Protocol</th><th>Monitor</th><th>Type</th><th>Operation/event</th><th>ID</th><th>Duration ns</th><th>Status</th><th>Details</th></tr></thead><tbody id="body"></tbody></table></div>
-<p id="page-label"></p><button id="prev">Previous</button> <button id="next">Next</button><pre id="detail">Select an observation to inspect its payload and timestamps.</pre></div>
+<p id="page-label"></p><button id="prev">Previous</button> <button id="next">Next</button>
+<div id="mrs-decoded" class="card" hidden aria-label="Source-qualified DDR4 mode register decoding"></div>
+<pre id="detail">Select an observation to inspect its payload and timestamps.</pre></div>
 <div class="card"><h2>Capture coverage</h2><p id="sources"></p><pre id="issues"></pre><small>These are records from existing protocol VIPs/testbenches. Unmeasured intervals, CDC, physical PHY/DRAM delays and bus-protocol compliance cannot be inferred from this report.</small></div>
 </main>
 <script type="application/json" id="protocol-data">__PROTOCOL_DATA__</script>
@@ -49,14 +51,36 @@ const control=$(id);for(const name of values.sort()){const opt=document.createEl
 $('sources').textContent=S.map(s=>s.id+' ('+s.protocol+' · '+s.role+' · '+s.clock_domain+')').join(' · ')||'No cataloged protocol sources';
 $('issues').textContent=D.issues?.length?JSON.stringify(D.issues,null,2):'No protocol capture diagnostics.';
 let filtered=R,page=0;const size=100;
-function select(o){$('detail').textContent=JSON.stringify(o,null,2)}
+function select(o){
+  $('detail').textContent=JSON.stringify(o,null,2);
+  const panel=$('mrs-decoded');panel.replaceChildren();
+  const f=o.fields||{};
+  if(o.protocol!=='dfi'||o.operation!=='mrs'||!Array.isArray(f.mr_decoded_fields)){
+    panel.hidden=true;return;
+  }
+  panel.hidden=false;
+  const add=(tag,value,parent=panel)=>{
+    const node=document.createElement(tag);node.textContent=String(value);parent.append(node);return node;
+  };
+  add('h3',(f.mr_register||'DDR4 MR')+' · observed '+f.mr_programmed_value+
+    ' · expected '+f.mr_expected_value+' · '+f.mr_match);
+  add('p','Observed DFI command, not a DRAM device readback or proof of MR-state enforcement. RDL '+f.mr_rdl_sha256);
+  const table=add('table','');
+  const thead=add('thead','',table),tr=add('tr','',thead);
+  for(const head of ['Field','Bits','Value','Description'])add('th',head,tr);
+  const tbody=add('tbody','',table);
+  for(const item of f.mr_decoded_fields){
+    const row=add('tr','',tbody);
+    for(const value of [item.field,item.bits,item.value,item.description])add('td',value,row);
+  }
+}
 // Display columns follow the selected monitor's self-described field names,
 // not a PCIe-only packet struct. The preferred order is semantic, and any
 // previously unseen protocol field is supported automatically.
 const prominent=['direction','address','requester_id','completer_id','tag',
                  'length_dw','payload_bytes','completion_status','byte_count',
                  'first_be','last_be','ether_type','command','register',
-                 'header_hex','payload_hex'];
+                 'header_hex','payload_hex','mr_register','mr_programmed_value','mr_expected_value','mr_match'];
 function decodedFieldKeys(records){
   const counts=new Map();
   for(const r of records.slice(0,500)){
