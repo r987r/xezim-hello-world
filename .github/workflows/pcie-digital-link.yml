@@ -525,7 +525,8 @@ jobs:
           # deliberately labels BAR/TLP/NoC/byte results UNMEASURED.
           # It does not create a synthetic full-chip result.json or PASS.
           python3 "$root/tools/pcie_link_report.py" "$root/pcie-cross-run.log" \
-            --out "$root/.tools/pcie-link/observations"
+            --out "$root/.tools/pcie-link/observations" \
+            --github-summary "$GITHUB_STEP_SUMMARY"
           # Mode must be visibly selected, but success still requires genuine L0.
           grep -q '^PCIE_SIM_FORCE_FAST_LTSSM: ENABLED override=512x' "$root/pcie-cross-run.log"
           grep -q '^PCIE_EP_SIM_FAST_LTSSM: ENABLED timer_divider=512 min_tx_ts1=16' "$root/pcie-cross-run.log"
