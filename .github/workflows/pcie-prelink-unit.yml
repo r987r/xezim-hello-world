@@ -1,0 +1,65 @@
+name: PCIe device prelink, host BAR0, PHY response RTL
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'dv/pcie_link/endpoint_prelink_ctrl.sv'
+      - 'dv/pcie_link/tb_endpoint_prelink_ctrl.sv'
+      - 'dv/pcie_link/phy_status_responder.sv'
+      - 'dv/pcie_link/tb_phy_status_responder.sv'
+      - 'dv/pcie_link/pcie_bar0_host_cfg.sv'
+      - 'dv/pcie_link/tb_pcie_bar0_host_cfg.sv'
+      - '.github/workflows/pcie-prelink-unit.yml'
+  workflow_dispatch:
+
+permissions: {contents: read}
+
+jobs:
+  run-rtl:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: YosysHQ/setup-oss-cad-suite@v4
+        with:
+          version: '2026-11-10'
+          github-token: ${{ github.token }}
+      - name: Prove real device sequence and remote host independence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .tools/pcie-prelink
+          iverilog -g2012 -Wall -s tb_endpoint_prelink_ctrl \
+            -o .tools/pcie-prelink/prelink.vvp \
+            dv/pcie_link/endpoint_prelink_ctrl.sv \
+            dv/pcie_link/tb_endpoint_prelink_ctrl.sv
+          vvp .tools/pcie-prelink/prelink.vvp | tee .tools/pcie-prelink/prelink.log
+          grep -q '^PASS: device BAR size/target' .tools/pcie-prelink/prelink.log
+          grep -q '^PASS: CPU DBI aliases mirror original host BAR0/MSE' .tools/pcie-prelink/prelink.log
+      - name: Prove host AXI-Lite BAR and MSE, independent from device
+        shell: bash
+        run: |
+          set -euo pipefail
+          iverilog -g2012 -Wall -s tb_pcie_bar0_host_cfg \
+            -o .tools/pcie-prelink/barcfg.vvp \
+            dv/pcie_link/pcie_bar0_host_cfg.sv \
+            dv/pcie_link/tb_pcie_bar0_host_cfg.sv
+          vvp .tools/pcie-prelink/barcfg.vvp | tee .tools/pcie-prelink/barcfg.log
+          grep -q '^PASS: real AXI-Lite host BAR0' .tools/pcie-prelink/barcfg.log
+      - name: Prove requested PHY detection without synthesizing L0
+        shell: bash
+        run: |
+          set -euo pipefail
+          iverilog -g2012 -Wall -s tb_pcie_phy_status_responder \
+            -o .tools/pcie-prelink/phy.vvp \
+            dv/pcie_link/phy_status_responder.sv \
+            dv/pcie_link/tb_phy_status_responder.sv
+          vvp .tools/pcie-prelink/phy.vvp | tee .tools/pcie-prelink/phy.log
+          grep -q '^PASS: Gen1 receiver-detect' .tools/pcie-prelink/phy.log
+      - name: Publish simulator transcripts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pcie-prelink-rtl-${{ github.run_id }}
+          path: .tools/pcie-prelink/
+          if-no-files-found: warn
