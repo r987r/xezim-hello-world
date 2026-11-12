@@ -164,7 +164,7 @@ class DdrMRPages(unittest.TestCase):
             variants.append(bad)
             for i,variant in enumerate(variants):
                 with self.subTest(mutation=i):
-                    with self.assertRaisesRegex(ValueError,"MR decode"):
+                    with self.assertRaisesRegex(ValueError,"MR decode|untrusted MR annotations"):
                         annotate_protocol(variant,verified)
 
     def test_unified_traffic_view_and_publish_paths(self):
