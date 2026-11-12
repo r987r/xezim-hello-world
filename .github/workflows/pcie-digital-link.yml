@@ -459,18 +459,14 @@ jobs:
           # not copied from the same generated C header.
           export SOC_SELECTED_PLAN_SHA
           SOC_SELECTED_PLAN_SHA="$(sha256sum "$root/.tools/pcie-link/scenario/scenario-plan.json" | cut -d' ' -f1)"
-          # Config TLP qualification needs active Gen1 PHY scrambling when
-          # the OpenPCIe receive descrambler is active. L0-only preserves
-          # its original host setting so the two lanes isolate the change.
-          if [[ "${{ matrix.mode }}" == "bar0" ]]; then
-            export PCIE_HOST_SCRAMBLING=1
-          fi
+          # The original OpenPCIe PHY descrambler is active. Disabling
+          # scrambling in the RC's previous L0-only smoke allowed early
+          # link_up_o but then entered Recovery rather than true ST_L0.
+          # Both genuine-link modes MUST use the original pcievhost
+          # Gen1 scrambler. 8b/10b remains handled by the PIPE K bits.
+          export PCIE_HOST_SCRAMBLING=1
           "$root/.tools/pcie-cross-obj/Vtop" 2>&1 | tee "$root/pcie-cross-run.log"
-          if [[ "${{ matrix.mode }}" == "bar0" ]]; then
-            grep -q '^PCIE_RC_SCRAMBLE_MODE: ENABLED' "$root/pcie-cross-run.log"
-          else
-            grep -q '^PCIE_RC_SCRAMBLE_MODE: DISABLED' "$root/pcie-cross-run.log"
-          fi
+          grep -q '^PCIE_RC_SCRAMBLE_MODE: ENABLED' "$root/pcie-cross-run.log"
           # One evidence adapter renders observed LTSSM/PIPE events, then
           # deliberately labels BAR/TLP/NoC/byte results UNMEASURED.
           # It does not create a synthetic full-chip result.json or PASS.
