@@ -247,6 +247,17 @@ async def execute_cold_boot(dut, *, external=None, benchmark=False):
             selected_sha = contract["plan_sha256"]
             verified_witness = verify_plan_witness(
                 selected_sha, contract["plan_witness_phys"], correlated)
+            # Independently reconstruct each selected C driver's issued and
+            # driver_done AXI store. This proves the real CPU dispatched the
+            # canonical action table, NOT iDMA hardware completion; the
+            # original passive DMA AXI/byte checks below remain mandatory.
+            from tools.scenario_cpu_action_trace import verify as verify_action_trace
+            scenario_intent = json.loads(Path(scenario_path).read_text())
+            action_trace = verify_action_trace(
+                selected_sha, contract["action_trace_phys"],
+                scenario_intent["actions"], correlated)
+            (Path(plan).parent / "cpu-scn-action-axi-trace.json").write_text(
+                json.dumps(action_trace, indent=2, sort_keys=True) + "\n")
             counts = {"src_ar": 0, "ddr_aw": 0, "ddr_ar": 0, "return_aw": 0}
             for event in events:
                 if event.get("monitor") != "compute0_local_data.dma" or event.get("channel") not in ("ar", "aw"):
@@ -278,6 +289,7 @@ async def execute_cold_boot(dut, *, external=None, benchmark=False):
                         "observed_dma_axi_counts": counts,
                         "cpu_result_checked": True,
                         "cpu_plan_sha_axi_witness": verified_witness,
+                        "cpu_action_trace": action_trace,
                         "intent_is_not_evidence": True}
             (Path(plan).parent / "scenario-execution.json").write_text(
                 json.dumps(evidence, indent=2, sort_keys=True) + "\n")
