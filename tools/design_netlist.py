@@ -45,7 +45,14 @@ def analyze(root: Path, profile: str, mode: str, output: Path,
     # timescale declarations. Slang requires a deterministic default in a
     # mixed-timescale compilation. This is an explicit compiler input, NOT
     # suppression of width/port/CDC or other elaboration diagnostics.
+    # The pinned upstream common_cells cc_id_queue reset pattern fills an
+    # enum-valued packed struct field using '0. Verilator accepts that RTL;
+    # slang's default implicit-enum rule rejects it. This narrowly scoped,
+    # documented compiler compatibility option accepts that conversion only,
+    # leaving missing ports, widths, source provenance and real elaboration
+    # errors fatal. It is not a lint waiver or wire-connectivity verdict.
     args = [executable, "--timescale", "1ns/1ps",
+            "--relax-enum-conversions",
             "--top", attested["top"], "-f", str(source_list)]
     if mode == "netlist":
         args += ["--save-netlist", str(output)]
