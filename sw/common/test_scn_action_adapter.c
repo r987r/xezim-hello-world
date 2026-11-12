@@ -33,11 +33,20 @@ int main(void) {
   for (i = 0; i < SOC_SCN_ACTION_COUNT; ++i) {
     const soc_scn_action_t *a = soc_scn_action_at((uint32_t)i);
     uint32_t j;
+    for (j = 0; j < a->dependency_count; ++j) {
+      uint32_t slot = a->first_dependency + j;
+      uint32_t prior = soc_scn_dependency_index_at(slot);
+      if (prior >= i ||
+          !soc_scn_text_equal(soc_scn_dependency_at(slot),
+                              soc_scn_action_at(prior)->action_instance_id))
+        return 23;
+    }
     for (j = 0; j < a->argument_count; ++j) {
       const soc_scn_argument_t *arg =
           soc_scn_argument_at(a->first_argument + j);
       const char *text = NULL;
       uint64_t number = 0;
+      if (arg->key_hash != soc_scn_arg_key_hash(arg->key)) return 24;
       if (arg->is_text) {
         if (!soc_scn_arg_text(a, arg->key, &text) ||
             !soc_scn_text_equal(text, arg->text_value) ||
