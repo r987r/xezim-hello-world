@@ -42,8 +42,9 @@ class ExternalAdapterTests(unittest.TestCase):
     def test_export_uses_real_profile_and_output(self):
         outfile = self.root / "out/ports.json"
         def run(argv, **kwargs):
-            self.assertEqual(argv[1:8], ["--timescale", "1ns/1ps",
+            self.assertEqual(argv[1:9], ["--timescale", "1ns/1ps",
                                            "--relax-enum-conversions",
+                                           "-Wno-error=multiple-always-assigns",
                                            "--top", "fake_tb", "-f",
                                            str(self.root / ".tools/regression/fake/sources.f")])
             self.assertEqual(argv[-3:], ["--ports", "--format", "json"])
