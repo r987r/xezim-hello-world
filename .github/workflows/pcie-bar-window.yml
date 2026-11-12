@@ -1,0 +1,42 @@
+name: PCIe BAR0 complete-span protection
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'dv/pcie_link/bar0_noc_translate.sv'
+      - 'dv/pcie_link/tb_bar0_noc_translate.sv'
+      - '.github/workflows/pcie-bar-window.yml'
+  workflow_dispatch:
+
+permissions: {contents: read}
+
+jobs:
+  complete-span:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: YosysHQ/setup-oss-cad-suite@v4
+        with:
+          version: '2026-11-10'
+          github-token: ${{ github.token }}
+      - name: Real RTL simulation of BAR0 bounds and rejection
+        run: |
+          set -euo pipefail
+          iverilog -V | head -n 2
+          mkdir -p .tools/pcie-bar-window
+          iverilog -g2012 -Wall -s tb_bar0_noc_translate \
+            -o .tools/pcie-bar-window/tb.vvp \
+            dv/pcie_link/bar0_noc_translate.sv \
+            dv/pcie_link/tb_bar0_noc_translate.sv
+          vvp .tools/pcie-bar-window/tb.vvp \
+            | tee .tools/pcie-bar-window/output.log
+          grep -q '^PASS: BAR0 bus/local-NoC complete-span mapping' \
+            .tools/pcie-bar-window/output.log
+      - name: Archive actual simulator transcript
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pcie-bar0-complete-span-${{ github.run_id }}
+          path: .tools/pcie-bar-window/
+          if-no-files-found: warn
