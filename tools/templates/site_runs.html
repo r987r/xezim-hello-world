@@ -277,7 +277,7 @@ function render(){
     if(fam&&suite(e.target,e.workflow)!==fam)continue;
     if(protocolFilter.value&&!(e.protocols||[]).includes(protocolFilter.value))continue;
     if(!matchesQuery([e.target,e.testname,e.config_target,e.simulator,e.execution_id,e.workflow,e.source_sha,e.engine,(e.protocols||[]).join(" ")],q))continue;
-    if(outcome&&(outcome==="pass")!==e.passed)continue;
+    if(outcome&&(e.evidence_only||(outcome==="pass")!==e.passed))continue;
     if(kind==="axi"&&!e.axi)continue;
     if(kind==="protocol"&&!(e.protocols||[]).length)continue;
     if(kind==="negative"&&!e.expected_failure)continue;
@@ -299,8 +299,11 @@ function render(){
     inspect.onclick=()=>window.openRunTraffic?.(e);
     const openFlow=document.createElement("button");openFlow.type="button";
     openFlow.textContent="View intended flow";openFlow.style.display="block";
+    openFlow.disabled=Boolean(e.evidence_only);
     openFlow.onclick=()=>markFlow(e.target,e);
-    const named=e.canonical_id?
+    const named=e.evidence_only?
+      text("div","Isolated source-verified monitor capture · no regression result.json","muted"):
+      e.canonical_id?
       text("div","Canonical: "+e.simulator+"/"+e.config_target+"/"+e.testname,"muted"):
       text("div","Historical run: canonical identity not archived","muted");
     td(tr,testLink,named,e.canonical_url?link("Open canonical run",e.canonical_url):text("span","","muted"),inspect,openFlow);
@@ -309,8 +312,11 @@ function render(){
       e.verified_site_source_sha===D.source_sha?"Verified same Git tree":
       e.verified_fabric_source_sha===D.source_sha?"Fabric inputs equivalent only":
       "Historical tested SHA";
-    td(tr,text("span",e.passed?"PASS":"FAIL",e.passed?"good":"bad"),
-      text("div",e.expected_failure?"Required negative check":"Positive / compile gate","muted"),
+    td(tr,text("span",e.evidence_only?"OBSERVED":e.passed?"PASS":"FAIL",
+                 e.evidence_only?"muted":e.passed?"good":"bad"),
+      text("div",e.evidence_only?"Capture only · "+(e.workflow_conclusion||"unknown")+
+           " workflow; never a full-chip PASS":
+           e.expected_failure?"Required negative check":"Positive / compile gate","muted"),
       text("div",evidenceRelation,"muted"));
     td(tr,e.engine);
     const protocols=e.protocols||[];
