@@ -19,6 +19,7 @@ on:
       - 'tests/test_pcie_link.py'
       - 'tests/test_pcie_scenario.py'
       - 'tests/test_pcie_cfg_overlay.py'
+      - 'tests/test_pcie_cfg_decode.py'
       - 'tests/test_pcie_link_report.py'
       - 'tests/test_pcie_mode_compatibility.py'
       - 'tests/test_pcie_upstream_test_timing.py'
@@ -64,7 +65,7 @@ jobs:
       - name: Prove profile swaps fail closed and checked-in generated selection agrees
         run: |
           set -euo pipefail
-          python3 -m unittest tests.test_pcie_link tests.test_ip_fetch_submodules tests.test_ci_require_cocotb tests.test_pcie_scenario tests.test_pcie_cfg_overlay tests.test_pcie_link_report tests.test_pcie_mode_compatibility tests.test_pcie_upstream_test_timing -v
+          python3 -m unittest tests.test_pcie_link tests.test_ip_fetch_submodules tests.test_ci_require_cocotb tests.test_pcie_scenario tests.test_pcie_cfg_overlay tests.test_pcie_cfg_decode tests.test_pcie_link_report tests.test_pcie_mode_compatibility tests.test_pcie_upstream_test_timing -v
           python3 tools/pcie_link.py --check
           mkdir -p .tools/pcie-link
           iverilog -g2012 -s tb_pcie_pipe_x1_adapter \
