@@ -111,6 +111,69 @@ ENUM_AFTER = """                try:
                     raise"""
 
 
+# Passive diagnostics for the original upstream payload readback, separate
+# from the zero-length posted-write flush already traced above. Never change
+# timeouts, returned data, TLP credits, or success predicates.
+ENUM_READ_BEFORE = """                assert await dev_bar0.read(offset, length, timeout=10000, timeout_unit='ns') == test_data"""
+ENUM_READ_AFTER = """                try:
+                    readback = await dev_bar0.read(offset, length, timeout=10000, timeout_unit='ns')
+                except Exception as exc:
+                    print("PCIE_UPSTREAM_READBACK_TIMEOUT: length=%d offset=%d error=%r" %
+                          (length, offset, exc), flush=True)
+                    for owner, port in (("rc", self.dev.upstream_port.other),
+                                        ("ep", self.dev.upstream_port)):
+                        try:
+                            vc = port.fc_state[0]
+                            fc = {}
+                            for kind in ("ph", "pd", "nph", "npd", "cplh", "cpld"):
+                                channel = getattr(vc, kind)
+                                fc[kind] = (int(channel.tx_credit_limit),
+                                            int(channel.tx_credits_consumed),
+                                            int(channel.tx_credits_available),
+                                            int(channel.rx_credits_allocated),
+                                            int(channel.rx_credits_received))
+                            print("PCIE_UPSTREAM_READBACK_FC: owner=%s tx_queue=%d "
+                                  "credit=(limit,used,available,rx_alloc,rx_recv) %r" %
+                                  (owner, port.tx_queue.qsize(), fc), flush=True)
+                        except (AttributeError, IndexError, TypeError, ValueError):
+                            print("PCIE_UPSTREAM_READBACK_FC: owner=%s unavailable" %
+                                  owner, flush=True)
+                    try:
+                        outstanding = [(i, q.qsize()) for i, q in
+                                       enumerate(self.rc.rx_cpl_queues) if q.qsize()]
+                        print("PCIE_UPSTREAM_READBACK_RC: tag_active=%r queued_cpl=%r" %
+                              (self.rc.tag_active[:32], outstanding[:32]), flush=True)
+                    except (AttributeError, TypeError, ValueError):
+                        print("PCIE_UPSTREAM_READBACK_RC: unavailable", flush=True)
+                    raise
+                assert readback == test_data"""
+
+# Original TestEndpoint produces CplD through this callback. Trace its
+# actual payload/tag; a SEND_MAC_TLP driver event is not proof that a packet
+# emerged from the endpoint PHY and reached the root complex.
+ENUM_EP_CPL_BEFORE = """    async def send_tlp_mac(self,tlp):
+        pipe_seq_item_h = pipe_seq_item("pipe_seq_item")
+        pipe_seq_item_h.pipe_operation = pipe_operation_t.SEND_MAC_TLP
+        pipe_seq_item_h.tlp = tlp
+        await self.start_item (pipe_seq_item_h)
+        await self.finish_item (pipe_seq_item_h)"""
+ENUM_EP_CPL_AFTER = """    async def send_tlp_mac(self,tlp):
+        if getattr(self, "_stall_diag_active", False):
+            print("PCIE_UPSTREAM_EP_CPL_BEGIN: type=%s tag=%s length=%s byte_count=%s lower_addr=%s" %
+                  (getattr(tlp, "fmt_type", "?"), getattr(tlp, "tag", "?"),
+                   getattr(tlp, "length", "?"), getattr(tlp, "byte_count", "?"),
+                   getattr(tlp, "lower_address", "?")), flush=True)
+        pipe_seq_item_h = pipe_seq_item("pipe_seq_item")
+        pipe_seq_item_h.pipe_operation = pipe_operation_t.SEND_MAC_TLP
+        pipe_seq_item_h.tlp = tlp
+        await self.start_item (pipe_seq_item_h)
+        await self.finish_item (pipe_seq_item_h)
+        if getattr(self, "_stall_diag_active", False):
+            print("PCIE_UPSTREAM_EP_CPL_DRIVER_DONE: type=%s tag=%s" %
+                  (getattr(tlp, "fmt_type", "?"), getattr(tlp, "tag", "?")),
+                  flush=True)"""
+
+
 def replace_once(text: str, before: str, after: str, label: str) -> str:
     if text.count(before) != 1:
         raise ValueError(f"{label}: pinned upstream self-test source changed")
@@ -125,6 +188,10 @@ def patched(path: str, source: str) -> str:
     if path == "verif/sequences/pcie_enumeration_seq.py":
         source = replace_once(source, ENUM_MODEL_BEFORE, ENUM_MODEL_AFTER, path + " model progress")
         source = replace_once(source, ENUM_HOST_BEFORE, ENUM_HOST_AFTER, path + " RC packets")
+        source = replace_once(source, ENUM_EP_CPL_BEFORE, ENUM_EP_CPL_AFTER,
+                              path + " actual endpoint completion packets")
+        source = replace_once(source, ENUM_READ_BEFORE, ENUM_READ_AFTER,
+                              path + " real payload readback")
         return replace_once(source,ENUM_BEFORE,ENUM_AFTER,path)
     raise ValueError(f"unknown timing-source path {path}")
 
