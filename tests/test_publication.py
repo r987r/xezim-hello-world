@@ -127,6 +127,8 @@ class PublicationTests(unittest.TestCase):
                                 e["evidence_scope"]=="isolated_observation_only"
                                 for e in captures))
             for e in captures:
+                self.assertNotIn("/.tools/",e["path"])
+                self.assertRegex(e["path"],r"^runs/capture-only/123-1/artifact-[0-9]+/[a-z0-9-]+/report[.]html$")
                 published=output/Path(e["path"]).parent
                 self.assertTrue((published/"protocols.html").is_file())
                 self.assertFalse((published/"result.json").exists())
