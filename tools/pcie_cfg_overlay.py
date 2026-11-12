@@ -114,7 +114,10 @@ def overlay_decode(source: str) -> str:
 
     The RX skid stream actually carries the transmitted DWORD; the pinned
     decoder previously skipped it for 3-DW writes and forwarded all-zero data.
-    Keep ordinary reads payload-free and preserve backpressure semantics.
+    PCIe headers need the upstream byte swap, but payload DWORDs already
+    arrive in host-ordered format at this skid boundary. Swapping payload
+    bytes corrupts 0x80001000 into 0x00100080. Keep reads payload-free,
+    preserving the original backpressure and header handling.
     """
     source = substitute_once(
         source,
@@ -141,7 +144,7 @@ def overlay_decode(source: str) -> str:
         "      ST_TLP_STREAM: begin\n"
         "        skid_axis_tready = '1;\n"
         "        if (skid_axis_tvalid) begin\n"
-        "          D.tlp_data[Q.word_count*32+:32] = tlp_byte_swapped;",
+        "          D.tlp_data[Q.word_count*32+:32] = skid_axis_tdata;",
         "decoder capture accepted payload DWORD in low bits")
     source = substitute_once(
         source,
