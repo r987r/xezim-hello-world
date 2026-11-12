@@ -16,15 +16,18 @@ BATCH_EVENTS = 128
 
 
 class PassiveAxiEventSink:
-    def __init__(self, output: TextIO):
+    def __init__(self, output: TextIO, *, batch_events: int = BATCH_EVENTS):
+        if type(batch_events) is not int or not 1 <= batch_events <= BATCH_EVENTS:
+            raise ValueError("passive AXI batch must be an integer in [1, 128]")
         self.output = output
+        self.batch_events = batch_events
         self.pending = 0
 
     def write(self, event: dict) -> None:
         # Keep the exact old canonical compact JSON wire format and order.
         self.output.write(json.dumps(event, separators=(",", ":")) + "\n")
         self.pending += 1
-        if self.pending >= BATCH_EVENTS or event.get("channel") in (
+        if self.pending >= self.batch_events or event.get("channel") in (
                 "reset", "phase", "capture_start", "capture_overflow",
                 "expect_response", "clock_period"):
             self.flush()
