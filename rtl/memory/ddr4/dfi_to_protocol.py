@@ -22,6 +22,7 @@ BANK="memory0.ddr0.bankmodel"
 DFI_COMMANDS={
     "dfi_activate":"act", "dfi_precharge":"pre",
     "dfi_read":"rd", "dfi_write":"wr", "dfi_refresh":"ref",
+    "dfi_mrs":"mrs",
     "dfi_rddata_en":"rddata_en", "dfi_rddata_valid":"rddata_valid",
     "dfi_wrdata_en":"wrdata_en",
 }
