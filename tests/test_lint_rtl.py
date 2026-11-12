@@ -43,6 +43,32 @@ class SlangLintTests(unittest.TestCase):
         self.assertEqual(lint_rtl.select_profiles(self.root, ["optional-real-memory"]),
                          ["optional-real-memory"])
 
+    def test_project_owned_selected_sources_have_explicit_time_scale(self):
+        # Source ownership only; pinned upstream warnings are a separate gate.
+        owned = [
+            "dv/dma/dma_tb.sv",
+            "rtl/adapters/axi_sram_target.sv",
+            "rtl/adapters/chip_types_pkg.sv",
+            "rtl/adapters/cpu_noc_adapter.sv",
+            "rtl/adapters/serv_axi_lite_adapter.sv",
+            "rtl/adapters/soc_dma_regs.sv",
+            "rtl/adapters/soc_idma_engine.sv",
+            "rtl/io/ethernet0/ethernet0_axi_mvp.sv",
+            "rtl/io/ethernet0/ethernet_queue_axi_regs.sv",
+            "rtl/io/ethernet0/ethernet_queue_ctrl.sv",
+            "gen/chip/soc_top.sv", "gen/chip/full_chip_dma_tb.sv",
+            "gen/supernoc/soc_noc.sv", "gen/supernoc/supernoc_tb.sv",
+        ]
+        networks = json.loads((ROOT/"gen/noc/floonoc/manifest.json").read_text())["networks"]
+        self.assertEqual(len(networks), 12)
+        for record in networks.values():
+            owned += ["gen/noc/floonoc/"+record[key] for key in ("top", "package")]
+        self.assertEqual(len(owned), 38)
+        for path in owned:
+            with self.subTest(path=path):
+                self.assertTrue((ROOT/path).read_text().startswith("`timescale 1ns/1ps\n"),
+                                f"owned selected RTL time scale missing: {path}")
+
     def test_source_location_and_severity(self):
         raw = self.root / "diagnostics.json"
         raw.write_text(json.dumps([

@@ -1,3 +1,4 @@
+`timescale 1ns/1ps
 // CPU0 AXI BFMs drive data/config NoC manager ports during DMA-only simulation.
 // These are cocotb testbench initiators, not PCIe; CPUs are held in reset.
 module full_chip_dma_tb (

@@ -1,3 +1,4 @@
+`timescale 1ns/1ps
 `include "axi/typedef.svh"
 // Only address classification/type wiring here. PULP modules own protocol
 // demultiplexing, AXI-Lite conversion and byte-lane/data-width conversion.

@@ -62,13 +62,8 @@ jobs:
       - uses: ./.github/actions/setup-bender
         env:
           GH_TOKEN: ${{ github.token }}
-      - name: Install configuration parser and selected generated CSR test dependencies
-        run: |
-          python -m pip install --disable-pip-version-check -r requirements.txt
-          # check-config discovers the generated endpoint CSR ABI tests merged
-          # into main. Use the project's existing pinned CSR requirements;
-          # never skip this real SystemRDL compilation or change the RTL.
-          python -m pip install --disable-pip-version-check -r csr/requirements.txt
+      - name: Install configuration parser
+        run: python -m pip install --disable-pip-version-check -r requirements.txt -r csr/requirements.txt
       - name: Install pinned upstream FlooGen (no simulator rebuild)
         run: |
           set -euo pipefail

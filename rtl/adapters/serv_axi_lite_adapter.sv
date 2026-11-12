@@ -1,3 +1,4 @@
+`timescale 1ns/1ps
 // SERV uses classic, single-request Wishbone. ZipCPU's proven pipelined
 // bridge owns AXI timing; this latch submits each held classic cycle once.
 module serv_axi_lite_adapter (

@@ -1,0 +1,130 @@
+// Device-owned PCIe0 endpoint management/DBI policy CSR (not host Type-0 config).
+//
+// Relative addresses in config/soc.yaml's PCIe0 control aperture:
+// 0x0000..0x003f already belongs to the LIVE outbound DMA requester.
+// This separate 0x1000 region is reserved for the PCIe endpoint setup bank.
+//
+// Generation from this RDL is *not* proof of CPU0 Config-NoC connectivity.
+// No host-visible BAR bus address or PCIe configuration register is stored
+// here. PCIe BAR enumeration stays a host-originated TLP operation.
+//
+// RDL defines storage/field ABI. The BAR aperture power-of-two validation,
+// SRAM target bounds, atomic COMMIT, write freeze, start eligibility,
+// link/NoC/MSE gating and successful/failed AXI responses are special
+// protocol side-effects requiring explicit RTL around generated storage.
+property csr_backdoor_policy {
+    type = string;
+    component = field;
+    default = "frontdoor_only";
+};
+
+addrmap pcie_endpoint_prelink_ctrl {
+    name = "PCIe0 endpoint pre-link management (CPU0 Config NoC)";
+    default regwidth = 32;
+
+    reg {
+        desc = "Device-advertised BAR0 aperture in bytes; power of two, 4KiB to 1MiB";
+        field {
+            sw = rw;
+            hw = r;
+            swwe;
+            reset = 0;
+            csr_backdoor_policy = "frontdoor_only";
+        } size_bytes[31:0];
+    } bar0_aperture @0x1000;
+
+    reg {
+        desc = "Device-local PCIe BAR0 target base on the SoC data NoC (not the PCI bus BAR)";
+        field {
+            sw = rw;
+            hw = r;
+            swwe;
+            reset = 0;
+            csr_backdoor_policy = "frontdoor_only";
+        } local_base[31:0];
+    } bar0_target @0x1004;
+
+    reg {
+        desc = "One-shot CPU0 commands: COMMIT configuration before LTSSM; then START";
+        field {
+            desc = "Request validated, immutable BAR0 aperture/target commit";
+            sw = w;
+            hw = r;
+            reset = 0;
+            singlepulse = true;
+            csr_backdoor_policy = "frontdoor_only";
+        } commit[0:0];
+        field {
+            desc = "Permit LTSSM startup after a successful device-owned COMMIT";
+            sw = w;
+            hw = r;
+            reset = 0;
+            singlepulse = true;
+            csr_backdoor_policy = "frontdoor_only";
+        } start[1:1];
+    } control @0x1008;
+
+    reg {
+        desc = "Real hardware status, never software-writable";
+        field {
+            sw = r; hw = w; reset = 0;
+            csr_backdoor_policy = "frontdoor_only";
+        } committed[0:0];
+        field {
+            sw = r; hw = w; reset = 0;
+            csr_backdoor_policy = "frontdoor_only";
+        } ltssm_allowed[1:1];
+        field {
+            sw = r; hw = w; reset = 0;
+            csr_backdoor_policy = "frontdoor_only";
+        } mem_ready[2:2];
+        field {
+            sw = r; hw = w; reset = 0;
+            csr_backdoor_policy = "frontdoor_only";
+        } violation[3:3];
+    } status @0x100c;
+
+    // These are DBI read-only ALIASES of actual host-visible PCIe state.
+    // sw=r, hw=w is a hardware-driven WIRE in SystemRDL, not a second
+    // software-writable BAR storage element. The host cannot reach these
+    // offsets: it sees Type-0 config registers at 0x10/0x04 over real PCIe.
+    reg {
+        desc = "CPU0 read-only view of host-assigned Type-0 BAR0 bus address";
+        field {
+            sw = r;
+            hw = w;
+            reset = 0;
+            csr_backdoor_policy = "frontdoor_only";
+        } pci_bus_base[31:4];
+    } host_bar0 @0x1010;
+
+    reg {
+        desc = "CPU0 read-only mirror of host COMMAND.Memory Space Enable";
+        field {
+            sw = r;
+            hw = w;
+            reset = 0;
+            csr_backdoor_policy = "frontdoor_only";
+        } memory_space_enable[1:1];
+    } host_command @0x1014;
+
+    reg {
+        desc = "Hardware-reported PHY, link and NoC readiness, not host writes";
+        field {
+            sw = r; hw = w; reset = 0;
+            csr_backdoor_policy = "frontdoor_only";
+        } ltssm_l0[0:0];
+        field {
+            sw = r; hw = w; reset = 0;
+            csr_backdoor_policy = "frontdoor_only";
+        } phy_ready[1:1];
+        field {
+            sw = r; hw = w; reset = 0;
+            csr_backdoor_policy = "frontdoor_only";
+        } noc_ready[2:2];
+        field {
+            sw = r; hw = w; reset = 0;
+            csr_backdoor_policy = "frontdoor_only";
+        } host_config_error[3:3];
+    } link_status @0x1018;
+};

@@ -1,3 +1,4 @@
+`timescale 1ns/1ps
 // Thin DV fixture. The same upstream iDMA RTL is instantiated by the
 // configuration-derived full-chip assembly; never duplicate the engine.
 module dma_tb (

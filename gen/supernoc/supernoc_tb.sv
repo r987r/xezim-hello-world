@@ -1,3 +1,4 @@
+`timescale 1ns/1ps
 // Generated BFM-facing wrapper around the shared NoC core.
 module supernoc_tb (
   input logic clk_i,
