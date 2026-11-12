@@ -169,7 +169,7 @@ class SlangLintTests(unittest.TestCase):
         import yaml
         cfg.write_text(yaml.safe_dump({"schema_version": 1, "tests": {
             "dma-rtl": definition}}, sort_keys=True))
-        filelist_bytes = b"+incdir+/pinned/noc\\n/pinned/dma_tb.sv\\n"
+        filelist_bytes = b"+incdir+/pinned/noc" + bytes([10]) + b"/pinned/dma_tb.sv" + bytes([10])
         identity = selected("dma-rtl", definition, filelist_bytes=filelist_bytes,
                             run_id="local-a1b2c3d4e5f6")
         directory = self.root / ".tools/runs" / relative_path(identity)
