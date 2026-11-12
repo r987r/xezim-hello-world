@@ -42,7 +42,8 @@ class ExternalAdapterTests(unittest.TestCase):
     def test_export_uses_real_profile_and_output(self):
         outfile = self.root / "out/ports.json"
         def run(argv, **kwargs):
-            self.assertEqual(argv[1:5], ["--top", "fake_tb", "-f",
+            self.assertEqual(argv[1:7], ["--timescale", "1ns/1ps",
+                                           "--top", "fake_tb", "-f",
                                            str(self.root / ".tools/regression/fake/sources.f")])
             self.assertEqual(argv[-3:], ["--ports", "--format", "json"])
             return subprocess.CompletedProcess(argv, 0, '[{"name":"fake_tb.clk","direction":"input"}]', "")
@@ -50,6 +51,9 @@ class ExternalAdapterTests(unittest.TestCase):
              patch("design_netlist.subprocess.run", side_effect=run):
             meta = design_netlist.analyze(self.root, "fake", "ports", outfile)
         self.assertEqual(meta["evidence"], "elaborated_slang_netlist_inputs_attested")
+        self.assertEqual(meta["command"][1:3], ["--timescale", "1ns/1ps"])
+        self.assertEqual(json.loads((outfile.parent / (outfile.name + ".meta.json")).read_text())
+                         ["command"], meta["command"])
         self.assertIn("fake.sv",meta["selected_source_sha256"])
         self.assertEqual(meta["source_count"],1)
         self.assertIn("plan_sha256",meta)
