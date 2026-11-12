@@ -346,17 +346,71 @@ def run_process(command, log, timeout, env):
             return process.returncode, True
 
 
+def append_pinned_dma_and_bender_sources(test, resolver, sources, includes, defines):
+    """Extend the actual Bender selected compile closure exactly once.
+
+    Shared by the standard runner and the first canonical Cocotb producer.
+    The latter must know the FINAL real compiler filelist before atomically
+    reserving its immutable run directory; no provisional legacy output or
+    second filelist source of truth is permitted.
+    """
+    if 'dma' in test.get('bender_targets', []):
+        import idma_rtl
+        # Pinned source is already fetched; generate backend + PeakRDL RTL
+        # before Bender expands the dma source set. This shares the existing
+        # FlooNoC AXI dependency graph; no second AXI checkout is introduced.
+        idma_rtl.generate()
+        # FlooNoC's Bender.lock also pins PULP APB, but our standard NoC
+        # source exclusion removes its unused files and include directories.
+        # Bring back ONLY the genuine upstream APB pkg/typedef for desc64.
+        # Never fetch a second APB/AXI revision or copy these definitions.
+        apb_root = Path(capture([resolver.bender, '-d',
+                                 str(ROOT/'.tools/floonoc'), 'path', 'apb']).strip())
+        if not (apb_root/'src/apb_pkg.sv').is_file():
+            raise ValueError('pinned FlooNoC APB package missing')
+        sources.insert(0, str(apb_root/'src/apb_pkg.sv'))
+        includes += [str(apb_root/'include'),
+                     str(ROOT/'.tools/pulp_idma/src/include'),
+                     str(ROOT/'.tools/pulp_idma/target/rtl/include')]
+    for target in test.get('bender_targets', []):
+        extra, inc, defs = resolver.sources({'sources': target})
+        sources += extra
+        includes += inc
+        defines += defs
+
+
 def run_target(name, test, resolver, options):
-    # First real canonical producers: small existing Xezim smoke and SRAM
-    # tests. Other tests continue their unchanged legacy path until their
-    # own generated variants, CI upload and report consumers are migrated.
-    canonical = name in ('smoke', 'sram')
+    # The first real Cocotb/Verilator producer joins Xezim smoke/SRAM in the
+    # canonical one-writer store. Other targets retain their legacy scratch
+    # only until independently qualified producer+consumer migrations.
+    canonical_cocotb_dma = name == 'dma-rtl'
+    canonical = name in ('smoke', 'sram') or canonical_cocotb_dma
     identity = None
     if canonical:
         from test_identity import selected as select_identity
         from run_workspace import reserve_run
         sources, includes, defines = resolver.sources(test)
         args = list(test.get('args', [])) + options.arg
+        if canonical_cocotb_dma:
+            # DMA has no per-run generated CPU/chip top. Resolve the SAME
+            # actual NoC/Bender/PULP backend and APB closure as normal, before
+            # selecting the immutable identity; never hash only the initial
+            # unexpanded Bender source group or use a second source resolver.
+            if (test['engine'] != 'cocotb-verilator' or test['sources'] != 'noc'
+                    or test.get('bender_targets') != ['dma'] or options.network
+                    or test.get('firmware_mode') or test.get('memory_config')
+                    or test.get('boot_relocate')):
+                raise ValueError('unreviewed canonical Cocotb producer variant')
+            noc_entries = noc_contracts()
+            noc_root = ROOT/'gen/noc/floonoc'
+            for _, entry in sorted(noc_entries.items()):
+                sources.extend((str(noc_root/entry['package']),
+                                str(noc_root/entry['top'])))
+            append_pinned_dma_and_bender_sources(
+                test, resolver, sources, includes, defines)
+            sources = list(dict.fromkeys(sources))
+            includes = list(dict.fromkeys(includes))
+            defines = list(dict.fromkeys(defines))
         selected_test = {**test, 'source_target': test['sources'], 'args': args}
         identity = select_identity(
             name, selected_test,
@@ -387,32 +441,12 @@ def run_target(name, test, resolver, options):
     for network, entry in sorted(networks.items()):
         (out/f'{network}.f').write_text(filelist_text(
             sources + [str(root/entry['package']), str(root/entry['top'])], includes, defines))
-    if networks and test['engine'] not in {'xezim-compile', 'verilator-lint'}:
-        sources += [str(root/entry['package']) for _, entry in sorted(networks.items())]
-        sources += [str(root/entry['top']) for _, entry in sorted(networks.items())]
-    if 'dma' in test.get('bender_targets', []):
-        import idma_rtl
-        # Pinned source is already fetched; generate backend + PeakRDL RTL
-        # before Bender expands the dma source set. This shares the existing
-        # FlooNoC AXI dependency graph; no second AXI checkout is introduced.
-        idma_rtl.generate()
-        # FlooNoC's Bender.lock also pins PULP APB, but our standard NoC
-        # source exclusion removes its unused files and include directories.
-        # Bring back ONLY the genuine upstream APB pkg/typedef for desc64.
-        # Never fetch a second APB/AXI revision or copy these definitions.
-        apb_root = Path(capture([resolver.bender, '-d',
-                                 str(ROOT/'.tools/floonoc'), 'path', 'apb']).strip())
-        if not (apb_root/'src/apb_pkg.sv').is_file():
-            raise ValueError('pinned FlooNoC APB package missing')
-        sources.insert(0, str(apb_root/'src/apb_pkg.sv'))
-        includes += [str(apb_root/'include'),
-                     str(ROOT/'.tools/pulp_idma/src/include'),
-                     str(ROOT/'.tools/pulp_idma/target/rtl/include')]
-    for target in test.get('bender_targets', []):
-        extra, inc, defs = resolver.sources({'sources': target})
-        sources += extra
-        includes += inc
-        defines += defs
+    if not canonical_cocotb_dma:
+        if networks and test['engine'] not in {'xezim-compile', 'verilator-lint'}:
+            sources += [str(root/entry['package']) for _, entry in sorted(networks.items())]
+            sources += [str(root/entry['top']) for _, entry in sorted(networks.items())]
+        append_pinned_dma_and_bender_sources(
+            test, resolver, sources, includes, defines)
     if test.get('firmware_mode') in ('cpu_dma', 'cpu_dma_scenario'):
         # Compile real C firmware into an alternate immutable FLASH image;
         # change only this run's generated top/checker, not tracked gen/.
