@@ -9,6 +9,19 @@
 #include <stddef.h>
 #include "soc_scn_action_adapter.h"
 
+/* A compact source-generated hash is only a negative filter. A collision
+ * can never select another argument: matching keys still compare byte exact.
+ * This is intentionally freestanding RV32I shift/add/xor, without libc.
+ */
+static inline uint32_t soc_scn_arg_key_hash(const char *key) {
+  uint32_t hash = UINT32_C(5381);
+  if (key == NULL) return 0;
+  while (*key != 0) {
+    hash = ((hash << 5) + hash) ^ (uint8_t)*key++;
+  }
+  return hash;
+}
+
 static inline const soc_scn_argument_t *
 soc_scn_arg_find(const soc_scn_action_t *action, const char *key) {
   const soc_scn_argument_t *found = NULL;
@@ -17,11 +30,12 @@ soc_scn_arg_find(const soc_scn_action_t *action, const char *key) {
       action->first_argument > SOC_SCN_ARGUMENT_COUNT ||
       action->argument_count > SOC_SCN_ARGUMENT_COUNT - action->first_argument)
     return NULL;
+  const uint32_t wanted = soc_scn_arg_key_hash(key);
   for (i = 0; i < action->argument_count; ++i) {
     const soc_scn_argument_t *item =
         soc_scn_argument_at(action->first_argument + i);
     if (item == NULL || item->key == NULL) return NULL;
-    if (soc_scn_text_equal(item->key, key)) {
+    if (item->key_hash == wanted && soc_scn_text_equal(item->key, key)) {
       if (found != NULL) return NULL; /* ambiguous duplicate key */
       found = item;
     }
