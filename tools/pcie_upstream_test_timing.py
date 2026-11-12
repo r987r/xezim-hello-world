@@ -84,6 +84,30 @@ ENUM_AFTER = """                try:
                     print("PCIE_UPSTREAM_MEM_STALL: length=%d offset=%d "
                           "posted_write_flush=TIMEOUT dut=%r" %
                           (length, offset, values), flush=True)
+                    # Passive snapshot of the ORIGINAL cocotbext-pcie FC
+                    # accounting. No private counter writes, FC injections,
+                    # timer changes or synthetic request/completion.
+                    for owner, port in (("rc", self.dev.upstream_port.other),
+                                        ("ep", self.dev.upstream_port)):
+                        try:
+                            vc = port.fc_state[0]
+                            fc = {}
+                            for kind in ("ph", "pd", "nph", "npd", "cplh", "cpld"):
+                                channel = getattr(vc, kind)
+                                fc[kind] = dict(
+                                    tx_limit=int(channel.tx_credit_limit),
+                                    tx_consumed=int(channel.tx_credits_consumed),
+                                    tx_available=int(channel.tx_credits_available),
+                                    rx_allocated=int(channel.rx_credits_allocated),
+                                    rx_received=int(channel.rx_credits_received))
+                            depth = port.tx_queue.qsize()
+                            print("PCIE_UPSTREAM_FC_SNAPSHOT: owner=%s "
+                                  "initialized=%s tx_queue_depth=%s vc0=%r" %
+                                  (owner, port.fc_initialized, depth, fc),
+                                  flush=True)
+                        except (AttributeError, IndexError, TypeError, ValueError):
+                            print("PCIE_UPSTREAM_FC_SNAPSHOT: owner=%s "
+                                  "unavailable" % owner, flush=True)
                     raise"""
 
 
