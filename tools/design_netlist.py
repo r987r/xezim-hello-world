@@ -86,8 +86,8 @@ def analyze(root: Path, profile: str, mode: str, output: Path,
     multi_driver_diags = [line for line in run.stderr.splitlines()
                           if "[-Wmultiple-always-assigns]" in line]
     if any(not re.search(
-            r"(?:^|\\s)\\.tools/floonoc/\\.bender/git/checkouts/"
-            r"tech_cells_generic-[^/]+/src/rtl/tc_sram\\.sv:[0-9]+:[0-9]+:"
+            r"(?:^|\s)\.tools/floonoc/\.bender/git/checkouts/"
+            r"tech_cells_generic-[^/]+/src/rtl/tc_sram\.sv:[0-9]+:[0-9]+:"
             r" warning:", line) for line in multi_driver_diags):
         output.unlink(missing_ok=True)
         stderr_log.write_text(run.stderr, encoding="utf-8")
