@@ -131,6 +131,96 @@ the new config sequence succeeds. Once passed, add its correlation
 to the canonical test-flow and TLP reporter. Full-chip BAR memory
 transactions must still use pinned `pcie_axi_master` and FlooNoC.
 
+## Byte-order ownership: do not hide a real decoder bug
+
+This is a **boundary contract** for the original independently trained
+pcievhost Root Complex and original OpenPCIe Endpoint, not a testbench
+`byte_swap` workaround. Follow the complete real path:
+
+```mermaid
+flowchart LR
+    RC["SCN-C host driver\ndv/pcie_link/host_link_vproc.cpp\noriginal pcievhost cfgWrite"] --> LINK["Original RC DLL/TLP + PIPE\nreal dual-sided Gen1 link"]
+    LINK --> RX["Original OpenPCIe receive\n3-DW CfgWr0 AXIS packet"]
+    RX --> DECODE["Pinned decoder overlay\ntools/pcie_cfg_overlay.py\nheader: byte_swap\npayload: NO second swap"]
+    DECODE --> AXI["Original pcie_config_handler\naccepted AXI-Lite AW/W/AR"]
+    AXI --> BAR["Our pcie_bar0_host_cfg.sv\nBAR sizing, bus base, COMMAND.MSE"]
+    BAR --> CPL["Original endpoint Cpl/CplD\nreturned over real PIPE"]
+    CPL --> RC
+```
+
+**Where our code lives** (all are editable in PR #225):
+
+- `dv/pcie_link/host_link_vproc.cpp` — source-selected host action
+  `pcie.config.bar0`; invokes *original pcievhost* `cfgWrite`/`cfgRead`;
+  checks returned tag/status/4-byte CplD and BAR0/MSE readback
+- `dv/pcie_link/endpoint_prelink_ctrl.sv` — device-local BAR aperture,
+  SRAM target, commit and LTSSM release policy (testbench stand-in for
+  real CPU0/Config-NoC programming, **not** visible to host software)
+- `dv/pcie_link/pcie_bar0_host_cfg.sv` — BAR0 size-mask/assignment
+  and COMMAND.MSE semantics from *accepted* original configuration
+  AXI-Lite AW/W/AR handshakes; no manually injected TLP values
+- `tools/pcie_cfg_overlay.py` — source-hash-checked modifications to
+  the pinned original `pcie_config_decode.sv` and
+  `pcie_cfg_wrapper.sv`; applies only to the external checkout
+  during simulation, so the OpenPCIe provider remains replaceable
+- `dv/pcie_link/tb_pcie_cross_link.sv` — independent concurrent host
+  and EP physical-link wiring + **passive** monitors
+- `tools/pcie_bar0_evidence.py` — compares original RC TX payload,
+  original endpoint RX last beat, **accepted** AXI WDATA, returned
+  endpoint CplD payload and the original RC completion callback;
+  refuses a PASS if any of these observations disagree
+
+**Root cause 1 (fixed):** pinned `pcie_config_decode.sv` decoded
+`TLP_4DW_ND` as having a payload but failed to decode `TLP_3DW_WD`,
+so real ConfigWr0 `FFFFFFFF` was dropped. Its `ST_TLP_SEND` also
+explicitly output zeros for payload and strobe. The pinned overlay now
+captures a genuine skid-buffer-accepted payload and holds it through
+ready/valid. Run 43130625842 proved the original host's actual
+`FFFFFFFF` BAR0 probe and `FFFFF000` readback over the link.
+
+**Root cause 2 (fixed):** the original decoder byte-swapped every
+32-bit header DWORD into its internal TLP header representation.
+It then incorrectly applied the **same transformation to payload
+DW0**, changing the root-complex bus assignment
+`0x80001000` to `0x00100080`. The original endpoint TLP RX
+had already presented `0x80001000` as its accepted data DWORD.
+The source-backed overlay keeps the header conversion unchanged,
+and forwards this already host-ordered payload through to AXI
+**without a second swap**. No host expected value is modified.
+Run 43131157735 independently observed host TX `0x80001000`,
+EP RX `0x80001000`, AXI WDATA `0x80001000`, CplD returned
+`0x80001000`, and COMMAND.MSE `0x00000002`, plus all six
+successfully returned original completion TLPs.
+
+Byte ordering depends on the streaming boundary, not a global
+`endian` switch. For example, Altera's P-Tile Avalon-ST PCIe
+guide explicitly specifies **header byte 0 in the most significant
+byte** of a DWORD but **payload byte 0 in the least significant byte**.
+Other vendor AXI streaming interfaces can have different conventions,
+so the actual pinned OpenPCIe/pciemodel stream and reciprocal packet
+capture remain authoritative for this test:
+
+- https://docs.altera.com/r/docs/683059/26.1.1/p-tile-avalon-streamingip-for-pci-express-user-guide/tlp-header-and-data-alignment-for-the-avalon-st-rx-and-tx-interfaces
+- https://docs.amd.com/r/en-US/pg054-7series-pcie/TLP-Format-in-the-AXI4-Stream-Interface
+
+**Do not equate this proof with full SoC acceptance.** The physically
+connected *BAR configuration* sequence has now passed in the actual
+Verilator transcript, but run 43131157735 remained red because
+`tools/pcie_link_report.py` rejected a later real LTSSM state change.
+The pinned OpenPCIe state enum defines **0x005 = ST_L0**;
+`link_up_o` can assert earlier while still in
+`ST_CONFIGURATION_IDLE` (0x0e3). The evidence gate now requires
+actual `ST_L0`, rejects a subsequent exit into Recovery, and the
+L0-only host runs enough independent idle clocks for this state
+transition (no device readiness backchannel).
+
+Still unqualified: original upstream standalone Cocotb test has a
+separate TS2/link-lane expectation mismatch; partial byte enables,
+multi-DWORD data and unknown TLP types are not covered by this
+1-DWORD BAR config directed sequence. The real endpoint non-config
+memory TLP → FlooNoC → SRAM, full-chip CPU0 boot, and the canonical
+full-chip traffic/byte scoreboards remain separate P0 gates.
+
 ## Independent Gen1 Data Link InitFC qualification
 
 A genuine host `InitFC1/InitFC2` handshake now passes when original pcievhost
