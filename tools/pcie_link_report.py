@@ -17,6 +17,32 @@ import sys
 STATE = re.compile(r"^PCIE_EP_STATE: ([0-9a-fA-F]+) -> ([0-9a-fA-F]+) at ([0-9]+)$")
 BAR = re.compile(r"^PCIE_DEVICE_PRELINK: committed BAR0 size=([0-9a-fA-F]+) target=([0-9a-fA-F]+) mask=([0-9a-fA-F]+)$")
 FAST = re.compile(r"^PCIE_EP_SIM_FAST_LTSSM: ENABLED timer_divider=([0-9]+) min_tx_ts1=([0-9]+) ")
+# These strings are emitted by the ORIGINAL pinned pcievhost src/ltssm.c,
+# not inferred from the endpoint LTSSM (nor from an imagined RC state).
+HOST_STAGE = re.compile(r"^---> (.+?) \(node ([0-9]+)\)$")
+HOST_LANES = re.compile(r"^---> Active lanes = 0x([0-9a-fA-F]{4}) \(node 0\)$")
+PIPE_SAMPLE = re.compile(
+    r"^PCIE_PIPE_(RC_TO_EP|EP_TO_RC): data=([0-9a-fA-F]+) "
+    r"k=([0-9a-fA-F]+) idle=([01]) valid=([01]) at ([0-9]+)$")
+HOST_STAGE_ORDER = (
+    "Detect Quiet", "Detect Active", "Polling Active", "Polling Config",
+    "Configuration Start", "Configuration Linkwidth Accept",
+    "Configuration Lanenum Wait", "Configuration Lanenum Accept",
+    "Configuration Complete", "Configuration Idle",
+    "Configuration exit to L0",
+)
+EP_STATE_NAMES = {
+    0x000: "Idle / reset", 0x041: "Detect.Quiet", 0x061: "Detect.Active",
+    0x002: "Polling", 0x022: "Polling.Active",
+    0x042: "Polling.Configuration",
+    0x023: "Configuration.Linkwidth.Start",
+    0x043: "Configuration.Linkwidth.Accept",
+    0x083: "Configuration.Lanenum.Wait",
+    0x063: "Configuration.Lanenum.Accept",
+    0x0a3: "Configuration.Complete", 0x0e3: "Configuration.Idle",
+    0x005: "L0",
+}
+
 HOST = "PCIE_HOST_L0: original InitLink(1) returned"
 ENDPOINT = "PCIE_ENDPOINT_L0: original endpoint asserts link_up"
 DETECT_REQ = "PCIE_TRACE: receiver-detect request"
@@ -31,6 +57,8 @@ def summarize(text: str) -> dict:
     """Preserve exact observed log events. Never synthesize missing protocol."""
     events: list[dict] = []
     states: list[dict] = []
+    host_stages: list[dict] = []
+    pipe_samples: list[dict] = []
     milestones = {}
     duplicate = []
     plan_hash = None
@@ -40,7 +68,9 @@ def summarize(text: str) -> dict:
         if match:
             src, dst, ps = match.groups()
             row = {"line": line_num, "kind": "endpoint_ltssm", "from": src,
-                   "to": dst, "time_ps": int(ps)}
+                   "to": dst, "time_ps": int(ps),
+                   "stage": EP_STATE_NAMES.get(int(dst, 16) & 0xfffff,
+                                                 f"Unknown LTSSM 0x{int(dst,16):05x}")}
             states.append(row)
             events.append(row)
             # Pinned OpenPCIe ST_L0 is 0x005. link_up_o may assert earlier
@@ -49,6 +79,28 @@ def summarize(text: str) -> dict:
                 if "endpoint_state_l0" in milestones:
                     duplicate.append("endpoint_state_l0")
                 milestones["endpoint_state_l0"] = line_num
+        host_state = HOST_STAGE.fullmatch(line)
+        if host_state and int(host_state.group(2)) == 0:
+            label = host_state.group(1)
+            if label in HOST_STAGE_ORDER:
+                row = {"line":line_num, "kind":"host_ltssm",
+                       "stage":label, "time_ps":None,
+                       "provenance":"original_pcievhost_ltssm_c_vprint"}
+                host_stages.append(row)
+                events.append(row)
+        active = HOST_LANES.fullmatch(line)
+        if active:
+            events.append({"line":line_num, "kind":"host_active_lanes",
+                           "lane_mask":int(active.group(1),16),
+                           "time_ps":None})
+        pipe = PIPE_SAMPLE.fullmatch(line)
+        if pipe:
+            direction, word, kflags, idle, valid, ps = pipe.groups()
+            pipe_samples.append({
+                "line":line_num, "direction":direction, "time_ps":int(ps),
+                "data":f"0x{int(word,16):04x}", "k":f"0x{int(kflags,16):x}",
+                "idle":bool(int(idle)), "valid":bool(int(valid))
+            })
         match = BAR.fullmatch(line)
         if match:
             row = {"line":line_num,"kind":"device_prelink_bar_commit",
@@ -101,6 +153,29 @@ def summarize(text: str) -> dict:
                 ("driver_issued","driver_done")):
         if a in milestones and b in milestones and milestones[a]>=milestones[b]:
             issues.append(f"incorrect event order {a} -> {b}")
+    # The host's source-observed LTSSM stages are visible separately from
+    # the RTL endpoint states. The original VPrint does NOT emit simulator
+    # timestamps, so they must never be plotted as if timed PIPE samples.
+    stage_positions = {stage: [x["line"] for x in host_stages if x["stage"] == stage]
+                       for stage in HOST_STAGE_ORDER}
+    for stage, locations in stage_positions.items():
+        if not locations:
+            issues.append(f"missing original host LTSSM stage: {stage}")
+    if all(stage_positions.values()):
+        positions = [stage_positions[stage][0] for stage in HOST_STAGE_ORDER]
+        if positions != sorted(positions) or len(set(positions)) != len(positions):
+            issues.append("original host LTSSM stages are out of order")
+        if "host_l0" in milestones and positions[-1] >= milestones["host_l0"]:
+            issues.append("host L0 claim preceded original Configuration exit to L0")
+    lanes = [e for e in events if e["kind"] == "host_active_lanes"]
+    if len(lanes) != 1 or lanes[0]["lane_mask"] != 1:
+        issues.append("original host did not report exactly one selected x1 lane")
+    for direction in ("RC_TO_EP", "EP_TO_RC"):
+        samples = [p for p in pipe_samples if p["direction"] == direction]
+        if not samples or not any(s["valid"] and not s["idle"] for s in samples):
+            issues.append(f"missing actual valid PIPE traffic in {direction} direction")
+        if any(p["time_ps"] < 0 for p in samples):
+            issues.append(f"invalid negative PIPE timestamp for {direction}")
     if not states:
         issues.append("no actual endpoint LTSSM state trace")
     elif not any(int(row["to"],16)==0x22 for row in states):
@@ -129,6 +204,12 @@ def summarize(text: str) -> dict:
         "qualified_digital_link_l0":not issues,
         "issues":issues,"events":events,
         "observed_endpoint_state_transitions":len(states),
+        "observed_host_ltssm_stages":len(host_stages),
+        "host_ltssm_stage_trace_observed":len(host_stages)>0,
+        "host_stage_clock":"not_emitted_by_upstream_model",
+        "pipe_samples":pipe_samples,
+        "pipe_traffic_samples":{"host_to_device":sum(p["direction"]=="RC_TO_EP" for p in pipe_samples),
+                                "device_to_host":sum(p["direction"]=="EP_TO_RC" for p in pipe_samples)},
         "host_l0_observed":"host_l0" in milestones,
         "endpoint_l0_observed":"endpoint_l0" in milestones,
         "endpoint_ltssm_l0_observed":"endpoint_state_l0" in milestones,
