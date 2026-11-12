@@ -55,6 +55,27 @@ module pcie_bar0_host_cfg (
                         command_mse_read_q;
   end
 
+  // Passive, bounded diagnostics from the real internal PCIe configuration
+  // AXI-Lite path. These never drive the overlay or fabricate completions.
+  // Each event identifies which handshake actually occurred, allowing the
+  // root cause of a zero BAR sizing response to be distinguished from an
+  // unaccepted write or a readback mux timing error.
+`ifndef SYNTHESIS
+  integer cfg_probe_log_count = 0;
+  always @(posedge clk_i) if (rst_ni && cfg_probe_log_count < 40) begin
+    if ((awvalid_i && awready_i) || (wvalid_i && wready_i) ||
+        (arvalid_i && arready_i)) begin
+      $display("PCIE_EP_BAR_CFG_AXI: AW=%b W=%b AR=%b awaddr=%h araddr=%h wdata=%h committed=%b pending_aw=%b pending_w=%b probe=%b mask=%h hostbase=%h readbar=%b rdldata=%h hostdata=%h at %0t",
+               awvalid_i && awready_i, wvalid_i && wready_i,
+               arvalid_i && arready_i, awaddr_i, araddr_i, wdata_i,
+               device_bar_committed_i, aw_pending, w_pending, probe_q,
+               size_mask, host_base_q, read_bar_q, rdata_from_rdl_i,
+               rdata_to_host_o, $time);
+      cfg_probe_log_count <= cfg_probe_log_count + 1;
+    end
+  end
+`endif
+
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
       aw_pending <= 1'b0;
