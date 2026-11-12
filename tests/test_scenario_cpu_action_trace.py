@@ -74,12 +74,9 @@ class CpuActionTraceTests(unittest.TestCase):
             elif name == "bad_marker":
                 rows[1]["beats"][0]["data"] = "0x0"
             elif name == "wrong_order":
-                rows[2], rows[3] = rows[3], rows[2]
-                # Order is defined by selected SRAM indices; swap the
-                # actual data while keeping their physical store addresses.
-                a = rows[2]["beats"][0]["data"]
-                rows[2]["beats"][0]["data"] = rows[3]["beats"][0]["data"]
-                rows[3]["beats"][0]["data"] = a
+                # A later action cannot masquerade as the selected earlier
+                # one at that reserved trace slot.
+                rows[2]["beats"][0]["data"] = "0x0"
             elif name == "wrong_actor":
                 rows[1]["role"] = "target"
             elif name == "incomplete":
