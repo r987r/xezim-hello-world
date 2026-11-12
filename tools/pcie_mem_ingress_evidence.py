@@ -11,7 +11,12 @@ from pathlib import Path
 import re
 import sys
 
-from tools.pcie_bar0_evidence import check as check_config
+# Work both as a repository module and as the standalone CLI used by CI.
+# Direct script execution puts tools/ (not repo root) on Python sys.path.
+if __package__ in (None, ""):
+    from pcie_bar0_evidence import check as check_config
+else:
+    from tools.pcie_bar0_evidence import check as check_config
 
 HOST = re.compile(
     r"^PCIE_RC_BAR_MWR_TX: action=write_bar0 addr=([0-9a-fA-F]{8}) "
