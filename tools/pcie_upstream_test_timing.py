@@ -38,6 +38,35 @@ TEST_AFTER = "await with_timeout(self.test_all.start(),250000,'ns')"
 # its original 10us posted-write flush times out, sample the DUT's real AXIS
 # handshake and link/FC state. This distinguishes source starvation, credit
 # backpressure and a completion dropped downstream without inventing traffic.
+
+# Additional *passive* model-side trace, restricted to the late BAR stress
+# region to avoid flooding the original UVM log. It shows whether the
+# independent Cocotb RC actually submitted the missing TLP to PIPE.
+ENUM_MODEL_BEFORE = """                uvm_root().logger.info("Memory operation (32-bit BAR) length: %d offset: %d", length, offset)"""
+ENUM_MODEL_AFTER = """                self._stall_diag_active = length >= 20
+                uvm_root().logger.info("Memory operation (32-bit BAR) length: %d offset: %d", length, offset)"""
+ENUM_HOST_BEFORE = """        elif isinstance(pkt,Tlp):
+            tlp_pkt = pkt
+            pipe_seq_item_h.pipe_operation = pipe_operation_t.TLP_TRANSFER
+            pipe_seq_item_h.tlp = tlp_pkt
+            await self.start_item (pipe_seq_item_h)
+            await self.finish_item (pipe_seq_item_h)"""
+ENUM_HOST_AFTER = """        elif isinstance(pkt,Tlp):
+            tlp_pkt = pkt
+            if getattr(self, "_stall_diag_active", False):
+                print("PCIE_UPSTREAM_RC_TX_BEGIN: type=%s tag=%s length=%s addr=%s" %
+                      (getattr(pkt, "fmt_type", "?"), getattr(pkt, "tag", "?"),
+                       getattr(pkt, "length", "?"), getattr(pkt, "address", "?")),
+                      flush=True)
+            pipe_seq_item_h.pipe_operation = pipe_operation_t.TLP_TRANSFER
+            pipe_seq_item_h.tlp = tlp_pkt
+            await self.start_item (pipe_seq_item_h)
+            await self.finish_item (pipe_seq_item_h)
+            if getattr(self, "_stall_diag_active", False):
+                print("PCIE_UPSTREAM_RC_TX_DONE: type=%s tag=%s" %
+                      (getattr(pkt, "fmt_type", "?"), getattr(pkt, "tag", "?")),
+                      flush=True)"""
+
 ENUM_BEFORE = "                await dev_bar0.read(offset, 0, timeout=10000, timeout_unit='ns')"
 ENUM_AFTER = """                try:
                     await dev_bar0.read(offset, 0, timeout=10000, timeout_unit='ns')
@@ -70,6 +99,8 @@ def patched(path: str, source: str) -> str:
     if path == "verif/tests/test_pcie_core.py":
         return replace_once(source,TEST_BEFORE,TEST_AFTER,path)
     if path == "verif/sequences/pcie_enumeration_seq.py":
+        source = replace_once(source, ENUM_MODEL_BEFORE, ENUM_MODEL_AFTER, path + " model progress")
+        source = replace_once(source, ENUM_HOST_BEFORE, ENUM_HOST_AFTER, path + " RC packets")
         return replace_once(source,ENUM_BEFORE,ENUM_AFTER,path)
     raise ValueError(f"unknown timing-source path {path}")
 
