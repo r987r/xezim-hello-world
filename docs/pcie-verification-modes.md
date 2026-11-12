@@ -131,6 +131,34 @@ the new config sequence succeeds. Once passed, add its correlation
 to the canonical test-flow and TLP reporter. Full-chip BAR memory
 transactions must still use pinned `pcie_axi_master` and FlooNoC.
 
+## Independent Gen1 Data Link InitFC qualification
+
+A genuine host `InitFC1/InitFC2` handshake now passes when original pcievhost
+Gen1 scrambling is enabled (only in the `bar0` CI lane), matching the
+OpenPCIe PHY's enabled descrambler. The original L0-only lane keeps its
+prior host setting. No TS1/TS2, DLLP, FC credit, L0 or configuration
+completion is fabricated.
+
+The initial real host ConfigWr0 BAR0 probe received a successful completion
+on [CI run 43123758732](https://github.com/r987r/xezim-hello-world/actions/runs/43123758732).
+The following CfgRd0 was blocked by pcievhost's **real fatal Data FC invariant**:
+`NewFC=4160 OldFC=65`. Its 12-bit received credit wrapped after a
+smaller advertised credit (64) followed a previously tracked 65, making
+the delta exceed the permitted 2047. Do **not** disable the host's FC
+sanity check, update received credit counters from TB software, or mark
+the BAR0 read/probe qualified.
+
+The pinned upstream `pcie_flow_ctrl_init.sv` sends a hardcoded minimum
+credit `UpdateFC` after InitFC2. The separate upstream
+`dllp_fc_update.sv` is already the actual dynamic UpdateFC producer.
+The reviewed source-selected endpoint overlay changes the InitFC2-complete
+transition from `ST_UPDATE_P` to `ST_FC_COMPLETE`: retain full
+genuine InitFC1/InitFC2 exchange, then leave subsequent UpdateFC to its
+existing dynamic owner rather than replaying fixed startup credits.
+This is an **experimental real RTL bug fix**, not yet qualified until
+the exact-head `bar0` and original upstream unit jobs execute successfully.
+All patch bytes and SHA remain tracked in `gen/pcie_link/selection.json`.
+
 ## Still required for issue #76
 
 1. Host original VProc API must issue **real ConfigRd0/ConfigWr0** after
