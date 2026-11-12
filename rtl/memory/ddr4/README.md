@@ -4,6 +4,29 @@ This directory owns the pinned **real LiteDRAM controller/AXI RTL** with its sim
 
 Sources are pinned by [`config/ip.lock.yaml`](../../../config/ip.lock.yaml) and [`toolchain.lock.yml`](toolchain.lock.yml). Generated Verilog, initialization plan and probe manifest belong under ignored `.tools/ddr4/`, not the tracked SoC `gen/`.
 
+## SystemRDL device mode registers and actual DFII MRS validation
+
+The **virtual** [MR0–MR6 SystemRDL source](../../../csr/rdl/ddr4_mode_registers.rdl)
+describes *device protocol mode-register images*, **not** memory-mapped
+LiteDRAM CSRs. The native LiteDRAM CSR catalog and its software-driven
+DFII MRS initialization remain the single hardware interface; no RDL-
+generated shadow CSR bank is instantiated. The first-pass independent
+checker in [mrs_check.py](mrs_check.py) compares an observed read-only DFI
+MRS stream against all seven upstream-derived mode-register commands and
+the source-qualified RDL field layout. Missing, extra, out-of-order or
+corrupted commands and premature DFI memory traffic fail the regression.
+MR evidence is emitted as `ddr4_mrs_evidence.json` for standalone, opt-in
+full-chip DDR and combined Ethernet/DDR/PCIe runs.
+
+**Qualification boundary:** pinned LiteDRAM `SDRAMPHYModel`/`BankModel`
+does **not** retain/enforce MR state or verify CL/CWL changes from MRS;
+the current checker proves *the command sequence and observed values only*.
+No JEDEC tMRD/tMOD, reset/ZQ timing, training, electrical PHY or physical
+DRAM qualification is implied. Do not read software-set `init_done` as
+independent device-state acceptance. The CSR workflow separately elaborates
+the RDL using pinned SystemRDL and checks compiler-produced fields against
+the virtual catalog.
+
 ## Standalone generation and functional test
 
 ```sh
