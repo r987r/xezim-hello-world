@@ -3,7 +3,10 @@ from __future__ import annotations
 import unittest
 from tempfile import TemporaryDirectory
 from pathlib import Path
+import copy
 
+from tests.test_pcie_bar0_evidence import sample
+from tools.pcie_bar0_evidence import check as checked_real_config
 from tools.pcie_link_report import summarize, render, render_actions_summary, export_shared_protocol_timeline
 
 PLAN="a"*64
@@ -155,6 +158,56 @@ class PcieLinkEvidenceTests(unittest.TestCase):
             self.assertTrue(all(x["source"]=="pcie0.ltssm" for x in report["records"]))
             self.assertEqual({x["protocol"] for x in report["records"]},{"pcie"})
             self.assertFalse(any(x["kind"]=="transaction" for x in report["records"]))
+
+    def test_source_qualified_config_tlps_share_unified_protocol_view(self):
+        # These log fixtures exercise the exporter only; hardware proof
+        # remains the actual cross-provider Verilator job and RC callbacks.
+        checked=checked_real_config(sample())
+        self.assertTrue(checked["qualified_over_link_bar0"],checked["issues"])
+        with TemporaryDirectory() as temp:
+            report=export_shared_protocol_timeline(
+                summarize(GOOD),Path(temp),bar_evidence=checked,mode="bar0")
+            self.assertTrue(report["capture_complete"],report["issues"])
+            self.assertEqual(report["run"]["target"],"pcie-bar0-isolated")
+            rows=[row for row in report["records"]
+                  if row["source"]=="pcie0.config"]
+            self.assertEqual([x["operation"] for x in rows],
+                             ["cfg_wr0","cfg_rd0"]*3)
+            self.assertEqual([x["id"] for x in rows],list(range(6)))
+            self.assertTrue(all(x["kind"]=="transaction" and
+                                x["status"]=="complete" and
+                                x["fields"]["host_completion_observed"]
+                                for x in rows))
+            self.assertEqual(rows[2]["fields"]["axi_accepted_wdata"],
+                             "0x80001000")
+            self.assertEqual(rows[1]["fields"]["endpoint_cpld_payload"],
+                             "0xfffff000")
+            self.assertEqual(rows[0]["start_ps"],500)
+            self.assertEqual(rows[0]["end_ps"],800)
+            self.assertEqual(rows[0]["fields"]["time_scope"],
+                             "endpoint_accepted_pins_ps")
+            self.assertFalse(any(row["operation"]=="mem_write"
+                                 for row in rows))
+            html=(Path(temp)/"protocols.html").read_text()
+            self.assertIn("cfg_wr0",html)
+            self.assertIn("pcie0.config",html)
+
+    def test_missing_config_provenance_cannot_be_promoted_to_view(self):
+        checked=checked_real_config(sample())
+        for field,value in (("endpoint_first_rx_ps",None),
+                            ("endpoint_last_cpl_ps",None),
+                            ("host_completion_observed",False)):
+            bad=copy.deepcopy(checked)
+            bad["transactions"][0][field]=value
+            with self.subTest(field=field),TemporaryDirectory() as temp:
+                with self.assertRaisesRegex(ValueError,
+                                            "accepted pins and RC completion"):
+                    export_shared_protocol_timeline(
+                        summarize(GOOD),Path(temp),bar_evidence=bad,mode="bar0")
+        with TemporaryDirectory() as temp:
+            with self.assertRaisesRegex(ValueError,"required"):
+                export_shared_protocol_timeline(
+                    summarize(GOOD),Path(temp),mode="bar0")
 
     def test_no_fake_protocol_timestamps_or_bar_completion(self):
         row=summarize(GOOD)
