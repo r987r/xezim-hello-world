@@ -140,8 +140,8 @@ def overlay_hierarchy(path: str, source: str) -> str:
             BAR_PORTS, "RX BAR ports")
         return substitute_once(
             source,
-            "       .cfg_function_number_o(cfg_function_number_o),\n",
-            "       .cfg_function_number_o(cfg_function_number_o),\n"+
+            "      .cfg_function_number_o(cfg_function_number_o),\n",
+            "      .cfg_function_number_o(cfg_function_number_o),\n"+
             BAR_BINDINGS, "RX to actual internal config BAR ports")
     raise ValueError(f"unrecognized upstream BAR hierarchy path: {path}")
 
