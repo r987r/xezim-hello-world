@@ -77,6 +77,98 @@ class PublicationTests(unittest.TestCase):
             self.assertIn("new-ip.yml",result)
             self.assertEqual(result["new-ip.yml"]["label"],"New protocol")
 
+    def test_any_future_protocol_capture_artifact_is_discovered(self):
+        # No protocol or controller-name registration is needed.
+        with tempfile.TemporaryDirectory() as temp:
+            directory=Path(temp)/".github/workflows"
+            directory.mkdir(parents=True)
+            (directory/"new-ip.yml").write_text(
+                "name: New abstract monitor\njobs:\n  smoke:\n    steps:\n"
+                "      - run: python3 -m unittest tests.test_protocol_report\n"
+                "      - uses: actions/upload-artifact@v4\n"
+                "        with:\n"
+                "          name: monitor-" + "$" + "{{ github.run_id }}\n"
+                "          path: .tools/device/observations/protocol-transactions.json\n")
+            discovery=site.discover_test_workflows(Path(temp))
+            self.assertEqual(discovery["new-ip.yml"]["artifacts"],
+                             ["monitor-"+"$"+"{{ github.run_id }}"])
+
+    def test_capture_only_publisher_accepts_any_protocol_never_forges_pass(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp)
+            evidence=root/"evidence"
+            fixture(evidence)
+            for i,proto in enumerate(("pcie","dfi","ethernet"),101):
+                folder=evidence/"123-1"/f"artifact-{i}"/".tools"/"device"/proto
+                folder.mkdir(parents=True)
+                data={
+                    "schema_version":1,"capture_complete":True,"issues":[],
+                    "run":{"commit":SHA,"dirty":False,"workflow_run_id":"123",
+                           "workflow_attempt":"1","target":f"{proto}-real-link",
+                           "engine":"cocotb-verilator"},
+                    "sources":[{"id":f"device.{proto}","protocol":proto,
+                                "clock_domain":"device","role":"link",
+                                "implementation":"source_observed_testbench"}],
+                    "records":[{"kind":"event","source":f"device.{proto}",
+                                "protocol":proto,"operation":"pin_transition",
+                                "start_ps":150,"end_ps":150,"status":"observed",
+                                "id":None,"fields":{"register_index":5}}],
+                }
+                site.dump(folder/"protocol-transactions.json",data)
+            output=root/"site";output.mkdir()
+            _,entries,notes=site.evidence_index(
+                evidence,output,"r987r/xezim-hello-world")
+            self.assertFalse(notes,notes)
+            captures=[e for e in entries if e.get("evidence_only")]
+            self.assertEqual(len(captures),3)
+            self.assertEqual({e["protocols"][0] for e in captures},
+                             {"pcie","dfi","ethernet"})
+            self.assertTrue(all(e["passed"] is None and
+                                e["evidence_scope"]=="isolated_observation_only"
+                                for e in captures))
+            for e in captures:
+                published=output/Path(e["path"]).parent
+                self.assertTrue((published/"protocols.html").is_file())
+                self.assertFalse((published/"result.json").exists())
+                self.assertIn("NOT A FULL-CHIP REGRESSION PASS",
+                              (published/"report.html").read_text())
+                self.assertIn("pin_transition",
+                              (published/"protocols.html").read_text())
+                self.assertEqual(e["protocol_links"]["sources"][0]["count"],1)
+            ui=(ROOT/"tools/templates/site_runs.html").read_text()
+            self.assertIn('e.evidence_only?"OBSERVED"',ui)
+            self.assertIn('e.evidence_only||(outcome==="pass")',ui)
+
+    def test_capture_only_quarantines_unqualified_and_missing_monitor_evidence(self):
+        for label in ("dirty","wrong_sha","wrong_attempt","invalid_source",
+                      "incomplete","no_observations"):
+            with self.subTest(label=label),tempfile.TemporaryDirectory() as temp:
+                root=Path(temp)
+                fixture(root/"evidence")
+                folder=root/"evidence"/"123-1"/"artifact-101"/"observations"
+                folder.mkdir(parents=True)
+                data={"schema_version":1,"capture_complete":True,"issues":[],
+                      "run":{"target":"future-dfi","commit":SHA,"dirty":False,
+                             "workflow_run_id":"123","workflow_attempt":"1"},
+                      "sources":[{"id":"ddr.dfi","protocol":"dfi"}],
+                      "records":[{"kind":"event","source":"ddr.dfi","protocol":"dfi",
+                                  "operation":"mr_write","status":"observed",
+                                  "start_ps":500,"end_ps":500,"id":None,
+                                  "fields":{"mr_index":1}}]}
+                if label=="dirty":data["run"]["dirty"]=True
+                if label=="wrong_sha":data["run"]["commit"]="b"*40
+                if label=="wrong_attempt":data["run"]["workflow_attempt"]="2"
+                if label=="invalid_source":data["records"][0]["source"]="unknown"
+                if label=="incomplete":data["capture_complete"]=False
+                if label=="no_observations":data["records"]=[]
+                site.dump(folder/"protocol-transactions.json",data)
+                output=root/"site";output.mkdir()
+                _,entries,notes=site.evidence_index(
+                    root/"evidence",output,"r987r/xezim-hello-world")
+                self.assertFalse(any(e.get("evidence_only") for e in entries))
+                self.assertTrue(any("omitted unverified standalone" in note
+                                    for note in notes))
+
     def test_standalone_test_without_artifact_is_visible_as_workflow_only(self):
         with tempfile.TemporaryDirectory() as temp:
             directory=Path(temp)/".github/workflows"
