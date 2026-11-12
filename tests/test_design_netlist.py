@@ -98,6 +98,29 @@ class ExternalAdapterTests(unittest.TestCase):
         self.assertFalse((outfile.parent / (outfile.name + ".failed.stderr.log")).exists())
         self.assertFalse((outfile.parent / (outfile.name + ".failed.stdout.log")).exists())
 
+    def test_pinned_sram_warning_is_visible_but_foreign_driver_fails_closed(self):
+        outfile = self.root / "out/ports.json"
+        source = (".tools/floonoc/.bender/git/checkouts/"
+                  "tech_cells_generic-b0f716d46ad601f4/src/rtl/tc_sram.sv:")
+        pinned = (source + "159:19: warning: variable 'sram' written "
+                  "by multiple always_ff [-Wmultiple-always-assigns]\n")
+        foreign = ("rtl/adapters/axi_sram_target.sv:55:45: warning: "
+                   "two writers [-Wmultiple-always-assigns]\n")
+        ok = '[{"name":"fake_tb.clk","direction":"input"}]'
+        with patch("design_netlist.shutil.which", return_value="/mock/slang-report"), \
+             patch("design_netlist.subprocess.run",
+                   return_value=subprocess.CompletedProcess([], 0, ok, pinned)):
+            result = design_netlist.analyze(self.root, "fake", "ports", outfile)
+        self.assertEqual(result["upstream_sram_multi_driver_warnings"], [pinned.strip()])
+        self.assertFalse(result["sram_driver_conformance_proven"])
+        self.assertTrue(outfile.exists())
+        with patch("design_netlist.shutil.which", return_value="/mock/slang-report"), \
+             patch("design_netlist.subprocess.run",
+                   return_value=subprocess.CompletedProcess([], 0, ok, foreign)):
+            with self.assertRaisesRegex(ValueError, "outside pinned"):
+                design_netlist.analyze(self.root, "fake", "ports", outfile)
+        self.assertFalse(outfile.exists())
+
     def test_selected_elaborated_hierarchy_rejects_foreign_source_and_duplicates(self):
         import hashlib
         selected = {"fake.sv": hashlib.sha256(
