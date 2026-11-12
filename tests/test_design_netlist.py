@@ -70,6 +70,31 @@ class ExternalAdapterTests(unittest.TestCase):
         self.assertFalse(outfile.exists())
 
 
+    def test_error_excerpt_preserves_first_real_elaboration_error_and_full_raw_log(self):
+        outfile = self.root / "out/netlist.json"
+        outfile.parent.mkdir(parents=True, exist_ok=True)
+        upstream = ("vendor.sv:22:8: error: unresolved physical RTL module\\n"
+                    + "upstream warning, not the first actual error\\n" * 2000)
+        bad = subprocess.CompletedProcess([], 1, "Slang stdout diagnostic\\n", upstream)
+        with patch("design_netlist.shutil.which", return_value="/mock/slang-netlist"), \\
+             patch("design_netlist.subprocess.run", return_value=bad):
+            with self.assertRaisesRegex(ValueError, "unresolved physical RTL module"):
+                design_netlist.analyze(self.root, "fake", "netlist", outfile)
+        self.assertFalse(outfile.exists())
+        self.assertEqual((outfile.parent / (outfile.name + ".failed.stderr.log")).read_text(),
+                         upstream)
+        self.assertEqual((outfile.parent / (outfile.name + ".failed.stdout.log")).read_text(),
+                         "Slang stdout diagnostic\\n")
+        # A corrected invocation must not accidentally publish or retain
+        # failure diagnostics from the previous selected source contract.
+        good = subprocess.CompletedProcess([], 0, '[{"path":"fake_tb"}]', "")
+        with patch("design_netlist.shutil.which", return_value="/mock/slang-report"), \\
+             patch("design_netlist.subprocess.run", return_value=good):
+            design_netlist.analyze(self.root, "fake", "ports", outfile)
+        self.assertTrue(outfile.exists())
+        self.assertFalse((outfile.parent / (outfile.name + ".failed.stderr.log")).exists())
+        self.assertFalse((outfile.parent / (outfile.name + ".failed.stdout.log")).exists())
+
     def test_selected_elaborated_hierarchy_rejects_foreign_source_and_duplicates(self):
         import hashlib
         selected = {"fake.sv": hashlib.sha256(
