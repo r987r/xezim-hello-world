@@ -28,6 +28,7 @@ PCIE_EP_STATE: 0000a3 -> 0000e3 at 24140000
 PCIE_ENDPOINT_L0: original endpoint asserts link_up after receiver-detect and bidirectional PIPE traffic
 PCIE_HOST_L0: original InitLink(1) returned for action=train_link
 PCIE_SCN_DRIVER: plan={PLAN} action=train_link stage=driver_done
+PCIE_EP_STATE: 0000e3 -> 000005 at 25556000
 """
 
 class PcieLinkEvidenceTests(unittest.TestCase):
@@ -65,6 +66,24 @@ class PcieLinkEvidenceTests(unittest.TestCase):
         ):
             with self.subTest(text=value[:80]):
                 self.assertFalse(summarize(value)["qualified_digital_link_l0"])
+
+    def test_only_real_ltssm_l0_qualifies_not_early_link_up(self):
+        # OpenPCIe link_up_o can assert while LTSSM is still in Config.Idle.
+        early = GOOD.replace("PCIE_EP_STATE: 0000e3 -> 000005 at 25556000\\n", "")
+        row = summarize(early)
+        self.assertFalse(row["qualified_digital_link_l0"])
+        self.assertFalse(row["endpoint_ltssm_l0_observed"])
+        self.assertTrue(row["endpoint_l0_observed"])
+
+        # Re-entry into recovery after L0 is a real bug, not report noise.
+        retrain = GOOD + "PCIE_EP_STATE: 000005 -> 000024 at 25600000\\n"
+        row = summarize(retrain)
+        self.assertFalse(row["qualified_digital_link_l0"])
+        self.assertIn("endpoint not in actual LTSSM ST_L0", str(row["issues"]))
+
+        stable = summarize(GOOD)
+        self.assertTrue(stable["qualified_digital_link_l0"],stable["issues"])
+        self.assertTrue(stable["endpoint_ltssm_l0_observed"])
 
     def test_reuses_existing_protocol_explorer_without_fake_tlp(self):
         with TemporaryDirectory() as temp:
