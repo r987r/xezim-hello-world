@@ -24,16 +24,21 @@ class PcieCsrGenerationTests(unittest.TestCase):
         self.assertEqual(aperture["size"], 0x10000)
         rows=registers(compile_rdl(RDL), aperture)
         self.assertEqual([r["offset"] for r in rows],
-                         [0x1000,0x1004,0x1008,0x100c])
+                         [0x1000,0x1004,0x1008,0x100c,
+                          0x1010,0x1014,0x1018])
         self.assertGreaterEqual(min(r["offset"] for r in rows),0x40)
         self.assertEqual(rows[2]["fields"][0]["mask"],"0x00000001")
         self.assertEqual(rows[2]["fields"][1]["mask"],"0x00000002")
         self.assertTrue(all(x["access"] == "r" for x in rows[-1]["fields"]))
         self.assertEqual(rows[1]["address"],0x40041004)
+        self.assertEqual(rows[4]["offset"],0x1010)
+        self.assertEqual(rows[4]["fields"][0]["mask"],"0xfffffff0")
+        self.assertEqual(rows[5]["fields"][0]["mask"],"0x00000002")
         h=header(rows,aperture["base"],aperture["size"])
         self.assertIn("SOC_PCIE_EP_CTRL_BASE UINT32_C(0x40040000)",h)
         self.assertIn("SOC_PCIE_EP_CONTROL_COMMIT_MASK UINT32_C(0x00000001)",h)
         self.assertIn("SOC_PCIE_EP_STATUS_VIOLATION_MASK UINT32_C(0x00000008)",h)
+        self.assertIn("SOC_PCIE_EP_HOST_COMMAND_MEMORY_SPACE_ENABLE_MASK",h)
         self.assertNotIn("SOC_PCIE_WR_HOST_LO",h)
 
     def test_real_peakrdl_regblock_and_check_generated(self):
@@ -50,7 +55,7 @@ class PcieCsrGenerationTests(unittest.TestCase):
             self.assertFalse(data["cpu0_frontdoor_verified"])
             self.assertEqual(data["host_pcie_configuration_space"],
                              "distinct_vendor_type0_rdl")
-            self.assertEqual(len(data["registers"]),4)
+            self.assertEqual(len(data["registers"]),7)
             (out/"soc_pcie_ep_prelink_regs.h").write_text("illegal manual edit")
             self.assertEqual(execute(SOC,RDL,out,True),1)
 
