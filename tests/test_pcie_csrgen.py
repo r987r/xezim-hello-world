@@ -73,7 +73,8 @@ class PcieCsrGenerationTests(unittest.TestCase):
         original=RDL.read_text()
         cases=[
             ("bar0_aperture @0x1000","bar0_aperture @0x0000"),
-            ("bar0_target @0x1004","bar0_target @0x1010"),
+            ("bar0_target @0x1004","bar0_target @0x1020"),
+            ("host_bar0 @0x1010","host_bar0 @0x0010"),
             ("sw = r; hw = w; reset = 0;","sw = rw; hw = w; reset = 0;"),
             ("} commit[0:0];","} commit[2:2];"),
             ("} pci_bus_base[31:4];","} pci_bus_base[31:0];"),
