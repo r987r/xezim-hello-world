@@ -22,6 +22,10 @@ AXI = re.compile(r"^PCIE_EP_BAR_CFG_AXI: AW=([01]) W=([01]) AR=([01]) awaddr=([0
 EP_CPL = re.compile(r"^PCIE_EP_INTERNAL_CFG_CPL_TX_BEAT: data=([0-9a-fA-F]{8}) keep=([0-9a-fA-F]+) last=([01]) at ([0-9]+)$")
 RC_CPL = re.compile(r"^PCIE_RC_CFG_RX_CPL: tag=([0-9]+) status=([0-9]+) type=([0-9a-fA-F]{2}) bytes=([0-9]+) timestamp=([0-9]+)$")
 RC_RESULT = re.compile(r"^PCIE_RC_CFG_RESULT: tag=([0-9]+) seen=([01]) status=([0-9]+) bytes=([0-9]+) ok=([01])$")
+# A genuinely later posted Memory Write is a DIFFERENT packet, not
+# an extra final beat of the last ConfigRd0. Bound packet provenance by
+# the original host's next TLP launch, not end-of-simulation.
+HOST_MWR = re.compile(r"^PCIE_RC_BAR_MWR_TX: action=[A-Za-z0-9_.-]+ addr=[0-9a-fA-F]{8} data=[0-9a-fA-F]{8} plan=[0-9a-fA-F]{64}$")
 
 
 def check(text: str) -> dict:
@@ -46,6 +50,14 @@ def check(text: str) -> dict:
         ("Rd", 0x004, None, 0x00000002),
     ]
     positions = [(i,m) for i,s in enumerate(lines) if (m:=TX.fullmatch(s))]
+    memory_launches = [i for i,s in enumerate(lines) if HOST_MWR.fullmatch(s)]
+    # Configuration must complete before the original RC issues BAR MWr.
+    final_result = [i for i,s in enumerate(lines) if
+                    (m := RC_RESULT.fullmatch(s)) and int(m[1]) == 5]
+    if memory_launches and (len(final_result) != 1 or
+                           memory_launches[0] <= final_result[0] or
+                           len(memory_launches) != 1):
+        issues.append("BAR Memory Write launched before final host Config completion or repeated")
     if len(positions) != len(expected):
         issues.append(f"expected six real host configuration TLPs, got {len(positions)}")
     records: list[dict] = []
@@ -56,6 +68,13 @@ def check(text: str) -> dict:
         val = int(word,16) if word is not None else None
         tag = int(tag)
         stop = positions[index+1][0] if index+1 < len(positions) else len(lines)
+        # Do not attribute subsequent *independent* MemWr32 RX beats to
+        # CfgRd0 tag 5. Still fail closed if the memory transaction starts
+        # before its actual host CplD was received and checked.
+        if memory_launches:
+            later_memory = [n for n in memory_launches if n > start]
+            if later_memory:
+                stop = min(stop, later_memory[0])
         window=lines[start:stop]
         row={"index":index, "kind":"Cfg"+op+"0", "address":hex(addr),
              "host_tag":tag, "host_value":hex(val) if val is not None else None}
