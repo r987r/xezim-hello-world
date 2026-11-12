@@ -38,12 +38,35 @@ typedef struct {
   const char *plan_sha256;
 } soc_scn_driver_result_t;
 
+/* Freestanding RV32I images link no libc. Use the same exact string
+ * equality as the C11 host adapter, without an external strcmp symbol.
+ */
+static inline int soc_scn_text_equal(const char *lhs, const char *rhs) {
+  if (lhs == NULL || rhs == NULL) return 0;
+  while (*lhs && *rhs && *lhs == *rhs) { ++lhs; ++rhs; }
+  return *lhs == *rhs;
+}
+
+/* Source-selected plan SHA is 64 lowercase hexadecimal bytes. A real
+ * passive AXI monitor must STILL verify the CPU's full 256-bit witness.
+ */
+static inline int soc_scn_sha_equal(const char *selected) {
+  size_t i;
+  if (selected == NULL) return 0;
+  for (i = 0; i < 64; ++i) {
+    char c = selected[i];
+    if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) ||
+        c != SOC_SCN_PLAN_SHA256[i]) return 0;
+  }
+  return selected[64] == '\\0' && SOC_SCN_PLAN_SHA256[64] == '\\0';
+}
+
 static inline const soc_scn_driver_registration_t *
 soc_scn_driver_for(const soc_scn_driver_registration_t *registry,
                    size_t count, const char *kind) {
   size_t n;
   for (n = 0; n < count; ++n) {
-    if (strcmp(kind, registry[n].kind) == 0) return &registry[n];
+    if (soc_scn_text_equal(kind, registry[n].kind)) return &registry[n];
   }
   return NULL;
 }
@@ -57,7 +80,7 @@ static inline int soc_scn_driver_preflight(
     if (registry[i].kind == NULL || registry[i].kind[0] == '\0' ||
         registry[i].execute == NULL) return SOC_SCN_ADAPTER_CONTRACT_ERROR;
     for (j = 0; j < i; ++j)
-      if (strcmp(registry[i].kind, registry[j].kind) == 0)
+      if (soc_scn_text_equal(registry[i].kind, registry[j].kind))
         return SOC_SCN_ADAPTER_CONTRACT_ERROR;
   }
   for (i = 0; i < SOC_SCN_ACTION_COUNT; ++i) {
@@ -77,7 +100,7 @@ static inline int soc_scn_driver_preflight(
       int earlier = 0;
       if (dep == NULL) return SOC_SCN_ADAPTER_CONTRACT_ERROR;
       for (k = 0; k < i; ++k)
-        if (strcmp(soc_scn_actions[k].action_instance_id, dep) == 0) {
+        if (soc_scn_text_equal(soc_scn_actions[k].action_instance_id, dep)) {
           earlier = 1;
           break;
         }
@@ -103,8 +126,7 @@ static inline soc_scn_driver_result_t soc_scn_driver_run(
       SOC_SCN_ADAPTER_OK, 0u, 0u, UINT32_MAX, SOC_SCN_PLAN_SHA256
   };
   size_t i;
-  if (selected_plan_sha == NULL || strlen(selected_plan_sha) != 64u ||
-      strcmp(selected_plan_sha, SOC_SCN_PLAN_SHA256) != 0) {
+  if (!soc_scn_sha_equal(selected_plan_sha)) {
     result.status = SOC_SCN_ADAPTER_CONTRACT_ERROR;
     return result;
   }
