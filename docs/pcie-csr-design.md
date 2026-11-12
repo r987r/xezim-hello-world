@@ -27,9 +27,11 @@ Keep the qualified original requester mode as the regression baseline.
 
 ## What SystemRDL and PeakRDL generate
 
-- `csr/rdl/pcie_endpoint_prelink_ctrl.rdl`: single source for 4×32-bit
-  CPU-visible registers, fields, reset/access policy and one-shot
-  COMMIT/START commands, explicitly `frontdoor_only`
+- `csr/rdl/pcie_endpoint_prelink_ctrl.rdl`: single source for **seven** 32-bit
+  CPU-visible registers: four device pre-link configuration/command/status
+  registers, read-only mirrors of host BAR0 and COMMAND.MSE, and link/NoC
+  status. Includes resets, access policy, protected SW writes (`swwe`),
+  one-shot COMMIT/START commands and explicit `frontdoor_only`
 - `tools/pcie_csrgen.py`: pins the **same** compiler/regblock/C-header
   versions as `tools/csrgen.py`; generates actual synthesizable flattened
   AXI4-Lite PeakRDL `soc_pcie_ep_prelink_regblock` RTL, namespaced
