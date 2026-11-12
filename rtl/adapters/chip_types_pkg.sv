@@ -1,3 +1,4 @@
+`timescale 1ns/1ps
 `include "axi/typedef.svh"
 package chip_types_pkg;
   typedef logic [31:0] addr32_t;

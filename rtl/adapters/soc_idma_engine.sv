@@ -1,3 +1,4 @@
+`timescale 1ns/1ps
 // Reusable pinned PULP iDMA RTL engine (64-bit APB command, 64-bit AXI4).
 // Upstream RTL owns descriptor fetching, read/write backend, AXI mux.
 // All connections to the generated SoC originate in full_chip_gen.py.

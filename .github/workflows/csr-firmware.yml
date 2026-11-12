@@ -7,6 +7,8 @@ on:
       - 'csr/rdl/soc_dma_shim.rdl'
       - 'sw/dma/dma.h'
       - 'sw/dma/dma.c'
+      - 'sw/dma/tests/cpu_dma_run.c'
+      - 'sw/common/generated/soc_boot_reset_ctrl_regs.h'
       - 'sw/dma/generated/**'
       - 'tools/cpu_dma_firmware.py'
       - 'tools/csrgen.py'
@@ -15,6 +17,7 @@ on:
       - 'config/soc.yaml'
       - 'tests/test_csr_dma_firmware_elf.py'
       - 'tools/csr_dma_headers.py'
+      - 'tools/csr_firmware_footprint.py'
       - 'tests/test_csr_dma_headers.py'
       - '.github/workflows/csr-firmware.yml'
   workflow_dispatch:
@@ -35,6 +38,15 @@ jobs:
       - name: Validate real RDL data, existing C ABI and generation drift
         run: |
           python3 -m unittest tests.test_csr_dma_headers tests.test_csr_boot_abi -v
+          python3 - <<'PY'
+          from pathlib import Path
+          from tools.csrgen import compile_rdl, register_layout, header
+          generated = header(register_layout(
+              compile_rdl(Path('csr/rdl/boot_reset_ctrl.rdl'), 1), 0x1000))
+          committed = Path('sw/common/generated/soc_boot_reset_ctrl_regs.h').read_text()
+          assert generated == committed, 'boot reset/ACK C ABI drifted from RDL'
+          print('PASS reset C firmware header matches actual SystemRDL')
+          PY
           python3 tools/csr_dma_headers.py --out .tools/csr-dma
           python3 tools/csr_dma_headers.py --out .tools/csr-dma --check
           python3 - <<'PY'
@@ -65,6 +77,15 @@ jobs:
           sudo apt-get install -y clang llvm lld
       - name: Link and compare real CPU C DMA legacy-vs-generated images
         run: python3 -m unittest tests.test_csr_dma_firmware_elf -v
+      - name: Audit linked RV32I footprint and exact CSR ABI across real CPU modes
+        run: python3 tools/csr_firmware_footprint.py --out .tools/csr-firmware/footprint.json
+      - name: Retain compiled variant ABI and footprint evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: csr-firmware-footprint
+          path: .tools/csr-firmware/footprint.json
+          if-no-files-found: warn
       - name: Compile real DMA C driver in generated and legacy ABI modes
         run: |
           clang --target=riscv32-unknown-elf -march=rv32i -mabi=ilp32 -ffreestanding -std=c11 -Wall -Wextra -Werror -Oz -ffunction-sections -fdata-sections -c sw/dma/dma.c -o .tools/csr-dma/dma_generated.o

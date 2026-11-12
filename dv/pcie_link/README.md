@@ -314,3 +314,11 @@ Host and endpoint still run independently, with no software-side
 crosslink. The remaining exact-head CI must demonstrate received
 ordered sets and both genuine LTSSMs in L0; width matching alone is not
 a PCIe PASS.
+
+## Mainline qualification checkpoints
+
+- PR #228: BAR0 complete-span address protection and Icarus RTL tests have
+  merged into main; full-chip nonconfig TLP path still requires completion.
+- PR #229: independent endpoint prelink, host Type-0 BAR and behavioral
+  PHY receiver-detect RTL benches have merged; CPU0 Config-NoC remains
+  unconnected to the endpoint prelink hardware in the full SoC.

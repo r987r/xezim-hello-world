@@ -59,9 +59,21 @@ class CombinedReferenceTests(unittest.TestCase):
         actual = compare(self.lock, self.manifest)
         self.assertEqual(actual["selected_top_sha256"],
                          self.lock["required_generated_sha256"][TOP])
-        self.assertIn("not_elaboration", actual["evidence"])
+        self.assertIn("not_hardware_qualified", actual["evidence"])
         self.assertEqual(actual["checked_generated_sources"],
                          len(self.lock["required_generated_sha256"]))
+
+    def test_source_candidate_status_is_explicitly_not_hardware_qualification(self):
+        report = self.check_candidate()
+        self.assertEqual(report["evidence"],
+                         "candidate_source_digests_match_not_hardware_qualified")
+        bad = copy.deepcopy(self.lock)
+        bad["qualification_status"] = "not-verified"
+        with self.assertRaisesRegex(ReferenceError, "qualification status"):
+            validate_lock(bad)
+
+    def check_candidate(self):
+        return compare(self.lock, self.manifest)
 
     def test_independent_run_id_never_changes_selected_source_identity(self):
         other = copy.deepcopy(self.manifest)
@@ -101,7 +113,7 @@ class CombinedReferenceTests(unittest.TestCase):
         changed["source_sha256"][path] = "a" * 64
         report = compare(self.lock, changed)
         self.assertEqual(report["variable_generated_ddr_sha256"][path], "a" * 64)
-        self.assertIn("unqualified", report["evidence"])
+        self.assertIn("not_hardware_qualified", report["evidence"])
 
     def test_reject_file_missing_from_compiler_even_if_generated(self):
         bad = copy.deepcopy(self.manifest)

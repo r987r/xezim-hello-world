@@ -1,3 +1,4 @@
+`timescale 1ns/1ps
 // Real Ethernet0 queue CSR frontdoor on independent 32-bit Config NoC.
 // PULP axi_to_axi_lite performs AXI4/AXI4-Lite conversion. This target
 // only serializes independent AW/W and AR handshakes into the queue's

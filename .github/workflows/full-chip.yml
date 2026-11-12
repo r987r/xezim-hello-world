@@ -3,7 +3,7 @@ name: Full-chip coordinated CPU boot
 on:
   pull_request:
     branches: [main]
-    paths: ['config/soc.yaml', 'config/regression.yaml', 'config/interface_contracts.yaml', 'config/ip.lock.yaml', 'gen/**', 'tools/chip_bootgen.py', 'tools/full_chip_gen.py', 'tools/sim_cocotb.py', 'tools/regress.py', 'tools/axi_report.py', 'tools/fabric_config.py', 'tools/generate.py', 'tools/ip_fetch.py', 'rtl/**', '!rtl/memory/ddr4/**', 'dv/full_chip/**', 'dv/dma/**', 'dv/common/axi_trace.py', 'dv/common/dma_vectors.py', 'sw/common/**', 'sw/dma/**', 'tests/test_dma*', 'tests/test_memory_plan.py', 'tools/memory_plan.py', 'tests/test_full_chip_gen.py', 'tests/test_boot_policy.py', 'tests/test_cpu_dma_probe.py', 'tests/test_axi_agent_ownership.py', 'tests/test_rv32i_runtime.py', 'tests/test_cpu_dma_firmware.py', 'tools/cpu_dma_firmware.py', 'tests/test_regression.py', 'Bender.yml', 'Bender.lock', 'Makefile', '.github/actions/setup-bender/**', '.github/workflows/full-chip.yml']
+    paths: ['config/soc.yaml', 'config/regression.yaml', 'config/interface_contracts.yaml', 'config/ip.lock.yaml', 'gen/**', 'tools/chip_bootgen.py', 'tools/full_chip_gen.py', 'tools/sim_cocotb.py', 'tools/regress.py', 'tools/axi_report.py', 'tools/fabric_config.py', 'tools/generate.py', 'tools/ip_fetch.py', 'rtl/**', '!rtl/memory/ddr4/**', 'dv/full_chip/**', 'dv/dma/**', 'dv/common/axi_trace.py', 'dv/common/dma_vectors.py', 'sw/common/**', 'sw/dma/**', 'tests/test_dma*', 'tests/test_memory_plan.py', 'tools/memory_plan.py', 'tests/test_full_chip_gen.py', 'tests/test_boot_policy.py', 'tests/test_cpu_dma_probe.py', 'tests/test_axi_agent_ownership.py', 'tests/test_rv32i_runtime.py', 'tests/test_cpu_dma_firmware.py', 'tools/cpu_dma_firmware.py', 'tools/csr_reset_axi_evidence.py', 'tests/test_csr_reset_axi_evidence.py', 'tests/test_regression.py', 'Bender.yml', 'Bender.lock', 'Makefile', '.github/actions/setup-bender/**', '.github/workflows/full-chip.yml']
   workflow_dispatch:
 
 permissions:
@@ -35,7 +35,7 @@ jobs:
           command -v llvm-objcopy
       - name: Fast CPU ELF link, memory allocator and probe-ownership tests
         run: |
-          python3 -m unittest tests.test_rv32i_runtime tests.test_cpu_dma_firmware tests.test_cpu_dma_probe tests.test_axi_agent_ownership tests.test_dma_sw tests.test_memory_plan -v
+          python3 -m unittest tests.test_rv32i_runtime tests.test_cpu_dma_firmware tests.test_cpu_dma_probe tests.test_axi_agent_ownership tests.test_dma_sw tests.test_memory_plan tests.test_csr_reset_axi_evidence -v
   boot:
     needs: firmware-preflight
     runs-on: ubuntu-24.04

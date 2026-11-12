@@ -1,3 +1,4 @@
+`timescale 1ns/1ps
 // Ethernet0 queue-control V1: programmable RX/TX descriptor ring ownership.
 // Simulation/RTL queue control only. Not a DMA engine, SRAM, AXI-Lite bridge,
 // header parser, MAC, or completion-memory writer.

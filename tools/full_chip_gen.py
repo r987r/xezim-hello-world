@@ -107,7 +107,7 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
         raise ValueError('generated chip DMA requires pinned PULP iDMA')
     probe = probe_ports()
     cfgprobe = probe_ports('cfgprobe', addr_bits=32, data_bits=32, id_bits=1)
-    lines = ['// Generated chip boot + DMA configuration: see gen/chip/manifest.json.',
+    lines = ['`timescale 1ns/1ps', '// Generated chip boot + DMA configuration: see gen/chip/manifest.json.',
              'module soc_top #(parameter bit ProbeEnable = 0, DmaEnable = 0, DmaTestMode = 0) (input logic clk_i, rst_ni,', f'  input logic [{count-1}:0] hold_mask_i,',
               *(['  input logic ddr_init_mode_i,', '  input logic ddr_negative_mode_i,'] if real_ddr_mode else []),
              f'  output logic [{count-1}:0] dma_irq_o, dma_irq_pending_o,',
@@ -731,7 +731,7 @@ def emit_dma_tb(cfg, fw, out, *, ethernet_mode=False):
     """Dedicated reset-isolated DMA-through-NoC test (no firmware preload)."""
     probe = probe_ports('cpu0_data_bfm')
     cfgprobe = probe_ports('cpu0_config_bfm', addr_bits=32, data_bits=32, id_bits=1)
-    lines = ['// CPU0 AXI BFMs drive data/config NoC manager ports during DMA-only simulation.',
+    lines = ['`timescale 1ns/1ps', '// CPU0 AXI BFMs drive data/config NoC manager ports during DMA-only simulation.',
              '// These are cocotb testbench initiators, not PCIe; CPUs are held in reset.',
              'module full_chip_dma_tb (',
              '  input logic clk_i, rst_ni,',
