@@ -112,6 +112,18 @@ def registers(root, aperture: dict) -> list[dict]:
                 raise PcieCsrError(f"{reg.inst_name}.{field.inst_name}: unexpected reset value")
             if reg.inst_name=="control" and not field.get_property("singlepulse"):
                 raise PcieCsrError(f"{field.inst_name}: commit/start must be one-cycle pulses")
+            # A DBI alias must read the live ORIGINAL host-owned value, not
+            # introduce a second CPU-writable BAR0 or COMMAND register.
+            if reg.inst_name in ("status","host_bar0","host_command","link_status"):
+                hw=field.get_property("hw")
+                hw=getattr(hw,"name",str(hw)).lower()
+                if access!="r" or hw!="w":
+                    raise PcieCsrError(
+                        f"{reg.inst_name}.{field.inst_name}: DBI aliases/status must be CPU read-only, hardware-driven")
+            if reg.inst_name in ("bar0_aperture","bar0_target"):
+                if not field.get_property("swwe"):
+                    raise PcieCsrError(
+                        f"{reg.inst_name}.{field.inst_name}: missing hardware pre-link commit write-freeze gate")
         output.append({
             "name": reg.inst_name, "offset": address,
             "address": aperture["base"] + address,
@@ -188,6 +200,17 @@ def generate(config: Path, rdl: Path, out: Path) -> None:
         "instance":"pcie0.endpoint_prelink",
         "configuration_domain":"soc_cpu_config_noc",
         "host_pcie_configuration_space":"distinct_vendor_type0_rdl",
+        "shared_host_state_aliases":{
+            "host_type0_bar0":{"pcie_config_offset":"0x10",
+                               "cpu_dbi_offset":"0x1010",
+                               "cpu_access":"read_only",
+                               "owner":"original_host_config_tlp"},
+            "host_type0_command_mse":{"pcie_config_offset":"0x04",
+                                      "cpu_dbi_offset":"0x1014",
+                                      "cpu_access":"read_only",
+                                      "owner":"original_host_config_tlp"},
+            "storage_policy":"one_writer_original_host_config_no_independent_dbi_bar_state"
+        },
         "base":f"0x{aperture['base']:08x}",
         "window_size_bytes":aperture["size"],
         "requester_reserved_offsets":"0x0000..0x003f",
