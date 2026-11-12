@@ -11,10 +11,14 @@ import hashlib
 import json
 from pathlib import Path
 import tempfile
+import sys
 
 import yaml
 
-from tools.cpu_dma_firmware import ROOT, compile_firmware
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+from tools.cpu_dma_firmware import compile_firmware
 
 
 MODES = (
