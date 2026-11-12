@@ -12,6 +12,7 @@ on:
       - 'tools/pcie_link_report.py'
       - 'tools/pcie_csrgen.py'
       - 'csr/rdl/pcie_endpoint_prelink_ctrl.rdl'
+      - 'sw/pcie/pcie_endpoint_ctrl.h'
       - 'csr/requirements.txt'
       - 'gen/pcie/csr/**'
       - 'tools/pcie_bar0_evidence.py'
@@ -73,7 +74,8 @@ jobs:
           grep -q 'module soc_pcie_ep_prelink_regblock' \
             .tools/pcie-csr/rtl/soc_pcie_ep_prelink_regblock.sv
           cc -std=c11 -Wall -Wextra -Werror \
-            -I.tools/pcie-csr -c tests/fixtures/pcie_csr_headers_smoke.c \
+            -I.tools/pcie-csr -Isw/pcie \
+            -c tests/fixtures/pcie_csr_headers_smoke.c \
             -o .tools/pcie-csr/headers_smoke.o
       - name: Archive generated PCIe register RTL and register map for review
         if: always()
