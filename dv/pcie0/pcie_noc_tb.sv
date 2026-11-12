@@ -86,8 +86,9 @@ module pcie_noc_tb #(
   logic [15:0] authorized_write_bursts;
   logic aw_handshake, w_last_handshake;
   assign aw_handshake = m_axi_awvalid && m_axi_awready;
-  assign w_authorized = (authorized_write_bursts != 16'd0) ||
-      (aw_handshake && aw_authorized);
+  // Register AW acceptance before releasing W: no combinational
+  // AWREADY -> WVALID path and no write data preceding authorization.
+  assign w_authorized = (authorized_write_bursts != 16'd0);
   assign w_last_handshake = m_axi_wvalid && m_axi_wready && m_axi_wlast;
   // AXI W has no address: it must not enter FlooNoC before an authorized
   // AW has been accepted. Count outstanding authorized write bursts so
