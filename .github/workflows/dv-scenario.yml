@@ -94,7 +94,13 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y clang llvm lld
       - name: Link actual selected scenario CPU with two source replay seeds
-        run: python3 -m unittest tests.test_cpu_scenario_firmware_elf -v
+        env:
+          SOC_REQUIRE_SCENARIO_RV32I_TOOLS: '1'
+        run: |
+          command -v clang
+          command -v llvm-objcopy
+          command -v ld.lld
+          python3 -m unittest tests.test_cpu_scenario_firmware_elf -v
 
   scenario-real-rtl:
     name: CPU C and BFM use same plan on generated FlooNoC RTL
