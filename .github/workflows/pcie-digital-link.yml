@@ -10,6 +10,7 @@ on:
       - 'tools/pcie_link.py'
       - 'tools/pcie_cfg_overlay.py'
       - 'tools/pcie_link_report.py'
+      - 'tools/pcie_bar0_evidence.py'
       - 'tools/pcie_upstream_test_timing.py'
       - 'tools/ci_require_cocotb.py'
       - 'tools/generate.py'
@@ -21,6 +22,7 @@ on:
       - 'tests/test_pcie_cfg_overlay.py'
       - 'tests/test_pcie_cfg_decode.py'
       - 'tests/test_pcie_link_report.py'
+      - 'tests/test_pcie_bar0_evidence.py'
       - 'tests/test_pcie_mode_compatibility.py'
       - 'tests/test_pcie_upstream_test_timing.py'
       - 'config/regression.yaml'
@@ -65,7 +67,7 @@ jobs:
       - name: Prove profile swaps fail closed and checked-in generated selection agrees
         run: |
           set -euo pipefail
-          python3 -m unittest tests.test_pcie_link tests.test_ip_fetch_submodules tests.test_ci_require_cocotb tests.test_pcie_scenario tests.test_pcie_cfg_overlay tests.test_pcie_cfg_decode tests.test_pcie_link_report tests.test_pcie_mode_compatibility tests.test_pcie_upstream_test_timing -v
+          python3 -m unittest tests.test_pcie_link tests.test_ip_fetch_submodules tests.test_ci_require_cocotb tests.test_pcie_scenario tests.test_pcie_cfg_overlay tests.test_pcie_cfg_decode tests.test_pcie_link_report tests.test_pcie_bar0_evidence tests.test_pcie_mode_compatibility tests.test_pcie_upstream_test_timing -v
           python3 tools/pcie_link.py --check
           mkdir -p .tools/pcie-link
           iverilog -g2012 -s tb_pcie_pipe_x1_adapter \
@@ -485,6 +487,12 @@ jobs:
           # The BAR0 matrix lane is strictly stronger: independent host
           # ConfigRd0/CfgWr0 completions must return over the actual link.
           if [[ "${{ matrix.mode }}" == "bar0" ]]; then
+            # Independent byte-provenance check: original RC packet, actual
+            # endpoint RX payload, accepted AXI-Lite write and CplD return.
+            # Fail even when final readback happened to match due to a
+            # compensating byte swap elsewhere.
+            python3 "$root/tools/pcie_bar0_evidence.py" "$root/pcie-cross-run.log" \
+              --out "$root/.tools/pcie-link/observations"
             grep -q '^PCIE_RC_CFG_PROBE_OK: BAR0 mask=fffff000' "$root/pcie-cross-run.log"
             grep -q '^PCIE_RC_CFG_BAR_ASSIGNED: BAR0 bus=80001000' "$root/pcie-cross-run.log"
             grep -q '^PCIE_RC_CFG_MSE_ENABLED:' "$root/pcie-cross-run.log"
@@ -502,6 +510,7 @@ jobs:
             pcie-cross-run.log
             .tools/pcie-link/scenario/scenario-plan.json
             .tools/pcie-link/observations/pcie-link-evidence.json
+            .tools/pcie-link/observations/pcie-bar0-evidence.json
             .tools/pcie-link/observations/pcie-link-report.html
             .tools/pcie-link/observations/protocol-events.jsonl
             .tools/pcie-link/observations/protocol-transactions.json
