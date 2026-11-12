@@ -115,3 +115,65 @@ def layout(path: Path) -> dict:
             "rdl_sha256": data["rdl_sha256"],
             "registers": data["registers"],
             "qualification": "SystemRDL_device_protocol_definitions_not_runtime_proof"}
+
+
+def annotate_protocol(protocol: dict, evidence: dict) -> dict:
+    """Create a *published-view copy* with source-qualified MRS field decode.
+
+    Never overwrite raw CI evidence; this joins the separate device-MR
+    scoreboard only after read_evidence() verified that scoreboard against
+    the original independently captured DFI protocol commands.
+    """
+    import copy
+    if (evidence.get("kind") != "device_mrs_not_mmio" or
+            evidence.get("status") != "observed_matching_commands" or
+            evidence.get("observed_writes") != 7 or
+            evidence.get("device_storage_readback_available") is not False or
+            evidence.get("model_enforces_mr_state") is not False):
+        raise ValueError("unqualified DDR4 MR decode overlay")
+    enriched = copy.deepcopy(protocol)
+    rows = [r for r in enriched.get("records", []) if
+            r.get("source") == SOURCE and r.get("operation") == "mrs"]
+    expected = evidence["records"]
+    if len(rows) != len(expected) or len(rows) != 7:
+        raise ValueError("MRS decode overlay differs from captured event count")
+    definitions = evidence["field_definitions"]
+    for row, approved in zip(rows, expected):
+        fields = row.get("fields")
+        mr = approved["mr"]
+        if (row.get("kind") != "event" or row.get("protocol") != "dfi" or
+                row.get("status") != "observed" or
+                row.get("start_ps") != approved["time_ps"] or
+                not isinstance(fields, dict) or
+                fields.get("origin_event") != "dfi_mrs" or
+                fields.get("bank") != mr or
+                fields.get("address") != int(approved["value"], 16) or
+                fields.get("cycle") != approved["cycle"] or
+                fields.get("dfi_phase") != approved["dfi_phase"]):
+            raise ValueError("DDR4 MR decode row is not the approved pin-observed command")
+        if any(k.startswith("mr_") for k in fields):
+            raise ValueError("original captured MRS event contains untrusted MR annotations")
+        reg = definitions[str(mr)]
+        decoded = []
+        for descriptor in reg["fields"]:
+            name = descriptor["name"]
+            decoded.append({
+                "field": name,
+                "bits": (str(descriptor["msb"]) if descriptor["msb"] == descriptor["lsb"]
+                         else f"{descriptor['msb']}:{descriptor['lsb']}"),
+                "value": approved["fields"][name],
+                "description": descriptor.get("description") or
+                               "Encoding not separately qualified",
+            })
+        fields.update({
+            "mr_register": f"MR{mr}",
+            "mr_programmed_value": approved["value"],
+            "mr_expected_value": approved["expected_value"],
+            "mr_match": "MATCH",
+            "mr_programming_phase": "INIT",
+            "mr_decoded_fields": decoded,
+            "mr_rdl_sha256": evidence["rdl_sha256"],
+            "mr_decode_scope": "observed_DFI_command_not_DRAM_device_readback",
+            "mr_model_applies_settings": False,
+        })
+    return enriched
