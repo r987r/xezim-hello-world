@@ -20,7 +20,7 @@ PHASES = ("init", "run", "check")
 KINDS = frozenset(("memory.allocate", "memory.initialize", "memory.check",
                    "memory.release", "dma.configure", "dma.copy", "dma.wait_idle",
                    "event.emit", "event.wait", "pcie.link.train",
-                   "pcie.config.bar0"))
+                   "pcie.config.bar0", "pcie.memory.write"))
 NAME = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]{0,95}$")
 PATTERNS = frozenset(("constant", "counter8", "address_xor"))
 POLICIES = frozenset(("strict", "fast", "hybrid", "auto"))
@@ -288,6 +288,7 @@ def _validate_memory(ordered: list[dict], ancestors: dict[str, set[str]],
     # driver_done; only a passive checker can prove device receipt.
     emitters: dict[tuple[str, str], str] = {}
     last_pcie_train: dict[str, str] = {}
+    last_pcie_bar: dict[str, tuple[str, int, int]] = {}
     available_pcie = {s["name"] for s in config["subsystems"]
                       if s.get("type") == "peripheral" and s["name"].startswith("pcie")}
 
@@ -472,6 +473,25 @@ def _validate_memory(ordered: list[dict], ancestors: dict[str, set[str]],
                 raise ScenarioError(f"{aid}: BAR aperture or host base misaligned")
             if host_base + aperture > (1 << 32):
                 raise ScenarioError(f"{aid}: BAR address wraps 32-bit PCI bus space")
+            last_pcie_bar[link] = (aid, aperture, host_base)
+        elif kind == "pcie.memory.write":
+            # Source-selected original root-complex posted write. Plan intent
+            # is never evidence of endpoint acceptance or actual SRAM bytes.
+            if phase != "run":
+                raise ScenarioError(f"{aid}: PCIe BAR memory write is a RUN action")
+            _fields(args, {"link", "bar_index", "offset", "data_word"}, set(), aid)
+            link = _name(args["link"], f"{aid}.link")
+            if link not in available_pcie or link not in last_pcie_bar:
+                raise ScenarioError(f"{aid}: Memory Write needs host BAR enumeration")
+            parent, aperture, _base = last_pcie_bar[link]
+            if parent not in ancestors[aid]:
+                raise ScenarioError(f"{aid}: Memory Write must depend on BAR enumeration")
+            if _int(args["bar_index"], f"{aid}.bar_index", low=0, high=5) != 0:
+                raise ScenarioError(f"{aid}: only BAR0 Memory Write qualified")
+            offset = _int(args["offset"], f"{aid}.offset", high=aperture-4)
+            _int(args["data_word"], f"{aid}.data_word", high=U32)
+            if offset & 3:
+                raise ScenarioError(f"{aid}: Memory Write needs DWORD-aligned offset")
         elif kind == "memory.release":
             if phase not in ("run", "check"):
                 raise ScenarioError(f"{aid}: release outside RUN/CHECK")
