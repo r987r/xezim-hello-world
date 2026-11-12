@@ -30,12 +30,18 @@ class AxiTrace:
         catalog = json.loads((Path(__file__).resolve().parents[2]/options['catalog']).read_text())
         scope = resolve(dut, options['scope'])
         clock, reset = resolve(dut, options['clock']), resolve(dut, options['reset'])
-        # Preserve every original channel event, but do not force an OS
-        # line-flush for each boot-flash instruction fetch. The full-chip
-        # CPU scenario can have tens of thousands of such transactions.
+        # The long-running, explicitly source-selected SCN-2 CPU/BFM
+        # profiles benefit from bounded batching of instruction-fetch traffic.
+        # ALL OTHER regressions retain the historical immediate-flush behavior:
+        # their CPUs/BFMs may finish on an arbitrary outstanding AXI handshake,
+        # and a partially buffered final channel event would look incomplete
+        # to the independent post-run transaction correlator.
+        selected_batch = plan.get('target') in (
+            'chip-cpu-scenario', 'chip-dma-scenario')
         self.output = (plan_path.parent/'axi-events.jsonl').open(
-            'w', buffering=256*1024)
-        self.sink = PassiveAxiEventSink(self.output)
+            'w', buffering=256*1024 if selected_batch else 1)
+        self.sink = PassiveAxiEventSink(
+            self.output, batch_events=128 if selected_batch else 1)
         self.count = 0
         self.limit = options.get('max_events', 500000)
         self.monitors = []
