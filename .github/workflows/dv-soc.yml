@@ -62,8 +62,13 @@ jobs:
       - uses: ./.github/actions/setup-bender
         env:
           GH_TOKEN: ${{ github.token }}
-      - name: Install configuration parser
-        run: python -m pip install --disable-pip-version-check -r requirements.txt
+      - name: Install regression and pinned SystemRDL configuration dependencies
+        run: |
+          python -m pip install --disable-pip-version-check -r requirements.txt
+          # check-config discovers generated CSR/PeakRDL ABI tests; without
+          # the existing pinned requirements it fails on absent systemrdl
+          # before any real Xezim/SoC regression can execute.
+          python -m pip install --disable-pip-version-check -r csr/requirements.txt
       - name: Install pinned upstream FlooGen (no simulator rebuild)
         run: |
           set -euo pipefail
