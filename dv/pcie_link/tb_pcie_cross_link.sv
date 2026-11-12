@@ -6,6 +6,7 @@ module test #(
   // This accelerates LTSSM timers only; it never drives link_up.
   parameter bit SIM_FORCE_FAST_LTSSM = 1'b0,
   parameter bit PARTNER_PRESENT = 1'b1,
+  parameter bit VERIFY_MEM_INGRESS = 1'b0,
   parameter integer MAX_PIPE_CYCLES = 100000
 );
   logic symbol_clk = 0;
@@ -212,6 +213,32 @@ module test #(
     .m_tlp_axis_tvalid(ep_rx_tlp_valid), .m_tlp_axis_tlast(ep_rx_tlp_last),
     .m_tlp_axis_tuser(ep_rx_tlp_user), .m_tlp_axis_tready(1'b0)
   );
+
+  // Original endpoint non-config TLP interface is deliberately NOT accepted
+  // until real TLP/AXI/FlooNoC bridge is physically connected. Observe
+  // valid under backpressure; no false posted-write/NoC PASS marker.
+  logic mem_ingress_held = 1'b0;
+  logic [31:0] mem_held_data = '0;
+  logic [3:0] mem_held_keep = '0;
+  logic mem_held_last = 1'b0;
+  always @(posedge core_clk) if (nreset && VERIFY_MEM_INGRESS) begin
+    if (ep_rx_tlp_valid && !mem_ingress_held) begin
+      if (ltssm_debug_state != 21'h005 || !host_memory_enable || !bar_committed)
+        $fatal(1, "memory ingress before real L0/MSE/commit");
+      mem_ingress_held <= 1'b1;
+      mem_held_data <= ep_rx_tlp_data;
+      mem_held_keep <= ep_rx_tlp_keep;
+      mem_held_last <= ep_rx_tlp_last;
+      $display("PCIE_EP_MEM_TLP_BACKPRESSURE: original endpoint valid ready=0 data=%08h keep=%h last=%b at %0t",
+               ep_rx_tlp_data, ep_rx_tlp_keep, ep_rx_tlp_last, $time);
+    end else if (ep_rx_tlp_valid && mem_ingress_held &&
+                (ep_rx_tlp_data !== mem_held_data ||
+                 ep_rx_tlp_keep !== mem_held_keep ||
+                 ep_rx_tlp_last !== mem_held_last))
+      $fatal(1, "original endpoint TLP changed while backpressured");
+    else if (!ep_rx_tlp_valid && mem_ingress_held)
+      $fatal(1, "original endpoint TLP valid dropped while backpressured");
+  end
 
   // Endpoint Data Link Layer diagnostics: pure reads of the original
   // OpenPCIe's real accepted PHY DLLP boundaries and FC state. Do not
