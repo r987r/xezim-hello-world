@@ -115,8 +115,8 @@ def overlay_hierarchy(path: str, source: str) -> str:
             BAR_PORTS, "PHY public BAR ports")
         source=substitute_once(
             source,
-            "       .fc_initialized_o       (fc_initialized_o),\n",
-            "       .fc_initialized_o       (fc_initialized_o),\n"+
+            "      .fc_initialized_o       (fc_initialized_o),\n",
+            "      .fc_initialized_o       (fc_initialized_o),\n"+
             BAR_BINDINGS, "PHY to DLL BAR ports")
         if source.count("SIM_FAST_LINK") < 2:
             raise ValueError("upstream LTSSM patch missing before BAR hierarchy overlay")
