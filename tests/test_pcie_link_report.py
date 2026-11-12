@@ -69,14 +69,14 @@ class PcieLinkEvidenceTests(unittest.TestCase):
 
     def test_only_real_ltssm_l0_qualifies_not_early_link_up(self):
         # OpenPCIe link_up_o can assert while LTSSM is still in Config.Idle.
-        early = GOOD.replace("PCIE_EP_STATE: 0000e3 -> 000005 at 25556000\\n", "")
+        early = GOOD.replace("PCIE_EP_STATE: 0000e3 -> 000005 at 25556000\n", "")
         row = summarize(early)
         self.assertFalse(row["qualified_digital_link_l0"])
         self.assertFalse(row["endpoint_ltssm_l0_observed"])
         self.assertTrue(row["endpoint_l0_observed"])
 
         # Re-entry into recovery after L0 is a real bug, not report noise.
-        retrain = GOOD + "PCIE_EP_STATE: 000005 -> 000024 at 25600000\\n"
+        retrain = GOOD + "PCIE_EP_STATE: 000005 -> 000024 at 25600000\n"
         row = summarize(retrain)
         self.assertFalse(row["qualified_digital_link_l0"])
         self.assertIn("endpoint not in actual LTSSM ST_L0", str(row["issues"]))
