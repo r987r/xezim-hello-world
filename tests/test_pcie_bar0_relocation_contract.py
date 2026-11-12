@@ -29,6 +29,15 @@ class PcieBarRelocationSourceTests(unittest.TestCase):
         self.assertIn("run(bar_relocate=False)",runner)
         self.assertIn("run(bar_relocate=True)",runner)
         self.assertIn("0x80001000",noc)
+        # Must not read a parameter-backed continuous RTL output in the
+        # Cocotb time-zero scheduling slot. The previously failing run had
+        # Verilator -GBAR0_RELOCATE=1 while Cocotb incorrectly selected legacy.
+        edge = noc.index("await RisingEdge(dut.clk)")
+        settle = noc.index("await Timer(1, units=\"ns\")")
+        sample = noc.index("relocated = bool(int(dut.bar0_relocation_enabled.value))")
+        self.assertLess(edge, settle)
+        self.assertLess(settle, sample)
+        self.assertIn("PCIE0_RTL_BAR_RELOCATE_SAMPLED",noc)
         self.assertIn("(0xff0,",noc)
         self.assertIn("assert bytes(got) == payload",noc)
 
