@@ -15,6 +15,7 @@ import subprocess
 SOURCES = {
     "pcie_phy.core": "283a8e4156f18368115037532dc19490a73d97bc",
     "verif/tests/test_pcie_core.py": "9592f1377c8ca42cde1dde08aa249190a4467593",
+    "verif/sequences/pcie_enumeration_seq.py": "57c6591d4936b2f795a059b8df8dbc2648667df8",
 }
 CORE_BEFORE = """  sim:
     flow: sim
@@ -33,6 +34,29 @@ CORE_AFTER = CORE_BEFORE.replace(
 TEST_BEFORE = "await with_timeout(self.test_all.start(),25000,'ns')"
 TEST_AFTER = "await with_timeout(self.test_all.start(),250000,'ns')"
 
+# The original memory regression is NOT shortened or made to pass. Only when
+# its original 10us posted-write flush times out, sample the DUT's real AXIS
+# handshake and link/FC state. This distinguishes source starvation, credit
+# backpressure and a completion dropped downstream without inventing traffic.
+ENUM_BEFORE = "                await dev_bar0.read(offset, 0, timeout=10000, timeout_unit='ns')"
+ENUM_AFTER = """                try:
+                    await dev_bar0.read(offset, 0, timeout=10000, timeout_unit='ns')
+                except Exception:
+                    dut = cocotb.top
+                    values = {}
+                    for name in ("s_tlp_axis_tvalid", "s_tlp_axis_tready",
+                                 "m_tlp_axis_tvalid", "m_tlp_axis_tready",
+                                 "fc_initialized_o", "link_up_o",
+                                 "ltssm_debug_state"):
+                        try:
+                            values[name] = int(getattr(dut, name).value)
+                        except (AttributeError, ValueError, TypeError):
+                            values[name] = "unavailable"
+                    print("PCIE_UPSTREAM_MEM_STALL: length=%d offset=%d "
+                          "posted_write_flush=TIMEOUT dut=%r" %
+                          (length, offset, values), flush=True)
+                    raise"""
+
 
 def replace_once(text: str, before: str, after: str, label: str) -> str:
     if text.count(before) != 1:
@@ -45,6 +69,8 @@ def patched(path: str, source: str) -> str:
         return replace_once(source,CORE_BEFORE,CORE_AFTER,path)
     if path == "verif/tests/test_pcie_core.py":
         return replace_once(source,TEST_BEFORE,TEST_AFTER,path)
+    if path == "verif/sequences/pcie_enumeration_seq.py":
+        return replace_once(source,ENUM_BEFORE,ENUM_AFTER,path)
     raise ValueError(f"unknown timing-source path {path}")
 
 
@@ -59,8 +85,12 @@ def apply(root:Path) -> None:
             raise ValueError(f"original upstream {rel} drift: {actual} != {expected}")
         content=patched(rel,path.read_text())
         path.write_text(content)
-        print(f"OPENPCIE_SELFTEST_TIMING: pinned {rel}: "
-              "Gen1 LTSSM 512x acceleration, 250us explicit test timeout")
+        if rel == "verif/sequences/pcie_enumeration_seq.py":
+            print("OPENPCIE_SELFTEST_STALL_PROBE: read-only AXIS/FC snapshot "
+                  "on original memory timeout, re-raise unchanged")
+        else:
+            print(f"OPENPCIE_SELFTEST_TIMING: pinned {rel}: "
+                  "Gen1 LTSSM 512x acceleration, 250us explicit test timeout")
     print("OPENPCIE_SELFTEST_TIMING: TEST-ONLY; not production or dual-sided L0 evidence")
 
 
