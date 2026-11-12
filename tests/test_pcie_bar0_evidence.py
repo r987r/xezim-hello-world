@@ -75,8 +75,8 @@ class PcieBar0EvidenceTests(unittest.TestCase):
         # A later memory payload must never become a duplicate Cfg final beat.
         log=sample()
         log+=("PCIE_RC_BAR_MWR_TX: action=write_bar0 addr=80001100 "
-              "data=a5c36e91 plan=" + "b"*64 + "\\n")
-        log+="PCIE_EP_INTERNAL_CFG_RX_BEAT: data=a5c36e91 keep=f last=1 at 9000\\n"
+              "data=a5c36e91 plan=" + "b"*64 + "\n")
+        log+="PCIE_EP_INTERNAL_CFG_RX_BEAT: data=a5c36e91 keep=f last=1 at 9000\n"
         result=check(log)
         self.assertTrue(result["qualified_over_link_bar0"],result["issues"])
         self.assertEqual(len(result["transactions"]),6)
@@ -86,7 +86,7 @@ class PcieBar0EvidenceTests(unittest.TestCase):
         early=sample().replace(
             "PCIE_RC_CFG_RESULT: tag=5 seen=1 status=0 bytes=4 ok=1",
             "PCIE_RC_BAR_MWR_TX: action=write_bar0 addr=80001100 "
-            "data=a5c36e91 plan=" + "b"*64 + "\\n"
+            "data=a5c36e91 plan=" + "b"*64 + "\n"
             "PCIE_RC_CFG_RESULT: tag=5 seen=1 status=0 bytes=4 ok=1"
         )
         self.assertFalse(check(early)["qualified_over_link_bar0"])
