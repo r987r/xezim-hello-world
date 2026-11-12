@@ -17,6 +17,12 @@ import subprocess
 
 UPSTREAM_BLOB = "1625d210addbedbe9627f22ddeddd51a36b7792e"
 SOURCE = Path("src/pcie_cfg/pcie_cfg_wrapper.sv")
+# ConfigWr0 reaches this pinned upstream decoder with its real 3-DW payload,
+# but the unmodified RTL wrongly treats only 4-DW packets as having data and
+# forwards a zero data bus to the AXI-Lite config handler. Preserve the
+# upstream dependency as a replaceable, commit-pinned simulation-only overlay.
+DECODE_SOURCE = Path("src/pcie_cfg/pcie_config_decode.sv")
+DECODE_BLOB = "6e43bdfdc51109b78251c6cd302c52093fad2838"
 
 # Original pinned source revisions. The independent LTSSM/timer patch is
 # applied to pcie_phy_top.sv earlier; check its git HEAD blob, not the
@@ -103,6 +109,73 @@ def overlay(source: str) -> str:
     return before + "  pcie_config_handler #" + rest
 
 
+def overlay_decode(source: str) -> str:
+    """Repair the ORIGINAL ConfigWr0 payload path; never inject host data.
+
+    The RX skid stream actually carries the transmitted DWORD; the pinned
+    decoder previously skipped it for 3-DW writes and forwarded all-zero data.
+    Keep ordinary reads payload-free and preserve backpressure semantics.
+    """
+    source = substitute_once(
+        source,
+        "          D.tlp_is_3dw             = '0;\\n"
+        "          D.tlp_data               = '0;\\n"
+        "          D.tlp_is_sop             = '1;",
+        "          D.tlp_is_3dw             = '0;\\n"
+        "          D.tlp_is_pd              = '0;\\n"
+        "          D.word_count             = '0;\\n"
+        "          D.tlp_data               = '0;\\n"
+        "          D.tlp_is_sop             = '1;",
+        "decoder new-TLP state reset")
+    source = substitute_once(
+        source,
+        "          if (tlp_dw0.byte0.Fmt inside {TLP_4DW_ND, TLP_4DW_WD}) begin",
+        "          if (tlp_dw0.byte0.Fmt inside {TLP_3DW_WD, TLP_4DW_WD}) begin",
+        "decoder format has-data selection")
+    source = substitute_once(
+        source,
+        "      ST_TLP_STREAM: begin\\n"
+        "        skid_axis_tready = '1;\\n"
+        "        if (s_axis_tvalid) begin\\n"
+        "          D.tlp_data[(3-Q.word_count)*32+:32] = tlp_byte_swapped;",
+        "      ST_TLP_STREAM: begin\\n"
+        "        skid_axis_tready = '1;\\n"
+        "        if (skid_axis_tvalid) begin\\n"
+        "          D.tlp_data[Q.word_count*32+:32] = tlp_byte_swapped;",
+        "decoder capture accepted payload DWORD in low bits")
+    source = substitute_once(
+        source,
+        "          if (s_axis_tlast) begin\\n"
+        "            D.tlp_is_eop = '1;",
+        "          if (skid_axis_tlast) begin\\n"
+        "            D.tlp_is_eop = '1;",
+        "decoder accepted final payload beat")
+    source = substitute_once(
+        source,
+        "      ST_TLP_SEND: begin\\n"
+        "        tlp_valid = '1;\\n"
+        "        if (tlp_ready) begin\\n"
+        "          tlp_tdata    = '0;\\n"
+        "          tlp_strb     = '0;\\n"
+        "          D.tlp_is_sop = '0;\\n"
+        "          D.tlp_is_eop = '0;\\n"
+        "          tlp_eop      = Q.tlp_is_eop;\\n"
+        "          tlp_sop      = Q.tlp_is_sop;",
+        "      ST_TLP_SEND: begin\\n"
+        "        tlp_valid = '1;\\n"
+        "        // Hold the actual accepted payload stable until the next stage\\n"
+        "        // accepts it. ConfigRd0 correctly retains a zero payload.\\n"
+        "        tlp_tdata = Q.tlp_data[DATA_WIDTH-1:0];\\n"
+        "        tlp_strb  = Q.tlp_is_pd ? '1 : '0;\\n"
+        "        tlp_eop   = Q.tlp_is_eop;\\n"
+        "        tlp_sop   = Q.tlp_is_sop;\\n"
+        "        if (tlp_ready) begin\\n"
+        "          D.tlp_is_sop = '0;\\n"
+        "          D.tlp_is_eop = '0;",
+        "decoder stable payload output")
+    return source
+
+
 def overlay_hierarchy(path: str, source: str) -> str:
     """Connect the ONE existing internal config wrapper, never a parallel TB
     wrapper. All six BAR signals cross the true PHY→DLLP→receiver boundary.
@@ -178,6 +251,21 @@ def apply(checkout: Path) -> None:
             raise ValueError(f"PCIe BAR hierarchy did not change: {rel}")
         part.write_text(after)
         print(f"OPENPCIE_BAR_HIERARCHY: {rel} real internal config path connected")
+    # The genuine endpoint receiver uses this decoder for ConfigWr0 and
+    # ConfigRd0; do not synthesize a fake AXI value in the testbench.
+    decoder_path = checkout / DECODE_SOURCE
+    if not decoder_path.is_file() or decoder_path.is_symlink():
+        raise ValueError(f"missing original OpenPCIe config decoder: {DECODE_SOURCE}")
+    original_decoder_blob = subprocess.run(
+        ["git", "-C", str(checkout), "hash-object", str(DECODE_SOURCE)],
+        check=True, text=True, capture_output=True).stdout.strip()
+    if original_decoder_blob != DECODE_BLOB:
+        raise ValueError(
+            f"OpenPCIe config decoder drift: {original_decoder_blob} != {DECODE_BLOB}")
+    before_decoder = decoder_path.read_text()
+    after_decoder = overlay_decode(before_decoder)
+    decoder_path.write_text(after_decoder)
+    print("OPENPCIE_CFG_DECODE: real accepted 3-DW ConfigWr0 payload carried to AXI-Lite WDATA")
     print("OpenPCIe BAR overlay installed in actual internal receiver (NOT BAR proof)")
 
 
