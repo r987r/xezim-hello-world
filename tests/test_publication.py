@@ -99,8 +99,6 @@ class PublicationTests(unittest.TestCase):
             evidence=root/"evidence"
             fixture(evidence)
             for i,proto in enumerate(("pcie","dfi","ethernet"),101):
-                folder=evidence/"123-1"/f"artifact-{i}"/".tools"/"device"/proto
-                folder.mkdir(parents=True)
                 data={
                     "schema_version":1,"capture_complete":True,"issues":[],
                     "run":{"commit":SHA,"dirty":False,"workflow_run_id":"123",
@@ -114,7 +112,17 @@ class PublicationTests(unittest.TestCase):
                                 "start_ps":150,"end_ps":150,"status":"observed",
                                 "id":None,"fields":{"register_index":5}}],
                 }
-                site.dump(folder/"protocol-transactions.json",data)
+                # Use a real Actions-style ZIP: selective extraction must
+                # preserve versioned captures despite ignoring simulator builds.
+                archive=io.BytesIO()
+                with zipfile.ZipFile(archive,"w") as z:
+                    z.writestr(f".tools/device/{proto}/protocol-transactions.json",
+                               json.dumps(data))
+                    z.writestr("obj_dir/huge-object.o","compiler output excluded")
+                target=evidence/"123-1"/f"artifact-{i}"
+                site.extract_archive(archive.getvalue(),target,CONFIG,
+                                     evidence_only=True)
+                self.assertFalse((target/"obj_dir/huge-object.o").exists())
             output=root/"site";output.mkdir()
             _,entries,notes=site.evidence_index(
                 evidence,output,"r987r/xezim-hello-world")
