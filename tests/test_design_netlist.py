@@ -76,7 +76,7 @@ class ExternalAdapterTests(unittest.TestCase):
         upstream = ("vendor.sv:22:8: error: unresolved physical RTL module\n"
                     + "upstream warning, not the first actual error\n" * 2000)
         bad = subprocess.CompletedProcess([], 1, "Slang stdout diagnostic\n", upstream)
-        with patch("design_netlist.shutil.which", return_value="/mock/slang-netlist"), \\
+        with patch("design_netlist.shutil.which", return_value="/mock/slang-netlist"), \
              patch("design_netlist.subprocess.run", return_value=bad):
             with self.assertRaisesRegex(ValueError, "unresolved physical RTL module"):
                 design_netlist.analyze(self.root, "fake", "netlist", outfile)
@@ -88,7 +88,7 @@ class ExternalAdapterTests(unittest.TestCase):
         # A corrected invocation must not accidentally publish or retain
         # failure diagnostics from the previous selected source contract.
         good = subprocess.CompletedProcess([], 0, '[{"path":"fake_tb"}]', "")
-        with patch("design_netlist.shutil.which", return_value="/mock/slang-report"), \\
+        with patch("design_netlist.shutil.which", return_value="/mock/slang-report"), \
              patch("design_netlist.subprocess.run", return_value=good):
             design_netlist.analyze(self.root, "fake", "ports", outfile)
         self.assertTrue(outfile.exists())
