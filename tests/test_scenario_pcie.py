@@ -35,11 +35,11 @@ class PcieScenarioContractTests(unittest.TestCase):
         self.assertEqual(len(plan["actions"]), 1)
         action = plan["actions"][0]
         self.assertEqual(action["kind"], "pcie.link.train")
-        self.assertEqual(action["phase"], "run")
+        self.assertEqual(action["phase"], "init")
         self.assertEqual(action["actor"], "host0")
         self.assertEqual(action["args"],
                          {"link": "pcie0", "lanes": 1,
-                          "generation": 1, "data_width_bits": 32})
+                          "generation": 1, "data_width_bits": 16})
         self.assertIsNone(plan["execution_evidence"])
         raw = canonical_json(plan).encode("ascii")
         digest = hashlib.sha256(raw).hexdigest()
@@ -50,7 +50,7 @@ class PcieScenarioContractTests(unittest.TestCase):
 
     def test_nonqualified_link_configs_and_phases_fail(self):
         for param, value in (
-            ("lanes", 2), ("generation", 2), ("data_width_bits", 16),
+            ("lanes", 2), ("generation", 2), ("data_width_bits", 32),
             ("link", "ethernet0"), ("link", "../pcie0")
         ):
             with self.subTest(param=param, value=value):
@@ -59,8 +59,8 @@ class PcieScenarioContractTests(unittest.TestCase):
                 with self.assertRaises(ScenarioError):
                     self.resolve(spec)
         spec = copy.deepcopy(self.source)
-        spec["actions"][0]["phase"] = "init"
-        with self.assertRaisesRegex(ScenarioError, "RUN action"):
+        spec["actions"][0]["phase"] = "run"
+        with self.assertRaisesRegex(ScenarioError, "INIT action"):
             self.resolve(spec)
 
     def test_unordered_same_link_training_fails_closed(self):
