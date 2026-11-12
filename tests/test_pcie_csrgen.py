@@ -68,7 +68,7 @@ class PcieCsrGenerationTests(unittest.TestCase):
                 with self.subTest(mutation=old):
                     self.assertIn(old,original)
                     path.write_text(original.replace(old,new,1))
-                    with self.assertRaises((PcieCsrError,ValueError,Exception)):
+                    with self.assertRaises(PcieCsrError):
                         registers(compile_rdl(path),config_aperture(SOC))
 
     def test_reject_stale_region_or_unowned_destination(self):
