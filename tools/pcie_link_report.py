@@ -43,6 +43,12 @@ def summarize(text: str) -> dict:
                    "to": dst, "time_ps": int(ps)}
             states.append(row)
             events.append(row)
+            # Pinned OpenPCIe ST_L0 is 0x005. link_up_o may assert earlier
+            # during Configuration.Idle 0x0e3 and is not proof by itself.
+            if int(dst,16) == 0x005:
+                if "endpoint_state_l0" in milestones:
+                    duplicate.append("endpoint_state_l0")
+                milestones["endpoint_state_l0"] = line_num
         match = BAR.fullmatch(line)
         if match:
             row = {"line":line_num,"kind":"device_prelink_bar_commit",
@@ -85,7 +91,8 @@ def summarize(text: str) -> dict:
                 if plan_hash is not None and m.group(1)!=plan_hash: duplicate.append("plan_sha_mismatch")
     required = ("bar_commit", "prelink_release","receiver_detect",
                 "phy_receiver_present","pipe_width","host_l0",
-                "endpoint_l0","fast_parameters","driver_issued","driver_done")
+                "endpoint_l0","endpoint_state_l0","fast_parameters",
+                "driver_issued","driver_done")
     issues = [f"missing observed {key}" for key in required if key not in milestones]
     issues += [f"duplicate or mismatched {item}" for item in sorted(set(duplicate))]
     for a,b in (("bar_commit","prelink_release"),("prelink_release","receiver_detect"),
@@ -107,8 +114,14 @@ def summarize(text: str) -> dict:
             (milestones["host_l0"]<=milestones["receiver_detect"]
              if "receiver_detect" in milestones else True)):
         issues.append("host L0 before receiver detection")
-    if "endpoint_l0" in milestones and states and milestones["endpoint_l0"]<=states[-1]["line"]:
-        issues.append("endpoint L0 trace before final observed state transition")
+    # The final 0x0e3 -> 0x005 transition is precisely what we want.
+    # A subsequent exit into Recovery or Detect must not be hidden.
+    if states and int(states[-1]["to"],16) != 0x005:
+        issues.append("endpoint not in actual LTSSM ST_L0 (0x005) at finish")
+    if ("endpoint_state_l0" in milestones and
+            "phy_receiver_present" in milestones and
+            milestones["endpoint_state_l0"] <= milestones["phy_receiver_present"]):
+        issues.append("endpoint LTSSM ST_L0 observed before receiver detection")
     return {
         "schema_version":1,"kind":"pcie_isolated_link_diagnostic",
         "source":"original_verilator_transcript",
@@ -118,6 +131,7 @@ def summarize(text: str) -> dict:
         "observed_endpoint_state_transitions":len(states),
         "host_l0_observed":"host_l0" in milestones,
         "endpoint_l0_observed":"endpoint_l0" in milestones,
+        "endpoint_ltssm_l0_observed":"endpoint_state_l0" in milestones,
         "capabilities":{
             "ltssm_digital_link":"observed" if not issues else "not_qualified",
             "host_bar_enumeration":"unmeasured",
