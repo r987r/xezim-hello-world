@@ -67,6 +67,19 @@ class ResetCsrAbiTests(unittest.TestCase):
                 with self.subTest(changed=changed), self.assertRaisesRegex(CsrError, message):
                     register_layout(root, 0x1000)
 
+    def test_production_reset_firmware_header_exact_rdl_parity(self):
+        compiled = compile_rdl(RDL, 1)
+        actual = header(register_layout(compiled, 0x1000))
+        production = ROOT / "sw/common/generated/soc_boot_reset_ctrl_regs.h"
+        self.assertTrue(production.is_file(), "missing real C reset CSR header")
+        self.assertEqual(production.read_text(), actual)
+        self.assertIn(
+            "#define SOC_BOOT_RESET_CTRL_SECONDARY_ACK_0_OFFSET UINT32_C(0x4)",
+            actual)
+        self.assertIn(
+            "#define SOC_BOOT_RESET_CTRL_CPU_RELEASE_SECONDARY_RELEASE_MASK UINT32_C(0x00000001)",
+            actual)
+
     def test_unqualified_register_aperture_rejected(self):
         with self.assertRaisesRegex(CsrError, "exceeds SoC CSR aperture"):
             register_layout(compile_rdl(RDL, 1), 4)
