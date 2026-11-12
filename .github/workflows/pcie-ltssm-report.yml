@@ -1,0 +1,46 @@
+name: PCIe independent host and endpoint LTSSM report
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'tools/pcie_link_report.py'
+      - 'tests/test_pcie_link_report.py'
+      - '.github/workflows/pcie-ltssm-report.yml'
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  verified-report:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Install base protocol report runtime
+        run: python3 -m pip install -r requirements.txt
+      - name: Verify independent original host/device stage evidence
+        run: |
+          set -euo pipefail
+          python3 -m unittest tests.test_pcie_link_report -v
+          python3 - <<'PY'
+          from pathlib import Path
+          from tests.test_pcie_link_report import GOOD
+          from tools.pcie_link_report import summarize, render, render_actions_summary
+          data=summarize(GOOD)
+          assert data['qualified_digital_link_l0'],data['issues']
+          assert data['host_stage_clock']=='not_emitted_by_upstream_model'
+          assert data['observed_host_ltssm_stages']>=11
+          assert data['endpoint_ltssm_l0_observed']
+          assert 'Root Complex / host LTSSM' in render(data)
+          assert 'Host stage (original C model)' in render_actions_summary(data)
+          print("PASS: isolated LTSSM renderer fixture and negative source-contract tests")
+          PY
+      - name: Publish only source-contract test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pcie-ltssm-renderer-unit-${{ github.run_id }}
+          path: |
+            tools/pcie_link_report.py
+            tests/test_pcie_link_report.py
+          if-no-files-found: error
