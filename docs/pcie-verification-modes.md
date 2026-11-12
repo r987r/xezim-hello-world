@@ -223,11 +223,22 @@ full-chip traffic/byte scoreboards remain separate P0 gates.
 
 ## Independent Gen1 Data Link InitFC qualification
 
-A genuine host `InitFC1/InitFC2` handshake now passes when original pcievhost
-Gen1 scrambling is enabled (only in the `bar0` CI lane), matching the
-OpenPCIe PHY's enabled descrambler. The original L0-only lane keeps its
-prior host setting. No TS1/TS2, DLLP, FC credit, L0 or configuration
-completion is fabricated.
+A genuine host `InitFC1/InitFC2` handshake passes when original pcievhost
+Gen1 scrambling is enabled, matching OpenPCIe's active descrambler.
+**Both** real-link CI lanes now enable this original host PHY behavior.
+The previous L0-only smoke disabled scrambling and returned immediately
+after `link_up_o` while the endpoint was still in Configuration.Idle;
+when the simulation continued, it entered Recovery rather than true
+`ST_L0 (0x005)`. Our new fail-closed reporter exposed that issue.
+The host independently sends a fixed extra idle interval and both
+real-link modes must observe the genuine endpoint `0x005` state. This
+does not read any device readiness flag or force an LTSSM state.
+Normal scrambling is not a byte-swap fix and does not alter BAR data.
+PCIe PHY documentation identifies no-scrambling as a diagnostic mode,
+not for an operating link:
+https://docs.amd.com/r/en-US/pg054-7series-pcie/Advanced-Physical-Layer
+
+No TS1/TS2, DLLP, FC credit, L0 or configuration completion is fabricated.
 
 The initial real host ConfigWr0 BAR0 probe received a successful completion
 on [CI run 43123758732](https://github.com/r987r/xezim-hello-world/actions/runs/43123758732).
