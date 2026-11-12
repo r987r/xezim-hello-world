@@ -36,7 +36,7 @@ FILES={'result.json','plan.json','sources.f','simulation.log','build.log','resul
        'axi-transactions.json','axi-events.jsonl',
        'protocol-transactions.json','protocol-events.jsonl','memory-operations.json',
        'test-flow.json','test-flow-events.jsonl','traffic-latency.json',
-       'ddr-native-csr-map.json','ddr4_fullchip_evidence.json',
+       'ddr-native-csr-map.json','ddr4_fullchip_evidence.json','ddr4_mrs_evidence.json',
        'planned-flow.json','memory-lifetimes.json','scenario-execution.json','scenario-plan.json',
        'variant-connectivity.json','variant-topology.json','variant-chip-manifest.json',
        'selected-test-plan.json','runner-events.json','selected-flow-correlation.json',
@@ -757,6 +757,17 @@ def evidence_index(evidence,output,repository):
             trace=json.loads(trace_path.read_text()) if trace_path.exists() else None
             protocol_path=source_dir/'protocol-transactions.json'
             protocol_data=json.loads(protocol_path.read_text()) if protocol_path.exists() else None
+            # Trust MRS only if this exact artifact's independent scoreboard
+            # agrees with its separately captured DFI protocol events.
+            mrs_path=source_dir/'ddr4_mrs_evidence.json'
+            mr_view=None
+            if mrs_path.is_file():
+                if not protocol_path.is_file() or result.get('passed') is not True:
+                    raise ValueError('unqualified DDR4 MR evidence without passing protocol capture')
+                from ddr_mr_report import read_evidence
+                mr_view=read_evidence(mrs_path,protocol_path)
+                if target not in ('chip-ddr4-real','chip-ethernet-ddr-pcie'):
+                    raise ValueError('DDR4 MRS artifact belongs to an unrelated target')
             flow_path=source_dir/'test-flow.json'
             flow_data=json.loads(flow_path.read_text()) if flow_path.exists() else None
             # Runner dispatch is a separate factual command-bound envelope, not
@@ -925,6 +936,8 @@ def evidence_index(evidence,output,repository):
                    'variant_connectivity':variant_view is not None,
                    'variant_chip_profile':variant_view.get('chip_variant') if variant_view else None,
                    'memory_lifetimes':memory_view is not None,
+                   'ddr_mrs_status':mr_view['status'] if mr_view else 'unmeasured',
+                   'ddr_mrs_writes':mr_view['observed_writes'] if mr_view else None,
                    'selected_plan_sha256':runtime_selected['plan_sha256'] if runtime_selected else None,
                    'runtime_adapter':runtime_selected['adapter'] if runtime_selected else 'historical_unrecorded',
                    'planned_flow_status':snapshot_status,'planned_flow_sha256':declared_hash,
@@ -982,6 +995,8 @@ def evidence_index(evidence,output,repository):
                 if (fabric_matches.get(tested_sha)
                         and re.fullmatch(r'[a-f0-9]{40}',fabric_matches[tested_sha])):
                     entry['verified_fabric_source_sha']=fabric_matches[tested_sha]
+                if mr_view is not None:
+                    trace['sections']['ddr_mrs']=mr_view
                 render_report(trace,destination/'report.html')
                 if memory_view is not None:
                     from scenario_memory_trace import embed_in_run_report
@@ -1135,6 +1150,36 @@ def markdown_pages(output,repository,sha):
     return listing
 
 
+def ddr_mr_views(entries, output):
+    """Source-proven per-test DRAM MR writes; never infer from a CSR map.
+
+    A previous successful run must retain both its exact evidence file and
+    passive DFI protocol capture. Missing/old artifacts stay unavailable.
+    """
+    from ddr_mr_report import read_evidence
+    views=[]
+    for item in entries:
+        if (item.get('target') not in ('chip-ddr4-real','chip-ethernet-ddr-pcie')
+                or item.get('passed') is not True or not item.get('axi')):
+            continue
+        folder=output/Path(item['path']).parent
+        raw=folder/'ddr4_mrs_evidence.json'
+        protocol=folder/'protocol-transactions.json'
+        if not raw.is_file() or not protocol.is_file():
+            continue
+        evidence=read_evidence(raw,protocol)
+        views.append({
+            'label': item['target']+' · CI '+str(item['run_id']),
+            'target':item['target'],
+            'run_id':item['run_id'],
+            'source_sha':item['source_sha'],
+            'report_href':item['path'],
+            'evidence_href':(Path(item['path']).parent/'ddr4_mrs_evidence.json').as_posix(),
+            'evidence':evidence,
+        })
+    return views[:16]
+
+
 def ddr_csr_views(entries, output):
     """Only source-verified, successful DDR run JSON can supply DDR CSR rows.
 
@@ -1214,6 +1259,11 @@ def build(output,evidence,repository,sha,config):
     dump(output/'data/test-intents.json',flow_intents)
     ddr_views = ddr_csr_views(entries, output)
     dump(output/'data/ddr-csr-verified-runs.json', ddr_views)
+    from ddr_mr_report import layout as mr_layout
+    mr_catalog=mr_layout(ROOT/'csr/rdl/ddr4_mode_registers.rdl')
+    dump(output/'data/ddr4-mr-definitions.json', mr_catalog)
+    ddr_mr_evidence=ddr_mr_views(entries, output)
+    dump(output/'data/ddr4-mr-verified-runs.json', ddr_mr_evidence)
     (output/'data/soc-data-memories.rdl').write_text(address_map.memory_rdl_view(address_catalog))
     if csr_ready:
         for filename in ('csr-map.json','soc_csr_bases.h','soc_boot_reset_ctrl_regs.h','boot_reset_ctrl_types.h'):
@@ -1304,6 +1354,10 @@ def build(output,evidence,repository,sha,config):
             body=body.replace('__ADDRESS_MAP_DATA__',map_json)
             ddr_json = json.dumps(ddr_views,separators=(',',':')).replace('<','\\u003c')
             body=body.replace('__DDR_CSR_VARIANTS__',ddr_json)
+            mr_json=json.dumps(mr_catalog,separators=(',',':')).replace('<','\\u003c')
+            body=body.replace('__DDR_MR_CATALOG__',mr_json)
+            mr_views_json=json.dumps(ddr_mr_evidence,separators=(',',':')).replace('<','\\u003c')
+            body=body.replace('__DDR_MR_RUNS__',mr_views_json)
             details=('<a href="data/csr-map.json">Generated CSR metadata</a> · '
                      '<a href="data/soc_boot_reset_ctrl_regs.h">Reset CSR C header</a> · '
                      '<a href="data/soc_dma_shim_regs.h">Production DMA CSR C header</a> · '
