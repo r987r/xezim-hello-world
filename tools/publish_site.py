@@ -690,6 +690,110 @@ def protocol_link_catalog(protocol_data, *, preview_per_source=12):
             'sources': list(indexed.values())} if indexed else None
 
 
+
+def append_capture_only_entries(folder, run, verified_shas, output, entries, notes):
+    """Publish authentic protocol JSON without inventing a canonical result.
+
+    A source-selected stand-alone PCIe, DDR/DFI or future monitor need not
+    manufacture a full-chip result.json. The observed-only status is *never*
+    a PASS and cannot contribute to AXI/Fabric or DDR qualification.
+    """
+    for trace_file in sorted(folder.glob("artifact-*/**/protocol-transactions.json")):
+        source_dir=trace_file.parent
+        if (source_dir/"result.json").is_file():
+            continue  # The canonical regression collector already owns it.
+        try:
+            payload=json.loads(trace_file.read_text())
+            if (not isinstance(payload,dict) or payload.get("schema_version")!=1
+                    or payload.get("capture_complete") is not True
+                    or payload.get("issues") != []):
+                raise ValueError("incomplete, failed, or unsupported protocol capture")
+            capture_run=payload.get("run")
+            if not isinstance(capture_run,dict):
+                raise ValueError("capture-only trace lacks original run metadata")
+            target=capture_run.get("target")
+            if not isinstance(target,str) or not re.fullmatch(r"[a-z][a-z0-9-]*",target):
+                raise ValueError("capture-only protocol target is invalid")
+            sha=capture_run.get("commit")
+            if (sha not in (verified_shas | {run["head_sha"]})
+                    or capture_run.get("dirty") is not False
+                    or str(capture_run.get("workflow_run_id"))!=str(run["id"])
+                    or str(capture_run.get("workflow_attempt"))!=str(run.get("run_attempt",1))):
+                raise ValueError("capture-only tested source/run/attempt is unverified")
+            source_rows=payload.get("sources")
+            records=payload.get("records")
+            if (not isinstance(source_rows,list) or not source_rows
+                    or not isinstance(records,list) or not records):
+                raise ValueError("capture-only protocol monitor inventory is empty")
+            sources={}
+            for source in source_rows:
+                if (not isinstance(source,dict) or
+                        not isinstance(source.get("id"),str) or
+                        not isinstance(source.get("protocol"),str) or
+                        source["id"] in sources):
+                    raise ValueError("invalid or duplicated protocol source")
+                sources[source["id"]]=source["protocol"]
+            for record in records:
+                if (not isinstance(record,dict) or
+                        record.get("source") not in sources or
+                        record.get("protocol")!=sources[record["source"]] or
+                        record.get("kind") not in ("transaction","event") or
+                        record.get("status") not in ("complete","observed","error") or
+                        type(record.get("start_ps")) is not int or
+                        type(record.get("end_ps")) is not int or
+                        record["end_ps"] < record["start_ps"]):
+                    raise ValueError("invalid capture-only protocol record or timing")
+                if ((record["kind"]=="event") !=
+                        (record["status"]=="observed")):
+                    raise ValueError("capture-only event/transaction status mismatch")
+            relative=(Path("runs")/"capture-only"/
+                      (str(run["id"])+"-"+str(run.get("run_attempt",1)))/
+                      source_dir.relative_to(folder))
+            destination=output/relative
+            if destination.exists():
+                raise ValueError("duplicate capture-only publication directory")
+            destination.mkdir(parents=True)
+            assets=[]
+            for item in sorted(source_dir.iterdir()):
+                if item.is_file() and item.name in FILES:
+                    shutil.copyfile(item,destination/item.name)
+                    assets.append(item.name)
+            render_protocol_report(payload,destination/"protocols.html")
+            # The source monitor is observed, not a conventional regression.
+            # Even a successful workflow with other green jobs cannot upgrade
+            # these standalone observations to a full-chip PASS.
+            status=("CI "+str(run.get("conclusion") or "unfinished")).upper()
+            html=(destination/"protocols.html").read_text()
+            notice=('<p class="warning"><strong>ISOLATED CAPTURE ONLY — NOT A '
+                    'FULL-CHIP REGRESSION PASS.</strong> Source-verifiable '
+                    'protocol observations from '+escape(target)+'. '
+                    'Workflow outcome: '+escape(status)+'. No canonical '
+                    'result.json, memory scoreboard or cross-domain path '
+                    'latency is implied.</p>')
+            (destination/"report.html").write_text(
+                html.replace("<main>","<main>"+notice,1))
+            entry={
+                "target":target, "suite":"protocol",
+                "evidence_only":True, "evidence_scope":"isolated_observation_only",
+                "workflow_conclusion":run.get("conclusion"),
+                "passed":None, "expected_failure":None,
+                "engine":capture_run.get("engine","standalone"),
+                "run_id":run["id"], "attempt":run.get("run_attempt",1),
+                "source_sha":sha, "recorded_at":run["created_at"],
+                "workflow":run["label"], "workflow_url":run["html_url"],
+                "path":str(relative/"report.html"), "assets":assets,
+                "axi":False, "protocols":sorted(set(sources.values())),
+                "protocol_observations":len(records),
+                "protocol_links":protocol_link_catalog(payload),
+                "flow_steps":0, "identity_status":"capture_only_no_result_json",
+            }
+            entries.append(entry)
+        except (ValueError, TypeError, KeyError, OSError, UnicodeError) as exc:
+            notes.append(
+                f"Run {run['id']}: omitted unverified standalone "
+                f"protocol archive {trace_file.relative_to(folder)} ({exc})")
+
+
 def evidence_index(evidence,output,repository):
     runs,entries,notes=[],[],[]
     if (evidence/'collection.json').exists():notes=json.loads((evidence/'collection.json').read_text()).get('notes',[])
@@ -1083,6 +1187,7 @@ def evidence_index(evidence,output,repository):
                                'Legacy report URL retained for historical compatibility.</p>')
                     report_html.write_text(html.replace('<main>','<main>'+note+render_intended_flow(intended),1))
             entries.append(entry)
+        append_capture_only_entries(file.parent,run,verified_shas,output,entries,notes)
     runs.sort(key=lambda r:r['created_at'],reverse=True)
     entries.sort(key=lambda r:r['recorded_at'],reverse=True)
     return runs,entries,notes
