@@ -8,6 +8,9 @@ on:
       - 'config/**'
       - 'tools/idma_rtl.py'
       - 'tools/regress.py'
+      - 'tools/run_workspace.py'
+      - 'tools/test_identity.py'
+      - 'tests/test_run_workspace.py'
       - 'tools/sim_cocotb.py'
       - 'dv/dma/**'
       - 'dv/common/dma_vectors.py'
@@ -56,15 +59,34 @@ jobs:
           python3 tools/dma_vectors.py --profile dma_only --count 100 --length 64
       - name: Generate pinned upstream iDMA backend and register RTL
         run: python3 tools/idma_rtl.py
+      - name: Verify canonical Cocotb identity and one-writer negative contracts
+        run: python3 -m unittest tests.test_run_workspace tests.test_regression -v
       - name: Run real iDMA descriptor fetch/AXI payload/IRQ regression
         run: python3 tools/regress.py dma
-      - name: Retain full source list, build, waveform metadata, logs and golden vectors
+      - name: Require original Cocotb XML, runner and selected RTL archive evidence
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          import yaml
+          from tools.run_workspace import require_completed_cocotb_run
+          selected = yaml.safe_load(Path('config/regression.yaml').read_text())['tests']['dma-rtl']
+          proof = require_completed_cocotb_run(
+              Path('.tools/runs'), 'dma-rtl', selected)
+          out = Path('.tools/canonical-dma-proof.json')
+          out.write_text(json.dumps(proof, indent=2, sort_keys=True) + '\n')
+          print(proof)
+          assert not Path('.tools/regression/dma-rtl').exists(), (
+              'legacy producer remains active; migration incomplete')
+          PY
+      - name: Retain one real canonical Verilator run, sources and golden vectors
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: dma-rtl-results
+          name: dma-canonical-verilator-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            .tools/regression/dma-rtl/
+            .tools/runs/verilator/
+            .tools/canonical-dma-proof.json
             .tools/dma-vectors/
           include-hidden-files: true
-          if-no-files-found: warn
+          if-no-files-found: error
