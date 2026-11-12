@@ -66,12 +66,27 @@ def run(*, bar_relocate: bool = False):
             errors = [line for line in lines if line.startswith(("%Error", "%Warning"))]
             print("PCIe NoC build diagnostics:", *(errors[:60] or lines[-60:]), sep="\n", file=sys.stderr, flush=True)
         raise
-    result = simulator.test(
-        hdl_toplevel="pcie_noc_tb", hdl_toplevel_lang="verilog",
-        test_module="noc_smoke", test_dir=ROOT / "dv/pcie0",
-        results_xml=str(output / "results.xml"),
-        log_file=output / "simulation.log",
-    )
+    # A $fatal or assertion in Verilator terminates with SIGABRT before
+    # Cocotb can write results.xml. Preserve and surface the actual
+    # simulator stderr/log rather than an unhelpful generic exit -6.
+    try:
+        result = simulator.test(
+            hdl_toplevel="pcie_noc_tb", hdl_toplevel_lang="verilog",
+            test_module="noc_smoke", test_dir=ROOT / "dv/pcie0",
+            results_xml=str(output / "results.xml"),
+            log_file=output / "simulation.log",
+        )
+    except Exception:
+        transcript = output / "simulation.log"
+        if transcript.is_file():
+            lines = transcript.read_text(errors="replace").splitlines()
+            print(f"PCIe {'relocated' if bar_relocate else 'legacy'} "
+                  "NoC RTL simulator aborted; last actual simulator lines:",
+                  *lines[-100:], sep="\n", file=sys.stderr, flush=True)
+        else:
+            print("PCIe NoC RTL simulator aborted before writing simulation.log",
+                  file=sys.stderr, flush=True)
+        raise
     if not Path(result).is_file():
         transcript = output / "simulation.log"
         details = transcript.read_text(errors="replace") if transcript.exists() else "(no simulation log)"
