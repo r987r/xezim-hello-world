@@ -118,13 +118,13 @@ def overlay_decode(source: str) -> str:
     """
     source = substitute_once(
         source,
-        "          D.tlp_is_3dw             = '0;\\n"
-        "          D.tlp_data               = '0;\\n"
+        "          D.tlp_is_3dw             = '0;\n"
+        "          D.tlp_data               = '0;\n"
         "          D.tlp_is_sop             = '1;",
-        "          D.tlp_is_3dw             = '0;\\n"
-        "          D.tlp_is_pd              = '0;\\n"
-        "          D.word_count             = '0;\\n"
-        "          D.tlp_data               = '0;\\n"
+        "          D.tlp_is_3dw             = '0;\n"
+        "          D.tlp_is_pd              = '0;\n"
+        "          D.word_count             = '0;\n"
+        "          D.tlp_data               = '0;\n"
         "          D.tlp_is_sop             = '1;",
         "decoder new-TLP state reset")
     source = substitute_once(
@@ -134,43 +134,43 @@ def overlay_decode(source: str) -> str:
         "decoder format has-data selection")
     source = substitute_once(
         source,
-        "      ST_TLP_STREAM: begin\\n"
-        "        skid_axis_tready = '1;\\n"
-        "        if (s_axis_tvalid) begin\\n"
+        "      ST_TLP_STREAM: begin\n"
+        "        skid_axis_tready = '1;\n"
+        "        if (s_axis_tvalid) begin\n"
         "          D.tlp_data[(3-Q.word_count)*32+:32] = tlp_byte_swapped;",
-        "      ST_TLP_STREAM: begin\\n"
-        "        skid_axis_tready = '1;\\n"
-        "        if (skid_axis_tvalid) begin\\n"
+        "      ST_TLP_STREAM: begin\n"
+        "        skid_axis_tready = '1;\n"
+        "        if (skid_axis_tvalid) begin\n"
         "          D.tlp_data[Q.word_count*32+:32] = tlp_byte_swapped;",
         "decoder capture accepted payload DWORD in low bits")
     source = substitute_once(
         source,
-        "          if (s_axis_tlast) begin\\n"
+        "          if (s_axis_tlast) begin\n"
         "            D.tlp_is_eop = '1;",
-        "          if (skid_axis_tlast) begin\\n"
+        "          if (skid_axis_tlast) begin\n"
         "            D.tlp_is_eop = '1;",
         "decoder accepted final payload beat")
     source = substitute_once(
         source,
-        "      ST_TLP_SEND: begin\\n"
-        "        tlp_valid = '1;\\n"
-        "        if (tlp_ready) begin\\n"
-        "          tlp_tdata    = '0;\\n"
-        "          tlp_strb     = '0;\\n"
-        "          D.tlp_is_sop = '0;\\n"
-        "          D.tlp_is_eop = '0;\\n"
-        "          tlp_eop      = Q.tlp_is_eop;\\n"
+        "      ST_TLP_SEND: begin\n"
+        "        tlp_valid = '1;\n"
+        "        if (tlp_ready) begin\n"
+        "          tlp_tdata    = '0;\n"
+        "          tlp_strb     = '0;\n"
+        "          D.tlp_is_sop = '0;\n"
+        "          D.tlp_is_eop = '0;\n"
+        "          tlp_eop      = Q.tlp_is_eop;\n"
         "          tlp_sop      = Q.tlp_is_sop;",
-        "      ST_TLP_SEND: begin\\n"
-        "        tlp_valid = '1;\\n"
-        "        // Hold the actual accepted payload stable until the next stage\\n"
-        "        // accepts it. ConfigRd0 correctly retains a zero payload.\\n"
-        "        tlp_tdata = Q.tlp_data[DATA_WIDTH-1:0];\\n"
-        "        tlp_strb  = Q.tlp_is_pd ? '1 : '0;\\n"
-        "        tlp_eop   = Q.tlp_is_eop;\\n"
-        "        tlp_sop   = Q.tlp_is_sop;\\n"
-        "        if (tlp_ready) begin\\n"
-        "          D.tlp_is_sop = '0;\\n"
+        "      ST_TLP_SEND: begin\n"
+        "        tlp_valid = '1;\n"
+        "        // Hold the actual accepted payload stable until the next stage\n"
+        "        // accepts it. ConfigRd0 correctly retains a zero payload.\n"
+        "        tlp_tdata = Q.tlp_data[DATA_WIDTH-1:0];\n"
+        "        tlp_strb  = Q.tlp_is_pd ? '1 : '0;\n"
+        "        tlp_eop   = Q.tlp_is_eop;\n"
+        "        tlp_sop   = Q.tlp_is_sop;\n"
+        "        if (tlp_ready) begin\n"
+        "          D.tlp_is_sop = '0;\n"
         "          D.tlp_is_eop = '0;",
         "decoder stable payload output")
     return source
