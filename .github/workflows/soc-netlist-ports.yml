@@ -73,6 +73,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 tools/design_netlist.py --profile chip-boot --mode netlist \
+            --hardware-top soc_top \
             --slang-netlist "$PWD/.tools/slang-netlist-build/tools/driver/slang-netlist" \
             --output .tools/connect46/chip-boot-netlist.json
           python3 - <<'PY'
@@ -83,12 +84,17 @@ jobs:
           meta=json.loads(graph.with_name(graph.name+'.meta.json').read_text())
           _,nodes,_=read_graph(graph)
           ports=enumerate_ports(nodes)
-          if len(ports) < 20 or not any(x['path'].startswith('full_chip_tb') for x in ports):
+          if (meta.get('elaborated_top') != 'soc_top'
+              or meta.get('selected_simulation_top') != 'full_chip_tb'
+              or not meta.get('hardware_only_elaboration')
+              or len(ports) < 20
+              or not any(x['path'].startswith('soc_top.') for x in ports)):
               raise RuntimeError('selected real full-chip elaboration lacked required Port inventory')
           result={
               'schema_version':1,
               'profile':'chip-boot',
-              'top':meta['top'],
+              'top':meta['elaborated_top'],
+              'selected_simulation_top':meta['selected_simulation_top'],
               'source_provenance':{
                   'filelist_sha256':meta['filelist_sha256'],
                   'plan_sha256':meta['plan_sha256'],
