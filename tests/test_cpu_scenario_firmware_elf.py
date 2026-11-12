@@ -54,7 +54,7 @@ class SelectedCpuScenarioFirmwareTests(unittest.TestCase):
                                  contract["plan_witness_phys"] + 32)
                 elf = (out / "cpu_dma.elf").read_bytes()
                 binary = (out / "cpu_dma.bin").read_bytes()
-                self.assertEqual(elf[:6], b"\\x7fELF\\x01\\x01")
+                self.assertEqual(elf[:6], bytes((0x7f, 0x45, 0x4c, 0x46, 1, 1)))
                 self.assertTrue(binary)
                 self.assertEqual(binary, result["data"])
                 self.assertEqual(hashlib.sha256(binary).hexdigest(),
