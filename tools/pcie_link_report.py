@@ -322,6 +322,42 @@ h3{font-size:1rem;margin:.3rem 0 1rem}
 )
 
 
+
+def render_actions_summary(data:dict) -> str:
+    """GitHub Actions Summary: browser-readable evidence, no downloads."""
+    outcome = "L0 observed" if data["qualified_digital_link_l0"] else "UNQUALIFIED"
+    lines = ["## PCIe Gen1 x1 — independent host/device LTSSM",
+             f"**{outcome}** · original Verilator transcript", "",
+             "The host and device run independently and exchange real PIPE words. "
+             "Original pcievhost logs LTSSM stages without simulator times. "
+             "OpenPCIe logs its RTL states with simulator timestamps. "
+             "Endpoint link_up may assert before the final ST_L0.", "",
+             "| Host stage (original C model) | Source log line | Simulator timestamp |",
+             "|---|---:|---|"]
+    for e in data["events"]:
+        if e["kind"]=="host_ltssm":
+            lines.append(f'| {e["stage"]} | {e["line"]} | Not emitted |')
+    lines.extend(["", "| Endpoint stage (original RTL) | Source log line | Simulation ns |",
+                  "|---|---:|---:|"])
+    for e in data["events"]:
+        if e["kind"]=="endpoint_ltssm":
+            lines.append(f'| {e["stage"]} | {e["line"]} | {e["time_ps"]/1000:.3f} |')
+    samples=data.get("pipe_traffic_samples",{})
+    lines.extend(["",
+        f"**Observed PIPE samples:** Host to Device {samples.get('host_to_device',0)}; "
+        f"Device to Host {samples.get('device_to_host',0)}.",
+        f"**Original host InitLink returned:** {data['host_l0_observed']} · "
+        f"**Endpoint actual ST_L0 observed:** {data['endpoint_ltssm_l0_observed']}.",
+        "",
+        "**Scope:** isolated Gen1 digital link, not full-chip boot, BAR memory "
+        "transfer, NoC SRAM writes or PCIe read completion. The CI artifact "
+        "pcie-link-report.html includes the responsive two-lane view and observed "
+        "PIPE words.", ""])
+    if data["issues"]:
+        lines.extend(["### Qualification failures",*("- "+v for v in data["issues"]),""])
+    return "\n".join(lines)
+
+
 def export_shared_protocol_timeline(data:dict, output:Path) -> dict:
     """Reuse the EXISTING protocol event exporter and HTML explorer.
 
@@ -365,6 +401,7 @@ def main() -> int:
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument("log",type=Path)
     p.add_argument("--out",type=Path,required=True)
+    p.add_argument("--github-summary",type=Path,help="Append browser-visible Actions summary")
     args=p.parse_args()
     if not args.log.is_file():
         p.error("simulation log not found")
@@ -372,6 +409,9 @@ def main() -> int:
     args.out.mkdir(parents=True,exist_ok=True)
     (args.out/"pcie-link-evidence.json").write_text(json.dumps(data,indent=2)+"\n")
     (args.out/"pcie-link-report.html").write_text(render(data))
+    if args.github_summary:
+        with args.github_summary.open("a",encoding="utf-8") as handle:
+            handle.write(render_actions_summary(data))
     # Same passive-protocol explorer renderer as our existing TLP/AXI reports.
     export_shared_protocol_timeline(data,args.out)
     print(f"{'PASS' if data['qualified_digital_link_l0'] else 'FAIL'} isolated PCIe L0 diagnostic: "
