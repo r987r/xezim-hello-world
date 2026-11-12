@@ -20,8 +20,12 @@ ROOT = Path(__file__).resolve().parents[2]
 async def phase(dut, signal, name):
     # Full LiteDRAM DFI simulation is far slower than AXI RAM, and our
     # real CPU enters RUN only after >1 ms of genuine JEDEC/DFII init.
-    # Keep the original 5 ms CPU-DMA deadline for the fast regression.
-    timeout = (12 if os.environ.get('SOC_DDR_REAL_MODE') == '1'
+    # Keep the original 5 ms CPU-DMA deadline for all existing fast runs.
+    # Typed source-selected CPU0 scenario adds an independently bounded
+    # action-count watchdog inside full_chip_tb; allow the same 12 ms cap
+    # in Cocotb without relaxing ordinary boot, BFM, PCIe, or DDR rules.
+    timeout = (12 if (os.environ.get('SOC_DDR_REAL_MODE') == '1' or
+                      os.environ.get('SOC_SCENARIO_PLAN'))
                else 5 if os.environ.get('SOC_CPU_DMA_MODE') == '1' else 1)
     if int(signal.value) != 1:
         await with_timeout(RisingEdge(signal), timeout, 'ms')
