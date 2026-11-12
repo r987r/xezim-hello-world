@@ -62,7 +62,7 @@ def analyze(root: Path, profile: str, mode: str, output: Path,
         stdout_log.write_text(run.stdout, encoding="utf-8")
         stderr_log.write_text(run.stderr, encoding="utf-8")
         diagnostics = [line for line in (run.stderr + "\n" + run.stdout).splitlines()
-                       if re.search(r"(?i)(?:^|\\s)(?:%?error:|fatal error:)", line)]
+                       if re.search(r"(?i)(?:^|\s)(?:%?error:|fatal error:)", line)]
         summary = "\n".join(diagnostics[:20])
         if not summary:
             summary = (run.stderr + "\n" + run.stdout)[-6000:]
