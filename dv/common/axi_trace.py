@@ -111,6 +111,19 @@ def attach_observers(dut):
         _active.append(AxiTrace(dut, plan_path))
 
 
+def flush_active():
+    """Persist every already-observed accepted channel event before test exit.
+
+    This does NOT wait for, complete, synthesize or discard an outstanding
+    transaction. The post-run AW/W/B/AR/R correlator remains the authority.
+    In particular the selected SCN-2 bounded batch must be flushed while
+    the Cocotb interpreter is still live; OS process teardown is not a
+    guaranteed Python TextIO destructor path.
+    """
+    for observer in _active:
+        observer.sink.flush()
+
+
 def trace_phase(label):
     for observer in _active:
         observer.emit({'channel':'phase','label':label})
