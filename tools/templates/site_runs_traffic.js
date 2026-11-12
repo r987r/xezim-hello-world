@@ -157,6 +157,7 @@ function apply(){
 const preferred=["direction","address","requester_id","tag","length_dw",
   "dst_mac","src_mac","ether_type","src_ip","dst_ip","src_port","dst_port",
   "length_bytes","fcs_valid","completion_status","byte_count","payload_bytes",
+  "mr_register","mr_programmed_value","mr_expected_value","mr_match",
   "bank","dfi_phase","test_phase","enabled_bytes","origin_event","model_boundary"];
 function fieldKeys(){
   const counts=new Map();
