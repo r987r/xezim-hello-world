@@ -449,3 +449,8 @@ async def ddr4_wishbone_init_axi_readwrite(dut):
                         error=None if succeeded else repr(failure))
         internal.finish("pass" if succeeded else "fail",
                         error=None if succeeded else repr(failure))
+        if succeeded:
+            from mrs_check import verify_capture
+            mrs = verify_capture(OUTPUT, OUTPUT / "ddr4_init_plan.json",
+                                 OUTPUT / "ddr4_mrs_evidence.json")
+            dut._log.info("PASS pin-observed DDR4 MRS: %s", mrs["records"])

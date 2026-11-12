@@ -242,6 +242,14 @@ def write_report(directory, plan, result):
             map_data, rows,
             complete_capture=(binding_complete and not overflow
                               and not issues and not correlation_issues))
+    # DDR4 MRs are device DFI operations, NEVER a new MMIO CSR aperture.
+    # Only the exact run's completed passive MRS capture may populate this view.
+    mrs_path = directory / 'ddr4_mrs_evidence.json'
+    if mrs_path.is_file():
+        from ddr_mr_report import read_evidence
+        protocol_path = directory / 'protocol-transactions.json'
+        payload['sections']['ddr_mrs'] = read_evidence(
+            mrs_path, protocol_path if protocol_path.is_file() else None)
     (directory/'axi-transactions.json').write_text(json.dumps(payload,indent=2)+'\n')
     # Escape '<' even inside JSON strings: transaction text must never close
     # the embedded script element. All table/details text uses textContent.
