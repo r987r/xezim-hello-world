@@ -1,0 +1,56 @@
+// Virtual DDR4 device mode-register field catalog; NOT a memory-mapped CSR bank.
+// Each @offset is a catalog index (MRn at n*4), NOT a Config-NoC address.
+// The actual values are programmed through pinned LiteDRAM DFII Wishbone CSRs.
+// No PeakRDL register RTL may be generated/instantiated from this addrmap.
+// Only fields used by the pinned DDR4 initialization profile are named here.
+// Reserved or profile-specific bits must NOT silently become validated JEDEC bits.
+addrmap ddr4_mode_registers {
+    name = "DDR4 device MR0-MR6 protocol image catalog (not MMIO)";
+    default regwidth = 32;
+
+    reg {
+        desc = "DDR4 MR0: burst length, CAS latency, DLL reset and write recovery";
+        field { sw = r; hw = w; desc = "Burst length encoding A[1:0]"; } burst_length[1:0];
+        field { sw = r; hw = w; desc = "CAS latency low encoding bit A2"; } cl_low[2:2];
+        field { sw = r; hw = w; desc = "Read burst type A3"; } burst_type[3:3];
+        field { sw = r; hw = w; desc = "CAS latency middle encoding A[6:4]"; } cl_mid[6:4];
+        field { sw = r; hw = w; desc = "DLL reset command A8"; } dll_reset[8:8];
+        field { sw = r; hw = w; desc = "Write recovery encoding A[11:9]"; } write_recovery_lo[11:9];
+        field { sw = r; hw = w; desc = "CAS latency extension A12"; } cl_high[12:12];
+        field { sw = r; hw = w; desc = "Write recovery extension A13"; } write_recovery_hi[13:13];
+    } mr0 @0x00;
+
+    reg {
+        desc = "DDR4 MR1: DLL, output impedance and termination controls";
+        field { sw = r; hw = w; desc = "DLL control raw A0 encoding"; } dll_control[0:0];
+        field { sw = r; hw = w; desc = "Output driver impedance encoding A[2:1]"; } ron[2:1];
+        field { sw = r; hw = w; desc = "Nominal RTT encoding A[10:8]"; } rtt_nom[10:8];
+        field { sw = r; hw = w; desc = "TDQS enable A11"; } tdqs[11:11];
+    } mr1 @0x04;
+
+    reg {
+        desc = "DDR4 MR2: CAS write latency and write termination";
+        field { sw = r; hw = w; desc = "CAS write latency encoding A[5:3]"; } cwl[5:3];
+        field { sw = r; hw = w; desc = "Write RTT raw encoding A[11:9]"; } rtt_wr[11:9];
+    } mr2 @0x08;
+
+    reg {
+        desc = "DDR4 MR3: fine-granularity refresh setting from LiteDRAM";
+        field { sw = r; hw = w; desc = "Fine-granularity refresh mode A[7:6]"; } fine_refresh[7:6];
+    } mr3 @0x0c;
+
+    reg {
+        desc = "DDR4 MR4: pinned LiteDRAM profile programs zero; opaque until qualified field semantics exist";
+        field { sw = r; hw = w; desc = "Unqualified MR4 image (do not infer JEDEC field correctness)"; } unqualified_image[15:0];
+    } mr4 @0x10;
+
+    reg {
+        desc = "DDR4 MR5: data-mask enable used by pinned controller profile";
+        field { sw = r; hw = w; desc = "Data mask A10"; } data_mask[10:10];
+    } mr5 @0x14;
+
+    reg {
+        desc = "DDR4 MR6: tCCD_L encoding from pinned controller profile";
+        field { sw = r; hw = w; desc = "CAS-to-CAS long delay encoding A[12:10]"; } tccd_l[12:10];
+    } mr6 @0x18;
+};
