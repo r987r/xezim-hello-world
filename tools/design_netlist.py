@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -33,6 +34,13 @@ def analyze(root: Path, profile: str, mode: str, output: Path,
     output.parent.mkdir(parents=True, exist_ok=True)
     if output.exists():
         output.unlink()  # Prevent stale successful output after tool failure.
+    # Never reuse diagnostics from a previous compiler invocation as proof of
+    # the current selected source closure.
+    stdout_log = output.with_name(output.name + ".failed.stdout.log")
+    stderr_log = output.with_name(output.name + ".failed.stderr.log")
+    for stale in (stdout_log, stderr_log):
+        if stale.exists():
+            stale.unlink()
     # Pinned third-party tech_cells_generic includes modules without local
     # timescale declarations. Slang requires a deterministic default in a
     # mixed-timescale compilation. This is an explicit compiler input, NOT
@@ -48,8 +56,18 @@ def analyze(root: Path, profile: str, mode: str, output: Path,
     if run.returncode:
         if output.exists():
             output.unlink()
-        raise ValueError(f"{mode} failed for {profile} (exit {run.returncode}):\n"
-                         + (run.stderr + "\n" + run.stdout)[-6000:])
+        # Capture the *entire original Slang stdout/stderr in the same
+        # source-selected artifact directory, not a truncated tail of
+        # warnings that hides the first elaboration error.
+        stdout_log.write_text(run.stdout, encoding="utf-8")
+        stderr_log.write_text(run.stderr, encoding="utf-8")
+        diagnostics = [line for line in (run.stderr + "\n" + run.stdout).splitlines()
+                       if re.search(r"(?i)(?:^|\\s)(?:%?error:|fatal error:)", line)]
+        summary = "\n".join(diagnostics[:20])
+        if not summary:
+            summary = (run.stderr + "\n" + run.stdout)[-6000:]
+        raise ValueError(f"{mode} failed for {profile} (exit {run.returncode}); "
+                         f"raw logs: {stderr_log}, {stdout_log}:\n{summary}")
     if mode != "netlist":
         output.write_text(run.stdout)
     if not output.is_file() or not output.stat().st_size:
