@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - 'rtl/memory/ddr4/**'
+      - 'csr/rdl/ddr4_mode_registers.rdl'
+      - 'tests/test_ddr_mrs_rdl.py'
       - 'dv/full_chip/**'
       - 'config/regression.yaml'
       - 'tools/ddr_chip.py'
@@ -41,7 +43,7 @@ jobs:
       - name: Install pinned CPU/DMA/NoC and DDR generator dependencies
         run: |
           set -euo pipefail
-          python3 -m pip install -r requirements.txt
+          python3 -m pip install -r requirements.txt -r csr/requirements.txt
           python3 -m pip install 'mako==1.3.10' 'hjson==3.1.0' 'peakrdl>=1.5.0' 'peakrdl-rawheader>=0.2.8' 'peakrdl-cheader>=1.1.0'
           python3 -m pip install 'cocotb==1.9.2' 'cocotbext-axi==0.1.28' 'cocotb-test==0.2.6'
           python3 tools/ip_fetch.py floonoc pulp_idma litedram
@@ -74,6 +76,7 @@ jobs:
           set -euo pipefail
           python3 rtl/memory/ddr4/bringup.py generate
           python3 -m unittest discover -s rtl/memory/ddr4 -p 'test_*.py'
+          python3 -m unittest tests.test_ddr_mrs_rdl -v
       - name: Audit independent pinned LiteDRAM generation for unqualified source drift
         run: |
           python3 rtl/memory/ddr4/bringup.py generate --output-dir .tools/ddr4/repeatability-second
@@ -105,6 +108,7 @@ jobs:
           # time must not consume our expensive simulation budget.
           python3 tools/regress.py chip-ddr4-real --stage run --fail-fast
           test -s .tools/regression/chip-ddr4-real/ddr4_fullchip_evidence.json
+          test -s .tools/regression/chip-ddr4-real/ddr4_mrs_evidence.json
           test -s .tools/regression/chip-ddr4-real/report.html
           test -s .tools/regression/chip-ddr4-real/ddr-native-csr-map.json
           python3 - <<'PY'
@@ -114,6 +118,11 @@ jobs:
           evidence=json.loads((p/'ddr4_fullchip_evidence.json').read_text())
           assert evidence['status']=='pass'
           assert evidence['init_done']==1 and evidence['init_error']==0
+          mrs=json.loads((p/'ddr4_mrs_evidence.json').read_text())
+          assert mrs['status']=='pass' and mrs['observed_mrs_count']==7, mrs
+          assert [r['mr'] for r in mrs['records']]==[3,6,5,4,2,1,0], mrs
+          assert not mrs['model_enforces_mr_state'] and not mrs['jedec_mrs_timing_verified']
+          assert evidence['mrs']['status']=='pass' and evidence['mrs']['count']==7
           assert all(evidence[key]>0 for key in ('axi_aw','axi_b','axi_ar','axi_rlast','dfi_read','dfi_write','bank_storage_write'))
           assert evidence['axi_aw']==evidence['axi_b'] and evidence['axi_ar']==evidence['axi_rlast']
           negative=evidence['routed_negative']

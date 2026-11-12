@@ -209,6 +209,7 @@ jobs:
           python3 rtl/memory/ddr4/dfi_to_protocol.py \
             --input .tools/ddr4/litedram_sim \
             --output .tools/regression/ddr4-standalone
+          test -s .tools/regression/ddr4-standalone/ddr4_mrs_evidence.json
           python3 - <<'PY'
           import json
           from pathlib import Path

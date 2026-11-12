@@ -62,7 +62,8 @@ function init(){
   load({protocol:query.get("protocol"),source:query.get("source")});
 }
 function rawPath(e){
-  return e.path.slice(0,e.path.lastIndexOf("/"))+"/protocol-transactions.json";
+  return e.protocol_decode_href||
+    e.path.slice(0,e.path.lastIndexOf("/"))+"/protocol-transactions.json";
 }
 function preview(e){
   const records=[];
@@ -156,6 +157,7 @@ function apply(){
 const preferred=["direction","address","requester_id","tag","length_dw",
   "dst_mac","src_mac","ether_type","src_ip","dst_ip","src_port","dst_port",
   "length_bytes","fcs_valid","completion_status","byte_count","payload_bytes",
+  "mr_register","mr_programmed_value","mr_expected_value","mr_match",
   "bank","dfi_phase","test_phase","enabled_bytes","origin_event","model_boundary"];
 function fieldKeys(){
   const counts=new Map();
@@ -169,6 +171,38 @@ function fieldKeys(){
 }
 function inspect(r){
   $("traffic-detail").textContent=JSON.stringify(r,null,2);
+  const panel=$("traffic-mrs-decode");
+  panel.replaceChildren();
+  const fields=r.fields||{};
+  if(r.protocol!=="dfi"||r.operation!=="mrs"||
+     !Array.isArray(fields.mr_decoded_fields)){
+    panel.hidden=true;
+    return;
+  }
+  panel.hidden=false;
+  const heading=uiText("h3",(fields.mr_register||"DDR4 MR")+" · observed "+
+    fields.mr_programmed_value+" · expected "+fields.mr_expected_value+
+    " · "+fields.mr_match);
+  panel.append(heading);
+  panel.append(uiText("p","Decoded from verified SystemRDL field definitions. "+
+    "This proves the DFI MRS command was observed, NOT that DRAM device "+
+    "state or timing changed. Source "+fields.mr_rdl_sha256));
+  const table=document.createElement("table");
+  const th=document.createElement("thead");
+  const header=document.createElement("tr");
+  for(const title of ["Field","Bits","Value","Description"]){
+    header.append(uiText("th",title));
+  }
+  th.append(header);table.append(th);
+  const body=document.createElement("tbody");
+  for(const field of fields.mr_decoded_fields){
+    const tr=document.createElement("tr");
+    for(const value of [field.field,field.bits,field.value,field.description]){
+      tr.append(uiText("td",value));
+    }
+    body.append(tr);
+  }
+  table.append(body);panel.append(table);
 }
 function render(){
   const tbody=$("traffic-rows");tbody.replaceChildren();

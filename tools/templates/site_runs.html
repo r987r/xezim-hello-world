@@ -37,6 +37,7 @@
 </div>
 <div class="scroll"><table id="traffic-table"><thead id="traffic-head"></thead><tbody id="traffic-rows"></tbody></table></div>
 <button type="button" id="traffic-prev">Previous</button> <button type="button" id="traffic-next">Next</button>
+<section id="traffic-mrs-decode" class="card" hidden aria-label="Decoded DDR4 mode register fields"></section>
 <details open><summary>Selected transaction / packet — full source-native fields</summary><pre id="traffic-detail" style="max-height:380px;overflow:auto">Select a row to view all captured header, frame, address, payload, and timing fields.</pre></details>
 </section>
 <style>
@@ -326,7 +327,11 @@ function render(){
       text("div",e.axi?(e.annotations?
         e.expected_errors+" declared errors · "+e.undeclared_errors+" undeclared":
         "Historical capture: intent not recorded"):
-        protocols.length?"Protocol event capture":"Result, logs and filelists","muted"));
+        protocols.length?"Protocol event capture":"Result, logs and filelists","muted"),
+      text("div",e.ddr_mrs_status==="observed_matching_commands"?
+        "DDR4 device MRs: "+e.ddr_mrs_writes+" DFI writes verified in INIT · no later MRS":
+        (/ddr|litedram/.test(e.target)?"DDR4 MRS: UNMEASURED":""),
+        e.ddr_mrs_status==="observed_matching_commands"?"good":"muted"));
     td(tr,link(e.source_sha.slice(0,12),"https://github.com/"+D.repository+"/commit/"+e.source_sha));
     td(tr,link(e.workflow+" #"+e.run_id,e.workflow_url),text("div",e.recorded_at,"muted"));
     results.append(tr);count++;

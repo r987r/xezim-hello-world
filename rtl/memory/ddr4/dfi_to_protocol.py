@@ -22,6 +22,7 @@ BANK="memory0.ddr0.bankmodel"
 DFI_COMMANDS={
     "dfi_activate":"act", "dfi_precharge":"pre",
     "dfi_read":"rd", "dfi_write":"wr", "dfi_refresh":"ref",
+    "dfi_mrs":"mrs",
     "dfi_rddata_en":"rddata_en", "dfi_rddata_valid":"rddata_valid",
     "dfi_wrdata_en":"wrdata_en",
 }
@@ -134,6 +135,14 @@ def convert(input_dir:Path,output_dir:Path):
     # Historical and new test results must be evaluated only for their
     # original tested SHA. A successful standalone simulation is not a claim
     # of the same command probes in the integrated full-chip test.
+    # Carry exact standalone MRS evidence into the existing published
+    # protocol artifact. Do not synthesize a register view from a plan.
+    mrs_source=input_dir/"ddr4_mrs_evidence.json"
+    if mrs_source.is_file():
+        from ddr_mr_report import read_evidence
+        import shutil
+        read_evidence(mrs_source, output_dir/"protocol-transactions.json")
+        shutil.copyfile(mrs_source,output_dir/"ddr4_mrs_evidence.json")
     result_data={"target":"ddr4-standalone","passed":True,"stage":"run",
                  "engine":"cocotb-verilator",
                  "scope":"standalone_litedram_behavioral_dfi",

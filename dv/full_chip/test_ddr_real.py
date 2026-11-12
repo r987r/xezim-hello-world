@@ -16,6 +16,7 @@ from dv.full_chip.test_boot import execute_cold_boot
 from dv.common.protocol_trace import open_from_plan
 from rtl.memory.ddr4.dfi_probe import DFIProbe, observe_dfi
 from rtl.memory.ddr4.dfi_to_protocol import export_fullchip_probe
+from rtl.memory.ddr4.mrs_check import verify_capture as verify_mrs_capture
 
 
 @cocotb.test(timeout_time=20, timeout_unit="ms")
@@ -132,6 +133,8 @@ async def cpu_dma_real_ddr_roundtrip(dut):
     dfi_probe.assert_alive(dfi_task)
     dfi_task.kill()
     dfi_summary=dfi_probe.finish("pass")
+    generated_plan=Path(__file__).resolve().parents[2]/".tools/ddr4/litedram_sim/ddr4_init_plan.json"
+    mrs=verify_mrs_capture(plan_dir,generated_plan,plan_dir/"ddr4_mrs_evidence.json")
     counts=export_fullchip_probe(plan_dir,dfi_protocol)
     dfi_protocol.close("pass")
     evidence["dfi_commands"]={
@@ -139,6 +142,8 @@ async def cpu_dma_real_ddr_roundtrip(dut):
         for key in ("activate","precharge","read","write","refresh")
     }
     evidence["dfi_sampled_cycles"]=dfi_summary["sampled_cycles"]
+    evidence["mrs"]={"status":mrs["status"],"count":mrs["observed_mrs_count"],
+                     "rdl_sha256":mrs["rdl_sha256"],"model_enforces_mr_state":False}
     assert evidence["dfi_commands"]["read"]>0
     assert evidence["dfi_commands"]["write"]>0
     evidence["status"] = "pass"
