@@ -5,6 +5,7 @@ from tools.pcie_upstream_test_timing import (
     patched, CORE_BEFORE, CORE_AFTER, TEST_BEFORE, TEST_AFTER,
     ENUM_BEFORE, ENUM_AFTER, ENUM_MODEL_BEFORE, ENUM_MODEL_AFTER,
     ENUM_HOST_BEFORE, ENUM_HOST_AFTER,
+    ENUM_READ_BEFORE, ENUM_READ_AFTER, ENUM_EP_CPL_BEFORE, ENUM_EP_CPL_AFTER,
 )
 
 
@@ -26,7 +27,8 @@ class UpstreamTimingOverlayTests(unittest.TestCase):
 
     def test_upstream_memory_stall_probe_is_passive_and_rethrows(self):
         source = ("async def body(self):\n" + ENUM_MODEL_BEFORE + "\n" +
-                  ENUM_BEFORE + "\n" + ENUM_HOST_BEFORE + "\n")
+                  ENUM_BEFORE + "\n" + ENUM_HOST_BEFORE + "\n" +
+                  ENUM_READ_BEFORE + "\n" + ENUM_EP_CPL_BEFORE + "\n")
         got = patched("verif/sequences/pcie_enumeration_seq.py", source)
         self.assertIn(ENUM_AFTER, got)
         self.assertIn(ENUM_MODEL_AFTER, got)
@@ -35,6 +37,12 @@ class UpstreamTimingOverlayTests(unittest.TestCase):
         self.assertIn("PCIE_UPSTREAM_RC_TX_DONE", got)
         self.assertIn("PCIE_UPSTREAM_MEM_STALL", got)
         self.assertIn("PCIE_UPSTREAM_FC_SNAPSHOT", got)
+        self.assertIn("PCIE_UPSTREAM_READBACK_TIMEOUT", got)
+        self.assertIn("PCIE_UPSTREAM_READBACK_FC", got)
+        self.assertIn("PCIE_UPSTREAM_READBACK_RC", got)
+        self.assertIn("PCIE_UPSTREAM_EP_CPL_BEGIN", got)
+        self.assertIn("PCIE_UPSTREAM_EP_CPL_DRIVER_DONE", got)
+        self.assertIn("assert readback == test_data", got)
         self.assertIn("tx_credits_available", got)
         self.assertIn("tx_credits_consumed", got)
         self.assertIn("rx_credits_allocated", got)
