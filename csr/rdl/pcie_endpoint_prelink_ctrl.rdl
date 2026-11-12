@@ -27,6 +27,7 @@ addrmap pcie_endpoint_prelink_ctrl {
         field {
             sw = rw;
             hw = r;
+            swwe;
             reset = 0;
             csr_backdoor_policy = "frontdoor_only";
         } size_bytes[31:0];
@@ -37,6 +38,7 @@ addrmap pcie_endpoint_prelink_ctrl {
         field {
             sw = rw;
             hw = r;
+            swwe;
             reset = 0;
             csr_backdoor_policy = "frontdoor_only";
         } local_base[31:0];
@@ -81,4 +83,48 @@ addrmap pcie_endpoint_prelink_ctrl {
             csr_backdoor_policy = "frontdoor_only";
         } violation[3:3];
     } status @0x100c;
+
+    // These are DBI read-only ALIASES of actual host-visible PCIe state.
+    // sw=r, hw=w is a hardware-driven WIRE in SystemRDL, not a second
+    // software-writable BAR storage element. The host cannot reach these
+    // offsets: it sees Type-0 config registers at 0x10/0x04 over real PCIe.
+    reg {
+        desc = "CPU0 read-only view of host-assigned Type-0 BAR0 bus address";
+        field {
+            sw = r;
+            hw = w;
+            reset = 0;
+            csr_backdoor_policy = "frontdoor_only";
+        } pci_bus_base[31:4];
+    } host_bar0 @0x1010;
+
+    reg {
+        desc = "CPU0 read-only mirror of host COMMAND.Memory Space Enable";
+        field {
+            sw = r;
+            hw = w;
+            reset = 0;
+            csr_backdoor_policy = "frontdoor_only";
+        } memory_space_enable[1:1];
+    } host_command @0x1014;
+
+    reg {
+        desc = "Hardware-reported PHY, link and NoC readiness, not host writes";
+        field {
+            sw = r; hw = w; reset = 0;
+            csr_backdoor_policy = "frontdoor_only";
+        } ltssm_l0[0:0];
+        field {
+            sw = r; hw = w; reset = 0;
+            csr_backdoor_policy = "frontdoor_only";
+        } phy_ready[1:1];
+        field {
+            sw = r; hw = w; reset = 0;
+            csr_backdoor_policy = "frontdoor_only";
+        } noc_ready[2:2];
+        field {
+            sw = r; hw = w; reset = 0;
+            csr_backdoor_policy = "frontdoor_only";
+        } host_config_error[3:3];
+    } link_status @0x1018;
 };
