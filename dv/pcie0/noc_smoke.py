@@ -2,7 +2,7 @@
 
 import cocotb
 from cocotb.clock import Clock
-from cocotb.triggers import RisingEdge, with_timeout
+from cocotb.triggers import RisingEdge, Timer, with_timeout
 from discovery import enumerate_root_complex
 from cocotbext.pcie.core import RootComplex
 # Cocotb runner constructs its own PYTHONPATH. Make the locked upstream
@@ -21,6 +21,16 @@ async def host_to_real_floonoc_tc_sram(dut):
     dut.rst.value = 1
     dut.clk.value = 0
     cocotb.start_soon(Clock(dut.clk, 10, units="ns").start())
+    # The BAR0_RELOCATE constant is an elaboration-time SV parameter,
+    # but Verilator's continuous output assignment is not VPI-visible
+    # until a simulator evaluation. Reading at time 0 can return the
+    # stale default 0 even when "-GBAR0_RELOCATE=1" was compiled.
+    # Observe the real selected RTL mode AFTER clock and delta evaluation.
+    await RisingEdge(dut.clk)
+    await Timer(1, units="ns")
+    relocated = bool(int(dut.bar0_relocation_enabled.value))
+    dut._log.info("PCIE0_RTL_BAR_RELOCATE_SAMPLED=%d after actual clock evaluation",
+                  int(relocated))
     rc = RootComplex()
     # In cocotbext-pcie 0.2.14 the RC constructor registers the outbound
     # TLP region at its DEFAULT mem_base (0xc0000000). Changing mem_base
@@ -28,7 +38,6 @@ async def host_to_real_floonoc_tc_sram(dut):
     # mapping, so BAR accesses fail before any TLP is sent. Install the
     # address-qualified outbound TLP region inside its low-address mem_pool.
     # This is RC BFM setup, not an RTL address-translation shortcut.
-    relocated = bool(int(dut.bar0_relocation_enabled.value))
     if relocated:
         # Real host PCIe BAR bus address is distinct from SRAM NoC address.
         rc.mem_pool.register_region(rc.mem_region, 0x80000000, 0x100000, offset=None)
