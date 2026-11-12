@@ -31,6 +31,7 @@ from dv.integration.combined34_scoreboard import (
 )
 from rtl.memory.ddr4.dfi_probe import DFIProbe, observe_dfi
 from rtl.memory.ddr4.dfi_to_protocol import export_fullchip_probe
+from rtl.memory.ddr4.mrs_check import verify_capture as verify_mrs_capture
 
 READY = 0xe7000001
 FINISH = 0xe700600d
@@ -195,6 +196,10 @@ async def ethernet_ddr_idma_pcie_single_chip(dut):
     axi_counts = check_accepted_axi(plan_file)
 
     summary = _finish_dfi(probe, dfi_task)
+    generated_plan = Path(__file__).resolve().parents[2]/".tools/ddr4/litedram_sim/ddr4_init_plan.json"
+    mrs = verify_mrs_capture(plan_file.parent, generated_plan,
+                             plan_file.parent/"ddr4_mrs_evidence.json")
+    assert mrs["observed_mrs_count"] == 7
     dfi_counts = export_fullchip_probe(plan_file.parent, trace)
     controller_counts = verify_controller(dut.dut.u_ddr_real, dfi_counts)
     assert summary["sampled_cycles"] >= 1
