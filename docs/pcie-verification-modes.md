@@ -69,14 +69,19 @@ artifact as `pcie-cross-run.log`. It also calls the existing
 `dv.common.protocol_trace.ProtocolTrace` and
 `tools/protocol_report.py` to produce `protocol-events.jsonl`,
 `protocol-transactions.json` and the existing interactive
-`protocols.html` viewer containing **only observed endpoint LTSSM
-state-transition events** with simulator timestamps. These are not
-TLP transactions. On missing/duplicate or impossible
-milestones, it rejects the L0 diagnostic. An event without a simulator
-timestamp is rendered **unmeasured**, never assigned a fabricated time.
+`protocols.html` viewer. The `l0` lane contains **only observed
+endpoint LTSSM state-transition events** with simulator timestamps.
+For `bar0` and `mem_ingress`, a *separately qualified* original
+host ConfigRd0/ConfigWr0 and actual endpoint-accepted Cpl/CplD
+checker supplies **six source-verified configuration transactions**
+using the endpoint's observed pin timestamps and original host tag.
+Host RC callback timestamps remain native fields: we never mix
+unrelated clocks or assign simulated times to unsynchronized host events.
+No Config TLP is shown if its original checker fails.
 
 This renderer does **not** emit a `result.json`, full-chip `test-flow.json`,
-completed TLP packet, AXI transaction or memory scoreboarding artifact.
+non-configuration memory-read completion, NoC AXI transaction or
+memory scoreboarding artifact.
 Those are owned by `tools/regress.py`, `tools/test_flow_report.py`,
 `tools/protocol_report.py`, `tools/axi_report.py` and
 `tools/action_evidence.py`, which already serve our Test Runs/Pages viewer.
@@ -95,15 +100,23 @@ For the isolated digital-link evidence and negative tests:
 
 ```sh
 python3 -m unittest tests.test_pcie_link_report -v
-python3 tools/pcie_link_report.py pcie-cross-run.log --out .tools/pcie-link/observations
+python3 tools/pcie_link_report.py pcie-cross-run.log --mode l0 --out .tools/pcie-link/observations
+# For BAR0 lanes, after the original real-TLP checker has passed:
+python3 tools/pcie_link_report.py pcie-cross-run.log --mode bar0 \
+  --bar-evidence .tools/pcie-link/observations/pcie-bar0-evidence.json \
+  --out .tools/pcie-link/observations
 ```
 
 The digital-link Actions artifact contains the original simulator log,
 source-selected scenario plan, JSON evidence, isolated HTML timeline, and
 standard `protocols.html` passive protocol explorer. The established
 `chip-pcie-host` and `chip-pcie-outbound` Test Runs reports remain
-unchanged. Neither
-this documentation nor the diagnostic is a full-chip PASS.
+unchanged. The generic publisher discovers standalone captures from their
+versioned JSON artifact path after verified main/merged-PR collection.
+**Test Runs → Protocol traffic** then shows the original six enumeration
+TLP requests/completions alongside the distinct LTSSM lane. An open PR's
+offline CI artifact is not yet a deployed public Pages source. Neither
+this documentation nor the isolated link diagnostic is a full-chip PASS.
 
 ## Over-link BAR enumeration qualification — opt-in matrix
 
