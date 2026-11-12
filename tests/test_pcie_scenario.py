@@ -21,6 +21,7 @@ class PcieScenarioTests(unittest.TestCase):
     def setUpClass(cls):
         cls.spec = json.loads((ROOT / "config/scenarios/pcie-gen1-link.json").read_text())
         cls.bar_spec = json.loads((ROOT / "config/scenarios/pcie-gen1-bar0.json").read_text())
+        cls.mem_spec = json.loads((ROOT / "config/scenarios/pcie-gen1-mem-ingress.json").read_text())
         cls.soc = yaml.safe_load((ROOT / "config/soc.yaml").read_text())
 
     def resolve(self, spec=None):
@@ -93,6 +94,36 @@ class PcieScenarioTests(unittest.TestCase):
         self.assertEqual(seen, ["pcie.link.train", "pcie.config.bar0"])
         with self.assertRaisesRegex(ActionDispatchError, "no registered handler"):
             ActionDispatcher(raw, {})
+
+    def test_posted_memory_write_is_host_intent_only(self):
+        p = self.resolve(self.mem_spec)
+        self.assertEqual([a["kind"] for a in p["actions"]],
+                         ["pcie.link.train", "pcie.config.bar0", "pcie.memory.write"])
+        self.assertIsNone(p["execution_evidence"])
+        self.assertEqual(p["actions"][-1]["args"]["data_word"], 0xa5c36e91)
+        for m in ("missing_dependency", "bad_offset", "outside", "bad_phase", "oversized"):
+            doc = copy.deepcopy(self.mem_spec)
+            req = doc["actions"][2]
+            if m == "missing_dependency":
+                req["depends_on"] = []
+            elif m == "bad_offset":
+                req["args"]["offset"] = 4094
+            elif m == "outside":
+                req["args"]["offset"] = 4096
+            elif m == "bad_phase":
+                req["phase"] = "init"
+            else:
+                req["args"]["data_word"] = 1 << 32
+            with self.subTest(case=m), self.assertRaises(ScenarioError):
+                self.resolve(doc)
+
+    def test_ingress_is_backpressured_without_fake_memory(self):
+        rtl = (ROOT/"dv/pcie_link/tb_pcie_cross_link.sv").read_text()
+        rc = (ROOT/"dv/pcie_link/host_link_vproc.cpp").read_text()
+        self.assertIn(".m_tlp_axis_tready(1'b0)", rtl)
+        self.assertIn("PCIE_EP_MEM_TLP_BACKPRESSURE", rtl)
+        self.assertIn("memWrite(address,bytes,4,", rc)
+        self.assertIn("A posted MWr has no Cpl", rc)
 
     def test_duplicate_link_training_needs_ordering(self):
         spec = copy.deepcopy(self.spec)

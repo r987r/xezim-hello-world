@@ -353,3 +353,23 @@ physical cross-provider OpenPCIe/pcievhost data path. The selected digital
 link's non-config m_tlp_axis and s_tlp_axis still require a packet-width
 adapter into this pinned bridge, genuine return completions, host/device
 parallel boot sequencing and canonical passive TLP/AXI reports.
+
+## Source-selected real-link non-config Memory Write ingress (not boot)
+
+A dedicated `mem_ingress` scenario extends the same pinned real
+pcievhost/OpenPCIe L0/BAR0 enumeration to send a **posted MemWr32**
+to bus address `0x80001100`, with value `0xa5c36e91`.
+The original endpoint `m_tlp_axis` is only observed while `ready=0`.
+It must assert a stable first beat and be in true L0 after genuine BAR
+commit and host COMMAND.MSE. This does **not** accept a posted write,
+complete AXI, or read back SRAM. No completion is expected for MWr.
+
+**Cold-boot integration remains open.** Existing `chip-pcie-host` boots
+CPU0 and completes INIT/RUN/CHECK but uses modeled PCIe TLP ingress.
+The independent Gen1 real link has testbench-owned prelink setup, no
+CPU0, and no attached nonconfig TLP receiver. The combined test
+must wire generated PeakRDL registers through CPU0 Config-NoC
+at `pcie0.ctrl+0x1000`, replace the surrogate, and connect true endpoint
+TLP ingress/completion egress to the pinned AXI bridge/FlooNoC/SRAM.
+Only one simulator run proving firmware, genuine L0, BAR, accepted AXI
+and correct bytes should qualify `chip-pcie-real-link-boot`.

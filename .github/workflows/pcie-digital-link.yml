@@ -42,6 +42,7 @@ on:
       - 'dv/common/action_runtime.py'
       - 'config/scenarios/pcie-gen1-link.json'
       - 'config/scenarios/pcie-gen1-bar0.json'
+      - 'config/scenarios/pcie-gen1-mem-ingress.json'
       - 'tests/test_ci_require_cocotb.py'
       - 'tests/test_ip_fetch_submodules.py'
       - '.github/workflows/pcie-digital-link.yml'
@@ -419,6 +420,7 @@ jobs:
         include:
           - {mode: l0, scenario: config/scenarios/pcie-gen1-link.json}
           - {mode: bar0, scenario: config/scenarios/pcie-gen1-bar0.json}
+          - {mode: mem_ingress, scenario: config/scenarios/pcie-gen1-mem-ingress.json}
     runs-on: ubuntu-24.04
     timeout-minutes: 55
     steps:
@@ -480,6 +482,8 @@ jobs:
           vproc="$root/.tools/pcie_host_vproc"
           sim="$root/build/fusesoc_pcie_phy_core_1.0.0/sim"
           cd "$sim"
+          mem_probe=0
+          if [[ "${{ matrix.mode }}" == "mem_ingress" ]]; then mem_probe=1; fi
           verilator --binary -sv --timing -Wno-fatal -DVPROC_SV \
             -I"$host/headers" -I"$host/testcross_x1" -I"$vproc" \
             -f fusesoc_pcie_phy_core_1.0.0.vc \
@@ -496,7 +500,7 @@ jobs:
             "$root/.tools/pcie_endpoint_openpcie/src/pcie_cfg/pcie_config_reg.sv" \
             "$root/.tools/pcie_endpoint_openpcie/src/pcie_cfg/pcie_cfg_wrapper.sv" \
             "$root/dv/pcie_link/tb_pcie_cross_link.sv" \
-            --top-module test -GSIM_FORCE_FAST_LTSSM=1 -Mdir "$root/.tools/pcie-cross-obj" \
+            --top-module test -GSIM_FORCE_FAST_LTSSM=1 "-GVERIFY_MEM_INGRESS=$mem_probe" -Mdir "$root/.tools/pcie-cross-obj" \
             -CFLAGS '-std=c++17 -Wno-attributes' \
             -LDFLAGS "-Wl,-E -lrt -rdynamic -Wl,-whole-archive \
               -L$host/testcross_x1 -lvproc \
@@ -530,7 +534,7 @@ jobs:
           grep -q '^PCIE_ENDPOINT_L0:' "$root/pcie-cross-run.log"
           # The BAR0 matrix lane is strictly stronger: independent host
           # ConfigRd0/CfgWr0 completions must return over the actual link.
-          if [[ "${{ matrix.mode }}" == "bar0" ]]; then
+          if [[ "${{ matrix.mode }}" == "bar0" || "${{ matrix.mode }}" == "mem_ingress" ]]; then
             # Independent byte-provenance check: original RC packet, actual
             # endpoint RX payload, accepted AXI-Lite write and CplD return.
             # Fail even when final readback happened to match due to a
@@ -545,6 +549,12 @@ jobs:
             grep -q '^PCIE_DEVICE_DBI_ALIAS: BAR0=80001000' "$root/pcie-cross-run.log"
             grep -q '^PCIE_DEVICE_DBI_ALIAS: COMMAND=00000002' "$root/pcie-cross-run.log"
             grep -Fq "PCIE_SCN_DRIVER: plan=$SOC_SELECTED_PLAN_SHA action=enumerate_bar0 stage=driver_done" "$root/pcie-cross-run.log"
+          fi
+          if [[ "${{ matrix.mode }}" == "mem_ingress" ]]; then
+            grep -Fq "PCIE_SCN_DRIVER: plan=$SOC_SELECTED_PLAN_SHA action=write_bar0 stage=driver_done" "$root/pcie-cross-run.log"
+            grep -q '^PCIE_RC_BAR_MWR_TX: action=write_bar0 addr=80001100 data=a5c36e91' "$root/pcie-cross-run.log"
+            grep -q '^PCIE_EP_MEM_TLP_BACKPRESSURE: original endpoint valid ready=0' "$root/pcie-cross-run.log"
+            # NO AXI transfer or completion asserted here; link ingress only.
           fi
           grep -q '^PCIE_TRACE: receiver-detect request' "$root/pcie-cross-run.log"
           grep -q '^PCIE_TRACE: PHY receiver present' "$root/pcie-cross-run.log"
