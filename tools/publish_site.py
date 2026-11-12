@@ -350,8 +350,10 @@ def discover_test_workflows(root=ROOT):
     """Auto-discover CI checks and their canonical regression artifacts.
 
     Test workflows with no canonical results are still included in workflow
-    history (status-only). Only workflows explicitly uploading regression
-    paths can contribute per-target reports; no invented result.json files.
+    history (status-only). Discover *any* explicitly archived versioned
+    protocol capture by filename, without PCIe/DDR/Ethernet exceptions.
+    Canonical regression artifacts still require their original result.json;
+    a capture-only artifact never becomes a synthetic regression PASS.
     """
     producers={}
     for file in sorted((root/".github/workflows").glob("*.yml")):
@@ -374,8 +376,12 @@ def discover_test_workflows(root=ROOT):
                 if not str(step.get("uses", "")).startswith("actions/upload-artifact@"):
                     continue
                 opts=step.get("with") or {}
-                if ".tools/regression/" in str(opts.get("path", "")):
-                    artifacts.append(str(opts.get("name", "")))
+                paths=str(opts.get("path", ""))
+                if (".tools/regression/" in paths
+                        or "protocol-transactions.json" in paths):
+                    name=str(opts.get("name", ""))
+                    if name:
+                        artifacts.append(name)
         if artifacts or is_test:
             producers[file.name]={"file":file.name,
                                   "label":str(workflow.get("name") or file.stem),
