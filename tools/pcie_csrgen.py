@@ -38,6 +38,12 @@ EXPECTED = (
     ("control", 0x1008, {"commit": (0, 0, "w"), "start": (1, 1, "w")}),
     ("status", 0x100c, {"committed": (0, 0, "r"), "ltssm_allowed": (1, 1, "r"),
                         "mem_ready": (2, 2, "r"), "violation": (3, 3, "r")}),
+    ("host_bar0", 0x1010, {"pci_bus_base": (4, 31, "r")}),
+    ("host_command", 0x1014, {"memory_space_enable": (1, 1, "r")}),
+    ("link_status", 0x1018, {"ltssm_l0": (0, 0, "r"),
+                             "phy_ready": (1, 1, "r"),
+                             "noc_ready": (2, 2, "r"),
+                             "host_config_error": (3, 3, "r")}),
 )
 
 
@@ -64,8 +70,8 @@ def config_aperture(config: Path = SOC) -> dict:
         raise PcieCsrError("expected exactly one configured pcie0.ctrl aperture")
     item = rows[0]
     base, size = as_int(item["base"]), as_int(item["size"])
-    if base & 3 or size < 0x1010 or base + size > 0x100000000:
-        raise PcieCsrError("pcie0.ctrl must be aligned, >=0x1010 bytes and 32-bit")
+    if base & 3 or size < 0x101c or base + size > 0x100000000:
+        raise PcieCsrError("pcie0.ctrl must be aligned, >=0x101c bytes and 32-bit")
     return {"name": "pcie0.ctrl", "base": base, "size": size}
 
 
