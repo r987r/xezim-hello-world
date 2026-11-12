@@ -521,12 +521,8 @@ jobs:
           export PCIE_HOST_SCRAMBLING=1
           "$root/.tools/pcie-cross-obj/Vtop" 2>&1 | tee "$root/pcie-cross-run.log"
           grep -q '^PCIE_RC_SCRAMBLE_MODE: ENABLED' "$root/pcie-cross-run.log"
-          # One evidence adapter renders observed LTSSM/PIPE events, then
-          # deliberately labels BAR/TLP/NoC/byte results UNMEASURED.
-          # It does not create a synthetic full-chip result.json or PASS.
-          python3 "$root/tools/pcie_link_report.py" "$root/pcie-cross-run.log" \
-            --out "$root/.tools/pcie-link/observations" \
-            --github-summary "$GITHUB_STEP_SUMMARY"
+          # Original TLP/AXI-Lite checkers run before publishing their
+          # transactions. Never infer successful enumeration from L0.
           # Mode must be visibly selected, but success still requires genuine L0.
           grep -q '^PCIE_SIM_FORCE_FAST_LTSSM: ENABLED override=512x' "$root/pcie-cross-run.log"
           grep -q '^PCIE_EP_SIM_FAST_LTSSM: ENABLED timer_divider=512 min_tx_ts1=16' "$root/pcie-cross-run.log"
@@ -561,6 +557,17 @@ jobs:
               --out "$root/.tools/pcie-link/observations"
             # NO AXI transfer or completion asserted here; link ingress only.
           fi
+          # Unified passive reporter sees only genuine endpoint LTSSM
+          # timestamps, and for BAR lanes only checker-accepted original
+          # ConfigRd/ConfigWr request + Cpl/CplD boundary timestamps.
+          # No fake result.json, original non-config bridge or CPU boot PASS.
+          report_args=("$root/pcie-cross-run.log"
+                       --out "$root/.tools/pcie-link/observations"
+                       --github-summary "$GITHUB_STEP_SUMMARY")
+          if [[ "${{ matrix.mode }}" != "l0" ]]; then
+            report_args+=(--bar-evidence "$root/.tools/pcie-link/observations/pcie-bar0-evidence.json")
+          fi
+          python3 "$root/tools/pcie_link_report.py" "${report_args[@]}"
           grep -q '^PCIE_TRACE: receiver-detect request' "$root/pcie-cross-run.log"
           grep -q '^PCIE_TRACE: PHY receiver present' "$root/pcie-cross-run.log"
       - name: Retain original commands, build and independent training logs
