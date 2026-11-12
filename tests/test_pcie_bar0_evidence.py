@@ -69,6 +69,30 @@ class PcieBar0EvidenceTests(unittest.TestCase):
         wrong=good.replace("data=80001000 keep=f last=1", "")
         self.assertFalse(check(wrong)["qualified_over_link_bar0"])
 
+    def test_later_actual_posted_bar_mwr_is_not_tag5_config(self):
+        # Two original packets share the endpoint's internal RX beat
+        # transcript, but the last CfgRd0 completes BEFORE MemWr32 launches.
+        # A later memory payload must never become a duplicate Cfg final beat.
+        log=sample()
+        log+=("PCIE_RC_BAR_MWR_TX: action=write_bar0 addr=80001100 "
+              "data=a5c36e91 plan=" + "b"*64 + "\\n")
+        log+="PCIE_EP_INTERNAL_CFG_RX_BEAT: data=a5c36e91 keep=f last=1 at 9000\\n"
+        result=check(log)
+        self.assertTrue(result["qualified_over_link_bar0"],result["issues"])
+        self.assertEqual(len(result["transactions"]),6)
+        self.assertEqual(result["transactions"][-1]["endpoint_cpld_payload"],"0x2")
+        # Ordering still matters: launching memory before the actual
+        # RC-completed COMMAND CplD is an error.
+        early=sample().replace(
+            "PCIE_RC_CFG_RESULT: tag=5 seen=1 status=0 bytes=4 ok=1",
+            "PCIE_RC_BAR_MWR_TX: action=write_bar0 addr=80001100 "
+            "data=a5c36e91 plan=" + "b"*64 + "\\n"
+            "PCIE_RC_CFG_RESULT: tag=5 seen=1 status=0 bytes=4 ok=1"
+        )
+        self.assertFalse(check(early)["qualified_over_link_bar0"])
+        self.assertTrue(any("Memory Write launched before" in issue
+                            for issue in check(early)["issues"]))
+
     def test_failed_completion_or_faked_bar_milestone_must_fail(self):
         s=sample()
         for wrong in (
