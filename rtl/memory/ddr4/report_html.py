@@ -36,8 +36,14 @@ def load(directory: Path) -> dict:
     for op in ("read", "write"):
         if axi.get("measured", {}).get(op, {}).get("samples", 0) < 1:
             raise ValueError(f"DDR4 {op} missing measured completed AXI transactions")
+    mr_source = directory / "ddr4_mrs_evidence.json"
+    mrs = None
+    if mr_source.is_file():
+        sys.path.insert(0, str(Path(__file__).resolve().parents[3]/"tools"))
+        from ddr_mr_report import read_evidence
+        mrs = read_evidence(mr_source)
     return {"run": result, "axi": axi, "dfi": dfi, "monitor": monitor,
-            "compiler": compiler}
+            "compiler": compiler, "mrs": mrs}
 
 
 def render(data: dict) -> str:
@@ -68,6 +74,26 @@ def render(data: dict) -> str:
     period_ns = period / 1000
     run = data["run"]
     warnings = data["compiler"].get("total_warnings", "not available")
+    mrs = data.get("mrs")
+    if mrs:
+        mr_rows = "".join(row("MR"+str(mr["mr"]),mr["expected_value"],
+                              mr["value"],"MATCH" if mr["matched"] else "MISMATCH",
+                              "INIT program",mr["cycle"],"No later MRS observed")
+                          for mr in mrs["records"])
+        mrs_block = (
+            '<h2>DDR4 device mode registers (NOT CPU MMIO CSRs)</h2>'
+            '<p>Seven actual MRS commands observed on LiteDRAM DFI pins, '
+            'checked against upstream initialization and SystemRDL field definitions. '
+            'The behavioral model does not retain MR state or enforce JEDEC timing.</p>'
+            '<div class="scroll"><table><thead><tr><th>Device register</th>'
+            '<th>Expected</th><th>DFI observed</th><th>Result</th>'
+            '<th>Test action</th><th>Cycle</th><th>After INIT</th></tr>'
+            '</thead><tbody>'+mr_rows+'</tbody></table></div>')
+    else:
+        mrs_block=(
+            '<h2>DDR4 mode register programming</h2>'
+            '<p>UNMEASURED: no independently qualified DFI MRS evidence '
+            'was attached to this report. Do not assume device state.</p>')
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Standalone LiteDRAM DDR4 — verification report</title>
@@ -91,6 +117,7 @@ This is NOT an integrated Memory0 Data NoC run, electrical DDR PHY, or silicon t
 <div class="card"><strong>{h(period_ns)} ns</strong>Observed 100 MHz source period</div>
 <div class="card"><strong>{h(warnings)}</strong>Reviewed upstream warnings</div>
 </div>
+{mrs_block}
 <h2>Completed AXI boundary latency (source-clock cycles)</h2>
 <p>Read: accepted AR → final accepted R. Write: accepted AW → accepted B.
 These values include RTL controller, behavioral DFI/BankModel and queued response handling.</p>
