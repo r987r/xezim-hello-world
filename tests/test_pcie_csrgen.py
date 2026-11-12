@@ -34,6 +34,10 @@ class PcieCsrGenerationTests(unittest.TestCase):
         self.assertEqual(rows[4]["offset"],0x1010)
         self.assertEqual(rows[4]["fields"][0]["mask"],"0xfffffff0")
         self.assertEqual(rows[5]["fields"][0]["mask"],"0x00000002")
+        # Host-owned Type-0 BAR0/MSE must be CPU read-only hardware aliases.
+        self.assertEqual([r["access"] for r in rows[4:]], ["r","r","r"])
+        self.assertEqual([r["address"] for r in rows[4:]],
+                         [0x40041010,0x40041014,0x40041018])
         h=header(rows,aperture["base"],aperture["size"])
         self.assertIn("SOC_PCIE_EP_CTRL_BASE UINT32_C(0x40040000)",h)
         self.assertIn("SOC_PCIE_EP_CONTROL_COMMIT_MASK UINT32_C(0x00000001)",h)
@@ -56,6 +60,12 @@ class PcieCsrGenerationTests(unittest.TestCase):
             self.assertEqual(data["host_pcie_configuration_space"],
                              "distinct_vendor_type0_rdl")
             self.assertEqual(len(data["registers"]),7)
+            aliases=data["shared_host_state_aliases"]
+            self.assertEqual(aliases["host_type0_bar0"]["cpu_dbi_offset"],"0x1010")
+            self.assertEqual(aliases["host_type0_bar0"]["pcie_config_offset"],"0x10")
+            self.assertEqual(aliases["host_type0_bar0"]["cpu_access"],"read_only")
+            self.assertEqual(aliases["host_type0_command_mse"]["pcie_config_offset"],"0x04")
+            self.assertEqual(aliases["host_type0_command_mse"]["cpu_access"],"read_only")
             (out/"soc_pcie_ep_prelink_regs.h").write_text("illegal manual edit")
             self.assertEqual(execute(SOC,RDL,out,True),1)
 
@@ -66,6 +76,9 @@ class PcieCsrGenerationTests(unittest.TestCase):
             ("bar0_target @0x1004","bar0_target @0x1010"),
             ("sw = r; hw = w; reset = 0;","sw = rw; hw = w; reset = 0;"),
             ("} commit[0:0];","} commit[2:2];"),
+            ("} pci_bus_base[31:4];","} pci_bus_base[31:0];"),
+            ("} memory_space_enable[1:1];","} memory_space_enable[2:2];"),
+            ("swwe;",""),
         ]
         with TemporaryDirectory() as temp:
             path=Path(temp)/"incorrect.rdl"
@@ -75,6 +88,23 @@ class PcieCsrGenerationTests(unittest.TestCase):
                     path.write_text(original.replace(old,new,1))
                     with self.assertRaises(PcieCsrError):
                         registers(compile_rdl(path),config_aperture(SOC))
+
+    def test_alias_cannot_be_cpu_writable_or_unbound_from_hardware(self):
+        original=RDL.read_text()
+        old="        } pci_bus_base[31:4];"
+        self.assertIn(old,original)
+        for before, after in (
+            ("            sw = r;\n            hw = w;\n            reset = 0;",
+             "            sw = rw;\n            hw = w;\n            reset = 0;"),
+            ("            sw = r;\n            hw = w;\n            reset = 0;",
+             "            sw = r;\n            hw = r;\n            reset = 0;"),
+        ):
+            with self.subTest(replacement=after), TemporaryDirectory() as temp:
+                p=Path(temp)/"invalid_alias.rdl"
+                self.assertIn(before,original)
+                p.write_text(original.replace(before,after,1))
+                with self.assertRaises(PcieCsrError):
+                    registers(compile_rdl(p),config_aperture(SOC))
 
     def test_reject_stale_region_or_unowned_destination(self):
         cfg=SOC.read_text()
