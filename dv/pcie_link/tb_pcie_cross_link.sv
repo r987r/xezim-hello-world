@@ -24,11 +24,16 @@ module test #(
   // Test-only CPU/Config-NoC surrogate for the standalone cross-link bench.
   // Real CPU firmware and Config NoC integration remain separate proof gates.
   logic prelink_wr = 0;
-  logic [3:0] prelink_addr = '0;
+  logic [12:0] prelink_addr = '0;
   logic [31:0] prelink_wdata = '0;
   wire [31:0] prelink_rdata, bar_aperture, bar_target, bar_mask;
   wire prelink_error, bar_committed, ltssm_permitted, bar_mem_ready;
   logic noc_ready = 0;
+  // All aliases are driven by the original endpoint's completed host Cfg
+  // TLPs. They are not TB-programmed and never go back to the host.
+  wire [31:0] bar_host_base;
+  wire host_cfg_violation, host_memory_enable, ep_link_up;
+  wire [20:0] ltssm_debug_state;
   // From actual host configuration TLP, not a TB-assigned enable.
   pcie_endpoint_prelink_ctrl prelink (
     .clk_i(core_clk), .rst_ni(nreset), .cfg_wr_i(prelink_wr),
@@ -37,12 +42,15 @@ module test #(
     .cfg_error_o(prelink_error), .phy_ready_i(nreset),
     .noc_ready_i(noc_ready), .link_up_i(ep_link_up),
     .host_mem_enable_i(host_memory_enable),
+    .host_bar0_bus_base_i(bar_host_base),
+    .host_cfg_violation_i(host_cfg_violation),
+    .ltssm_l0_i(ltssm_debug_state == 21'h005),
     .bar0_aperture_o(bar_aperture), .bar0_local_target_o(bar_target),
     .bar0_size_mask_o(bar_mask), .bar_config_committed_o(bar_committed),
     .ltssm_enable_o(ltssm_permitted), .bar_mem_ready_o(bar_mem_ready)
   );
 
-  task automatic cfg_prelink(input logic [3:0] addr,
+  task automatic cfg_prelink(input logic [12:0] addr,
                               input logic [31:0] data);
     @(negedge core_clk);
     prelink_addr = addr; prelink_wdata = data; prelink_wr = 1'b1;
@@ -58,18 +66,37 @@ module test #(
     repeat (4) @(negedge core_clk);
     if (ltssm_permitted || ep_link_up)
       $fatal(1, "link started before device BAR preconfiguration");
-    cfg_prelink(4'h0, 32'h0000_1000);
-    cfg_prelink(4'h4, 32'h1200_0000);
-    cfg_prelink(4'h8, 32'h0000_0001);
+    cfg_prelink(13'h1000, 32'h0000_1000);
+    cfg_prelink(13'h1004, 32'h1200_0000);
+    cfg_prelink(13'h1008, 32'h0000_0001);
     if (!bar_committed || bar_mask != 32'hffff_f000 || prelink_error)
       $fatal(1, "prelink BAR configuration commit did not succeed");
     $display("PCIE_DEVICE_PRELINK: committed BAR0 size=%h target=%h mask=%h",
              bar_aperture, bar_target, bar_mask);
-    cfg_prelink(4'h8, 32'h0000_0002);
+    cfg_prelink(13'h1008, 32'h0000_0002);
     if (!ltssm_permitted)
       $fatal(1, "device did not permit LTSSM after BAR commit");
     $display("PCIE_DEVICE_PRELINK: LTSSM enable released after BAR commit");
   end
+  // Passive device DBI access check. Only original host Cfg TLPs can
+  // change host_memory_enable/bar_host_base; this read does not assist either
+  // LTSSM or the RC. Same physical state is visible in two address spaces.
+  initial begin
+    wait (host_memory_enable);
+    @(negedge core_clk);
+    prelink_addr = 13'h1010;
+    #1;
+    if (prelink_rdata !== (bar_host_base & 32'hffff_fff0))
+      $fatal(1,"CPU DBI BAR mirror differs from over-link host BAR");
+    $display("PCIE_DEVICE_DBI_ALIAS: BAR0=%08h",prelink_rdata);
+    @(negedge core_clk);
+    prelink_addr = 13'h1014;
+    #1;
+    if (prelink_rdata !== 32'h0000_0002)
+      $fatal(1,"CPU DBI COMMAND.MSE mirror differs from host configuration");
+    $display("PCIE_DEVICE_DBI_ALIAS: COMMAND=%08h",prelink_rdata);
+  end
+
   // Upstream endpoint reports Gen1 PIPE_WIDTH=16, so run the RC at 16 bits
   // rather than incorrectly presenting four host bytes per endpoint beat.
   // The 32-bit adapter shell is zero-extended only: the physical exchange
@@ -93,11 +120,7 @@ module test #(
   wire [3:0] ep_rx_tlp_keep;
   wire [4:0] ep_rx_tlp_user;
   wire ep_rx_tlp_valid, ep_rx_tlp_last;
-  wire [31:0] bar_host_base;
-  wire host_bar_probe, host_cfg_violation, host_memory_enable;
-
-  wire [20:0] ltssm_debug_state;
-  wire ep_link_up;
+  wire host_bar_probe;
   wire ep_fc_initialized;
   wire [1:0] phy_powerdown;
   wire [2:0] phy_rate;
