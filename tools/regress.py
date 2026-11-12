@@ -403,9 +403,15 @@ def run_target(name, test, resolver, options):
                 raise ValueError('unreviewed canonical Cocotb producer variant')
             noc_entries = noc_contracts()
             noc_root = ROOT/'gen/noc/floonoc'
-            for _, entry in sorted(noc_entries.items()):
-                sources.extend((str(noc_root/entry['package']),
-                                str(noc_root/entry['top'])))
+            # Preserve the original selected filelist sequence EXACTLY:
+            # every FlooNoC package first, then every corresponding top.
+            # Interleaving package/top changes compiler input order even
+            # when the same files are present, and would make the canonical
+            # migration alter execution rather than only its output root.
+            sources += [str(noc_root/entry['package'])
+                        for _, entry in sorted(noc_entries.items())]
+            sources += [str(noc_root/entry['top'])
+                        for _, entry in sorted(noc_entries.items())]
             append_pinned_dma_and_bender_sources(
                 test, resolver, sources, includes, defines)
             sources = list(dict.fromkeys(sources))
