@@ -23,6 +23,7 @@ on:
       - 'tests/test_scenario_cpu_plan_witness.py'
       - 'tools/scenario_cpu_action_trace.py'
       - 'tests/test_scenario_cpu_action_trace.py'
+      - 'tests/test_cpu_scenario_firmware_elf.py'
       - 'tools/scenario_c.py'
       - 'sw/common/soc_scn_action_adapter.h'
       - 'sw/common/soc_scn_action_args.h'
@@ -78,6 +79,22 @@ jobs:
           name: scenario-plan-intent-only
           path: .tools/scenarios/smoke/scenario-plan.json
           if-no-files-found: ignore
+
+  scenario-cpu-elf:
+    name: Fast freestanding selected CPU C scenario RV32I link preflight
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Install compiler and firmware configuration dependencies
+        run: |
+          python3 -m pip install 'PyYAML==6.0.3'
+          sudo apt-get update -qq
+          sudo apt-get install -y clang llvm lld
+      - name: Link actual selected scenario CPU with two source replay seeds
+        run: python3 -m unittest tests.test_cpu_scenario_firmware_elf -v
 
   scenario-real-rtl:
     name: CPU C and BFM use same plan on generated FlooNoC RTL
