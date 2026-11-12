@@ -2,6 +2,7 @@
  * This is an ABI/type check, not proof of a CPU/Config-NoC register access.
  */
 #include "soc_pcie_ep_prelink_regs.h"
+#include "pcie_endpoint_ctrl.h"
 
 _Static_assert(SOC_PCIE_EP_CTRL_BASE == UINT32_C(0x40040000), "bad CPU Config NoC base");
 _Static_assert(SOC_PCIE_EP_BAR0_APERTURE_OFFSET == UINT32_C(0x1000), "reserved requester overlap");
@@ -27,5 +28,16 @@ static inline volatile uint32_t *pcie_ep_csr(void) {
     return (volatile uint32_t *)(uintptr_t)SOC_PCIE_EP_CTRL_BASE;
 }
 uint32_t soc_pcie_ep_stub_read_status(void) {
-    return pcie_ep_csr()[SOC_PCIE_EP_STATUS_OFFSET / 4u];
+    return soc_pcie_ep_read_status(pcie_ep_csr());
+}
+
+/* Compile API against the same generated header. Actual CPU/frontdoor
+ * execution remains an independent integration gate.
+ */
+bool soc_pcie_ep_stub_setup(void) {
+    return soc_pcie_ep_configure(pcie_ep_csr(),UINT32_C(4096),
+                                 UINT32_C(0x12000000),UINT32_C(1000));
+}
+soc_pcie_ep_host_state soc_pcie_ep_stub_host_alias(void) {
+    return soc_pcie_ep_read_host_state(pcie_ep_csr());
 }
