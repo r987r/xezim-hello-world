@@ -32,16 +32,22 @@ async def host_to_real_floonoc_tc_sram(dut):
     dut._log.info("PCIE0_RTL_BAR_RELOCATE_SAMPLED=%d after actual clock evaluation",
                   int(relocated))
     rc = RootComplex()
-    # In cocotbext-pcie 0.2.14 the RC constructor registers the outbound
-    # TLP region at its DEFAULT mem_base (0xc0000000). Changing mem_base
-    # afterward moves BAR allocation, but does not change the AddressSpace
-    # mapping, so BAR accesses fail before any TLP is sent. Install the
-    # address-qualified outbound TLP region inside its low-address mem_pool.
-    # This is RC BFM setup, not an RTL address-translation shortcut.
+    # cocotbext-pcie 0.2.14 registers outbound PCIe TLPs in the root
+    # mem_address_space at 0xc0000000 by default. Merely moving mem_base
+    # changes BAR allocation without adding a corresponding TLP route.
+    # Critically, mem_pool covers ONLY [0, 0x80000000), so registering
+    # 0x80001000 there fails immediately with ValueError: address out of
+    # range. Register the high BAR on the root address space instead.
+    # The registered MemoryTlpRegion still routes through the real RC TLP
+    # send path, never through a host-memory shortcut or synthetic completion.
     if relocated:
-        # Real host PCIe BAR bus address is distinct from SRAM NoC address.
-        rc.mem_pool.register_region(rc.mem_region, 0x80000000, 0x100000, offset=None)
+        rc.mem_address_space.register_region(
+            rc.mem_region, 0x80000000, 0x100000, offset=None
+        )
         rc.mem_base = 0x80001000
+        assert rc.mem_address_space.find_regions(0x80001000, 0x1000), (
+            "relocated PCIe host BAR must resolve to the TLP region"
+        )
     else:
         rc.mem_pool.register_region(rc.mem_region, 0x12000000, 0x100000, offset=None)
         rc.mem_base = 0x12000000
