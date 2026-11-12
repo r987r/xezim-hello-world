@@ -86,40 +86,15 @@ module test #(
   wire ep_txdata_valid, ep_txelecidle, ep_rxdata_valid, ep_rxelecidle;
   wire ep_txdetectrx, phy_phystatus;
   wire [2:0] phy_rxstatus;
-  // REAL upstream config TLP path, with source-qualified BAR overlay.
-  wire [31:0] ep_rx_tlp_data, ep_cfg_cpl_data;
-  wire [3:0] ep_rx_tlp_keep, ep_cfg_cpl_keep;
-  wire [4:0] ep_rx_tlp_user, ep_cfg_cpl_user;
-  wire ep_rx_tlp_valid, ep_rx_tlp_last, ep_rx_tlp_ready;
-  wire ep_cfg_cpl_valid, ep_cfg_cpl_last, ep_cfg_cpl_ready;
+  // The genuine PCIe config path resides inside the original DLLP receiver.
+  // Device prelink BAR signals enter it through PHY→DLL hierarchy. There is
+  // NO second external config wrapper or host/device software backchannel.
+  wire [31:0] ep_rx_tlp_data;
+  wire [3:0] ep_rx_tlp_keep;
+  wire [4:0] ep_rx_tlp_user;
+  wire ep_rx_tlp_valid, ep_rx_tlp_last;
   wire [31:0] bar_host_base;
-  wire host_bar_probe, host_cfg_violation;
-  wire host_memory_enable;
-  pcie_config_reg_pkg::pcie_config_reg__in_t cfg_hwif_in;
-  assign cfg_hwif_in = '{default:'0};
-  pcie_cfg_wrapper #(.DATA_WIDTH(32), .KEEP_WIDTH(4), .USER_WIDTH(5))
-  endpoint_cfg (
-    .clk_i(core_clk), .rst_i(~nreset),
-    .s_axis_tdata(ep_rx_tlp_data), .s_axis_tkeep(ep_rx_tlp_keep),
-    .s_axis_tvalid(ep_rx_tlp_valid), .s_axis_tlast(ep_rx_tlp_last),
-    .s_axis_tuser(ep_rx_tlp_user), .s_axis_tready(ep_rx_tlp_ready),
-    .cpl_axis_tdata(ep_cfg_cpl_data), .cpl_axis_tkeep(ep_cfg_cpl_keep),
-    .cpl_axis_tvalid(ep_cfg_cpl_valid), .cpl_axis_tlast(ep_cfg_cpl_last),
-    .cpl_axis_tuser(ep_cfg_cpl_user), .cpl_axis_tready(ep_cfg_cpl_ready),
-    // Non-configuration requests need the real NoC bridge in full-chip;
-    // the isolated L0 test never qualifies BAR memory transactions.
-    .m_tlp_axis_tdata(), .m_tlp_axis_tkeep(), .m_tlp_axis_tvalid(),
-    .m_tlp_axis_tlast(), .m_tlp_axis_tuser(),
-    .m_tlp_axis_tready(1'b0),
-    .cfg_bus_number_o(), .cfg_device_number_o(), .cfg_function_number_o(),
-    .hwif_in(cfg_hwif_in), .hwif_out(),
-    .bar0_device_committed_i(bar_committed),
-    .bar0_device_aperture_i(bar_aperture),
-    .bar0_host_bus_base_o(bar_host_base),
-    .bar0_host_memory_enable_o(host_memory_enable),
-    .bar0_probe_o(host_bar_probe),
-    .bar0_cfg_violation_o(host_cfg_violation)
-  );
+  wire host_bar_probe, host_cfg_violation, host_memory_enable;
 
   wire [20:0] ltssm_debug_state;
   wire ep_link_up;
@@ -175,6 +150,12 @@ module test #(
     .clk_i(core_clk), .rst_i(~nreset), .en_i(ltssm_permitted),
     .pipe_rx_usr_clk_i(pipe_clk), .pipe_tx_usr_clk_i(pipe_clk),
     .fc_initialized_o(ep_fc_initialized),
+    .bar0_device_committed_i(bar_committed),
+    .bar0_device_aperture_i(bar_aperture),
+    .bar0_host_bus_base_o(bar_host_base),
+    .bar0_host_memory_enable_o(host_memory_enable),
+    .bar0_probe_o(host_bar_probe),
+    .bar0_cfg_violation_o(host_cfg_violation),
     .phy_txdata(ep_txdata), .phy_txdata_valid(ep_txdata_valid),
     .phy_txdatak(ep_txdatak), .phy_txstart_block(), .phy_txsync_header(),
     .phy_rxdata(ep_rxdata), .phy_rxdata_valid(ep_rxdata_valid),
@@ -199,12 +180,14 @@ module test #(
     .as_mac_in_detect(), .as_cdr_hold_req(),
     .ltssm_debug_state(ltssm_debug_state),
     .tx_elec_idle(1'b0), .phy_ready_en(ltssm_permitted), .link_up_o(ep_link_up),
-    .s_tlp_axis_tdata(ep_cfg_cpl_data), .s_tlp_axis_tkeep(ep_cfg_cpl_keep),
-    .s_tlp_axis_tvalid(ep_cfg_cpl_valid), .s_tlp_axis_tlast(ep_cfg_cpl_last),
-    .s_tlp_axis_tuser(ep_cfg_cpl_user), .s_tlp_axis_tready(ep_cfg_cpl_ready),
+    // Original internal config block consumes over-link Cfg and sends Cpl.
+    // Non-config TLP bridge to FlooNoC is a distinct later qualification.
+    .s_tlp_axis_tdata('0), .s_tlp_axis_tkeep('0),
+    .s_tlp_axis_tvalid(1'b0), .s_tlp_axis_tlast(1'b0),
+    .s_tlp_axis_tuser('0), .s_tlp_axis_tready(),
     .m_tlp_axis_tdata(ep_rx_tlp_data), .m_tlp_axis_tkeep(ep_rx_tlp_keep),
     .m_tlp_axis_tvalid(ep_rx_tlp_valid), .m_tlp_axis_tlast(ep_rx_tlp_last),
-    .m_tlp_axis_tuser(ep_rx_tlp_user), .m_tlp_axis_tready(ep_rx_tlp_ready)
+    .m_tlp_axis_tuser(ep_rx_tlp_user), .m_tlp_axis_tready(1'b0)
   );
 
   // Endpoint Data Link Layer diagnostics: pure reads of the original
@@ -242,24 +225,27 @@ module test #(
     end
   end
 
-  // Device-local passive transaction boundary observations: the endpoint
-  // delivers accepted real-link TLP beats to its original configuration
-  // wrapper; the wrapper presents Cpl beats back to the endpoint. Never
-  // drive either path from a testbench procedure, nor infer a Cpl from intent.
+  // Passive evidence from the ONE internal OpenPCIe configuration path.
   integer observed_ep_cfg_rx_beats = 0;
   integer observed_ep_cfg_cpl_beats = 0;
   always @(posedge core_clk) if (nreset && ep_link_up) begin
-    if (ep_rx_tlp_valid && ep_rx_tlp_ready) begin
+    if (ep.pcie_datalink_layer_inst.dllp_receive_inst.tlp_to_mac_tvalid &&
+        ep.pcie_datalink_layer_inst.dllp_receive_inst.tlp_to_mac_tready) begin
       observed_ep_cfg_rx_beats <= observed_ep_cfg_rx_beats + 1;
       if (observed_ep_cfg_rx_beats < 64)
-        $display("PCIE_EP_CFG_RX_BEAT: data=%08h keep=%h last=%b at %0t",
-                 ep_rx_tlp_data,ep_rx_tlp_keep,ep_rx_tlp_last,$time);
+        $display("PCIE_EP_INTERNAL_CFG_RX_BEAT: data=%08h keep=%h last=%b at %0t",
+                 ep.pcie_datalink_layer_inst.dllp_receive_inst.tlp_to_mac_tdata,
+                 ep.pcie_datalink_layer_inst.dllp_receive_inst.tlp_to_mac_tkeep,
+                 ep.pcie_datalink_layer_inst.dllp_receive_inst.tlp_to_mac_tlast,$time);
     end
-    if (ep_cfg_cpl_valid && ep_cfg_cpl_ready) begin
+    if (ep.pcie_datalink_layer_inst.cpl_from_cfg_tvalid &&
+        ep.pcie_datalink_layer_inst.cpl_from_cfg_tready) begin
       observed_ep_cfg_cpl_beats <= observed_ep_cfg_cpl_beats + 1;
       if (observed_ep_cfg_cpl_beats < 64)
-        $display("PCIE_EP_CFG_CPL_TX_BEAT: data=%08h keep=%h last=%b at %0t",
-                 ep_cfg_cpl_data,ep_cfg_cpl_keep,ep_cfg_cpl_last,$time);
+        $display("PCIE_EP_INTERNAL_CFG_CPL_TX_BEAT: data=%08h keep=%h last=%b at %0t",
+                 ep.pcie_datalink_layer_inst.cpl_from_cfg_tdata,
+                 ep.pcie_datalink_layer_inst.cpl_from_cfg_tkeep,
+                 ep.pcie_datalink_layer_inst.cpl_from_cfg_tlast,$time);
     end
   end
 
