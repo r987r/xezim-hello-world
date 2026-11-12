@@ -11,7 +11,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT/"tools"))
 sys.path.insert(0, str(ROOT/"rtl/memory/ddr4"))
-from ddr_mr_report import layout, read_evidence
+from ddr_mr_report import layout, read_evidence, annotate_protocol
 from publish_site import ddr_mr_views
 from mrs_check import verify_observed
 from test_mrs_contract import fixture
@@ -115,6 +115,70 @@ class DdrMRPages(unittest.TestCase):
             (folder/"ddr4_mrs_evidence.json").write_text(json.dumps(bad))
             with self.assertRaisesRegex(ValueError, "decoded DDR4 fields"):
                 read_evidence(folder/"ddr4_mrs_evidence.json")
+
+
+    def test_unified_traffic_has_verified_rdl_decode(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp)
+            _,folder,original,_=recorded_run(root)
+            verified=read_evidence(folder/"ddr4_mrs_evidence.json",
+                                   folder/"protocol-transactions.json")
+            source=copy.deepcopy(original)
+            for event in source["records"]:
+                event["protocol"]="dfi"
+            decoded=annotate_protocol(source,verified)
+            self.assertNotIn("mr_register",source["records"][0]["fields"])
+            self.assertEqual([r["fields"]["mr_register"] for r in decoded["records"]],
+                             ["MR3","MR6","MR5","MR4","MR2","MR1","MR0"])
+            mr5=decoded["records"][2]["fields"]
+            self.assertEqual(mr5["mr_programmed_value"],"0x0400")
+            self.assertEqual(mr5["mr_match"],"MATCH")
+            self.assertEqual(mr5["mr_decoded_fields"][0]["field"],"data_mask")
+            self.assertEqual(mr5["mr_decoded_fields"][0]["value"],1)
+            self.assertEqual(mr5["mr_programming_phase"],"INIT")
+            self.assertEqual(mr5["mr_decode_scope"],
+                             "observed_DFI_command_not_DRAM_device_readback")
+            self.assertFalse(mr5["mr_model_applies_settings"])
+
+    def test_unified_overlay_rejects_corrupted_raw_capture(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp)
+            _,folder,original,_=recorded_run(root)
+            verified=read_evidence(folder/"ddr4_mrs_evidence.json",
+                                   folder/"protocol-transactions.json")
+            source=copy.deepcopy(original)
+            for event in source["records"]:
+                event["protocol"]="dfi"
+            variants=[]
+            bad=copy.deepcopy(source)
+            bad["records"][0],bad["records"][1]=bad["records"][1],bad["records"][0]
+            variants.append(bad)
+            bad=copy.deepcopy(source)
+            bad["records"][1]["fields"]["address"] ^= 1
+            variants.append(bad)
+            bad=copy.deepcopy(source)
+            bad["records"][0]["fields"]["mr_match"]="MATCH"
+            variants.append(bad)
+            bad=copy.deepcopy(source)
+            bad["records"][0]["protocol"]="axi4"
+            variants.append(bad)
+            for i,variant in enumerate(variants):
+                with self.subTest(mutation=i):
+                    with self.assertRaisesRegex(ValueError,"MR decode"):
+                        annotate_protocol(variant,verified)
+
+    def test_unified_traffic_view_and_publish_paths(self):
+        published=(ROOT/"tools/publish_site.py").read_text()
+        site=(ROOT/"tools/templates/site_runs_traffic.js").read_text()
+        run=(ROOT/"tools/templates/site_runs.html").read_text()
+        detail=(ROOT/"tools/templates/protocol_report.html").read_text()
+        self.assertIn("protocol-transactions-decoded.json",published)
+        self.assertIn("visible_protocol = annotate_protocol(protocol_data, mr_view)",published)
+        self.assertIn("protocol_decode_href",site)
+        self.assertIn("traffic-mrs-decode",site)
+        self.assertIn("traffic-mrs-decode",run)
+        self.assertIn("mrs-decoded",detail)
+        self.assertIn("mr_decoded_fields",detail)
 
     def test_templates_have_explicit_statuses(self):
         address=(ROOT/"tools/templates/site_address-map.html").read_text()
