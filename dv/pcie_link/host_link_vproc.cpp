@@ -25,6 +25,8 @@ static unsigned completion_byte_count = 0;
 static uint32_t completion_data = 0;
 static unsigned completed_config_packets = 0;
 static unsigned next_tag = 0;
+static bool bar0_enumerated = false;
+static uint32_t bar0_bus_base = 0, bar0_aperture = 0;
 
 static void on_packet(pPkt_t pkt, int, void*) {
     if (!pkt) return;
@@ -165,7 +167,54 @@ static int configure_selected_bar0(const soc_scn_action_t *action, void *opaque)
     }
     std::printf("PCIE_RC_CFG_MSE_ENABLED: command=%08x completions=%u\n",
                 actual,completed_config_packets);
+    bar0_bus_base = static_cast<uint32_t>(base);
+    bar0_aperture = static_cast<uint32_t>(aperture);
+    bar0_enumerated = true;
     return 0;
+}
+
+// Original PCIe host transmits a posted memory TLP over digital PIPE.
+// No endpoint NoC sink is attached in this mode; this is ingress evidence.
+static int write_selected_bar0(const soc_scn_action_t *action, void *opaque) {
+    if (!action || !opaque || std::strcmp(action->kind,"pcie.memory.write"))
+        return -1;
+    const char *link=nullptr;
+    uint64_t index=UINT64_MAX, offset=UINT64_MAX, word=UINT64_MAX;
+    for (uint32_t i=0; i<action->argument_count; ++i) {
+        const soc_scn_argument_t *arg =
+            soc_scn_argument_at(action->first_argument+i);
+        if (!arg || !arg->key) return -1;
+        if (!std::strcmp(arg->key,"link") && arg->is_text)
+            link=arg->text_value;
+        else if (!std::strcmp(arg->key,"bar_index") && !arg->is_text)
+            index=arg->uint_value;
+        else if (!std::strcmp(arg->key,"offset") && !arg->is_text)
+            offset=arg->uint_value;
+        else if (!std::strcmp(arg->key,"data_word") && !arg->is_text)
+            word=arg->uint_value;
+        else return -1;
+    }
+    if (!link || std::strcmp(link,"pcie0") || index!=0 ||
+        !bar0_enumerated || offset > UINT32_MAX ||
+        offset+4 > bar0_aperture || (offset&3) ||
+        word>UINT32_MAX || unexpected_completion || pending_tag>=0)
+        return -1;
+    const uint32_t address=bar0_bus_base+static_cast<uint32_t>(offset);
+    PktData_t bytes[4] = {
+        static_cast<PktData_t>(word & 255u),
+        static_cast<PktData_t>((word>>8)&255u),
+        static_cast<PktData_t>((word>>16)&255u),
+        static_cast<PktData_t>((word>>24)&255u)
+    };
+    auto *rc=static_cast<pcieModelClass*>(opaque);
+    std::printf("PCIE_RC_BAR_MWR_TX: action=%s addr=%08x data=%08x plan=%s\n",
+                action->action_instance_id,address,
+                static_cast<unsigned>(word),SOC_SCN_PLAN_SHA256);
+    std::fflush(stdout);
+    rc->memWrite(address,bytes,4,static_cast<int>((next_tag++)&31u),1);
+    // A posted MWr has no Cpl. Never interpret the return as SRAM evidence.
+    rc->sendIdle(1000);
+    return unexpected_completion ? -1 : 0;
 }
 
 static int train_selected_link(const soc_scn_action_t *action, void *opaque) {
@@ -235,9 +284,10 @@ extern "C" void VUserMain0(int node) {
     const soc_scn_driver_registration_t handlers[] = {
         {"pcie.link.train", train_selected_link},
         {"pcie.config.bar0", configure_selected_bar0},
+        {"pcie.memory.write", write_selected_bar0},
     };
     const soc_scn_driver_result_t result = soc_scn_driver_run(
-        selected_sha, handlers, 2, record_driver, &rc);
+        selected_sha, handlers, 3, record_driver, &rc);
     if (result.status != SOC_SCN_ADAPTER_OK ||
         result.issued != SOC_SCN_ACTION_COUNT ||
         result.driver_done != SOC_SCN_ACTION_COUNT) {
