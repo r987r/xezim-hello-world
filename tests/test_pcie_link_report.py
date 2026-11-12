@@ -4,7 +4,7 @@ import unittest
 from tempfile import TemporaryDirectory
 from pathlib import Path
 
-from tools.pcie_link_report import summarize, render, export_shared_protocol_timeline
+from tools.pcie_link_report import summarize, render, render_actions_summary, export_shared_protocol_timeline
 
 PLAN="a"*64
 GOOD=f"""PCIE_EP_SIM_FAST_LTSSM: ENABLED timer_divider=512 min_tx_ts1=16 1ms_cycles=195
@@ -87,6 +87,19 @@ class PcieLinkEvidenceTests(unittest.TestCase):
         ):
             with self.subTest(replacement=edited[-100:]):
                 self.assertFalse(summarize(edited)["qualified_digital_link_l0"])
+
+    def test_actions_webpage_summary_exposes_both_original_ltssms(self):
+        row=summarize(GOOD)
+        markdown=render_actions_summary(row)
+        self.assertIn("Host stage (original C model)",markdown)
+        self.assertIn("Endpoint stage (original RTL)",markdown)
+        self.assertIn("Detect Quiet",markdown)
+        self.assertIn("Polling.Active",markdown)
+        self.assertIn("Configuration exit to L0",markdown)
+        self.assertIn("| L0 |",markdown)
+        self.assertIn("Not emitted",markdown)
+        self.assertIn("25556.000",markdown)
+        self.assertNotIn("NoC SRAM writes qualified",markdown)
 
     def test_negative_missing_independent_l0(self):
         for marker in ("PCIE_ENDPOINT_L0:", "PCIE_HOST_L0:", "PCIE_TRACE: PHY receiver present",
