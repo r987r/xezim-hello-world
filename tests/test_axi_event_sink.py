@@ -42,6 +42,25 @@ class PassiveAxiEventSinkTests(unittest.TestCase):
                          "".join(json.dumps(row, separators=(",",":")) + "\n"
                                  for row in expected))
 
+    def test_default_per_event_flush_matches_historical_all_regressions(self):
+        output = TrackedOutput()
+        sink = PassiveAxiEventSink(output, batch_events=1)
+        events = [
+            {"monitor": "compute0_local_data.cpu", "channel": "ar",
+             "time_ps": 100, "fields": {"id": "0x0", "addr": "0x100000d0"}},
+            {"monitor": "compute0_local_data.cpu", "channel": "r",
+             "time_ps": 110, "fields": {"id": "0x0", "last": "0x1"}},
+        ]
+        for i, event in enumerate(events, 1):
+            sink.write(event)
+            self.assertEqual(output.flush_calls, i)
+            self.assertEqual(sink.pending, 0)
+            self.assertEqual([json.loads(line) for line in output.getvalue().splitlines()],
+                             events[:i])
+        for invalid in (0, 129, False, "1", 2.3):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                PassiveAxiEventSink(TrackedOutput(), batch_events=invalid)
+
     def test_critical_controls_flush_immediately_without_discarding_channel_events(self):
         output = TrackedOutput()
         sink = PassiveAxiEventSink(output)
