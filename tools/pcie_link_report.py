@@ -358,13 +358,17 @@ def render_actions_summary(data:dict) -> str:
     return "\n".join(lines)
 
 
-def export_shared_protocol_timeline(data:dict, output:Path) -> dict:
+def export_shared_protocol_timeline(data:dict, output:Path, *, bar_evidence=None) -> dict:
     """Reuse the EXISTING protocol event exporter and HTML explorer.
 
     Only endpoint LTSSM state transitions have observed simulator ps stamps;
     host return, local BAR setup and software events without timestamps stay
     in the separate diagnostic JSON/HTML and are never promoted to protocol
-    events or TLP completions.
+    events or TLP completions. Optional BAR0 rows are an independently checked
+    *original host* configuration request, real endpoint RX/AXI-Lite
+    acceptance, returned Cpl/CplD and RC callback. Their times are ONLY
+    endpoint RTL accepted pin timestamps, never the RC's unrelated clock.
+    This does not connect the non-config bridge or qualify SoC boot.
     """
     try:
         from . import protocol_report
@@ -381,15 +385,56 @@ def export_shared_protocol_timeline(data:dict, output:Path) -> dict:
             "modeling":"behavioral_digital_phy",
         }
     }
+    if bar_evidence is not None:
+        transactions=bar_evidence.get("transactions")
+        if (bar_evidence.get("qualified_over_link_bar0") is not True
+                or not isinstance(transactions,list) or len(transactions)!=6):
+            raise ValueError("unqualified source-checked real BAR0 enumeration")
+        sources["pcie0.config"]={
+            "protocol":"pcie", "clock_domain":"pipe_125mhz",
+            "role":"link", "implementation":"original_openpcie_cfg_tlp_axi_lite",
+            "modeling":"behavioral_digital_phy",
+        }
     trace=ProtocolTrace(output/"protocol-events.jsonl",sources)
-    for event in data["events"]:
-        if event["kind"]=="endpoint_ltssm":
-            trace.event(
-                "pcie0.ltssm", "ltssm_transition", event["time_ps"],
-                {"from": event["from"], "to": event["to"],
-                 "original_log_line": event["line"]})
-    trace.close("pass" if data["qualified_digital_link_l0"] else "fail",
-                "; ".join(data["issues"]) if data["issues"] else None)
+    try:
+        for event in data["events"]:
+            if event["kind"]=="endpoint_ltssm":
+                trace.event(
+                    "pcie0.ltssm", "ltssm_transition", event["time_ps"],
+                    {"from": event["from"], "to": event["to"],
+                     "original_log_line": event["line"]})
+        if bar_evidence is not None:
+            for row in transactions:
+                start=row.get("endpoint_first_rx_ps")
+                finish=row.get("endpoint_last_cpl_ps")
+                if (type(start) is not int or type(finish) is not int
+                        or start < 0 or finish < start
+                        or row.get("host_completion_observed") is not True
+                        or row.get("actual_completion_kind") not in ("Cpl","CplD")):
+                    raise ValueError("BAR0 transaction lacks real accepted pins and RC completion")
+                if row.get("kind") not in ("CfgWr0","CfgRd0"):
+                    raise ValueError("unexpected original configuration TLP")
+                trace.transaction(
+                    "pcie0.config", "cfg_wr0" if row["kind"]=="CfgWr0" else "cfg_rd0",
+                    start_ps=start, end_ps=finish,
+                    identifier=row["host_tag"], status="complete",
+                    fields={
+                        "address":row["address"], "host_value":row["host_value"],
+                        "endpoint_received_payload":row.get("endpoint_received_payload"),
+                        "axi_accepted_wdata":row.get("axi_accepted_wdata"),
+                        "endpoint_cpld_payload":row.get("endpoint_cpld_payload"),
+                        "completion_type":row["actual_completion_kind"],
+                        "host_completion_observed":True,
+                        "root_complex_cpl_timestamp_native":row["root_complex_cpl_timestamp_native"],
+                        "time_scope":"endpoint_accepted_pins_ps",
+                        "evidence_scope":"isolated_real_host_cfg_only",
+                    })
+        trace.close("pass" if data["qualified_digital_link_l0"] else "fail",
+                    "; ".join(data["issues"]) if data["issues"] else None)
+    except BaseException as exc:
+        if not trace.closed:
+            trace.close("fail",str(exc))
+        raise
     # This is deliberately NOT a source-selected full-chip regress.py result,
     # and produces no result.json or fake AXI/TLP transactions.
     plan={"target":"pcie-link-isolated","engine":"verilator",
@@ -402,6 +447,8 @@ def main() -> int:
     p.add_argument("log",type=Path)
     p.add_argument("--out",type=Path,required=True)
     p.add_argument("--github-summary",type=Path,help="Append browser-visible Actions summary")
+    p.add_argument("--bar-evidence",type=Path,
+                   help="Source-verified real BAR0 ConfigRd/ConfigWr evidence JSON")
     args=p.parse_args()
     if not args.log.is_file():
         p.error("simulation log not found")
@@ -413,7 +460,8 @@ def main() -> int:
         with args.github_summary.open("a",encoding="utf-8") as handle:
             handle.write(render_actions_summary(data))
     # Same passive-protocol explorer renderer as our existing TLP/AXI reports.
-    export_shared_protocol_timeline(data,args.out)
+    bar_evidence=json.loads(args.bar_evidence.read_text()) if args.bar_evidence else None
+    export_shared_protocol_timeline(data,args.out,bar_evidence=bar_evidence)
     print(f"{'PASS' if data['qualified_digital_link_l0'] else 'FAIL'} isolated PCIe L0 diagnostic: "
           f"{len(data['events'])} observations; {data['issues']}")
     return 0 if data["qualified_digital_link_l0"] else 1
