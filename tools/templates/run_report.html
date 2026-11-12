@@ -64,6 +64,15 @@ header{display:flex;justify-content:space-between;align-items:center;gap:18px}h1
  <div class="table-wrap"><table><thead><tr><th>Plane</th><th>Region / CSR</th><th>Base / Address</th><th>Span / Width</th><th>Type / Backing</th><th>Observed AXI</th><th>Access</th></tr></thead><tbody id="address-map-rows"></tbody></table></div>
  <div class="details"><strong>Selected address-map entry</strong><pre id="address-map-details">Select an entry above for definition, backing model and evidence details.</pre></div>
 </section>
+<section class="card" id="ddr-mrs-section" aria-label="DDR4 device mode register programming">
+ <div class="toolbar"><div><h2>DDR4 device mode registers · MR0–MR6</h2><p id="ddr-mrs-status">Inspect whether this particular test observed mode-register programming.</p></div></div>
+ <p><strong>Not memory-mapped CSRs.</strong> These are DRAM device MRS commands sent through LiteDRAM's existing DFII interface. A test without a qualified DFI monitor is <strong>UNMEASURED</strong>, not assumed unchanged. An observed command does not prove the behavioral DRAM model applied it.</p>
+ <div id="ddr-mrs-provenance"></div>
+ <div class="table-wrap" id="ddr-mrs-wrap" hidden>
+  <table><thead><tr><th>Device MR</th><th>Expected init value</th><th>Observed on DFI</th><th>Check</th><th>Test action</th><th>DFI cycle</th><th>Changed after INIT?</th></tr></thead><tbody id="ddr-mrs-rows"></tbody></table>
+ </div>
+ <div id="ddr-mrs-fields"></div>
+</section>
 <section class="card" id="memory-section" hidden><h2>Memory INIT / CHECK</h2><p id="memory-context"></p><div class="table-wrap"><table><thead><tr><th>Operation</th><th>Method</th><th>Bytes</th><th>Wall ms</th><th>Sim cycles</th></tr></thead><tbody id="memory-rows"></tbody></table></div><p id="memory-note"></p></section>
 <section class="card"><h2>Capture coverage and diagnostics</h2><p id="coverage-summary"></p><div class="coverage" id="coverage"></div><pre id="diagnostics"></pre></section>
 <p style="margin-top:20px">Self-contained run report · passive cocotbext-axi channel capture · no external assets or server required</p>
@@ -76,6 +85,40 @@ const report=JSON.parse(document.getElementById('run-data').textContent), run=re
 const $=id=>document.getElementById(id), rows=axi.transactions, size=100;
 const memory=report.sections.memory;
 const addressMap=report.sections.address_map;
+const mrEvidence=report.sections.ddr_mrs;
+if(mrEvidence){
+ $('ddr-mrs-status').textContent='OBSERVED AND MATCHED · '+mrEvidence.observed_writes+' real DFI MRS commands, one per MR0–MR6, in INIT';
+ $('ddr-mrs-provenance').textContent='RDL source SHA-256 '+mrEvidence.rdl_sha256+' · no additional MRS captured after INIT · no device-side MR readback, timing qualification or MR-state enforcement';
+ $('ddr-mrs-wrap').hidden=false;
+ for(const item of mrEvidence.records){
+  const tr=document.createElement('tr');
+  const values=['MR'+item.mr,item.expected_value,item.value,item.matched?'MATCH':'MISMATCH',
+    'INIT program',item.cycle,mrEvidence.after_init_writes===0?'No further MRS observed':'Observed reprogramming'];
+  for(const value of values){const td=document.createElement('td');td.textContent=String(value);tr.append(td);}
+  $('ddr-mrs-rows').append(tr);
+  const details=document.createElement('details');
+  const summary=document.createElement('summary');
+  summary.textContent='MR'+item.mr+' · decoded RDL fields · '+item.value;
+  details.append(summary);
+  const table=document.createElement('table'),head=document.createElement('thead'),headRow=document.createElement('tr');
+  for(const title of ['Field','Bits','Decoded value','Definition']){const th=document.createElement('th');th.textContent=title;headRow.append(th);}
+  head.append(headRow);table.append(head);
+  const body=document.createElement('tbody');
+  const reg=mrEvidence.field_definitions[String(item.mr)];
+  for(const f of reg.fields){
+   const row=document.createElement('tr');
+   for(const v of [f.name,f.msb+':'+f.lsb,item.fields[f.name],f.description||'Unqualified field']){
+    const td=document.createElement('td');td.textContent=String(v);row.append(td);
+   }
+   body.append(row);
+  }
+  table.append(body);details.append(table);$('ddr-mrs-fields').append(details);
+ }
+}else{
+ $('ddr-mrs-status').textContent='UNMEASURED · no independently qualified MRS trace is attached to this run';
+ $('ddr-mrs-provenance').textContent='This does not prove the test never initialized DDR; use the source-selected run and its actual protocol evidence to determine whether a real controller was exercised.';
+}
+
 if(addressMap){
  $('address-map-section').hidden=false;
  const allMapEntries=[];
