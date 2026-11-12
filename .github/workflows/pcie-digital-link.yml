@@ -534,6 +534,10 @@ jobs:
             grep -q '^PCIE_RC_CFG_PROBE_OK: BAR0 mask=fffff000' "$root/pcie-cross-run.log"
             grep -q '^PCIE_RC_CFG_BAR_ASSIGNED: BAR0 bus=80001000' "$root/pcie-cross-run.log"
             grep -q '^PCIE_RC_CFG_MSE_ENABLED:' "$root/pcie-cross-run.log"
+            # CPU-side DBI alias must reflect the same host-owned hardware
+            # BAR0/MSE state observed over TLP; never a TB-written duplicate.
+            grep -q '^PCIE_DEVICE_DBI_ALIAS: BAR0=80001000' "$root/pcie-cross-run.log"
+            grep -q '^PCIE_DEVICE_DBI_ALIAS: COMMAND=00000002' "$root/pcie-cross-run.log"
             grep -Fq "PCIE_SCN_DRIVER: plan=$SOC_SELECTED_PLAN_SHA action=enumerate_bar0 stage=driver_done" "$root/pcie-cross-run.log"
           fi
           grep -q '^PCIE_TRACE: receiver-detect request' "$root/pcie-cross-run.log"
