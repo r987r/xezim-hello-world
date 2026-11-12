@@ -17,6 +17,7 @@ on:
       - 'config/soc.yaml'
       - 'tests/test_csr_dma_firmware_elf.py'
       - 'tools/csr_dma_headers.py'
+      - 'tools/csr_firmware_footprint.py'
       - 'tests/test_csr_dma_headers.py'
       - '.github/workflows/csr-firmware.yml'
   workflow_dispatch:
@@ -76,6 +77,15 @@ jobs:
           sudo apt-get install -y clang llvm lld
       - name: Link and compare real CPU C DMA legacy-vs-generated images
         run: python3 -m unittest tests.test_csr_dma_firmware_elf -v
+      - name: Audit linked RV32I footprint and exact CSR ABI across real CPU modes
+        run: python3 tools/csr_firmware_footprint.py --out .tools/csr-firmware/footprint.json
+      - name: Retain compiled variant ABI and footprint evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: csr-firmware-footprint
+          path: .tools/csr-firmware/footprint.json
+          if-no-files-found: warn
       - name: Compile real DMA C driver in generated and legacy ABI modes
         run: |
           clang --target=riscv32-unknown-elf -march=rv32i -mabi=ilp32 -ffreestanding -std=c11 -Wall -Wextra -Werror -Oz -ffunction-sections -fdata-sections -c sw/dma/dma.c -o .tools/csr-dma/dma_generated.o
