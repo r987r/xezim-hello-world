@@ -94,16 +94,17 @@ static inline int soc_scn_driver_preflight(
     if (!soc_scn_driver_for(registry, count, a->kind))
       return SOC_SCN_ADAPTER_UNSUPPORTED;
     for (j = 0; j < a->dependency_count; ++j) {
-      const char *dep = soc_scn_dependency_at(a->first_dependency + (uint32_t)j);
-      size_t k;
-      int earlier = 0;
-      if (dep == NULL) return SOC_SCN_ADAPTER_CONTRACT_ERROR;
-      for (k = 0; k < i; ++k)
-        if (soc_scn_text_equal(soc_scn_actions[k].action_instance_id, dep)) {
-          earlier = 1;
-          break;
-        }
-      if (!earlier) return SOC_SCN_ADAPTER_CONTRACT_ERROR;
+      const uint32_t slot = a->first_dependency + (uint32_t)j;
+      const uint32_t prior = soc_scn_dependency_index_at(slot);
+      const char *dep = soc_scn_dependency_at(slot);
+      /* The exact source-plan resolver already establishes the dependency
+       * order. Still verify the original dependency name and bounds at
+       * runtime: the integer index is only a fast lookup, not authorization.
+       * This avoids O(actions^2) string scans over AXI-backed flash.
+       */
+      if (dep == NULL || prior >= i ||
+          !soc_scn_text_equal(soc_scn_actions[prior].action_instance_id, dep))
+        return SOC_SCN_ADAPTER_CONTRACT_ERROR;
     }
   }
   return SOC_SCN_ADAPTER_OK;
