@@ -16,6 +16,7 @@ on:
       - 'csr/requirements.txt'
       - 'gen/pcie/csr/**'
       - 'tools/pcie_bar0_evidence.py'
+      - 'tools/pcie_mem_ingress_evidence.py'
       - 'tools/pcie_upstream_test_timing.py'
       - 'tools/ci_require_cocotb.py'
       - 'tools/generate.py'
@@ -34,6 +35,7 @@ on:
       - 'tests/test_pcie_csrgen.py'
       - 'tests/fixtures/pcie_csr_headers_smoke.c'
       - 'tests/test_pcie_bar0_evidence.py'
+      - 'tests/test_pcie_mem_ingress_evidence.py'
       - 'tests/test_pcie_mode_compatibility.py'
       - 'tests/test_pcie_upstream_test_timing.py'
       - 'config/regression.yaml'
@@ -116,7 +118,7 @@ jobs:
       - name: Prove profile swaps fail closed and checked-in generated selection agrees
         run: |
           set -euo pipefail
-          python3 -m unittest tests.test_pcie_link tests.test_ip_fetch_submodules tests.test_ci_require_cocotb tests.test_pcie_scenario tests.test_pcie_cfg_overlay tests.test_pcie_cfg_decode tests.test_pcie_link_report tests.test_pcie_bar0_evidence tests.test_pcie_mode_compatibility tests.test_pcie_upstream_test_timing tests.test_pcie_bar0_relocation_contract -v
+          python3 -m unittest tests.test_pcie_link tests.test_ip_fetch_submodules tests.test_ci_require_cocotb tests.test_pcie_scenario tests.test_pcie_cfg_overlay tests.test_pcie_cfg_decode tests.test_pcie_link_report tests.test_pcie_bar0_evidence tests.test_pcie_mem_ingress_evidence tests.test_pcie_mode_compatibility tests.test_pcie_upstream_test_timing tests.test_pcie_bar0_relocation_contract -v
           python3 tools/pcie_link.py --check
           mkdir -p .tools/pcie-link
           iverilog -g2012 -s tb_pcie_pipe_x1_adapter \
@@ -554,6 +556,8 @@ jobs:
             grep -Fq "PCIE_SCN_DRIVER: plan=$SOC_SELECTED_PLAN_SHA action=write_bar0 stage=driver_done" "$root/pcie-cross-run.log"
             grep -q '^PCIE_RC_BAR_MWR_TX: action=write_bar0 addr=80001100 data=a5c36e91' "$root/pcie-cross-run.log"
             grep -q '^PCIE_EP_MEM_TLP_BACKPRESSURE: original endpoint valid ready=0' "$root/pcie-cross-run.log"
+            python3 "$root/tools/pcie_mem_ingress_evidence.py" "$root/pcie-cross-run.log" \
+              --out "$root/.tools/pcie-link/observations"
             # NO AXI transfer or completion asserted here; link ingress only.
           fi
           grep -q '^PCIE_TRACE: receiver-detect request' "$root/pcie-cross-run.log"
@@ -569,6 +573,7 @@ jobs:
             .tools/pcie-link/scenario/scenario-plan.json
             .tools/pcie-link/observations/pcie-link-evidence.json
             .tools/pcie-link/observations/pcie-bar0-evidence.json
+            .tools/pcie-link/observations/pcie-mem-ingress-evidence.json
             .tools/pcie-link/observations/pcie-link-report.html
             .tools/pcie-link/observations/protocol-events.jsonl
             .tools/pcie-link/observations/protocol-transactions.json
