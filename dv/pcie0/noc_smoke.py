@@ -32,21 +32,27 @@ async def host_to_real_floonoc_tc_sram(dut):
     dut._log.info("PCIE0_RTL_BAR_RELOCATE_SAMPLED=%d after actual clock evaluation",
                   int(relocated))
     rc = RootComplex()
-    # cocotbext-pcie 0.2.14 registers outbound PCIe TLPs in the root
-    # mem_address_space at 0xc0000000 by default. Merely moving mem_base
-    # changes BAR allocation without adding a corresponding TLP route.
-    # Critically, mem_pool covers ONLY [0, 0x80000000), so registering
-    # 0x80001000 there fails immediately with ValueError: address out of
-    # range. Register the high BAR on the root address space instead.
-    # The registered MemoryTlpRegion still routes through the real RC TLP
-    # send path, never through a host-memory shortcut or synthetic completion.
+    # The upstream RC has two reserved mappings: low mem_pool spans
+    # [0, 0x80000000), while the 16-byte MSI aperture starts at 0x80000000.
+    # Consequently the older low-pool mapping failed "address out of range";
+    # replacing it with a 1MiB root mapping at 0x80000000 failed "overlaps
+    # existing region" because of that MSI aperture. The device's BAR0 is
+    # exactly 4KiB at 0x80001000: route ONLY its actual address window.
+    # offset=None preserves absolute addresses in authentic TLP requests.
+    # This never substitutes host RAM for real RTL or fabricates a completion.
     if relocated:
-        rc.mem_address_space.register_region(
-            rc.mem_region, 0x80000000, 0x100000, offset=None
+        host_bar = 0x80001000
+        bar_size = 0x1000
+        assert not rc.mem_address_space.find_regions(host_bar, bar_size), (
+            "host BAR collides with an upstream reserved RC region"
         )
-        rc.mem_base = 0x80001000
-        assert rc.mem_address_space.find_regions(0x80001000, 0x1000), (
-            "relocated PCIe host BAR must resolve to the TLP region"
+        rc.mem_address_space.register_region(
+            rc.mem_region, host_bar, bar_size, offset=None
+        )
+        rc.mem_base = host_bar
+        matches = rc.mem_address_space.find_regions(host_bar, bar_size)
+        assert len(matches) == 1 and matches[0][3] is rc.mem_region, (
+            "relocated PCIe host BAR must use the real TLP route"
         )
     else:
         rc.mem_pool.register_region(rc.mem_region, 0x12000000, 0x100000, offset=None)
