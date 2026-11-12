@@ -94,10 +94,21 @@ def run(*, bar_relocate: bool = False):
               details[-12000:], sep="\n", file=sys.stderr, flush=True)
         raise RuntimeError("missing Cocotb results XML: see simulator log above")
     tests = ElementTree.parse(result).findall(".//testcase")
-    if not tests or any(
-        any(t.find(tag) is not None for tag in ("failure", "error", "skipped"))
-        for t in tests
-    ):
+    failures = [(t.get("name", "<unnamed>"), tag, t.find(tag))
+                for t in tests for tag in ("failure", "error", "skipped")
+                if t.find(tag) is not None]
+    if not tests or failures:
+        print(f"PCIe {'relocated' if bar_relocate else 'legacy'} NoC RTL "
+              f"simulation failed: {len(tests)} testcases, {len(failures)} failures",
+              file=sys.stderr, flush=True)
+        for name, tag, node in failures:
+            print(f"  {name}: {tag}: {node.get('message', '')}",
+                  (node.text or "")[-5000:], sep="\n", file=sys.stderr, flush=True)
+        transcript = output / "simulation.log"
+        if transcript.is_file():
+            print("Last simulator transcript lines:",
+                  *transcript.read_text(errors="replace").splitlines()[-65:],
+                  sep="\n", file=sys.stderr, flush=True)
         raise RuntimeError("real NoC/SRAM regression failed")
     print("PCIE0_BAR_RELOCATED_NOC_SRAM_PASS" if bar_relocate
           else "PCIE0_REAL_NOC_SRAM_REGRESSION_PASS")
