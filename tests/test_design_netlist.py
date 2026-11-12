@@ -63,6 +63,45 @@ class ExternalAdapterTests(unittest.TestCase):
         self.assertEqual(json.loads(outfile.read_text())[0]["name"], "fake_tb.clk")
         self.assertTrue((outfile.parent / (outfile.name + ".meta.json")).exists())
 
+    def test_selected_hardware_top_preserves_original_filelist_and_provenance(self):
+        (self.root / "config/regression.yaml").write_text(
+            "schema_version: 1\\ntests:\\n  fake:\\n    top: full_chip_tb\\n    sources: noc\\n".replace("\\n", "\n"))
+        (self.root / "fake.sv").write_text(
+            "module soc_top(input logic clk); endmodule\\n"
+            "module full_chip_tb; soc_top dut(); endmodule\\n".replace("\\n", "\n"))
+        generated = self.root / "selected/soc_top.sv"
+        generated.parent.mkdir(parents=True)
+        generated.write_text("module soc_top(input logic clk); endmodule\n")
+        source_list = self.root / ".tools/regression/fake/sources.f"
+        source_list.write_text("fake.sv\nselected/soc_top.sv\n")
+        plan_path = self.root / ".tools/regression/fake/plan.json"
+        plan = json.loads(plan_path.read_text())
+        plan["top"] = "full_chip_tb"
+        plan["sources"] = ["fake.sv", "selected/soc_top.sv"]
+        plan_path.write_text(json.dumps(plan))
+        out = self.root / "out/real-hardware.json"
+        def run(argv, **kwargs):
+            self.assertEqual(argv[argv.index("--top") + 1], "soc_top")
+            self.assertEqual(argv[argv.index("-f") + 1], str(source_list))
+            return subprocess.CompletedProcess(argv, 0, '[{"path":"soc_top"}]', "")
+        with patch("design_netlist.shutil.which", return_value="/mock/slang-report"), \
+             patch("design_netlist.subprocess.run", side_effect=run):
+            result = design_netlist.analyze(self.root, "fake", "ports", out,
+                                            hardware_top="soc_top")
+        self.assertEqual(result["top"], "full_chip_tb")
+        self.assertEqual(result["selected_simulation_top"], "full_chip_tb")
+        self.assertEqual(result["elaborated_top"], "soc_top")
+        self.assertTrue(result["hardware_only_elaboration"])
+        self.assertEqual(result["source_count"], 2)
+        for invalid in ("full_chip_tb", "invented_top"):
+            with self.subTest(invalid=invalid), self.assertRaisesRegex(ValueError, "hardware-only"):
+                design_netlist.analyze(self.root, "fake", "ports", out,
+                                       hardware_top=invalid)
+        generated.unlink()
+        with self.assertRaisesRegex(ValueError, "source missing"):
+            design_netlist.analyze(self.root, "fake", "ports", out,
+                                   hardware_top="soc_top")
+
     def test_tool_failure_removes_stale_output(self):
         outfile = self.root / "netlist.json"
         outfile.write_text('{"stale":true}')
