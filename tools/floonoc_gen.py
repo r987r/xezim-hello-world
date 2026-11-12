@@ -362,7 +362,12 @@ def generate_all(soc, knobs, out, floogen_bin="floogen"):
         if "floo_axi_router" not in rtl or "floo_axi_chimney" not in rtl:
             raise NoCGenerationError(f"missing actual routers/network interfaces: {name}")
         rtl, num_nis = native_bindings(rtl, item["native_parameters"])
-        top.write_text(rtl)
+        # Annotate only our generated copies: upstream FlooGen is pinned and immutable.
+        # A new upstream timescale policy must be reviewed rather than doubled.
+        for artifact, body in ((top, rtl), (pkg, pkg.read_text())):
+            if re.search(r"(?m)^\s*`timescale\b", body):
+                raise NoCGenerationError(f"upstream FlooGen time scale changed: {artifact.name}")
+            artifact.write_text("`timescale 1ns/1ps\n" + body)
         index["networks"][name] = {
             "subdirectory": item["path"], "plane": item["plane"],
             "top_module": base, "top": top.relative_to(out).as_posix(),

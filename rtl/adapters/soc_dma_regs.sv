@@ -1,3 +1,4 @@
+`timescale 1ns/1ps
 // PULP AXI-to-AXI-Lite + axi_lite_regs own the bus protocol.
 // This bounded shim commits a 64-bit descriptor head atomically into the
 // upstream iDMA APB frontend after CPU/verification writes 32-bit halves.

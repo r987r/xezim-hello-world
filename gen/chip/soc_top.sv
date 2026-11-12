@@ -1,3 +1,4 @@
+`timescale 1ns/1ps
 // Generated chip boot + DMA configuration: see gen/chip/manifest.json.
 module soc_top #(parameter bit ProbeEnable = 0, DmaEnable = 0, DmaTestMode = 0) (input logic clk_i, rst_ni,
   input logic [1:0] hold_mask_i,

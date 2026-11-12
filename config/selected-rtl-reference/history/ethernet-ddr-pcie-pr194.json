@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "project": "xezim_soc_dv",
+  "profile": "chip-ethernet-ddr-pcie",
+  "compiled_top": "full_chip_tb",
+  "selected_soc_top": ".tools/regression/chip-ethernet-ddr-pcie/variant/soc_top.sv",
+  "source_count": 312,
+  "verified_pr": 194,
+  "verified_pr_head": "190793b0b943cf3bfd44aedb8ca22f81ff1e0374",
+  "verified_hardware_run": 42561215396,
+  "evidence": "historically_qualified_stable_source_311_of_312_compiled_source_digests_ddr4_generated_verilog_not_reproducible",
+  "required_generated_sha256": {
+    ".tools/regression/chip-ethernet-ddr-pcie/variant/soc_top.sv": "022d75416267777e6fcf3be8f5823dbe838116c46b722e27b8cd7f065700d3c4",
+    ".tools/regression/chip-ethernet-ddr-pcie/variant/flash.hex": "ee763ab99082530693b61f0ff126e433e7688148f0e8113fc7166c8a8fba5cba",
+    ".tools/regression/chip-ethernet-ddr-pcie/variant/bootrom.hex": "23c39010c1e6c2fdd90d5bd2dc206d853dfb435634180ce6630064ec039367b0",
+    ".tools/regression/chip-ethernet-ddr-pcie/ddr_noc/supernoc/soc_noc.sv": "a274de53f5301c41382375b1fc2bec6998da81073a3ae21e62364b6f25d4af43",
+    ".tools/regression/chip-ethernet-ddr-pcie/ddr_noc/noc/floonoc/global_data/floo_xezim_global_data_noc.sv": "c205b069bc4cd1b6c5d22b6c8f26f9e9f137240856adfac1fc901de7793685bb",
+    ".tools/regression/chip-ethernet-ddr-pcie/ddr_noc/noc/floonoc/global_config/floo_xezim_global_config_noc.sv": "92b278d68e7abe55785d94630458b76dbf2cd171be894c877a42f37de5acd283",
+    ".tools/regression/chip-ethernet-ddr-pcie/ddr_noc/noc/floonoc/ethernet0/local_data/floo_xezim_ethernet0_local_data_noc.sv": "56adf5dc07c130ab1fffbbbb1ad58a1777ee6b2971201eb04a39fab350eaaa69",
+    ".tools/regression/chip-ethernet-ddr-pcie/ddr_noc/noc/floonoc/pcie0/local_data/floo_xezim_pcie0_local_data_noc.sv": "56430b2963a855feafa64a1dd77a16ab3b844a31748a03a13a7b357ef3270dda",
+    ".tools/regression/chip-ethernet-ddr-pcie/ddr_noc/noc/floonoc/memory0/local_data/floo_xezim_memory0_local_data_noc.sv": "9d073d000d769044d9d846b024d085ea0f0ef50ec2dd27615ea149d3f4c8d16e"
+  },
+  "required_source_sha256": {},
+  "filelist_sha256": "d86d2bb808b2a31cb242997f2dcbca7c41acfda8f3ff39f8a74ce64f51c40a32",
+  "historical_volatile_source_sha256": {
+    ".tools/ddr4/litedram_sim/gateware/soc_ddr4_sim.v": "641b2593bf12969b8f2816e6c84e6af7a25585ea970d91923b9ca6a5cfd38ec2"
+  },
+  "volatile_source_paths": [
+    ".tools/ddr4/litedram_sim/gateware/soc_ddr4_sim.v"
+  ],
+  "stable_compiler_inputs_sha256": "b5b8447bf223fa53af0e7226a68f94d0717f5328ce08956ec3a67347e5cc4578",
+  "historical_compiler_input_sha256": "399222eb50d3fc58244885fe39502f2ce2955ed49144a7926ff8641d82c1e24f"
+}
