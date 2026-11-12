@@ -137,7 +137,14 @@ def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False, ethernet_cpu
         emit_dma_header(directory / "csr")
     args = [require_tool("clang"),
             "--target=riscv32-unknown-elf", "-march=rv32i", "-mabi=ilp32",
-            "-Oz", "-ffunction-sections", "-ffreestanding", "-fno-builtin",
+            # SCN-C walks a source-selected typed argument graph on a real
+            # RV32I core. A full-chip timeout run proved -Oz inflated the
+            # on-chip dispatch work enough to hit a 30-minute simulation
+            # wall after only five of eight actions. Optimize just this
+            # optional firmware for latency. All production/default mode
+            # binaries retain the old -Oz ABI and code-generation settings.
+            "-O3" if scenario_mode else "-Oz",
+            "-ffunction-sections", "-ffreestanding", "-fno-builtin",
             "-fno-stack-protector", "-fno-pic", "-fno-pie",
             "-nostdlib", "-fuse-ld=lld", "-Wl,--no-relax",
             "-Wl,--build-id=none", f"-Wl,-T,{linker}",
