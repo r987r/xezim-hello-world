@@ -246,6 +246,11 @@ extern "C" void VUserMain0(int node) {
         VWrite(PVH_FATAL, 0, 0, node);
         return;
     }
-    rc.sendIdle(100);
+    // LTSSM link_up_o asserts during Configuration.Idle before OpenPCIe
+    // makes its genuine ST_CONFIGURATION_IDLE -> ST_L0 (0x005) transition.
+    // Run a FIXED amount of independent host-local idle traffic so even
+    // the L0-only scenario can observe actual endpoint ST_L0 before finish.
+    // No host access to endpoint LTSSM/debug signals or shared ready flags.
+    rc.sendIdle(1000);
     VWrite(PVH_FINISH, 0, 0, node);
 }
