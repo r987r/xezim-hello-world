@@ -21,6 +21,10 @@ on:
       - 'tools/regress.py'
       - 'tools/generate.py'
       - 'tools/lint_rtl.py'
+      - 'tools/run_workspace.py'
+      - 'tools/test_identity.py'
+      - 'tools/selected_rtl_provenance.py'
+      - 'tests/test_run_workspace.py'
       - 'tools/ip_fetch.py'
       - 'tools/idma_rtl.py'
       - 'tools/floonoc_gen.py'
@@ -128,5 +132,10 @@ jobs:
             .tools/regression/*/plan.json
             .tools/regression/*/selected-rtl-manifest.json
             .tools/regression/*/selected-rtl/** 
+            .tools/runs/**/identity.json
+            .tools/runs/**/plan.json
+            .tools/runs/**/sources.f
+            .tools/runs/**/selected-rtl-manifest.json
+            .tools/runs/**/selected-rtl/**
           include-hidden-files: true
           if-no-files-found: warn

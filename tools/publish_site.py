@@ -374,7 +374,11 @@ def discover_test_workflows(root=ROOT):
                 if not str(step.get("uses", "")).startswith("actions/upload-artifact@"):
                     continue
                 opts=step.get("with") or {}
-                if ".tools/regression/" in str(opts.get("path", "")):
+                paths = str(opts.get("path", ""))
+                # CI producers may now write directly into the original
+                # immutable four-part canonical run tree. Do not require a
+                # legacy target-named mirror to make Pages discover them.
+                if ".tools/regression/" in paths or ".tools/runs/" in paths:
                     artifacts.append(str(opts.get("name", "")))
         if artifacts or is_test:
             producers[file.name]={"file":file.name,
