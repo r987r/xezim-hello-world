@@ -1,0 +1,51 @@
+name: PCIe endpoint PeakRDL CPU0 DBI source ABI
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'csr/rdl/pcie_endpoint_prelink_ctrl.rdl'
+      - 'tools/pcie_csrgen.py'
+      - 'tests/test_pcie_csrgen.py'
+      - 'tests/fixtures/pcie_csr_headers_smoke.c'
+      - 'sw/pcie/pcie_endpoint_ctrl.h'
+      - '.github/workflows/pcie-csr-source.yml'
+  workflow_dispatch:
+
+permissions: {contents: read}
+
+jobs:
+  real-peakrdl:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Install exact SystemRDL/PeakRDL packages
+        run: |
+          set -euo pipefail
+          python3 -m pip install 'PyYAML==6.0.3' -r csr/requirements.txt
+      - name: Check real RDL compilation and immutable ABI
+        run: |
+          set -euo pipefail
+          python3 -m unittest tests.test_pcie_csrgen -v
+      - name: Generate actual AXI4-Lite bank and verify regeneration
+        run: |
+          set -euo pipefail
+          python3 tools/pcie_csrgen.py --out .tools/pcie-csr
+          python3 tools/pcie_csrgen.py --out .tools/pcie-csr --check
+          grep -q 'module soc_pcie_ep_prelink_regblock' \
+            .tools/pcie-csr/rtl/soc_pcie_ep_prelink_regblock.sv
+          test -s .tools/pcie-csr/rtl/soc_pcie_ep_prelink_regblock_pkg.sv
+          cc -std=c11 -Wall -Wextra -Werror \
+            -I.tools/pcie-csr -Isw/pcie \
+            -c tests/fixtures/pcie_csr_headers_smoke.c \
+            -o .tools/pcie-csr/headers_smoke.o
+      - name: Save generated bank, C header, and absolute address map
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pcie-endpoint-peakrdl-${{ github.run_id }}
+          path: .tools/pcie-csr/
+          include-hidden-files: true
+          if-no-files-found: warn
