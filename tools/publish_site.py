@@ -766,7 +766,7 @@ def evidence_index(evidence,output,repository):
                     raise ValueError('unqualified DDR4 MR evidence without passing protocol capture')
                 from ddr_mr_report import read_evidence
                 mr_view=read_evidence(mrs_path,protocol_path)
-                if target not in ('chip-ddr4-real','chip-ethernet-ddr-pcie'):
+                if target not in ('ddr4-standalone','chip-ddr4-real','chip-ethernet-ddr-pcie'):
                     raise ValueError('DDR4 MRS artifact belongs to an unrelated target')
             flow_path=source_dir/'test-flow.json'
             flow_data=json.loads(flow_path.read_text()) if flow_path.exists() else None
@@ -1159,8 +1159,9 @@ def ddr_mr_views(entries, output):
     from ddr_mr_report import read_evidence
     views=[]
     for item in entries:
-        if (item.get('target') not in ('chip-ddr4-real','chip-ethernet-ddr-pcie')
-                or item.get('passed') is not True or not item.get('axi')):
+        if (item.get('target') not in ('ddr4-standalone','chip-ddr4-real','chip-ethernet-ddr-pcie')
+                or item.get('passed') is not True or
+                (not item.get('axi') and 'dfi' not in item.get('protocols', []))):
             continue
         folder=output/Path(item['path']).parent
         raw=folder/'ddr4_mrs_evidence.json'
