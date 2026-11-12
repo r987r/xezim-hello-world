@@ -58,7 +58,7 @@ static inline int soc_scn_sha_equal(const char *selected) {
     if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) ||
         c != SOC_SCN_PLAN_SHA256[i]) return 0;
   }
-  return selected[64] == '\\0' && SOC_SCN_PLAN_SHA256[64] == '\\0';
+  return selected[64] == 0 && SOC_SCN_PLAN_SHA256[64] == 0;
 }
 
 static inline const soc_scn_driver_registration_t *
