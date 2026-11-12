@@ -82,6 +82,27 @@ module pcie_noc_tb #(
   logic aw_in_window, ar_in_window, aw_blocked, ar_blocked;
   logic [31:0] aw_transfer_bytes, ar_transfer_bytes;
   logic aw_authorized, ar_authorized;
+  logic w_authorized;
+  logic [15:0] authorized_write_bursts;
+  logic aw_handshake, w_last_handshake;
+  assign aw_handshake = m_axi_awvalid && m_axi_awready;
+  assign w_authorized = (authorized_write_bursts != 16'd0) ||
+      (aw_handshake && aw_authorized);
+  assign w_last_handshake = m_axi_wvalid && m_axi_wready && m_axi_wlast;
+  // AXI W has no address: it must not enter FlooNoC before an authorized
+  // AW has been accepted. Count outstanding authorized write bursts so
+  // simultaneous AW and WLAST handshakes do not corrupt the grant.
+  always_ff @(posedge clk or posedge rst) begin
+    if (rst)
+      authorized_write_bursts <= '0;
+    else if (BAR0_RELOCATE) begin
+      case ({aw_handshake, w_last_handshake})
+        2'b10: authorized_write_bursts <= authorized_write_bursts + 16'd1;
+        2'b01: authorized_write_bursts <= authorized_write_bursts - 16'd1;
+        default: ;
+      endcase
+    end
+  end
   assign aw_transfer_bytes = ({24'd0, m_axi_awlen} + 32'd1) << m_axi_awsize;
   assign ar_transfer_bytes = ({24'd0, m_axi_arlen} + 32'd1) << m_axi_arsize;
 
@@ -164,12 +185,12 @@ module pcie_noc_tb #(
   assign pcie_req.aw.atop = '0;
   assign pcie_req.w.user = '0;
   assign pcie_req.aw_valid = m_axi_awvalid && (!BAR0_RELOCATE || aw_authorized);
-  assign pcie_req.w_valid = m_axi_wvalid;
+  assign pcie_req.w_valid = m_axi_wvalid && (!BAR0_RELOCATE || w_authorized);
   assign pcie_req.ar_valid = m_axi_arvalid && (!BAR0_RELOCATE || ar_authorized);
   assign pcie_req.b_ready = m_axi_bready;
   assign pcie_req.r_ready = m_axi_rready;
   assign m_axi_awready = pcie_rsp.aw_ready && (!BAR0_RELOCATE || aw_authorized);
-  assign m_axi_wready = pcie_rsp.w_ready;
+  assign m_axi_wready = pcie_rsp.w_ready && (!BAR0_RELOCATE || w_authorized);
   assign m_axi_arready = pcie_rsp.ar_ready && (!BAR0_RELOCATE || ar_authorized);
   assign m_axi_bvalid = pcie_rsp.b_valid;
   assign m_axi_rvalid = pcie_rsp.r_valid;
