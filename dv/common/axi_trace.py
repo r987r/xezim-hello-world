@@ -12,6 +12,7 @@ from cocotb.triggers import Edge, RisingEdge, Timer
 from cocotb.utils import get_sim_time
 from cocotbext.axi import axi_channels
 from dv.common.axi_outstanding import AcceptedAxiInFlight
+from dv.common.axi_event_sink import PassiveAxiEventSink
 
 _active = []
 
@@ -29,7 +30,12 @@ class AxiTrace:
         catalog = json.loads((Path(__file__).resolve().parents[2]/options['catalog']).read_text())
         scope = resolve(dut, options['scope'])
         clock, reset = resolve(dut, options['clock']), resolve(dut, options['reset'])
-        self.output = (plan_path.parent/'axi-events.jsonl').open('w', buffering=1)
+        # Preserve every original channel event, but do not force an OS
+        # line-flush for each boot-flash instruction fetch. The full-chip
+        # CPU scenario can have tens of thousands of such transactions.
+        self.output = (plan_path.parent/'axi-events.jsonl').open(
+            'w', buffering=256*1024)
+        self.sink = PassiveAxiEventSink(self.output)
         self.count = 0
         self.limit = options.get('max_events', 500000)
         self.monitors = []
@@ -58,7 +64,7 @@ class AxiTrace:
     def emit(self, event):
         event['time_ps'] = int(get_sim_time(units='ps'))
         self.in_flight.observe(event)
-        self.output.write(json.dumps(event, separators=(',',':'))+'\n')
+        self.sink.write(event)
 
     async def sample_clock(self, clock):
         """Measure the simulation clock period, not an architectural frequency."""
