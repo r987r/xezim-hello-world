@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "soc_scn_action_adapter.h"
+#include "soc_scn_action_args.h"
 
 static uint32_t callbacks, events_issued, events_done;
 static uint32_t fail_at = UINT32_MAX;
@@ -26,6 +27,34 @@ int main(void) {
   soc_scn_driver_registration_t registrations[SOC_SCN_ACTION_COUNT];
   soc_scn_driver_result_t r;
   if (strlen(SOC_SCN_PLAN_SHA256) != 64) return 1;
+  /* The same generated flattened args are available to freestanding
+   * RV32I callbacks; a typed mismatch or unselected key fails closed.
+   */
+  for (i = 0; i < SOC_SCN_ACTION_COUNT; ++i) {
+    const soc_scn_action_t *a = soc_scn_action_at((uint32_t)i);
+    uint32_t j;
+    for (j = 0; j < a->argument_count; ++j) {
+      const soc_scn_argument_t *arg =
+          soc_scn_argument_at(a->first_argument + j);
+      const char *text = NULL;
+      uint64_t number = 0;
+      if (arg->is_text) {
+        if (!soc_scn_arg_text(a, arg->key, &text) ||
+            !soc_scn_text_equal(text, arg->text_value) ||
+            soc_scn_arg_uint(a, arg->key, &number)) return 20;
+      } else {
+        if (!soc_scn_arg_uint(a, arg->key, &number) ||
+            number != arg->uint_value ||
+            soc_scn_arg_text(a, arg->key, &text)) return 21;
+      }
+    }
+    {
+      const char *text = NULL;
+      uint64_t number = 0;
+      if (soc_scn_arg_text(a, "__not_selected__", &text) ||
+          soc_scn_arg_uint(a, "__not_selected__", &number)) return 22;
+    }
+  }
   for (i=0; i<SOC_SCN_ACTION_COUNT; ++i) {
     const char *kind = soc_scn_actions[i].kind;
     size_t j;
