@@ -66,6 +66,16 @@ class PcieLinkSelectionTests(unittest.TestCase):
                     pcie_link.PcieProviderError, "unsafe source-qualified"):
                 self.choose(lambda p: p["endpoint"].update({"patch": path}))
 
+    def test_endpoint_fc_overlay_is_explicit_and_does_not_fake_credits(self):
+        # Source-pinned repair moves one-shot init to the provider's
+        # existing dynamic UpdateFC producer; host FC validation remains on.
+        source=(ROOT/"dv/pcie_link/patches/openpcie_ltssm_comb_assignment.patch").read_text()
+        self.assertIn("diff --git a/src/dllp/pcie_flow_ctrl_init.sv",source)
+        self.assertIn("-            next_state        = ST_UPDATE_P;",source)
+        self.assertIn("+            next_state        = ST_FC_COMPLETE;",source)
+        self.assertNotIn("+            fc2_values_sent_o = '1;",source)
+        self.assertNotIn("+            fc1_values_stored_i = '1;",source)
+
     def test_l0_and_bar_may_not_be_asserted_by_declaration(self):
         for key in pcie_link.CAPABILITY_FLAGS:
             with self.subTest(field=key), self.assertRaisesRegex(
