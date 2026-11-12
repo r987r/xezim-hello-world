@@ -741,7 +741,7 @@ class PublicationTests(unittest.TestCase):
 
     def test_pcie_compact_ci_artifact_and_suite_navigation_present(self):
         workflow=(ROOT/".github/workflows/pcie0-integrated.yml").read_text()
-        self.assertIn("path: .tools/regression/chip-pcie-host/",workflow)
+        # Workflow artifact paths may be a multiline YAML scalar; validate the\n        # selected artifact value rather than requiring a specific indentation.\n        parsed=yaml.safe_load(workflow)\n        artifact_paths=[str(step.get("with",{}).get("path",""))\n                        for job in parsed["jobs"].values()\n                        for step in job.get("steps",[])\n                        if step.get("uses","").startswith("actions/upload-artifact@")]\n        self.assertTrue(any(".tools/regression/chip-pcie-host/" in path\n                            for path in artifact_paths),\n                        "PCIe CI must preserve the host regression evidence")
         self.assertNotIn("            .tools/pcie0/full_chip_build/",workflow)
         self.assertGreaterEqual(CONFIG["max_archive_mib"],130)
         site_html=(ROOT/"tools/templates/site_runs.html").read_text()
