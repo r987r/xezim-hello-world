@@ -77,7 +77,7 @@ def check(transcript: str) -> dict:
         issues.append(f"expected one observed nonconfig TLP under ready=0, got {len(backs)}")
     elif len(captured) == 4:
         index, b = backs[0]
-        if index <= captured[0][0] or index >= done[0][0] or (
+        if len(done) != 1 or index <= captured[0][0] or index >= done[0][0] or (
                 int(b[1],16),int(b[2],16),int(b[3])) != (captured[0][1],15,0):
             issues.append("backpressured nonconfig first beat differs from actual inbound TLP")
     if any(x.startswith(("PCIE_RC_CFG_FAIL:", "PCIE_SCN_DRIVER_FAIL:"))
