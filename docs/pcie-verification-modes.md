@@ -300,3 +300,36 @@ this upstream PASS, issue #76 and PR #225 remain open/draft.
 **Policy:** default regular regressions keep their existing fast modeled
 TLP provider. Real digital link is explicit/opt-in and adds coverage; never
 delete or weaken the proven bridge-only path.
+
+## P0 memory-window completeness and standalone upstream stall
+
+The previously working BAR address translation seam is *not* an inbound
+transaction bridge. At this checkpoint `pcie_bar0_noc_translate` receives an
+explicit full `request_bytes_i` byte-span and accepts a request only if its
+**entire** range lies within the precommitted, power-of-two BAR window and the
+local 32-bit target. Arithmetic is widened to reject overflow; host-assigned
+BAR and device-local target must both be aperture-aligned. The directed RTL
+regression also rejects straddling reads/writes, zero-length transfers,
+misaligned windows and traffic while memory readiness is false. The translator
+does not create AXI handshakes, completion TLPs or a scoreboard; a real
+non-config endpoint stream and pinned AXI bridge are still required.
+
+The **separate** upstream OpenPCIe Cocotb self-test is red even though the
+original RC↔EP Gen1 L0 and six BAR0 configuration TLPs pass independently.
+Run [43153358261](https://github.com/r987r/xezim-hello-world/actions/runs/43153358261)
+reproduced a memory timeout at 22-byte BAR write, offset 1, after hundreds of
+successful test iterations. The original timeout snapshot shows true L0,
+initialized FC, `s_tlp_axis_tvalid=0`, `s_tlp_axis_tready=1`,
+`m_tlp_axis_tvalid=0`, and `m_tlp_axis_tready=1`. Thus the endpoint's
+external AXIS interface was not permanently stalled at *that instant*; whether
+the transaction was never scheduled by the original UVM/RC driver, lost inside
+its packet path, or throttled by flow-control needs a full packet trace.
+
+A new source-hash-locked **standalone-test-only** diagnostic records
+`PCIE_UPSTREAM_RC_TX_BEGIN/DONE` when the original UVM RC schedules the late
+BAR stress TLPs, and prints the original endpoint's AXIS/FC snapshot if
+the original 10-us posted-write flush times out. The exception is re-raised
+unchanged. No DLLP credits, host TLP, endpoint LTSSM, return data or check
+expectations are synthesized or weakened. Keep this upstream self-test RED
+until the actual packet/credit owner is identified and fixed. These
+instrumentation changes are not a successful rerun by themselves.
