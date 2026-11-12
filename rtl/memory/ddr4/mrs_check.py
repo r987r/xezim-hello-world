@@ -18,7 +18,7 @@ RDL = ROOT / "csr" / "rdl" / "ddr4_mode_registers.rdl"
 ORDER = (3, 6, 5, 4, 2, 1, 0)
 # Independent pin-level shape sanity, not a hardcoded source for MR bitfields.
 DFI_MRS_COMMAND = 0x0f
-FIELDS = re.compile(r"\}\s*([a-z][a-z0-9_]*)\[(\d+):(\d+)\]\s*;")
+FIELDS = re.compile(r"\bfield\s*\{(.*?)\}\s*([a-z][a-z0-9_]*)\[(\d+):(\d+)\]\s*;", re.S)
 REGISTERS = re.compile(r"\breg\s*\{(.*?)\}\s*mr([0-6])\s*@\s*(0x[0-9a-f]+)\s*;", re.S | re.I)
 
 
@@ -45,7 +45,7 @@ def catalog(path: Path = RDL) -> dict:
         items = []
         used = 0
         for field in FIELDS.finditer(body):
-            name, high_raw, low_raw = field.groups()
+            declaration, name, high_raw, low_raw = field.groups()
             hi, lo = int(high_raw), int(low_raw)
             if not 0 <= lo <= hi < 16:
                 raise MRValidationError(f"MR{idx}.{name}: invalid DDR4 bit range")
@@ -53,7 +53,9 @@ def catalog(path: Path = RDL) -> dict:
             if mask & used:
                 raise MRValidationError(f"MR{idx}: overlapping RDL field bits")
             used |= mask
-            items.append({"name": name, "lsb": lo, "msb": hi, "mask": mask})
+            description = re.search(r'\bdesc\s*=\s*"([^"]*)"\s*;', declaration)
+            items.append({"name": name, "lsb": lo, "msb": hi, "mask": mask,
+                          "description": description.group(1) if description else None})
         if not items:
             raise MRValidationError(f"MR{idx}: no SystemRDL fields")
         regs[idx] = {"offset": offset, "fields": items, "known_mask": used}
@@ -119,6 +121,9 @@ def verify_observed(plan: dict, events: list[dict], *, path: Path = RDL) -> dict
             for f in layout["registers"][bank]["fields"]
         }
         result.append({"mr": bank, "value": f"0x{value:04x}",
+                       "expected_value": f"0x{want['value']:04x}",
+                       "matched": True, "programming": "initialization_mrs",
+                       "dfi_phase": seen["dfi_phase"],
                        "cycle": seen.get("cycle"), "time_ps": seen.get("time_ps"),
                        "fields": fields})
     cutoff = max(int(e.get("time_ps", 0)) for e in actual)
@@ -130,6 +135,11 @@ def verify_observed(plan: dict, events: list[dict], *, path: Path = RDL) -> dict
         "status": "pass", "scope": "observed_dfi_mrs_sequence_and_values",
         "device_mode_registers_not_mmio": True, "rdl_sha256": layout["rdl_sha256"],
         "observed_mrs_count": len(actual), "records": result,
+        "field_definitions": layout["registers"],
+        "programmed_during_init": True,
+        "subsequent_mrs_count": 0,
+        "subsequent_reprogramming_observed": False,
+        "pre_init_device_mr_state": "not_observable_in_upstream_behavioral_model",
         "model_enforces_mr_state": False,
         "mr_derived_read_write_latency_verified": False,
         "jedec_mrs_timing_verified": False,
