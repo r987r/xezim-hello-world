@@ -68,3 +68,19 @@ diff --git a/src/pcie_phy_core/pcie_phy_top.sv b/src/pcie_phy_core/pcie_phy_top.
        .USER_WIDTH   (USER_WIDTH)
    ) pcie_ltssm_downstream_inst (
        .clk_i              (pipe_rx_usr_clk_i),
+diff --git a/src/dllp/pcie_flow_ctrl_init.sv b/src/dllp/pcie_flow_ctrl_init.sv
+--- a/src/dllp/pcie_flow_ctrl_init.sv
++++ b/src/dllp/pcie_flow_ctrl_init.sv
+@@ -340,11 +340,11 @@
+             seq_count_c       = '0;
+             fc_axis_tvalid    = '0;
+             fc2_values_sent_o = '1;
+             // next_state        = ST_FC2;
+             // if (first_tlp_valid_i) begin
+-            next_state        = ST_UPDATE_P;
++            next_state        = ST_FC_COMPLETE;
+             // end
+             // next_state     = ST_FC_COMPLETE;
+           end else if (seq_count_r >= FcWaitPeriod) begin
+             seq_count_c = '0;
+ 
