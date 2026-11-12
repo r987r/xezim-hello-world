@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 import hashlib
 import json
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 try:
@@ -189,7 +190,6 @@ def require_completed_cocotb_run(root: Path, target: str, plan: dict) -> dict:
     infer protocol/AXI proof from a report directory, print marker, or path.
     Later migration of chip-level targets requires their own passive monitors.
     """
-    import xml.etree.ElementTree as ET
     try:
         from .test_identity import load
         from .selected_rtl_provenance import verify_selected_archive
@@ -223,8 +223,7 @@ def require_completed_cocotb_run(root: Path, target: str, plan: dict) -> dict:
         selected_plan = json.loads((directory / "plan.json").read_text())
         result = json.loads((directory / "result.json").read_text())
         dispatch = json.loads((directory / "runner-events.json").read_text())
-        tests = __import__("xml.etree.ElementTree", fromlist=["parse"]).parse(
-            directory / "results.xml").findall(".//testcase")
+        tests = ET.parse(directory / "results.xml").findall(".//testcase")
     except (OSError, ValueError, ET.ParseError) as error:
         raise IdentityError("invalid original Cocotb completion evidence") from error
     if (selected_plan.get("identity") != identity
