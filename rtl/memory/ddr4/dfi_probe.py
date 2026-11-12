@@ -54,6 +54,11 @@ class DFIProbe:
 
         for i, p in enumerate(phases):
             if not p["cs_n"]:
+                # MRS is the all-low CS/RAS/CAS/WE DFI command.
+                # Observe before ACT_N decoding: this is not DRAM model state.
+                if not p["ras_n"] and not p["cas_n"] and not p["we_n"]:
+                    emit("dfi_mrs", dfi_phase=i, bank=p["bank"],
+                         address=p["address"], command="MRS")
                 # The pinned LiteDRAM SDRAMPHYModel decodes ACT from
                 # !CS_N && !RAS_N && CAS_N && WE_N (classic DFI control).
                 # Its behavioral DFIPhaseModel does NOT use DDR4 ACT_N.
@@ -61,7 +66,7 @@ class DFIProbe:
                 # keeping PRE (!WE_N) distinct from classic ACT (WE_N).
                 # These are observed command pins, not a JEDEC checker.
                 classic_act = (not p["ras_n"] and p["cas_n"] and p["we_n"])
-                if not p["act_n"] or classic_act:
+                elif not p["act_n"] or classic_act:
                     emit("dfi_activate", dfi_phase=i, bank=p["bank"],
                          address=p["address"],
                          decode="ddr4_act_n" if not p["act_n"] else "litedram_classic_dfi")
