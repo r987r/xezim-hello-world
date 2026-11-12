@@ -3,7 +3,8 @@ import unittest
 
 from tools.pcie_upstream_test_timing import (
     patched, CORE_BEFORE, CORE_AFTER, TEST_BEFORE, TEST_AFTER,
-    ENUM_BEFORE, ENUM_AFTER,
+    ENUM_BEFORE, ENUM_AFTER, ENUM_MODEL_BEFORE, ENUM_MODEL_AFTER,
+    ENUM_HOST_BEFORE, ENUM_HOST_AFTER,
 )
 
 
@@ -24,9 +25,14 @@ class UpstreamTimingOverlayTests(unittest.TestCase):
         self.assertNotIn("force",result)
 
     def test_upstream_memory_stall_probe_is_passive_and_rethrows(self):
-        source = "async def body(self):\n" + ENUM_BEFORE + "\n"
+        source = ("async def body(self):\n" + ENUM_MODEL_BEFORE + "\n" +
+                  ENUM_BEFORE + "\n" + ENUM_HOST_BEFORE + "\n")
         got = patched("verif/sequences/pcie_enumeration_seq.py", source)
         self.assertIn(ENUM_AFTER, got)
+        self.assertIn(ENUM_MODEL_AFTER, got)
+        self.assertIn(ENUM_HOST_AFTER, got)
+        self.assertIn("PCIE_UPSTREAM_RC_TX_BEGIN", got)
+        self.assertIn("PCIE_UPSTREAM_RC_TX_DONE", got)
         self.assertIn("PCIE_UPSTREAM_MEM_STALL", got)
         self.assertIn("raise", got)
         self.assertNotIn("force", got)
