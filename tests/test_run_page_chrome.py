@@ -49,7 +49,7 @@ class RunPageChromeTests(unittest.TestCase):
                     self.assertIn('href="../../../../index.html"',html)
                     self.assertIn("All test runs",html)
                     self.assertIn('<footer',html)
-                    self.assertIn("a"*12,html)
+                    # Already shell-rendered variant pages keep their original source footer.\n                    self.assertIn(("b" if name=="variant-architecture.html" else "a")*12,html)
                     self.assertNotIn("Not Found",html)
             self.assertIn("AXI_ORIGINAL_RECORDS",(destination/"report.html").read_text())
             self.assertIn("TLP_ORIGINAL_CAPTURE",(destination/"protocols.html").read_text())
