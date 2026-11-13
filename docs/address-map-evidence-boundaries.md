@@ -45,10 +45,16 @@ A legitimate DDR4 device latency report requires independently captured,
 cycle-synchronized DFI commands (ACT, READ/WRITE, PRE, REF), correlated
 AXI/DFI transactions, bank/row/page-hit/miss state and explicit timing
 parameters (`tRCD`, `tRP`, `tRAS`, `tRFC` and read/write turnaround).
-The current standalone DDR latency reporter explicitly leaves controller
-scheduling, simulated PHY pipeline and BankModel internal latency
-**unmeasured**. Real DFI MRS evidence checks programming, not DDR timing
-enforcement or physical PHY behavior. Never label AXI target turnaround
+The standalone DDR DFI probe **does capture** actual simulated ACT, READ,
+WRITE, PRECHARGE and REFRESH commands, as well as BankModel events. The
+separate `dfi_latency_report.py` can measure a subset of uniquely paired
+READ-to-model and WRITE-to-bank-storage intervals. It does **not** attribute
+concurrent AXI requests to DFI IDs, and its AXI AW-to-DFI WRITE interval
+remains **unmeasured**: AXI B may precede DFI write and storage. A row hit
+may not require ACTIVATE for each request; a closed row requires activation
+and the applicable timing constraints. These sampled model boundaries are
+not silicon-PHY or DRAM timing qualification. Real DFI MRS evidence checks
+programming, not DDR timing enforcement or physical PHY behavior. Never label AXI target turnaround
 as DDR activate+read latency.
 
 To qualify host→DDR or Ethernet→DDR, record a single full-chip test with
