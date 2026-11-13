@@ -236,6 +236,8 @@ class PublishedPagePresentationTests(unittest.TestCase):
         address = self.template("address-map")
         self.assertIn('id="physical-address-map"', address)
         self.assertIn('id="csr-definitions"', address)
+        # Deploy must publish the same source-coverage link its post-deploy gate expects.
+        self.assertIn('href="data/csr-source-coverage.json"', address)
         self.assertIn('id="ddr-mr-browser"', address)
         self.assertIn('__DDR_MR_CATALOG__', address)
         self.assertNotIn('mr-test-select', address)
