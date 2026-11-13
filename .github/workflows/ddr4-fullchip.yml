@@ -83,7 +83,7 @@ jobs:
           python3 rtl/memory/ddr4/repro_audit.py \
             --first .tools/ddr4/litedram_sim \
             --second .tools/ddr4/repeatability-second \
-            --out .tools/ddr4/ddr-source-repeatability.json \\
+            --out .tools/ddr4/ddr-source-repeatability.json \
             --require-rtl-equal
           python3 - <<'PY'
           import json
