@@ -113,3 +113,55 @@ diff --git a/src/dllp/dllp2tlp.sv b/src/dllp/dllp2tlp.sv
 +          (word_count_r == '0 ? 12'd256 : ((word_count_r + 16'd3) >> 2));
            end
          end else begin
+diff --git a/src/dllp/tlp2dllp.sv b/src/dllp/tlp2dllp.sv
+--- a/src/dllp/tlp2dllp.sv
++++ b/src/dllp/tlp2dllp.sv
+@@ -248,8 +248,8 @@
+       //store packet, because we're shifting the data to fit in
+       //the seq number, we'll need to save 2 bytes of this packet
+       ST_IDLE: begin
+-        if (tlp_axis_tready && skid_axis_tvalid) begin
++        if (tlp_axis_tready && skid_axis_tvalid && retry_available_i) begin
+           tlp_dw0  = skid_axis_tdata;
+           crc_in_c = '1;
+           //handle posted request
+           if (tlp_dw0.byte0 inside {MRd, MRdLk, IORd, CfgRd0, CfgRd1, TCfgRd}) begin
+@@ -383,11 +383,11 @@
+         static logic [15:0] data_length;
+         static logic [15:0] data_credits_required;
+         tlp_dw0 = skid_axis_tdata;
+         has_ph_credit = '0;
+         has_pd_credit = '0;
+         data_length = {tlp_dw0.byte2.Length1, tlp_dw0.byte3.Length0};
+-        data_credits_required = data_length >> 2 == '0 ? 1'b1 : data_length >> 2;
++        data_credits_required = (data_length == '0) ? 16'd256 : ((data_length + 16'd3) >> 2);
+         //assign seq number then first 2 bytes of tlp
+         tlp_axis_tdata = {
+           skid_axis_tdata[15:0], next_transmit_seq_r[7:0], 4'h0, next_transmit_seq_r[11:8]
+         };
+@@ -468,12 +468,12 @@
+         static logic [15:0] data_length;
+         static logic [15:0] data_credits_required;
+         tlp_dw0 = skid_axis_tdata;
+         has_cplh_credit = '0;
+         has_cpld_credit = '0;
+         data_length = {tlp_dw0.byte2.Length1, tlp_dw0.byte3.Length0};
+-        data_credits_required = data_length >> 2 == '0 ? 1'b1 : data_length >> 2;
++        data_credits_required = (data_length == '0) ? 16'd256 : ((data_length + 16'd3) >> 2);
+         //assign seq number then first 2 bytes of tlp
+         tlp_axis_tdata = {
+           skid_axis_tdata[15:0], next_transmit_seq_r[7:0], 4'h0, next_transmit_seq_r[11:8]
+         };
+         crc_tlp_axis_tdata = {
+@@ -572,8 +572,11 @@
+       end
+       ST_TLP_LAST: begin
+         crc_in_c            = '1;
++        // One reservation pulse per *completed* TLP, after accepted TLAST.
++        // Retry buffer must not be overrun when completions arrive in bursts.
++        dllp_valid_o = 1'b1;
+         next_transmit_seq_c = next_transmit_seq_r + 1'b1;
+         next_state          = ST_IDLE;
+       end
+       default: begin
+       end

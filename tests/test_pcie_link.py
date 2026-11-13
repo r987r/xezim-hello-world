@@ -66,6 +66,22 @@ class PcieLinkSelectionTests(unittest.TestCase):
                     pcie_link.PcieProviderError, "unsafe source-qualified"):
                 self.choose(lambda p: p["endpoint"].update({"patch": path}))
 
+    def test_endpoint_retry_fifo_is_reserved_and_backpressures_before_each_tlp(self):
+        # The exact pinned upstream tlp2dllp RTL had dllp_valid_o fixed at
+        # zero. retry_management never accounted for buffered outgoing TLPs,
+        # and a burst of CplD fragments silently overran the unguarded slots.
+        # Test the reviewed source patch, not a forced completion or timeout.
+        patch_text=(ROOT/"dv/pcie_link/patches/openpcie_ltssm_comb_assignment.patch").read_text()
+        self.assertIn("diff --git a/src/dllp/tlp2dllp.sv",patch_text)
+        self.assertIn("+        if (tlp_axis_tready && skid_axis_tvalid && retry_available_i) begin",patch_text)
+        self.assertIn("+        dllp_valid_o = 1'b1;",patch_text)
+        self.assertIn("+        // One reservation pulse per *completed* TLP",patch_text)
+        self.assertEqual(patch_text.count("+        data_credits_required = (data_length == '0) ? 16'd256 : ((data_length + 16'd3) >> 2);"),2)
+        self.assertNotIn("+        data_credits_required = data_length >> 2 == '0",patch_text)
+        for length_dw,credits in ((1,1),(4,1),(5,2),(6,2),(7,2),(8,2),(9,3),(31,8),(32,8),(127,32),(0,256)):
+            actual_dw=1024 if length_dw==0 else length_dw
+            self.assertEqual((actual_dw+3)//4,credits)
+
     def test_endpoint_fc_overlay_is_explicit_and_does_not_fake_credits(self):
         # Source-pinned repair moves one-shot init to the provider's
         # existing dynamic UpdateFC producer; host FC validation remains on.
