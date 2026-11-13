@@ -16,6 +16,7 @@ SOURCES = {
     "pcie_phy.core": "283a8e4156f18368115037532dc19490a73d97bc",
     "verif/tests/test_pcie_core.py": "9592f1377c8ca42cde1dde08aa249190a4467593",
     "verif/sequences/pcie_enumeration_seq.py": "57c6591d4936b2f795a059b8df8dbc2648667df8",
+    "verif/agents/pipe_agent/pipe_agent.py": "ae0dab3a77c6f3ce0427aecf7faf926cd6d535fc",
 }
 CORE_BEFORE = """  sim:
     flow: sim
@@ -43,6 +44,38 @@ CPLD_ORIGINAL_BLOB = "4971e61449f76ef5530288844b0937b936547ccb"
 CPLD_ROUNDING = "data_credits_required = (data_length == '0) ? 16'd256 : ((data_length + 16'd3) >> 2);"
 CPLD_READY_BEFORE = "        if (has_cplh_credit && has_cpld_credit) begin"
 CPLD_READY_AFTER = "        if (has_cplh_credit && has_cpld_credit && tlp_axis_tready && skid_axis_tvalid) begin"
+
+# Reuse the provider's original active PIPE decoder callback, rather than
+# introducing an independent TLP/DLLP decoder. These events are emitted only
+# when OpenPCIe's original pipe_monitor_bfm reconstructs a packet from
+# phy_txdata/phy_txdatak. This is EP -> wire, not guaranteed host receipt.
+# Keep the original UVM queues/callbacks unchanged.
+PIPE_MONITOR_SOURCE = "verif/agents/pipe_agent/pipe_agent.py"
+PIPE_MONITOR_TLP_BEFORE = """    def notify_tlp_received(self,tlp) :
+        # Creating the sequnce item
+        self.pipe_agent_config.tlp_received.append(tlp)"""
+PIPE_MONITOR_TLP_AFTER = """    def notify_tlp_received(self,tlp) :
+        # Passive OpenPCIe PIPE monitor packet, never a synthesized TLP.
+        try:
+            raw = bytes(int(v) & 0xff for v in tlp)
+            print("PCIE_UPSTREAM_PIPE_MON_TLP: direction=EP_TO_RC bytes=%d raw=%s" %
+                  (len(raw), raw.hex()), flush=True)
+        except (TypeError, ValueError):
+            print("PCIE_UPSTREAM_PIPE_MON_TLP_UNDECODED: direction=EP_TO_RC", flush=True)
+        # Creating the sequnce item
+        self.pipe_agent_config.tlp_received.append(tlp)"""
+PIPE_MONITOR_DLLP_BEFORE = """        self.pipe_agent_config.dllp_received.append(dllp)
+        self.pipe_agent_config.dllp_data_detected_e.set()"""
+PIPE_MONITOR_DLLP_AFTER = """        # Passive original OpenPCIe PHY decoder: ACK/NAK/FC, not RC received.
+        try:
+            raw = bytes(int(v) & 0xff for v in dllp)
+            print("PCIE_UPSTREAM_PIPE_MON_DLLP: direction=EP_TO_RC bytes=%d raw=%s" %
+                  (len(raw), raw.hex()), flush=True)
+        except (TypeError, ValueError):
+            print("PCIE_UPSTREAM_PIPE_MON_DLLP_UNDECODED: direction=EP_TO_RC", flush=True)
+        self.pipe_agent_config.dllp_received.append(dllp)
+        self.pipe_agent_config.dllp_data_detected_e.set()"""
+
 
 # Test-only passive RTL observation when the original CplD transmitter has
 # been waiting for its first beat. Never synthesize credits, ACKs or packets.
@@ -245,6 +278,13 @@ def replace_once(text: str, before: str, after: str, label: str) -> str:
 
 
 def patched(path: str, source: str) -> str:
+    if path == PIPE_MONITOR_SOURCE:
+        source = replace_once(source, PIPE_MONITOR_TLP_BEFORE,
+                              PIPE_MONITOR_TLP_AFTER,
+                              path + " original PIPE TLP monitor")
+        return replace_once(source, PIPE_MONITOR_DLLP_BEFORE,
+                            PIPE_MONITOR_DLLP_AFTER,
+                            path + " original PIPE DLLP monitor")
     if path == CPLD_READY_REL:
         # A credit grant is not an accepted AXI beat. The original RTL can
         # consume the first CplD beat even when the downstream mux is stalled.
@@ -283,7 +323,10 @@ def apply(root:Path) -> None:
             raise ValueError(f"original upstream {rel} drift: {actual} != {expected}")
         content=patched(rel,path.read_text())
         path.write_text(content)
-        if rel == "verif/sequences/pcie_enumeration_seq.py":
+        if rel == PIPE_MONITOR_SOURCE:
+            print("OPENPCIE_SELFTEST_NATIVE_PIPE_MON: enabled original "
+                  "OpenPCIe TLP/DLLP PHY callbacks (endpoint transmit)")
+        elif rel == "verif/sequences/pcie_enumeration_seq.py":
             print("OPENPCIE_SELFTEST_STALL_PROBE: read-only AXIS/FC snapshot "
                   "on original memory timeout, re-raise unchanged")
         else:
