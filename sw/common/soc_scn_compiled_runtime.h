@@ -85,8 +85,14 @@ static inline soc_scn_driver_result_t soc_scn_driver_run_compiled(
     }
     for (j = 0; j < a->dependency_count; ++j) {
       const uint32_t slot = a->first_dependency + (uint32_t)j;
-      if (soc_scn_dependency_index_at(slot) >= i ||
-          soc_scn_dependency_at(slot) == NULL) {
+      const uint32_t prior = soc_scn_dependency_index_at(slot);
+      const char *dep = soc_scn_dependency_at(slot);
+      /* Keep exact source-selected dependency NAME proof, not only order.
+       * The source-generated integer is an optimization, not authorization.
+       */
+      if (prior >= i || dep == NULL ||
+          !soc_scn_text_equal(dep,
+              soc_scn_action_at(prior)->action_instance_id)) {
         result.status = SOC_SCN_ADAPTER_CONTRACT_ERROR;
         return result;
       }
