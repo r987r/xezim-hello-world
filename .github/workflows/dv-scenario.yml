@@ -29,6 +29,7 @@ on:
       - 'tests/test_cpu_scenario_firmware_elf.py'
       - 'tools/scenario_c.py'
       - 'sw/common/soc_scn_action_adapter.h'
+      - 'sw/common/soc_scn_compiled_runtime.h'
       - 'sw/common/soc_scn_action_args.h'
       - 'tests/test_scenario_replay_audit.py'
       - 'tools/scenario_plan.py'
