@@ -44,7 +44,7 @@ def source_registers(root=ROOT):
     pairs = re.findall(r"\bSOC_PCIE_([A-Z][A-Z0-9_]*)\s*=\s*(0x[0-9a-fA-F]+)\b",
                        match.group(1))
     offsets = [(name, int(offset, 16)) for name, offset in pairs]
-    if (len(offsets) != 16 or len(set(name for name, _ in offsets)) != len(offsets)
+    if (len(offsets) != 15 or len(set(name for name, _ in offsets)) != len(offsets)
             or len(set(off for _, off in offsets)) != len(offsets)
             or any(off >= 0x40 or off % 4 for _, off in offsets)):
         raise PcieSourceError("unexpected PCIe requester register ABI")
