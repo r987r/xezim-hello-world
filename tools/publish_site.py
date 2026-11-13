@@ -1234,8 +1234,16 @@ def shell(title,body,relative,repository,sha):
     if prefix=='.':prefix=''
     else:prefix+='/'
     template=(ROOT/'tools/templates/site.html').read_text()
-    navigation=''.join(f'<a href="{prefix}{path}">{label}</a>' for path,label in
-                       [('index.html','Overview'),('topology.html','Topology'),('explorer.html','Chip architecture'),('fabric.html','Fabric Explorer'),('address-map.html','Address Map'),('runs.html','Test runs'),('docs.html','Documentation'),('reference.html','Source data')])
+    navigation_items=[('index.html','Overview'),('topology.html','Topology'),
+                      ('explorer.html','Chip architecture'),('fabric.html','Fabric routes'),
+                      ('address-map.html','Address map'),('runs.html','Test runs'),
+                      ('docs.html','Documentation'),('reference.html','Source data')]
+    active=('docs.html' if str(relative).startswith('docs/') or str(relative)=='readme.html'
+            else 'runs.html' if str(relative).startswith('runs/')
+            else str(relative) if str(relative) in {path for path,_ in navigation_items} else '')
+    navigation=''.join(
+        f'<a href="{prefix}{path}"'+(' aria-current="page"' if path==active else '')+
+        f'>{label}</a>' for path,label in navigation_items)
     return (template.replace('__TITLE__',escape(title)).replace('__NAV__',navigation).replace('__HOME__',prefix+'index.html')
             .replace('__CONTENT__',body).replace('__SOURCE__',escape(sha[:12]))
             .replace('__REPO__',f'https://github.com/{repository}/tree/{sha}'))

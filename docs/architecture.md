@@ -15,6 +15,14 @@ CPU0 (PicoRV32) is the primary boot core. CPU1 (SERV) stays in reset until CPU0 
 - Memory 0 contains independently generated local data and configuration FlooNoCs and one HBM + one DDR behavioral model. The chip attaches a 1×2 Verilog-AXI crossbar at the single local-NoC target endpoint. The older independent 2×2 crossbar test still checks both inputs against both targets.
 - Global data and global configuration FlooNoC meshes are independent. The config NoC uses AXI4 wire transport. Upstream AXI4-Lite adapters are selected for CSR boundaries but are not attached in the BFM test. Both compute SRAM destinations are used by chip-level CPU0-to-CPU1 cold boot.
 
+### Default vs active peripheral attachments
+
+The canonical Topology page presents the **default generated chip**, not a union of all independent verification configurations. The PCIe0 and Ethernet0 local data/config NoCs and their SRAM/CSR apertures appear as structural connections, even where the default chip reserves a packet engine or management initiator with an idle/error responder. A **dashed/reserved attachment** is intentional connectivity metadata, not proof of an active endpoint.
+
+Active PCIe bridge/host and Ethernet MAC/DMA paths are selected by dedicated RTL variants. Real LiteDRAM is also opt-in; the normal chip image retains AXI RAM backing for its DDR/HBM address windows. Some scoped integrated tests combine selected components, but those combinations must be read from the original tested variant and captures, not inferred from a profile selector in the interactive architecture diagram.
+
+For structural routes use [the Fabric Explorer](design-explorer.md) and the generated manifests. For executed transfers, source/variant identity, register writes and DDR DFI/MRS observations, use the [test-specific reports](publication.md). The address-map browser describes decode apertures and register *definitions*; it does not duplicate test evidence.
+
 ## Stable contract vs backend
 
 The generator first validates an abstract graph of **initiators, targets, boundaries, address windows, and NoC ports**. It produces `gen/noc/fabric_ir.json`. The pinned upstream FlooGen generator now emits real structural module/package pairs under `gen/noc/floonoc/` for every local/global network, and `tools/full_chip_gen.py` assembles the CPU boot configuration around the same shared NoC core. Real iDMA and CPU0 C-driven DMA are integrated and tested behind the opt-in enable; general controller/PHY integration remains pending. The separate connected NoC BFM test does run real routed RTL traffic.

@@ -1,2 +1,40 @@
-<div class="eyebrow">Repository documentation</div><h1>Contracts, scopes and limits</h1><p class="lede">The repository's current Markdown is rendered here at the site's source commit. Links to code resolve to that same immutable snapshot. Test reports separately retain their tested SHA.</p><div class="actions"><a href="readme.html">Full README</a><a href="docs/implementation-status.html">Implementation status</a><a href="docs/verification.html">Verification inventory</a></div><ul id="documents" class="list"></ul>
-<script type="application/json" id="site-data">__SITE_DATA__</script><script>const D=JSON.parse(document.getElementById('site-data').textContent);for(const d of D.documents){const li=document.createElement('li'),a=document.createElement('a');a.href=d.path;a.textContent=d.title;li.append(a);document.getElementById('documents').append(li)}</script>
+<div class="eyebrow">Engineering references</div>
+<h1>Documentation</h1>
+<p class="lede">Build instructions, architecture contracts, verification methods and source/evidence interpretation. Each guide is rendered from the same source revision as this site.</p>
+<div class="actions"><a href="readme.html">Project README</a><a href="docs/architecture.html">Architecture guide</a><a href="docs/regression.html">Run a regression</a><a href="docs/publication.html">Understand test evidence</a></div>
+<div class="filters docs-controls"><label for="docs-search">Find a guide<input id="docs-search" type="search" placeholder="Search by title, subject or file name" autocomplete="off"></label><span id="docs-count" class="muted" role="status" aria-live="polite"></span></div>
+<div id="documents" class="doc-groups"></div>
+<script type="application/json" id="site-data">__SITE_DATA__</script><script>
+(()=>{
+ const D=JSON.parse(document.getElementById('site-data').textContent);
+ const groups=['Start here','Architecture & interfaces','Verification & stimulus','Protocols, memory & firmware','Publication & developer tooling','Additional guides'];
+ const category=path=>{
+  const p=path.toLowerCase().split('/').pop().replace('.html','');
+  if(/^(readme|agents)$/.test(p))return groups[0];
+  if(/pcie|ethernet|ddr|csr|axi|boot|dma|memory-allocation/.test(p))return groups[3];
+  if(/scenario|regression|test-|verification|stimulus|supernoc|subsystem|integration-closure|action-instance/.test(p))return groups[2];
+  if(/architecture|soc-|fabric|design-explorer|signal-explorer|hardware-variant|ip-portability|selected-rtl|combined-source/.test(p))return groups[1];
+  if(/publication|simulator|lint|source|peripheral-generator|build-|rtl-variant/.test(p))return groups[4];
+  return groups[5];
+ };
+ const search=document.getElementById('docs-search'),container=document.getElementById('documents'),count=document.getElementById('docs-count');
+ const render=()=>{
+  const query=search.value.toLowerCase().trim();container.replaceChildren();
+  const docs=(D.documents||[]).filter(d=>(d.title+' '+d.path).toLowerCase().includes(query));
+  for(const name of groups){
+   const items=docs.filter(d=>category(d.path)===name);if(!items.length)continue;
+   const section=document.createElement('section');section.className='card doc-group';
+   const heading=document.createElement('h2');heading.textContent=name;
+   const list=document.createElement('ul');list.className='list';
+   for(const d of items){
+    const li=document.createElement('li'),a=document.createElement('a');a.href=d.path;a.textContent=d.title;
+    li.append(a);list.append(li);
+   }
+   section.append(heading,list);container.append(section);
+  }
+  count.textContent=docs.length+' of '+(D.documents||[]).length+' guides';
+  if(!docs.length){const p=document.createElement('p');p.className='empty';p.textContent='No matching guides. Try a protocol, IP or workflow term.';container.append(p);}
+ };
+ search.addEventListener('input',render);render();
+})();
+</script>
