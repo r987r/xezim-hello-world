@@ -15,6 +15,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 
 import address_map
 from csr_source_references import SourceCatalogError, attach_sources
+from pcie_source_registers import source_registers as pcie_source_registers, PcieSourceError
 
 
 class SourceCsrTests(unittest.TestCase):
@@ -117,6 +118,29 @@ class SourceCsrTests(unittest.TestCase):
         for model, cfg in self._extend("mystery0", "peripheral", ip="new_unknown_ip"):
             with self.assertRaisesRegex(SourceCatalogError, "mystery0.ctrl"):
                 attach_sources(model, config_path=cfg)
+
+    def test_pcie_source_drift_fails_closed(self):
+        rows, provenance = pcie_source_registers()
+        self.assertEqual(len(rows), 22)
+        self.assertTrue(provenance["rdl_sha256"])
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            for relative in ("sw/pcie/pcie_requester.h",
+                             "rtl/adapters/pcie_requester_axi_regs.sv",
+                             "csr/rdl/pcie_endpoint_prelink_ctrl.rdl"):
+                (root / relative).parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(ROOT / relative, root / relative)
+            hdr = root / "sw/pcie/pcie_requester.h"
+            hdr.write_text(hdr.read_text().replace(
+                "SOC_PCIE_WR_STATUS = 0x18", "SOC_PCIE_WR_STATUS = 0x1c"))
+            with self.assertRaises(PcieSourceError):
+                pcie_source_registers(root)
+            shutil.copy2(ROOT / "sw/pcie/pcie_requester.h", hdr)
+            rdl = root / "csr/rdl/pcie_endpoint_prelink_ctrl.rdl"
+            rdl.write_text(rdl.read_text().replace(
+                "host_bar0 @0x1010", "host_bar0 @0x1020"))
+            with self.assertRaises(PcieSourceError):
+                pcie_source_registers(root)
 
     def test_header_rtl_drift_is_rejected(self):
         with tempfile.TemporaryDirectory() as td:
