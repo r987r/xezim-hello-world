@@ -6,10 +6,11 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import yaml
 
-from tools.run_workspace import reserve_run, verify_run, canonical_artifact, require_completed_xezim_run, verify_artifact_inventory
+from tools.run_workspace import reserve_run, verify_run, canonical_artifact, require_completed_xezim_run, require_completed_cocotb_run, verify_artifact_inventory
 from tools.test_identity import IdentityError, selected, relative_path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -98,6 +99,67 @@ class WorkspaceTests(unittest.TestCase):
             json.dumps({"target": "smoke", "passed": True}) + "\n")
         with self.assertRaisesRegex(IdentityError, "missing canonical"):
             require_completed_xezim_run(root, "smoke", plan)
+
+    def test_real_verilator_cocotb_producer_refuses_fabricated_completion(self):
+        """A canonical name alone cannot make XML/runner/source evidence PASS."""
+        plan = self.catalog["dma-rtl"]
+        identity = selected("dma-rtl", plan, run_id="local-555555555555")
+        root = Path(self.temp.name) / ".tools/runs"
+        folder = reserve_run(root, identity, plan=plan)
+        with self.assertRaisesRegex(IdentityError, "missing canonical"):
+            require_completed_cocotb_run(root, "dma-rtl", plan)
+        for name, data in {
+            "plan.json": json.dumps({
+                "target": "dma-rtl", "top": "dma_tb",
+                "identity": identity}),
+            "sources.f": "real DMA sources selected\\n",
+            "selected-rtl-manifest.json": "{}\\n",
+            "result.json": json.dumps({
+                "target": "dma-rtl", "passed": True, "stage": "all",
+                "identity_sha256": identity["identity_sha256"],
+                "canonical_id": relative_path(identity).as_posix(),
+                "results": [{"name": "dma-rtl", "passed": True, "exit_code": 0}]}),
+            "runner-events.json": json.dumps({
+                "events": [{"status": "completed", "passed": True}]}),
+            "dma-rtl.log": "real Cocotb runner transcript\\n",
+            "simulation.log": "PASS dma-rtl: descriptor real IRQ\\n",
+            "results.xml": '<testsuite><testcase name="pulp_idma"/></testsuite>',
+        }.items():
+            (folder / name).write_text(data.replace("\\n", "\n"))
+        # Only the source-archive *unit fixture* is mocked. Production
+        # verification uses the original selected RTL manifest/hash checker.
+        with patch("tools.selected_rtl_provenance.verify_selected_archive"):
+            proof = require_completed_cocotb_run(root, "dma-rtl", plan)
+            self.assertEqual(proof["canonical_id"],
+                             relative_path(identity).as_posix())
+            self.assertNotIn("protocol_qualified", proof["status"])
+            for broken in ('<testsuite><testcase><failure/></testcase></testsuite>',
+                           '<testsuite><testcase><error/></testcase></testsuite>',
+                           '<testsuite><testcase><skipped/></testcase></testsuite>',
+                           '<testsuite/>', '<not-xml'):
+                (folder / "results.xml").write_text(broken)
+                with self.subTest(xml=broken), self.assertRaises(IdentityError):
+                    require_completed_cocotb_run(root, "dma-rtl", plan)
+            (folder / "results.xml").write_text(
+                '<testsuite><testcase name="pulp_idma"/></testsuite>')
+            (folder / "simulation.log").write_text("fake simulator transcript")
+            with self.assertRaisesRegex(IdentityError, "original simulator"):
+                require_completed_cocotb_run(root, "dma-rtl", plan)
+            (folder / "simulation.log").write_text("PASS dma-rtl: restored")
+            bad = json.loads((folder / "result.json").read_text())
+            bad["identity_sha256"] = "0" * 64
+            (folder / "result.json").write_text(json.dumps(bad))
+            with self.assertRaisesRegex(IdentityError, "original completed PASS"):
+                require_completed_cocotb_run(root, "dma-rtl", plan)
+            with self.assertRaisesRegex(IdentityError, "unreviewed"):
+                require_completed_cocotb_run(root, "chip-cpu-dma", plan)
+            # A second writer with the same logical target cannot silently
+            # replace the first run; matching target across 2 run IDs is
+            # treated as ambiguous at the CI ingestion boundary.
+            other = selected("dma-rtl", plan, run_id="local-666666666666")
+            reserve_run(root, other, plan=plan)
+            with self.assertRaisesRegex(IdentityError, "exactly one"):
+                require_completed_cocotb_run(root, "dma-rtl", plan)
 
     def test_symlink_and_escape_rejected(self):
         outer = Path(self.temp.name)

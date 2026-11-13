@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 import hashlib
 import json
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 try:
@@ -180,3 +181,74 @@ def require_completed_xezim_run(root: Path, target: str, plan: dict) -> dict:
     verify_selected_archive(root.parent.parent, target, plan, directory=folder)
     return {"target": target, "canonical_id": relative_path(identity).as_posix(),
             "status": "runner_completed_xezim_no_protocol_coverage_claim"}
+
+
+def require_completed_cocotb_run(root: Path, target: str, plan: dict) -> dict:
+    """Verify actual real Cocotb/Verilator producer and original selected inputs.
+
+    Only the first reviewed standalone iDMA producer is eligible. Do not
+    infer protocol/AXI proof from a report directory, print marker, or path.
+    Later migration of chip-level targets requires their own passive monitors.
+    """
+    try:
+        from .test_identity import load
+        from .selected_rtl_provenance import verify_selected_archive
+    except ImportError:
+        from test_identity import load
+        from selected_rtl_provenance import verify_selected_archive
+    root = Path(root).absolute()
+    if not root.is_dir() or root.is_symlink():
+        raise IdentityError("missing canonical Cocotb run root")
+    _existing_ancestors_safe(root)
+    if (target != "dma-rtl" or plan.get("engine") != "cocotb-verilator"
+            or plan.get("top") != "dma_tb" or plan.get("module") != "dv.dma.test_dma"
+            or root.name != "runs" or root.parent.name != ".tools"):
+        raise IdentityError("unreviewed canonical Cocotb producer selection")
+    matches = []
+    for path in root.rglob("identity.json"):
+        try:
+            identity = load(path, target=target, plan=plan)
+        except IdentityError:
+            continue
+        directory = verify_run(path.parent, identity, plan=plan)
+        matches.append((directory, identity))
+    if len(matches) != 1:
+        raise IdentityError("expected exactly one real canonical Cocotb producer")
+    directory, identity = matches[0]
+    required = ["plan.json", "sources.f", "selected-rtl-manifest.json",
+                "result.json", "runner-events.json", "dma-rtl.log",
+                "simulation.log", "results.xml"]
+    verify_artifact_inventory(directory, identity, required, plan=plan)
+    try:
+        selected_plan = json.loads((directory / "plan.json").read_text())
+        result = json.loads((directory / "result.json").read_text())
+        dispatch = json.loads((directory / "runner-events.json").read_text())
+        tests = ET.parse(directory / "results.xml").findall(".//testcase")
+    except (OSError, ValueError, ET.ParseError) as error:
+        raise IdentityError("invalid original Cocotb completion evidence") from error
+    if (selected_plan.get("identity") != identity
+            or selected_plan.get("target") != target
+            or selected_plan.get("top") != plan["top"]
+            or result.get("target") != target or result.get("passed") is not True
+            or result.get("stage") != "all"
+            or result.get("identity_sha256") != identity["identity_sha256"]
+            or result.get("canonical_id") != relative_path(identity).as_posix()
+            or len(result.get("results", [])) != 1
+            or result["results"][0].get("name") != target
+            or result["results"][0].get("passed") is not True
+            or result["results"][0].get("exit_code") != 0
+            or not tests
+            or any(any(case.find(tag) is not None
+                       for tag in ("failure", "error", "skipped")) for case in tests)
+            or not isinstance(dispatch.get("events"), list)
+            or not dispatch["events"]):
+        raise IdentityError("canonical Cocotb run lacks original completed PASS")
+    if not any(event.get("status") == "completed" and event.get("passed") is True
+               for event in dispatch["events"]):
+        raise IdentityError("missing original runner success event")
+    if (plan.get("pass") not in
+            (directory / "simulation.log").read_text(errors="replace")):
+        raise IdentityError("original simulator transcript missing declared PASS")
+    verify_selected_archive(root.parent.parent, target, plan, directory=directory)
+    return {"target": target, "canonical_id": relative_path(identity).as_posix(),
+            "status": "real_cocotb_xml_and_runner_pass_without_fabric_axi_coverage"}

@@ -59,6 +59,11 @@ class PublicationTests(unittest.TestCase):
         self.assertTrue(any("pcie-cross-provider-" in a
                             for a in workflows["pcie-digital-link.yml"]["artifacts"]))
         self.assertIn("full-chip.yml",workflows)
+        self.assertIn("dma.yml", workflows)
+        self.assertTrue(any(a.startswith("dma-canonical-verilator-")
+                            for a in workflows["dma.yml"]["artifacts"]))
+        self.assertNotIn(".tools/regression/dma-rtl/",
+                         (ROOT/".github/workflows/dma.yml").read_text())
         self.assertNotIn("pages.yml",workflows)
         self.assertNotIn("publish-xezim.yml",workflows)
         self.assertTrue(any("ethernet-chip-data-config" in a for a in workflows["ethernet-mvp.yml"]["artifacts"]))
@@ -76,6 +81,21 @@ class PublicationTests(unittest.TestCase):
             result=site.discover_test_workflows(Path(temp))
             self.assertIn("new-ip.yml",result)
             self.assertEqual(result["new-ip.yml"]["label"],"New protocol")
+
+    def test_canonical_only_workflow_is_discovered_for_existing_pages_consumer(self):
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)/".github/workflows"
+            directory.mkdir(parents=True)
+            (directory/"standalone-axi.yml").write_text(
+                "name: Canonical-only Cocotb\njobs:\n  test:\n    steps:\n"
+                "      - uses: actions/upload-artifact@v4\n"
+                "        with:\n"
+                "          name: original-verilator-${{ github.run_id }}\n"
+                "          path: .tools/runs/verilator/\n")
+            result = site.discover_test_workflows(Path(temp))
+            self.assertEqual(result["standalone-axi.yml"]["artifacts"],
+                             ["original-verilator-${{ github.run_id }}"])
+            self.assertNotIn("legacy", str(result))
 
     def test_any_future_protocol_capture_artifact_is_discovered(self):
         # No protocol or controller-name registration is needed.

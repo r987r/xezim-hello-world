@@ -377,7 +377,10 @@ def discover_test_workflows(root=ROOT):
                     continue
                 opts=step.get("with") or {}
                 paths=str(opts.get("path", ""))
+                # Keep both canonical-only DMA producer archives and
+                # generic protocol captures visible without legacy mirrors.
                 if (".tools/regression/" in paths
+                        or ".tools/runs/" in paths
                         or "protocol-transactions.json" in paths):
                     name=str(opts.get("name", ""))
                     if name:
