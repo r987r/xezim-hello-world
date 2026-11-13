@@ -5,6 +5,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
@@ -155,6 +156,54 @@ class SlangLintTests(unittest.TestCase):
         dedup = lint_rtl.deduplicate_reports([report])
         self.assertEqual(dedup["unique_diagnostics"],2)
         self.assertEqual(dedup["unique_severity_counts"]["error"],2)
+
+    def test_migrated_dma_lint_reads_only_exact_canonical_identity_and_source_archive(self):
+        from test_identity import selected, save, relative_path
+        definition = {
+            "engine": "cocotb-verilator", "sources": "noc",
+            "bender_targets": ["dma"], "top": "dma_tb",
+            "module": "dv.dma.test_dma",
+            "logical_test": "dma-descriptor-chain",
+        }
+        cfg = self.root / "config/regression.yaml"
+        import yaml
+        cfg.write_text(yaml.safe_dump({"schema_version": 1, "tests": {
+            "dma-rtl": definition}}, sort_keys=True))
+        filelist_bytes = b"+incdir+/pinned/noc" + bytes([10]) + b"/pinned/dma_tb.sv" + bytes([10])
+        identity = selected("dma-rtl", definition, filelist_bytes=filelist_bytes,
+                            run_id="local-a1b2c3d4e5f6")
+        directory = self.root / ".tools/runs" / relative_path(identity)
+        directory.mkdir(parents=True)
+        save(directory / "identity.json", identity)
+        (directory / "sources.f").write_bytes(filelist_bytes)
+        (directory / "plan.json").write_text(json.dumps({
+            **definition, "target": "dma-rtl", "source_target": "noc",
+            "sources": ["/pinned/dma_tb.sv"], "identity": identity}))
+        with patch("selected_rtl_provenance.verify_selected_archive",
+                   return_value={"status": "source_selected_only"}) as verifier:
+            self.assertEqual(lint_rtl.verify_plan(self.root, "dma-rtl", "dma_tb"),
+                             directory / "sources.f")
+            verifier.assert_called_once_with(
+                self.root.resolve(), "dma-rtl", definition, directory=directory)
+            # Conflicting old target aliases cannot override the new writer.
+            old = self.root / ".tools/regression/dma-rtl"
+            old.mkdir(parents=True)
+            (old / "sources.f").write_bytes(filelist_bytes)
+            with self.assertRaisesRegex(ValueError, "legacy dma-rtl"):
+                lint_rtl.verify_plan(self.root, "dma-rtl", "dma_tb")
+            import shutil
+            shutil.rmtree(old)
+            (directory / "sources.f").write_bytes(b"tampered")
+            with self.assertRaisesRegex(ValueError, "filelist SHA mismatch"):
+                lint_rtl.verify_plan(self.root, "dma-rtl", "dma_tb")
+            (directory / "sources.f").write_bytes(filelist_bytes)
+            second = directory.parent / "local-111111111111"
+            second.mkdir()
+            save(second / "identity.json", selected(
+                "dma-rtl", definition, filelist_bytes=filelist_bytes,
+                run_id="local-111111111111"))
+            with self.assertRaisesRegex(ValueError, "exactly one"):
+                lint_rtl.verify_plan(self.root, "dma-rtl", "dma_tb")
 
     def test_rejects_wrong_plan(self):
         (self.folder / "plan.json").write_text(
