@@ -124,11 +124,36 @@ static int on_initialize(const soc_scn_action_t *action, void *user) {
         seed != SOC_SCN_SEED || seed > UINT32_MAX ||
         ctx->source.cpu_ptr == NULL) return -1;
     ctx->effective_seed = (uint32_t)seed;
-    soc_mem_fill_pattern(ctx->source.cpu_ptr, ctx->source.phys,
-                         (size_t)SOC_SCN_LENGTH, ctx->effective_seed,
-                         SOC_PATTERN_CONSTANT);
+    if (!scn_constant_fill(ctx->source.cpu_ptr, (size_t)SOC_SCN_LENGTH,
+                           ctx->effective_seed)) return -1;
     ctx->initialized = 1u;
     return 0;
+}
+
+/* The selected existing SCN-2 pattern is a constant 64-byte payload in
+ * 64-byte-aligned real SRAM. Use aligned RV32I word accesses rather than
+ * 64 volatile byte loads/stores, each with a flash instruction fetch.
+ * This is a CPU speed optimization only: SAME bytes, same AXI addresses,
+ * same actual PULP iDMA transfers, same independent passive scoreboards.
+ * Fail closed for a source plan that is no longer aligned/word-sized.
+ */
+static bool scn_constant_fill(void *addr, size_t bytes, uint32_t seed) {
+    if (addr == NULL || ((uintptr_t)addr & 3u) != 0u ||
+        (bytes & 3u) != 0u || bytes == 0u) return false;
+    volatile uint32_t *const p = (volatile uint32_t *)addr;
+    const uint32_t word = (uint32_t)(uint8_t)seed * UINT32_C(0x01010101);
+    for (size_t i = 0; i < bytes / 4u; ++i) p[i] = word;
+    return true;
+}
+
+static bool scn_constant_check(const void *addr, size_t bytes, uint32_t seed) {
+    if (addr == NULL || ((uintptr_t)addr & 3u) != 0u ||
+        (bytes & 3u) != 0u || bytes == 0u) return false;
+    volatile const uint32_t *const p = (volatile const uint32_t *)addr;
+    const uint32_t word = (uint32_t)(uint8_t)seed * UINT32_C(0x01010101);
+    for (size_t i = 0; i < bytes / 4u; ++i)
+        if (p[i] != word) return false;
+    return true;
 }
 
 static bool writeback_ready(const soc_dma_chain_t *chain) {
@@ -206,10 +231,8 @@ static int on_check(const soc_scn_action_t *action, void *user) {
         !soc_scn_arg_uint(action, "pattern.seed", &seed) ||
         seed != ctx->effective_seed) return -1;
     soc_flow_emit(ctx->flow, SOC_FLOW_RUN, SOC_FLOW_START, 1, 103);
-    if (soc_mem_check_pattern(ctx->returned.cpu_ptr, ctx->source.phys,
-                              (size_t)SOC_SCN_LENGTH, ctx->effective_seed,
-                              SOC_PATTERN_CONSTANT) != SOC_SCN_LENGTH)
-        return -1;
+    if (!scn_constant_check(ctx->returned.cpu_ptr, (size_t)SOC_SCN_LENGTH,
+                            ctx->effective_seed)) return -1;
     ctx->checked = 1u;
     soc_flow_emit(ctx->flow, SOC_FLOW_RUN, SOC_FLOW_PASS, 1, 103);
     soc_flow_emit(ctx->flow, SOC_FLOW_RUN, SOC_FLOW_PASS, 1, 102);
