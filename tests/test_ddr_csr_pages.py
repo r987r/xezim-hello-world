@@ -20,7 +20,9 @@ class DdrCsrPagesTests(unittest.TestCase):
                 "schema_version":1,"variant":"ddr_real",
                 "regions":[{"name":"memory0.ctrl","size":"0x4000",
                             "base":"0x40030000",
+                            "observations":{"reads_ok":13,"writes_ok":7},
                             "registers":[{"name":"sdram_dfii_control",
+                                          "observations":{"completed":9},
                                           "definition_status":"native_LiteDRAM_generated_CSR_not_bus_coverage"}]}],
             }
             (location/"axi-transactions.json").write_text(json.dumps({
@@ -32,6 +34,10 @@ class DdrCsrPagesTests(unittest.TestCase):
             self.assertEqual(len(views),1)
             self.assertEqual(views[0]["catalog"]["variant"],"ddr_real")
             self.assertEqual(views[0]["run_id"],987)
+            self.assertNotIn("observations",views[0]["catalog"]["regions"][0])
+            self.assertNotIn("observations",views[0]["catalog"]["regions"][0]["registers"][0])
+            original=json.loads((location/"axi-transactions.json").read_text())
+            self.assertEqual(original["sections"]["address_map"]["regions"][0]["observations"]["reads_ok"],13)
             self.assertEqual(ddr_csr_views([{**item,"passed":False}],output),[])
             fake={**catalog,"variant":"architecture"}
             (location/"axi-transactions.json").write_text(json.dumps({
