@@ -74,7 +74,7 @@
     ...(reg.fields||[]).flatMap(f=>[f.name,f.description,f.mask])
    ].filter(Boolean).some(x=>String(x).toLowerCase().includes(query)));
    if(query&&!regionMatch&&!regs.length)continue;
-   shown++;defined+=regs.filter(x=>x.definition_status!=='C_ABI_RTL_crosschecked_source_reference_not_build_qualified').length;
+   shown++;defined+=regs.filter(x=>!['C_ABI_RTL_crosschecked_source_reference_not_build_qualified','PCIe_source_reference_not_build_qualified'].includes(x.definition_status)).length;
    reference+=regs.filter(x=>x.definition_status==='C_ABI_RTL_crosschecked_source_reference_not_build_qualified').length;
    if(!displayed.length)missing++;
    const card=append(holder,'details','','am-csr-ip');
