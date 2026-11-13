@@ -44,6 +44,29 @@ CPLD_ROUNDING = "data_credits_required = (data_length == '0) ? 16'd256 : ((data_
 CPLD_READY_BEFORE = "        if (has_cplh_credit && has_cpld_credit) begin"
 CPLD_READY_AFTER = "        if (has_cplh_credit && has_cpld_credit && tlp_axis_tready && skid_axis_tvalid) begin"
 
+# Test-only passive RTL observation when the original CplD transmitter has
+# been waiting for its first beat. Never synthesize credits, ACKs or packets.
+CPLD_STALL_PROBE = """`ifndef SYNTHESIS
+  logic [9:0] pcie_upstream_cpld_wait_r;
+  always_ff @(posedge clk_i) begin
+    if (rst_i || curr_state != ST_CHECK_CREDITS_CPLH_CPLD ||
+        !skid_axis_tvalid || skid_axis_tready) begin
+      pcie_upstream_cpld_wait_r <= '0;
+    end else if (pcie_upstream_cpld_wait_r != 10'd1023) begin
+      pcie_upstream_cpld_wait_r <= pcie_upstream_cpld_wait_r + 1'b1;
+      if (pcie_upstream_cpld_wait_r == 10'd64 ||
+          pcie_upstream_cpld_wait_r == 10'd512) begin
+        $display("PCIE_UPSTREAM_CPLD_CREDIT_STALL: time=%0t cycles=%0d seq=%0d cplh_limit=%0d cplh_used=%0d cpld_limit=%0d cpld_used=%0d stream_ready=%b skid_valid=%b",
+                 $time, pcie_upstream_cpld_wait_r, next_transmit_seq_r,
+                 cplh_credit_limit_r, cplh_credits_consumed_r,
+                 cpld_credit_limit_r, cpld_credits_consumed_r,
+                 tlp_axis_tready, skid_axis_tvalid);
+      end
+    end
+  end
+`endif
+"""
+
 # The original memory regression is NOT shortened or made to pass. Only when
 # its original 10us posted-write flush times out, sample the DUT's real AXIS
 # handshake and link/FC state. This distinguishes source starvation, credit
@@ -130,6 +153,37 @@ ENUM_READ_AFTER = """                try:
                 except Exception as exc:
                     print("PCIE_UPSTREAM_READBACK_TIMEOUT: length=%d offset=%d error=%r" %
                           (length, offset, exc), flush=True)
+                    # Original DUT transmitter status, observed at failure.
+                    # If Verilator does not expose an internal hierarchy
+                    # member, print not_exposed instead of guessing a value.
+                    rtl_paths = (
+                        "s_tlp_axis_tvalid", "s_tlp_axis_tready",
+                        "pcie_datalink_layer_inst.tx_tlp_tvalid",
+                        "pcie_datalink_layer_inst.tx_tlp_tready",
+                        "pcie_datalink_layer_inst.m_phy_axis_tvalid",
+                        "pcie_datalink_layer_inst.m_phy_axis_tready",
+                        "pcie_datalink_layer_inst.dllp_transmit_inst.tlp2dllp_inst.curr_state",
+                        "pcie_datalink_layer_inst.dllp_transmit_inst.tlp2dllp_inst.skid_axis_tvalid",
+                        "pcie_datalink_layer_inst.dllp_transmit_inst.tlp2dllp_inst.skid_axis_tready",
+                        "pcie_datalink_layer_inst.dllp_transmit_inst.tlp2dllp_inst.tlp_axis_tvalid",
+                        "pcie_datalink_layer_inst.dllp_transmit_inst.tlp2dllp_inst.tlp_axis_tready",
+                        "pcie_datalink_layer_inst.dllp_transmit_inst.tlp2dllp_inst.cplh_credit_limit_r",
+                        "pcie_datalink_layer_inst.dllp_transmit_inst.tlp2dllp_inst.cpld_credit_limit_r",
+                        "pcie_datalink_layer_inst.dllp_transmit_inst.tlp2dllp_inst.cplh_credits_consumed_r",
+                        "pcie_datalink_layer_inst.dllp_transmit_inst.tlp2dllp_inst.cpld_credits_consumed_r",
+                        "pcie_datalink_layer_inst.dllp_transmit_inst.tlp2dllp_inst.next_transmit_seq_r",
+                    )
+                    snapshot = {}
+                    for rtl_path in rtl_paths:
+                        try:
+                            handle = cocotb.top
+                            for segment in rtl_path.split("."):
+                                handle = getattr(handle, segment)
+                            snapshot[rtl_path] = int(handle.value)
+                        except (AttributeError, TypeError, ValueError):
+                            snapshot[rtl_path] = "not_exposed"
+                    print("PCIE_UPSTREAM_READBACK_RTL_SNAPSHOT: %r" %
+                          snapshot, flush=True)
                     for owner, port in (("rc", self.dev.upstream_port.other),
                                         ("ep", self.dev.upstream_port)):
                         try:
@@ -198,8 +252,11 @@ def patched(path: str, source: str) -> str:
             raise ValueError(f"{path}: reviewed credit overlay changed")
         if source.count("dllp_valid_o            = '0;") != 1:
             raise ValueError(f"{path}: experimental retry-enable drift")
-        return replace_once(source, CPLD_READY_BEFORE, CPLD_READY_AFTER,
-                            path + " CplD accepted first beat")
+        source = replace_once(source, CPLD_READY_BEFORE, CPLD_READY_AFTER,
+                              path + " CplD accepted first beat")
+        return replace_once(source, "\nendmodule\n",
+                            "\n" + CPLD_STALL_PROBE + "endmodule\n",
+                            path + " passive credit stall diagnostic")
     if path == "pcie_phy.core":
         return replace_once(source,CORE_BEFORE,CORE_AFTER,path)
     if path == "verif/tests/test_pcie_core.py":
@@ -246,7 +303,8 @@ def apply(root:Path) -> None:
         raise ValueError(f"missing standalone upstream source {CPLD_READY_REL}")
     cpld_path.write_text(patched(CPLD_READY_REL, cpld_path.read_text()))
     print("OPENPCIE_SELFTEST_CPLD_READY_AB: test-only first-beat ready/valid "
-          "guard on original pinned RTL; original Cocotb byte oracle retained")
+          "guard and passive credit-stall probes on pinned RTL; "
+          "original Cocotb byte oracle retained")
     print("OPENPCIE_SELFTEST_TIMING: TEST-ONLY; not production or dual-sided L0 evidence")
 
 
