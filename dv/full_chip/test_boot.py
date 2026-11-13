@@ -126,6 +126,8 @@ async def execute_cold_boot(dut, *, external=None, benchmark=False):
         host=PcieHostParticipant(flow,manifest)
     memory = json.loads((ROOT/'gen/chip/manifest.json').read_text())['memory_models']
     cpu_dma_mode = os.environ.get('SOC_CPU_DMA_MODE') == '1'
+    scenario_cpu_mode = bool(plan and json.loads(Path(plan).read_text()).get(
+        'firmware_mode') == 'cpu_dma_scenario')
     real_ddr_mode = os.environ.get('SOC_DDR_REAL_MODE') == '1'
     # The probe outputs mirror the *real iDMA response* when DmaEnable=1
     # and ProbeEnable=0. Attaching AxiMaster in CPU mode would let its
@@ -145,7 +147,11 @@ async def execute_cold_boot(dut, *, external=None, benchmark=False):
     attach_observers(dut)
     if cpu_dma_mode and os.environ.get('SOC_CPU_DMA_PROGRESS') == '1':
         cocotb.start_soon(_cpu_dma_progress(dut))
-    cocotb.start_soon(Clock(dut.clk, 10, 'ns').start())
+    # SCN-2 selected CPU variant already drives the *same* 10 ns clock
+    # natively in the generated testbench. Do not also drive it from Python.
+    # All existing non-SCN-2 variants keep their original Cocotb clock.
+    if not scenario_cpu_mode:
+        cocotb.start_soon(Clock(dut.clk, 10, 'ns').start())
     for _ in range(10):
         await FallingEdge(dut.clk)
     dut.rst_n.value = 1
