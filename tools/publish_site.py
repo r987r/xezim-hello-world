@@ -1239,6 +1239,7 @@ def shell(title,body,relative,repository,sha):
                       ('address-map.html','Address map'),('runs.html','Test runs'),
                       ('docs.html','Documentation'),('reference.html','Source data')]
     active=('docs.html' if str(relative).startswith('docs/') or str(relative)=='readme.html'
+            else 'runs.html' if str(relative).startswith('runs/')
             else str(relative) if str(relative) in {path for path,_ in navigation_items} else '')
     navigation=''.join(
         f'<a href="{prefix}{path}"'+(' aria-current="page"' if path==active else '')+
