@@ -73,6 +73,7 @@ def compare(left: Path, right: Path, *, max_lines: int = 16) -> dict:
         "first_core_sha256": a["files"][core],
         "second_core_sha256": b["files"][core],
         "repeatable": not changed,
+        "rtl_byte_repeatable": a["files"][core] == b["files"][core],
         "changed_generated_paths": changed,
         "changed_count": len(changed),
         "diff_sample": diff[:max_lines],
@@ -88,10 +89,14 @@ def main() -> int:
     cli.add_argument("--out", type=Path, required=True)
     cli.add_argument("--require-equal", action="store_true",
                      help="fail until all generator outputs are byte-identical")
+    cli.add_argument("--require-rtl-equal", action="store_true",
+                     help="fail when the generated Verilog differs, even if collateral is noisy")
     args = cli.parse_args()
     result = compare(args.first, args.second)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
+    if args.require_rtl_equal and not result["rtl_byte_repeatable"]:
+        raise RepeatabilityError("generated DDR compiled Verilog still differs between independent builds")
     if not result["repeatable"]:
         print("DDR OUTPUT DRIFT (NOT QUALIFIED): " + ", ".join(result["changed_generated_paths"]))
         if args.require_equal:
