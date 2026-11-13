@@ -193,9 +193,30 @@ def main():
             assert "chip-ddr4-real" in driver.find_element(By.ID,"traffic-provenance").text
             # Clicking the actual run link must preserve hub chrome and the
             # same-site return path, unlike the old standalone HTML reports.
-            driver.find_element(By.CSS_SELECTOR,
-                '#results a[href="runs/example/report.html"]').click()
-            wait.until(lambda d: d.current_url.endswith("/runs/example/report.html"))
+            report_link=driver.find_element(
+                By.CSS_SELECTOR, '#results a[href="runs/example/report.html"]')
+            assert report_link.get_attribute("href").endswith(
+                "/runs/example/report.html"), "unexpected run report destination"
+            # Execute the real anchor's click handler rather than relying on a
+            # viewport-dependent WebDriver pointer hit in the scrollable
+            # results table. A click must still navigate to the linked page;
+            # never substitute driver.get() or mark a failed navigation PASS.
+            driver.execute_script("arguments[0].click()", report_link)
+            expected="/runs/example/report.html"
+            def entered_report(d):
+                for handle in d.window_handles:
+                    d.switch_to.window(handle)
+                    if d.current_url.endswith(expected):
+                        return True
+                return False
+            try:
+                wait.until(entered_report)
+            except Exception as exc:
+                raise AssertionError(
+                    "Test Runs report link did not navigate; "
+                    f"windows={[(h, driver.switch_to.window(h) or driver.current_url) for h in driver.window_handles]} "
+                    f"expected suffix={expected}"
+                ) from exc
             wait.until(lambda d: "AXI Run Explorer" in d.find_element(By.TAG_NAME,"main").text)
             assert driver.find_element(By.CSS_SELECTOR,
                 '.hub-global-header .brand').text=="SoC / verification hub"
