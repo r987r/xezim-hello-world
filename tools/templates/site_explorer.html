@@ -1,6 +1,11 @@
 <div class="eyebrow">Architecture / RTL hierarchy</div>
 <h1>Chip architecture</h1>
 <p class="lede">Explore the SoC from subsystems down to IP blocks, local NoCs, routers and interfaces. Select a component or connection to inspect its generated structure.</p>
+<section class="arch-directory card" aria-labelledby="arch-directory-title">
+  <h2 id="arch-directory-title">Explore every generated subsystem and NoC</h2>
+  <p class="muted">Jump to any available hierarchy view. The directory is derived from the generated design graph, not a hand-maintained list. Views describe structural sources; the selected test mode controls actor overlays, not which hardware passed.</p>
+  <div id="arch-directory" class="arch-directory-grid"></div>
+</section>
 <div class="arch-toolbar" aria-label="Diagram controls">
   <div id="arch-crumbs" class="arch-crumbs" aria-label="Hierarchy breadcrumb"></div>
   <label>Variant annotations <select id="arch-profile"></select></label>
@@ -62,6 +67,13 @@
 <div class="actions"><a href="data/rtl-architecture.json">Compiler-parsed RTL JSON</a><a href="data/rtl-instance-bindings.json">RTL instance binding provenance JSON</a><a href="data/design-graph.json">Design graph JSON</a><a href="data/signal-inventory.json">Physical signal inventory JSON</a><a href="topology.html">Generation sources and NoC tables</a></div>
 
 <style>
+.arch-directory{margin:18px 0;padding:15px 17px}
+.arch-directory h2{margin:0 0 7px;font-size:18px}
+.arch-directory-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(225px,1fr));gap:10px}
+.arch-directory-item{border:1px solid var(--line);border-radius:9px;padding:11px;min-width:0}
+.arch-directory-item h3{margin:0 0 7px;font-size:14px}
+.arch-directory-actions{display:flex;flex-wrap:wrap;gap:6px}
+.arch-directory-actions button{font-size:12px;white-space:normal;text-align:left;padding:5px 8px}
 .arch-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;border:1px solid var(--line);background:#101f31;padding:12px 14px;border-radius:12px;margin:20px 0 12px}
 .arch-toolbar label{display:flex;align-items:center;gap:6px}
 .arch-toolbar button{padding:7px 11px;font-size:13px}
