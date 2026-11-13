@@ -241,13 +241,16 @@ async def execute_cold_boot(dut, *, external=None, benchmark=False):
                         contract["ddr_phys"])
             assert observed == expected, (
                 f"SCN-2 CPU allocations {observed} differ from resolved plan {expected}")
-            # The selected CPU profile batches original passive AXI JSONL writes.
-            # Flush every already-accepted handshake BEFORE independent
-            # correlation, not only after the scenario evidence is emitted.
-            # Same-edge monitor deliveries get a bounded 1 ns scheduling turn;
-            # no response/transaction is inserted or marked complete here.
-            await Timer(1, 'ns')
-            from dv.common.axi_trace import flush_active
+            # The real CPU0 and CPU1 continue executing after CHECK. A
+            # snapshot taken on an arbitrary fetch cycle can contain a real
+            # AR whose RLAST is still traversing the generated NoC. The
+            # captured CI artifact (run 43511477345) showed exactly one such
+            # compute1 CPU read, with the target response already accepted.
+            # Use the EXISTING bounded passive monitor drain used by other
+            # full-chip regressions; never pause CPUs, synthesize responses,
+            # drop records, or waive the original strict post-run correlator.
+            from dv.common.axi_trace import wait_axi_quiescent, flush_active
+            await wait_axi_quiescent(timeout_ns=5000, stable_ns=2)
             flush_active()
             events, bad = read_events(events_file)
             assert not bad, f"SCN-2 invalid real passive AXI events: {bad[:3]}"
