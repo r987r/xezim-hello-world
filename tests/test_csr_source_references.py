@@ -48,8 +48,15 @@ class SourceCsrTests(unittest.TestCase):
         self.assertEqual(irq["write_semantics"], "write_one_to_clear")
         self.assertEqual(eth["source_provenance"]["header"], "sw/ethernet/eth_queue_abi.h")
         self.assertEqual({i["instance"] for i in report["gaps"]},
-                         {"boot.reset_ctrl", "memory0.ctrl", "pcie0.ctrl"})
+                         {"boot.reset_ctrl", "memory0.ctrl"})
         self.assertFalse(report["unacknowledged"])
+        pcie=by_name["pcie0.ctrl"]
+        self.assertEqual(len(pcie["source_registers"]), 22)
+        self.assertEqual(pcie["registers"], [])
+        self.assertEqual(next(x for x in pcie["source_registers"] if x["name"]=="wr_command")["address"],"0x40040014")
+        self.assertEqual(next(x for x in pcie["source_registers"] if x["name"]=="bar0_aperture")["address"],"0x40041000")
+        self.assertEqual(next(x for x in pcie["source_registers"] if x["name"]=="host_bar0")["fields"][0]["access"],"r")
+        self.assertTrue(all(x["definition_status"]=="PCIe_source_reference_not_build_qualified" for x in pcie["source_registers"]))
 
     def _extend(self, name, subtype, ip=None):
         config = yaml.safe_load((ROOT / "config/soc.yaml").read_text())
