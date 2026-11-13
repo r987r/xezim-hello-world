@@ -608,7 +608,7 @@ class PublicationTests(unittest.TestCase):
             page=output/entries[0]['path']
             self.assertIn('All captured protocol traffic',page.read_text())
             self.assertIn('id="all-protocol-traffic"',page.read_text())
-            self.assertIn('src="protocols.html"',page.read_text())
+            self.assertIn('src="protocols.html?embed=1"',page.read_text())
             self.assertIn('href="protocol-transactions.json"',page.read_text())
             generated=(page.parent/'protocols.html').read_text()
             self.assertIn('Protocol Run Explorer',generated)
