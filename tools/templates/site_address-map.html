@@ -41,6 +41,7 @@
  const append=(parent,tag,s,cls)=>{const x=document.createElement(tag);x.textContent=String(s);if(cls)x.className=cls;parent.append(x);return x;};
  const end=(base,size)=>'0x'+(BigInt(base)+BigInt(size)-1n).toString(16);
  const size=s=>{const n=Number(BigInt(s));return n>=1073741824?(n/1073741824)+' GiB':n>=1048576?(n/1048576)+' MiB':n>=1024?(n/1024)+' KiB':n+' B';};
+ const baselinePcie=d.regions.find(r=>r.name==='pcie0.ctrl');
  const variants=[{label:'Default SoC · modeled DDR / architecture-only CSRs',catalog:d},...ddrVariants];
  const menu=e('am-variant');
  variants.forEach((v,i)=>{const o=append(menu,'option',v.label);o.value=String(i);});
@@ -75,7 +76,7 @@
    ].filter(Boolean).some(x=>String(x).toLowerCase().includes(query)));
    if(query&&!regionMatch&&!regs.length)continue;
    shown++;defined+=regs.filter(x=>!['C_ABI_RTL_crosschecked_source_reference_not_build_qualified','PCIe_source_reference_not_build_qualified'].includes(x.definition_status)).length;
-   reference+=regs.filter(x=>x.definition_status==='C_ABI_RTL_crosschecked_source_reference_not_build_qualified').length;
+   reference+=regs.filter(x=>['C_ABI_RTL_crosschecked_source_reference_not_build_qualified','PCIe_source_reference_not_build_qualified'].includes(x.definition_status)).length;
    if(!displayed.length)missing++;
    const card=append(holder,'details','','am-csr-ip');
    const expand=regs.length&&!firstExpanded&&(active.length||!hasBuildDefinitions);
