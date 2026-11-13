@@ -93,6 +93,14 @@ class ArchitectureExplorerTests(unittest.TestCase):
         self.assertIn("Math.max(.65",self.script)
         self.assertIn("PERIPHERAL SUBSYSTEM",self.script)
 
+    def test_every_subsystem_and_noc_is_discoverable(self):
+        self.assertIn('id="arch-directory"', self.markup)
+        self.assertIn('function buildDirectory()', self.script)
+        self.assertIn('for(const q of groups)', self.script)
+        self.assertIn('buildDirectory();busOptions();navigate("chip","");', self.script)
+        # No hardcoded subsystem name list should be introduced to the menu.
+        self.assertIn('n.startsWith(name+"_")', self.script)
+
     def test_multi_subsystem_graph_is_not_hardcoded_in_viewer(self):
         # The renderer derives subtype membership from generated groups.
         self.assertIn('endsWith("_subsystem")',self.script)

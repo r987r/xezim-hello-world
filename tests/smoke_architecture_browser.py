@@ -32,6 +32,24 @@ def main():
         driver.get(args.page.resolve().as_uri())
         wait=WebDriverWait(driver,20)
         wait.until(lambda d:"SYSTEM-ON-CHIP" in d.find_element(By.ID,"arch-svg").text)
+        directory=driver.find_element(By.ID,"arch-directory")
+        directory_labels=directory.text
+        for subsystem in ("compute0","compute1","memory0","pcie0","ethernet0"):
+            assert subsystem in directory_labels, f"missing subsystem directory entry: {subsystem}"
+        for network in ("global_data","global_config","compute0_local_data",
+                        "compute0_local_config","pcie0_local_data","ethernet0_local_config"):
+            assert network in directory_labels, f"missing NoC directory entry: {network}"
+        # Exercise directory navigation, not just presence of labels.
+        driver.execute_script("""
+            const b=[...document.querySelectorAll('#arch-directory button')]
+              .find(x=>x.textContent.includes('memory0_local_data'));
+            if(!b)throw new Error('missing memory-local NoC shortcut');
+            b.click();
+        """)
+        assert "memory0_local_data" in driver.find_element(By.ID,"arch-crumbs").text
+        driver.execute_script("""
+            document.querySelector('#arch-crumbs button').click();
+        """)
         assert "GLOBAL FABRIC" in driver.find_element(By.ID,"arch-svg").text
         assert "COMPUTE0" in driver.find_element(By.ID,"arch-svg").text
         assert "MEMORY0" in driver.find_element(By.ID,"arch-svg").text

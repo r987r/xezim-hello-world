@@ -8,6 +8,8 @@ on:
       - 'gen/manifest.json'
       - 'gen/chip/soc_top.sv'
       - 'tools/generate.py'
+      - 'tools/generated_review.py'
+      - 'tests/test_generated_review.py'
       - 'tests/test_default_review_variant.py'
       - '.github/workflows/checked-rtl-variants.yml'
   workflow_dispatch:
@@ -25,7 +27,7 @@ jobs:
         with: {python-version: '3.12'}
       - run: python3 -m pip install 'PyYAML==6.0.3'
       - name: Verify checked-in top matches real generated SoC source
-        run: python3 -m unittest tests.test_default_review_variant -v
+        run: python3 -m unittest tests.test_default_review_variant tests.test_generated_review -v
       - name: Check source hash recorded in generator manifest
         run: |
           python3 - <<'PY'
