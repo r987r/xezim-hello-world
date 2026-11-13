@@ -99,7 +99,7 @@ class ArchitectureExplorerTests(unittest.TestCase):
         self.assertIn('for(const q of groups)', self.script)
         self.assertIn('buildDirectory();busOptions();navigate("chip","");', self.script)
         # No hardcoded subsystem name list should be introduced to the menu.
-        self.assertIn('name.startsWith(name+"_")', self.script)
+        self.assertIn('n.startsWith(name+"_")', self.script)
 
     def test_multi_subsystem_graph_is_not_hardcoded_in_viewer(self):
         # The renderer derives subtype membership from generated groups.
