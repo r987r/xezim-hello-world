@@ -326,10 +326,19 @@ class PublicationTests(unittest.TestCase):
             self.assertEqual(len(region['compute1.dma']['source_registers']),4)
             self.assertGreaterEqual(len(region['ethernet0.ctrl']['source_registers']),25)
             self.assertEqual(region['ethernet0.ctrl']['registers'],[])
-            self.assertEqual(region['pcie0.ctrl']['source_registers'],[])
+            pcie=region['pcie0.ctrl']
+            self.assertEqual(pcie['registers'],[])
+            self.assertEqual(len(pcie['source_registers']),22)
+            pcie_regs={r['name']:r for r in pcie['source_registers']}
+            self.assertEqual(pcie_regs['wr_command']['access'],'w')
+            self.assertEqual(pcie_regs['rd_command']['access'],'w')
+            self.assertEqual(pcie_regs['bar0_aperture']['address'],'0x40041000')
+            self.assertEqual(pcie_regs['host_bar0']['fields'][0]['access'],'r')
             coverage=json.loads((output/'data/csr-source-coverage.json').read_text())
             self.assertFalse(coverage['unacknowledged'])
-            self.assertIn('pcie0.ctrl',{g['instance'] for g in coverage['gaps']})
+            self.assertNotIn('pcie0.ctrl',{g['instance'] for g in coverage['gaps']})
+            self.assertEqual(next(r for r in coverage['instances']
+                if r['instance']=='pcie0.ctrl')['source_only_registers'],22)
             self.assertEqual(addr['config_sha256'],
                 hashlib.sha256((ROOT/'config/soc.yaml').read_bytes()).hexdigest())
             self.assertEqual(next(r for r in addr['regions']
@@ -401,8 +410,10 @@ class PublicationTests(unittest.TestCase):
             self.assertIn('Open router path and CI evidence',html)
             self.assertIn('fabric-detail-table',html)
             self.assertIn("dataset.label='Request cycles'",html)
-            self.assertIn('Target read',html)
-            self.assertIn('Target write',html)
+            self.assertIn('AXI target read',html)
+            self.assertIn('AXI target write',html)
+            self.assertIn('not a DDR4 DRAM device',html)
+            self.assertIn('PCIe host and Ethernet rows',html)
             self.assertNotIn('id="fabric-matrix"',html)
             self.assertNotIn('renderMatrix()',html)
             self.assertFalse(dataset['entries'])

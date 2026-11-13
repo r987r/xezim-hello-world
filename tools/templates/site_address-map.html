@@ -1,7 +1,7 @@
 <div class="eyebrow">Address space / CSR definitions</div>
 <h1>Address space &amp; registers</h1>
 <p class="lede">Inspect physical memory windows, peripheral control apertures and register fields for the selected SoC build.</p>
-<div class="actions"><a href="#physical-address-map">Physical address map</a><a href="#csr-definitions">CSR definitions</a><a href="#ddr-mr-browser">DDR4 mode fields</a><a href="runs.html">Executed memory and register transactions</a><a href="data/soc-address-map.json">Address-map JSON</a><a href="data/csr-source-coverage.json">CSR source coverage</a></div>
+<div class="actions"><a href="#csr-ip-pcie0-ctrl">PCIe registers</a><a href="#csr-ip-memory0-ctrl">DDR controller registers</a><a href="#physical-address-map">Physical address map</a><a href="#csr-definitions">CSR definitions</a><a href="#ddr-mr-browser">DDR4 mode fields</a><a href="runs.html">Executed memory and register transactions</a><a href="data/soc-address-map.json">Address-map JSON</a><a href="data/csr-source-coverage.json">CSR source coverage</a></div>
 <p class="muted">CSR source references: __CSR_SOURCE_LINKS__ · <a href="data/csr-source-coverage.json">CSR source coverage and unresolved IPs</a></p>
 <div class="grid" id="am-summary"></div>
 <p class="scope-note">These are configured decode windows and register definitions, not test results. Modeled capacity may be smaller than the declared memory window. Verified accesses and DDR mode commands belong to <a href="runs.html">individual tests</a>.</p>
@@ -11,7 +11,7 @@
 <label>Plane<select id="am-plane"><option value="">Both planes</option><option value="data">Data</option><option value="config">Config / CSR</option></select></label>
 <label>Type<select id="am-kind"><option value="">All types</option><option value="csr_aperture">CSR</option><option value="sram">SRAM</option><option value="rom">ROM</option><option value="flash">Flash</option><option value="ddr">DDR</option><option value="hbm">HBM</option></select></label>
 </div>
-<p class="muted" id="am-variant-evidence">The default chip uses modeled AXI RAM; real DDR registers appear only in independently verified DDR CI variants.</p>
+<p class="muted" id="am-variant-evidence">The default chip uses modeled AXI RAM; native LiteDRAM controller CSRs are selectable only from source-verified DDR test variants. PCIe requester and endpoint DBI definitions are always available as source-only references; the separate host PCIe Type-0 configuration space is not SoC MMIO.</p>
 <p class="muted" id="am-count" aria-live="polite"></p>
 
 
@@ -44,6 +44,7 @@
  const append=(parent,tag,s,cls)=>{const x=document.createElement(tag);x.textContent=String(s);if(cls)x.className=cls;parent.append(x);return x;};
  const end=(base,size)=>'0x'+(BigInt(base)+BigInt(size)-1n).toString(16);
  const size=s=>{const n=Number(BigInt(s));return n>=1073741824?(n/1073741824)+' GiB':n>=1048576?(n/1048576)+' MiB':n>=1024?(n/1024)+' KiB':n+' B';};
+ const baselinePcie=d.regions.find(r=>r.name==='pcie0.ctrl');
  const variants=[{label:'Default SoC · modeled DDR / architecture-only CSRs',catalog:d},...ddrVariants];
  const menu=e('am-variant');
  variants.forEach((v,i)=>{const o=append(menu,'option',v.label);o.value=String(i);});
@@ -60,7 +61,9 @@
   ?'Native LiteDRAM/LiteX csr.json (no unsourced bitfields or resets)'
   :reg.definition_status==='C_ABI_RTL_crosschecked_source_reference_not_build_qualified'
    ?'C ABI / RTL cross-checked reference only; not active-variant proof'
-   :'SystemRDL-generated definition (not independent RTL coverage)';
+   :reg.definition_status==='PCIe_source_reference_not_build_qualified'
+    ?'PCIe requester C/RTL or endpoint SystemRDL source; CPU frontdoor/link not qualified'
+    :'SystemRDL-generated definition (not independent RTL coverage)';
  const drawCsr=()=>{
   const holder=e('am-csr-browser');holder.replaceChildren();
   const query=e('am-search').value.toLowerCase().trim(),plane=e('am-plane').value,kind=e('am-kind').value;
@@ -69,28 +72,31 @@
   const regions=d.regions.filter(r=>r.plane==='config'&&(!plane||plane==='config')&&(!kind||r.kind===kind));
   for(const r of regions){
    const regionMatch=[r.name,r.owner,r.base].filter(Boolean).some(x=>String(x).toLowerCase().includes(query));
-   const active=(r.registers||[]),sourceOnly=active.length?[]:(r.source_registers||[]);
-   const displayed=[...active,...sourceOnly];
+   const active=(r.registers||[]),sourceOnly=(r.source_registers||[]);
+   const activeOffsets=new Set(active.map(reg=>String(reg.offset).toLowerCase()));
+   const displayed=[...active,...sourceOnly.filter(reg=>!activeOffsets.has(String(reg.offset).toLowerCase()))];
    const regs=displayed.filter(reg=>regionMatch||[
     reg.name,reg.address,reg.offset,reg.description,reg.access,
     ...(reg.fields||[]).flatMap(f=>[f.name,f.description,f.mask])
    ].filter(Boolean).some(x=>String(x).toLowerCase().includes(query)));
    if(query&&!regionMatch&&!regs.length)continue;
-   shown++;defined+=regs.filter(x=>x.definition_status!=='C_ABI_RTL_crosschecked_source_reference_not_build_qualified').length;
-   reference+=regs.filter(x=>x.definition_status==='C_ABI_RTL_crosschecked_source_reference_not_build_qualified').length;
+   shown++;defined+=regs.filter(x=>!['C_ABI_RTL_crosschecked_source_reference_not_build_qualified','PCIe_source_reference_not_build_qualified'].includes(x.definition_status)).length;
+   reference+=regs.filter(x=>['C_ABI_RTL_crosschecked_source_reference_not_build_qualified','PCIe_source_reference_not_build_qualified'].includes(x.definition_status)).length;
    if(!displayed.length)missing++;
    const card=append(holder,'details','','am-csr-ip');
+   card.id='csr-ip-'+r.name.replaceAll('.','-');
    const expand=regs.length&&!firstExpanded&&(active.length||!hasBuildDefinitions);
-   if(expand||Boolean(query))card.open=true;
+   if(expand||Boolean(query)||r.name==='pcie0.ctrl')card.open=true;
    if(expand)firstExpanded=true;
-   append(card,'summary',r.name+' · '+r.base+' · '+displayed.length+' register definition(s)'+(sourceOnly.length?' · SOURCE ONLY':''));
-   const status=active.length?'Selected-variant register definitions; independent RTL evidence is separate':
+   append(card,'summary',r.name+' · '+r.base+' · '+displayed.length+' register definition(s)'+(sourceOnly.length?' · includes SOURCE ONLY':''));
+   const status=active.length?'Selected-variant definitions plus any nonoverlapping, unqualified source references; independent RTL qualification is separate':
      sourceOnly.length?'Source-only C/RTL register references. These do NOT assert enabled RTL or Config-NoC attachment in this build':
      'No CSR register source for this build or repository reference';
    append(card,'p','CSR aperture '+size(r.size)+' · '+status,'am-csr-source');
    if(sourceOnly.length&&r.source_provenance){
     append(card,'p','Source: '+r.source_provenance.header+' (C ABI) · '+r.source_provenance.rtl+
       ' (RTL) · verified source SHA '+r.source_provenance.header_sha256.slice(0,12),'am-csr-source');
+     if(r.source_provenance.rdl)append(card,'p','PCIe endpoint source: '+r.source_provenance.rdl+' · '+r.source_provenance.rdl_sha256.slice(0,12)+' · host PCIe configuration TLPs are a distinct address space.','am-csr-source');
    }
    if(!regs.length){
     append(card,'p',displayed.length
@@ -104,7 +110,7 @@
     if((query||firstReg)&&card.open)item.open=true;
     firstReg=false;
     append(item,'summary',reg.name+' · '+reg.address+' · '+specified(reg.width_bits)+' bits · '+specified(reg.access).toUpperCase()+
-      (reg.definition_status==='C_ABI_RTL_crosschecked_source_reference_not_build_qualified'?' · SOURCE REFERENCE':''));
+      ((reg.definition_status||'').includes('source_reference')?' · SOURCE REFERENCE':''));
     const facts=append(item,'div','','am-csr-facts');
     for(const [k,v] of [['Absolute',reg.address],['Offset',reg.offset],['Width',reg.width_bits==null?null:reg.width_bits+' bits'],['Access',reg.access],['Reset',reg.reset],['Source',definitionSource(reg)],['C symbol',reg.source_symbol],['Write semantics',reg.write_semantics]]){
      const cell=append(facts,'span','');
@@ -160,6 +166,16 @@
  const selectVariant=()=>{
   const selected=variants[Number(menu.value)||0];
   d=selected.catalog;
+  // Current source-only PCIe metadata does not qualify PCIe in an archived DDR run.
+  if(selected.run_id&&baselinePcie){
+   const pcie=d.regions.find(r=>r.name==='pcie0.ctrl');
+   if(pcie&&pcie.base===baselinePcie.base&&pcie.size===baselinePcie.size){
+    d={...d,regions:d.regions.map(r=>r===pcie?{...r,
+      source_registers:baselinePcie.source_registers,
+      source_provenance:baselinePcie.source_provenance,
+      source_status:'current_source_reference_not_historical_ddr_evidence'}:r)};
+   }
+  }
   entries=[];
   for(const r of d.regions){entries.push({r,reg:null});for(const reg of r.registers||[])entries.push({r,reg});}
   e('am-summary').replaceChildren();
@@ -170,8 +186,9 @@
   if(selected.run_id){
    append(notice,'span','Native LiteDRAM CSR layout from independently verified CI run '+selected.run_id+' · tested '+selected.source_sha.slice(0,12)+' · ');
    const link=append(notice,'a','View real AXI/DDR run and CSR observations');link.href=selected.report_href;
+   append(notice,'span',' · PCIe references use current source definitions, not the historical DDR run.');
   } else {
-   append(notice,'span','Default build uses modeled AXI RAM: real LiteDRAM control registers are not implemented in this variant. ');
+   append(notice,'span','Default build uses modeled AXI RAM: real LiteDRAM control registers are not implemented in this variant. PCIe source references are not proof of an active CPU frontdoor. ');
    if(!ddrVariants.length)append(notice,'span','No verified DDR-run register map is available in the published evidence history.');
   }
   draw();

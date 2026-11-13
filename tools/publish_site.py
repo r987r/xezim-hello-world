@@ -1354,12 +1354,20 @@ def ddr_csr_views(entries, output):
                            'native_LiteDRAM_generated_CSR_not_bus_coverage'
                            for r in regions[0]['registers'])):
             continue
+        # The static address-map page may reuse a tested variant's *register
+        # definitions*, but never its observed read/write counts. The original
+        # per-test report retains those exact observations and provenances.
+        static_model = json.loads(json.dumps(model))
+        for region in static_model['regions']:
+            region.pop('observations', None)
+            for register in region.get('registers', []):
+                register.pop('observations', None)
         views.append({
             'label': f"Real LiteDRAM · {item['target']} · {item['run_id']}",
             'source_sha': item['source_sha'],
             'run_id': item['run_id'],
             'report_href': item['path'],
-            'catalog': model,
+            'catalog': static_model,
         })
     return views[:12]
 
@@ -1504,8 +1512,6 @@ def build(output,evidence,repository,sha,config):
             body=body.replace('__DDR_CSR_VARIANTS__',ddr_json)
             mr_json=json.dumps(mr_catalog,separators=(',',':')).replace('<','\\u003c')
             body=body.replace('__DDR_MR_CATALOG__',mr_json)
-            mr_views_json=json.dumps(ddr_mr_evidence,separators=(',',':')).replace('<','\\u003c')
-            body=body.replace('__DDR_MR_RUNS__',mr_views_json)
             details=('<a href="data/csr-map.json">Generated CSR metadata</a> · '
                      '<a href="data/soc_boot_reset_ctrl_regs.h">Reset CSR C header</a> · '
                      '<a href="data/soc_dma_shim_regs.h">Production DMA CSR C header</a> · '

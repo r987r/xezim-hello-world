@@ -15,6 +15,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 
 import address_map
 from csr_source_references import SourceCatalogError, attach_sources
+from pcie_source_registers import source_registers as pcie_source_registers, PcieSourceError
 
 
 class SourceCsrTests(unittest.TestCase):
@@ -48,8 +49,17 @@ class SourceCsrTests(unittest.TestCase):
         self.assertEqual(irq["write_semantics"], "write_one_to_clear")
         self.assertEqual(eth["source_provenance"]["header"], "sw/ethernet/eth_queue_abi.h")
         self.assertEqual({i["instance"] for i in report["gaps"]},
-                         {"boot.reset_ctrl", "memory0.ctrl", "pcie0.ctrl"})
+                         {"boot.reset_ctrl", "memory0.ctrl"})
         self.assertFalse(report["unacknowledged"])
+        pcie=by_name["pcie0.ctrl"]
+        self.assertEqual(len(pcie["source_registers"]), 22)
+        self.assertEqual(pcie["registers"], [])
+        self.assertEqual(next(x for x in pcie["source_registers"] if x["name"]=="wr_command")["address"],"0x40040014")
+        self.assertEqual(next(x for x in pcie["source_registers"] if x["name"]=="wr_command")["access"],"w")
+        self.assertEqual(next(x for x in pcie["source_registers"] if x["name"]=="rd_command")["access"],"w")
+        self.assertEqual(next(x for x in pcie["source_registers"] if x["name"]=="bar0_aperture")["address"],"0x40041000")
+        self.assertEqual(next(x for x in pcie["source_registers"] if x["name"]=="host_bar0")["fields"][0]["access"],"r")
+        self.assertTrue(all(x["definition_status"]=="PCIe_source_reference_not_build_qualified" for x in pcie["source_registers"]))
 
     def _extend(self, name, subtype, ip=None):
         config = yaml.safe_load((ROOT / "config/soc.yaml").read_text())
@@ -111,13 +121,39 @@ class SourceCsrTests(unittest.TestCase):
             with self.assertRaisesRegex(SourceCatalogError, "mystery0.ctrl"):
                 attach_sources(model, config_path=cfg)
 
+    def test_pcie_source_drift_fails_closed(self):
+        rows, provenance = pcie_source_registers()
+        self.assertEqual(len(rows), 22)
+        self.assertTrue(provenance["rdl_sha256"])
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            for relative in ("sw/pcie/pcie_requester.h",
+                             "rtl/adapters/pcie_requester_axi_regs.sv",
+                             "csr/rdl/pcie_endpoint_prelink_ctrl.rdl"):
+                (root / relative).parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(ROOT / relative, root / relative)
+            hdr = root / "sw/pcie/pcie_requester.h"
+            hdr.write_text(hdr.read_text().replace(
+                "SOC_PCIE_WR_STATUS = 0x18", "SOC_PCIE_WR_STATUS = 0x1c"))
+            with self.assertRaises(PcieSourceError):
+                pcie_source_registers(root)
+            shutil.copy2(ROOT / "sw/pcie/pcie_requester.h", hdr)
+            rdl = root / "csr/rdl/pcie_endpoint_prelink_ctrl.rdl"
+            rdl.write_text(rdl.read_text().replace(
+                "host_bar0 @0x1010", "host_bar0 @0x1020"))
+            with self.assertRaises(PcieSourceError):
+                pcie_source_registers(root)
+
     def test_header_rtl_drift_is_rejected(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             for relative in ("config/soc.yaml", "sw/dma/dma.h",
                              "sw/ethernet/eth_queue_abi.h",
                              "rtl/adapters/soc_dma_regs.sv",
-                             "rtl/io/ethernet0/ethernet_queue_ctrl.sv"):
+                             "rtl/io/ethernet0/ethernet_queue_ctrl.sv",
+                             "sw/pcie/pcie_requester.h",
+                             "rtl/adapters/pcie_requester_axi_regs.sv",
+                             "csr/rdl/pcie_endpoint_prelink_ctrl.rdl"):
                 (root / relative).parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(ROOT / relative, root / relative)
             shutil.copytree(ROOT / "csr/source-registers",
