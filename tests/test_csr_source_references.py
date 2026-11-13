@@ -124,7 +124,10 @@ class SourceCsrTests(unittest.TestCase):
             for relative in ("config/soc.yaml", "sw/dma/dma.h",
                              "sw/ethernet/eth_queue_abi.h",
                              "rtl/adapters/soc_dma_regs.sv",
-                             "rtl/io/ethernet0/ethernet_queue_ctrl.sv"):
+                             "rtl/io/ethernet0/ethernet_queue_ctrl.sv",
+                             "sw/pcie/pcie_requester.h",
+                             "rtl/adapters/pcie_requester_axi_regs.sv",
+                             "csr/rdl/pcie_endpoint_prelink_ctrl.rdl"):
                 (root / relative).parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(ROOT / relative, root / relative)
             shutil.copytree(ROOT / "csr/source-registers",
