@@ -6,8 +6,10 @@ opt-in **Gen1 x1 digital** test experiment; not a silicon transceiver.
 **Current status / visual architecture:** The cross-connected original
 pcievhost RC ↔ OpenPCIe endpoint **reached L0 independently** in
 [GitHub Actions run 43099695972](https://github.com/r987r/xezim-hello-world/actions/runs/43099695972).
-This proves the isolated **digital-link** test, not BAR enumeration or a
-full-chip NoC/SRAM transfer. See [PCIe fast-versus-real-link architecture,
+This proves the isolated **digital-link** test, not full-chip NoC/SRAM transfer.
+Separately, later branch-only original Type-0 BAR0 probe/assignment/MSE
+sequences and accepted endpoint config TLP completions also passed; neither
+is CPU0-controlled endpoint DBI or an over-link memory-to-NoC transaction. See [PCIe fast-versus-real-link architecture,
 evidence matrix and report integration](../../docs/pcie-verification-modes.md).
 The original modeled-link full-chip reporter remains the default.
 
@@ -126,8 +128,11 @@ endpoint link.
 
 Source example: pcievhost's pinned `src/ltssm.c` explicitly describes its
 abbreviated LTSSM as intended for L0 simulation only, not full compliance.
-The upstream OpenPCIe self-test and the host standalone demo are **not**
-cross-connected. No current result establishes L0 training.
+The upstream OpenPCIe self-test and host standalone demo are **different**
+from the independently cross-connected RTL/host link test, which now proves
+real digital L0. The original upstream Cocotb self-test is still **failing**
+unaligned long BAR readback (1024 bytes / offset 7); do not misclassify the
+isolated L0 as complete original-provider qualification.
 
 ## Full-chip parallel boot and PCIe link ownership (integration contract)
 
@@ -322,3 +327,22 @@ a PCIe PASS.
 - PR #229: independent endpoint prelink, host Type-0 BAR and behavioral
   PHY receiver-detect RTL benches have merged; CPU0 Config-NoC remains
   unconnected to the endpoint prelink hardware in the full SoC.
+
+## Active PR #232: surviving completion-failure gate
+
+[Issue #76](https://github.com/r987r/xezim-hello-world/issues/76)
+records current authoritative acceptance. The original OpenPCIe
+`test_pcie_core.link_up_test` on draft head `2bdbb2c` failed
+in [run 43413751149](https://github.com/r987r/xezim-hello-world/actions/runs/43413751149),
+where host MRd tags 10, 11 and 12 requested 1024 bytes at offset 7.
+Endpoint logs show segmented CplD construction but no complete host
+readback. The temporary retry-reservation overlay worsened this to
+offset 1 and was reverted; its ACK/FIFO behavior was not independently
+validated. Keep this required CI gate red until exact-head byte readback
+passes on original source-pinned RTL. Distinguish endpoint CplD driver
+completion from accepted DLL/PIPE output and independent RC receipt.
+
+After this blocker, **do not** count isolated link+isolated NoC/SRAM as one
+integrated host-to-memory test: attach actual non-config ingress and
+CplD response and CPU0 Config-NoC prelink programming before claiming
+full-chip readiness. Analog SerDes remains out of scope.
