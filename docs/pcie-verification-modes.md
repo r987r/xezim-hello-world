@@ -2,7 +2,7 @@
 
 **Owner:** [PCIe P0 #76](https://github.com/r987r/xezim-hello-world/issues/76) ·
 [Stimulus scaling #152](https://github.com/r987r/xezim-hello-world/issues/152) ·
-[Draft real-link PR #225](https://github.com/r987r/xezim-hello-world/pull/225)
+[Active real-link draft #232](https://github.com/r987r/xezim-hello-world/pull/232)
 
 Two **complementary** backends remain selectable. Never replace the existing
 TLP-level SoC regression with the much slower digital PIPE/LTSSM qualification,
@@ -47,7 +47,7 @@ or host/device readiness backchannel is allowed.
 | Root Complex | Cocotb modeled RC with TLP-level connection | Original independent pcievhost VProc RC |
 | Device | Real pinned TLP-to-AXI bridge, PCIe0 FlooNoC, SRAM and CPU0 C/iDMA | Original OpenPCIe endpoint with LTSSM/DLL/PIPE and device-local pre-link BAR setup |
 | Link training | **Not present** | Independently observed host and endpoint L0 in CI run `43099695972` |
-| Configuration space | Modeled host/endpoint BAR0 enumeration, real bridge TLPs | Host-visible BAR RTL overlay compiled; real host config TLP enumeration **not yet tested** |
+| Configuration space | Modeled host/endpoint BAR0 enumeration, real bridge TLPs | Six observed genuine Type-0 BAR0/config TLP transactions over independently trained Gen1 x1 digital link; independent isolated proof, not CPU/NoC attachment |
 | Memory traffic | Real AXI/TLP captures, RAM byte scoreboard | Not yet connected to real NoC/SRAM |
 | Reporting | Existing canonical `result.json`, `test-flow.json`, `axi-transactions.json`, `protocol-transactions.json`, HTML | `pcie-link-evidence.json`, `pcie-link-report.html`, and reused `protocols.html` explorer for observed LTSSM events **only** |
 | SerDes/electrical link | No | No: behavioral digital PHY only |
@@ -138,11 +138,11 @@ and fail on missing completions. At the other end, passive endpoint RX
 and completion-TX AXI-stream handshakes are logged from original RTL.
 No testbench relay or direct host/device prelink readback exists.
 
-The `bar0` CI lane is **experimental/unqualified until its own run
-passes**. Independent L0 is already established; it does not imply
-the new config sequence succeeds. Once passed, add its correlation
-to the canonical test-flow and TLP reporter. Full-chip BAR memory
-transactions must still use pinned `pcie_axi_master` and FlooNoC.
+The `bar0` CI lane has passed isolated original host ↔ endpoint configuration
+transactions with six returned and cross-checked TLPs. This does **not**
+qualify nonconfiguration over-link BAR memory traffic or CPU0 DBI programming.
+Full-chip BAR memory transactions must still use pinned `pcie_axi_master`,
+FlooNoC and actual SRAM readback in the same trained-link simulation.
 
 ## Byte-order ownership: do not hide a real decoder bug
 
@@ -161,7 +161,7 @@ flowchart LR
     CPL --> RC
 ```
 
-**Where our code lives** (all are editable in PR #225):
+**Where the integration code lives** (active draft PR #232; former #225 closed):
 
 - `dv/pcie_link/host_link_vproc.cpp` — source-selected host action
   `pcie.config.bar0`; invokes *original pcievhost* `cfgWrite`/`cfgRead`;
@@ -401,3 +401,32 @@ Write as an extra final ConfigRd beat; now packet windows close at the
 original host's next launch. It also rejects a MemWr before the final
 config completion. **There is still no SRAM write or PCIe completion
 here**: the NoC path must be physically attached and qualified next.
+
+## Digital-link qualification blocker (source-backed diagnostic boundary)
+
+The **original upstream OpenPCIe Cocotb** `test_pcie_core.link_up_test` is
+still a required gate even when isolated `l0`, `bar0` and `mem_ingress`
+lanes pass. On [draft #232 exact head `2bdbb2c`](https://github.com/r987r/xezim-hello-world/pull/232),
+[workflow 43413751149](https://github.com/r987r/xezim-hello-world/actions/runs/43413751149)
+failed its original 1024-byte offset-7 BAR readback. Real host MRd tags
+10/11/12 reached the endpoint; source logs show endpoint CplD fragment
+submission, but host readback timed out. `driver DONE` and an empty
+queue do not prove each completion crossed the accepted PIPE boundary.
+The experimental retry-buffer reservation/start gate was quarantined after
+the failure moved earlier to offset 1; the latest safe branch removed only
+that unqualified activation and retained reviewed 16-byte credit rounding.
+
+The next required protocol diagnosis is a **per-fragment acceptance ledger**:
+record original tag, byte count, lower address, payload/checksum and sequence
+number at endpoint CplD issuance, accepted TLP-to-DLL transfer, retry-buffer
+reservation, accepted PIPE TX beats, host RX and ACK retirement. Distinguish
+missing packet vs missing ACK vs corrupted/incomplete fragment; apply
+PCIe cumulative ACK semantics and stable ready/valid only after the original
+RTL proves those handshakes. Do not disable the upstream readback test, extend
+timeouts, inject completions or relax the byte oracle.
+
+**Separate next integration gate:** even a fixed original OpenPCIe self-test
+is not full-chip qualification. The trained endpoint's non-config TLP output
+must attach to real `pcie_axi_master` → generated PCIe0 FlooNoC → SRAM and
+return genuine CplD; CPU0 must program endpoint DBI through actual Config-NoC
+in the **same** cold-boot/link/enumerate/DMA/byte-check run. See [issue #76](https://github.com/r987r/xezim-hello-world/issues/76).
