@@ -34,6 +34,16 @@ CORE_AFTER = CORE_BEFORE.replace(
 TEST_BEFORE = "await with_timeout(self.test_all.start(),25000,'ns')"
 TEST_AFTER = "await with_timeout(self.test_all.start(),250000,'ns')"
 
+# A/B DIAGNOSTIC ONLY, applied to the detached upstream standalone self-test.
+# The selected/checked-in SoC OpenPCIe RTL overlay is NOT changed here.
+# Original source is checked against the exact locked Git blob; the working
+# tree must already carry the reviewed 16-byte transmit credit fix.
+CPLD_READY_REL = "src/dllp/tlp2dllp.sv"
+CPLD_ORIGINAL_BLOB = "4971e61449f76ef5530288844b0937b936547ccb"
+CPLD_ROUNDING = "data_credits_required = (data_length == '0) ? 16'd256 : ((data_length + 16'd3) >> 2);"
+CPLD_READY_BEFORE = "        if (has_cplh_credit && has_cpld_credit) begin"
+CPLD_READY_AFTER = "        if (has_cplh_credit && has_cpld_credit && tlp_axis_tready && skid_axis_tvalid) begin"
+
 # The original memory regression is NOT shortened or made to pass. Only when
 # its original 10us posted-write flush times out, sample the DUT's real AXIS
 # handshake and link/FC state. This distinguishes source starvation, credit
@@ -181,6 +191,15 @@ def replace_once(text: str, before: str, after: str, label: str) -> str:
 
 
 def patched(path: str, source: str) -> str:
+    if path == CPLD_READY_REL:
+        # A credit grant is not an accepted AXI beat. The original RTL can
+        # consume the first CplD beat even when the downstream mux is stalled.
+        if source.count(CPLD_ROUNDING) != 2:
+            raise ValueError(f"{path}: reviewed credit overlay changed")
+        if source.count("dllp_valid_o            = '0;") != 1:
+            raise ValueError(f"{path}: experimental retry-enable drift")
+        return replace_once(source, CPLD_READY_BEFORE, CPLD_READY_AFTER,
+                            path + " CplD accepted first beat")
     if path == "pcie_phy.core":
         return replace_once(source,CORE_BEFORE,CORE_AFTER,path)
     if path == "verif/tests/test_pcie_core.py":
@@ -213,6 +232,21 @@ def apply(root:Path) -> None:
         else:
             print(f"OPENPCIE_SELFTEST_TIMING: pinned {rel}: "
                   "Gen1 LTSSM 512x acceleration, 250us explicit test timeout")
+    # A/B experiment for an actual first-beat ready/valid bug. Applied only
+    # to the original upstream standalone qualification checkout; no new
+    # host packets, synthetic CplD, timeout changes, or PASS exemptions.
+    original_blob = subprocess.run(
+        ["git", "-C", str(root), "rev-parse", f"HEAD:{CPLD_READY_REL}"],
+        check=True, capture_output=True, text=True).stdout.strip()
+    if original_blob != CPLD_ORIGINAL_BLOB:
+        raise ValueError(f"original upstream {CPLD_READY_REL} drift: "
+                         f"{original_blob} != {CPLD_ORIGINAL_BLOB}")
+    cpld_path = root / CPLD_READY_REL
+    if not cpld_path.is_file() or cpld_path.is_symlink():
+        raise ValueError(f"missing standalone upstream source {CPLD_READY_REL}")
+    cpld_path.write_text(patched(CPLD_READY_REL, cpld_path.read_text()))
+    print("OPENPCIE_SELFTEST_CPLD_READY_AB: test-only first-beat ready/valid "
+          "guard on original pinned RTL; original Cocotb byte oracle retained")
     print("OPENPCIE_SELFTEST_TIMING: TEST-ONLY; not production or dual-sided L0 evidence")
 
 
