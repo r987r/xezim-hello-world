@@ -8,7 +8,11 @@ from __future__ import annotations
 
 import json
 import re
+from contextlib import contextmanager
+from functools import partial
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from threading import Thread
 import tempfile
 
 from selenium import webdriver
@@ -18,6 +22,32 @@ from selenium.webdriver.support.ui import WebDriverWait
 
 ROOT=Path(__file__).resolve().parents[1]
 PAGE=ROOT/".tools/pages-site/runs.html"
+
+
+@contextmanager
+def serve_fixture(directory: Path):
+    """Use the same HTTP navigation semantics as Pages, never file:// links.
+
+    Chrome can render a file:// landing page but restrict clicks to sibling
+    local files. That makes a click-through smoke fail without testing the
+    deployed site's navigation at all.
+    """
+    class QuietHTTP(SimpleHTTPRequestHandler):
+        def log_message(self, _format, *args):
+            pass
+
+    with ThreadingHTTPServer(
+        ("127.0.0.1", 0), partial(QuietHTTP, directory=str(directory))
+    ) as server:
+        thread = Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            yield f"http://127.0.0.1:{server.server_port}/runs.html"
+        finally:
+            server.shutdown()
+            thread.join(timeout=5)
+
+
 
 
 def sample(target,workflow,sha="a"*40):
@@ -98,8 +128,8 @@ def main():
             '<html><main><h1>Protocol Run Explorer</h1></main></html>')
         decorate_run_pages(report_root,Path("runs/example"),
                            "r987r/xezim-hello-world","a"*40,shell_fn=shell)
-        with webdriver.Chrome(options=options) as driver:
-            driver.get(path.as_uri())
+        with serve_fixture(Path(tmp)) as fixture_url, webdriver.Chrome(options=options) as driver:
+            driver.get(fixture_url)
             wait=WebDriverWait(driver,20)
             wait.until(lambda d: d.find_elements(By.CSS_SELECTOR,"#suite-summary button"))
             catalog=driver.find_element(By.ID,"catalog").text
@@ -112,7 +142,10 @@ def main():
                    f.value="PCIe";f.dispatchEvent(new Event("change"));""")
             wait.until(lambda d: "chip-pcie-host" in d.find_element(By.ID,"results").text)
             assert "chip-ethernet" not in driver.find_element(By.ID,"results").text
-            # PCIe-filtered catalog legitimately contains the new combined\n            # chip-ethernet-ddr-pcie target. Exclude only the standalone\n            # chip-ethernet target, not its composite PCIe sibling.\n            assert not re.search(r"\\bchip-ethernet\\b(?!-)",\n                                 driver.find_element(By.ID,"catalog").text)
+            # A combined chip-ethernet-ddr-pcie target belongs to PCIe.
+            # Exclude only the standalone Ethernet target.
+            assert not re.search(r"\bchip-ethernet\b(?!-)",
+                                 driver.find_element(By.ID,"catalog").text)
             assert "chip-pcie-host" in driver.find_element(By.ID,"catalog").text
 
             driver.execute_script(
@@ -162,6 +195,7 @@ def main():
             # same-site return path, unlike the old standalone HTML reports.
             driver.find_element(By.CSS_SELECTOR,
                 '#results a[href="runs/example/report.html"]').click()
+            wait.until(lambda d: d.current_url.endswith("/runs/example/report.html"))
             wait.until(lambda d: "AXI Run Explorer" in d.find_element(By.TAG_NAME,"main").text)
             assert driver.find_element(By.CSS_SELECTOR,
                 '.hub-global-header .brand').text=="SoC / verification hub"
