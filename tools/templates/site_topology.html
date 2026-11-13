@@ -26,7 +26,7 @@
 <div class="scroll"><table><thead><tr><th>Boundary</th><th>Role</th><th>Plane</th><th>Connected endpoints</th></tr></thead><tbody id="monitors"></tbody></table></div>
 <div class="actions"><a href="config/soc.yaml">SoC configuration</a><a href="gen/diagrams/noc-topology.json">Topology JSON</a><a href="gen/supernoc/axi_monitors.json">Monitor catalog</a><a href="docs/architecture.html">Architecture contracts</a></div>
 </details>
-<p class="scope-note"><strong>Implementation scope:</strong> The default chip routes DDR/HBM windows to AXI memory models. Active PCIe, Ethernet and real LiteDRAM datapaths are selected and verified in separate build/test variants. See <a href="docs/implementation-status.html">implementation scope</a> and <a href="runs.html">individual test runs</a> before treating a connection as exercised.</p>
+<p class="scope-note"><strong>Implementation scope:</strong> The default chip routes DDR/HBM windows to AXI memory models. PCIe, Ethernet and real LiteDRAM datapaths are enabled in selected test variants; inspect each run to see which components were active together. See <a href="docs/implementation-status.html">implementation scope</a> and <a href="runs.html">individual test runs</a> before treating a connection as exercised.</p>
 <script type="application/json" id="site-data">__SITE_DATA__</script><script>
 const D=JSON.parse(document.getElementById('site-data').textContent);
 function cell(row,value,href){const td=document.createElement('td'),node=document.createElement(href?'a':'span');node.textContent=String(value??'Not recorded');if(href)node.href=href;td.append(node);row.append(td)}
