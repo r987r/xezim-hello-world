@@ -11,6 +11,7 @@
 #include "../../common/memory_pattern.h"
 #include "../../common/test_flow.h"
 #include "../../common/soc_scn_action_args.h"
+#include "../../common/soc_scn_compiled_runtime.h"
 #include "scenario_dma_contract.h"
 #include <stdint.h>
 
@@ -286,9 +287,10 @@ int cpu_dma_run(void) {
     };
     /* Source-selected SHA string is from the same immutable plan; only the
      * independent CPU AXI 256-bit witness checks hardware receipt.
-     * The existing C11 action ABI dispatches real typed callbacks here.
+     * The compiled variant resolves the same selected typed C callbacks
+     * once, retaining exact dependency/argument and SHA checks.
      */
-    soc_scn_driver_result_t result = soc_scn_driver_run(
+    soc_scn_driver_result_t result = soc_scn_driver_run_compiled(
         SOC_SCN_PLAN_SHA256, handlers,
         sizeof(handlers) / sizeof(handlers[0]), record_action, &ctx);
     if (result.status != SOC_SCN_ADAPTER_OK ||
