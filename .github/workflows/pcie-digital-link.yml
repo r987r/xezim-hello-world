@@ -304,6 +304,22 @@ jobs:
           grep -q '^PCIE_EP_SIM_FAST_LTSSM: ENABLED timer_divider=512 min_tx_ts1=16' \
             .tools/pcie-link/openpcie-upstream.log
           python3 tools/ci_require_cocotb.py .tools/pcie-link/openpcie-upstream.log
+      # Reuse the generic protocol capture schema after original Cocotb,
+      # including when it fails. Capture integrity is NOT test PASS.
+      - name: Adapt pinned OpenPCIe native TLP/DLLP capture into unified protocol view
+        if: always()
+        run: |
+          set -euo pipefail
+          if [[ -f .tools/pcie-link/openpcie-upstream.log ]]; then
+            python3 tools/pcie_native_pipe_capture.py \
+              .tools/pcie-link/openpcie-upstream.log \
+              --out .tools/pcie-link/observations
+            test -s .tools/pcie-link/observations/protocol-events.jsonl
+            test -s .tools/pcie-link/observations/protocol-transactions.json
+            test -s .tools/pcie-link/observations/protocols.html
+          else
+            echo "No original upstream simulation log: no PIPE capture claim"
+          fi
       - name: Preserve upstream endpoint run evidence and failures
         if: always()
         uses: actions/upload-artifact@v4
