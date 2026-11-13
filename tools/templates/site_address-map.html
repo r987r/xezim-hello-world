@@ -1,10 +1,10 @@
-<div class="eyebrow">Source-defined architecture · data and config planes</div>
-<h1>SoC address map &amp; CSR register definitions</h1>
-<p class="lede">ROM, SRAM, flash, DDR, HBM and control windows from the configured SoC. SystemRDL-owned and upstream LiteDRAM/LiteX native registers are subsets of the physical apertures. Choose the exact SoC build below.</p>
-<div class="actions"><a href="#csr-definitions">Browse registers &amp; bitfields</a><a href="data/soc-address-map.json">Download address-map JSON</a><a href="data/csr-source-coverage.json">CSR coverage / missing IP sources</a><a href="data/soc-data-memories.rdl">External memory RDL view</a><a href="runs.html">Inspect measured run evidence</a></div>
+<div class="eyebrow">Address space / CSR definitions</div>
+<h1>Address space &amp; registers</h1>
+<p class="lede">Inspect physical memory windows, peripheral control apertures and register fields for the selected SoC build.</p>
+<div class="actions"><a href="#physical-address-map">Physical address map</a><a href="#csr-definitions">CSR definitions</a><a href="#ddr-mr-browser">DDR4 mode fields</a><a href="runs.html">Executed memory and register transactions</a><a href="data/soc-address-map.json">Address-map JSON</a></div>
 <p class="muted">__CSR_SOURCE_LINKS__</p>
 <div class="grid" id="am-summary"></div>
-<p class="notice">Mapped apertures and register definitions are not RTL test coverage. Memory-model backing may be far smaller than the declared DDR/HBM windows. Unassigned holes are not backed storage; read/write evidence belongs to each run's passive AXI trace.</p>
+<p class="scope-note">These are configured decode windows and register definitions, not test results. Modeled capacity may be smaller than the declared memory window. Verified accesses and DDR mode commands belong to <a href="runs.html">individual tests</a>.</p>
 <div class="filters">
 <label>SoC build / register provider<select id="am-variant"></select></label>
 <label>Region, address or register<input type="search" id="am-search" placeholder="0x40020000, ddr0, cpu_release"></label>
@@ -13,24 +13,20 @@
 </div>
 <p class="muted" id="am-variant-evidence">The default chip uses modeled AXI RAM; real DDR registers appear only in independently verified DDR CI variants.</p>
 <p class="muted" id="am-count" aria-live="polite"></p>
-<section class="card am-csr" id="ddr-mr-browser" aria-labelledby="mr-title">
- <h2 id="mr-title">DDR4 device mode registers · MR0–MR6</h2>
- <p>Decode the <strong>device MRS command</strong> fields generated from SystemRDL. These are <strong>not CPU-addressable CSRs</strong> and do not occupy the SoC address map. Real test values appear only when a complete DFI monitor and independent scoreboard agree. A test without evidence is <strong>UNMEASURED</strong>.</p>
- <div class="filters">
-  <label>Test / run evidence<select id="mr-test-select" aria-label="DDR4 test whose register writes are shown"></select></label>
-  <label>Compare with another test<select id="mr-compare-select" aria-label="Compare DDR4 registers between tests"></select></label>
- </div>
- <p id="mr-evidence-status" class="muted" aria-live="polite"></p>
- <div class="actions" id="mr-evidence-links"></div>
- <div class="scroll mr-table-scroll" style="overflow-x:auto">
-  <table><thead><tr><th>Device MR</th><th>Test programmed?</th><th>Expected at INIT</th><th>Actual DFI MRS</th><th>Result</th><th>After-init change?</th><th>Comparison</th></tr></thead><tbody id="mr-table-rows"></tbody></table>
- </div>
- <div id="mr-details"></div>
- <p class="muted">A matching DFI MRS observation proves the command reached the DFI boundary, not that the upstream behavioral model applied its settings or enforced JEDEC timing.</p>
-</section>
-<section class="card am-csr" id="csr-definitions" aria-labelledby="am-csr-title"><h2 id="am-csr-title">CSR register definitions and source references by IP</h2><p class="muted">Expand an IP, then a register to inspect absolute address, offset, access and source-defined bitfields. Selected-variant CSR definitions are separate from C/RTL source references that are not qualified as active. Missing sources are explicit; neither category is evidence of an observed MMIO.</p><p id="am-csr-count" aria-live="polite"></p><div id="am-csr-browser"></div></section>
+
+
+<h2 id="physical-address-map">Physical address map</h2>
 <div class="scroll am-table"><table><thead><tr><th>Plane</th><th>Region / register</th><th>Address</th><th>End inclusive</th><th>Size</th><th>Modeled backing</th><th>Status</th><th>Details</th></tr></thead><tbody id="am-rows"></tbody></table></div>
 <div class="am-mobile" id="am-mobile"></div>
+<section class="card am-csr" id="csr-definitions" aria-labelledby="am-csr-title"><h2 id="am-csr-title">CSR definitions by IP</h2><p class="muted">Expand an IP to inspect register addresses and bitfields. The selected variant distinguishes active definitions from source-only references.</p><p id="am-csr-count" aria-live="polite"></p><div id="am-csr-browser"></div></section>
+
+<details class="technical-notes" id="ddr-mr-browser">
+ <summary>DDR4 device mode fields · MR0–MR6 (not memory-mapped)</summary>
+ <p>Source-defined DDR4 MRS command fields. Device mode registers do not occupy CPU address space. Test-specific programmed values, observed DFI commands and comparisons are reported with the <a href="runs.html#unified-traffic">recorded transactions</a> and individual test reports.</p>
+ <p><a href="data/ddr4-mr-definitions.json">MR definitions JSON</a> · <a href="docs/csr-ddr.html">DDR CSR reference</a></p>
+ <div id="mr-details"></div>
+</details>
+
 <section class="card"><details id="am-raw-panel"><summary>Advanced: raw aperture / CSR metadata</summary><h2 id="am-detail-title">Address metadata</h2><pre id="am-detail">Select a physical-address row to inspect the source JSON.</pre></details></section>
 <style>
 .am-csr{margin:16px 0}.am-csr h2{margin-top:0}.am-csr-ip{border-top:1px solid var(--border,#ddd);padding:10px 0}.am-csr-ip summary,.am-csr-register summary{cursor:pointer;font-weight:600;overflow-wrap:anywhere}.am-csr-ip .am-csr-register{margin:8px 0 8px 12px;padding:9px 12px;border-left:3px solid var(--accent,#777);background:var(--panel,#121e31);color:var(--fg,#e9eff8);border:1px solid var(--line,#2b3c54);border-radius:6px}.am-csr-ip[open]>summary,.am-csr-register[open]>summary{color:var(--fg,#e9eff8)}.am-csr-ip summary:focus-visible,.am-csr-register summary:focus-visible{outline:2px solid var(--accent,#80d4ff);outline-offset:3px}.am-csr-register .am-csr-facts,.am-csr-register .am-csr-table{color:var(--fg,#e9eff8)}.am-csr-register .am-csr-table th{background:var(--bg,#0b1220);color:var(--muted,#a9b9d0)}.am-csr-register .am-csr-table td{background:var(--panel,#121e31);color:var(--fg,#e9eff8)}.am-csr-register .am-csr-empty,.am-csr-register .am-csr-source{color:var(--muted,#a9b9d0)}.am-csr-facts{display:flex;flex-wrap:wrap;gap:8px 18px;margin:8px 0;font-size:13px}.am-csr-facts span{overflow-wrap:anywhere}.am-csr-table{overflow-x:auto}.am-csr-table table{width:100%;font-size:13px}.am-csr-table th,.am-csr-table td{padding:6px 8px;text-align:left;vertical-align:top;overflow-wrap:anywhere}.am-csr-empty{margin:10px 0 4px 12px;color:var(--muted,#666);font-size:13px}.am-csr-source{margin:6px 0 0 12px;font-size:12px}.am-mobile{display:none}.am-mobile .card{margin:12px 0}.am-mobile p{margin:4px 0;font-size:13px}.am-register{border-left:3px solid var(--accent)}.am-table td{overflow-wrap:anywhere;max-width:340px}.am-table button{font-size:12px}@media(max-width:820px){.am-table{display:none}.am-mobile{display:block}}
@@ -38,7 +34,7 @@
 <script type="application/json" id="address-map-data">__ADDRESS_MAP_DATA__</script>
 <script type="application/json" id="ddr-csr-variants-data">__DDR_CSR_VARIANTS__</script>
 <script type="application/json" id="ddr-mr-catalog-data">__DDR_MR_CATALOG__</script>
-<script type="application/json" id="ddr-mr-runs-data">__DDR_MR_RUNS__</script>
+
 <script>
 'use strict';
 (()=>{
@@ -186,87 +182,33 @@
 })();
 </script>
 
+
 <script>
 'use strict';
 (()=>{
- const e=id=>document.getElementById(id);
- const add=(parent,tag,value)=>{const node=document.createElement(tag);node.textContent=String(value);parent.append(node);return node;};
- const defs=JSON.parse(e('ddr-mr-catalog-data').textContent);
- const runs=JSON.parse(e('ddr-mr-runs-data').textContent);
- const selected=e('mr-test-select'),other=e('mr-compare-select');
- const data=[null,...runs];
- for(const [menu,defaultLabel] of [[selected,'Definitions only · no test evidence'],[other,'No comparison']]){
-  add(menu,'option',defaultLabel).value='0';
-  for(let i=0;i<runs.length;i++){
-   const run=runs[i];const title=run.label+' · '+run.source_sha.slice(0,12);
-   add(menu,'option',title).value=String(i+1);
-  }
- }
- if(runs.length)selected.value='1';
- const render=()=>{
-  const a=data[Number(selected.value)||0];
-  const b=data[Number(other.value)||0];
-  const evidence=a?.evidence,compare=b?.evidence;
-  const status=e('mr-evidence-status');status.replaceChildren();
-  if(a){
-   add(status,'strong','Observed · '+evidence.observed_writes+' MRS commands during INIT in '+a.label);
-   add(status,'span',' · 0 additional writes observed after INIT · model does not enforce MR state · '+a.source_sha.slice(0,12));
-  }else{
-   add(status,'strong','SOURCE ONLY · MR field definitions, not programmed state');
-   add(status,'span',runs.length
-      ?' · Select a completed DDR4 test to view exact observed register values and compare runs.'
-      :' · No qualified DDR4 MR trace is available in the published test history.');
-  }
-  const links=e('mr-evidence-links');links.replaceChildren();
-  if(a){
-   const link=add(links,'a','Open measured run');link.href=a.report_href;
-   const json=add(links,'a','MRS evidence JSON');json.href=a.evidence_href;
-  }else{
-   const link=add(links,'a','Download MR field definitions');link.href='data/ddr4-mr-definitions.json';
-  }
-  const table=e('mr-table-rows');table.replaceChildren();
-  const details=e('mr-details');details.replaceChildren();
-  const current=evidence?.records||[];
-  const previous=compare?.records||[];
-  const map=new Map(current.map(x=>[x.mr,x]));
-  const prior=new Map(previous.map(x=>[x.mr,x]));
-  for(let mr=0;mr<7;mr++){
-   const record=map.get(mr),ref=prior.get(mr);
-   const row=add(table,'tr','');
-   const values=[
-    'MR'+mr,
-    record?'Yes · INIT':'UNMEASURED',
-    record?record.expected_value:'—',
-    record?record.value:'Not observed in this view',
-    record?(record.matched?'MATCH':'MISMATCH'):'Source definition',
-    record?(evidence.after_init_writes===0?'No additional MRS observed':'Additional MRS observed'):'UNMEASURED',
-    record&&ref?(record.value===ref.value?'Same as '+b.target:'Different from '+b.target):'—',
-   ];
-   for(const value of values)add(row,'td',value);
-   const node=add(details,'details','');
-   const sum=add(node,'summary','MR'+mr+' · '+(record?'Observed '+record.value+' at DFI cycle '+record.cycle:'Field definitions only'));
-   sum.style.cursor='pointer';
-   const source=evidence?.field_definitions?.[String(mr)]||
-                defs.registers[String(mr)];
-   if(!source||!Array.isArray(source.fields)){add(node,'p','No source-qualified fields');continue;}
-   const scroll=add(node,'div','');scroll.style.overflowX='auto';
-   const t=add(scroll,'table','');const head=add(t,'thead','');const h=add(head,'tr','');
-   for(const name of ['Field','Bits','Value in selected test','Meaning from RDL'])add(h,'th',name);
-   const body=add(t,'tbody','');
-   for(const f of source.fields){
-    const trow=add(body,'tr','');
-    for(const value of [
-      f.name,f.msb+':'+f.lsb,record?record.fields[f.name]:'UNMEASURED',
-      f.description||'Field semantics not source qualified']){
-     add(trow,'td',value);
-    }
-   }
-   const caveat=add(node,'p','Virtual RDL offset '+source.offset+' · no device MR readback · '+(record?'Observed test programming, not DRAM model state':'No runtime proof in this view'));
-   caveat.className='muted';
-  }
+ const defs=JSON.parse(document.getElementById('ddr-mr-catalog-data').textContent);
+ const holder=document.getElementById('mr-details');
+ const add=(parent,tag,content)=>{
+  const element=document.createElement(tag);element.textContent=String(content);
+  parent.append(element);return element;
  };
- selected.addEventListener('change',render);
- other.addEventListener('change',render);
- render();
+ for(let mr=0;mr<7;mr++){
+  const reg=defs.registers?.[String(mr)];
+  const detail=add(holder,'details','');detail.className='am-csr-register';
+  add(detail,'summary','MR'+mr+' · device command fields');
+  if(!reg||!Array.isArray(reg.fields)){add(detail,'p','No source-defined fields available');continue;}
+  const scroll=add(detail,'div','');scroll.className='scroll';
+  const table=add(scroll,'table',''),thead=add(table,'thead',''),row=add(thead,'tr','');
+  for(const name of ['Field','Bits','Definition'])add(row,'th',name);
+  const body=add(table,'tbody','');
+  for(const field of reg.fields){
+   const r=add(body,'tr','');
+   add(r,'td',field.name);
+   add(r,'td',field.msb===field.lsb?field.msb:field.msb+':'+field.lsb);
+   add(r,'td',field.description||'See source RDL');
+  }
+  const note=add(detail,'p','Virtual RDL offset '+reg.offset+' · not a CPU address or an observed value');
+  note.className='muted';
+ }
 })();
 </script>

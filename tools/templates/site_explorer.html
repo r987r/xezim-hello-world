@@ -1,6 +1,6 @@
-<div class="eyebrow">Architecture explorer · structural RTL</div>
-<h1>Chip composition &amp; connectivity</h1>
-<p class="lede">Follow the real design hierarchy: the full SoC contains subsystems; subsystems contain IP and local fabrics; fabrics contain the exact FlooGen router mesh and network interfaces. Click a block to drill down.</p>
+<div class="eyebrow">Architecture / RTL hierarchy</div>
+<h1>Chip architecture</h1>
+<p class="lede">Explore the SoC from subsystems down to IP blocks, local NoCs, routers and interfaces. Select a component or connection to inspect its generated structure.</p>
 <section class="arch-directory card" aria-labelledby="arch-directory-title">
   <h2 id="arch-directory-title">Explore every generated subsystem and NoC</h2>
   <p class="muted">Jump to any available hierarchy view. The directory is derived from the generated design graph, not a hand-maintained list. Views describe structural sources; the selected test mode controls actor overlays, not which hardware passed.</p>
@@ -8,7 +8,7 @@
 </section>
 <div class="arch-toolbar" aria-label="Diagram controls">
   <div id="arch-crumbs" class="arch-crumbs" aria-label="Hierarchy breadcrumb"></div>
-  <label>Test mode <select id="arch-profile"></select></label>
+  <label>Variant annotations <select id="arch-profile"></select></label>
   <label>Connections <select id="arch-plane"><option value="all">Data + config</option><option value="data">Data only</option><option value="config">Config only</option></select></label>
   <button type="button" id="arch-zoom-out" title="Zoom out">−</button>
   <button type="button" id="arch-fit">Fit</button>
@@ -28,7 +28,7 @@
   <aside class="arch-inspector">
     <div class="eyebrow">Inspector</div>
     <h2 id="arch-inspect-title">Select a block or connection</h2>
-    <p id="arch-inspect-subtitle" class="muted">Click a subsystem to see its composition, or a NoC to see its routers and interfaces.</p>
+    <p id="arch-inspect-subtitle" class="muted">Select a subsystem, IP block, network or connection in the diagram.</p>
     <div id="arch-inspect-facts"></div>
     <div id="arch-inspect-links"></div>
     <section id="arch-link-traffic" class="arch-traffic" aria-label="Observed link traffic" hidden>
@@ -44,7 +44,7 @@
     <button id="arch-inspect-open" type="button" hidden>Open this block</button>
   </aside>
 </div>
-<div class="arch-evidence">Source distinction: router coordinates and FlooNoC links are from generated structural topology; inter-subsystem links are generator-declared RTL integration. Signal widths/directions come from generated RTL port declarations. A drawn connection is not evidence of a successful AXI transfer or a slang-netlist path.</div>
+<p class="scope-note">The variant selector changes architecture annotations; it does not elaborate a different RTL chip. Diagram connections are structural, not transaction evidence. <a href="docs/design-explorer.html">Diagram and RTL qualification</a>.</p>
 <details id="arch-signals" class="arch-signal-panel">
   <summary>Signal and bus inspector <span id="arch-signals-count"></span></summary>
   <div class="arch-signal-controls">
