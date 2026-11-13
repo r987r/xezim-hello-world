@@ -126,8 +126,6 @@ async def execute_cold_boot(dut, *, external=None, benchmark=False):
         host=PcieHostParticipant(flow,manifest)
     memory = json.loads((ROOT/'gen/chip/manifest.json').read_text())['memory_models']
     cpu_dma_mode = os.environ.get('SOC_CPU_DMA_MODE') == '1'
-    scenario_cpu_mode = bool(plan and json.loads(Path(plan).read_text()).get(
-        'firmware_mode') == 'cpu_dma_scenario')
     real_ddr_mode = os.environ.get('SOC_DDR_REAL_MODE') == '1'
     # The probe outputs mirror the *real iDMA response* when DmaEnable=1
     # and ProbeEnable=0. Attaching AxiMaster in CPU mode would let its
