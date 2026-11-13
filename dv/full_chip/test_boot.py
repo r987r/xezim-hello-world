@@ -243,6 +243,14 @@ async def execute_cold_boot(dut, *, external=None, benchmark=False):
                         contract["ddr_phys"])
             assert observed == expected, (
                 f"SCN-2 CPU allocations {observed} differ from resolved plan {expected}")
+            # The selected CPU profile batches original passive AXI JSONL writes.
+            # Flush every already-accepted handshake BEFORE independent
+            # correlation, not only after the scenario evidence is emitted.
+            # Same-edge monitor deliveries get a bounded 1 ns scheduling turn;
+            # no response/transaction is inserted or marked complete here.
+            await Timer(1, 'ns')
+            from dv.common.axi_trace import flush_active
+            flush_active()
             events, bad = read_events(events_file)
             assert not bad, f"SCN-2 invalid real passive AXI events: {bad[:3]}"
             # Independently reconstruct all 256 bits of the selected plan SHA
