@@ -71,15 +71,17 @@ python3 tools/pcie_link.py --check --check-upstream
 
 Dedicated `pcie-digital-link.yml` additionally attempts the exact
 upstream OpenPCIe FuseSoC/Verilator test and the original pcievhost
-Verilator/VProc x1 self-test in separate jobs. These **are not** yet the
-cross-connected real endpoint/host L0 proof. Logs, source selection and
-original upstream exit status are kept in GitHub Actions artifacts.
+Verilator/VProc x1 self-test in separate jobs. Those *standalone provider
+self-tests* do not themselves prove the independent cross-connected link,
+which is now tested in the separate real `l0`/BAR0 workflow lanes. Logs,
+source selection and original upstream exit status are kept in Actions.
 
-## Required real-L0 qualification (still open)
+## Remaining digital-link and full-chip qualification (partial L0 complete)
 
-- One compiled cross-connected full-chip digital PIPE test with a behavioral
-  PHY responder, actual clock/reset wiring, observed ordered-set exchanges,
-  LTSSM progressing into L0 **without forcing LinkUp**.
+- [x] Isolated original host/endpoint compiled digital PIPE/LTSSM reaches
+  L0 without forcing LinkUp (independent CI scope, **not full-chip**).
+- [ ] Same trained link connected to full-chip NoC/SRAM and CPU0 firmware,
+  with genuine host readback and expected physical link transitions.
 - Negative tests for absent remote partner, bad ordered sets, link-down,
   receiver detect failure and timeout. No test may succeed because a timer
   merely sets `link_up`.
@@ -98,7 +100,7 @@ Do **not** close #76 or treat an upstream self-test, pipe adapter, configuration
 header, synthetic modeled link-up, or `pcie_axi_master` alone as a trained
 endpoint link.
 
-## Current L0 bring-up investigation (NOT yet connected)
+## Historical L0 bring-up investigation (initial steps now passed; full-chip still missing)
 
 1. Fix the **original upstream Cocotb execution** first. A green build previously
    hid an import failure; the new mandatory result parser rejects zero/failed
@@ -214,7 +216,7 @@ proves only sequencing/gating; it does not qualify the full-chip boot path.
 The provided 4KiB/1MiB apertures are test cases, not claims that the pinned
 OpenPCIe upstream config space or PCIe host sees these values.
 
-**Upstream limitation that must be fixed before BAR enumeration is claimed:**
+**Historical upstream BAR limitation (resolved for isolated host enumeration via reviewed overlay; full-chip CPU ownership still missing):**
 the pinned OpenPCIe `src/pcie_cfg/pcie_config.rdl` defines BAR0 at 0x10
 as hardware-readable, software-read-only fields with a constant reset/mask;
 the generated `pcie_config_reg.sv` hardwires those values, and the existing
