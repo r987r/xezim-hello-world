@@ -142,7 +142,13 @@ def require_completed_xezim_run(root: Path, target: str, plan: dict) -> dict:
     if not root.is_dir() or root.is_symlink():
         raise IdentityError("missing canonical Xezim run root")
     _existing_ancestors_safe(root)
-    if plan.get("engine") != "xezim" or target not in ("smoke", "sram"):
+    if (plan.get("engine") != "xezim"
+            or target not in ("smoke", "sram", "serv")
+            or (target == "serv" and
+                (plan.get("top") != "serv_minimal_tb"
+                 or plan.get("sources") != "serv"
+                 or plan.get("logical_test") != "cpu-instruction-smoke"
+                 or plan.get("mode", "simulate") != "simulate"))):
         raise IdentityError("unexpected canonical Xezim producer selection")
     matches = []
     for identity_file in root.rglob("identity.json"):

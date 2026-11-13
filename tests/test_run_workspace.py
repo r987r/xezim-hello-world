@@ -100,6 +100,38 @@ class WorkspaceTests(unittest.TestCase):
         with self.assertRaisesRegex(IdentityError, "missing canonical"):
             require_completed_xezim_run(root, "smoke", plan)
 
+    def test_canonical_serv_cpu_requires_selected_real_execution(self):
+        plan = self.catalog["serv"]
+        root = Path(self.temp.name) / ".tools/runs"
+        identity = selected("serv", plan, run_id="local-aaaaaaaaaaaa")
+        directory = reserve_run(root, identity, plan=plan)
+        self.assertEqual(directory.relative_to(root), relative_path(identity))
+        self.assertFalse((root.parent / "regression/serv").exists())
+        with self.assertRaisesRegex(IdentityError, "missing canonical"):
+            require_completed_xezim_run(root, "serv", plan)
+        (directory / "result.json").write_text(json.dumps({
+            "target": "serv", "passed": True, "stage": "all",
+            "identity_sha256": identity["identity_sha256"],
+            "canonical_id": relative_path(identity).as_posix(),
+            "results": [{"name": "serv", "passed": True, "exit_code": 0}]
+        }) + "\n")
+        # A bare claimed PASS cannot replace actual source archive, log,
+        # runner evidence or source selected artifact hashes.
+        with self.assertRaisesRegex(IdentityError, "missing canonical"):
+            require_completed_xezim_run(root, "serv", plan)
+        invalid = dict(plan, top="wrong_cpu_tb")
+        with self.assertRaisesRegex(IdentityError, "unexpected canonical"):
+            require_completed_xezim_run(root, "serv", invalid)
+        invalid = dict(plan, mode="compile")
+        with self.assertRaisesRegex(IdentityError, "unexpected canonical"):
+            require_completed_xezim_run(root, "serv", invalid)
+        other = selected("serv", plan, run_id="local-bbbbbbbbbbbb")
+        reserve_run(root, other, plan=plan)
+        # Two otherwise valid identities remain ambiguous, even when
+        # neither run has any completed simulator evidence.
+        with self.assertRaisesRegex(IdentityError, "exactly one real canonical"):
+            require_completed_xezim_run(root, "serv", plan)
+
     def test_real_verilator_cocotb_producer_refuses_fabricated_completion(self):
         """A canonical name alone cannot make XML/runner/source evidence PASS."""
         plan = self.catalog["dma-rtl"]
