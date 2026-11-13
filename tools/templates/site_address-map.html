@@ -1,10 +1,10 @@
-<div class="eyebrow">Source-defined architecture · data and config planes</div>
-<h1>SoC address map &amp; CSR register definitions</h1>
-<p class="lede">ROM, SRAM, flash, DDR, HBM and control windows from the configured SoC. SystemRDL-owned and upstream LiteDRAM/LiteX native registers are subsets of the physical apertures. Choose the exact SoC build below.</p>
-<div class="actions"><a href="#csr-ip-pcie0-ctrl">PCIe controller registers</a><a href="#csr-ip-memory0-ctrl">DDR controller registers</a><a href="#csr-definitions">All register definitions</a><a href="data/soc-address-map.json">Download address-map JSON</a><a href="data/csr-source-coverage.json">CSR coverage / missing IP sources</a><a href="data/soc-data-memories.rdl">External memory RDL view</a><a href="runs.html">Inspect measured run evidence</a></div>
+<div class="eyebrow">Address space / CSR definitions</div>
+<h1>Address space &amp; registers</h1>
+<p class="lede">Inspect physical memory windows, peripheral control apertures and register fields for the selected SoC build.</p>
+<div class="actions"><a href="#csr-ip-pcie0-ctrl">PCIe registers</a><a href="#csr-ip-memory0-ctrl">DDR controller registers</a><a href="#physical-address-map">Physical address map</a><a href="#csr-definitions">CSR definitions</a><a href="#ddr-mr-browser">DDR4 mode fields</a><a href="runs.html">Executed memory and register transactions</a><a href="data/soc-address-map.json">Address-map JSON</a></div>
 <p class="muted">__CSR_SOURCE_LINKS__</p>
 <div class="grid" id="am-summary"></div>
-<p class="notice">Mapped apertures and register definitions are not RTL test coverage. Memory-model backing may be far smaller than the declared DDR/HBM windows. Unassigned holes are not backed storage; read/write evidence belongs to each run's passive AXI trace.</p>
+<p class="scope-note">These are configured decode windows and register definitions, not test results. Modeled capacity may be smaller than the declared memory window. Verified accesses and DDR mode commands belong to <a href="runs.html">individual tests</a>.</p>
 <div class="filters">
 <label>SoC build / register provider<select id="am-variant"></select></label>
 <label>Region, address or register<input type="search" id="am-search" placeholder="0x40020000, ddr0, cpu_release"></label>
@@ -13,18 +13,20 @@
 </div>
 <p class="muted" id="am-variant-evidence">The default chip uses modeled AXI RAM; native LiteDRAM controller CSRs are selectable only from source-verified DDR test variants. PCIe requester and endpoint DBI definitions are always available as source-only references; the separate host PCIe Type-0 configuration space is not SoC MMIO.</p>
 <p class="muted" id="am-count" aria-live="polite"></p>
-<section class="card am-csr" id="ddr-mr-browser" aria-labelledby="mr-title">
- <h2 id="mr-title">DDR4 device mode register definitions · MR0–MR6</h2>
- <p>DDR4 MR0–MR6 are programmed via DFI MRS commands, not CPU-addressable MMIO. This page displays source-defined fields only. Actual programmed values, decoded DFI cycles, after-init changes, scoreboard checks and source evidence belong exclusively to the individual <a href="runs.html#unified-traffic">Test Runs</a> and their <a href="runs.html">per-test reports</a>.</p>
- <div class="scroll mr-table-scroll" style="overflow-x:auto">
-  <table><thead><tr><th>Device MR</th><th>Source definition</th><th>RDL offset (virtual, not MMIO)</th><th>Fields</th></tr></thead><tbody id="mr-definition-rows"></tbody></table>
- </div>
- <div id="mr-definition-details"></div>
- <p class="muted">Mode-register state is not readable through this address map. DFI observation alone also does not prove that the upstream behavioral BankModel enforced MR state or physical DDR4 timing.</p>
-</section>
-<section class="card am-csr" id="csr-definitions" aria-labelledby="am-csr-title"><h2 id="am-csr-title">CSR register definitions and source references by IP</h2><p class="muted">Expand an IP, then a register to inspect absolute address, offset, access and source-defined bitfields. Selected-variant CSR definitions are separate from C/RTL source references that are not qualified as active. Missing sources are explicit; neither category is evidence of an observed MMIO.</p><p id="am-csr-count" aria-live="polite"></p><div id="am-csr-browser"></div></section>
+
+
+<h2 id="physical-address-map">Physical address map</h2>
 <div class="scroll am-table"><table><thead><tr><th>Plane</th><th>Region / register</th><th>Address</th><th>End inclusive</th><th>Size</th><th>Modeled backing</th><th>Status</th><th>Details</th></tr></thead><tbody id="am-rows"></tbody></table></div>
 <div class="am-mobile" id="am-mobile"></div>
+<section class="card am-csr" id="csr-definitions" aria-labelledby="am-csr-title"><h2 id="am-csr-title">CSR definitions by IP</h2><p class="muted">Expand an IP to inspect register addresses and bitfields. The selected variant distinguishes active definitions from source-only references.</p><p id="am-csr-count" aria-live="polite"></p><div id="am-csr-browser"></div></section>
+
+<details class="technical-notes" id="ddr-mr-browser">
+ <summary>DDR4 device mode fields · MR0–MR6 (not memory-mapped)</summary>
+ <p>Source-defined DDR4 MRS command fields. Device mode registers do not occupy CPU address space. Test-specific programmed values, observed DFI commands and comparisons are reported with the <a href="runs.html#unified-traffic">recorded transactions</a> and individual test reports.</p>
+ <p><a href="data/ddr4-mr-definitions.json">MR definitions JSON</a> · <a href="docs/csr-ddr.html">DDR CSR reference</a></p>
+ <div id="mr-details"></div>
+</details>
+
 <section class="card"><details id="am-raw-panel"><summary>Advanced: raw aperture / CSR metadata</summary><h2 id="am-detail-title">Address metadata</h2><pre id="am-detail">Select a physical-address row to inspect the source JSON.</pre></details></section>
 <style>
 .am-csr{margin:16px 0}.am-csr h2{margin-top:0}.am-csr-ip{border-top:1px solid var(--border,#ddd);padding:10px 0}.am-csr-ip summary,.am-csr-register summary{cursor:pointer;font-weight:600;overflow-wrap:anywhere}.am-csr-ip .am-csr-register{margin:8px 0 8px 12px;padding:9px 12px;border-left:3px solid var(--accent,#777);background:var(--panel,#121e31);color:var(--fg,#e9eff8);border:1px solid var(--line,#2b3c54);border-radius:6px}.am-csr-ip[open]>summary,.am-csr-register[open]>summary{color:var(--fg,#e9eff8)}.am-csr-ip summary:focus-visible,.am-csr-register summary:focus-visible{outline:2px solid var(--accent,#80d4ff);outline-offset:3px}.am-csr-register .am-csr-facts,.am-csr-register .am-csr-table{color:var(--fg,#e9eff8)}.am-csr-register .am-csr-table th{background:var(--bg,#0b1220);color:var(--muted,#a9b9d0)}.am-csr-register .am-csr-table td{background:var(--panel,#121e31);color:var(--fg,#e9eff8)}.am-csr-register .am-csr-empty,.am-csr-register .am-csr-source{color:var(--muted,#a9b9d0)}.am-csr-facts{display:flex;flex-wrap:wrap;gap:8px 18px;margin:8px 0;font-size:13px}.am-csr-facts span{overflow-wrap:anywhere}.am-csr-table{overflow-x:auto}.am-csr-table table{width:100%;font-size:13px}.am-csr-table th,.am-csr-table td{padding:6px 8px;text-align:left;vertical-align:top;overflow-wrap:anywhere}.am-csr-empty{margin:10px 0 4px 12px;color:var(--muted,#666);font-size:13px}.am-csr-source{margin:6px 0 0 12px;font-size:12px}.am-mobile{display:none}.am-mobile .card{margin:12px 0}.am-mobile p{margin:4px 0;font-size:13px}.am-register{border-left:3px solid var(--accent)}.am-table td{overflow-wrap:anywhere;max-width:340px}.am-table button{font-size:12px}@media(max-width:820px){.am-table{display:none}.am-mobile{display:block}}
@@ -32,6 +34,7 @@
 <script type="application/json" id="address-map-data">__ADDRESS_MAP_DATA__</script>
 <script type="application/json" id="ddr-csr-variants-data">__DDR_CSR_VARIANTS__</script>
 <script type="application/json" id="ddr-mr-catalog-data">__DDR_MR_CATALOG__</script>
+
 <script>
 'use strict';
 (()=>{
@@ -41,6 +44,7 @@
  const append=(parent,tag,s,cls)=>{const x=document.createElement(tag);x.textContent=String(s);if(cls)x.className=cls;parent.append(x);return x;};
  const end=(base,size)=>'0x'+(BigInt(base)+BigInt(size)-1n).toString(16);
  const size=s=>{const n=Number(BigInt(s));return n>=1073741824?(n/1073741824)+' GiB':n>=1048576?(n/1048576)+' MiB':n>=1024?(n/1024)+' KiB':n+' B';};
+ const baselinePcie=d.regions.find(r=>r.name==='pcie0.ctrl');
  const baselinePcie=d.regions.find(r=>r.name==='pcie0.ctrl');
  const variants=[{label:'Default SoC · modeled DDR / architecture-only CSRs',catalog:d},...ddrVariants];
  const menu=e('am-variant');
@@ -58,7 +62,9 @@
   ?'Native LiteDRAM/LiteX csr.json (no unsourced bitfields or resets)'
   :reg.definition_status==='C_ABI_RTL_crosschecked_source_reference_not_build_qualified'
    ?'C ABI / RTL cross-checked reference only; not active-variant proof'
-   :'SystemRDL-generated definition (not independent RTL coverage)';
+   :reg.definition_status==='PCIe_source_reference_not_build_qualified'
+    ?'PCIe requester C/RTL or endpoint SystemRDL source; CPU frontdoor/link not qualified'
+    :'SystemRDL-generated definition (not independent RTL coverage)';
  const drawCsr=()=>{
   const holder=e('am-csr-browser');holder.replaceChildren();
   const query=e('am-search').value.toLowerCase().trim(),plane=e('am-plane').value,kind=e('am-kind').value;
@@ -161,6 +167,16 @@
  const selectVariant=()=>{
   const selected=variants[Number(menu.value)||0];
   d=selected.catalog;
+  // Current source-only PCIe metadata does not qualify PCIe in an archived DDR run.
+  if(selected.run_id&&baselinePcie){
+   const pcie=d.regions.find(r=>r.name==='pcie0.ctrl');
+   if(pcie&&pcie.base===baselinePcie.base&&pcie.size===baselinePcie.size){
+    d={...d,regions:d.regions.map(r=>r===pcie?{...r,
+      source_registers:baselinePcie.source_registers,
+      source_provenance:baselinePcie.source_provenance,
+      source_status:'current_source_reference_not_historical_ddr_evidence'}:r)};
+   }
+  }
   entries=[];
   for(const r of d.regions){entries.push({r,reg:null});for(const reg of r.registers||[])entries.push({r,reg});}
   e('am-summary').replaceChildren();
@@ -171,8 +187,9 @@
   if(selected.run_id){
    append(notice,'span','Native LiteDRAM CSR layout from independently verified CI run '+selected.run_id+' · tested '+selected.source_sha.slice(0,12)+' · ');
    const link=append(notice,'a','View real AXI/DDR run and CSR observations');link.href=selected.report_href;
+   append(notice,'span',' · PCIe references use current source definitions, not the historical DDR run.');
   } else {
-   append(notice,'span','Default build uses modeled AXI RAM: real LiteDRAM control registers are not implemented in this variant. ');
+   append(notice,'span','Default build uses modeled AXI RAM: real LiteDRAM control registers are not implemented in this variant. PCIe source references are not proof of an active CPU frontdoor. ');
    if(!ddrVariants.length)append(notice,'span','No verified DDR-run register map is available in the published evidence history.');
   }
   draw();
@@ -183,23 +200,33 @@
 })();
 </script>
 
+
 <script>
 'use strict';
 (()=>{
  const defs=JSON.parse(document.getElementById('ddr-mr-catalog-data').textContent);
- const table=document.getElementById('mr-definition-rows');
- const details=document.getElementById('mr-definition-details');
- const add=(parent,tag,value)=>{const el=document.createElement(tag);el.textContent=String(value);parent.append(el);return el;};
+ const holder=document.getElementById('mr-details');
+ const add=(parent,tag,content)=>{
+  const element=document.createElement(tag);element.textContent=String(content);
+  parent.append(element);return element;
+ };
  for(let mr=0;mr<7;mr++){
-  const spec=defs.registers[String(mr)];
-  if(!spec||!Array.isArray(spec.fields))continue;
-  const row=add(table,'tr','');
-  for(const value of ['MR'+mr,'DDR4 SystemRDL fields',spec.offset,spec.fields.length])add(row,'td',value);
-  const item=add(details,'details','');const summary=add(item,'summary','MR'+mr+' · field definitions');summary.style.cursor='pointer';
-  const scroll=add(item,'div','');scroll.style.overflowX='auto';const t=add(scroll,'table','');
-  const hr=add(add(t,'thead',''),'tr','');for(const head of ['Field','Bits','Meaning from RDL'])add(hr,'th',head);
-  const body=add(t,'tbody','');
-  for(const field of spec.fields){const tr=add(body,'tr','');for(const v of [field.name,field.msb+':'+field.lsb,field.description||'Source semantics not supplied'])add(tr,'td',v);}
+  const reg=defs.registers?.[String(mr)];
+  const detail=add(holder,'details','');detail.className='am-csr-register';
+  add(detail,'summary','MR'+mr+' · device command fields');
+  if(!reg||!Array.isArray(reg.fields)){add(detail,'p','No source-defined fields available');continue;}
+  const scroll=add(detail,'div','');scroll.className='scroll';
+  const table=add(scroll,'table',''),thead=add(table,'thead',''),row=add(thead,'tr','');
+  for(const name of ['Field','Bits','Definition'])add(row,'th',name);
+  const body=add(table,'tbody','');
+  for(const field of reg.fields){
+   const r=add(body,'tr','');
+   add(r,'td',field.name);
+   add(r,'td',field.msb===field.lsb?field.msb:field.msb+':'+field.lsb);
+   add(r,'td',field.description||'See source RDL');
+  }
+  const note=add(detail,'p','Virtual RDL offset '+reg.offset+' · not a CPU address or an observed value');
+  note.className='muted';
  }
 })();
 </script>

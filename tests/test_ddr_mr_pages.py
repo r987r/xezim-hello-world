@@ -183,13 +183,13 @@ class DdrMRPages(unittest.TestCase):
     def test_templates_have_explicit_statuses(self):
         address=(ROOT/"tools/templates/site_address-map.html").read_text()
         report=(ROOT/"tools/templates/run_report.html").read_text()
-        for word in ('ddr-mr-browser','mr-definition-rows',
-                     'mr-definition-details','__DDR_MR_CATALOG__'):
+        for word in ('ddr-mr-browser','mr-details','__DDR_MR_CATALOG__',
+                     'runs.html#unified-traffic'):
             self.assertIn(word, address)
-        self.assertNotIn('mr-test-select',address)
-        self.assertNotIn('mr-compare-select',address)
-        self.assertNotIn('__DDR_MR_RUNS__',address)
-        self.assertIn('ddr-mrs-section',report)
+        # The static address reference does not host selected-run observations.
+        self.assertNotIn('mr-test-select', address)
+        self.assertNotIn('mr-compare-select', address)
+        self.assertNotIn('__DDR_MR_RUNS__', address)
         for word in ('ddr-mrs-section','mrEvidence','UNMEASURED',
                      'Changed after INIT?', 'Not memory-mapped CSRs'):
             self.assertIn(word, report)

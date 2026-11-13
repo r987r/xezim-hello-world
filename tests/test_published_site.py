@@ -200,5 +200,50 @@ class PublicSiteTests(unittest.TestCase):
             self.check(site=site)
 
 
+class PublishedPagePresentationTests(unittest.TestCase):
+    """Architecture and source pages never substitute for per-test evidence."""
+
+    def template(self, name):
+        return (ROOT / "tools" / "templates" / ("site_" + name + ".html")).read_text()
+
+    def test_topology_is_a_structural_readout_not_an_issue_faq(self):
+        topology = self.template("topology")
+        self.assertIn("<h1>SoC topology</h1>", topology)
+        self.assertIn('id="networks"', topology)
+        self.assertIn('id="peripheral-attachment-status"', topology)
+        self.assertIn('class="topology-pan"', topology)
+        self.assertNotIn("Why do PCIe and Ethernet", topology)
+        self.assertIn("runs.html", topology)
+
+    def test_page_purposes_and_deep_links_are_consistent(self):
+        for name, title in [
+            ("index", "SoC design &amp; verification"),
+            ("explorer", "Chip architecture"),
+            ("fabric", "Fabric routes &amp; latency"),
+            ("address-map", "Address space &amp; registers"),
+            ("runs", "Test runs &amp; transactions"),
+            ("docs", "Documentation"),
+            ("reference", "Source files &amp; generated data"),
+        ]:
+            with self.subTest(page=name):
+                self.assertIn("<h1>" + title + "</h1>", self.template(name))
+        self.assertIn('id="recorded-tests"', self.template("runs"))
+        self.assertIn('id="test-catalog"', self.template("runs"))
+        self.assertIn("docs-search", self.template("docs"))
+        self.assertIn('aria-current="page"', (ROOT/"tools"/"publish_site.py").read_text())
+
+    def test_address_reference_never_renders_recorded_mr_evidence(self):
+        address = self.template("address-map")
+        self.assertIn('id="physical-address-map"', address)
+        self.assertIn('id="csr-definitions"', address)
+        self.assertIn('id="ddr-mr-browser"', address)
+        self.assertIn('__DDR_MR_CATALOG__', address)
+        self.assertNotIn('mr-test-select', address)
+        self.assertNotIn('__DDR_MR_RUNS__', address)
+        run = self.template("runs")
+        self.assertIn('id="traffic-mrs-decode"', run)
+        self.assertIn('id="unified-traffic"', run)
+
+
 if __name__ == "__main__":
     unittest.main()

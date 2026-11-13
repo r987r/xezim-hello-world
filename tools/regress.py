@@ -380,11 +380,12 @@ def append_pinned_dma_and_bender_sources(test, resolver, sources, includes, defi
 
 
 def run_target(name, test, resolver, options):
-    # The first real Cocotb/Verilator producer joins Xezim smoke/SRAM in the
-    # canonical one-writer store. Other targets retain their legacy scratch
-    # only until independently qualified producer+consumer migrations.
+    # Migrate the original selected SERV CPU instruction smoke test to the
+    # same one-writer canonical Xezim workspace as smoke/SRAM. No source
+    # variant or firmware is generated per run for this reviewed profile.
+    # Other targets still require separate producer/consumer qualification.
     canonical_cocotb_dma = name == 'dma-rtl'
-    canonical = name in ('smoke', 'sram') or canonical_cocotb_dma
+    canonical = name in ('smoke', 'sram', 'serv') or canonical_cocotb_dma
     identity = None
     if canonical:
         from test_identity import selected as select_identity

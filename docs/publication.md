@@ -7,9 +7,26 @@ The [verification hub](https://r987r.github.io/xezim-hello-world/) publishes the
 - **Architecture:** source-generated Data/Config FlooNoC links, address map, discovered RTL instance hierarchy and source provenance. A drawn/declared edge is **not** an elaborated port or accepted packet.
 - **Test Runs:** selected regression catalog (including never-run tests), original tested source/attempt, result/negative acceptance, logs, original plan/filelists, scenario/step evidence, and actual AXI/TLP/GMII/DFI observations when available. Historical archives remain explicitly historical.
 - **Fabric Explorer:** source-derived route/NI/XY path inventory, outstanding budgets, read/write comparisons and original captures. Actual latency requires complete, clean, source-compatible **serial one-beat** AXI observations at each stated boundary. A route without suitable evidence is **unmeasured**, not zero.
-- **Address Map/CSR:** SoC physical apertures, source-owned register definitions, qualified real-DDR variant references and accepted Config-NoC transactions where present. Default reserved registers are not invented as active hardware.
+- **Address Map/CSR:** SoC physical apertures and source-owned register definitions, with selected real-DDR CSR layouts where qualified. DDR4 MR0–MR6 are labeled device-command definitions, not CPU-addressable registers. Executed register accesses and DDR MRS observations remain in test-specific reports.
 
 Each test has an original **tested SHA** distinct from the currently deployed site SHA. A green old workflow or copied JSON is not proof the same RTL ran on today's main. The site presents genuine expected-negative, failed, and missing evidence without changing PASS semantics.
+
+## Published page responsibilities
+
+The public site is an architecture and verification review surface, not an engineering decision log. Pages follow a consistent content model:
+
+| Page | Primary presentation | Detailed references |
+| --- | --- | --- |
+| Overview | Canonical architecture image, design facts, verification snapshot | README, implementation boundaries |
+| Topology | Network structure, peripheral attachment inventory, FlooNoC source links | Architecture contracts, network manifests |
+| Chip architecture | Interactive subsystem/IP/router hierarchy and connectivity | RTL bindings and signal inventory |
+| Fabric routes | Reachability, router path, interface parameters, qualified latency | Timing methodology and per-run evidence |
+| Address map | Memory/CSR windows, register definitions, DDR4 device MR field catalog | Source RDL, CSR generation and firmware ABI |
+| Test runs | Test intent, actual acceptance, observed transactions, logs and DDR MRS command values | Per-test reports and original CI artifacts |
+| Documentation | Searchable, subject-grouped engineering guides | Source-linked original Markdown |
+| Source data | Downloadable architecture, generated RTL and regression configuration | Raw JSON, Bender and pinned source inputs |
+
+Present **what exists and what is measured** directly in diagrams and tables. Move design decisions, unsupported-case explanations and procedure details to engineering docs. Keep brief, precise scope distinctions visible when a source/model view could otherwise be mistaken for verified hardware. Never copy historical measurements, simulation traffic or PASS/FAIL evidence into an architecture summary.
 
 ## Source-verified standalone protocol captures
 
@@ -17,7 +34,7 @@ Any test workflow uploading a versioned `protocol-transactions.json` is
 auto-discovered alongside canonical regression archives. This applies to
 PCIe configuration/enumeration, DDR/DFI mode-register commands, Ethernet
 frames and future protocols with no new page-specific code. Real observations
-appear in **Test Runs → Protocol traffic · all tests**, including their
+appear in **Test runs → Observed protocol transactions**, including their
 original monitor, operation, source SHA, CI attempt and native fields.
 
 A standalone link or controller capture with no authentic `result.json`
