@@ -112,6 +112,9 @@ static int on_allocate(const soc_scn_action_t *action, void *user) {
     return 0;
 }
 
+/* C11 requires a declaration before the selected action callback uses this helper. */
+static bool scn_constant_fill(void *addr, size_t bytes, uint32_t seed);
+
 static int on_initialize(const soc_scn_action_t *action, void *user) {
     soc_scn_cpu_context_t *ctx = (soc_scn_cpu_context_t *)user;
     uint64_t seed;
