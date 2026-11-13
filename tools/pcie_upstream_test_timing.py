@@ -55,24 +55,29 @@ PIPE_MONITOR_TLP_BEFORE = """    def notify_tlp_received(self,tlp) :
         # Creating the sequnce item
         self.pipe_agent_config.tlp_received.append(tlp)"""
 PIPE_MONITOR_TLP_AFTER = """    def notify_tlp_received(self,tlp) :
-        # Passive OpenPCIe PIPE monitor packet, never a synthesized TLP.
+        # Existing PHY data/K monitor callback, not a new TLP decoder.
+        # Cocotb's actual time is essential to the shared protocol timeline.
+        observed_ps = int(cocotb.utils.get_sim_time(units="ps"))
         try:
             raw = bytes(int(v) & 0xff for v in tlp)
-            print("PCIE_UPSTREAM_PIPE_MON_TLP: direction=EP_TO_RC bytes=%d raw=%s" %
-                  (len(raw), raw.hex()), flush=True)
+            print("PCIE_UPSTREAM_PIPE_MON_TLP: direction=EP_TO_RC time_ps=%d bytes=%d raw=%s" %
+                  (observed_ps, len(raw), raw.hex()), flush=True)
         except (TypeError, ValueError):
-            print("PCIE_UPSTREAM_PIPE_MON_TLP_UNDECODED: direction=EP_TO_RC", flush=True)
-        # Creating the sequnce item
+            print("PCIE_UPSTREAM_PIPE_MON_TLP_UNDECODED: direction=EP_TO_RC time_ps=%d" %
+                  observed_ps, flush=True)
+        # Preserve original UVM queue/callback semantics exactly.
         self.pipe_agent_config.tlp_received.append(tlp)"""
 PIPE_MONITOR_DLLP_BEFORE = """        self.pipe_agent_config.dllp_received.append(dllp)
         self.pipe_agent_config.dllp_data_detected_e.set()"""
-PIPE_MONITOR_DLLP_AFTER = """        # Passive original OpenPCIe PHY decoder: ACK/NAK/FC, not RC received.
+PIPE_MONITOR_DLLP_AFTER = """        # Original PIPE monitor's decoded DLLP, not synthetic ACK/FC.
+        observed_ps = int(cocotb.utils.get_sim_time(units="ps"))
         try:
             raw = bytes(int(v) & 0xff for v in dllp)
-            print("PCIE_UPSTREAM_PIPE_MON_DLLP: direction=EP_TO_RC bytes=%d raw=%s" %
-                  (len(raw), raw.hex()), flush=True)
+            print("PCIE_UPSTREAM_PIPE_MON_DLLP: direction=EP_TO_RC time_ps=%d bytes=%d raw=%s" %
+                  (observed_ps, len(raw), raw.hex()), flush=True)
         except (TypeError, ValueError):
-            print("PCIE_UPSTREAM_PIPE_MON_DLLP_UNDECODED: direction=EP_TO_RC", flush=True)
+            print("PCIE_UPSTREAM_PIPE_MON_DLLP_UNDECODED: direction=EP_TO_RC time_ps=%d" %
+                  observed_ps, flush=True)
         self.pipe_agent_config.dllp_received.append(dllp)
         self.pipe_agent_config.dllp_data_detected_e.set()"""
 
