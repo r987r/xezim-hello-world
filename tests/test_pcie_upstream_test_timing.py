@@ -6,6 +6,7 @@ from tools.pcie_upstream_test_timing import (
     ENUM_BEFORE, ENUM_AFTER, ENUM_MODEL_BEFORE, ENUM_MODEL_AFTER,
     ENUM_HOST_BEFORE, ENUM_HOST_AFTER,
     ENUM_READ_BEFORE, ENUM_READ_AFTER, ENUM_EP_CPL_BEFORE, ENUM_EP_CPL_AFTER,
+    CPLD_READY_REL, CPLD_READY_BEFORE, CPLD_READY_AFTER, CPLD_ROUNDING,
 )
 
 
@@ -52,6 +53,27 @@ class UpstreamTimingOverlayTests(unittest.TestCase):
         self.assertNotIn("force", got)
         self.assertNotIn("send(", got)
         self.assertNotIn("write(", got)
+
+    def test_original_cpld_first_beat_waits_for_valid_and_ready(self):
+        source = ("module tlp2dllp;\n"
+                  + CPLD_ROUNDING + "\n" + CPLD_ROUNDING + "\n"
+                  + "dllp_valid_o            = '0;\n"
+                  + CPLD_READY_BEFORE + "\nendmodule\n")
+        got = patched(CPLD_READY_REL, source)
+        self.assertEqual(got.count(CPLD_READY_AFTER), 1)
+        self.assertNotIn(CPLD_READY_BEFORE + "\n", got)
+        # These are source checks, not a fabricated upstream PASS.
+        self.assertEqual(got.count(CPLD_ROUNDING), 2)
+        self.assertIn("dllp_valid_o            = '0;", got)
+        self.assertNotIn("dllp_valid_o            = '1;", got)
+        with self.assertRaisesRegex(ValueError, "changed"):
+            patched(CPLD_READY_REL, got)
+        with self.assertRaisesRegex(ValueError, "changed"):
+            patched(CPLD_READY_REL, source.replace(CPLD_ROUNDING, "tampered"))
+        with self.assertRaisesRegex(ValueError, "changed"):
+            patched(CPLD_READY_REL, source.replace(
+                "dllp_valid_o            = '0;",
+                "dllp_valid_o            = '1;"))
 
     def test_source_drift_and_repeat_fail_closed(self):
         for path,source in (("pcie_phy.core","wrong content"),
