@@ -26,6 +26,7 @@ from markdown_it import MarkdownIt
 import yaml
 
 from axi_report import render_report
+from run_page_chrome import decorate_run_pages
 from protocol_report import render as render_protocol_report
 from test_flow_report import render_summary as render_test_flow
 from test_intent import (catalog as intended_flow_catalog, plan as intended_flow_plan,
@@ -694,7 +695,7 @@ def protocol_link_catalog(protocol_data, *, preview_per_source=12):
 
 
 
-def append_capture_only_entries(folder, run, verified_shas, output, entries, notes):
+def append_capture_only_entries(folder, run, verified_shas, output, entries, notes, repository, site_sha):
     """Publish authentic protocol JSON without inventing a canonical result.
 
     A source-selected stand-alone PCIe, DDR/DFI or future monitor need not
@@ -782,6 +783,7 @@ def append_capture_only_entries(folder, run, verified_shas, output, entries, not
                     'latency is implied.</p>')
             (destination/"report.html").write_text(
                 html.replace("<main>","<main>"+notice,1))
+            decorate_run_pages(destination,relative,repository,site_sha or run['head_sha'],shell_fn=shell)
             entry={
                 "target":target, "suite":"protocol",
                 "evidence_only":True, "evidence_scope":"isolated_observation_only",
@@ -804,7 +806,7 @@ def append_capture_only_entries(folder, run, verified_shas, output, entries, not
                 f"protocol archive {trace_file.relative_to(folder)} ({exc})")
 
 
-def evidence_index(evidence,output,repository):
+def evidence_index(evidence,output,repository,site_sha=None):
     runs,entries,notes=[],[],[]
     if (evidence/'collection.json').exists():notes=json.loads((evidence/'collection.json').read_text()).get('notes',[])
     for file in sorted(evidence.glob('*/run.json')):
@@ -1101,7 +1103,7 @@ def evidence_index(evidence,output,repository):
                 page=render_variant_html(variant_view,variant_graph)
                 (destination/'variant-architecture.html').write_text(
                     shell('Selected variant connectivity',page,
-                          relative/'variant-architecture.html',repository,run['head_sha']))
+                          relative/'variant-architecture.html',repository,site_sha or run['head_sha']))
             if trace:
                 tested_sha=trace['run'].get('commit')
                 if (tested_sha not in (verified_shas | {run['head_sha']})
@@ -1151,7 +1153,7 @@ def evidence_index(evidence,output,repository):
                           'not a synthetic combined trace.</p>'
                           '<p><a href="protocols.html">Open full protocol explorer</a>'
                           ' · <a href="protocol-transactions.json">Raw protocol JSON</a></p>'
-                          '<iframe src="protocols.html" loading="lazy" '
+                          '<iframe src="protocols.html?embed=1" loading="lazy" '
                           'title="Source-verified per-test protocol observations" '
                           'style="display:block;width:100%;height:640px;'
                           'border:1px solid var(--line);border-radius:8px">'
@@ -1183,6 +1185,8 @@ def evidence_index(evidence,output,repository):
                                 '<p><strong>Canonical run:</strong> <code>'+escape(canonical_path(selected_identity).as_posix())+
                                 '</code> · <a href="identity.json">Immutable identity</a></p>'
                                 if selected_identity else '')+render_intended_flow(intended),1))
+                    decorate_run_pages(destination,relative,repository,
+                                       site_sha or run['head_sha'],shell_fn=shell)
                     entries.append(entry)
                     continue
                 body='<p>This scope publishes its actual result, plan, filelist and logs. It has no AXI traffic observer.</p>'
@@ -1190,7 +1194,7 @@ def evidence_index(evidence,output,repository):
                 if entry['expected_failure']:body+='<p>Expected-failure case: '+escape(entry['expected_failure'])+'</p>'
                 body+='<pre>'+escape(json.dumps(result,indent=2))+'</pre>'
                 body+='<ul>'+''.join(f'<li><a href="{escape(name)}">{escape(name)}</a></li>' for name in assets)+'</ul>'
-                (destination/'report.html').write_text(shell(target,body,relative/'report.html',repository,run['head_sha']))
+                (destination/'report.html').write_text(shell(target,body,relative/'report.html',repository,site_sha or run['head_sha']))
             # Original report now has a definition-only flow independently of
             # the optional validated test-flow evidence overlay.
             report_html=destination/'report.html'
@@ -1222,8 +1226,11 @@ def evidence_index(evidence,output,repository):
                                '</code> · <a href="identity.json">Immutable identity</a>. '
                                'Legacy report URL retained for historical compatibility.</p>')
                     report_html.write_text(html.replace('<main>','<main>'+note+render_intended_flow(intended),1))
+            decorate_run_pages(destination,relative,repository,
+                               site_sha or run['head_sha'],shell_fn=shell)
             entries.append(entry)
-        append_capture_only_entries(file.parent,run,verified_shas,output,entries,notes)
+        append_capture_only_entries(file.parent,run,verified_shas,output,entries,notes,
+                                    repository,site_sha)
     runs.sort(key=lambda r:r['created_at'],reverse=True)
     entries.sort(key=lambda r:r['recorded_at'],reverse=True)
     return runs,entries,notes
@@ -1365,7 +1372,7 @@ def build(output,evidence,repository,sha,config):
     for name in ('gen','config'):shutil.copytree(ROOT/name,output/name)
     for name in ('Bender.yml','Bender.lock'):shutil.copyfile(ROOT/name,output/name)
     docs=markdown_pages(output,repository,sha)
-    runs,entries,notes=evidence_index(evidence,output,repository)
+    runs,entries,notes=evidence_index(evidence,output,repository,site_sha=sha)
     import fabric_report
     fabric = fabric_report.load(ROOT)
     catalog=yaml.safe_load((ROOT/'config/regression.yaml').read_text())
