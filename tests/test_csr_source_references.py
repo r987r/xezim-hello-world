@@ -55,6 +55,8 @@ class SourceCsrTests(unittest.TestCase):
         self.assertEqual(len(pcie["source_registers"]), 22)
         self.assertEqual(pcie["registers"], [])
         self.assertEqual(next(x for x in pcie["source_registers"] if x["name"]=="wr_command")["address"],"0x40040014")
+        self.assertEqual(next(x for x in pcie["source_registers"] if x["name"]=="wr_command")["access"],"w")
+        self.assertEqual(next(x for x in pcie["source_registers"] if x["name"]=="rd_command")["access"],"w")
         self.assertEqual(next(x for x in pcie["source_registers"] if x["name"]=="bar0_aperture")["address"],"0x40041000")
         self.assertEqual(next(x for x in pcie["source_registers"] if x["name"]=="host_bar0")["fields"][0]["access"],"r")
         self.assertTrue(all(x["definition_status"]=="PCIe_source_reference_not_build_qualified" for x in pcie["source_registers"]))
