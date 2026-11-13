@@ -44,7 +44,9 @@ See [setup and regression options](docs/regression.md), [simulator limits](docs/
 
 **Inspect each test's stimulus:** [authored YAML](config/stimulus/tests.yaml), [selection and execution mapping](config/stimulus/README.md), and [the regression build specs](config/regression.yaml). Use `python3 tools/stimulus_catalog.py --list` or `--show chip-ethernet-cpu`. These descriptions do **not** imply every C/Python/SV driver has migrated to source-selected typed dispatch.
 
-**Repository navigation:** [Where tests are defined, every subsystem view, and useful generated RTL diffs](docs/repository-map.md). For PR review use `python3 tools/generated_review.py --base origin/main` after `make gen` and `make check-generated`.\n\n## Architecture and generated sources
+**Repository navigation:** [Where tests are defined, every subsystem view, and useful generated RTL diffs](docs/repository-map.md). For PR review use `python3 tools/generated_review.py --base origin/main` after `make gen` and `make check-generated`.
+
+## Architecture and generated sources
 
 <!-- BEGIN GENERATED SOC -->
 
