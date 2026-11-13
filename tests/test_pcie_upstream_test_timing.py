@@ -7,6 +7,8 @@ from tools.pcie_upstream_test_timing import (
     ENUM_HOST_BEFORE, ENUM_HOST_AFTER,
     ENUM_READ_BEFORE, ENUM_READ_AFTER, ENUM_EP_CPL_BEFORE, ENUM_EP_CPL_AFTER,
     CPLD_READY_REL, CPLD_READY_BEFORE, CPLD_READY_AFTER, CPLD_ROUNDING,
+    PIPE_MONITOR_SOURCE, PIPE_MONITOR_TLP_BEFORE, PIPE_MONITOR_TLP_AFTER,
+    PIPE_MONITOR_DLLP_BEFORE, PIPE_MONITOR_DLLP_AFTER,
 )
 
 
@@ -57,6 +59,28 @@ class UpstreamTimingOverlayTests(unittest.TestCase):
         self.assertNotIn("force", got)
         self.assertNotIn("send(", got)
         self.assertNotIn("write(", got)
+
+    def test_reuse_original_openpcie_pipe_tlp_dllp_decoder_callbacks(self):
+        source = ("class pipe_monitor:\n" +
+                  PIPE_MONITOR_TLP_BEFORE + "\n" +
+                  PIPE_MONITOR_DLLP_BEFORE + "\n")
+        got = patched(PIPE_MONITOR_SOURCE, source)
+        self.assertIn(PIPE_MONITOR_TLP_AFTER, got)
+        self.assertIn(PIPE_MONITOR_DLLP_AFTER, got)
+        self.assertIn("PCIE_UPSTREAM_PIPE_MON_TLP: direction=EP_TO_RC", got)
+        self.assertIn("PCIE_UPSTREAM_PIPE_MON_DLLP: direction=EP_TO_RC", got)
+        self.assertIn("self.pipe_agent_config.tlp_received.append(tlp)", got)
+        self.assertIn("self.pipe_agent_config.dllp_received.append(dllp)", got)
+        self.assertNotIn("self.pipe_agent_config.tlp_received.clear()", got)
+        self.assertNotIn("self.pipe_agent_config.dllp_received.clear()", got)
+        with self.assertRaisesRegex(ValueError, "changed"):
+            patched(PIPE_MONITOR_SOURCE, got)
+        with self.assertRaisesRegex(ValueError, "changed"):
+            patched(PIPE_MONITOR_SOURCE, source.replace(
+                PIPE_MONITOR_TLP_BEFORE, "def altered_monitor(self):"))
+        with self.assertRaisesRegex(ValueError, "changed"):
+            patched(PIPE_MONITOR_SOURCE, source.replace(
+                PIPE_MONITOR_DLLP_BEFORE, ""))
 
     def test_original_cpld_first_beat_waits_for_valid_and_ready(self):
         source = ("module tlp2dllp;\n"
