@@ -402,6 +402,36 @@ original host's next launch. It also rejects a MemWr before the final
 config completion. **There is still no SRAM write or PCIe completion
 here**: the NoC path must be physically attached and qualified next.
 
+## Shared monitor-to-report integration (draft #232)
+
+The original OpenPCIe `pipe_monitor_bfm.py` remains the **only** source
+for reconstructed PHY TLP and DLLP packets in the standalone upstream
+FuseSoC/Cocotb run. The `pipe_agent.py` notification callbacks now attach
+native Cocotb picosecond timestamps without changing the upstream queues.
+The reusable `tools/pcie_native_pipe_capture.py` converts those native
+observations into **one** `ProtocolTrace` source,
+`pcie0.pipe.ep_tx`, and emits the same
+`protocol-events.jsonl`/`protocol-transactions.json`/`protocols.html`
+as our AXI/Ethernet/DFI reporting paths. This is not a second monitor or
+a new packet parser. No packet is synthesized, and duplicate retransmits
+are retained as observed. All raw bytes, lengths, time and source metadata
+are original-monitor evidence.
+
+The upstream GitHub Actions workflow runs this conversion even if its
+original Cocotb self-test fails. The original test status is recorded as
+`run.test_status` and remains the **required red acceptance gate**.
+`capture_complete` refers only to sound, bounded monitor data and **not**
+the PCIe correctness result; a failing run cannot become a full-chip PASS
+or create a synthetic `result.json`. See
+[protocol run architecture](protocol-run-reports.md).
+
+The full cross-provider independent host/endpoint test still lacks
+continuous decoded **both-direction** PIPE capture and independent
+host-receive completion correlation. We must extend the same source
+catalog and shared exporter using genuine provider monitor callbacks
+(verify decoded PIPE compatibility), not add another per-PCIe reporter
+or assert RC delivery from endpoint-only observation.
+
 ## Native open-source PIPE monitoring — what is and is not observed
 
 The pinned [OpenPCIe endpoint](https://github.com/isomoye-msu/pcie_datalink_layer)
