@@ -61,7 +61,7 @@ def source_registers(root=ROOT):
     # The last wr_offset case is the accepted AXI-Lite write decoder;
     # earlier uses are policy validation only.
     writes = case_offsets(write_cases[-1])
-    expected_reads = {off for _, off in offsets}
+    expected_reads = {off for name, off in offsets if not name.endswith("_COMMAND")}
     expected_writes = {off for name, off in offsets
                        if not (name.endswith("_STATUS") or name == "VERSION")}
     if reads != expected_reads or writes != expected_writes:
@@ -74,6 +74,7 @@ def source_registers(root=ROOT):
     requester = []
     for name, offset in offsets:
         writable = offset in writes
+        readable = offset in reads
         fields = []
         if name.endswith("_STATUS"):
             fields = [{
@@ -85,7 +86,8 @@ def source_registers(root=ROOT):
             } for field, mask in (("DONE", 1), ("BUSY", 2), ("ERROR", 4))]
         requester.append({
             "name": name.lower(), "offset": hex(offset), "size_bytes": 4,
-            "width_bits": 32, "access": "rw" if writable else "r",
+            "width_bits": 32, "access": ("rw" if writable and readable else
+                                          "w" if writable else "r"),
             "reset": None, "fields": fields,
             "source_symbol": "SOC_PCIE_" + name,
             "description": "Outbound PCIe requester: C enum and RTL AXI-Lite decode agree. "
