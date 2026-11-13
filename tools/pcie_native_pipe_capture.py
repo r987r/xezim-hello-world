@@ -12,6 +12,12 @@ import argparse
 import json
 from pathlib import Path
 import re
+import sys
+
+# Direct 'python3 tools/...' execution still resolves shared repo-root DV.
+_ROOT = Path(__file__).resolve().parents[1]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
 
 from dv.common.protocol_trace import ProtocolTrace
 from tools import protocol_report
