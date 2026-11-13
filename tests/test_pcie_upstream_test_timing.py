@@ -70,7 +70,9 @@ class UpstreamTimingOverlayTests(unittest.TestCase):
             patched(CPLD_READY_REL, got)
         with self.assertRaisesRegex(ValueError, "changed"):
             patched(CPLD_READY_REL, source.replace(CPLD_ROUNDING, "tampered"))
-        with self.assertRaisesRegex(ValueError, "changed"):
+        # This negative fixture must fail specifically at the disabled
+        # experimental retry guard, not only at a generic source mismatch.
+        with self.assertRaisesRegex(ValueError, "experimental retry-enable drift"):
             patched(CPLD_READY_REL, source.replace(
                 "dllp_valid_o            = '0;",
                 "dllp_valid_o            = '1;"))
