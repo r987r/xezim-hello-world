@@ -11,6 +11,26 @@ The [verification hub](https://r987r.github.io/xezim-hello-world/) publishes the
 
 Each test has an original **tested SHA** distinct from the currently deployed site SHA. A green old workflow or copied JSON is not proof the same RTL ran on today's main. The site presents genuine expected-negative, failed, and missing evidence without changing PASS semantics.
 
+## Source-verified standalone protocol captures
+
+Any test workflow uploading a versioned `protocol-transactions.json` is
+auto-discovered alongside canonical regression archives. This applies to
+PCIe configuration/enumeration, DDR/DFI mode-register commands, Ethernet
+frames and future protocols with no new page-specific code. Real observations
+appear in **Test Runs → Protocol traffic · all tests**, including their
+original monitor, operation, source SHA, CI attempt and native fields.
+
+A standalone link or controller capture with no authentic `result.json`
+is labeled **OBSERVED — isolated capture only**. It must not be displayed as
+a passed full-chip integration test, fabricated memory completion or a
+source-verified latency across independent clocks. Every accepted trace is
+validated against its exact CI run/attempt, clean checkout and trusted
+main/merged-PR source; mismatches are quarantined with a visible note.
+Unmerged PR observations remain in the GitHub Actions artifacts until a
+trusted `main` publication exists. New protocol support must include
+producer, workflow-artifact, collector, unified-view and negative-evidence
+tests; a parser-only implementation is not complete.
+
 ## Timing and evidence boundaries
 
 The AXI baseline records 10,000 ps (10 ns) simulation reference clocks where captured, **not** a physical device clock frequency. Raw ps timestamps, source SHA and per-route sample counts accompany measured min/average/max cycles. Read/write remain separate and dynamic per-plane stage columns show observed local/global/target boundaries. Router-internal cycles, standalone-controller timing and unavailable packet paths remain **unmeasured**. Individually computed minima/maxima generally do **not** add up to path minima/maxima; paired sample arithmetic means may.
