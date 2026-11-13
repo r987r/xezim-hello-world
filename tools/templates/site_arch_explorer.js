@@ -13,6 +13,35 @@ const nodes=new Map(g.nodes.map(n=>[n.id,n])),groups=new Map(g.groups.map(q=>[q.
 const nets=new Map(g.groups.filter(q=>["data","config"].includes(q.info?.plane)).map(q=>[q.name,q]));
 const subs=g.groups.filter(q=>q.name.endsWith("_subsystem"));
 const subName=q=>q.name.slice(0,-10);
+const directory=document.getElementById("arch-directory");
+function buildDirectory(){
+  if(!directory)return;
+  directory.replaceChildren();
+  const groups=[...subs].sort((a,b)=>a.name.localeCompare(b.name));
+  function addItem(label,networks,kind){
+    const section=document.createElement("section");section.className="arch-directory-item";
+    const heading=document.createElement("h3");heading.textContent=label;section.append(heading);
+    const actions=document.createElement("div");actions.className="arch-directory-actions";
+    function jump(text,type,name){
+      const button=document.createElement("button");button.type="button";
+      button.textContent=text;button.addEventListener("click",()=>navigate(type,name));
+      actions.append(button);
+    }
+    if(kind==="sub")jump("Subsystem composition","sub",label);
+    for(const n of networks.sort((a,b)=>a.localeCompare(b))){
+      const info=nets.get(n)?.info||{};
+      const plane=info.plane==="config"?"Config NoC":info.plane==="data"?"Data NoC":"NoC";
+      jump(plane+" · "+n,"noc",n);
+    }
+    section.append(actions);directory.append(section);
+  }
+  addItem("Global fabrics",[...nets.keys()].filter(n=>!groups.some(q=>n.startsWith(subName(q)+"_"))),"global");
+  for(const q of groups){
+    const name=subName(q);
+    addItem(name,[...nets.keys()].filter(n=>n.startsWith(name+"_")),"sub");
+  }
+}
+
 const memberOf=new Map;subs.forEach(q=>q.instances.forEach(n=>memberOf.set(n,subName(q))));
 const networkOf=id=>{for(const n of nets.keys())if(id.startsWith(n+"."))return n;return null};
 const networksOf=id=>[...nets.keys()].filter(n=>n.startsWith(id+"_"));
@@ -589,5 +618,5 @@ for(const m of rtlModules){
     rtlRows.append(tr);
   }
 }
-busOptions();navigate("chip","");
+buildDirectory();busOptions();navigate("chip","");
 })();
