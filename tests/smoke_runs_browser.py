@@ -79,8 +79,25 @@ def main():
                  "--disable-gpu","--window-size=1365,900"):
         options.add_argument(flag)
     with tempfile.TemporaryDirectory() as tmp:
-        path=Path(tmp)/"runs-fixture.html"
+        # The synthetic list links to a synthetic source-attested run page.
+        # This exercises the real click-through path without inventing CI PASS.
+        from sys import path as module_path
+        module_path.insert(0,str(ROOT/"tools"))
+        from publish_site import shell
+        from run_page_chrome import decorate_run_pages
+        path=Path(tmp)/"runs.html"
         path.write_text(page)
+        report_root=Path(tmp)/"runs/example"
+        report_root.mkdir(parents=True)
+        (report_root/"report.html").write_text(
+            '<html><style>header{display:flex}</style><main>'
+            '<header><h1>AXI Run Explorer</h1></header>'
+            '<p id="synthetic-observations">Synthetic browser fixture only</p>'
+            '</main></html>')
+        (report_root/"protocols.html").write_text(
+            '<html><main><h1>Protocol Run Explorer</h1></main></html>')
+        decorate_run_pages(report_root,Path("runs/example"),
+                           "r987r/xezim-hello-world","a"*40,shell_fn=shell)
         with webdriver.Chrome(options=options) as driver:
             driver.get(path.as_uri())
             wait=WebDriverWait(driver,20)
@@ -141,6 +158,26 @@ def main():
             assert "memory0.ddr0.dfi" in driver.find_element(By.ID,"traffic-rows").text
             assert "dfi" in driver.find_element(By.ID,"traffic-protocol").text
             assert "chip-ddr4-real" in driver.find_element(By.ID,"traffic-provenance").text
+            # Clicking the actual run link must preserve hub chrome and the
+            # same-site return path, unlike the old standalone HTML reports.
+            driver.find_element(By.CSS_SELECTOR,
+                '#results a[href="runs/example/report.html"]').click()
+            wait.until(lambda d: "AXI Run Explorer" in d.find_element(By.TAG_NAME,"main").text)
+            assert driver.find_element(By.CSS_SELECTOR,
+                '.hub-global-header .brand').text=="SoC / verification hub"
+            assert driver.find_element(By.CSS_SELECTOR,
+                '.hub-global-header nav a[aria-current="page"]').text=="Test runs"
+            assert driver.find_element(By.CSS_SELECTOR,
+                '.hub-run-tabs a[aria-current="page"]').text=="Run overview"
+            assert "Synthetic browser fixture only" in driver.find_element(By.TAG_NAME,"main").text
+            driver.find_element(By.CSS_SELECTOR,'.hub-run-tabs a[href="protocols.html"]').click()
+            wait.until(lambda d: "Protocol Run Explorer" in d.find_element(By.TAG_NAME,"main").text)
+            assert driver.find_element(By.CSS_SELECTOR,
+                '.hub-run-tabs a[aria-current="page"]').text=="Protocol traffic"
+            driver.find_element(By.CSS_SELECTOR,'.hub-run-tabs a[href="../../runs.html"]').click()
+            wait.until(lambda d:"Test runs" in d.find_element(By.TAG_NAME,"h1").text.lower())
+            assert driver.find_element(By.ID,"catalog")
+            print("PASS: Test Runs click-through preserves global nav, protocol tabs and same-site back path")
             print("PASS: unified Test Runs show source-native PCIe, Ethernet, DFI sample records")
 
 
