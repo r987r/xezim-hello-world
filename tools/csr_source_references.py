@@ -230,6 +230,25 @@ def attach_sources(catalog, *, root=ROOT, config_path=None, source_dir=None,
                 for v in registers]
             r["source_status"] = "source_only_attachment_not_qualified"
             r["source_provenance"] = provenance
+    # Device-owned PCIe0 CSR source has two independent ranges: the outbound
+    # requester RTL and endpoint-prelink SystemRDL. They are source references,
+    # never inferred full-chip connectivity or observed host enumeration.
+    from pcie_source_registers import source_registers as pcie_source_registers
+    pcie_rows, pcie_provenance = pcie_source_registers(root)
+    pcie_instances = [r for r in regions if r["name"] == "pcie0.ctrl"]
+    if len(pcie_instances) != 1:
+        raise SourceCatalogError("configured PCIe0 source lacks unique ctrl aperture")
+    pcie_region = pcie_instances[0]
+    if pcie_region["source_registers"]:
+        raise SourceCatalogError("ambiguous PCIe CSR source plugin")
+    base, length = int(pcie_region["base"], 0), int(pcie_region["size"], 0)
+    if any(int(reg["offset"], 0) + reg["size_bytes"] > length for reg in pcie_rows):
+        raise SourceCatalogError("PCIe source register outside configured aperture")
+    pcie_region["source_registers"] = [
+        {**reg, "address": f"0x{base + int(reg['offset'], 0):x}"}
+        for reg in pcie_rows]
+    pcie_region["source_status"] = "source_only_attachment_not_qualified"
+    pcie_region["source_provenance"] = pcie_provenance
     gaps = [r["name"] for r in regions
             if not r.get("registers") and not r["source_registers"]]
     known = json.loads(gaps_path.read_text())
@@ -244,7 +263,7 @@ def attach_sources(catalog, *, root=ROOT, config_path=None, source_dir=None,
             ", ".join(unacknowledged))
     return {
         "schema_version": 1, "variant": catalog["variant"],
-        "sources": [p for _, _, p in plugins],
+        "sources": [p for _, _, p in plugins] + [pcie_provenance],
         "instances": [{
             "instance": r["name"], "selected_variant_registers": len(r.get("registers", [])),
             "source_only_registers": len(r["source_registers"]),
