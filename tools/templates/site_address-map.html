@@ -11,22 +11,16 @@
 <label>Plane<select id="am-plane"><option value="">Both planes</option><option value="data">Data</option><option value="config">Config / CSR</option></select></label>
 <label>Type<select id="am-kind"><option value="">All types</option><option value="csr_aperture">CSR</option><option value="sram">SRAM</option><option value="rom">ROM</option><option value="flash">Flash</option><option value="ddr">DDR</option><option value="hbm">HBM</option></select></label>
 </div>
-<p class="muted" id="am-variant-evidence">The default chip uses modeled AXI RAM; real DDR registers appear only in independently verified DDR CI variants.</p>
+<p class="muted" id="am-variant-evidence">The default chip uses modeled AXI RAM; native LiteDRAM controller CSRs are selectable only from source-verified DDR test variants. PCIe requester and endpoint DBI definitions are always available as source-only references; the separate host PCIe Type-0 configuration space is not SoC MMIO.</p>
 <p class="muted" id="am-count" aria-live="polite"></p>
 <section class="card am-csr" id="ddr-mr-browser" aria-labelledby="mr-title">
- <h2 id="mr-title">DDR4 device mode registers · MR0–MR6</h2>
- <p>Decode the <strong>device MRS command</strong> fields generated from SystemRDL. These are <strong>not CPU-addressable CSRs</strong> and do not occupy the SoC address map. Real test values appear only when a complete DFI monitor and independent scoreboard agree. A test without evidence is <strong>UNMEASURED</strong>.</p>
- <div class="filters">
-  <label>Test / run evidence<select id="mr-test-select" aria-label="DDR4 test whose register writes are shown"></select></label>
-  <label>Compare with another test<select id="mr-compare-select" aria-label="Compare DDR4 registers between tests"></select></label>
- </div>
- <p id="mr-evidence-status" class="muted" aria-live="polite"></p>
- <div class="actions" id="mr-evidence-links"></div>
+ <h2 id="mr-title">DDR4 device mode register definitions · MR0–MR6</h2>
+ <p>DDR4 MR0–MR6 are programmed via DFI MRS commands, not CPU-addressable MMIO. This page displays source-defined fields only. Actual programmed values, decoded DFI cycles, after-init changes, scoreboard checks and source evidence belong exclusively to the individual <a href="runs.html#unified-traffic">Test Runs</a> and their <a href="runs.html">per-test reports</a>.</p>
  <div class="scroll mr-table-scroll" style="overflow-x:auto">
-  <table><thead><tr><th>Device MR</th><th>Test programmed?</th><th>Expected at INIT</th><th>Actual DFI MRS</th><th>Result</th><th>After-init change?</th><th>Comparison</th></tr></thead><tbody id="mr-table-rows"></tbody></table>
+  <table><thead><tr><th>Device MR</th><th>Source definition</th><th>RDL offset (virtual, not MMIO)</th><th>Fields</th></tr></thead><tbody id="mr-definition-rows"></tbody></table>
  </div>
- <div id="mr-details"></div>
- <p class="muted">A matching DFI MRS observation proves the command reached the DFI boundary, not that the upstream behavioral model applied its settings or enforced JEDEC timing.</p>
+ <div id="mr-definition-details"></div>
+ <p class="muted">Mode-register state is not readable through this address map. DFI observation alone also does not prove that the upstream behavioral BankModel enforced MR state or physical DDR4 timing.</p>
 </section>
 <section class="card am-csr" id="csr-definitions" aria-labelledby="am-csr-title"><h2 id="am-csr-title">CSR register definitions and source references by IP</h2><p class="muted">Expand an IP, then a register to inspect absolute address, offset, access and source-defined bitfields. Selected-variant CSR definitions are separate from C/RTL source references that are not qualified as active. Missing sources are explicit; neither category is evidence of an observed MMIO.</p><p id="am-csr-count" aria-live="polite"></p><div id="am-csr-browser"></div></section>
 <div class="scroll am-table"><table><thead><tr><th>Plane</th><th>Region / register</th><th>Address</th><th>End inclusive</th><th>Size</th><th>Modeled backing</th><th>Status</th><th>Details</th></tr></thead><tbody id="am-rows"></tbody></table></div>
@@ -38,7 +32,6 @@
 <script type="application/json" id="address-map-data">__ADDRESS_MAP_DATA__</script>
 <script type="application/json" id="ddr-csr-variants-data">__DDR_CSR_VARIANTS__</script>
 <script type="application/json" id="ddr-mr-catalog-data">__DDR_MR_CATALOG__</script>
-<script type="application/json" id="ddr-mr-runs-data">__DDR_MR_RUNS__</script>
 <script>
 'use strict';
 (()=>{
@@ -73,8 +66,9 @@
   const regions=d.regions.filter(r=>r.plane==='config'&&(!plane||plane==='config')&&(!kind||r.kind===kind));
   for(const r of regions){
    const regionMatch=[r.name,r.owner,r.base].filter(Boolean).some(x=>String(x).toLowerCase().includes(query));
-   const active=(r.registers||[]),sourceOnly=active.length?[]:(r.source_registers||[]);
-   const displayed=[...active,...sourceOnly];
+   const active=(r.registers||[]),sourceOnly=(r.source_registers||[]);
+   const activeOffsets=new Set(active.map(reg=>String(reg.offset).toLowerCase()));
+   const displayed=[...active,...sourceOnly.filter(reg=>!activeOffsets.has(String(reg.offset).toLowerCase()))];
    const regs=displayed.filter(reg=>regionMatch||[
     reg.name,reg.address,reg.offset,reg.description,reg.access,
     ...(reg.fields||[]).flatMap(f=>[f.name,f.description,f.mask])
@@ -85,16 +79,17 @@
    if(!displayed.length)missing++;
    const card=append(holder,'details','','am-csr-ip');
    const expand=regs.length&&!firstExpanded&&(active.length||!hasBuildDefinitions);
-   if(expand||Boolean(query))card.open=true;
+   if(expand||Boolean(query)||r.name==='pcie0.ctrl')card.open=true;
    if(expand)firstExpanded=true;
-   append(card,'summary',r.name+' · '+r.base+' · '+displayed.length+' register definition(s)'+(sourceOnly.length?' · SOURCE ONLY':''));
-   const status=active.length?'Selected-variant register definitions; independent RTL evidence is separate':
+   append(card,'summary',r.name+' · '+r.base+' · '+displayed.length+' register definition(s)'+(sourceOnly.length?' · includes SOURCE ONLY':''));
+   const status=active.length?'Selected-variant definitions plus any nonoverlapping, unqualified source references; independent RTL qualification is separate':
      sourceOnly.length?'Source-only C/RTL register references. These do NOT assert enabled RTL or Config-NoC attachment in this build':
      'No CSR register source for this build or repository reference';
    append(card,'p','CSR aperture '+size(r.size)+' · '+status,'am-csr-source');
    if(sourceOnly.length&&r.source_provenance){
     append(card,'p','Source: '+r.source_provenance.header+' (C ABI) · '+r.source_provenance.rtl+
       ' (RTL) · verified source SHA '+r.source_provenance.header_sha256.slice(0,12),'am-csr-source');
+     if(r.source_provenance.rdl)append(card,'p','PCIe endpoint source: '+r.source_provenance.rdl+' · '+r.source_provenance.rdl_sha256.slice(0,12)+' · host PCIe configuration TLPs are a distinct address space.','am-csr-source');
    }
    if(!regs.length){
     append(card,'p',displayed.length
@@ -108,7 +103,7 @@
     if((query||firstReg)&&card.open)item.open=true;
     firstReg=false;
     append(item,'summary',reg.name+' · '+reg.address+' · '+specified(reg.width_bits)+' bits · '+specified(reg.access).toUpperCase()+
-      (reg.definition_status==='C_ABI_RTL_crosschecked_source_reference_not_build_qualified'?' · SOURCE REFERENCE':''));
+      ((reg.definition_status||'').includes('source_reference')?' · SOURCE REFERENCE':''));
     const facts=append(item,'div','','am-csr-facts');
     for(const [k,v] of [['Absolute',reg.address],['Offset',reg.offset],['Width',reg.width_bits==null?null:reg.width_bits+' bits'],['Access',reg.access],['Reset',reg.reset],['Source',definitionSource(reg)],['C symbol',reg.source_symbol],['Write semantics',reg.write_semantics]]){
      const cell=append(facts,'span','');
@@ -189,84 +184,20 @@
 <script>
 'use strict';
 (()=>{
- const e=id=>document.getElementById(id);
- const add=(parent,tag,value)=>{const node=document.createElement(tag);node.textContent=String(value);parent.append(node);return node;};
- const defs=JSON.parse(e('ddr-mr-catalog-data').textContent);
- const runs=JSON.parse(e('ddr-mr-runs-data').textContent);
- const selected=e('mr-test-select'),other=e('mr-compare-select');
- const data=[null,...runs];
- for(const [menu,defaultLabel] of [[selected,'Definitions only · no test evidence'],[other,'No comparison']]){
-  add(menu,'option',defaultLabel).value='0';
-  for(let i=0;i<runs.length;i++){
-   const run=runs[i];const title=run.label+' · '+run.source_sha.slice(0,12);
-   add(menu,'option',title).value=String(i+1);
-  }
+ const defs=JSON.parse(document.getElementById('ddr-mr-catalog-data').textContent);
+ const table=document.getElementById('mr-definition-rows');
+ const details=document.getElementById('mr-definition-details');
+ const add=(parent,tag,value)=>{const el=document.createElement(tag);el.textContent=String(value);parent.append(el);return el;};
+ for(let mr=0;mr<7;mr++){
+  const spec=defs.registers[String(mr)];
+  if(!spec||!Array.isArray(spec.fields))continue;
+  const row=add(table,'tr','');
+  for(const value of ['MR'+mr,'DDR4 SystemRDL fields',spec.offset,spec.fields.length])add(row,'td',value);
+  const item=add(details,'details','');const summary=add(item,'summary','MR'+mr+' · field definitions');summary.style.cursor='pointer';
+  const scroll=add(item,'div','');scroll.style.overflowX='auto';const t=add(scroll,'table','');
+  const hr=add(add(t,'thead',''),'tr','');for(const head of ['Field','Bits','Meaning from RDL'])add(hr,'th',head);
+  const body=add(t,'tbody','');
+  for(const field of spec.fields){const tr=add(body,'tr','');for(const v of [field.name,field.msb+':'+field.lsb,field.description||'Source semantics not supplied'])add(tr,'td',v);}
  }
- if(runs.length)selected.value='1';
- const render=()=>{
-  const a=data[Number(selected.value)||0];
-  const b=data[Number(other.value)||0];
-  const evidence=a?.evidence,compare=b?.evidence;
-  const status=e('mr-evidence-status');status.replaceChildren();
-  if(a){
-   add(status,'strong','Observed · '+evidence.observed_writes+' MRS commands during INIT in '+a.label);
-   add(status,'span',' · 0 additional writes observed after INIT · model does not enforce MR state · '+a.source_sha.slice(0,12));
-  }else{
-   add(status,'strong','SOURCE ONLY · MR field definitions, not programmed state');
-   add(status,'span',runs.length
-      ?' · Select a completed DDR4 test to view exact observed register values and compare runs.'
-      :' · No qualified DDR4 MR trace is available in the published test history.');
-  }
-  const links=e('mr-evidence-links');links.replaceChildren();
-  if(a){
-   const link=add(links,'a','Open measured run');link.href=a.report_href;
-   const json=add(links,'a','MRS evidence JSON');json.href=a.evidence_href;
-  }else{
-   const link=add(links,'a','Download MR field definitions');link.href='data/ddr4-mr-definitions.json';
-  }
-  const table=e('mr-table-rows');table.replaceChildren();
-  const details=e('mr-details');details.replaceChildren();
-  const current=evidence?.records||[];
-  const previous=compare?.records||[];
-  const map=new Map(current.map(x=>[x.mr,x]));
-  const prior=new Map(previous.map(x=>[x.mr,x]));
-  for(let mr=0;mr<7;mr++){
-   const record=map.get(mr),ref=prior.get(mr);
-   const row=add(table,'tr','');
-   const values=[
-    'MR'+mr,
-    record?'Yes · INIT':'UNMEASURED',
-    record?record.expected_value:'—',
-    record?record.value:'Not observed in this view',
-    record?(record.matched?'MATCH':'MISMATCH'):'Source definition',
-    record?(evidence.after_init_writes===0?'No additional MRS observed':'Additional MRS observed'):'UNMEASURED',
-    record&&ref?(record.value===ref.value?'Same as '+b.target:'Different from '+b.target):'—',
-   ];
-   for(const value of values)add(row,'td',value);
-   const node=add(details,'details','');
-   const sum=add(node,'summary','MR'+mr+' · '+(record?'Observed '+record.value+' at DFI cycle '+record.cycle:'Field definitions only'));
-   sum.style.cursor='pointer';
-   const source=evidence?.field_definitions?.[String(mr)]||
-                defs.registers[String(mr)];
-   if(!source||!Array.isArray(source.fields)){add(node,'p','No source-qualified fields');continue;}
-   const scroll=add(node,'div','');scroll.style.overflowX='auto';
-   const t=add(scroll,'table','');const head=add(t,'thead','');const h=add(head,'tr','');
-   for(const name of ['Field','Bits','Value in selected test','Meaning from RDL'])add(h,'th',name);
-   const body=add(t,'tbody','');
-   for(const f of source.fields){
-    const trow=add(body,'tr','');
-    for(const value of [
-      f.name,f.msb+':'+f.lsb,record?record.fields[f.name]:'UNMEASURED',
-      f.description||'Field semantics not source qualified']){
-     add(trow,'td',value);
-    }
-   }
-   const caveat=add(node,'p','Virtual RDL offset '+source.offset+' · no device MR readback · '+(record?'Observed test programming, not DRAM model state':'No runtime proof in this view'));
-   caveat.className='muted';
-  }
- };
- selected.addEventListener('change',render);
- other.addEventListener('change',render);
- render();
 })();
 </script>
