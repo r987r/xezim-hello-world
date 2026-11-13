@@ -253,6 +253,7 @@ jobs:
           git -C .tools/pcie_endpoint_openpcie diff -- \
             pcie_phy.core verif/tests/test_pcie_core.py \
             verif/sequences/pcie_enumeration_seq.py \
+            verif/agents/pipe_agent/pipe_agent.py \
             src/dllp/tlp2dllp.sv \
             > .tools/pcie-link/openpcie-upstream-selftest-timing.diff
           # Includes the explicitly pinned A/B first-beat CplD handshake
@@ -263,6 +264,13 @@ jobs:
           grep -Fq '+        if (has_cplh_credit && has_cpld_credit && tlp_axis_tready && skid_axis_tvalid) begin' \
             .tools/pcie-link/openpcie-cpld-ready-ab.diff
           test -s .tools/pcie-link/openpcie-upstream-selftest-timing.diff
+          # OpenPCIe's native phy_txdata/K TLP/DLLP decoder is enabled.
+          # This proves the existing upstream monitor was instrumented,
+          # not that all link packets have reached the far-end host.
+          grep -Fq 'PCIE_UPSTREAM_PIPE_MON_TLP: direction=EP_TO_RC' \
+            .tools/pcie_endpoint_openpcie/verif/agents/pipe_agent/pipe_agent.py
+          grep -Fq 'PCIE_UPSTREAM_PIPE_MON_DLLP: direction=EP_TO_RC' \
+            .tools/pcie_endpoint_openpcie/verif/agents/pipe_agent/pipe_agent.py
           # Each Actions step starts a fresh shell. Re-select the pinned
           # Python 3.11 scripts directory here as well (before FuseSoC).
           export PATH="$(python3 -c 'import sysconfig; print(sysconfig.get_path("scripts"))'):$PATH"
