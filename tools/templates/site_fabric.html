@@ -1,11 +1,11 @@
-<div class="eyebrow">Architecture-derived endpoint contracts · address decode · test evidence</div>
+<div class="eyebrow">Architecture-derived endpoints · address decode · AXI timing scope</div>
 <h1>Fabric Explorer</h1>
-<p class="lede">Inspect every NoC boundary, initiator-to-target reachability and the exact upstream-generated XY router path. The two planes and their source/target permissions stay separate.</p>
-<div class="notice"><strong>Timing semantics:</strong> router counts are structural, not clock-cycle delays. Where a clean controlled one-beat trace matches this site's source SHA, the measured AXI boundary deltas break down request/response time per mesh and terminal AXI service. Router-internal hop cycles and isolated DDR/HBM device latency are not measured. The real PULP iDMA engines are connected in the default generated RTL and exercised in chip-dma mode; chip-cpu-dma verifies CPU-programmed transfers. The default generated chip retains behavioral AXI RAM for DDR/HBM; the separate opt-in chip-ddr4-real full-chip variant instantiates genuine pinned LiteDRAM controller RTL and captures read-only DFI/behavioral BankModel commands (merged #117). Do not infer that Ethernet, PCIe host, and real LiteDRAM are all live in one variant or that DFI activity proves a physical PHY.</div>
+<p class="lede">Explore configured CPU, DMA, PCIe host and Ethernet packet-DMA initiators to SRAM, HBM, DDR and control targets. Reachability is generated topology, not evidence that a host link, Ethernet MAC or real DDR controller operated together. Data and configuration planes remain separate.</p>
+<div class="notice"><strong>What these cycles measure:</strong> In the baseline SoC, <code>memory0.ddr0</code> and <code>memory0.hbm0</code> terminate in behavioral AXI RAM, not a DDR4 DRAM device. Source-matched serial one-beat AXI traces may measure request/response delays at the NoC and the last target-facing AXI monitor; they do <strong>not</strong> include qualified DDR4 ACT, READ/WRITE, PRE, REF or tRCD/tRP/tRAS/tRFC timing. DDR command timing must be measured separately using synchronized, source-verified DFI ACT/RD/WR/PRE/REF events in the <a href="runs.html">real-DDR test case</a>. PCIe host and Ethernet rows show intended or generated fabric reachability, not proof of trained PCIe traffic or a working GMII packet path.</div>
 <div class="actions"><a href="explorer.html">Interactive chip → subsystem → NoC topology</a><a href="data/fabric.json">Download fabric report JSON</a><a href="config/interface_contracts.yaml">Sizing contracts</a><a href="gen/supernoc/manifest.json">Wired route manifest</a></div>
 <div class="grid" id="fabric-facts"></div>
 <div class="grid" style="align-items:end"><label>Fabric plane <select id="fabric-plane"><option value="data">Data (AXI4)</option><option value="config">Configuration (AXI4 transport)</option></select></label><label>Filter by endpoint, subsystem or target <input id="fabric-search" type="search" placeholder="e.g. compute0, sram, hbm0" autocomplete="off"></label><label id="fabric-scope-wrap" hidden>Qualified evidence scope <select id="fabric-scope"></select></label></div>
-<h2>Route-by-route latency in reference clock cycles</h2>
+<h2>Initiator → target AXI boundary latency (simulation cycles)</h2>
 <p class="muted">This is a <strong>structural route inventory first</strong>, and measured latency only where a qualified serial AXI test supplies matching RTL/DV execution evidence. <strong>Unmeasured</strong> means no valid per-stage samples were available for this source revision, never zero cycles. Historical measurements remain accessible in individual test reports. Select a route for its source, router path and evidence links.</p>
 <p id="fabric-evidence-coverage" class="muted" role="status" aria-live="polite"></p>
 <p class="muted" id="fabric-reference-clock">Reference clock: awaiting measured simulation evidence.</p>
@@ -245,7 +245,7 @@ function renderMobileRoutes(){
   details.append(summary);
   const body=E('div',undefined,'fabric-mobile-details');
   for(const mesh of row.network_path)addMobileStage(body,meshLabel(mesh),row.mesh_cycles[mesh]||{},row.access);
-  addMobileStage(body,'Target-facing AXI service',row.target_cycles,row.access);
+  addMobileStage(body,'Target-facing AXI turnaround (not DRAM device)',row.target_cycles,row.access);
   body.append(E('p','Per-NoC totals combine request and response at AXI boundaries. Target service may include the crossbar and memory model; these are not individual-router or physical DDR/HBM delays.','fabric-mobile-stage-note'));
   const button=E('button','Open router path and CI evidence','fabric-mobile-detail-button');
   button.type='button';
@@ -260,7 +260,7 @@ function renderLatencyTable(){
  hdr.replaceChildren();body.replaceChildren();
  const meshes=latency.mesh_columns[plane.value]||[];
  const h=E('tr');
- for(const name of ['Source','Destination','Access',...meshes.map(x=>x.replaceAll('_',' ')),'Target read','Target write','Total read','Total write'])addCell(h,name,'th');
+ for(const name of ['Source','Destination','Access',...meshes.map(x=>x.replaceAll('_',' ')),'AXI target read','AXI target write','Total read','Total write'])addCell(h,name,'th');
  hdr.append(h);
  let shown=0;
  for(const r of filteredRoutes()){
