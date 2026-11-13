@@ -339,6 +339,7 @@ class PublicationTests(unittest.TestCase):
             self.assertIn('id="address-map-data"',map_html)
             self.assertIn('id="ddr-csr-variants-data"',map_html)
             self.assertIn('id="am-variant"',map_html)
+            self.assertIn('href="data/csr-source-coverage.json"',map_html)
             self.assertEqual(json.loads((output/'data/ddr-csr-verified-runs.json').read_text()),[])
             self.assertNotIn('__DDR_CSR_VARIANTS__',map_html)
             self.assertIn('configured decode windows and register definitions, not test results',map_html)
