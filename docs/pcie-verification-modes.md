@@ -308,7 +308,7 @@ is source-hash-checked and archived as an upstream source diff;
 it does **not** force a link-up state, alter synthesizable defaults, or
 claim cross-provider BAR/TLP/AXI acceptance. A real nonempty Cocotb
 completed-test table remains mandatory. Until exact-head CI demonstrates
-this upstream PASS, issue #76 and PR #225 remain open/draft.
+this upstream PASS, issue #76 remains open and active PR #232 remains draft; historical PR #225 is closed.
 
 **Policy:** default regular regressions keep their existing fast modeled
 TLP provider. Real digital link is explicit/opt-in and adds coverage; never
@@ -329,7 +329,7 @@ non-config endpoint stream and pinned AXI bridge are still required.
 
 The **separate** upstream OpenPCIe Cocotb self-test is red even though the
 original RC↔EP Gen1 L0 and six BAR0 configuration TLPs pass independently.
-Run [43153358261](https://github.com/r987r/xezim-hello-world/actions/runs/43153358261)
+An earlier historical run [43153358261](https://github.com/r987r/xezim-hello-world/actions/runs/43153358261)
 reproduced a memory timeout at 22-byte BAR write, offset 1, after hundreds of
 successful test iterations. The original timeout snapshot shows true L0,
 initialized FC, `s_tlp_axis_tvalid=0`, `s_tlp_axis_tready=1`,
