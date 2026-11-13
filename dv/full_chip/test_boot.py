@@ -147,11 +147,11 @@ async def execute_cold_boot(dut, *, external=None, benchmark=False):
     attach_observers(dut)
     if cpu_dma_mode and os.environ.get('SOC_CPU_DMA_PROGRESS') == '1':
         cocotb.start_soon(_cpu_dma_progress(dut))
-    # SCN-2 selected CPU variant already drives the *same* 10 ns clock
-    # natively in the generated testbench. Do not also drive it from Python.
-    # All existing non-SCN-2 variants keep their original Cocotb clock.
-    if not scenario_cpu_mode:
-        cocotb.start_soon(Clock(dut.clk, 10, 'ns').start())
+    # Keep exactly one Cocotb-owned clock source for all Cocotb regressions.
+    # Native Verilator SCN-2 clock generation previously caused the passive
+    # AXI monitors to miss accepted AW/AR while still observing W/B/R;
+    # a CPU firmware PASS is not sufficient when capture is incomplete.
+    cocotb.start_soon(Clock(dut.clk, 10, 'ns').start())
     for _ in range(10):
         await FallingEdge(dut.clk)
     dut.rst_n.value = 1
