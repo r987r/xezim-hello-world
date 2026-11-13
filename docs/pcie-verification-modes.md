@@ -402,6 +402,49 @@ original host's next launch. It also rejects a MemWr before the final
 config completion. **There is still no SRAM write or PCIe completion
 here**: the NoC path must be physically attached and qualified next.
 
+## Native open-source PIPE monitoring — what is and is not observed
+
+The pinned [OpenPCIe endpoint](https://github.com/isomoye-msu/pcie_datalink_layer)
+already has `verif/agents/pipe_agent/pipe_monitor_bfm.py`: this
+descrambles and reconstructs original TLP/DLLP symbols from the
+**endpoint PHY transmit** `phy_txdata/phy_txdatak` bus. The original
+`pipe_agent.py` routes reconstructed packets through
+`notify_tlp_received` and `notify_dllp_received`. The upstream
+`tlp_monitor_bfm.py` is a **different**, AXI-Stream `m_tlp_axis`
+sink; it observes accepted transaction-layer TLPs rather than the
+physical PIPE boundary. Both are existing upstream open-source IP,
+not newly written parsers.
+
+**On draft #232**, the isolated original FuseSoC/Cocotb upstream test
+now attaches non-mutating, version-pin-qualified
+`PCIE_UPSTREAM_PIPE_MON_TLP` / `PCIE_UPSTREAM_PIPE_MON_DLLP`
+raw-hex events to these *native* callback outputs. Compare these to
+`PCIE_UPSTREAM_EP_CPL_BEGIN`, the original TX AXI Stream frames,
+the host model's decoded delivery, and the timeout state/FC snapshots.
+An endpoint-local PHY TX observation **cannot prove actual RC receipt**:
+missing events must remain missing rather than synthesized. If the
+native monitor cannot reconstruct a fragment, it is not PASS.
+
+The independent **pcievhost ↔ OpenPCIe** `tb_pcie_cross_link.sv`
+still has only sampled PIPE words (16 training-state samples each way),
+passive selected DLLP and BAR configuration handshakes; it is **not
+yet a complete per-direction PIPE packet capture/decoder**. The
+pinned pcievhost `PcieDispLink` display IP is a candidate for
+reusing decoded link visibility, but its documented serial/8b10b
+interface must be checked for compatibility with Gen1 16-bit
+**already decoded** PIPE data/K. Do not bolt serial decoders onto
+a parallel PIPE interface or distribute GPL host source as
+synthesizable SoC RTL.
+
+**Full link-monitor acceptance still open:** observe both directions
+continuously after L0; decode TS1/TS2/SKP and TLP/DLLP with seq,
+ACK/NAK, flow-control credits, tag, byte count, address, packet
+CRC/error, and accepted beat timing; correlate RC transmitted
+requests → EP received requests → EP transmitted completions →
+RC accepted completions with no unobserved or fabricated packets.
+Use the existing source-qualified `protocol-events.jsonl` and Test
+Runs reports, not a competing packet dashboard.
+
 ## Digital-link qualification blocker (source-backed diagnostic boundary)
 
 The **original upstream OpenPCIe Cocotb** `test_pcie_core.link_up_test` is
