@@ -175,7 +175,7 @@ def main():
             assert driver.find_element(By.CSS_SELECTOR,
                 '.hub-run-tabs a[aria-current="page"]').text=="Protocol traffic"
             driver.find_element(By.CSS_SELECTOR,'.hub-run-tabs a[href="../../runs.html"]').click()
-            wait.until(lambda d:"Test runs" in d.find_element(By.TAG_NAME,"h1").text.lower())
+            wait.until(lambda d:"test runs" in d.find_element(By.TAG_NAME,"h1").text.lower())
             assert driver.find_element(By.ID,"catalog")
             print("PASS: Test Runs click-through preserves global nav, protocol tabs and same-site back path")
             print("PASS: unified Test Runs show source-native PCIe, Ethernet, DFI sample records")
