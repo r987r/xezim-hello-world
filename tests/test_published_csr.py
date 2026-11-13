@@ -40,6 +40,11 @@ class PublishedCsrTests(unittest.TestCase):
             },
         }]
 
+    def test_published_address_template_links_csr_source_inventory(self):
+        template = (ROOT / "tools/templates/site_address-map.html").read_text()
+        self.assertIn('href="data/csr-source-coverage.json"', template)
+        self.assertIn('id="am-csr-browser"', template)
+
     def test_qualified_public_release(self):
         self.assertEqual(validate(self.site, self.html, self.coverage, self.ddr), 1)
 
