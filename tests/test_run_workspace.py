@@ -127,7 +127,9 @@ class WorkspaceTests(unittest.TestCase):
             require_completed_xezim_run(root, "serv", invalid)
         other = selected("serv", plan, run_id="local-bbbbbbbbbbbb")
         reserve_run(root, other, plan=plan)
-        with self.assertRaisesRegex(IdentityError, "missing canonical"):
+        # Two otherwise valid identities remain ambiguous, even when
+        # neither run has any completed simulator evidence.
+        with self.assertRaisesRegex(IdentityError, "exactly one real canonical"):
             require_completed_xezim_run(root, "serv", plan)
 
     def test_real_verilator_cocotb_producer_refuses_fabricated_completion(self):
