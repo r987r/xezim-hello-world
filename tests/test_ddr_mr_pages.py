@@ -186,6 +186,9 @@ class DdrMRPages(unittest.TestCase):
         for word in ('ddr-mr-browser','mr-test-select','mr-compare-select',
                      '__DDR_MR_CATALOG__','__DDR_MR_RUNS__'):
             self.assertIn(word, address)
+        self.assertNotIn('mr-test-select',address)
+        self.assertNotIn('__DDR_MR_RUNS__',address)
+        self.assertIn('ddr-mrs-section',report)
         for word in ('ddr-mrs-section','mrEvidence','UNMEASURED',
                      'Changed after INIT?', 'Not memory-mapped CSRs'):
             self.assertIn(word, report)
