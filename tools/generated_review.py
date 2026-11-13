@@ -14,7 +14,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 HEX_REF = re.compile(r"^[A-Za-z0-9_./^-]+$")
-STRUCTURED = {".json", ".yaml", ".yml"}
 
 
 def git(*args: str, root: Path = ROOT, allow_missing: bool = False) -> str | None:
@@ -90,14 +89,13 @@ def review(base: str, *, root: Path = ROOT) -> dict:
         keys = semantic_keys(old, new) if old is not None and new is not None else []
         files.append({"path": path, "change": status, "group": classify(path),
                       "changed_fields": keys})
-    # Include working-tree changes, even before they are staged.
-    changed = set(x["path"] for x in files)
-    for status, path in [line.split("\t", 1) for line in
-                         git("status", "--porcelain=v1", "--untracked-files=all", "--", "gen/", root=root).splitlines()
-                         if "\t" in line]:
+    # Untracked outputs matter too; git diff already includes tracked edits.
+    changed = {x["path"] for x in files}
+    untracked = git("ls-files", "--others", "--exclude-standard", "--", "gen/", root=root)
+    for path in untracked.splitlines():
         if path not in changed:
-            files.append({"path": path, "change": status.strip() or "M",
-                          "group": classify(path), "changed_fields": []})
+            files.append({"path": path, "change": "?", "group": classify(path),
+                          "changed_fields": []})
     files.sort(key=lambda item: (item["group"], item["path"]))
     return {"base_commit": sha, "files": files, "count": len(files)}
 
@@ -111,16 +109,16 @@ def markdown(data: dict) -> str:
     for group in groups:
         lines.append(f"## {group}")
         for f in (x for x in data["files"] if x["group"] == group):
-            lines.append(f"- \`{f['change']}\` \`{f['path']}\`")
+            lines.append(f"- `{f['change']}` `{f['path']}`")
             if f["changed_fields"]:
                 lines.append("  - Changed JSON fields: " +
-                             ", ".join(f"\`{key}\`" for key in f["changed_fields"]))
+                             ", ".join(f"`{key}`" for key in f["changed_fields"]))
         lines.append("")
     lines += ["**Review limits:** SHA/path changes are generated-source evidence only; "
               "they do not establish an elaborated chip or a passing RTL test. "
-              "Run \`make check-generated\` separately for exact byte reproducibility. "
-              "Opt-in compiler-selected RTL under ignored \`.tools/\` is not in this report; "
-              "issue #184 tracks promotion of such RTL into tracked \`gen/projects/\`.", ""]
+              "Run `make check-generated` separately for exact byte reproducibility. "
+              "Opt-in compiler-selected RTL under ignored `.tools/` is not in this report; "
+              "issue #184 tracks promotion of such RTL into tracked `gen/projects/`.", ""]
     return "\n".join(lines)
 
 
