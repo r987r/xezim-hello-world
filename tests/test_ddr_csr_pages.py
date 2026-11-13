@@ -53,6 +53,8 @@ class DdrCsrPagesTests(unittest.TestCase):
         self.assertIn('id="ddr-csr-variants-data"',template)
         self.assertIn("ddrVariants.length",template)
         self.assertIn("selectVariant()",template)
+        self.assertIn("PCIe_source_reference_not_build_qualified",template)
+        self.assertNotIn('mr-test-select',template)
 
 
 if __name__=="__main__":
