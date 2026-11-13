@@ -838,12 +838,10 @@ def emit_tb(cfg, fw, out, *, image_prefix='gen/chip', cpu_dma_mode=False,
         *(['  wire rst = ~rst_n;'] if pcie_host_mode else []),
         '`ifndef COCOTB_SIM', '  always #5 clk = ~clk;',
         '  initial begin repeat (10) @(negedge clk); rst_n = 1; end', '`endif',
-        # SCN-2 only: source-selected existing CPU test uses the same 10ns
-        # 50/50 clock in Verilator rather than scheduling two Cocotb timer
-        # callbacks every cycle. No simulator timeout or AXI gate changes.
-        *(['`ifdef COCOTB_SIM',
-           "  initial begin clk = 1'b1; forever #5 clk = ~clk; end",
-           '`endif'] if scenario_action_count else []),
+        # In Cocotb modes the one authoritative clock driver is Cocotb's
+        # Clock, exactly as for the already-qualified default CPU/NoC tests.
+        # A Verilator-native SCN-2 clock made passive AXI AW/AR observations
+        # incomplete despite CPU firmware PASS; do not mix clock authorities.
         '  reg [N-1:0] hold_mask = 0;', '  initial if ($test$plusargs("HOLD_SECONDARY")) hold_mask[1] = 1;',
         '  wire [N-1:0] released, fetch_valid, sram_valid, sram_write;',
         '  wire [N*32-1:0] fetch_addr;', '  wire [N*64-1:0] sram_addr, sram_data;',
