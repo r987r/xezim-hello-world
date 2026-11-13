@@ -1,7 +1,7 @@
 <div class="eyebrow">Source-defined architecture · data and config planes</div>
 <h1>SoC address map &amp; CSR register definitions</h1>
 <p class="lede">ROM, SRAM, flash, DDR, HBM and control windows from the configured SoC. SystemRDL-owned and upstream LiteDRAM/LiteX native registers are subsets of the physical apertures. Choose the exact SoC build below.</p>
-<div class="actions"><a href="#csr-definitions">Browse registers &amp; bitfields</a><a href="data/soc-address-map.json">Download address-map JSON</a><a href="data/csr-source-coverage.json">CSR coverage / missing IP sources</a><a href="data/soc-data-memories.rdl">External memory RDL view</a><a href="runs.html">Inspect measured run evidence</a></div>
+<div class="actions"><a href="#csr-ip-pcie0-ctrl">PCIe controller registers</a><a href="#csr-ip-memory0-ctrl">DDR controller registers</a><a href="#csr-definitions">All register definitions</a><a href="data/soc-address-map.json">Download address-map JSON</a><a href="data/csr-source-coverage.json">CSR coverage / missing IP sources</a><a href="data/soc-data-memories.rdl">External memory RDL view</a><a href="runs.html">Inspect measured run evidence</a></div>
 <p class="muted">__CSR_SOURCE_LINKS__</p>
 <div class="grid" id="am-summary"></div>
 <p class="notice">Mapped apertures and register definitions are not RTL test coverage. Memory-model backing may be far smaller than the declared DDR/HBM windows. Unassigned holes are not backed storage; read/write evidence belongs to each run's passive AXI trace.</p>
@@ -79,6 +79,7 @@
    reference+=regs.filter(x=>['C_ABI_RTL_crosschecked_source_reference_not_build_qualified','PCIe_source_reference_not_build_qualified'].includes(x.definition_status)).length;
    if(!displayed.length)missing++;
    const card=append(holder,'details','','am-csr-ip');
+   card.id='csr-ip-'+r.name.replaceAll('.','-');
    const expand=regs.length&&!firstExpanded&&(active.length||!hasBuildDefinitions);
    if(expand||Boolean(query)||r.name==='pcie0.ctrl')card.open=true;
    if(expand)firstExpanded=true;
