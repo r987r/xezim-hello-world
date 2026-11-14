@@ -70,7 +70,13 @@ jobs:
     # Existing long RTL simulation plus two real pinned source regenerations.
     timeout-minutes: 145
     steps:
+      # PR default checkout uses a synthetic merge SHA. Build and publish
+      # precisely the immutable PR head instead, so the post-PASS push guard
+      # attests the same tested source revision. This still runs against
+      # main after the PR is merged and is never authorized to push to main.
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/checkout@v4
         with:
           repository: alexforencich/verilog-pcie
