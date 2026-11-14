@@ -50,18 +50,20 @@ def validate_lock(lock: dict) -> None:
             if (not isinstance(path, str) or not path.startswith(".tools/")
                     or "/../" in path or not _sha(digest)):
                 raise ReferenceError("malformed selected reference source/hash")
+    qualification = lock.get("qualification_status", "historically_qualified")
+    if qualification not in ("historically_qualified", "candidate_source_only", "qualified"):
+        raise ReferenceError("unknown selected source qualification status")
     variable = lock.get("volatile_source_paths")
-    if (variable != sorted(lock["historical_volatile_source_sha256"])
+    if (not isinstance(variable, list)
+            or variable != sorted(lock["historical_volatile_source_sha256"])
             or len(variable) != 1
-            or variable[0] in lock["required_source_sha256"]
+            or (qualification != "qualified" and
+                variable[0] in lock["required_source_sha256"])
             or not _sha(lock.get("stable_compiler_inputs_sha256"))
             or not _sha(lock.get("historical_compiler_input_sha256"))):
         raise ReferenceError("invalid/non-audited variable generated DDR source")
     if lock["required_generated_sha256"].get(TOP) is None:
         raise ReferenceError("missing real combined generated top SHA")
-    qualification = lock.get("qualification_status", "historically_qualified")
-    if qualification not in ("historically_qualified", "candidate_source_only", "qualified"):
-        raise ReferenceError("unknown selected source qualification status")
     if qualification == "candidate_source_only":
         if (not isinstance(lock.get("historical_reference"), str)
                 or not lock["historical_reference"].startswith(
