@@ -31,7 +31,11 @@ CORE_BEFORE = """  sim:
 """
 CORE_AFTER = CORE_BEFORE.replace(
     "        - waiver.vlt\n",
-    "        - waiver.vlt\n        - -GSIM_FAST_LINK=1\n")
+    "        - waiver.vlt\n        - -GSIM_FAST_LINK=1\n"
+    "      run_options:\n"
+    "        - --trace\n"
+    "        - --trace-file\n"
+    "        - pcie-credit-debug.fst\n")
 TEST_BEFORE = "await with_timeout(self.test_all.start(),25000,'ns')"
 TEST_AFTER = "await with_timeout(self.test_all.start(),250000,'ns')"
 
@@ -82,10 +86,55 @@ PIPE_MONITOR_DLLP_AFTER = """        # Original PIPE monitor's decoded DLLP, not
         self.pipe_agent_config.dllp_data_detected_e.set()"""
 
 
+# The original Cocotb/Verilator driver builds trace support in the pinned
+# FuseSoC sim target, but only opens dump.fst when the runtime receives --trace.
+# Edalize's run_options routes these argv directly to the original model.
+# All waveforms are observations, and our byte oracle/FC behavior stay intact.
+DLLP_HANDLER_REL = "src/dllp/dllp_handler.sv"
+DLLP_HANDLER_ORIGINAL_BLOB = "8ec61023a55f60f0a12712aae215ea59467ffed2"
+DLLP_CREDIT_RX_PROBE = """`ifndef SYNTHESIS
+  logic [15:0] pcie_upstream_crc_drop_count_r;
+  always_ff @(posedge clk_i) begin
+    if (rst_i) begin
+      pcie_upstream_crc_drop_count_r <= '0;
+    end else begin
+      if (curr_state == ST_CHECK_CRC &&
+          skid_s_axis_tvalid && skid_s_axis_tuser[UserIsDllp] &&
+          crc_reversed != skid_s_axis_tdata[15:0]) begin
+        pcie_upstream_crc_drop_count_r <= pcie_upstream_crc_drop_count_r + 1'b1;
+        if (pcie_upstream_crc_drop_count_r < 16'd10) begin
+          $display("PCIE_UPSTREAM_EP_DLLP_CRC_REJECT: time=%0t expected=%h received=%h count=%0d",
+                   $time, crc_reversed, skid_s_axis_tdata[15:0],
+                   pcie_upstream_crc_drop_count_r + 1'b1);
+        end
+      end
+      if (curr_state == ST_PROCESS_DLLP &&
+          dll_packet_r.generic.dllp_type == UpdateFC_Cpl) begin
+        $display("PCIE_UPSTREAM_EP_UPDATEFC_CPL_RX: time=%0t hdr=%0d data=%0d update=%b",
+                 $time,
+                 {dll_packet_r.flow_control.byte1.hdrfc1, dll_packet_r.flow_control.byte2.hdrfc0},
+                 {dll_packet_r.flow_control.byte2.datafc1, dll_packet_r.flow_control.datafc0},
+                 update_fc_c);
+      end
+    end
+  end
+`endif
+"""
+
+
 # Test-only passive RTL observation when the original CplD transmitter has
 # been waiting for its first beat. Never synthesize credits, ACKs or packets.
 CPLD_STALL_PROBE = """`ifndef SYNTHESIS
   logic [9:0] pcie_upstream_cpld_wait_r;
+  always_ff @(posedge clk_i) begin
+    if (!rst_i && update_fc_i && tx_fc_cplh_i != cplh_credit_limit_r) begin
+      $display("PCIE_UPSTREAM_EP_CPLH_LATCH: time=%0t input=%0d prior=%0d next=%0d used=%0d data_in=%0d data_limit=%0d",
+               $time, tx_fc_cplh_i, cplh_credit_limit_r,
+               cplh_credit_limit_c, cplh_credits_consumed_r,
+               tx_fc_cpld_i, cpld_credit_limit_r);
+    end
+  end
+
   always_ff @(posedge clk_i) begin
     if (rst_i || curr_state != ST_CHECK_CREDITS_CPLH_CPLD ||
         !skid_axis_tvalid || skid_axis_tready) begin
@@ -343,6 +392,10 @@ def patched(path: str, source: str) -> str:
         return replace_once(source, "\nendmodule\n",
                             "\n" + CPLD_STALL_PROBE + "endmodule\n",
                             path + " passive credit stall diagnostic")
+    if path == DLLP_HANDLER_REL:
+        return replace_once(source, "\nendmodule\n",
+                            "\n" + DLLP_CREDIT_RX_PROBE + "endmodule\n",
+                            path + " passive CRC/UpdateFC receive trace")
     if path == "pcie_phy.core":
         return replace_once(source,CORE_BEFORE,CORE_AFTER,path)
     if path == "verif/tests/test_pcie_core.py":
@@ -385,6 +438,21 @@ def apply(root:Path) -> None:
         else:
             print(f"OPENPCIE_SELFTEST_TIMING: pinned {rel}: "
                   "Gen1 LTSSM 512x acceleration, 250us explicit test timeout")
+    # Passive receive-path probes run only in the detached original RTL
+    # self-test; the locked production IP and PCIe lane wiring are unchanged.
+    original_rx_blob = subprocess.run(
+        ["git", "-C", str(root), "rev-parse", f"HEAD:{DLLP_HANDLER_REL}"],
+        check=True, capture_output=True, text=True).stdout.strip()
+    if original_rx_blob != DLLP_HANDLER_ORIGINAL_BLOB:
+        raise ValueError(f"original upstream {DLLP_HANDLER_REL} drift: "
+                         f"{original_rx_blob} != {DLLP_HANDLER_ORIGINAL_BLOB}")
+    rx_path = root / DLLP_HANDLER_REL
+    if not rx_path.is_file() or rx_path.is_symlink():
+        raise ValueError(f"missing original DLLP receiver {DLLP_HANDLER_REL}")
+    rx_path.write_text(patched(DLLP_HANDLER_REL, rx_path.read_text()))
+    print("OPENPCIE_SELFTEST_CREDIT_WAVE: original RTL CRC/UpdateFC "
+          "receiver trace enabled, no credit override; "
+          "pinned Verilator FST runtime trace=on")
     # A/B experiment for an actual first-beat ready/valid bug. Applied only
     # to the original upstream standalone qualification checkout; no new
     # host packets, synthetic CplD, timeout changes, or PASS exemptions.
