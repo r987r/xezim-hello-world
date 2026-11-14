@@ -11,7 +11,7 @@ import unittest
 import yaml
 
 from dv.common.scenario import canonical_json, resolve_scenario
-from tools.scenario_c import render_header
+from tools.scenario_c import render_header, argument_key_hash
 from tools.scenario_sv import load_plan, render_package
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -60,6 +60,30 @@ class ScenarioCContractTests(unittest.TestCase):
                 if type(value) is int:
                     self.assertIn("UINT64_C(" + str(value) + ")", c)
         self.assertNotIn("PASS: hardware", c)
+
+    def test_generated_indices_and_hashes_are_derived_from_same_source(self):
+        c = render_header(self.raw)
+        actions = self.plan["actions"]
+        dependencies = []
+        for i, action in enumerate(actions):
+            for dependency in action["depends_on"]:
+                prior = [j for j, item in enumerate(actions[:i])
+                         if item["action_instance_id"] == dependency]
+                self.assertEqual(len(prior), 1)
+                dependencies.append(prior[0])
+        self.assertIn("soc_scn_dependency_indices", c)
+        self.assertIn("soc_scn_dependency_index_at", c)
+        for prior in set(dependencies):
+            self.assertIn("UINT16_C(" + str(prior) + ")", c)
+        for key in ("alignment", "buffer", "region", "size",
+                    "pattern.kind", "pattern.seed", "engine"):
+            expected = 5381
+            for byte in key.encode("ascii"):
+                expected = (((expected << 5) + expected) ^ byte) & 0xffffffff
+            self.assertEqual(argument_key_hash(key), expected)
+            self.assertIn("UINT32_C(" + str(expected) + ")", c)
+        self.assertEqual(c, render_header(self.raw))
+        self.assertNotIn("hardware_pass", c)
 
     def test_unsupported_c_argument_is_rejected_by_existing_sv_schema(self):
         bad = copy.deepcopy(self.plan)

@@ -227,8 +227,14 @@ tests:
     seed: 1
     test_dir: .
     build: .tools/chip-cpu-scenario-obj
-    env: {MAKEFLAGS: '-j2', SOC_CPU_DMA_MODE: '1'}
-    timeout_s: 1800
+    # Same real CPU/iDMA/NoC RTL as chip-cpu-dma, but eight source-selected
+    # C actions plus independent passive AXI capture. Hosted CI observed
+    # 3.80ms of advancing real RTL in 1800s before the runner killed it,
+    # while a complete observed scenario requires about 4.66ms. Keep a
+    # finite 50-minute bound rather than weaken AXI completion or CPU phases.
+    # Passive checkpoints identify a genuine stall without changing buses.
+    env: {MAKEFLAGS: '-j2', SOC_CPU_DMA_MODE: '1', SOC_CPU_DMA_PROGRESS: '1'}
+    timeout_s: 3000
     pass: 'PASS scenario-cpu:'
     report:
       address_map: {config: config/soc.yaml, variant: architecture}

@@ -7,6 +7,9 @@ on:
       - 'dv/common/scenario.py'
       - 'dv/common/action_runtime.py'
       - 'tests/test_action_runtime.py'
+      - 'dv/common/axi_trace.py'
+      - 'dv/common/axi_event_sink.py'
+      - 'tests/test_axi_event_sink.py'
       - 'dv/common/scenario_dma.py'
       - 'dv/full_chip/test_boot.py'
       - 'dv/full_chip/test_dma.py'
@@ -21,6 +24,13 @@ on:
       - 'tools/scenario_replay_audit.py'
       - 'tools/scenario_cpu_plan_witness.py'
       - 'tests/test_scenario_cpu_plan_witness.py'
+      - 'tools/scenario_cpu_action_trace.py'
+      - 'tests/test_scenario_cpu_action_trace.py'
+      - 'tests/test_cpu_scenario_firmware_elf.py'
+      - 'tools/scenario_c.py'
+      - 'sw/common/soc_scn_action_adapter.h'
+      - 'sw/common/soc_scn_compiled_runtime.h'
+      - 'sw/common/soc_scn_action_args.h'
       - 'tests/test_scenario_replay_audit.py'
       - 'tools/scenario_plan.py'
       - 'tools/scenario_seed_matrix.py'
@@ -52,7 +62,7 @@ jobs:
       - name: Install existing configuration parser
         run: python3 -m pip install 'PyYAML==6.0.3'
       - name: Test typed scenarios, allocator contract and multi-seed replay
-        run: python3 -m unittest tests.test_scenario_plan tests.test_scenario_seed_matrix tests.test_action_runtime tests.test_scenario_dma tests.test_scenario_cpu_plan_witness tests.test_scenario_replay_audit tests.test_memory_plan tests.test_dma_vectors -v
+        run: python3 -m unittest tests.test_scenario_plan tests.test_scenario_seed_matrix tests.test_action_runtime tests.test_scenario_dma tests.test_scenario_cpu_plan_witness tests.test_scenario_cpu_action_trace tests.test_scenario_replay_audit tests.test_axi_event_sink tests.test_memory_plan tests.test_dma_vectors -v
       - name: Resolve and independently verify directed plus randomized SCN plan matrix
         run: |
           python3 tools/scenario_seed_matrix.py --scenario config/scenarios/dma-roundtrip.json --soc config/soc.yaml --out .tools/scenarios/ci-seed-matrix --seeds 1 22 31337 --source-revision "${GITHUB_SHA}"
@@ -74,10 +84,36 @@ jobs:
           path: .tools/scenarios/smoke/scenario-plan.json
           if-no-files-found: ignore
 
+  scenario-cpu-elf:
+    name: Fast freestanding selected CPU C scenario RV32I link preflight
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Install compiler and firmware configuration dependencies
+        run: |
+          python3 -m pip install 'PyYAML==6.0.3'
+          sudo apt-get update -qq
+          sudo apt-get install -y clang llvm lld
+      - name: Link actual selected scenario CPU with two source replay seeds
+        env:
+          SOC_REQUIRE_SCENARIO_RV32I_TOOLS: '1'
+        run: |
+          command -v clang
+          command -v llvm-objcopy
+          command -v ld.lld
+          python3 -m unittest tests.test_cpu_scenario_firmware_elf -v
+
   scenario-real-rtl:
     name: CPU C and BFM use same plan on generated FlooNoC RTL
+    needs: [scenario-schema, scenario-cpu-elf]
     runs-on: ubuntu-24.04
-    timeout-minutes: 125
+    # Two genuinely randomized CPU/BFM pairs each retain their own finite
+    # regression timeouts. The job must exceed both real CPU bounds plus
+    # pinned RTL build, two real BFM runs and archived evidence validation.
+    timeout-minutes: 160
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-bender
@@ -95,7 +131,7 @@ jobs:
           sudo apt-get install -y verilator clang llvm lld
       - name: Check source ABI, CPU C and generated platform
         run: |
-          python3 -m unittest tests.test_scenario_plan tests.test_scenario_dma tests.test_scenario_cpu_plan_witness tests.test_scenario_replay_audit tests.test_scenario_memory_trace tests.test_scenario_memory_finalization tests.test_cpu_dma_firmware -v
+          python3 -m unittest tests.test_scenario_plan tests.test_scenario_dma tests.test_scenario_cpu_plan_witness tests.test_scenario_cpu_action_trace tests.test_scenario_replay_audit tests.test_scenario_memory_trace tests.test_scenario_memory_finalization tests.test_cpu_dma_firmware tests.test_axi_event_sink -v
           make check-generated
       - name: Execute two freshly randomized source-selected scenarios in actual CPU and BFM RTL
         run: |

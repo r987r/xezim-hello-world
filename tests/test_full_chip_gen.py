@@ -162,6 +162,39 @@ class FullChipTests(unittest.TestCase):
                 full_chip_gen.emit(cfg,meta,ROOT/'gen/noc/floonoc',out,
                                    cpu_dma_mode=True)
 
+    def test_source_selected_cpu_action_budget_is_scoped_and_bounded(self):
+        meta = json.loads((ROOT/'gen/supernoc/manifest.json').read_text())
+        flash = next(r for r in self.cfg['address_map']['data']
+                     if r['name'] == 'boot.flash')
+        hook = int(flash['base'], 0) + 0x1000
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            baseline = base/'ordinary-cpu'
+            scenario = base/'selected-scn'
+            full_chip_gen.emit(self.cfg, meta, ROOT/'gen/noc/floonoc', baseline,
+                               cpu0_run_hook=hook, cpu_dma_mode=True)
+            full_chip_gen.emit(self.cfg, meta, ROOT/'gen/noc/floonoc', scenario,
+                               cpu0_run_hook=hook, cpu_dma_mode=True,
+                               scenario_action_count=8)
+            normal_tb = (baseline/'full_chip_tb.sv').read_text()
+            selected_tb = (scenario/'full_chip_tb.sv').read_text()
+            self.assertIn('stalled > 350000', normal_tb)
+            self.assertIn('stalled > 1150000', selected_tb)
+            self.assertNotIn('stalled > 1150000', normal_tb)
+            self.assertIn('cycles > 1200000', selected_tb)
+            # Same top and ROM: this opt-in change only extends a watchdog,
+            # never modifies physical bus acceptance, check, or memory RTL.
+            self.assertEqual((baseline/'soc_top.sv').read_bytes(),
+                             (scenario/'soc_top.sv').read_bytes())
+            for bad in (-1, True, 4097):
+                with self.subTest(bad=bad), self.assertRaises(ValueError):
+                    full_chip_gen.emit(self.cfg, meta, ROOT/'gen/noc/floonoc',
+                                       base/'bad', cpu0_run_hook=hook,
+                                       cpu_dma_mode=True, scenario_action_count=bad)
+            with self.assertRaises(ValueError):
+                full_chip_gen.emit(self.cfg, meta, ROOT/'gen/noc/floonoc',
+                                   base/'plain', scenario_action_count=8)
+
     def test_cpu_dma_hook_is_bounded_to_immutable_flash(self):
         import chip_bootgen
         cfg=copy.deepcopy(self.cfg)

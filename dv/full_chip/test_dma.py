@@ -195,6 +195,12 @@ async def two_compute_dmas_through_all_fabrics(dut):
                     "intent_is_not_evidence": True}
         (Path(plan_file).parent/"scenario-execution.json").write_text(
             json.dumps(evidence, sort_keys=True, indent=2)+"\n")
+        # Do not rely on Cocotb process teardown to flush the selected
+        # passive AXI bounded batch. Preserve every already accepted event
+        # and let the independent AW/W/B/AR/R correlator qualify completion.
+        await Timer(1, 'ns')
+        from dv.common.axi_trace import flush_active
+        flush_active()
         dut._log.info("PASS chipdma: scenario BFM real full-NoC DDR roundtrip, %s", observed)
         return
 

@@ -137,7 +137,14 @@ def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False, ethernet_cpu
         emit_dma_header(directory / "csr")
     args = [require_tool("clang"),
             "--target=riscv32-unknown-elf", "-march=rv32i", "-mabi=ilp32",
-            "-Oz", "-ffunction-sections", "-ffreestanding", "-fno-builtin",
+            # SCN-C walks a source-selected typed argument graph on a real
+            # RV32I core. A full-chip timeout run proved -Oz inflated the
+            # on-chip dispatch work enough to hit a 30-minute simulation
+            # wall after only five of eight actions. Optimize just this
+            # optional firmware for latency. All production/default mode
+            # binaries retain the old -Oz ABI and code-generation settings.
+            "-O3" if scenario_mode else "-Oz",
+            "-ffunction-sections", "-ffreestanding", "-fno-builtin",
             "-fno-stack-protector", "-fno-pic", "-fno-pie",
             "-nostdlib", "-fuse-ld=lld", "-Wl,--no-relax",
             "-Wl,--build-id=none", f"-Wl,-T,{linker}",
@@ -200,6 +207,18 @@ def prepare(cfg, noc_manifest, noc_root, output: Path, *, pcie_host_mode=False,
                           pcie_outbound_mode=pcie_outbound_mode,
                           scenario_seed=scenario_seed)
     image_prefix = output.relative_to(ROOT).as_posix()
+    selected_scn = None
+    if scenario_mode:
+        from dv.common.scenario_dma import load_contract_from_plan
+        selected_scn = load_contract_from_plan(output / "scenario-plan.json")
+        from dv.common.action_events import parse_plan
+        selected_raw = (output / "scenario-plan.json").read_bytes()
+        selected_plan, selected_sha, _ = parse_plan(selected_raw)
+        if selected_sha != selected_scn["plan_sha256"]:
+            raise ValueError("selected action count disagrees with compiled CPU SHA")
+        action_count = len(selected_plan["actions"])
+    else:
+        action_count = 0
     # Normal generated gen/chip outputs remain byte-for-byte unchanged.
     manifest = full_chip_gen.emit(cfg, noc_manifest, noc_root, output,
                                   cpu0_run_hook=fw["hook"],
@@ -209,7 +228,8 @@ def prepare(cfg, noc_manifest, noc_root, output: Path, *, pcie_host_mode=False,
                                   ethernet_mode=ethernet_cpu_mode,
                                   ethernet_cpu_mode=ethernet_cpu_mode,
                                   real_ddr_mode=real_ddr_mode,
-                                  ddr_wb_base=ddr_wb_base, ddr_wb_adr_bits=ddr_wb_adr_bits)
+                                  ddr_wb_base=ddr_wb_base, ddr_wb_adr_bits=ddr_wb_adr_bits,
+                                  scenario_action_count=action_count)
     image = output / "flash.hex"
     additional = [f"@{HOOK_OFFSET // 8:x}"]
     blob = fw["data"]
@@ -234,8 +254,7 @@ def prepare(cfg, noc_manifest, noc_root, output: Path, *, pcie_host_mode=False,
                                   'host': 'modeled_RC_BAR_pull',
                                   'status': 'selected_not_executed'}
     if scenario_mode:
-        from dv.common.scenario_dma import load_contract_from_plan
-        contract = load_contract_from_plan(output/'scenario-plan.json')
+        contract = selected_scn
         manifest['scenario_intent'] = {'scenario_id': contract['scenario_id'],
                                        'plan_sha256': contract['plan_sha256'],
                                        'path': str(output/'scenario-plan.json'),

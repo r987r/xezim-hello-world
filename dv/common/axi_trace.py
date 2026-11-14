@@ -12,6 +12,7 @@ from cocotb.triggers import Edge, RisingEdge, Timer
 from cocotb.utils import get_sim_time
 from cocotbext.axi import axi_channels
 from dv.common.axi_outstanding import AcceptedAxiInFlight
+from dv.common.axi_event_sink import PassiveAxiEventSink
 
 _active = []
 
@@ -29,7 +30,18 @@ class AxiTrace:
         catalog = json.loads((Path(__file__).resolve().parents[2]/options['catalog']).read_text())
         scope = resolve(dut, options['scope'])
         clock, reset = resolve(dut, options['clock']), resolve(dut, options['reset'])
-        self.output = (plan_path.parent/'axi-events.jsonl').open('w', buffering=1)
+        # The long-running, explicitly source-selected SCN-2 CPU/BFM
+        # profiles benefit from bounded batching of instruction-fetch traffic.
+        # ALL OTHER regressions retain the historical immediate-flush behavior:
+        # their CPUs/BFMs may finish on an arbitrary outstanding AXI handshake,
+        # and a partially buffered final channel event would look incomplete
+        # to the independent post-run transaction correlator.
+        selected_batch = plan.get('target') in (
+            'chip-cpu-scenario', 'chip-dma-scenario')
+        self.output = (plan_path.parent/'axi-events.jsonl').open(
+            'w', buffering=256*1024 if selected_batch else 1)
+        self.sink = PassiveAxiEventSink(
+            self.output, batch_events=128 if selected_batch else 1)
         self.count = 0
         self.limit = options.get('max_events', 500000)
         self.monitors = []
@@ -58,7 +70,7 @@ class AxiTrace:
     def emit(self, event):
         event['time_ps'] = int(get_sim_time(units='ps'))
         self.in_flight.observe(event)
-        self.output.write(json.dumps(event, separators=(',',':'))+'\n')
+        self.sink.write(event)
 
     async def sample_clock(self, clock):
         """Measure the simulation clock period, not an architectural frequency."""
@@ -97,6 +109,19 @@ def attach_observers(dut):
     plan = json.loads(plan_path.read_text())
     if 'axi' in plan.get('report', {}):
         _active.append(AxiTrace(dut, plan_path))
+
+
+def flush_active():
+    """Persist every already-observed accepted channel event before test exit.
+
+    This does NOT wait for, complete, synthesize or discard an outstanding
+    transaction. The post-run AW/W/B/AR/R correlator remains the authority.
+    In particular the selected SCN-2 bounded batch must be flushed while
+    the Cocotb interpreter is still live; OS process teardown is not a
+    guaranteed Python TextIO destructor path.
+    """
+    for observer in _active:
+        observer.sink.flush()
 
 
 def trace_phase(label):

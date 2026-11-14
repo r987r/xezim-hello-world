@@ -39,6 +39,14 @@ class ScenarioReplayAuditTests(unittest.TestCase):
                            "accepted_writes": 8, "checked_bytes": 32,
                            "evidence": "original_passive_axi_aw_w_b_not_firmware_self_report",
                            "scenario_action_completion_proven": False},
+                       "cpu_action_trace": {
+                           "status": "source_selected_cpu_action_driver_observed_on_real_axi",
+                           "plan_sha256": sha, "trace_phys": hex(16 + 0x1000 + 32),
+                           "action_ids": ["init_source"],
+                           "accepted_writes": 2, "checked_bytes": 8,
+                           "issued": 1, "driver_done": 1,
+                           "evidence": "original_passive_axi_aw_w_b_driver_events_only",
+                           "hardware_completion_proven": False},
                        "observed_dma_axi_counts": observed}
         self.bfm_ev = {"profile": "reset_isolated_cocotb_bfm", "plan_sha256": sha,
                        "scenario_id": "shared", "scenario_seed": 12345, "executed_pattern_seed": 90, "execution_state": "rtl_observed",
@@ -127,6 +135,27 @@ class ScenarioReplayAuditTests(unittest.TestCase):
         self.write()
         with self.assertRaisesRegex(ReplayAuditError, "full SHA"):
             audit(self.cpu, self.bfm)
+
+    def test_missing_or_forged_cpu_action_trace_fails_closed(self):
+        original = copy.deepcopy(self.cpu_ev["cpu_action_trace"])
+        self.cpu_ev.pop("cpu_action_trace")
+        self.write()
+        with self.assertRaisesRegex(ReplayAuditError, "action dispatch"):
+            audit(self.cpu, self.bfm)
+        for field, bad in (
+            ("action_ids", ["not_selected"]),
+            ("accepted_writes", 0),
+            ("checked_bytes", 0),
+            ("driver_done", 0),
+            ("hardware_completion_proven", True),
+            ("trace_phys", "0x0"),
+        ):
+            self.cpu_ev["cpu_action_trace"] = copy.deepcopy(original)
+            self.cpu_ev["cpu_action_trace"][field] = bad
+            self.write()
+            with self.subTest(field=field), self.assertRaisesRegex(
+                    ReplayAuditError, "action dispatch"):
+                audit(self.cpu, self.bfm)
 
     def test_missing_cpu_mmio_or_byte_check_rejected(self):
         self.cpu_ev["observed_cpu_allocations"] = [16, 80, 100]

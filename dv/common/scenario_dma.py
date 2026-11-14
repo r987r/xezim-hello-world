@@ -38,6 +38,16 @@ def compile_contract(plan: dict) -> dict:
     for aid, kind in REQUIRED.items():
         if actions[aid]["kind"] != kind:
             raise ScenarioError(f"{aid}: incompatible action kind")
+    # Existing SCN-2 hardware ownership is fixed; a selected C table may
+    # dispatch each of these actions only through its qualified real actor.
+    expected_actor = {
+        "alloc_source": "cpu0", "alloc_ddr": "cpu0",
+        "alloc_return": "cpu0", "init_source": "cpu0",
+        "copy_out": "dma0", "copy_back": "dma0",
+        "wait_idle": "cpu0", "check_return": "checker0",
+    }
+    if any(actions[aid]["actor"] != actor for aid, actor in expected_actor.items()):
+        raise ScenarioError("SCN-2 source-selected actor disagrees with hardware ownership")
     allocations = {b["buffer"]: b for b in plan["allocations"]}
     if set(allocations) != {"src", "ddr", "return"}:
         raise ScenarioError("SCN-2 needs only src, DDR and return buffers")
@@ -92,17 +102,23 @@ def compile_contract(plan: dict) -> dict:
     # selected source/return allocations and iDMA descriptor pool. It is
     # NOT a replacement CSR/mailbox IP and cannot establish completion.
     witness_phys = src["phys"] + 0x1000
-    if (witness_phys % 8 or witness_phys + 32 > next(
+    # The 32-byte full SHA is followed by 2 recorded real CPU AXI stores
+    # per selected action (issued, driver_done), not a fabricated scorecard.
+    action_trace_phys = witness_phys + 32
+    witness_end = action_trace_phys + 8 * len(plan["actions"])
+    if (witness_phys % 8 or witness_end > next(
             r["base"] + r["modeled_bytes"] for r in plan["regions"]
             if r["name"] == "compute0.sram.payload")
             or any(witness_phys < x["phys"] + x["size"]
-                   and x["phys"] < witness_phys + 32
+                   and x["phys"] < witness_end
                    for x in allocations.values())):
         raise ScenarioError("scenario plan SHA witness overlaps a planned buffer")
     return {
         "scenario_id": plan["scenario_id"],
         "plan_sha256": hashlib.sha256(canonical_json(plan).encode("ascii")).hexdigest(),
         "plan_witness_phys": witness_phys,
+        "action_trace_phys": action_trace_phys,
+        "action_trace_bytes": 8 * len(plan["actions"]),
         "length": nbytes,
         "seed": init["pattern"]["seed"],
         "source_phys": src["phys"],
@@ -127,6 +143,8 @@ def render_c_header(contract: dict) -> str:
         "SOC_SCN_RETURN_PHYS": contract["return_phys"],
         "SOC_SCN_SRC_POOL_PHYS": contract["source_region_base"],
         "SOC_SCN_PLAN_WITNESS_PHYS": contract["plan_witness_phys"],
+        "SOC_SCN_ACTION_TRACE_PHYS": contract["action_trace_phys"],
+        "SOC_SCN_ACTION_TRACE_BYTES": contract["action_trace_bytes"],
         "SOC_SCN_DDR_POOL_PHYS": contract["ddr_region_base"],
     }
     sha = contract["plan_sha256"]
@@ -160,6 +178,11 @@ def materialize(cfg: dict, out: Path, *, source_revision: str | None = None,
     out.mkdir(parents=True, exist_ok=True)
     (out / "scenario-plan.json").write_text(canonical_json(plan), encoding="ascii")
     (out / "scenario_dma_contract.h").write_text(render_c_header(contract))
+    # Generate the existing universal SCN-C action table from the SAME exact
+    # canonical bytes as the BFM, not a second hand-maintained C test graph.
+    from tools.scenario_c import render_header as render_action_table
+    (out / "soc_scenario_contract.h").write_text(
+        render_action_table(canonical_json(plan).encode("ascii")), encoding="ascii")
     (out / "scenario-contract.json").write_text(canonical_json(contract))
     return plan, contract
 

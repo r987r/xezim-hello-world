@@ -20,8 +20,12 @@ ROOT = Path(__file__).resolve().parents[2]
 async def phase(dut, signal, name):
     # Full LiteDRAM DFI simulation is far slower than AXI RAM, and our
     # real CPU enters RUN only after >1 ms of genuine JEDEC/DFII init.
-    # Keep the original 5 ms CPU-DMA deadline for the fast regression.
-    timeout = (12 if os.environ.get('SOC_DDR_REAL_MODE') == '1'
+    # Keep the original 5 ms CPU-DMA deadline for all existing fast runs.
+    # Typed source-selected CPU0 scenario adds an independently bounded
+    # action-count watchdog inside full_chip_tb; allow the same 12 ms cap
+    # in Cocotb without relaxing ordinary boot, BFM, PCIe, or DDR rules.
+    timeout = (12 if (os.environ.get('SOC_DDR_REAL_MODE') == '1' or
+                      os.environ.get('SOC_SCENARIO_PLAN'))
                else 5 if os.environ.get('SOC_CPU_DMA_MODE') == '1' else 1)
     if int(signal.value) != 1:
         await with_timeout(RisingEdge(signal), timeout, 'ms')
@@ -141,6 +145,10 @@ async def execute_cold_boot(dut, *, external=None, benchmark=False):
     attach_observers(dut)
     if cpu_dma_mode and os.environ.get('SOC_CPU_DMA_PROGRESS') == '1':
         cocotb.start_soon(_cpu_dma_progress(dut))
+    # Keep exactly one Cocotb-owned clock source for all Cocotb regressions.
+    # Native Verilator SCN-2 clock generation previously caused the passive
+    # AXI monitors to miss accepted AW/AR while still observing W/B/R;
+    # a CPU firmware PASS is not sufficient when capture is incomplete.
     cocotb.start_soon(Clock(dut.clk, 10, 'ns').start())
     for _ in range(10):
         await FallingEdge(dut.clk)
@@ -233,6 +241,17 @@ async def execute_cold_boot(dut, *, external=None, benchmark=False):
                         contract["ddr_phys"])
             assert observed == expected, (
                 f"SCN-2 CPU allocations {observed} differ from resolved plan {expected}")
+            # The real CPU0 and CPU1 continue executing after CHECK. A
+            # snapshot taken on an arbitrary fetch cycle can contain a real
+            # AR whose RLAST is still traversing the generated NoC. The
+            # captured CI artifact (run 43511477345) showed exactly one such
+            # compute1 CPU read, with the target response already accepted.
+            # Use the EXISTING bounded passive monitor drain used by other
+            # full-chip regressions; never pause CPUs, synthesize responses,
+            # drop records, or waive the original strict post-run correlator.
+            from dv.common.axi_trace import wait_axi_quiescent, flush_active
+            await wait_axi_quiescent(timeout_ns=5000, stable_ns=2)
+            flush_active()
             events, bad = read_events(events_file)
             assert not bad, f"SCN-2 invalid real passive AXI events: {bad[:3]}"
             # Independently reconstruct all 256 bits of the selected plan SHA
@@ -247,6 +266,17 @@ async def execute_cold_boot(dut, *, external=None, benchmark=False):
             selected_sha = contract["plan_sha256"]
             verified_witness = verify_plan_witness(
                 selected_sha, contract["plan_witness_phys"], correlated)
+            # Independently reconstruct each selected C driver's issued and
+            # driver_done AXI store. This proves the real CPU dispatched the
+            # canonical action table, NOT iDMA hardware completion; the
+            # original passive DMA AXI/byte checks below remain mandatory.
+            from tools.scenario_cpu_action_trace import verify as verify_action_trace
+            scenario_intent = json.loads(Path(scenario_path).read_text())
+            action_trace = verify_action_trace(
+                selected_sha, contract["action_trace_phys"],
+                scenario_intent["actions"], correlated)
+            (Path(plan).parent / "cpu-scn-action-axi-trace.json").write_text(
+                json.dumps(action_trace, indent=2, sort_keys=True) + "\n")
             counts = {"src_ar": 0, "ddr_aw": 0, "ddr_ar": 0, "return_aw": 0}
             for event in events:
                 if event.get("monitor") != "compute0_local_data.dma" or event.get("channel") not in ("ar", "aw"):
@@ -278,11 +308,19 @@ async def execute_cold_boot(dut, *, external=None, benchmark=False):
                         "observed_dma_axi_counts": counts,
                         "cpu_result_checked": True,
                         "cpu_plan_sha_axi_witness": verified_witness,
+                        "cpu_action_trace": action_trace,
                         "intent_is_not_evidence": True}
             (Path(plan).parent / "scenario-execution.json").write_text(
                 json.dumps(evidence, indent=2, sort_keys=True) + "\n")
             trace_phase("SCN-2 CPU C real NoC DDR roundtrip: " +
                         contract["scenario_id"])
+            # Give same-edge passive monitor tasks a bounded clock edge to
+            # report accepted bus channels, then persist the exact bytes
+            # BEFORE Cocotb test teardown. No AXI completion is synthesized;
+            # the original post-run correlator still rejects dangling AR/AW.
+            await Timer(1, 'ns')
+            from dv.common.axi_trace import flush_active
+            flush_active()
             dut._log.info("PASS scenario-cpu: CPU0 C + iDMA real DDR modeled AXI, %s", counts)
             return
         regions = configured_regions(yaml.safe_load(

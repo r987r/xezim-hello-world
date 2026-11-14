@@ -64,12 +64,18 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
          image_prefix='gen/chip', cpu_dma_mode=False, pcie_host_mode=False,
          pcie_outbound_mode=False,
          ethernet_mode=False, ethernet_cpu_mode=False,
-         real_ddr_mode=False, ddr_wb_base=0, ddr_wb_adr_bits=30, peakrdl_reset=False):
+         real_ddr_mode=False, ddr_wb_base=0, ddr_wb_adr_bits=30,
+         peakrdl_reset=False, scenario_action_count=0):
     """Emit normal or opt-in compiled CPU Ethernet/PCIe/DMA firmware."""
     if ethernet_cpu_mode and not (ethernet_mode and cpu_dma_mode):
         raise ValueError('real Ethernet CPU test requires active Ethernet and C-hook')
     if cpu_dma_mode != (cpu0_run_hook is not None):
         raise ValueError('CPU DMA mode requires a valid compiled C hook')
+    if (type(scenario_action_count) is not int or
+            not 0 <= scenario_action_count <= 4096 or
+            (scenario_action_count and
+             (not cpu_dma_mode or pcie_host_mode or real_ddr_mode))):
+        raise ValueError('SCN-C action-count budget requires modeled DDR CPU scenario only')
     if real_ddr_mode and not cpu_dma_mode:
         raise ValueError('real DDR requires CPU/iDMA firmware mode')
     if real_ddr_mode and not (1 <= ddr_wb_adr_bits <= 30 and ddr_wb_base >= 0 and ddr_wb_base % 0x4000 == 0):
@@ -590,7 +596,8 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
             cpu_dma_mode=cpu_dma_mode, pcie_host_mode=pcie_host_mode,
             pcie_outbound_mode=pcie_outbound_mode,
             ethernet_mode=ethernet_mode, ethernet_cpu_mode=ethernet_cpu_mode,
-            real_ddr_mode=real_ddr_mode)
+            real_ddr_mode=real_ddr_mode,
+            scenario_action_count=scenario_action_count)
     emit_dma_tb(cfg, fw, out, ethernet_mode=ethernet_mode)
     manifest = {'top':'soc_top','testbench':'full_chip_tb','dma_testbench':'full_chip_dma_tb',
                 'cores':count,'networks':len(nets),
@@ -770,7 +777,7 @@ def emit_dma_tb(cfg, fw, out, *, ethernet_mode=False):
 def emit_tb(cfg, fw, out, *, image_prefix='gen/chip', cpu_dma_mode=False,
             pcie_host_mode=False, pcie_outbound_mode=False,
             ethernet_mode=False, ethernet_cpu_mode=False,
-            real_ddr_mode=False):
+            real_ddr_mode=False, scenario_action_count=0):
     n = len(fw['cores'])
     words = [len(fw['images'][c['name']]) for c in fw['cores']]
     max_words = max(words)
@@ -793,6 +800,19 @@ def emit_tb(cfg, fw, out, *, image_prefix='gen/chip', cpu_dma_mode=False,
         # tiny minimal RV32I mailbox bootstrap, but still strictly bounded.
         opts['timeout_cycles'] = max(opts['timeout_cycles'], 1000000 if pcie_host_mode else 400000)
         opts['phase_timeout_cycles'] = max(opts['phase_timeout_cycles'], 900000 if pcie_host_mode else 350000)
+    if scenario_action_count:
+        # Source-selected typed C firmware executes more real RV32I
+        # instructions than the hard-coded legacy two-copy routine. The
+        # passive trace on the first failed exact-head run showed three
+        # accepted allocation stages consuming ~3.6 ms; this is a bounded
+        # simulator watchdog extension, NOT an AXI/DMA timeout bypass.
+        # No normal boot, PCIe, DDR4 controller or BFM variant is affected.
+        # Preserve the source-selected action count in the compiled variant.
+        per_action_cycles = 100000
+        opts['phase_timeout_cycles'] = max(
+            opts['phase_timeout_cycles'], 350000 + per_action_cycles * scenario_action_count)
+        opts['timeout_cycles'] = max(
+            opts['timeout_cycles'], 400000 + per_action_cycles * scenario_action_count)
     probe = probe_ports()
     cfgprobe = probe_ports('cfgprobe', addr_bits=32, data_bits=32, id_bits=1)
     lines = ['`timescale 1ns/1ps', '// One boot/coordination checker shared by both simulators.',
@@ -818,6 +838,10 @@ def emit_tb(cfg, fw, out, *, image_prefix='gen/chip', cpu_dma_mode=False,
         *(['  wire rst = ~rst_n;'] if pcie_host_mode else []),
         '`ifndef COCOTB_SIM', '  always #5 clk = ~clk;',
         '  initial begin repeat (10) @(negedge clk); rst_n = 1; end', '`endif',
+        # In Cocotb modes the one authoritative clock driver is Cocotb's
+        # Clock, exactly as for the already-qualified default CPU/NoC tests.
+        # A Verilator-native SCN-2 clock made passive AXI AW/AR observations
+        # incomplete despite CPU firmware PASS; do not mix clock authorities.
         '  reg [N-1:0] hold_mask = 0;', '  initial if ($test$plusargs("HOLD_SECONDARY")) hold_mask[1] = 1;',
         '  wire [N-1:0] released, fetch_valid, sram_valid, sram_write;',
         '  wire [N*32-1:0] fetch_addr;', '  wire [N*64-1:0] sram_addr, sram_data;',

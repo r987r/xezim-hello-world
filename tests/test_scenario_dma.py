@@ -37,7 +37,10 @@ class ScenarioDmaTests(unittest.TestCase):
         self.assertEqual(c["seed"], 90)
         self.assertEqual(c["execution_state"], "pending_real_rtl")
         self.assertEqual(c["plan_witness_phys"], 0x10003000)
+        self.assertEqual(c["action_trace_phys"], 0x10003020)
+        self.assertEqual(c["action_trace_bytes"], 64)
         emitted = render_c_header(c)
+        self.assertIn("#define SOC_SCN_ACTION_TRACE_PHYS 0x10003020ULL", emitted)
         self.assertIn("#define SOC_SCN_PLAN_WITNESS_PHYS 0x10003000ULL", emitted)
         sha_bytes = bytes.fromhex(c["plan_sha256"])
         for idx in range(8):
@@ -85,12 +88,16 @@ class ScenarioDmaTests(unittest.TestCase):
             original = (out / "scenario-plan.json").read_bytes()
             contract = (out / "scenario-contract.json").read_bytes()
             header = (out / "scenario_dma_contract.h").read_bytes()
+            action_table = (out / "soc_scenario_contract.h").read_bytes()
+            self.assertIn(b"#define SOC_SCN_ACTION_COUNT 8", action_table)
+            self.assertIn(c["plan_sha256"].encode("ascii"), action_table)
             self.assertEqual(original, canonical_json(self.plan).encode("ascii"))
             self.assertEqual(c, load_contract_from_plan(out / "scenario-plan.json"))
             materialize(self.cfg, out)
             self.assertEqual((out / "scenario-plan.json").read_bytes(), original)
             self.assertEqual((out / "scenario-contract.json").read_bytes(), contract)
             self.assertEqual((out / "scenario_dma_contract.h").read_bytes(), header)
+            self.assertEqual((out / "soc_scenario_contract.h").read_bytes(), action_table)
 
     def test_check_origin_requires_causal_init_and_same_pattern(self):
         for field, bad in (("expected_from", "ddr"), ("pattern", {"kind": "constant", "seed": 91})):

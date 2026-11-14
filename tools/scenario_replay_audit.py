@@ -97,6 +97,24 @@ def audit(cpu_dir: Path, bfm_dir: Path) -> dict:
             or witness.get("evidence") != "original_passive_axi_aw_w_b_not_firmware_self_report"
             or witness.get("scenario_action_completion_proven") is not False):
         raise ReplayAuditError("CPU plan SHA lacks full independently accepted AXI write coverage")
+    # New real CPU C runtime now dispatches from the selected typed SCN-C
+    # action table, not the old hardcoded sequence. Its driver-issued/done
+    # words must be independently observed as accepted CPU AXI AW/W/B,
+    # but are never substituted for DMA/NoC independent byte proof.
+    trace = cpu_ev.get("cpu_action_trace")
+    selected_ids = [a.get("action_instance_id") for a in cpu_plan.get("actions", [])]
+    if (not isinstance(trace, dict) or not selected_ids or
+            trace.get("status") != "source_selected_cpu_action_driver_observed_on_real_axi" or
+            trace.get("plan_sha256") != hashlib.sha256(cpu_raw).hexdigest() or
+            trace.get("trace_phys") != hex(expected_witness + 0x1000 + 32) or
+            trace.get("action_ids") != selected_ids or
+            trace.get("accepted_writes") != 2 * len(selected_ids) or
+            trace.get("checked_bytes") != 8 * len(selected_ids) or
+            trace.get("issued") != len(selected_ids) or
+            trace.get("driver_done") != len(selected_ids) or
+            trace.get("evidence") != "original_passive_axi_aw_w_b_driver_events_only" or
+            trace.get("hardware_completion_proven") is not False):
+        raise ReplayAuditError("real CPU selected SCN-C action dispatch AXI proof missing")
     if cpu_ev.get("cpu_result_checked") is not True:
         raise ReplayAuditError("CPU real C firmware did not prove returned bytes")
     if bfm_ev.get("independently_readback_bytes") != 64:

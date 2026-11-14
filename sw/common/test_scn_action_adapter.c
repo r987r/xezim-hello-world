@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <string.h>
 #include "soc_scn_action_adapter.h"
+#include "soc_scn_action_args.h"
+#include "soc_scn_compiled_runtime.h"
 
 static uint32_t callbacks, events_issued, events_done;
 static uint32_t fail_at = UINT32_MAX;
@@ -26,6 +28,43 @@ int main(void) {
   soc_scn_driver_registration_t registrations[SOC_SCN_ACTION_COUNT];
   soc_scn_driver_result_t r;
   if (strlen(SOC_SCN_PLAN_SHA256) != 64) return 1;
+  /* The same generated flattened args are available to freestanding
+   * RV32I callbacks; a typed mismatch or unselected key fails closed.
+   */
+  for (i = 0; i < SOC_SCN_ACTION_COUNT; ++i) {
+    const soc_scn_action_t *a = soc_scn_action_at((uint32_t)i);
+    uint32_t j;
+    for (j = 0; j < a->dependency_count; ++j) {
+      uint32_t slot = a->first_dependency + j;
+      uint32_t prior = soc_scn_dependency_index_at(slot);
+      if (prior >= i ||
+          !soc_scn_text_equal(soc_scn_dependency_at(slot),
+                              soc_scn_action_at(prior)->action_instance_id))
+        return 23;
+    }
+    for (j = 0; j < a->argument_count; ++j) {
+      const soc_scn_argument_t *arg =
+          soc_scn_argument_at(a->first_argument + j);
+      const char *text = NULL;
+      uint64_t number = 0;
+      if (arg->key_hash != soc_scn_arg_key_hash(arg->key)) return 24;
+      if (arg->is_text) {
+        if (!soc_scn_arg_text(a, arg->key, &text) ||
+            !soc_scn_text_equal(text, arg->text_value) ||
+            soc_scn_arg_uint(a, arg->key, &number)) return 20;
+      } else {
+        if (!soc_scn_arg_uint(a, arg->key, &number) ||
+            number != arg->uint_value ||
+            soc_scn_arg_text(a, arg->key, &text)) return 21;
+      }
+    }
+    {
+      const char *text = NULL;
+      uint64_t number = 0;
+      if (soc_scn_arg_text(a, "__not_selected__", &text) ||
+          soc_scn_arg_uint(a, "__not_selected__", &number)) return 22;
+    }
+  }
   for (i=0; i<SOC_SCN_ACTION_COUNT; ++i) {
     const char *kind = soc_scn_actions[i].kind;
     size_t j;
@@ -39,6 +78,9 @@ int main(void) {
   }
   r=soc_scn_driver_run(SOC_SCN_PLAN_SHA256, registrations, n-1, capture, NULL);
   if (r.status != SOC_SCN_ADAPTER_UNSUPPORTED || r.issued != 0) return 2;
+  r=soc_scn_driver_run_compiled(SOC_SCN_PLAN_SHA256, registrations, n-1, capture, NULL);
+  if (r.status != SOC_SCN_ADAPTER_UNSUPPORTED || r.issued != 0 ||
+      callbacks != 0 || events_issued != 0) return 25;
   /* A firmware mailbox advertising a foreign SHA aborts before issuing.
    * The same plan ID emitted by the contract is NOT a passive RTL check. */
   {
@@ -48,6 +90,9 @@ int main(void) {
     r=soc_scn_driver_run(foreign_sha, registrations, n, capture, NULL);
     if (r.status != SOC_SCN_ADAPTER_CONTRACT_ERROR || r.issued != 0 ||
         callbacks != 0 || events_done != 0 || events_issued != 0) return 7;
+    r=soc_scn_driver_run_compiled(foreign_sha, registrations, n, capture, NULL);
+    if (r.status != SOC_SCN_ADAPTER_CONTRACT_ERROR || r.issued != 0 ||
+        callbacks != 0 || events_done != 0 || events_issued != 0) return 26;
     r=soc_scn_driver_run(NULL, registrations, n, capture, NULL);
     if (r.status != SOC_SCN_ADAPTER_CONTRACT_ERROR || r.issued != 0 ||
         callbacks != 0) return 8;
@@ -56,6 +101,17 @@ int main(void) {
   if (r.status != SOC_SCN_ADAPTER_OK || r.driver_done != SOC_SCN_ACTION_COUNT ||
       events_done != SOC_SCN_ACTION_COUNT || events_issued != SOC_SCN_ACTION_COUNT ||
       callbacks != SOC_SCN_ACTION_COUNT || r.failure_index != UINT32_MAX) return 3;
+  /* Compiled RV32I execution must preserve the original selected event count
+   * and real driver callback semantics; neither reports hardware completion.
+   */
+  callbacks=0; events_done=0; events_issued=0;
+  r=soc_scn_driver_run_compiled(SOC_SCN_PLAN_SHA256, registrations, n, capture, NULL);
+  if (r.status != SOC_SCN_ADAPTER_OK || r.issued != SOC_SCN_ACTION_COUNT ||
+      r.driver_done != SOC_SCN_ACTION_COUNT ||
+      r.failure_index != UINT32_MAX ||
+      callbacks != SOC_SCN_ACTION_COUNT ||
+      events_issued != SOC_SCN_ACTION_COUNT ||
+      events_done != SOC_SCN_ACTION_COUNT) return 27;
   registrations[0].execute=mock_driver;
   r=soc_scn_driver_run(SOC_SCN_PLAN_SHA256, registrations, n, NULL, NULL);
   if (r.status != SOC_SCN_ADAPTER_OK) return 4;
@@ -69,6 +125,22 @@ int main(void) {
   r=soc_scn_driver_run(SOC_SCN_PLAN_SHA256, registrations, n, capture, NULL);
   if (r.status != SOC_SCN_ADAPTER_DRIVER_FAILED || r.failure_index != 1 ||
       r.issued != 2 || r.driver_done != 1 || events_done != 1) return 6;
-  puts("PASS SCN-C selected action driver adapter (driver-only, no RTL proof)");
+  callbacks=0; events_done=0; events_issued=0;
+  r=soc_scn_driver_run_compiled(SOC_SCN_PLAN_SHA256, registrations, n, capture, NULL);
+  if (r.status != SOC_SCN_ADAPTER_DRIVER_FAILED || r.failure_index != 1 ||
+      r.issued != 2 || r.driver_done != 1 ||
+      callbacks != 2 || events_done != 1 || events_issued != 2) return 28;
+  /* Reject duplicate registrations before ANY action can execute. */
+  {
+    soc_scn_driver_registration_t dup[SOC_SCN_ACTION_COUNT + 1u];
+    if (n >= SOC_SCN_ACTION_COUNT + 1u) return 29;
+    for (i = 0; i < n; ++i) dup[i] = registrations[i];
+    dup[n] = registrations[0];
+    callbacks=0; events_done=0; events_issued=0; fail_at=UINT32_MAX;
+    r=soc_scn_driver_run_compiled(SOC_SCN_PLAN_SHA256, dup, n+1u, capture, NULL);
+    if (r.status != SOC_SCN_ADAPTER_CONTRACT_ERROR || r.issued != 0 ||
+        callbacks != 0 || events_issued != 0) return 30;
+  }
+  puts("PASS SCN-C generic and compiled selected action drivers (driver-only, no RTL proof)");
   return 0;
 }
