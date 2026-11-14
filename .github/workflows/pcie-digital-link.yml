@@ -257,6 +257,7 @@ jobs:
             verif/sequences/pcie_enumeration_seq.py \
             verif/agents/pipe_agent/pipe_agent.py \
             src/dllp/tlp2dllp.sv \
+            src/dllp/dllp_handler.sv \
             > .tools/pcie-link/openpcie-upstream-selftest-timing.diff
           # Includes the explicitly pinned A/B first-beat CplD handshake
           # probe. Original source+expected byte readback still gate CI.
@@ -273,6 +274,15 @@ jobs:
             .tools/pcie_endpoint_openpcie/verif/agents/pipe_agent/pipe_agent.py
           grep -Fq 'PCIE_UPSTREAM_PIPE_MON_DLLP: direction=EP_TO_RC' \
             .tools/pcie_endpoint_openpcie/verif/agents/pipe_agent/pipe_agent.py
+          # Verify runtime tracing is truly requested; compile-time --trace-fst
+          # by itself does not open a waveform. Edalize run_options passes
+          # these to original cocotb 1.9.2 Verilator simulator driver.
+          grep -Fq 'pcie-credit-debug.fst' \
+            .tools/pcie_endpoint_openpcie/pcie_phy.core
+          grep -Fq 'PCIE_UPSTREAM_EP_UPDATEFC_CPL_RX' \
+            .tools/pcie_endpoint_openpcie/src/dllp/dllp_handler.sv
+          grep -Fq 'PCIE_UPSTREAM_EP_CPLH_LATCH' \
+            .tools/pcie_endpoint_openpcie/src/dllp/tlp2dllp.sv
           # Each Actions step starts a fresh shell. Re-select the pinned
           # Python 3.11 scripts directory here as well (before FuseSoC).
           export PATH="$(python3 -c 'import sysconfig; print(sysconfig.get_path("scripts"))'):$PATH"
@@ -306,6 +316,20 @@ jobs:
           grep -q '^PCIE_EP_SIM_FAST_LTSSM: ENABLED timer_divider=512 min_tx_ts1=16' \
             .tools/pcie-link/openpcie-upstream.log
           python3 tools/ci_require_cocotb.py .tools/pcie-link/openpcie-upstream.log
+      - name: Preserve genuine pinned Verilator FST waveform for credit debugging
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p .tools/pcie-link/waveforms
+          wave=build/fusesoc_pcie_phy_core_1.0.0/sim/pcie-credit-debug.fst
+          if [[ -s "$wave" ]]; then
+            cp "$wave" .tools/pcie-link/waveforms/pcie-credit-debug.fst
+            du -h .tools/pcie-link/waveforms/pcie-credit-debug.fst
+            echo "PCIE_CREDIT_FST_CAPTURE: available original_RTL=true"
+          else
+            echo "PCIE_CREDIT_FST_CAPTURE: missing or empty; fail original upstream qualification"
+            exit 1
+          fi
       # Reuse the generic protocol capture schema after original Cocotb,
       # including when it fails. Capture integrity is NOT test PASS.
       - name: Adapt pinned OpenPCIe native TLP/DLLP capture into unified protocol view
