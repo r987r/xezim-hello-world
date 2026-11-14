@@ -60,10 +60,22 @@ class CombinedGeneratorTests(unittest.TestCase):
                      if k.startswith(publisher.SOURCE_ROOT)}
         other = {f"rtl/third_party_{i:03d}.sv": "f"*64
                  for i in range(312 - len(hashes))}
+        # Fixture models the actual source-list size and absolute Bender
+        # checkout paths, without requiring any upstream IP checkout.
+        for name in other:
+            target = self.root / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text("module stub; endmodule\n")
+        filelist = ("+incdir+" + str(self.root / "config") + "\n"
+                    "+define+TARGET_RTL\n" +
+                    "".join(str(self.root / name) + "\n"
+                            for name in [*hashes, *other]))
+        (self.root / publisher.SOURCE_ROOT / "sources.f").write_text(filelist)
         self.manifest = {
             "source_count": 312, "source_sha256": {**hashes, **other},
             "generated_sha256": generated,
-            "compiler_input_sha256": "1"*64, "filelist_sha256": "2"*64,
+            "compiler_input_sha256": "1"*64,
+            "filelist_sha256": hashlib.sha256(filelist.encode()).hexdigest(),
         }
         self.calls = []
 
@@ -94,6 +106,15 @@ class CombinedGeneratorTests(unittest.TestCase):
         for item in ("rtl/flash.hex", "rtl/bootrom.hex",
                      "controller/gateware/soc_ddr4_sim.v"):
             self.assertTrue((folder / item).is_file())
+        portable = (folder / "compiler/sources.f").read_text()
+        self.assertNotIn(str(self.root), portable)
+        self.assertIn("+incdir+config", portable)
+        self.assertIn("gen/projects/xezim_soc_dv/variants/ethernet-ddr-pcie/rtl/soc_top.sv",
+                      portable)
+        self.assertIn("gen/projects/xezim_soc_dv/variants/ethernet-ddr-pcie/controller/gateware/soc_ddr4_sim.v",
+                      portable)
+        self.assertEqual(len([line for line in portable.splitlines()
+                              if not line.startswith("+")]), 312)
 
     def test_modified_original_real_rtl_fails_before_publication(self):
         path = self.root / publisher.SOURCE_ROOT / "variant/soc_top.sv"
@@ -113,6 +134,21 @@ class CombinedGeneratorTests(unittest.TestCase):
             publisher.portable_image_paths(
                 source + b'// ' + publisher.SOURCE_ROOT.encode() +
                 b'variant/flash.hex\n', "xezim_soc_dv", "rtl/soc_top.sv")
+
+    def test_missing_source_or_changed_original_filelist_is_rejected(self):
+        list_path = self.root / publisher.SOURCE_ROOT / "sources.f"
+        list_path.write_text(list_path.read_text() + "+define+SURPRISE\n")
+        with patch.object(publisher, "verify_selected_archive",
+                          return_value=self.manifest):
+            with self.assertRaisesRegex(publisher.CombinedGenerationError, "filelist digest"):
+                publisher.emit(self.root, self.root / "published", runner=self.runner)
+        list_path.write_text(list_path.read_text().removesuffix("+define+SURPRISE\n"))
+        missing = self.root / publisher.DDR_ROOT / "soc_ddr4_sim.v"
+        missing.unlink()
+        with patch.object(publisher, "verify_selected_archive",
+                          return_value=self.manifest):
+            with self.assertRaisesRegex(publisher.CombinedGenerationError, "missing"):
+                publisher.emit(self.root, self.root / "published", runner=self.runner)
 
     def test_wrong_selected_compiler_count_fails_closed(self):
         self.manifest["source_count"] = 311
