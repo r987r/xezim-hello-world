@@ -79,7 +79,14 @@ produced by final-head CI; prove the portable generated RTL elaborates and
 passes the existing real combined transaction checker. Do not treat an
 artifact upload or this opt-in generator as issue closure.
 
-The full compiler-input digest describes the **original selected**
-312-source compilation. The portable remapped copy has separately reported
-file hashes; its remapped output is not by itself a proven elaborated
-compiler source set or physical/bit-level interconnect (#46).
+The original 312-source compiler-input SHA in the selected run archive
+can include checkout-absolute compiler/include paths, so it is **not**
+copied as a supposedly cross-machine-stable generated manifest digest.
+The portable generated manifest instead fingerprints the relative ordered
+312-entry filelist, all actual pinned source/header SHA values, generated
+bytes, defines and source configuration. The original absolute-path
+fingerprint remains in the verified `.tools/regression/` run attestation.
+A test regenerates the same source under two different checkout directories
+and requires exact portable manifest and compiler filelist bytes. The
+portable copy is separately elaborated by Verilator in the existing CI, but
+this alone is not bit-level interconnect proof (#46).
