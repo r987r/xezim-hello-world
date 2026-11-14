@@ -145,6 +145,10 @@ jobs:
               assert b".tools/regression/" not in data, name
           print("PASS selected combined generated RTL, portable ROM and exact source replay")
           PY
+          # Compile the portable generated top/NoCs/controller itself, not
+          # only the original .tools selected-source compilation.
+          verilator --lint-only --timing -Wno-fatal --top-module full_chip_tb \\
+            -f gen/projects/xezim_soc_dv/variants/ethernet-ddr-pcie/compiler/sources.f
       - name: Elaborate exact-head Ethernet LiteDRAM iDMA PCIe chip
         timeout-minutes: 35
         run: python3 tools/regress.py chip-ethernet-ddr-pcie --stage build --fail-fast
