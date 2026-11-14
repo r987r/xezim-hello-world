@@ -1,6 +1,7 @@
 """Real combined source publisher: no snapshot-only acceptance or fake RTL PASS."""
 import hashlib
 import json
+import shutil
 from pathlib import Path
 import sys
 import tempfile
@@ -115,6 +116,32 @@ class CombinedGeneratorTests(unittest.TestCase):
                       portable)
         self.assertEqual(len([line for line in portable.splitlines()
                               if not line.startswith("+")]), 312)
+
+    def test_portable_compiler_identity_is_stable_across_checkout_paths(self):
+        first = self.generate()
+        with tempfile.TemporaryDirectory() as other:
+            relocated = Path(other) / "different-checkout"
+            shutil.copytree(self.root, relocated)
+            source_list = relocated / publisher.SOURCE_ROOT / "sources.f"
+            rewritten = source_list.read_text().replace(
+                str(self.root), str(relocated))
+            source_list.write_text(rewritten)
+            other_manifest = {**self.manifest,
+                              "filelist_sha256": hashlib.sha256(
+                                  rewritten.encode()).hexdigest(),
+                              "compiler_input_sha256": "9"*64}
+            with patch.object(publisher, "verify_selected_archive",
+                              return_value=other_manifest):
+                second = publisher.emit(relocated, relocated / "portable",
+                                        runner=self.runner)
+            self.assertEqual(first, second)
+            self.assertEqual((self.root/"published/manifest.json").read_bytes(),
+                             (relocated/"portable/manifest.json").read_bytes())
+            self.assertEqual((self.root/"published/compiler/sources.f").read_bytes(),
+                             (relocated/"portable/compiler/sources.f").read_bytes())
+            self.assertNotIn(str(self.root),
+                             (self.root/"published/manifest.json").read_text())
+            self.assertEqual(len(second["portable_compiler_input_sha256"]), 64)
 
     def test_modified_original_real_rtl_fails_before_publication(self):
         path = self.root / publisher.SOURCE_ROOT / "variant/soc_top.sv"
