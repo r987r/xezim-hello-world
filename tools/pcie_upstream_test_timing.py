@@ -116,6 +116,47 @@ CPLD_STALL_PROBE = """`ifndef SYNTHESIS
 ENUM_MODEL_BEFORE = """                uvm_root().logger.info("Memory operation (32-bit BAR) length: %d offset: %d", length, offset)"""
 ENUM_MODEL_AFTER = """                self._stall_diag_active = length >= 20
                 uvm_root().logger.info("Memory operation (32-bit BAR) length: %d offset: %d", length, offset)"""
+# The pinned cocotbext-pcie v0.2.16 RC intentionally rate-limits UpdateFC
+# to 30us by default; the original BAR smoke test only waits 10us/read.
+# Trial a faster *genuine* host UpdateFC cadence (real DLLPs on the original
+# PHY link) without changing the endpoint credit limit or TLP byte oracle.
+# Preserve original 30us value in the log and validate the pinned API.
+ENUM_RC_FC_BEFORE = """        port = self.rc.make_port()
+        port.connect(self.dev)"""
+ENUM_RC_FC_AFTER = """        port = self.rc.make_port()
+        port.connect(self.dev)
+        # Real external root complex's original FC scheduler, not a credit
+        # injection into DUT or BFM. Every update remains a host DLLP.
+        host_port = self.dev.upstream_port.other
+        original_fc_steps = cocotb.utils.get_sim_steps(30, 'us')
+        assert host_port.fc_update_steps == original_fc_steps, (
+            "original cocotbext-pcie 0.2.16 host FC scheduling API changed")
+        host_port.fc_update_steps = cocotb.utils.get_sim_steps(1, 'us')
+        print("PCIE_UPSTREAM_RC_FC_PROFILE: provider=cocotbext-pcie-0.2.16 "
+              "default_us=30 selected_us=1 real_updatefc_dllp=1 "
+              "no_credit_override=1", flush=True)"""
+
+ENUM_HOST_FC_BEFORE = """        if isinstance(pkt,Dllp):
+            pipe_seq_item_h.pipe_operation = pipe_operation_t.DLLP_TRANSFER
+            pipe_seq_item_h.dllp = pkt
+            await self.start_item (pipe_seq_item_h)
+            await self.finish_item (pipe_seq_item_h)"""
+ENUM_HOST_FC_AFTER = """        if isinstance(pkt,Dllp):
+            if pkt.type == DllpType.UPDATE_FC_CPL:
+                print("PCIE_UPSTREAM_RC_UPDATEFC_CPL_TX: time_ps=%d "
+                      "hdr_fc=%d data_fc=%d" %
+                      (int(cocotb.utils.get_sim_time(units="ps")),
+                       pkt.hdr_fc, pkt.data_fc), flush=True)
+            pipe_seq_item_h.pipe_operation = pipe_operation_t.DLLP_TRANSFER
+            pipe_seq_item_h.dllp = pkt
+            await self.start_item (pipe_seq_item_h)
+            await self.finish_item (pipe_seq_item_h)
+            if pkt.type == DllpType.UPDATE_FC_CPL:
+                print("PCIE_UPSTREAM_RC_UPDATEFC_CPL_DONE: time_ps=%d "
+                      "hdr_fc=%d data_fc=%d" %
+                      (int(cocotb.utils.get_sim_time(units="ps")),
+                       pkt.hdr_fc, pkt.data_fc), flush=True)"""
+
 ENUM_HOST_BEFORE = """        elif isinstance(pkt,Tlp):
             tlp_pkt = pkt
             pipe_seq_item_h.pipe_operation = pipe_operation_t.TLP_TRANSFER
@@ -307,6 +348,10 @@ def patched(path: str, source: str) -> str:
     if path == "verif/tests/test_pcie_core.py":
         return replace_once(source,TEST_BEFORE,TEST_AFTER,path)
     if path == "verif/sequences/pcie_enumeration_seq.py":
+        source = replace_once(source, ENUM_RC_FC_BEFORE, ENUM_RC_FC_AFTER,
+                              path + " original RC legal FC schedule")
+        source = replace_once(source, ENUM_HOST_FC_BEFORE, ENUM_HOST_FC_AFTER,
+                              path + " original RC UpdateFC DLLP TX")
         source = replace_once(source, ENUM_MODEL_BEFORE, ENUM_MODEL_AFTER, path + " model progress")
         source = replace_once(source, ENUM_HOST_BEFORE, ENUM_HOST_AFTER, path + " RC packets")
         source = replace_once(source, ENUM_EP_CPL_BEFORE, ENUM_EP_CPL_AFTER,
@@ -332,6 +377,9 @@ def apply(root:Path) -> None:
             print("OPENPCIE_SELFTEST_NATIVE_PIPE_MON: enabled original "
                   "OpenPCIe TLP/DLLP PHY callbacks (endpoint transmit)")
         elif rel == "verif/sequences/pcie_enumeration_seq.py":
+            print("OPENPCIE_SELFTEST_RC_FC_A_B: source-pinned real host "
+                  "UpdateFC_Cpl period=1us versus cocotbext-pcie default=30us; "
+                  "no synthetic credits/timeout changes")
             print("OPENPCIE_SELFTEST_STALL_PROBE: read-only AXIS/FC snapshot "
                   "on original memory timeout, re-raise unchanged")
         else:
