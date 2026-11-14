@@ -40,7 +40,7 @@ class CombinedReferenceTests(unittest.TestCase):
                 **lock["required_source_sha256"]
             },
             "generated_sha256": dict(lock["required_generated_sha256"]),
-            "compiler_input_sha256": lock["historical_compiler_input_sha256"],
+            "compiler_input_sha256": lock["exact_compiler_input_sha256"],
             "config_sha256": "1" * 64,
             "definition_sha256": "2" * 64,
             "include_headers_sha256": {},
@@ -59,21 +59,28 @@ class CombinedReferenceTests(unittest.TestCase):
         actual = compare(self.lock, self.manifest)
         self.assertEqual(actual["selected_top_sha256"],
                          self.lock["required_generated_sha256"][TOP])
-        self.assertIn("not_hardware_qualified", actual["evidence"])
+        self.assertEqual(actual["evidence"],
+                         "qualified_exact_312_source_compiler_input_not_elaborated")
+        self.assertEqual(actual["exact_compiler_input_sha256"],
+                         self.manifest["compiler_input_sha256"])
         self.assertEqual(actual["checked_generated_sources"],
                          len(self.lock["required_generated_sha256"]))
 
-    def test_source_candidate_status_is_explicitly_not_hardware_qualification(self):
-        report = self.check_candidate()
-        self.assertEqual(report["evidence"],
-                         "candidate_source_digests_match_not_hardware_qualified")
+    def test_qualified_status_requires_full_source_and_is_not_bit_proof(self):
+        result = compare(self.lock, self.manifest)
+        self.assertEqual(result["evidence"],
+                         "qualified_exact_312_source_compiler_input_not_elaborated")
+        for key in ("exact_compiler_input_sha256",
+                    "reproducible_controller_source_sha256"):
+            with self.subTest(key=key):
+                bad = copy.deepcopy(self.lock)
+                bad.pop(key)
+                with self.assertRaisesRegex(ReferenceError, "pin full compiler"):
+                    validate_lock(bad)
         bad = copy.deepcopy(self.lock)
         bad["qualification_status"] = "not-verified"
         with self.assertRaisesRegex(ReferenceError, "qualification status"):
             validate_lock(bad)
-
-    def check_candidate(self):
-        return compare(self.lock, self.manifest)
 
     def test_independent_run_id_never_changes_selected_source_identity(self):
         other = copy.deepcopy(self.manifest)
@@ -107,13 +114,18 @@ class CombinedReferenceTests(unittest.TestCase):
         with self.assertRaisesRegex(ReferenceError, "stable 311-source"):
             compare(self.lock, bad)
 
-    def test_generated_ddr_hash_drift_is_reported_not_accepted_as_proof(self):
+    def test_real_generated_ddr_hash_drift_is_rejected(self):
         path = self.lock["volatile_source_paths"][0]
         changed = copy.deepcopy(self.manifest)
         changed["source_sha256"][path] = "a" * 64
-        report = compare(self.lock, changed)
-        self.assertEqual(report["variable_generated_ddr_sha256"][path], "a" * 64)
-        self.assertIn("not_hardware_qualified", report["evidence"])
+        with self.assertRaisesRegex(ReferenceError, "changed"):
+            compare(self.lock, changed)
+
+    def test_complete_compiler_fingerprint_drift_is_rejected(self):
+        changed = copy.deepcopy(self.manifest)
+        changed["compiler_input_sha256"] = "a" * 64
+        with self.assertRaisesRegex(ReferenceError, "exact qualified 312-source"):
+            compare(self.lock, changed)
 
     def test_reject_file_missing_from_compiler_even_if_generated(self):
         bad = copy.deepcopy(self.manifest)
