@@ -65,6 +65,8 @@ jobs:
   real-combined-rtl:
     needs: static-contract
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
     # Existing long RTL simulation plus two real pinned source regenerations.
     timeout-minutes: 145
     steps:
@@ -176,6 +178,29 @@ jobs:
                   "memory0.ddr0.dfi","memory0.ddr0.bankmodel"}<=sources,sources
           print("PASS #34 single-chip observed hardware sources:",sorted(sources))
           PY
+      # No generated source is pushed unless actual DDR/GMII/iDMA/PCIe
+      # silicon-facing RTL passes first. This is restricted to the project
+      # owner's #249 branch, never to forks or main. The default test job has
+      # only read permission elsewhere; the GITHUB_TOKEN push does not
+      # manufacture another workflow PASS or close the parent acceptance.
+      - name: Commit verified generated combined RTL on original P0 branch
+        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'agent/184-generator-owned-combined-20261114' }}
+        env:
+          EXPECTED_BRANCH: ${{ github.event.pull_request.head.ref }}
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          git add -f -A -- gen/projects/xezim_soc_dv/variants/ethernet-ddr-pcie
+          if git diff --cached --quiet; then
+            echo "PASS generated RTL already tracked and byte-identical"
+            exit 0
+          fi
+          git -c user.name='github-actions[bot]' \
+              -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+              commit -m 'gen(p0): check in verified real Ethernet DDR PCIe sources'
+          # Fast-forward only; concurrent branch edits must not be overwritten.
+          git push origin "HEAD:refs/heads/$EXPECTED_BRANCH"
       - name: Preserve exact-head source-selected RTL, C, PCIe, AXI, GMII and DFI evidence
         if: always()
         uses: actions/upload-artifact@v4
