@@ -42,7 +42,10 @@ class ExternalAdapterTests(unittest.TestCase):
     def test_export_uses_real_profile_and_output(self):
         outfile = self.root / "out/ports.json"
         def run(argv, **kwargs):
-            self.assertEqual(argv[1:5], ["--top", "fake_tb", "-f",
+            self.assertEqual(argv[1:9], ["--timescale", "1ns/1ps",
+                                           "--relax-enum-conversions",
+                                           "-Wno-error=multiple-always-assigns",
+                                           "--top", "fake_tb", "-f",
                                            str(self.root / ".tools/regression/fake/sources.f")])
             self.assertEqual(argv[-3:], ["--ports", "--format", "json"])
             return subprocess.CompletedProcess(argv, 0, '[{"name":"fake_tb.clk","direction":"input"}]', "")
@@ -50,11 +53,54 @@ class ExternalAdapterTests(unittest.TestCase):
              patch("design_netlist.subprocess.run", side_effect=run):
             meta = design_netlist.analyze(self.root, "fake", "ports", outfile)
         self.assertEqual(meta["evidence"], "elaborated_slang_netlist_inputs_attested")
+        self.assertEqual(meta["command"][1:4],
+                         ["--timescale", "1ns/1ps", "--relax-enum-conversions"])
+        self.assertEqual(json.loads((outfile.parent / (outfile.name + ".meta.json")).read_text())
+                         ["command"], meta["command"])
         self.assertIn("fake.sv",meta["selected_source_sha256"])
         self.assertEqual(meta["source_count"],1)
         self.assertIn("plan_sha256",meta)
         self.assertEqual(json.loads(outfile.read_text())[0]["name"], "fake_tb.clk")
         self.assertTrue((outfile.parent / (outfile.name + ".meta.json")).exists())
+
+    def test_selected_hardware_top_preserves_original_filelist_and_provenance(self):
+        (self.root / "config/regression.yaml").write_text(
+            "schema_version: 1\\ntests:\\n  fake:\\n    top: full_chip_tb\\n    sources: noc\\n".replace("\\n", "\n"))
+        (self.root / "fake.sv").write_text(
+            "module soc_top(input logic clk); endmodule\\n"
+            "module full_chip_tb; soc_top dut(); endmodule\\n".replace("\\n", "\n"))
+        generated = self.root / "selected/soc_top.sv"
+        generated.parent.mkdir(parents=True)
+        generated.write_text("module soc_top(input logic clk); endmodule\n")
+        source_list = self.root / ".tools/regression/fake/sources.f"
+        source_list.write_text("fake.sv\nselected/soc_top.sv\n")
+        plan_path = self.root / ".tools/regression/fake/plan.json"
+        plan = json.loads(plan_path.read_text())
+        plan["top"] = "full_chip_tb"
+        plan["sources"] = ["fake.sv", "selected/soc_top.sv"]
+        plan_path.write_text(json.dumps(plan))
+        out = self.root / "out/real-hardware.json"
+        def run(argv, **kwargs):
+            self.assertEqual(argv[argv.index("--top") + 1], "soc_top")
+            self.assertEqual(argv[argv.index("-f") + 1], str(source_list))
+            return subprocess.CompletedProcess(argv, 0, '[{"path":"soc_top"}]', "")
+        with patch("design_netlist.shutil.which", return_value="/mock/slang-report"), \
+             patch("design_netlist.subprocess.run", side_effect=run):
+            result = design_netlist.analyze(self.root, "fake", "ports", out,
+                                            hardware_top="soc_top")
+        self.assertEqual(result["top"], "full_chip_tb")
+        self.assertEqual(result["selected_simulation_top"], "full_chip_tb")
+        self.assertEqual(result["elaborated_top"], "soc_top")
+        self.assertTrue(result["hardware_only_elaboration"])
+        self.assertEqual(result["source_count"], 2)
+        for invalid in ("full_chip_tb", "invented_top"):
+            with self.subTest(invalid=invalid), self.assertRaisesRegex(ValueError, "hardware-only"):
+                design_netlist.analyze(self.root, "fake", "ports", out,
+                                       hardware_top=invalid)
+        generated.unlink()
+        with self.assertRaisesRegex(ValueError, "source missing"):
+            design_netlist.analyze(self.root, "fake", "ports", out,
+                                   hardware_top="soc_top")
 
     def test_tool_failure_removes_stale_output(self):
         outfile = self.root / "netlist.json"
@@ -65,6 +111,54 @@ class ExternalAdapterTests(unittest.TestCase):
                 design_netlist.analyze(self.root, "fake", "netlist", outfile)
         self.assertFalse(outfile.exists())
 
+
+    def test_error_excerpt_preserves_first_real_elaboration_error_and_full_raw_log(self):
+        outfile = self.root / "out/netlist.json"
+        outfile.parent.mkdir(parents=True, exist_ok=True)
+        upstream = ("vendor.sv:22:8: error: unresolved physical RTL module\n"
+                    + "upstream warning, not the first actual error\n" * 2000)
+        bad = subprocess.CompletedProcess([], 1, "Slang stdout diagnostic\n", upstream)
+        with patch("design_netlist.shutil.which", return_value="/mock/slang-netlist"), \
+             patch("design_netlist.subprocess.run", return_value=bad):
+            with self.assertRaisesRegex(ValueError, "unresolved physical RTL module"):
+                design_netlist.analyze(self.root, "fake", "netlist", outfile)
+        self.assertFalse(outfile.exists())
+        self.assertEqual((outfile.parent / (outfile.name + ".failed.stderr.log")).read_text(),
+                         upstream)
+        self.assertEqual((outfile.parent / (outfile.name + ".failed.stdout.log")).read_text(),
+                         "Slang stdout diagnostic\n")
+        # A corrected invocation must not accidentally publish or retain
+        # failure diagnostics from the previous selected source contract.
+        good = subprocess.CompletedProcess([], 0, '[{"path":"fake_tb"}]', "")
+        with patch("design_netlist.shutil.which", return_value="/mock/slang-report"), \
+             patch("design_netlist.subprocess.run", return_value=good):
+            design_netlist.analyze(self.root, "fake", "ports", outfile)
+        self.assertTrue(outfile.exists())
+        self.assertFalse((outfile.parent / (outfile.name + ".failed.stderr.log")).exists())
+        self.assertFalse((outfile.parent / (outfile.name + ".failed.stdout.log")).exists())
+
+    def test_pinned_sram_warning_is_visible_but_foreign_driver_fails_closed(self):
+        outfile = self.root / "out/ports.json"
+        source = (".tools/floonoc/.bender/git/checkouts/"
+                  "tech_cells_generic-b0f716d46ad601f4/src/rtl/tc_sram.sv:")
+        pinned = (source + "159:19: warning: variable 'sram' written "
+                  "by multiple always_ff [-Wmultiple-always-assigns]\n")
+        foreign = ("rtl/adapters/axi_sram_target.sv:55:45: warning: "
+                   "two writers [-Wmultiple-always-assigns]\n")
+        ok = '[{"name":"fake_tb.clk","direction":"input"}]'
+        with patch("design_netlist.shutil.which", return_value="/mock/slang-report"), \
+             patch("design_netlist.subprocess.run",
+                   return_value=subprocess.CompletedProcess([], 0, ok, pinned)):
+            result = design_netlist.analyze(self.root, "fake", "ports", outfile)
+        self.assertEqual(result["upstream_sram_multi_driver_warnings"], [pinned.strip()])
+        self.assertFalse(result["sram_driver_conformance_proven"])
+        self.assertTrue(outfile.exists())
+        with patch("design_netlist.shutil.which", return_value="/mock/slang-report"), \
+             patch("design_netlist.subprocess.run",
+                   return_value=subprocess.CompletedProcess([], 0, ok, foreign)):
+            with self.assertRaisesRegex(ValueError, "outside pinned"):
+                design_netlist.analyze(self.root, "fake", "ports", outfile)
+        self.assertFalse(outfile.exists())
 
     def test_selected_elaborated_hierarchy_rejects_foreign_source_and_duplicates(self):
         import hashlib
