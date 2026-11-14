@@ -6,6 +6,7 @@ from tools.pcie_upstream_test_timing import (
     ENUM_BEFORE, ENUM_AFTER, ENUM_MODEL_BEFORE, ENUM_MODEL_AFTER,
     ENUM_HOST_BEFORE, ENUM_HOST_AFTER,
     ENUM_READ_BEFORE, ENUM_READ_AFTER, ENUM_EP_CPL_BEFORE, ENUM_EP_CPL_AFTER,
+    ENUM_RC_FC_BEFORE, ENUM_RC_FC_AFTER, ENUM_HOST_FC_BEFORE, ENUM_HOST_FC_AFTER,
     CPLD_READY_REL, CPLD_READY_BEFORE, CPLD_READY_AFTER, CPLD_ROUNDING,
     PIPE_MONITOR_SOURCE, PIPE_MONITOR_TLP_BEFORE, PIPE_MONITOR_TLP_AFTER,
     PIPE_MONITOR_DLLP_BEFORE, PIPE_MONITOR_DLLP_AFTER,
@@ -30,12 +31,21 @@ class UpstreamTimingOverlayTests(unittest.TestCase):
 
     def test_upstream_memory_stall_probe_is_passive_and_rethrows(self):
         source = ("async def body(self):\n" + ENUM_MODEL_BEFORE + "\n" +
-                  ENUM_BEFORE + "\n" + ENUM_HOST_BEFORE + "\n" +
+                  ENUM_BEFORE + "\n" + ENUM_RC_FC_BEFORE + "\n" +
+                  ENUM_HOST_FC_BEFORE + "\n" + ENUM_HOST_BEFORE + "\n" +
                   ENUM_READ_BEFORE + "\n" + ENUM_EP_CPL_BEFORE + "\n")
         got = patched("verif/sequences/pcie_enumeration_seq.py", source)
         self.assertIn(ENUM_AFTER, got)
         self.assertIn(ENUM_MODEL_AFTER, got)
         self.assertIn(ENUM_HOST_AFTER, got)
+        self.assertIn("PCIE_UPSTREAM_RC_FC_PROFILE", got)
+        self.assertIn("PCIE_UPSTREAM_RC_UPDATEFC_CPL_TX", got)
+        self.assertIn("PCIE_UPSTREAM_RC_UPDATEFC_CPL_DONE", got)
+        self.assertIn("host_port.fc_update_steps = cocotb.utils.get_sim_steps(1, 'us')", got)
+        self.assertIn("assert host_port.fc_update_steps == original_fc_steps", got)
+        self.assertNotIn("tx_credit_limit =", got)
+        self.assertNotIn("rx_credits_allocated =", got)
+        self.assertNotIn("tx_credits_consumed =", got)
         self.assertIn("PCIE_UPSTREAM_RC_TX_BEGIN", got)
         self.assertIn("PCIE_UPSTREAM_RC_TX_DONE", got)
         self.assertIn("PCIE_UPSTREAM_MEM_STALL", got)
@@ -81,6 +91,20 @@ class UpstreamTimingOverlayTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "changed"):
             patched(PIPE_MONITOR_SOURCE, source.replace(
                 PIPE_MONITOR_DLLP_BEFORE, ""))
+
+    def test_updatefc_host_profile_is_pinned_and_non_bypassing(self):
+        sample = ("class sequence:\n" + ENUM_RC_FC_BEFORE + "\n" +
+                  ENUM_HOST_FC_BEFORE + "\n")
+        # Both source-locked transforms must reject unrelated provider changes.
+        with self.assertRaisesRegex(ValueError, "changed"):
+            from tools.pcie_upstream_test_timing import replace_once
+            replace_once(sample, "nonexistent pinned anchor", "foo", "test")
+        self.assertIn("fc_update_steps", ENUM_RC_FC_AFTER)
+        self.assertIn("DllpType.UPDATE_FC_CPL", ENUM_HOST_FC_AFTER)
+        self.assertIn("await self.finish_item", ENUM_HOST_FC_AFTER)
+        self.assertNotIn("rx_release_fc(", ENUM_RC_FC_AFTER)
+        self.assertNotIn("tx_consume_fc(", ENUM_RC_FC_AFTER)
+        self.assertNotIn("dut.", ENUM_RC_FC_AFTER)
 
     def test_original_cpld_first_beat_waits_for_valid_and_ready(self):
         source = ("module tlp2dllp;\n"
