@@ -258,6 +258,7 @@ jobs:
             verif/agents/pipe_agent/pipe_agent.py \
             src/dllp/tlp2dllp.sv \
             src/dllp/dllp_handler.sv \
+            src/dllp/axis_user_demux.sv \
             > .tools/pcie-link/openpcie-upstream-selftest-timing.diff
           # Includes the explicitly pinned A/B first-beat CplD handshake
           # probe. Original source+expected byte readback still gate CI.
@@ -274,6 +275,17 @@ jobs:
             .tools/pcie_endpoint_openpcie/verif/agents/pipe_agent/pipe_agent.py
           grep -Fq 'PCIE_UPSTREAM_PIPE_MON_DLLP: direction=EP_TO_RC' \
             .tools/pcie_endpoint_openpcie/verif/agents/pipe_agent/pipe_agent.py
+          # Real CplH starvation was traced to an accepted PHY DLLP header
+          # discarded before the upstream demux skid-register input.
+          # Validate the original pinned provider receives the handshake fix.
+          grep -Fq 'OPENPCIE_SELFTEST_DEMUX_HANDSHAKE' \
+            tools/pcie_upstream_test_timing.py
+          grep -Fq 's_axis_tready = dllp_ready;' \
+            .tools/pcie_endpoint_openpcie/src/dllp/axis_user_demux.sv
+          grep -Fq 's_axis_tready = tlp_ready;' \
+            .tools/pcie_endpoint_openpcie/src/dllp/axis_user_demux.sv
+          grep -Fq 'if (s_axis_tready && !s_axis_tlast) next_state = ST_DLLP;' \
+            .tools/pcie_endpoint_openpcie/src/dllp/axis_user_demux.sv
           # Verify runtime tracing is truly requested; compile-time --trace-fst
           # by itself does not open a waveform. Edalize run_options passes
           # these to original cocotb 1.9.2 Verilator simulator driver.
