@@ -199,14 +199,32 @@ def emit(root: Path, folder: Path, *, runner=None) -> dict:
     compiler_sources = portable_filelist(root, original, mapped, project)
     (folder / "compiler").mkdir(parents=True, exist_ok=True)
     (folder / "compiler/sources.f").write_bytes(compiler_sources)
-    # Full 312-input provenance from the original selected compiler remains
-    # explicit, including external pinned RTL. We do NOT claim the remapped
-    # generated output has been independently elaborated yet.
+    # Original compiler-input/filelist hashes contain absolute checkout
+    # paths and must stay in the separately verified .tools selected archive.
+    # A generator-owned manifest instead hashes the relative, ordered -f
+    # list, source/header bytes, defines and selected generated source bytes.
+    # This identity is stable across workspaces without weakening any input.
+    portable_includes = [line[len("+incdir+"):] for line in
+                         compiler_sources.decode("utf-8").splitlines()
+                         if line.startswith("+incdir+")]
+    portable_identity = {
+        "project": project, "variant": VARIANT,
+        "source_config_sha256": original.get("config_sha256"),
+        "selection_sha256": original.get("definition_sha256"),
+        "portable_filelist_sha256": digest(compiler_sources),
+        "include_headers_sha256": original.get("include_headers_sha256"),
+        "selected_source_sha256": dict(sorted(sources.items())),
+        "generated_files_sha256": {rel: item["generated_sha256"]
+                                   for rel, item in sorted(copies.items())},
+        "defines": original.get("defines"), "includes": portable_includes,
+        "compiler_args": original.get("args"),
+    }
     metadata = {
         "schema_version": 1, "project": project, "variant": VARIANT,
         "source_profile": PROFILE,
-        "selected_compiler_input_sha256": original["compiler_input_sha256"],
-        "selected_filelist_sha256": original["filelist_sha256"],
+        "original_source_attestation": SOURCE_ROOT + "selected-rtl-manifest.json",
+        "portable_compiler_input_sha256": digest(json.dumps(
+            portable_identity, sort_keys=True, separators=(",", ":")).encode("utf-8")),
         "portable_filelist_sha256": digest(compiler_sources),
         "portable_filelist": "compiler/sources.f",
         "source_config_sha256": original.get("config_sha256"),
@@ -214,7 +232,7 @@ def emit(root: Path, folder: Path, *, runner=None) -> dict:
         "include_headers_sha256": original.get("include_headers_sha256"),
         "network_filelists": original.get("network_filelists"),
         "defines": original.get("defines"),
-        "includes": original.get("includes"),
+        "includes": portable_includes,
         "compiler_args": original.get("args"),
         "source_count": len(sources),
         "selected_source_sha256": dict(sorted(sources.items())),
