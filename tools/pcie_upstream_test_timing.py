@@ -393,6 +393,10 @@ def patched(path: str, source: str) -> str:
                             "\n" + CPLD_STALL_PROBE + "endmodule\n",
                             path + " passive credit stall diagnostic")
     if path == DLLP_HANDLER_REL:
+        # A repeated overlay must fail closed instead of silently duplicating
+        # passive CRC/UpdateFC debug logic in the original pinned receiver.
+        if DLLP_CREDIT_RX_PROBE.strip() in source:
+            raise ValueError(f"{path}: pinned upstream self-test source changed (credit probe already present)")
         return replace_once(source, "\nendmodule\n",
                             "\n" + DLLP_CREDIT_RX_PROBE + "endmodule\n",
                             path + " passive CRC/UpdateFC receive trace")
