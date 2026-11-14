@@ -110,7 +110,10 @@ jobs:
     name: CPU C and BFM use same plan on generated FlooNoC RTL
     needs: [scenario-schema, scenario-cpu-elf]
     runs-on: ubuntu-24.04
-    timeout-minutes: 125
+    # Two genuinely randomized CPU/BFM pairs each retain their own finite
+    # regression timeouts. The job must exceed both real CPU bounds plus
+    # pinned RTL build, two real BFM runs and archived evidence validation.
+    timeout-minutes: 160
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-bender
