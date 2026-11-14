@@ -43,6 +43,25 @@ TEST_AFTER = "await with_timeout(self.test_all.start(),250000,'ns')"
 # The selected/checked-in SoC OpenPCIe RTL overlay is NOT changed here.
 # Original source is checked against the exact locked Git blob; the working
 # tree must already carry the reviewed 16-byte transmit credit fix.
+# Pinned upstream receiver demux: upstream AXIS ready must reflect the
+# INPUT readiness of the corresponding skid buffer, not its OUTPUT ready.
+# A streaming-state transition also requires an accepted non-final beat.
+# The untouched original source is locked by its Git blob below.
+DEMUX_READY_REL = "src/dllp/axis_user_demux.sv"
+DEMUX_ORIGINAL_BLOB = "b2a79a9bd71f00100fae5d8087f357cf708097b4"
+DEMUX_TLP_BEFORE = """            s_axis_tready = m_tlp_axis_tready;
+            tlp_valid = s_axis_tvalid;
+            next_state = ST_TLP;"""
+DEMUX_TLP_AFTER = """            s_axis_tready = tlp_ready;
+            tlp_valid = s_axis_tvalid;
+            if (s_axis_tready && !s_axis_tlast) next_state = ST_TLP;"""
+DEMUX_DLLP_BEFORE = """            s_axis_tready = m_dllp_axis_tready;
+            dllp_valid = s_axis_tvalid;
+            next_state = ST_DLLP;"""
+DEMUX_DLLP_AFTER = """            s_axis_tready = dllp_ready;
+            dllp_valid = s_axis_tvalid;
+            if (s_axis_tready && !s_axis_tlast) next_state = ST_DLLP;"""
+
 CPLD_READY_REL = "src/dllp/tlp2dllp.sv"
 CPLD_ORIGINAL_BLOB = "4971e61449f76ef5530288844b0937b936547ccb"
 CPLD_ROUNDING = "data_credits_required = (data_length == '0) ? 16'd256 : ((data_length + 16'd3) >> 2);"
@@ -380,6 +399,11 @@ def patched(path: str, source: str) -> str:
         return replace_once(source, PIPE_MONITOR_DLLP_BEFORE,
                             PIPE_MONITOR_DLLP_AFTER,
                             path + " original PIPE DLLP monitor")
+    if path == DEMUX_READY_REL:
+        source = replace_once(source, DEMUX_TLP_BEFORE, DEMUX_TLP_AFTER,
+                              path + " accepted TLP start")
+        return replace_once(source, DEMUX_DLLP_BEFORE, DEMUX_DLLP_AFTER,
+                            path + " accepted DLLP start")
     if path == CPLD_READY_REL:
         # A credit grant is not an accepted AXI beat. The original RTL can
         # consume the first CplD beat even when the downstream mux is stalled.
@@ -473,6 +497,18 @@ def apply(root:Path) -> None:
     print("OPENPCIE_SELFTEST_CPLD_READY_AB: test-only first-beat ready/valid "
           "guard and passive credit-stall probes on pinned RTL; "
           "original Cocotb byte oracle retained")
+    demux_blob = subprocess.run(
+        ["git", "-C", str(root), "rev-parse", f"HEAD:{DEMUX_READY_REL}"],
+        check=True, capture_output=True, text=True).stdout.strip()
+    if demux_blob != DEMUX_ORIGINAL_BLOB:
+        raise ValueError(f"original upstream {DEMUX_READY_REL} drift: "
+                         f"{demux_blob} != {DEMUX_ORIGINAL_BLOB}")
+    demux_path = root / DEMUX_READY_REL
+    if not demux_path.is_file() or demux_path.is_symlink():
+        raise ValueError(f"missing standalone upstream source {DEMUX_READY_REL}")
+    demux_path.write_text(patched(DEMUX_READY_REL, demux_path.read_text()))
+    print("OPENPCIE_SELFTEST_DEMUX_HANDSHAKE: pinned original skid-buffer"
+          " input ready and accepted first-beat state transitions")
     print("OPENPCIE_SELFTEST_TIMING: TEST-ONLY; not production or dual-sided L0 evidence")
 
 
