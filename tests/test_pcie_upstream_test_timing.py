@@ -10,6 +10,7 @@ from tools.pcie_upstream_test_timing import (
     CPLD_READY_REL, CPLD_READY_BEFORE, CPLD_READY_AFTER, CPLD_ROUNDING,
     PIPE_MONITOR_SOURCE, PIPE_MONITOR_TLP_BEFORE, PIPE_MONITOR_TLP_AFTER,
     PIPE_MONITOR_DLLP_BEFORE, PIPE_MONITOR_DLLP_AFTER,
+    DLLP_HANDLER_REL, DLLP_CREDIT_RX_PROBE,
 )
 
 
@@ -18,6 +19,9 @@ class UpstreamTimingOverlayTests(unittest.TestCase):
         source="CAPI=2:\nname: original\n"+CORE_BEFORE+"\n  verilate:\n    flow: sim\n"
         got=patched("pcie_phy.core",source)
         self.assertIn(CORE_AFTER,got)
+        self.assertIn("run_options:", got)
+        self.assertIn("pcie-credit-debug.fst", got)
+        self.assertIn("--trace-file", got)
         self.assertEqual(got.count("-GSIM_FAST_LINK=1"),1)
         self.assertIn("  verilate:\n    flow: sim",got)
         self.assertIn("  sim:\n    flow: sim",got)
@@ -106,6 +110,19 @@ class UpstreamTimingOverlayTests(unittest.TestCase):
         self.assertNotIn("tx_consume_fc(", ENUM_RC_FC_AFTER)
         self.assertNotIn("dut.", ENUM_RC_FC_AFTER)
 
+    def test_original_dllp_receiver_credit_debug_is_read_only(self):
+        source = "module dllp_handler;\nendmodule\n"
+        got = patched(DLLP_HANDLER_REL, source)
+        self.assertIn("PCIE_UPSTREAM_EP_UPDATEFC_CPL_RX", got)
+        self.assertIn("PCIE_UPSTREAM_EP_DLLP_CRC_REJECT", got)
+        self.assertIn(DLLP_CREDIT_RX_PROBE, got)
+        self.assertIn("curr_state == ST_PROCESS_DLLP", got)
+        self.assertIn("crc_reversed != skid_s_axis_tdata[15:0]", got)
+        self.assertNotIn("tx_fc_cplh_r <=", DLLP_CREDIT_RX_PROBE)
+        self.assertNotIn("update_fc_r <=", DLLP_CREDIT_RX_PROBE)
+        with self.assertRaisesRegex(ValueError, "changed"):
+            patched(DLLP_HANDLER_REL, got)
+
     def test_original_cpld_first_beat_waits_for_valid_and_ready(self):
         source = ("module tlp2dllp;\n"
                   + CPLD_ROUNDING + "\n" + CPLD_ROUNDING + "\n"
@@ -114,6 +131,8 @@ class UpstreamTimingOverlayTests(unittest.TestCase):
         got = patched(CPLD_READY_REL, source)
         self.assertEqual(got.count(CPLD_READY_AFTER), 1)
         self.assertIn("PCIE_UPSTREAM_CPLD_CREDIT_STALL", got)
+        self.assertIn("PCIE_UPSTREAM_EP_CPLH_LATCH", got)
+        self.assertIn("update_fc_i && tx_fc_cplh_i != cplh_credit_limit_r", got)
         self.assertEqual(got.count("PCIE_UPSTREAM_CPLD_CREDIT_STALL"), 1)
         self.assertIn("cplh_credit_limit_r", got)
         self.assertIn("cpld_credits_consumed_r", got)
