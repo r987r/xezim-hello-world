@@ -10,6 +10,7 @@ All generated variants live in ignored .tools/regression, never tracked gen/.
 from __future__ import annotations
 import json
 import hashlib
+import re
 import struct
 import sys
 from pathlib import Path
@@ -190,8 +191,18 @@ def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False, ethernet_cpu
 def prepare(cfg, noc_manifest, noc_root, output: Path, *, pcie_host_mode=False,
             ethernet_cpu_mode=False, real_ddr_mode=False, ddr_wb_base=0, ddr_wb_adr_bits=30,
             scenario_mode=False, combined_mode=False, pcie_outbound_mode=False,
-            scenario_seed=None):
+            scenario_seed=None, image_prefix=None):
     from tools import full_chip_gen
+    # Source-only generator builds in an isolated temporary directory, but
+    # the synthesized ROM/flash filenames must be stable repository-relative
+    # paths. The default selected regression retains its original behavior.
+    if image_prefix is None:
+        image_prefix = output.relative_to(ROOT).as_posix()
+    else:
+        pattern = (r"gen/projects/" + re.escape(cfg["name"]) +
+                   r"/variants/[a-z][a-z0-9-]*/rtl")
+        if (not isinstance(image_prefix, str) or not re.fullmatch(pattern, image_prefix)):
+            raise ValueError("generator-owned firmware image path must be within the selected SoC project")
     if pcie_outbound_mode and (not pcie_host_mode or combined_mode or real_ddr_mode or ethernet_cpu_mode or scenario_mode):
         raise ValueError('outbound requester firmware requires isolated CPU PCIe mode')
     if combined_mode and (not pcie_host_mode or not ethernet_cpu_mode or not real_ddr_mode or scenario_mode):
@@ -206,7 +217,6 @@ def prepare(cfg, noc_manifest, noc_root, output: Path, *, pcie_host_mode=False,
                           scenario_mode=scenario_mode, combined_mode=combined_mode,
                           pcie_outbound_mode=pcie_outbound_mode,
                           scenario_seed=scenario_seed)
-    image_prefix = output.relative_to(ROOT).as_posix()
     selected_scn = None
     if scenario_mode:
         from dv.common.scenario_dma import load_contract_from_plan
