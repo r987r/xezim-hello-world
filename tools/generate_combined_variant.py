@@ -83,6 +83,52 @@ def portable_image_paths(source: bytes, project: str, relative: str) -> bytes:
     return result
 
 
+def portable_filelist(root: Path, original: dict, remapped: dict,
+                      project: str) -> bytes:
+    """Retain the compiler's original ordered 312 sources and pinned include paths.
+
+    Normalize only checkout-absolute paths and replace the verified generated
+    source paths. Never silently use a different Bender source or module order.
+    The returned -f file is resolved relative to the repository working dir.
+    """
+    filelist = root / SOURCE_ROOT / "sources.f"
+    if not filelist.is_file() or filelist.is_symlink():
+        raise CombinedGenerationError("original selected compiler filelist missing")
+    raw = filelist.read_bytes()
+    if digest(raw) != original["filelist_sha256"]:
+        raise CombinedGenerationError("original selected compiler filelist digest changed")
+    out = []
+    observed = []
+    for line in raw.decode("utf-8").splitlines():
+        if line.startswith("+define+"):
+            out.append(line)
+            continue
+        is_include = line.startswith("+incdir+")
+        path = line[len("+incdir+"):] if is_include else line
+        if not path or not Path(path).is_absolute():
+            raise CombinedGenerationError("unexpected selected compiler filelist syntax")
+        candidate = Path(path)
+        if candidate.is_symlink() or not candidate.resolve().is_relative_to(root):
+            raise CombinedGenerationError("foreign or symlink compiler source/include")
+        if is_include and not candidate.is_dir():
+            raise CombinedGenerationError("selected include directory missing")
+        if not is_include and not candidate.is_file():
+            raise CombinedGenerationError("selected compiler file missing")
+        relative = candidate.resolve().relative_to(root).as_posix()
+        if is_include:
+            out.append("+incdir+" + relative)
+        else:
+            if relative not in original["source_sha256"]:
+                raise CombinedGenerationError("unattested source selected: " + relative)
+            observed.append(relative)
+            if relative in remapped:
+                relative = f"gen/projects/{project}/variants/{VARIANT}/" + remapped[relative]
+            out.append(relative)
+    if len(observed) != 312 or set(observed) != set(original["source_sha256"]):
+        raise CombinedGenerationError("portable compiler source set/ordering changed")
+    return ("\n".join(out) + "\n").encode("utf-8")
+
+
 def emit(root: Path, folder: Path, *, runner=None) -> dict:
     """Regenerate and verify selected sources, then export only actual bytes."""
     root = root.resolve()
@@ -150,6 +196,9 @@ def emit(root: Path, folder: Path, *, runner=None) -> dict:
                       "controller/gateware/soc_ddr4_sim.v"):
         if mandatory not in copies:
             raise CombinedGenerationError("missing mandatory generated combined source: " + mandatory)
+    compiler_sources = portable_filelist(root, original, mapped, project)
+    (folder / "compiler").mkdir(parents=True, exist_ok=True)
+    (folder / "compiler/sources.f").write_bytes(compiler_sources)
     # Full 312-input provenance from the original selected compiler remains
     # explicit, including external pinned RTL. We do NOT claim the remapped
     # generated output has been independently elaborated yet.
@@ -158,6 +207,15 @@ def emit(root: Path, folder: Path, *, runner=None) -> dict:
         "source_profile": PROFILE,
         "selected_compiler_input_sha256": original["compiler_input_sha256"],
         "selected_filelist_sha256": original["filelist_sha256"],
+        "portable_filelist_sha256": digest(compiler_sources),
+        "portable_filelist": "compiler/sources.f",
+        "source_config_sha256": original.get("config_sha256"),
+        "selection_sha256": original.get("definition_sha256"),
+        "include_headers_sha256": original.get("include_headers_sha256"),
+        "network_filelists": original.get("network_filelists"),
+        "defines": original.get("defines"),
+        "includes": original.get("includes"),
+        "compiler_args": original.get("args"),
         "source_count": len(sources),
         "selected_source_sha256": dict(sorted(sources.items())),
         "portable_source_map": mapped,
