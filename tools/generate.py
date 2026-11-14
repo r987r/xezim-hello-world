@@ -26,6 +26,7 @@ import supernoc_gen
 import full_chip_gen
 import soc_ir
 import soc_ip_compose
+import pcie_link
 
 ROOT = Path(__file__).resolve().parents[1]
 START = "<!-- BEGIN GENERATED SOC -->"
@@ -230,6 +231,9 @@ def build(cfg_path: Path, out: Path, readme: Path) -> str:
     # avoiding a second, divergent project/variant naming source.
     selected_ir = verify_generated_source_graph(cfg, out)
     emit_default_review_variant(selected_ir, out)
+    # Single-source, tracked experiment selection. Never imply a trained link
+    # merely because the root complex/model was selected or sources fetched.
+    pcie_link.emit(ROOT, out / "pcie_link")
     dump(out / "verification" / "plan.json", verification_plan(cfg, meta))
     dump(out / "verification" / "routes.json", route_matrix(meta))
     (out / "README.md").write_text(

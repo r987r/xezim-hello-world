@@ -13,7 +13,7 @@ from prepare_rtl import assert_iverilog_clean
 from run_rtl_smoke import source_contract
 
 
-def run():
+def run(*, bar_relocate: bool = False):
     pin = source_contract()
     patched = assert_iverilog_clean()
     cfg = regress.load_config(ROOT / "config/regression.yaml")
@@ -27,7 +27,9 @@ def run():
                  for key in ("package", "top")]
     vendor = ROOT / ".tools/verilog_pcie"
     files = list(dict.fromkeys(
-        noc_files + generated + [str(ROOT / "rtl/adapters/axi_sram_target.sv"), str(patched)]
+        noc_files + generated + [str(ROOT / "rtl/adapters/axi_sram_target.sv"),
+                                 str(ROOT / "dv/pcie_link/bar0_noc_translate.sv"),
+                                 str(patched)]
         + [str(vendor / p) for p in pin["rtl_modules"]
            if p != "rtl/pcie_axi_master.v"]
         + [str(ROOT / "dv/pcie0/pcie_noc_tb.sv")]
@@ -43,7 +45,8 @@ def run():
     )
     os.environ["MAKEFLAGS"] = "-j2"
     from cocotb.runner import get_runner
-    output = ROOT / ".tools/pcie0/noc_build"
+    output = ROOT / (".tools/pcie0/noc_relocated_build" if bar_relocate
+                     else ".tools/pcie0/noc_build")
     output.mkdir(parents=True, exist_ok=True)
     simulator = get_runner("verilator")
     # Compile generated package before its NoC module.
@@ -52,6 +55,7 @@ def run():
         simulator.build(
             sources=files, includes=includes, defines=defs,
             hdl_toplevel="pcie_noc_tb", build_dir=output,
+            parameters={"BAR0_RELOCATE": int(bar_relocate)},
             build_args=["--timing", "--assert", "-Wno-fatal"],
             always=True, waves=False, log_file=output / "build.log"
         )
@@ -62,12 +66,27 @@ def run():
             errors = [line for line in lines if line.startswith(("%Error", "%Warning"))]
             print("PCIe NoC build diagnostics:", *(errors[:60] or lines[-60:]), sep="\n", file=sys.stderr, flush=True)
         raise
-    result = simulator.test(
-        hdl_toplevel="pcie_noc_tb", hdl_toplevel_lang="verilog",
-        test_module="noc_smoke", test_dir=ROOT / "dv/pcie0",
-        results_xml=str(output / "results.xml"),
-        log_file=output / "simulation.log",
-    )
+    # A $fatal or assertion in Verilator terminates with SIGABRT before
+    # Cocotb can write results.xml. Preserve and surface the actual
+    # simulator stderr/log rather than an unhelpful generic exit -6.
+    try:
+        result = simulator.test(
+            hdl_toplevel="pcie_noc_tb", hdl_toplevel_lang="verilog",
+            test_module="noc_smoke", test_dir=ROOT / "dv/pcie0",
+            results_xml=str(output / "results.xml"),
+            log_file=output / "simulation.log",
+        )
+    except Exception:
+        transcript = output / "simulation.log"
+        if transcript.is_file():
+            lines = transcript.read_text(errors="replace").splitlines()
+            print(f"PCIe {'relocated' if bar_relocate else 'legacy'} "
+                  "NoC RTL simulator aborted; last actual simulator lines:",
+                  *lines[-100:], sep="\n", file=sys.stderr, flush=True)
+        else:
+            print("PCIe NoC RTL simulator aborted before writing simulation.log",
+                  file=sys.stderr, flush=True)
+        raise
     if not Path(result).is_file():
         transcript = output / "simulation.log"
         details = transcript.read_text(errors="replace") if transcript.exists() else "(no simulation log)"
@@ -75,13 +94,26 @@ def run():
               details[-12000:], sep="\n", file=sys.stderr, flush=True)
         raise RuntimeError("missing Cocotb results XML: see simulator log above")
     tests = ElementTree.parse(result).findall(".//testcase")
-    if not tests or any(
-        any(t.find(tag) is not None for tag in ("failure", "error", "skipped"))
-        for t in tests
-    ):
+    failures = [(t.get("name", "<unnamed>"), tag, t.find(tag))
+                for t in tests for tag in ("failure", "error", "skipped")
+                if t.find(tag) is not None]
+    if not tests or failures:
+        print(f"PCIe {'relocated' if bar_relocate else 'legacy'} NoC RTL "
+              f"simulation failed: {len(tests)} testcases, {len(failures)} failures",
+              file=sys.stderr, flush=True)
+        for name, tag, node in failures:
+            print(f"  {name}: {tag}: {node.get('message', '')}",
+                  (node.text or "")[-5000:], sep="\n", file=sys.stderr, flush=True)
+        transcript = output / "simulation.log"
+        if transcript.is_file():
+            print("Last simulator transcript lines:",
+                  *transcript.read_text(errors="replace").splitlines()[-65:],
+                  sep="\n", file=sys.stderr, flush=True)
         raise RuntimeError("real NoC/SRAM regression failed")
-    print("PCIE0_REAL_NOC_SRAM_REGRESSION_PASS")
+    print("PCIE0_BAR_RELOCATED_NOC_SRAM_PASS" if bar_relocate
+          else "PCIE0_REAL_NOC_SRAM_REGRESSION_PASS")
 
 
 if __name__ == "__main__":
-    run()
+    run(bar_relocate=False)  # preserve established fast TLP-only mode
+    run(bar_relocate=True)   # independent host-BAR->FlooNoC byte proof

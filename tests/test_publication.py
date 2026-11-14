@@ -55,6 +55,9 @@ class PublicationTests(unittest.TestCase):
         self.assertIn("ethernet-mvp.yml",workflows)
         self.assertIn("ethernet-standalone.yml",workflows)
         self.assertIn("pcie0-integrated.yml",workflows)
+        self.assertIn("pcie-digital-link.yml",workflows)
+        self.assertTrue(any("pcie-cross-provider-" in a
+                            for a in workflows["pcie-digital-link.yml"]["artifacts"]))
         self.assertIn("full-chip.yml",workflows)
         self.assertIn("dma.yml", workflows)
         self.assertTrue(any(a.startswith("dma-canonical-verilator-")

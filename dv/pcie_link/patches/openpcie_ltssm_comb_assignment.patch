@@ -1,0 +1,145 @@
+diff --git a/src/ltssm/pcie_ltssm_downstream.sv b/src/ltssm/pcie_ltssm_downstream.sv
+--- a/src/ltssm/pcie_ltssm_downstream.sv
++++ b/src/ltssm/pcie_ltssm_downstream.sv
+@@ -101,13 +101,23 @@
+   localparam int ClockPeriodNs = ((10 ** 3) / CLK_RATE);
+-  localparam longint TwentyFourMsTimeOut = (24 * (10 ** 6)) / ClockPeriodNs;
+-  localparam longint FourtyEightMsTimeOut = (48 * (10 ** 6)) / ClockPeriodNs;
+-  localparam longint TwelveMsTimeOut = SIM_FAST_LINK ? (12 * (10 ** 4)) / (ClockPeriodNs *10): 
+-  (12 * (10 ** 6)) / ClockPeriodNs;
+-  localparam longint TwoMsTimeOut = (2 * (10 ** 6)) / ClockPeriodNs;
+-  localparam longint OneMsTimeOut = SIM_FAST_LINK ? (1 * (10 ** 4)) / (ClockPeriodNs *10): (1 * (10 ** 6)) / ClockPeriodNs;
+-  localparam int SixUsTimeOut = (6 * (10 ** 3)) / ClockPeriodNs;
+-  localparam int EigthHundredNanoSecondTimeOut = (800) / ClockPeriodNs;
+-  localparam int TwentyNanoSeconds = 20* (10 **0)/ ClockPeriodNs;  //(20 * (10** -9)); //)) / int'((1 / (CLK_RATE * $pow(10, 6))));
+-  localparam int MinTS1sPolling = 1024;  //24;  //1024
++  // SIM_FAST_LINK is an opt-in simulation timer override (not an LTSSM force).
++  // Follow common PCIe VIP practice: 512x for ms intervals; 16 TS1s sent
++  // during Polling.Active, while RX ordered-set validation is unchanged.
++  localparam longint SimTimerDivider = SIM_FAST_LINK ? 512 : 1;
++  localparam longint TwentyFourMsTimeOut = ((24 * (10 ** 6)) / ClockPeriodNs) / SimTimerDivider;
++  localparam longint FourtyEightMsTimeOut = ((48 * (10 ** 6)) / ClockPeriodNs) / SimTimerDivider;
++  localparam longint TwelveMsTimeOut = ((12 * (10 ** 6)) / ClockPeriodNs) / SimTimerDivider;
++  localparam longint TwoMsTimeOut = ((2 * (10 ** 6)) / ClockPeriodNs) / SimTimerDivider;
++  localparam longint OneMsTimeOut = ((1 * (10 ** 6)) / ClockPeriodNs) / SimTimerDivider;
++  localparam int SixUsTimeOut = (6 * (10 ** 3)) / ClockPeriodNs;
++  localparam int EigthHundredNanoSecondTimeOut = (800) / ClockPeriodNs;
++  localparam int TwentyNanoSeconds = 20* (10 **0)/ ClockPeriodNs;  //(20 * (10** -9)); //)) / int'((1 / (CLK_RATE * $pow(10, 6))));
++  localparam int MinTS1sPolling = SIM_FAST_LINK ? 16 : 1024;
++`ifndef SYNTHESIS
++  initial if (SIM_FAST_LINK) begin
++    $display("PCIE_EP_SIM_FAST_LTSSM: ENABLED timer_divider=%0d min_tx_ts1=%0d 1ms_cycles=%0d 2ms_cycles=%0d 12ms_cycles=%0d 24ms_cycles=%0d 48ms_cycles=%0d",
++             SimTimerDivider, MinTS1sPolling, OneMsTimeOut, TwoMsTimeOut,
++             TwelveMsTimeOut, TwentyFourMsTimeOut, FourtyEightMsTimeOut);
++  end
++`endif
+ 
+   typedef enum logic [19:0] {
+@@ -1608,9 +1618,9 @@
+               single_ts1_received_c = '1;
+ 
+               if ((ordered_set_i[lane].link_num == PAD) && (ordered_set_i[lane].lane_num == PAD)) begin
+                 ts1_cnt_c = (ts1_cnt >= 8'h8) ? 8'h8 : ts1_cnt + 1;
+               end else begin
+-                ts1_cnt_c <= ts1_cnt >= 8'h8 ? 8'h8 : '0;
++                ts1_cnt_c = ts1_cnt >= 8'h8 ? 8'h8 : '0;
+               end
+             end else if (ts2_valid_i[lane]) begin
+               single_ts2_received_c = '1;
+diff --git a/src/pcie_phy_core/pcie_phy_top.sv b/src/pcie_phy_core/pcie_phy_top.sv
+--- a/src/pcie_phy_core/pcie_phy_top.sv
++++ b/src/pcie_phy_core/pcie_phy_top.sv
+@@ -2,7 +2,8 @@
+ module pcie_phy_top
+   import pcie_phy_pkg::*;
+ #(
++    parameter int SIM_FAST_LINK = 0,            //! Simulation timer acceleration only, no LTSSM state override
+     parameter int CLK_RATE      = 100,             //!Clock speed in MHz, Defualt is 100
+     parameter int MAX_NUM_LANES = 1,               //! Maximum number of lanes module can support
+     // TLP data width
+     parameter int DATA_WIDTH    = 32,              //! AXIS data width
+@@ -295,8 +296,9 @@
+   pcie_ltssm_downstream #(
+       .CLK_RATE     (CLK_RATE),
++      .SIM_FAST_LINK(SIM_FAST_LINK),
+       .MAX_NUM_LANES(MAX_NUM_LANES),
+       .DATA_WIDTH   (DATA_WIDTH),
+       .KEEP_WIDTH   (KEEP_WIDTH),
+       .USER_WIDTH   (USER_WIDTH)
+   ) pcie_ltssm_downstream_inst (
+       .clk_i              (pipe_rx_usr_clk_i),
+diff --git a/src/dllp/pcie_flow_ctrl_init.sv b/src/dllp/pcie_flow_ctrl_init.sv
+--- a/src/dllp/pcie_flow_ctrl_init.sv
++++ b/src/dllp/pcie_flow_ctrl_init.sv
+@@ -340,11 +340,11 @@
+             seq_count_c       = '0;
+             fc_axis_tvalid    = '0;
+             fc2_values_sent_o = '1;
+             // next_state        = ST_FC2;
+             // if (first_tlp_valid_i) begin
+-            next_state        = ST_UPDATE_P;
++            next_state        = ST_FC_COMPLETE;
+             // end
+             // next_state     = ST_FC_COMPLETE;
+           end else if (seq_count_r >= FcWaitPeriod) begin
+             seq_count_c = '0;
+ 
+diff --git a/src/dllp/dllp2tlp.sv b/src/dllp/dllp2tlp.sv
+--- a/src/dllp/dllp2tlp.sv
++++ b/src/dllp/dllp2tlp.sv
+@@ -437,22 +437,22 @@
+         //check crc
+         if ((lcrc32d32 == crc_from_tlp_r) && (next_expected_seq_num_r == next_transmit_seq_r)) begin
+           if (tlp_is_nph_r) begin
+             nph_credits_consumed_c = nph_credits_consumed_r + 8'h1;
+           end else if (tlp_is_npd_r) begin
+             nph_credits_consumed_c = nph_credits_consumed_r + 8'h1;
+             npd_credits_consumed_c = npd_credits_consumed_r +
+-          (word_count_r >> 2 == '0 ? 1'b1 : word_count_r >> 2);
++          (word_count_r == '0 ? 12'd256 : ((word_count_r + 16'd3) >> 2));
+           end else if (tlp_is_ph_r) begin
+             ph_credits_consumed_c = ph_credits_consumed_r + 8'h1;
+           end else if (tlp_is_pd_r) begin
+             ph_credits_consumed_c = ph_credits_consumed_r + 8'h1;
+             pd_credits_consumed_c = pd_credits_consumed_r +
+-          (word_count_r >> 2 == '0 ? 1'b1 : word_count_r >> 2);
++          (word_count_r == '0 ? 12'd256 : ((word_count_r + 16'd3) >> 2));
+           end else if (tlp_is_cplh_r) begin
+             cplh_credits_consumed_c = cplh_credits_consumed_r + 8'h1;
+           end else if (tlp_is_cpld_r) begin
+             cplh_credits_consumed_c = cplh_credits_consumed_r + 8'h1;
+             cpld_credits_consumed_c = cpld_credits_consumed_r +
+-          (word_count_r >> 2 == '0 ? 1'b1 : word_count_r >> 2);
++          (word_count_r == '0 ? 12'd256 : ((word_count_r + 16'd3) >> 2));
+           end
+         end else begin
+diff --git a/src/dllp/tlp2dllp.sv b/src/dllp/tlp2dllp.sv
+--- a/src/dllp/tlp2dllp.sv
++++ b/src/dllp/tlp2dllp.sv
+@@ -383,11 +383,11 @@
+         static logic [15:0] data_length;
+         static logic [15:0] data_credits_required;
+         tlp_dw0 = skid_axis_tdata;
+         has_ph_credit = '0;
+         has_pd_credit = '0;
+         data_length = {tlp_dw0.byte2.Length1, tlp_dw0.byte3.Length0};
+-        data_credits_required = data_length >> 2 == '0 ? 1'b1 : data_length >> 2;
++        data_credits_required = (data_length == '0) ? 16'd256 : ((data_length + 16'd3) >> 2);
+         //assign seq number then first 2 bytes of tlp
+         tlp_axis_tdata = {
+           skid_axis_tdata[15:0], next_transmit_seq_r[7:0], 4'h0, next_transmit_seq_r[11:8]
+         };
+@@ -468,12 +468,12 @@
+         static logic [15:0] data_length;
+         static logic [15:0] data_credits_required;
+         tlp_dw0 = skid_axis_tdata;
+         has_cplh_credit = '0;
+         has_cpld_credit = '0;
+         data_length = {tlp_dw0.byte2.Length1, tlp_dw0.byte3.Length0};
+-        data_credits_required = data_length >> 2 == '0 ? 1'b1 : data_length >> 2;
++        data_credits_required = (data_length == '0) ? 16'd256 : ((data_length + 16'd3) >> 2);
+         //assign seq number then first 2 bytes of tlp
+         tlp_axis_tdata = {
+           skid_axis_tdata[15:0], next_transmit_seq_r[7:0], 4'h0, next_transmit_seq_r[11:8]
+         };
+         crc_tlp_axis_tdata = {

@@ -1,0 +1,119 @@
+{
+  "capability": {
+    "bar0_decode_in_real_controller": false,
+    "digital_phy_sideband_ready": false,
+    "host_config_accepted_on_real_link": false,
+    "l0_trained": false,
+    "physical_serdes_implemented": false,
+    "provider_interface_preflight": "not_elaborated",
+    "status": "source_declared_not_executed"
+  },
+  "evidence": "pinned_selected_sources_and_checked_in_digital_adapter_only",
+  "ip_lock_sha256": "37cacf84332e605648cb9a05c89c826dafaddd6cc1926f468fead7fc12fff5a4",
+  "link": {
+    "bar0_hardware_decode": false,
+    "data_width_bits": 16,
+    "datak_width_bits": 2,
+    "encoded_symbol_clock_mhz": 250,
+    "generation": 1,
+    "hardware_config_enumeration": false,
+    "lanes": 1,
+    "pipe_parallel_clock_mhz": 125,
+    "qualifier": "source_and_adapter_preflight_only",
+    "trained_l0": false
+  },
+  "local_source_overlays": [
+    {
+      "path": "dv/pcie_link/patches/openpcie_ltssm_comb_assignment.patch",
+      "role": "endpoint",
+      "sha256": "db3a326f7a8097399e4abdd1cc0363be739a9ffa5a2db2310f2de665a4cbf8cd",
+      "status": "reviewed_source_overlay_not_upstream_revision"
+    }
+  ],
+  "phy": {
+    "adapter": "dv/pcie_link/pipe_x1_adapter.sv",
+    "adapter_sha256": "f36ed54d4be6040eacac0af856960b670eae06b28719716c55d1182fc5c0dcfd",
+    "implementation": "behavioral_digital_pipe_only",
+    "status_driver": "not_connected_yet"
+  },
+  "ports": {
+    "endpoint": {
+      "config_space_rdl": "src/pcie_cfg/pcie_config.rdl",
+      "ip_lock": "pcie_endpoint_openpcie",
+      "link_up": "link_up_o",
+      "ltssm_state": "ltssm_debug_state",
+      "patch": "dv/pcie_link/patches/openpcie_ltssm_comb_assignment.patch",
+      "rx_data": "phy_rxdata",
+      "rx_datak": "phy_rxdatak",
+      "rx_electrical_idle": "phy_rxelecidle",
+      "rx_valid": "phy_rxdata_valid",
+      "top": "pcie_phy_top",
+      "tx_data": "phy_txdata",
+      "tx_datak": "phy_txdatak",
+      "tx_electrical_idle": "phy_txelecidle",
+      "tx_valid": "phy_txdata_valid"
+    },
+    "host": {
+      "data_width_parameter": "DataWidth",
+      "dependency_ip_lock": "pcie_host_vproc",
+      "endpoint_parameter": "EndPoint",
+      "endpoint_parameter_value": 0,
+      "ip_lock": "pcie_host_pcievhost",
+      "rx_data": "RxData",
+      "rx_datak": "RxDataK",
+      "rx_electrical_idle": "ElecIdleIn",
+      "top": "pcieVHostPipex1",
+      "tx_data": "TxData",
+      "tx_datak": "TxDataK",
+      "tx_electrical_idle": "ElecIdleOut"
+    }
+  },
+  "providers": {
+    "endpoint": {
+      "commit": "4b4779c6c68048240c9a625b45156e864bf6105a",
+      "git": "https://github.com/isomoye-msu/pcie_datalink_layer.git",
+      "integration": "digital_link_candidate_unqualified",
+      "ip_lock_key": "pcie_endpoint_openpcie",
+      "license": "needs-review-upstream-mit-claim-no-root-license",
+      "modules": [
+        "src/pcie_phy_core/pcie_phy_top.sv",
+        "src/pcie_cfg/pcie_config.rdl",
+        "pcie_phy.core"
+      ],
+      "submodules": [
+        "src/async_fifo",
+        "src/verilog-pcie",
+        "src/verilog-axis"
+      ]
+    },
+    "host": {
+      "commit": "b82b2ff3a047f742354c9607dea34b9b97bf108c",
+      "git": "https://github.com/wyvernSemi/pcievhost.git",
+      "integration": "simulation_host_only",
+      "ip_lock_key": "pcie_host_pcievhost",
+      "license": "GPL-3.0",
+      "modules": [
+        "verilog/pcieVHost/pcieVHostPipex1.v",
+        "verilog/testpipex1/makefile.verilator",
+        "LICENSE"
+      ],
+      "submodules": []
+    },
+    "host_support": {
+      "commit": "ae80e5b5cb43d4e9f82f9d45aa3b614e053f9df4",
+      "git": "https://github.com/wyvernSemi/vproc.git",
+      "integration": "simulation_host_dependency_only",
+      "ip_lock_key": "pcie_host_vproc",
+      "license": "GPL-3.0",
+      "modules": [
+        "LICENSE",
+        "README.md"
+      ],
+      "submodules": []
+    }
+  },
+  "schema_version": 1,
+  "selection": "openpcie_pcievhost_gen1_x1",
+  "source": "config/pcie_link.yaml",
+  "source_sha256": "07a9d17d31bee1fadf6c1deaedb10485657684ce986e5296cf00374b955de2a4"
+}

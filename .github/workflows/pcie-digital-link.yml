@@ -1,0 +1,649 @@
+name: PCIe digital link - pinned endpoint/host provider qualification
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'config/ip.lock.yaml'
+      - 'config/pcie_link.yaml'
+      - 'tools/ip_fetch.py'
+      - 'tools/pcie_link.py'
+      - 'tools/pcie_cfg_overlay.py'
+      - 'tools/pcie_link_report.py'
+      - 'tools/pcie_csrgen.py'
+      - 'csr/rdl/pcie_endpoint_prelink_ctrl.rdl'
+      - 'sw/pcie/pcie_endpoint_ctrl.h'
+      - 'csr/requirements.txt'
+      - 'gen/pcie/csr/**'
+      - 'tools/pcie_bar0_evidence.py'
+      - 'tools/pcie_mem_ingress_evidence.py'
+      - 'tools/pcie_upstream_test_timing.py'
+      - 'tools/pcie_native_pipe_capture.py'
+      - 'tools/ci_require_cocotb.py'
+      - 'tools/generate.py'
+      - 'dv/pcie_link/**'
+      - 'dv/pcie0/pcie_noc_tb.sv'
+      - 'dv/pcie0/noc_smoke.py'
+      - 'dv/pcie0/run_noc_smoke.py'
+      - 'tests/test_pcie_bar0_relocation_contract.py'
+      - 'gen/pcie_link/**'
+      - 'gen/manifest.json'
+      - 'tests/test_pcie_link.py'
+      - 'tests/test_pcie_scenario.py'
+      - 'tests/test_pcie_cfg_overlay.py'
+      - 'tests/test_pcie_cfg_decode.py'
+      - 'tests/test_pcie_link_report.py'
+      - 'tests/test_pcie_csrgen.py'
+      - 'tests/fixtures/pcie_csr_headers_smoke.c'
+      - 'tests/test_pcie_bar0_evidence.py'
+      - 'tests/test_pcie_mem_ingress_evidence.py'
+      - 'tests/test_pcie_mode_compatibility.py'
+      - 'tests/test_pcie_upstream_test_timing.py'
+      - 'tests/test_pcie_native_pipe_capture.py'
+      - 'config/regression.yaml'
+      - 'config/stimulus/tests.yaml'
+      - 'dv/common/scenario.py'
+      - 'dv/common/action_runtime.py'
+      - 'config/scenarios/pcie-gen1-link.json'
+      - 'config/scenarios/pcie-gen1-bar0.json'
+      - 'config/scenarios/pcie-gen1-mem-ingress.json'
+      - 'tests/test_ci_require_cocotb.py'
+      - 'tests/test_ip_fetch_submodules.py'
+      - '.github/workflows/pcie-digital-link.yml'
+  workflow_dispatch:
+
+permissions: {contents: read}
+concurrency:
+  group: pcie-digital-link-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pcie-csr-generation:
+    name: Pinned SystemRDL/PeakRDL endpoint management CSR generation (NOT wired CPU0)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Install pinned repository CSR generator
+        run: |
+          set -euo pipefail
+          python3 -m pip install 'PyYAML==6.0.2' -r csr/requirements.txt
+      - name: Compile real RDL and validate non-overlapping PCIe CSR source
+        run: |
+          set -euo pipefail
+          python3 -m unittest tests.test_pcie_csrgen -v
+      - name: Generate deterministic AXI4-Lite RTL, C header and catalog
+        run: |
+          set -euo pipefail
+          python3 tools/pcie_csrgen.py --out .tools/pcie-csr
+          python3 tools/pcie_csrgen.py --out .tools/pcie-csr --check
+          # Source-only generated RTL and C ABI do not prove Config-NoC traffic.
+          grep -q 'module soc_pcie_ep_prelink_regblock' \
+            .tools/pcie-csr/rtl/soc_pcie_ep_prelink_regblock.sv
+          cc -std=c11 -Wall -Wextra -Werror \
+            -I.tools/pcie-csr -Isw/pcie \
+            -c tests/fixtures/pcie_csr_headers_smoke.c \
+            -o .tools/pcie-csr/headers_smoke.o
+      - name: Archive generated PCIe register RTL and register map for review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pcie-peakrdl-generated-${{ github.run_id }}
+          path: .tools/pcie-csr/
+          include-hidden-files: true
+          if-no-files-found: warn
+
+  provider-contract:
+    name: Pinned source selection and real adapter unit behavior (NOT L0)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      # Pinned official Icarus/Verilator binaries bypass unreliable APT DNS.
+      - uses: YosysHQ/setup-oss-cad-suite@v4
+        with:
+          version: '2026-11-10'
+          github-token: ${{ github.token }}
+      - name: Record simulator versions
+        run: |
+          set -euo pipefail
+          verilator --version
+          iverilog -V | head -n 2
+      - name: Install Python source-preflight dependencies
+        run: |
+          set -euo pipefail
+          python3 -m pip install 'PyYAML==6.0.2'
+      - name: Prove profile swaps fail closed and checked-in generated selection agrees
+        run: |
+          set -euo pipefail
+          python3 -m unittest tests.test_pcie_link tests.test_ip_fetch_submodules tests.test_ci_require_cocotb tests.test_pcie_scenario tests.test_pcie_cfg_overlay tests.test_pcie_cfg_decode tests.test_pcie_link_report tests.test_pcie_bar0_evidence tests.test_pcie_mem_ingress_evidence tests.test_pcie_mode_compatibility tests.test_pcie_upstream_test_timing tests.test_pcie_native_pipe_capture tests.test_pcie_bar0_relocation_contract -v
+          python3 tools/pcie_link.py --check
+          mkdir -p .tools/pcie-link
+          iverilog -g2012 -s tb_pcie_pipe_x1_adapter \
+            -o .tools/pcie-link/pipe_x1_adapter.vvp \
+            dv/pcie_link/pipe_x1_adapter.sv dv/pcie_link/tb_pipe_x1_adapter.sv
+          vvp .tools/pcie-link/pipe_x1_adapter.vvp \
+            | tee .tools/pcie-link/adapter-unit.log
+          grep -q '^PASS: Gen1 x1' .tools/pcie-link/adapter-unit.log
+          # An actual request-driven PHY response, not a timer-generated LinkUp.
+          iverilog -g2012 -s tb_pcie_phy_status_responder \
+            -o .tools/pcie-link/phy_status.vvp \
+            dv/pcie_link/phy_status_responder.sv \
+            dv/pcie_link/tb_phy_status_responder.sv
+          vvp .tools/pcie-link/phy_status.vvp \
+            | tee .tools/pcie-link/phy-status-unit.log
+          grep -q '^PASS: Gen1 receiver-detect' .tools/pcie-link/phy-status-unit.log
+          # Device-owned BAR initialization must precede LTSSM start.
+          iverilog -g2012 -s tb_endpoint_prelink_ctrl \
+            -o .tools/pcie-link/prelink.vvp \
+            dv/pcie_link/endpoint_prelink_ctrl.sv \
+            dv/pcie_link/tb_endpoint_prelink_ctrl.sv
+          vvp .tools/pcie-link/prelink.vvp \
+            | tee .tools/pcie-link/prelink-unit.log
+          grep -q '^PASS: device BAR size/target' .tools/pcie-link/prelink-unit.log
+          iverilog -g2012 -s tb_pcie_bar0_host_cfg \
+            -o .tools/pcie-link/bar-host.vvp \
+            dv/pcie_link/pcie_bar0_host_cfg.sv \
+            dv/pcie_link/tb_pcie_bar0_host_cfg.sv
+          vvp .tools/pcie-link/bar-host.vvp \
+            | tee .tools/pcie-link/bar-host-unit.log
+          grep -q '^PASS: real AXI-Lite host BAR0' .tools/pcie-link/bar-host-unit.log
+          iverilog -g2012 -s tb_bar0_noc_translate \
+            -o .tools/pcie-link/bar-translate.vvp \
+            dv/pcie_link/bar0_noc_translate.sv \
+            dv/pcie_link/tb_bar0_noc_translate.sv
+          vvp .tools/pcie-link/bar-translate.vvp \
+            | tee .tools/pcie-link/bar-translate-unit.log
+          grep -q '^PASS: BAR0 bus/local-NoC' .tools/pcie-link/bar-translate-unit.log
+      - name: Fetch three independently pinned providers and check original port names
+        run: |
+          set -euo pipefail
+          python3 tools/ip_fetch.py pcie_endpoint_openpcie pcie_host_pcievhost pcie_host_vproc
+          python3 tools/pcie_link.py --check --check-upstream
+          cp gen/pcie_link/selection.json .tools/pcie-link/selection.json
+          git -C .tools/pcie_endpoint_openpcie rev-parse HEAD \
+            > .tools/pcie-link/endpoint-head.txt
+          git -C .tools/pcie_host_pcievhost rev-parse HEAD \
+            > .tools/pcie-link/host-head.txt
+          git -C .tools/pcie_host_vproc rev-parse HEAD \
+            > .tools/pcie-link/vproc-head.txt
+      - name: Retain original selection, adapter smoke and pinned version evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pcie-digital-provider-contract-${{ github.run_id }}
+          path: |
+            gen/pcie_link/
+            .tools/pcie-link/
+          include-hidden-files: true
+          if-no-files-found: warn
+
+  generated-tree-parity:
+    name: Existing make check-generated with new checked-in PCIe manifest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-bender
+        env: {GH_TOKEN: "${{ github.token }}"}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Build original generator dependencies, do not bypass SoC drift gates
+        env:
+          GH_TOKEN: "${{ github.token }}"
+        run: |
+          set -euo pipefail
+          python3 -m pip install -r requirements.txt
+          python3 tools/ip_fetch.py floonoc
+          python3 -m pip install -e .tools/floonoc
+          python3 tools/generate.py --check
+
+  upstream-endpoint:
+    name: Pinned OpenPCIe FuseSoC/Verilator + reviewed LTSSM fix (NOT yet host-connected)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      # Pinned official Icarus/Verilator binaries bypass unreliable APT DNS.
+      - uses: YosysHQ/setup-oss-cad-suite@v4
+        with:
+          version: '2026-11-10'
+          github-token: ${{ github.token }}
+      - name: Record simulator versions
+        run: |
+          set -euo pipefail
+          verilator --version
+          iverilog -V | head -n 2
+      - name: Install original upstream Python test dependencies
+        run: |
+          set -euo pipefail
+          python3 -m pip install 'PyYAML==6.0.2' 'fusesoc==2.4.4' \
+            'edalize==0.6.1' 'cocotb==1.9.2' 'pyuvm==3.0.0' \
+            'cocotb-bus==0.2.1' 'cocotb-coverage==1.2.0' \
+            'cocotbext-pcie==0.2.16' 'cocotbext-axi==0.1.26' \
+            'cocotb-test==0.2.5' 'crc==7.1.0' \
+            'bitstring==4.3.1' 'bitarray==3.7.2' \
+            'pyvsc==0.9.5.27214109393'
+          python3 tools/ip_fetch.py pcie_endpoint_openpcie pcie_host_pcievhost pcie_host_vproc
+          # OSS CAD bundles a different Cocotb development runtime. Prefer
+          # the cocotb-config executable from our pinned Python environment
+          # for BOTH Verilator compilation and GPI runtime initialization.
+          export PATH="$(python3 -c 'import sysconfig; print(sysconfig.get_path("scripts"))'):$PATH"
+          python3 -c 'import cocotb, pyuvm; assert cocotb.__version__ == "1.9.2"; print("Pinned Cocotb", cocotb.__version__, "pyuvm", pyuvm.__file__)'
+          cocotb-config --version
+          test "$(cocotb-config --version)" = "1.9.2"
+          echo "Selected cocotb-config: $(command -v cocotb-config)"
+          echo "Selected pip Python: $(command -v python3)"
+          echo "Pinned Cocotb libdir: $(cocotb-config --lib-dir)"
+      - name: Apply only source-pinned, reviewed LTSSM fix and run original verification target
+        run: |
+          set -euo pipefail
+          mkdir -p .tools/pcie-link
+          python3 tools/pcie_link.py --check --check-upstream --apply-selected-overlays
+          # The original upstream UVM test hardcodes 25us but normal Detect
+          # takes 12ms. Explicitly accelerate ONLY this pinned FuseSoC sim
+          # target, and increase its test timeout to permit real TS1/TS2.
+          # This does not force LTSSM state or alter the cross-connected test.
+          python3 tools/pcie_upstream_test_timing.py \
+            --checkout .tools/pcie_endpoint_openpcie
+          git -C .tools/pcie_endpoint_openpcie diff -- \
+            pcie_phy.core verif/tests/test_pcie_core.py \
+            verif/sequences/pcie_enumeration_seq.py \
+            verif/agents/pipe_agent/pipe_agent.py \
+            src/dllp/tlp2dllp.sv \
+            src/dllp/dllp_handler.sv \
+            > .tools/pcie-link/openpcie-upstream-selftest-timing.diff
+          # Includes the explicitly pinned A/B first-beat CplD handshake
+          # probe. Original source+expected byte readback still gate CI.
+          git -C .tools/pcie_endpoint_openpcie diff -- src/dllp/tlp2dllp.sv \
+            > .tools/pcie-link/openpcie-cpld-ready-ab.diff
+          test -s .tools/pcie-link/openpcie-cpld-ready-ab.diff
+          grep -Fq '+        if (has_cplh_credit && has_cpld_credit && tlp_axis_tready && skid_axis_tvalid) begin' \
+            .tools/pcie-link/openpcie-cpld-ready-ab.diff
+          test -s .tools/pcie-link/openpcie-upstream-selftest-timing.diff
+          # OpenPCIe's native phy_txdata/K TLP/DLLP decoder is enabled.
+          # This proves the existing upstream monitor was instrumented,
+          # not that all link packets have reached the far-end host.
+          grep -Fq 'PCIE_UPSTREAM_PIPE_MON_TLP: direction=EP_TO_RC' \
+            .tools/pcie_endpoint_openpcie/verif/agents/pipe_agent/pipe_agent.py
+          grep -Fq 'PCIE_UPSTREAM_PIPE_MON_DLLP: direction=EP_TO_RC' \
+            .tools/pcie_endpoint_openpcie/verif/agents/pipe_agent/pipe_agent.py
+          # Verify runtime tracing is truly requested; compile-time --trace-fst
+          # by itself does not open a waveform. Edalize run_options passes
+          # these to original cocotb 1.9.2 Verilator simulator driver.
+          grep -Fq 'pcie-credit-debug.fst' \
+            .tools/pcie_endpoint_openpcie/pcie_phy.core
+          grep -Fq 'PCIE_UPSTREAM_EP_UPDATEFC_CPL_RX' \
+            .tools/pcie_endpoint_openpcie/src/dllp/dllp_handler.sv
+          grep -Fq 'PCIE_UPSTREAM_EP_CPLH_LATCH' \
+            .tools/pcie_endpoint_openpcie/src/dllp/tlp2dllp.sv
+          # Each Actions step starts a fresh shell. Re-select the pinned
+          # Python 3.11 scripts directory here as well (before FuseSoC).
+          export PATH="$(python3 -c 'import sysconfig; print(sysconfig.get_path("scripts"))'):$PATH"
+          test "$(cocotb-config --version)" = "1.9.2"
+          # Standalone upstream FuseSoC must NOT be modified with BAR0 wrapper
+          # hooks: that isolated source target lacks our BAR0 overlay module.
+          git -C .tools/pcie_endpoint_openpcie diff -- src/ltssm/pcie_ltssm_downstream.sv \
+            > .tools/pcie-link/openpcie-reviewed-ltssm.diff
+          test -s .tools/pcie-link/openpcie-reviewed-ltssm.diff
+          # Pinned Cocotb 1.9 initializes via the directly-linked Verilator
+          # VPI library. GPI_USERS/--pygpi-entry-point is a Cocotb 2.x API;
+          # using it here selects the wrong startup path.
+          unset GPI_USERS
+          export LIBPYTHON_LOC="$(cocotb-config --libpython)"
+          export PYTHONPATH="$PWD/.tools/pcie_endpoint_openpcie/verif/tests:${PYTHONPATH:-}"
+          export MODULE=test_pcie_core
+          # The original FuseSoC target elaborates pcie_phy_top, not top.
+          export TOPLEVEL=pcie_phy_top
+          export TOPLEVEL_LANG=verilog
+          export LD_LIBRARY_PATH="$(cocotb-config --lib-dir):${LD_LIBRARY_PATH:-}"
+          echo "Pinned Cocotb: $(cocotb-config --version) TOPLEVEL=$TOPLEVEL"
+          python3 -c 'import cocotb, pyuvm; assert cocotb.__version__ == "1.9.2"'
+          python3 --version
+          fusesoc --cores-root=.tools/pcie_endpoint_openpcie \
+            run --target=sim fusesoc:pcie:phy_core:1.0.0 \
+            2>&1 | tee .tools/pcie-link/openpcie-upstream.log
+          # FuseSoC can exit zero even when Cocotb fails test-module import.
+          # Require an actual completed, nonempty and entirely passing test table.
+          # Proof the original LTSSM actually received the explicit test-only
+          # 512x timing option; a source patch alone cannot pass qualification.
+          grep -q '^PCIE_EP_SIM_FAST_LTSSM: ENABLED timer_divider=512 min_tx_ts1=16' \
+            .tools/pcie-link/openpcie-upstream.log
+          python3 tools/ci_require_cocotb.py .tools/pcie-link/openpcie-upstream.log
+      - name: Preserve genuine pinned Verilator FST waveform for credit debugging
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p .tools/pcie-link/waveforms
+          wave=build/fusesoc_pcie_phy_core_1.0.0/sim/pcie-credit-debug.fst
+          if [[ -s "$wave" ]]; then
+            cp "$wave" .tools/pcie-link/waveforms/pcie-credit-debug.fst
+            du -h .tools/pcie-link/waveforms/pcie-credit-debug.fst
+            echo "PCIE_CREDIT_FST_CAPTURE: available original_RTL=true"
+          else
+            echo "PCIE_CREDIT_FST_CAPTURE: missing or empty; fail original upstream qualification"
+            exit 1
+          fi
+      # Reuse the generic protocol capture schema after original Cocotb,
+      # including when it fails. Capture integrity is NOT test PASS.
+      - name: Adapt pinned OpenPCIe native TLP/DLLP capture into unified protocol view
+        if: always()
+        run: |
+          set -euo pipefail
+          if [[ -f .tools/pcie-link/openpcie-upstream.log ]]; then
+            python3 tools/pcie_native_pipe_capture.py \
+              .tools/pcie-link/openpcie-upstream.log \
+              --out .tools/pcie-link/observations
+            test -s .tools/pcie-link/observations/protocol-events.jsonl
+            test -s .tools/pcie-link/observations/protocol-transactions.json
+            test -s .tools/pcie-link/observations/protocols.html
+          else
+            echo "No original upstream simulation log: no PIPE capture claim"
+          fi
+      - name: Preserve upstream endpoint run evidence and failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openpcie-upstream-rtl-${{ github.run_id }}
+          path: |
+            gen/pcie_link/
+            .tools/pcie-link/
+          include-hidden-files: true
+          if-no-files-found: warn
+
+  upstream-host:
+    name: Original pcievhost x1 model smoke (NOT connected to OpenPCIe)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      # Pinned official Icarus/Verilator binaries bypass unreliable APT DNS.
+      - uses: YosysHQ/setup-oss-cad-suite@v4
+        with:
+          version: '2026-11-10'
+          github-token: ${{ github.token }}
+      - name: Record simulator versions
+        run: |
+          set -euo pipefail
+          verilator --version
+          iverilog -V | head -n 2
+      - name: Fetch testbench-only GPL host and pinned VProc
+        run: |
+          set -euo pipefail
+          python3 -m pip install 'PyYAML==6.0.2'
+          python3 tools/ip_fetch.py pcie_host_pcievhost pcie_host_vproc
+      - name: Build/run upstream x1 self-test with pinned host backend
+        run: |
+          set -euo pipefail
+          mkdir -p .tools/pcie-link
+          # Upstream files.verilator hardcodes ../../../vproc/f_VProc.v;
+          # makefile VPROC_TOP alone cannot override this ORIGINAL filelist.
+          # Alias the verified exact-pinned tree (no source copy or fork).
+          test ! -e .tools/vproc
+          ln -s pcie_host_vproc .tools/vproc
+          test "$(git -C .tools/vproc rev-parse HEAD)" = \
+            "ae80e5b5cb43d4e9f82f9d45aa3b614e053f9df4"
+          make -C .tools/pcie_host_pcievhost/verilog/testpipex1 \
+            -f makefile.verilator run VPROC_TOP=../../../vproc \
+            2>&1 | tee .tools/pcie-link/pcievhost-upstream.log
+      - name: Retain original upstream host build and test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pcievhost-upstream-bfm-${{ github.run_id }}
+          path: |
+            gen/pcie_link/
+            .tools/pcie-link/
+          include-hidden-files: true
+          if-no-files-found: warn
+
+  cross-provider-elaboration:
+    name: Cross-connected real OpenPCIe RTL and independent pcievhost (elaboration ONLY)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      # Pinned official Icarus/Verilator binaries bypass unreliable APT DNS.
+      - uses: YosysHQ/setup-oss-cad-suite@v4
+        with:
+          version: '2026-11-10'
+          github-token: ${{ github.token }}
+      - name: Record simulator versions
+        run: |
+          set -euo pipefail
+          verilator --version
+          iverilog -V | head -n 2
+      - name: Fetch pinned endpoint/host/VProc and original FuseSoC RTL dependencies
+        run: |
+          set -euo pipefail
+          python3 -m pip install 'PyYAML==6.0.2' 'fusesoc==2.4.4' 'edalize==0.6.1'
+          python3 tools/ip_fetch.py pcie_endpoint_openpcie pcie_host_pcievhost pcie_host_vproc
+          python3 tools/pcie_link.py --check --check-upstream --apply-selected-overlays
+          python3 tools/pcie_cfg_overlay.py --checkout .tools/pcie_endpoint_openpcie
+          fusesoc --cores-root=.tools/pcie_endpoint_openpcie \
+            run --setup --target=sim fusesoc:pcie:phy_core:1.0.0
+      - name: Compile actual selected RC + endpoint source at shared Gen1 PIPE boundary
+        run: |
+          set -euo pipefail
+          # Original FuseSoC resolves the complete transitive endpoint RTL.
+          # No synthesized symbol-stream or LTSSM stand-in is used.
+          # The original host generates its Verilog register-map header from C.
+          make -C .tools/pcie_host_pcievhost/verilog/testpipex1 \
+            -f makefile.verilator ../headers/pcie_vhost_map.v
+          cd build/fusesoc_pcie_phy_core_1.0.0/sim
+          root="$GITHUB_WORKSPACE"
+          rc="$root/.tools/pcie_host_pcievhost"
+          vproc="$root/.tools/pcie_host_vproc"
+          verilator --lint-only --timing -Wno-fatal -DVPROC_SV \
+            -I"$rc/verilog/headers" -I"$rc/verilog/testpipex1" -I"$vproc" \
+            -f fusesoc_pcie_phy_core_1.0.0.vc \
+            "$rc/verilog/lib/Serialiser.v" \
+            "$rc/verilog/lib/clkmux.v" \
+            "$rc/verilog/pcieVHost/pcieVHostPipex1.v" \
+            "$rc/verilog/pcieVHost/pcieVHost.v" \
+            "$vproc/f_VProc.v" \
+            "$root/dv/pcie_link/pipe_x1_adapter.sv" \
+            "$root/dv/pcie_link/phy_status_responder.sv" \
+            "$root/dv/pcie_link/endpoint_prelink_ctrl.sv" \
+            "$root/dv/pcie_link/pcie_bar0_host_cfg.sv" \
+            "$root/.tools/pcie_endpoint_openpcie/src/pcie_cfg/pcie_config_decode.sv" \
+            "$root/.tools/pcie_endpoint_openpcie/src/pcie_cfg/pcie_config_handler.sv" \
+            "$root/.tools/pcie_endpoint_openpcie/src/pcie_cfg/pcie_config_mux.sv" \
+            "$root/.tools/pcie_endpoint_openpcie/src/pcie_cfg/pcie_config_reg.sv" \
+            "$root/.tools/pcie_endpoint_openpcie/src/pcie_cfg/pcie_cfg_wrapper.sv" \
+            "$root/dv/pcie_link/tb_pcie_cross_link.sv" \
+            --top-module test \
+            2>&1 | tee "$root/cross-provider-elaboration.log"
+          # RTL elaboration is only a necessary precondition, never L0 proof.
+      - name: Archive original compiler output even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pcie-cross-provider-elaboration-${{ github.run_id }}
+          path: cross-provider-elaboration.log
+          if-no-files-found: warn
+
+  cross-provider-training:
+    name: Independent PCIe real link / ${{ matrix.mode }} (no forced state)
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {mode: l0, scenario: config/scenarios/pcie-gen1-link.json}
+          - {mode: bar0, scenario: config/scenarios/pcie-gen1-bar0.json}
+          - {mode: mem_ingress, scenario: config/scenarios/pcie-gen1-mem-ingress.json}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      # Pinned official Icarus/Verilator binaries bypass unreliable APT DNS.
+      - uses: YosysHQ/setup-oss-cad-suite@v4
+        with:
+          version: '2026-11-10'
+          github-token: ${{ github.token }}
+      - name: Record simulator versions
+        run: |
+          set -euo pipefail
+          verilator --version
+          iverilog -V | head -n 2
+      - name: Fetch and prepare original pinned endpoint plus GPL simulation host
+        run: |
+          set -euo pipefail
+          python3 -m pip install 'PyYAML==6.0.2' 'fusesoc==2.4.4' 'edalize==0.6.1'
+          python3 tools/ip_fetch.py pcie_endpoint_openpcie pcie_host_pcievhost pcie_host_vproc
+          python3 tools/pcie_link.py --check --check-upstream --apply-selected-overlays
+          python3 tools/pcie_cfg_overlay.py --checkout .tools/pcie_endpoint_openpcie
+          fusesoc --cores-root=.tools/pcie_endpoint_openpcie \
+            run --setup --target=sim fusesoc:pcie:phy_core:1.0.0
+          # The upstream host makefile requires this exact pinned VProc alias.
+          test ! -e .tools/vproc
+          ln -s pcie_host_vproc .tools/vproc
+          test "$(git -C .tools/vproc rev-parse HEAD)" = \
+            "ae80e5b5cb43d4e9f82f9d45aa3b614e053f9df4"
+          host=.tools/pcie_host_pcievhost/verilog
+          cp -a "$host/testpipex1" "$host/testcross_x1"
+          cp dv/pcie_link/tb_pcie_cross_link.sv "$host/testcross_x1/test.v"
+          cp dv/pcie_link/host_link_vproc.cpp \
+            "$host/testcross_x1/usercode/VUserMain0.cpp"
+          # Exactly one canonical SCN scenario/plan, shared with Python/C/SV.
+          mkdir -p .tools/pcie-link/scenario
+          python3 tools/scenario_plan.py \
+            --scenario "${{ matrix.scenario }}" \
+            --soc config/soc.yaml \
+            --out .tools/pcie-link/scenario/scenario-plan.json \
+            --source-revision "$GITHUB_SHA"
+          python3 tools/scenario_c.py \
+            --plan .tools/pcie-link/scenario/scenario-plan.json \
+            --out "$host/testcross_x1/usercode/soc_scenario_contract.h"
+          cp sw/common/soc_scn_action_adapter.h \
+            "$host/testcross_x1/usercode/soc_scn_action_adapter.h"
+          make -C "$host/testcross_x1" -f makefile.verilator \
+            ../headers/pcie_vhost_map.v
+          # Builds original host library and only the test-owned VProc node 0.
+          make -C "$host/testcross_x1" -f makefile.verilator \
+            vproc_lib NUM_VPROC=1 USER_C=VUserMain0.cpp \
+            VPROC_TOP=../../../vproc
+      - name: Compile and execute cross-connected real host/endpoint LTSSMs
+        run: |
+          set -euo pipefail
+          root="$GITHUB_WORKSPACE"
+          host="$root/.tools/pcie_host_pcievhost/verilog"
+          vproc="$root/.tools/pcie_host_vproc"
+          sim="$root/build/fusesoc_pcie_phy_core_1.0.0/sim"
+          cd "$sim"
+          mem_probe=0
+          if [[ "${{ matrix.mode }}" == "mem_ingress" ]]; then mem_probe=1; fi
+          verilator --binary -sv --timing -Wno-fatal -DVPROC_SV \
+            -I"$host/headers" -I"$host/testcross_x1" -I"$vproc" \
+            -f fusesoc_pcie_phy_core_1.0.0.vc \
+            "$host/lib/Serialiser.v" "$host/lib/clkmux.v" \
+            "$host/pcieVHost/pcieVHostPipex1.v" \
+            "$host/pcieVHost/pcieVHost.v" "$vproc/f_VProc.v" \
+            "$root/dv/pcie_link/pipe_x1_adapter.sv" \
+            "$root/dv/pcie_link/phy_status_responder.sv" \
+            "$root/dv/pcie_link/endpoint_prelink_ctrl.sv" \
+            "$root/dv/pcie_link/pcie_bar0_host_cfg.sv" \
+            "$root/.tools/pcie_endpoint_openpcie/src/pcie_cfg/pcie_config_decode.sv" \
+            "$root/.tools/pcie_endpoint_openpcie/src/pcie_cfg/pcie_config_handler.sv" \
+            "$root/.tools/pcie_endpoint_openpcie/src/pcie_cfg/pcie_config_mux.sv" \
+            "$root/.tools/pcie_endpoint_openpcie/src/pcie_cfg/pcie_config_reg.sv" \
+            "$root/.tools/pcie_endpoint_openpcie/src/pcie_cfg/pcie_cfg_wrapper.sv" \
+            "$root/dv/pcie_link/tb_pcie_cross_link.sv" \
+            --top-module test -GSIM_FORCE_FAST_LTSSM=1 "-GVERIFY_MEM_INGRESS=$mem_probe" -Mdir "$root/.tools/pcie-cross-obj" \
+            -CFLAGS '-std=c++17 -Wno-attributes' \
+            -LDFLAGS "-Wl,-E -lrt -rdynamic -Wl,-whole-archive \
+              -L$host/testcross_x1 -lvproc \
+              -L$root/.tools/pcie_host_pcievhost/lib -lpcievhost \
+              -Wl,-no-whole-archive -ldl" \
+            2>&1 | tee "$root/pcie-cross-build.log"
+          # The selected plan SHA is independently computed by the runner,
+          # not copied from the same generated C header.
+          export SOC_SELECTED_PLAN_SHA
+          SOC_SELECTED_PLAN_SHA="$(sha256sum "$root/.tools/pcie-link/scenario/scenario-plan.json" | cut -d' ' -f1)"
+          # The original OpenPCIe PHY descrambler is active. Disabling
+          # scrambling in the RC's previous L0-only smoke allowed early
+          # link_up_o but then entered Recovery rather than true ST_L0.
+          # Both genuine-link modes MUST use the original pcievhost
+          # Gen1 scrambler. 8b/10b remains handled by the PIPE K bits.
+          export PCIE_HOST_SCRAMBLING=1
+          "$root/.tools/pcie-cross-obj/Vtop" 2>&1 | tee "$root/pcie-cross-run.log"
+          grep -q '^PCIE_RC_SCRAMBLE_MODE: ENABLED' "$root/pcie-cross-run.log"
+          # Original TLP/AXI-Lite checkers run before publishing their
+          # transactions. Never infer successful enumeration from L0.
+          # Mode must be visibly selected, but success still requires genuine L0.
+          grep -q '^PCIE_SIM_FORCE_FAST_LTSSM: ENABLED override=512x' "$root/pcie-cross-run.log"
+          grep -q '^PCIE_EP_SIM_FAST_LTSSM: ENABLED timer_divider=512 min_tx_ts1=16' "$root/pcie-cross-run.log"
+          grep -Fq "PCIE_SCN_DRIVER: plan=$SOC_SELECTED_PLAN_SHA action=train_link stage=issued" "$root/pcie-cross-run.log"
+          grep -Fq "PCIE_SCN_DRIVER: plan=$SOC_SELECTED_PLAN_SHA action=train_link stage=driver_done" "$root/pcie-cross-run.log"
+          # Require independently observed actual LTSSMs, not just $finish.
+          grep -q '^PCIE_HOST_L0:' "$root/pcie-cross-run.log"
+          grep -q '^PCIE_ENDPOINT_L0:' "$root/pcie-cross-run.log"
+          # The BAR0 matrix lane is strictly stronger: independent host
+          # ConfigRd0/CfgWr0 completions must return over the actual link.
+          if [[ "${{ matrix.mode }}" == "bar0" || "${{ matrix.mode }}" == "mem_ingress" ]]; then
+            # Independent byte-provenance check: original RC packet, actual
+            # endpoint RX payload, accepted AXI-Lite write and CplD return.
+            # Fail even when final readback happened to match due to a
+            # compensating byte swap elsewhere.
+            python3 "$root/tools/pcie_bar0_evidence.py" "$root/pcie-cross-run.log" \
+              --out "$root/.tools/pcie-link/observations"
+            grep -q '^PCIE_RC_CFG_PROBE_OK: BAR0 mask=fffff000' "$root/pcie-cross-run.log"
+            grep -q '^PCIE_RC_CFG_BAR_ASSIGNED: BAR0 bus=80001000' "$root/pcie-cross-run.log"
+            grep -q '^PCIE_RC_CFG_MSE_ENABLED:' "$root/pcie-cross-run.log"
+            # CPU-side DBI alias must reflect the same host-owned hardware
+            # BAR0/MSE state observed over TLP; never a TB-written duplicate.
+            grep -q '^PCIE_DEVICE_DBI_ALIAS: BAR0=80001000' "$root/pcie-cross-run.log"
+            grep -q '^PCIE_DEVICE_DBI_ALIAS: COMMAND=00000002' "$root/pcie-cross-run.log"
+            grep -Fq "PCIE_SCN_DRIVER: plan=$SOC_SELECTED_PLAN_SHA action=enumerate_bar0 stage=driver_done" "$root/pcie-cross-run.log"
+          fi
+          if [[ "${{ matrix.mode }}" == "mem_ingress" ]]; then
+            grep -Fq "PCIE_SCN_DRIVER: plan=$SOC_SELECTED_PLAN_SHA action=write_bar0 stage=driver_done" "$root/pcie-cross-run.log"
+            grep -q '^PCIE_RC_BAR_MWR_TX: action=write_bar0 addr=80001100 data=a5c36e91' "$root/pcie-cross-run.log"
+            grep -q '^PCIE_EP_MEM_TLP_BACKPRESSURE: original endpoint valid ready=0' "$root/pcie-cross-run.log"
+            python3 "$root/tools/pcie_mem_ingress_evidence.py" "$root/pcie-cross-run.log" \
+              --out "$root/.tools/pcie-link/observations"
+            # NO AXI transfer or completion asserted here; link ingress only.
+          fi
+          # Unified passive reporter sees only genuine endpoint LTSSM
+          # timestamps, and for BAR lanes only checker-accepted original
+          # ConfigRd/ConfigWr request + Cpl/CplD boundary timestamps.
+          # No fake result.json, original non-config bridge or CPU boot PASS.
+          report_args=("$root/pcie-cross-run.log"
+                       --out "$root/.tools/pcie-link/observations"
+                       --mode "${{ matrix.mode }}"
+                       --github-summary "$GITHUB_STEP_SUMMARY")
+          if [[ "${{ matrix.mode }}" != "l0" ]]; then
+            report_args+=(--bar-evidence "$root/.tools/pcie-link/observations/pcie-bar0-evidence.json")
+          fi
+          python3 "$root/tools/pcie_link_report.py" "${report_args[@]}"
+          grep -q '^PCIE_TRACE: receiver-detect request' "$root/pcie-cross-run.log"
+          grep -q '^PCIE_TRACE: PHY receiver present' "$root/pcie-cross-run.log"
+      - name: Retain original commands, build and independent training logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pcie-cross-provider-${{ matrix.mode }}-${{ github.run_id }}
+          path: |
+            pcie-cross-build.log
+            pcie-cross-run.log
+            .tools/pcie-link/scenario/scenario-plan.json
+            .tools/pcie-link/observations/pcie-link-evidence.json
+            .tools/pcie-link/observations/pcie-bar0-evidence.json
+            .tools/pcie-link/observations/pcie-mem-ingress-evidence.json
+            .tools/pcie-link/observations/pcie-link-report.html
+            .tools/pcie-link/observations/protocol-events.jsonl
+            .tools/pcie-link/observations/protocol-transactions.json
+            .tools/pcie-link/observations/protocols.html
+          if-no-files-found: warn
