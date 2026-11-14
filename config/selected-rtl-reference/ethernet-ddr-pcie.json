@@ -5,9 +5,9 @@
   "compiled_top": "full_chip_tb",
   "selected_soc_top": ".tools/regression/chip-ethernet-ddr-pcie/variant/soc_top.sv",
   "source_count": 312,
-  "verified_pr": 221,
-  "verified_pr_head": "8b591f5f90752bc85e74fcd1281598930e96711d",
-  "evidence": "candidate_exact_selected_source_lock_after_timescale_only_change_not_hardware_qualified",
+  "verified_pr": 247,
+  "verified_pr_head": "d5665d62f27528baed920e930be9b3725ef884e7",
+  "evidence": "source_selected_312_compiler_inputs_qualified_by_exact_head_real_combined_dv_not_generator_owned_or_bit_elaborated",
   "required_generated_sha256": {
     ".tools/regression/chip-ethernet-ddr-pcie/variant/soc_top.sv": "3946d5ac82e1c50ea502377c8e4c8d0ae80b6b248d3c0edf8fb0cbb5585cd8fb",
     ".tools/regression/chip-ethernet-ddr-pcie/variant/flash.hex": "ee763ab99082530693b61f0ff126e433e7688148f0e8113fc7166c8a8fba5cba",
@@ -19,7 +19,9 @@
     ".tools/regression/chip-ethernet-ddr-pcie/ddr_noc/noc/floonoc/pcie0/local_data/floo_xezim_pcie0_local_data_noc.sv": "95f9d22739c7a98ef1637e41291dc4df4cc06ede7d3edeeb1bd1cfe56c2c6946",
     ".tools/regression/chip-ethernet-ddr-pcie/ddr_noc/noc/floonoc/memory0/local_data/floo_xezim_memory0_local_data_noc.sv": "d19e98ed89e1d0308f063c9af7184056ac924960b58ed1cb69866193014fc99e"
   },
-  "required_source_sha256": {},
+  "required_source_sha256": {
+    ".tools/ddr4/litedram_sim/gateware/soc_ddr4_sim.v": "8d5ee39173113d5c373862933847771087f461e12633b7b8a41e05c450588ad7"
+  },
   "filelist_sha256": "d86d2bb808b2a31cb242997f2dcbca7c41acfda8f3ff39f8a74ce64f51c40a32",
   "historical_volatile_source_sha256": {
     ".tools/ddr4/litedram_sim/gateware/soc_ddr4_sim.v": "641b2593bf12969b8f2816e6c84e6af7a25585ea970d91923b9ca6a5cfd38ec2"
@@ -29,7 +31,9 @@
   ],
   "stable_compiler_inputs_sha256": "ae782e50b83c34a43b64db264c3db573d15d90b7a1bbf129de7b069072cc14a4",
   "historical_compiler_input_sha256": "399222eb50d3fc58244885fe39502f2ce2955ed49144a7926ff8641d82c1e24f",
-  "qualification_status": "candidate_source_only",
-  "candidate_source_artifact_run": 42921944930,
-  "historical_reference": "config/selected-rtl-reference/history/ethernet-ddr-pcie-pr194.json"
+  "qualification_status": "qualified",
+  "candidate_source_artifact_run": 43514920706,
+  "historical_reference": "config/selected-rtl-reference/history/ethernet-ddr-pcie-pr194.json",
+  "exact_compiler_input_sha256": "37f22d616d6c7101d4320aa3bbd4eceb1ac744cf16d931369ecb861559839266",
+  "reproducible_controller_source_sha256": "8d5ee39173113d5c373862933847771087f461e12633b7b8a41e05c450588ad7"
 }
