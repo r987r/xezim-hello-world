@@ -11,6 +11,8 @@ from tools.pcie_upstream_test_timing import (
     PIPE_MONITOR_SOURCE, PIPE_MONITOR_TLP_BEFORE, PIPE_MONITOR_TLP_AFTER,
     PIPE_MONITOR_DLLP_BEFORE, PIPE_MONITOR_DLLP_AFTER,
     DLLP_HANDLER_REL, DLLP_CREDIT_RX_PROBE,
+    DEMUX_READY_REL, DEMUX_TLP_BEFORE, DEMUX_TLP_AFTER,
+    DEMUX_DLLP_BEFORE, DEMUX_DLLP_AFTER,
 )
 
 
@@ -109,6 +111,25 @@ class UpstreamTimingOverlayTests(unittest.TestCase):
         self.assertNotIn("rx_release_fc(", ENUM_RC_FC_AFTER)
         self.assertNotIn("tx_consume_fc(", ENUM_RC_FC_AFTER)
         self.assertNotIn("dut.", ENUM_RC_FC_AFTER)
+
+    def test_original_skid_demux_ready_repair_requires_real_handshake(self):
+        source = ("module axis_user_demux;\n"
+                  + DEMUX_TLP_BEFORE + "\n"
+                  + DEMUX_DLLP_BEFORE + "\nendmodule\n")
+        got = patched(DEMUX_READY_REL, source)
+        self.assertIn(DEMUX_TLP_AFTER, got)
+        self.assertIn(DEMUX_DLLP_AFTER, got)
+        self.assertEqual(got.count("if (s_axis_tready && !s_axis_tlast)"), 2)
+        self.assertNotIn("s_axis_tready = m_dllp_axis_tready;", got)
+        self.assertNotIn("s_axis_tready = m_tlp_axis_tready;", got)
+        self.assertIn("s_axis_tready = dllp_ready;", got)
+        self.assertIn("s_axis_tready = tlp_ready;", got)
+        with self.assertRaisesRegex(ValueError, "changed"):
+            patched(DEMUX_READY_REL, got)
+        with self.assertRaisesRegex(ValueError, "changed"):
+            patched(DEMUX_READY_REL, source.replace("m_dllp_axis_tready", "m_tlp_axis_tready"))
+        with self.assertRaisesRegex(ValueError, "changed"):
+            patched(DEMUX_READY_REL, source.replace("next_state = ST_DLLP;", "next_state = ST_IDLE;"))
 
     def test_original_dllp_receiver_credit_debug_is_read_only(self):
         source = "module dllp_handler;\nendmodule\n"
