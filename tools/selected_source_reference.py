@@ -70,6 +70,17 @@ def validate_lock(lock: dict) -> None:
             raise ReferenceError("candidate source lock missing preserved history and source run")
     if not _sha(lock.get("filelist_sha256")):
         raise ReferenceError("invalid qualified compiler filelist reference")
+    if qualification == "qualified":
+        # The historical source lock excluded a varying LiteX controller
+        # timestamp. PR #247 normalized that exact source; a newly qualified
+        # lock must now attest ALL 312 compiler inputs, including real DDR RTL.
+        pinned = lock.get("exact_compiler_input_sha256")
+        if (not _sha(pinned)
+                or not _sha(lock.get("reproducible_controller_source_sha256"))
+                or len(variable) != 1
+                or lock["required_source_sha256"].get(variable[0])
+                   != lock["reproducible_controller_source_sha256"]):
+            raise ReferenceError("qualified combined source must pin full compiler SHA and DDR Verilog")
 
 
 def _stable_compiler_inputs(actual: dict, volatile: list[str]) -> str:
@@ -124,6 +135,11 @@ def compare(lock: dict, actual: dict) -> dict:
     for path in lock["volatile_source_paths"]:
         if not _sha(actual.get("source_sha256", {}).get(path)):
             raise ReferenceError("variable generated DDR source missing from compiler closure")
+    # Preserve historical comparison for archived builds; newly qualified
+    # references must reject any DDR source drift or metadata/CLI change.
+    if lock.get("qualification_status") == "qualified":
+        if actual.get("compiler_input_sha256") != lock["exact_compiler_input_sha256"]:
+            raise ReferenceError("exact qualified 312-source compiler input SHA changed")
     return {
         "schema_version": 1,
         "profile": lock["profile"],
@@ -137,7 +153,13 @@ def compare(lock: dict, actual: dict) -> dict:
         "variable_generated_ddr_sha256": {
             path: actual["source_sha256"][path] for path in lock["volatile_source_paths"]
         },
-        "evidence": ("candidate_source_digests_match_not_hardware_qualified" if lock.get("qualification_status")=="candidate_source_only" else "stable_selected_source_match_variable_ddr_unqualified_not_elaboration_or_simulation"),
+        "exact_compiler_input_sha256": (lock["exact_compiler_input_sha256"]
+                                        if lock.get("qualification_status") == "qualified" else None),
+        "evidence": ("qualified_exact_312_source_compiler_input_not_elaborated"
+                     if lock.get("qualification_status") == "qualified"
+                     else "candidate_source_digests_match_not_hardware_qualified"
+                     if lock.get("qualification_status") == "candidate_source_only"
+                     else "stable_selected_source_match_variable_ddr_unqualified_not_elaboration_or_simulation"),
     }
 
 
