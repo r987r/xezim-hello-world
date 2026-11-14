@@ -38,3 +38,55 @@ CLI's scheduling/reproduction/rejection logic with mocked runner calls;
 a real default/combined source rebuild + passive simulation acceptance
 must still be qualified before #184 can close. Do not copy a one-time CI
 snapshot into `gen/`; issue #184 tracks canonical generator integration.
+
+## Generator-owned combined RTL (P0 #184)
+
+The canonical generator now has an **opt-in** publication target, built from
+the same live `regress.py chip-ethernet-ddr-pcie --stage files` source
+selection rather than from a downloaded CI archive:
+
+```sh
+# After the existing dv-combined34 pinned Bender/FlooGen/LiteDRAM/C tools
+# have been installed and real LiteDRAM Verilog generated:
+make gen-combined
+make check-generated-combined
+```
+
+Both commands **re-run** the source-selected emitter, independently verify
+the original selected-source archive, and check exact per-file SHA values.
+The generated source-review tree is
+`gen/projects/xezim_soc_dv/variants/ethernet-ddr-pcie/`. It contains
+the actual selected top, real local/global DDR FlooNoC RTL, CPU firmware
+and ROM images, compiled CPU ELF, selected testbench sources, pinned
+LiteDRAM controller Verilog, plus the original full compiler source-hash
+inventory. The published top, testbench and firmware metadata use stable
+`gen/projects/` image paths instead of the previous ephemeral
+`.tools/regression/` references. These are the *only* source text edits
+to the selected original top and testbench; both raw and published SHA values
+are recorded. A missing image, extra temporary reference, unknown emitted
+source category, 312-source closure change or modified checked-in file
+fails without passing.
+
+This is the first reproducible **named selected variant publisher**, not a
+second SV generator. Normal `make gen` and `make check-generated` still
+cover the lightweight default variant and do not install or run the heavy
+opt-in pinned controller/PCIe toolchain. Therefore, **the combined variant
+is not fully integrated with the default atomic generator lifecycle yet**:
+a later default `make gen` can still replace `gen/` and remove the
+combined subtree. Before #184 closes, combine these into one coordinated
+atomic `make gen`/check-generation publication and commit actual bytes
+produced by final-head CI; prove the portable generated RTL elaborates and
+passes the existing real combined transaction checker. Do not treat an
+artifact upload or this opt-in generator as issue closure.
+
+The original 312-source compiler-input SHA in the selected run archive
+can include checkout-absolute compiler/include paths, so it is **not**
+copied as a supposedly cross-machine-stable generated manifest digest.
+The portable generated manifest instead fingerprints the relative ordered
+312-entry filelist, all actual pinned source/header SHA values, generated
+bytes, defines and source configuration. The original absolute-path
+fingerprint remains in the verified `.tools/regression/` run attestation.
+A test regenerates the same source under two different checkout directories
+and requires exact portable manifest and compiler filelist bytes. The
+portable copy is separately elaborated by Verilator in the existing CI, but
+this alone is not bit-level interconnect proof (#46).
