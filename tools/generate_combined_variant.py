@@ -37,8 +37,10 @@ def digest(data: bytes) -> str:
 
 
 def tree(folder: Path) -> dict[str, bytes]:
+    if any(p.is_symlink() for p in folder.rglob("*")):
+        raise CombinedGenerationError("generated variant contains unsafe symbolic links")
     return {p.relative_to(folder).as_posix(): p.read_bytes()
-            for p in folder.rglob("*") if p.is_file() and not p.is_symlink()}
+            for p in folder.rglob("*") if p.is_file()}
 
 
 def source_bytes(root: Path, name: str, expected: str) -> bytes:
@@ -53,18 +55,31 @@ def source_bytes(root: Path, name: str, expected: str) -> bytes:
     return raw
 
 
-def portable_image_paths(source: bytes, project: str) -> bytes:
-    """Rewrite only the two known path literals in a freshly emitted top."""
+def portable_image_paths(source: bytes, project: str, relative: str) -> bytes:
+    """Normalize ONLY known firmware references of freshly selected RTL.
+
+    All other compiler text must remain byte-identical. Unknown/extra paths
+    fail rather than silently publish a broken stand-alone generated variant.
+    """
     old = SOURCE_ROOT + "variant/"
     new = f"gen/projects/{project}/variants/{VARIANT}/rtl/"
+    expected = {
+        "rtl/soc_top.sv": ("flash.hex", "bootrom.hex"),
+        "rtl/full_chip_tb.sv": ("compute0.hex", "compute1.hex"),
+        "rtl/manifest.json": ("flash.hex",),
+    }
     result = source
-    for image in ("flash.hex", "bootrom.hex"):
-        previous = (old + image).encode("ascii")
-        if result.count(previous) != 1:
-            raise CombinedGenerationError("generated top missing unique ROM/flash image: " + image)
-        result = result.replace(previous, (new + image).encode("ascii"))
-    if (b".tools/regression/" in result or b"gen/projects/" not in result):
-        raise CombinedGenerationError("generated top still contains temporary regression paths")
+    if relative in expected:
+        for image in expected[relative]:
+            previous = (old + image).encode("ascii")
+            if result.count(previous) != 1:
+                raise CombinedGenerationError(
+                    "selected generated source lacks unique image reference: " +
+                    relative + ": " + image)
+            result = result.replace(previous, (new + image).encode("ascii"))
+    if b".tools/regression/" in result:
+        raise CombinedGenerationError(
+            "generated variant still references temporary regression paths: " + relative)
     return result
 
 
@@ -93,6 +108,8 @@ def emit(root: Path, folder: Path, *, runner=None) -> dict:
     original = verify_selected_archive(root, PROFILE, definition)
     generated = original["generated_sha256"]
     sources = original["source_sha256"]
+    if original.get("source_count") != 312 or len(sources) != 312:
+        raise CombinedGenerationError("selected combined source count changed; review source contract")
     top = SOURCE_ROOT + "variant/soc_top.sv"
     if top not in generated or generated[top] != sources.get(top):
         raise CombinedGenerationError("original selected combined RTL top not in compiler closure")
@@ -110,8 +127,8 @@ def emit(root: Path, folder: Path, *, runner=None) -> dict:
         else:
             raise CombinedGenerationError("unreviewed generated source category: " + suffix)
         raw = source_bytes(root, name, sha)
-        if name == top:
-            raw = portable_image_paths(raw, project)
+        if suffix.startswith("variant/"):
+            raw = portable_image_paths(raw, project, rel)
         output = folder / rel
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_bytes(raw)
@@ -148,6 +165,7 @@ def emit(root: Path, folder: Path, *, runner=None) -> dict:
         "evidence": "generator_owned_selected_source_review_not_elaborated_or_simulated",
     }
     (folder / "manifest.json").write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n")
+    (folder / ".generated-combined").write_text("combined-source-v1\n")
     return metadata
 
 
@@ -177,8 +195,20 @@ def main() -> int:
             print("PASS generator-owned combined variant exact selected source replay")
             return 0
         if destination.exists():
-            shutil.rmtree(destination)
-        fresh.rename(destination)
+            if not (destination / ".generated-combined").is_file():
+                raise CombinedGenerationError("refusing to replace unowned generated variant")
+            backup = destination.with_name(destination.name + ".previous-combined")
+            if backup.exists():
+                raise CombinedGenerationError("previous combined generation backup must be removed first")
+            destination.rename(backup)
+            try:
+                fresh.rename(destination)
+            except Exception:
+                backup.rename(destination)
+                raise
+            shutil.rmtree(backup)
+        else:
+            fresh.rename(destination)
     print("GENERATED real combined RTL at " + str(destination.relative_to(root)))
     return 0
 
