@@ -281,6 +281,28 @@ def execute(cfg: Path, out: Path, readme: Path, check: bool = False) -> int:
         staging = Path(temporary) / "gen"
         staging.mkdir()
         readme_result = build(cfg, staging, readme)
+        # Named heavy combined hardware is emitted by the same selected
+        # regress.py/FlooGen/C RTL authority, but requires the optional
+        # pinned DDR/PCIe toolchains. Ordinary default generation preserves
+        # ONLY the specifically owned, fully hash-verified selected tree.
+        # Unrecognized files or tampering fail; never silently drop work or
+        # accept an arbitrary stale generated subdirectory.
+        selected_project = yaml.safe_load(cfg.read_text())["name"]
+        named = Path("projects") / selected_project / "variants" / "ethernet-ddr-pcie"
+        existing = out / named
+        if existing.exists() or existing.is_symlink():
+            from generate_combined_variant import (
+                CombinedGenerationError, verify_published_tree)
+            try:
+                verify_published_tree(existing, cfg)
+            except CombinedGenerationError as exc:
+                raise GenerationError("existing combined generated RTL failed integrity: " +
+                                      str(exc)) from exc
+            replacement = staging / named
+            if replacement.exists():
+                raise GenerationError("default generator unexpectedly owns selected combined variant")
+            replacement.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(existing, replacement, symlinks=False)
         if check:
             differences_found = differences(staging, out, readme_result, readme)
             if differences_found:
