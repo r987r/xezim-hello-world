@@ -65,7 +65,8 @@ jobs:
   real-combined-rtl:
     needs: static-contract
     runs-on: ubuntu-24.04
-    timeout-minutes: 110
+    # Existing long RTL simulation plus two real pinned source regenerations.
+    timeout-minutes: 145
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
