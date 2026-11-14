@@ -43,6 +43,60 @@ def tree(folder: Path) -> dict[str, bytes]:
             for p in folder.rglob("*") if p.is_file()}
 
 
+def verify_published_tree(folder: Path, cfg: Path) -> dict:
+    """Fast, fail-closed local integrity gate for the owned opt-in variant.
+
+    The default generator cannot independently regenerate pinned LiteDRAM,
+    PCIe and C firmware without the heavy toolchain; its check still must
+    reject changed or foreign generated files. The separate combined check
+    replays all real pinned sources.
+    """
+    if folder.is_symlink() or not folder.is_dir():
+        raise CombinedGenerationError("unowned or missing combined variant directory")
+    files = tree(folder)  # rejects all symlinks, including nested directories
+    if files.get(".generated-combined") != b"combined-source-v1\n":
+        raise CombinedGenerationError("missing exact combined generated ownership marker")
+    try:
+        manifest = json.loads(files["manifest.json"])
+    except (KeyError, ValueError, UnicodeDecodeError) as exc:
+        raise CombinedGenerationError("invalid combined generated manifest") from exc
+    project = yaml.safe_load(cfg.read_text())["name"]
+    if (manifest.get("schema_version") != 1
+            or manifest.get("project") != project
+            or manifest.get("variant") != VARIANT
+            or manifest.get("source_profile") != PROFILE
+            or manifest.get("soc_config_sha256") != digest(cfg.read_bytes())
+            or manifest.get("source_count") != 312
+            or len(manifest.get("selected_source_sha256", {})) != 312):
+        raise CombinedGenerationError("combined source config or provenance changed")
+    entries = manifest.get("files")
+    if not isinstance(entries, dict):
+        raise CombinedGenerationError("invalid combined generated file inventory")
+    expected = set(entries) | {".generated-combined", "manifest.json",
+                                "compiler/sources.f"}
+    if set(files) != expected:
+        raise CombinedGenerationError("combined generated variant contains stale or missing files")
+    for rel, data in files.items():
+        if rel in entries:
+            record = entries[rel]
+            if (not isinstance(record, dict)
+                    or record.get("generated_sha256") != digest(data)):
+                raise CombinedGenerationError("combined generated file digest changed: " + rel)
+    compiler = files["compiler/sources.f"]
+    if manifest.get("portable_filelist_sha256") != digest(compiler):
+        raise CombinedGenerationError("combined generated compiler filelist drift")
+    text = compiler.decode("utf-8")
+    selected = [line for line in text.splitlines() if not line.startswith("+")]
+    if len(selected) != 312 or len(set(selected)) != 312:
+        raise CombinedGenerationError("combined generated compiler source ordering/selection drift")
+    prefix = f"gen/projects/{project}/variants/{VARIANT}/"
+    for name in selected:
+        if name.startswith(prefix):
+            if name[len(prefix):] not in entries:
+                raise CombinedGenerationError("combined compiler list references missing published RTL")
+    return manifest
+
+
 def source_bytes(root: Path, name: str, expected: str) -> bytes:
     if not isinstance(name, str) or Path(name).is_absolute() or ".." in Path(name).parts:
         raise CombinedGenerationError("unsafe selected compiler path")
@@ -222,6 +276,7 @@ def emit(root: Path, folder: Path, *, runner=None) -> dict:
     metadata = {
         "schema_version": 1, "project": project, "variant": VARIANT,
         "source_profile": PROFILE,
+        "soc_config_sha256": digest((root / "config/soc.yaml").read_bytes()),
         "original_source_attestation": SOURCE_ROOT + "selected-rtl-manifest.json",
         "portable_compiler_input_sha256": digest(json.dumps(
             portable_identity, sort_keys=True, separators=(",", ":")).encode("utf-8")),
