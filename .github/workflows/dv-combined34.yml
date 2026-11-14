@@ -10,6 +10,9 @@ on:
       - 'config/runtime_migration.yaml'
       - 'tools/regress.py'
       - 'tools/build_hardware_variant.py'
+      - 'tools/generate_combined_variant.py'
+      - 'tests/test_generate_combined_variant.py'
+      - 'Makefile'
       - 'tools/selected_source_reference.py'
       - 'config/selected-rtl-reference/**'
       - 'tests/test_selected_source_reference.py'
@@ -48,8 +51,8 @@ jobs:
       - name: Verify selected config, C ABI and independent evidence contract
         run: |
           set -euo pipefail
-          python3 -m py_compile tools/regress.py tools/cpu_dma_firmware.py tools/full_chip_gen.py dv/integration/test_combined.py dv/integration/combined34_scoreboard.py dv/pcie0/host_adapter.py dv/pcie0/tlp_trace.py dv/ethernet0/gmii_trace.py rtl/memory/ddr4/dfi_to_protocol.py
-          python3 -m unittest tests.test_combined34 tests.test_regression tests.test_selected_source_reference -v
+          python3 -m py_compile tools/generate_combined_variant.py tools/regress.py tools/cpu_dma_firmware.py tools/full_chip_gen.py dv/integration/test_combined.py dv/integration/combined34_scoreboard.py dv/pcie0/host_adapter.py dv/pcie0/tlp_trace.py dv/ethernet0/gmii_trace.py rtl/memory/ddr4/dfi_to_protocol.py
+          python3 -m unittest tests.test_generate_combined_variant tests.test_combined34 tests.test_regression tests.test_selected_source_reference -v
           python3 tools/stimulus_catalog.py
           python3 tools/regress.py --list
           clang --target=riscv32-unknown-elf -march=rv32i -mabi=ilp32 -ffreestanding -fsyntax-only \
@@ -120,6 +123,27 @@ jobs:
           test -s .tools/regression/chip-ethernet-ddr-pcie/ddr_noc/ddr4_init_script.json
           test -s .tools/regression/chip-ethernet-ddr-pcie/sources.f
           make check-generated
+      - name: Generate and independently replay actual portable Ethernet DDR PCIe RTL
+        timeout-minutes: 40
+        run: |
+          set -euo pipefail
+          make gen-combined
+          make check-generated-combined
+          test -s gen/projects/xezim_soc_dv/variants/ethernet-ddr-pcie/rtl/soc_top.sv
+          test -s gen/projects/xezim_soc_dv/variants/ethernet-ddr-pcie/controller/gateware/soc_ddr4_sim.v
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path("gen/projects/xezim_soc_dv/variants/ethernet-ddr-pcie")
+          manifest=json.loads((root/"manifest.json").read_text())
+          assert manifest["source_count"]==312
+          assert len(manifest["selected_source_sha256"])==312
+          assert "rtl/soc_top.sv" in manifest["files"]
+          for name in ("rtl/soc_top.sv","rtl/full_chip_tb.sv","rtl/manifest.json"):
+              data=(root/name).read_bytes()
+              assert b".tools/regression/" not in data, name
+          print("PASS selected combined generated RTL, portable ROM and exact source replay")
+          PY
       - name: Elaborate exact-head Ethernet LiteDRAM iDMA PCIe chip
         timeout-minutes: 35
         run: python3 tools/regress.py chip-ethernet-ddr-pcie --stage build --fail-fast
@@ -154,7 +178,8 @@ jobs:
           name: dv-combined34-single-chip-${{ github.run_id }}
           path: |
             .tools/regression/chip-ethernet-ddr-pcie/
-            .tools/rtl-review-staging/xezim_soc_dv/soc-ethernet-ddr-pcie/
+            .tools/rtl-review-staging/xezim_soc_dv/soc-ethernet-ddr-pcie/ 
+           gen/projects/xezim_soc_dv/variants/ethernet-ddr-pcie/
             .tools/ddr4/litedram_sim/ddr4_manifest.json
           include-hidden-files: true
           if-no-files-found: warn
