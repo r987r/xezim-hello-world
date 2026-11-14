@@ -178,8 +178,8 @@ jobs:
           name: dv-combined34-single-chip-${{ github.run_id }}
           path: |
             .tools/regression/chip-ethernet-ddr-pcie/
-            .tools/rtl-review-staging/xezim_soc_dv/soc-ethernet-ddr-pcie/ 
-           gen/projects/xezim_soc_dv/variants/ethernet-ddr-pcie/
+            .tools/rtl-review-staging/xezim_soc_dv/soc-ethernet-ddr-pcie/
+            gen/projects/xezim_soc_dv/variants/ethernet-ddr-pcie/
             .tools/ddr4/litedram_sim/ddr4_manifest.json
           include-hidden-files: true
           if-no-files-found: warn
