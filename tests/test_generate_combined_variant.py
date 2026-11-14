@@ -143,6 +143,44 @@ class CombinedGeneratorTests(unittest.TestCase):
                              (self.root/"published/manifest.json").read_text())
             self.assertEqual(len(second["portable_compiler_input_sha256"]), 64)
 
+    def test_default_atomic_generator_preserves_verified_named_variant(self):
+        import generate
+        selected = self.root / "gen/projects/xezim_soc_dv/variants/ethernet-ddr-pcie"
+        self.generate()
+        selected.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(self.root / "published", selected)
+        actual_gen = self.root / "gen"
+        (actual_gen / generate.STAMP).write_text("socgen-v2\n")
+        (actual_gen / "default.sv").write_text("module default_top; endmodule\n")
+        readme = self.root / "README.md"
+        readme.write_text("existing README fixture\n")
+
+        def original_default_build(cfg, out, readme_path):
+            (out / generate.STAMP).write_text("socgen-v2\n")
+            (out / "default.sv").write_text("module default_top; endmodule\n")
+            return readme_path.read_text()
+
+        with patch.object(generate, "build", side_effect=original_default_build):
+            self.assertEqual(
+                generate.execute(self.root / "config/soc.yaml", actual_gen,
+                                 readme, check=True), 0)
+            self.assertEqual(
+                generate.execute(self.root / "config/soc.yaml", actual_gen,
+                                 readme, check=False), 0)
+            self.assertTrue((selected / "rtl/soc_top.sv").is_file())
+            (selected / "rtl/soc_top.sv").write_bytes(b"tampered real RTL\n")
+            with self.assertRaisesRegex(generate.GenerationError, "integrity"):
+                generate.execute(self.root / "config/soc.yaml", actual_gen,
+                                 readme, check=True)
+
+    def test_owned_selected_tree_detects_missing_and_stale_sources(self):
+        self.generate()
+        selected = self.root / "published"
+        publisher.verify_published_tree(selected, self.root / "config/soc.yaml")
+        (selected / "rtl/flash.hex").unlink()
+        with self.assertRaisesRegex(publisher.CombinedGenerationError, "missing"):
+            publisher.verify_published_tree(selected, self.root / "config/soc.yaml")
+
     def test_modified_original_real_rtl_fails_before_publication(self):
         path = self.root / publisher.SOURCE_ROOT / "variant/soc_top.sv"
         path.write_bytes(b"module false_top; endmodule")
