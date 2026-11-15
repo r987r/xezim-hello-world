@@ -1252,6 +1252,10 @@ def project_pages(output, projects, entries, repository, sha):
                if e.get('project_id') is not None} - project_ids
     if unknown:
         raise ValueError('run has unknown project identity: ' + str(sorted(unknown)))
+    # Untagged historical evidence belongs only to the canonical default
+    # SoC config, never to a newly cataloged project.
+    legacy_default = next((p['id'] for p in projects
+                           if p['config'] == 'config/soc.yaml'), None)
     cards = []
     for project in projects:
         pid = project['id']
@@ -1278,7 +1282,7 @@ def project_pages(output, projects, entries, repository, sha):
         # no other project may silently adopt them.
         if published:
             selected = [e for e in entries
-                        if e.get('project_id', 'xezim_soc_dv') == pid]
+                        if e.get('project_id', legacy_default) == pid]
         else:
             selected = [e for e in entries if e.get('project_id') == pid]
             if selected:
