@@ -82,6 +82,36 @@ class PcieLinkSelectionTests(unittest.TestCase):
             effective=1024 if dw==0 else dw
             self.assertEqual((effective+3)//4,credits)
 
+    def test_selected_endpoint_overlay_repairs_demux_handshake(self):
+        # Regress the selected-provider path, not just standalone self-test
+        # instrumentation: losing this hunk silently revives #76 CplH stalls.
+        patch_path = ROOT / "dv/pcie_link/patches/openpcie_ltssm_comb_assignment.patch"
+        contents = patch_path.read_text()
+        heading = "diff --git a/src/dllp/axis_user_demux.sv b/src/dllp/axis_user_demux.sv"
+        self.assertEqual(contents.count(heading), 1)
+        demux = contents.split(heading, 1)[1]
+        for removed, added in (
+            ("-            s_axis_tready = m_tlp_axis_tready;",
+             "+            s_axis_tready = tlp_ready;"),
+            ("-            s_axis_tready = m_dllp_axis_tready;",
+             "+            s_axis_tready = dllp_ready;"),
+            ("-            next_state = ST_TLP;",
+             "+            if (s_axis_tready && !s_axis_tlast) next_state = ST_TLP;"),
+            ("-            next_state = ST_DLLP;",
+             "+            if (s_axis_tready && !s_axis_tlast) next_state = ST_DLLP;"),
+        ):
+            self.assertIn(removed, demux)
+            self.assertIn(added, demux)
+        selected = pcie_link.selection(ROOT)
+        self.assertEqual(len(selected["local_source_overlays"]), 1)
+        self.assertEqual(selected["local_source_overlays"][0]["path"],
+                         "dv/pcie_link/patches/openpcie_ltssm_comb_assignment.patch")
+        self.assertEqual(selected["local_source_overlays"][0]["sha256"],
+                         pcie_link.digest(patch_path.read_bytes()))
+        selection_json = json.loads((ROOT / "gen/pcie_link/selection.json").read_text())
+        self.assertEqual(selection_json["local_source_overlays"],
+                         selected["local_source_overlays"])
+
     def test_endpoint_fc_overlay_is_explicit_and_does_not_fake_credits(self):
         # Source-pinned repair moves one-shot init to the provider's
         # existing dynamic UpdateFC producer; host FC validation remains on.
