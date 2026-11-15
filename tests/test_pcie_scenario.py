@@ -128,6 +128,10 @@ class PcieScenarioTests(unittest.TestCase):
         self.assertIn("end else begin : no_mem_write", rtl)
         self.assertIn("assign ep_mem_rx_ready = bar_mem_ready && adapter_ready;", rtl)
         self.assertIn("pcie_noc_tb #(.BAR0_RELOCATE(1'b1))", rtl)
+        self.assertIn("`ifdef PCIE_CONNECTED_MEM", rtl)
+        self.assertIn("`else", rtl)
+        self.assertIn("'-DPCIE_CONNECTED_MEM'",
+                      (ROOT/"tools/pcie_connected_compile.py").read_text())
         self.assertIn("PCIE_EP_MEM_TLP_BACKPRESSURE", rtl)
         self.assertIn("memWrite(address,bytes,4,", rc)
         self.assertIn("A posted MWr has no Cpl", rc)
