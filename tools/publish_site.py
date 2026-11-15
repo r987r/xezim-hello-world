@@ -1341,7 +1341,11 @@ def project_pages(output, projects, entries, repository, sha):
             for e in selected
         ], site_source_sha=sha, files=files,
             selected_compile_workflow=workflow_url,
-            functional_test_qualified=bool(selected))
+            historical_run_records_present=bool(selected),
+            current_source_functional_pass=any(
+                e.get('project_id') == pid and
+                e.get('source_sha') == sha and
+                e.get('passed') is True for e in selected))
         dump(base / 'data/project.json', data)
         info = ('<div class="eyebrow">' + escape(pid) +
                 '</div><h1>' + name + '</h1><p class="lede">' +
