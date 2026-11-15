@@ -90,21 +90,24 @@ def _verify_generated_subset(generated: Path, dest: Path) -> None:
     The only allowed post-generation additions are exact known compiler
     artifacts. Unexpected files and modified generated RTL still fail closed.
     """
-    expected = {
-        f.relative_to(generated).as_posix(): f.read_bytes()
+    expected_paths = {
+        f.relative_to(generated).as_posix(): f
         for f in generated.rglob("*") if f.is_file()
     }
-    actual = {
-        f.relative_to(dest).as_posix(): f.read_bytes()
+    actual_paths = {
+        f.relative_to(dest).as_posix(): f
         for f in dest.rglob("*") if f.is_file()
     }
-    for name, data in expected.items():
-        if actual.get(name) != data:
+    for name, original in expected_paths.items():
+        target = actual_paths.get(name)
+        if target is None or target.is_symlink() or sha(target.read_bytes()) != sha(original.read_bytes()):
             raise ValueError("selected project generated source mismatch: " + name)
-    additions = set(actual) - set(expected)
+    # The compiler may produce large .o/.cpp products. Compare their names
+    # only; do NOT read all compiled objects into memory during RTL checking.
+    additions = set(actual_paths) - set(expected_paths)
     allowed = {"chip/sources.f", "chip/compile-result.json", "chip/compile.log"}
     for name in additions:
-        if name not in allowed and not name.startswith("chip/obj_dir/"):
+        if (name not in allowed and not name.startswith("chip/obj_dir/")) or actual_paths[name].is_symlink():
             raise ValueError("unowned or stale generated project file: " + name)
 
 
