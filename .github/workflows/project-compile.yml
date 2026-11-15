@@ -15,19 +15,35 @@ on:
       - 'tools/socgen.py'
       - '.github/workflows/project-compile.yml'
   workflow_dispatch:
+  push:
+    branches: [main]
 permissions:
   contents: read
 concurrency:
   group: project-compile-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 jobs:
+  catalog:
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.projects.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Resolve and validate all project identities
+        id: projects
+        run: |
+          python3 -m pip install -r requirements.txt
+          echo "matrix=$(python3 tools/project_catalog.py --matrix)" >> "$GITHUB_OUTPUT"
   selected-projects:
+    needs: catalog
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     strategy:
       fail-fast: false
-      matrix:
-        project: [xezim_soc_dv, xezim_ethernet_cpu_ddr_pcie]
+      max-parallel: 3
+      matrix: ${{ fromJSON(needs.catalog.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
