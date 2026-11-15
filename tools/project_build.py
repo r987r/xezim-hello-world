@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Project-isolated boot/memory RTL generation using the shared SoC emitters.
+"""Project-isolated boot, memory and optional full-chip selected RTL.
 
-No shadow copies of RTL producers, test framework, or source configuration.
-This command generates the independently supported *unit* hardware slices;
-it never claims full-chip direct-link RTL or a passing simulation.
+Uses shared emitters and pinned IP without copying the verification engine.
+--full-chip emits actual selected NoC/SoC RTL; compilation and functional
+qualification are separate explicit gates.
 """
 from __future__ import annotations
 
@@ -63,8 +63,7 @@ def generate_one(root: Path, project: dict, output: Path, *,
         full_chip_gen.emit(
             soc, noc_manifest, noc_root, output / "chip",
             image_prefix=image_prefix)
-    # No full-chip test PASS may be inferred from successful source emission
-    # and verified. Memory-only and boot firmware are separately labelled.
+    # Hardware generation alone cannot imply a simulation or traffic PASS.
     record = {
         "schema_version": 1,
         "project_id": project["id"],

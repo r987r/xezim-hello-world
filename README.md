@@ -2,24 +2,24 @@
 
 [![SoC regression](https://github.com/r987r/xezim-hello-world/actions/workflows/dv-soc.yml/badge.svg)](https://github.com/r987r/xezim-hello-world/actions/workflows/dv-soc.yml)
 
-A hierarchical SoC verification vehicle using pinned open-source CPUs, PULP iDMA, FlooNoC, PCIe and Ethernet IP. The architecture and addresses come from [`config/soc.yaml`](config/soc.yaml); [`config/regression.yaml`](config/regression.yaml) selects executable tests; [interface contracts](config/interface_contracts.yaml) and [IP locks](config/ip.lock.yaml) define integration boundaries. Tracked `gen/` outputs are generated, **not** hand-maintained.
+A multi-project SoC verification platform using pinned open-source CPUs, PULP iDMA, FlooNoC, PCIe and Ethernet IP. Project configurations are selected through [`config/projects/catalog.yaml`](config/projects/catalog.yaml); the canonical original design is [`config/soc.yaml`](config/soc.yaml); [`config/regression.yaml`](config/regression.yaml) selects executable tests; [interface contracts](config/interface_contracts.yaml) and [IP locks](config/ip.lock.yaml) define integration boundaries. Tracked `gen/` outputs are generated, **not** hand-maintained.
 
 ## SoC projects
 
-The [verification hub](https://r987r.github.io/xezim-hello-world/) opens with
-a project picker after the Pages update merges. The canonical hierarchical
-SoC remains defined by [config/soc.yaml](config/soc.yaml). A separate
-[Ethernet / CPU+DDR / PCIe project](config/projects/ethernet-cpu-ddr-pcie/soc.yaml)
-defines one CPU, DDR only and direct FlooNoC data links, with independent
-source identity and [project review guide](docs/three-region-project.md).
-Both are registered under [config/projects/catalog.yaml](config/projects/catalog.yaml).
+The [verification hub](https://r987r.github.io/xezim-hello-world/) opens
+with a catalog-driven project picker. Each project has independent
+architecture, addresses, [selected top and source-file navigation](docs/multi-project-pages.md),
+and qualified test views. The current catalog includes the original
+[hierarchical chip](config/soc.yaml) and a separate
+[Ethernet / CPU+DDR / PCIe design](config/projects/ethernet-cpu-ddr-pcie/soc.yaml).
+The same FlooGen, Bender, boot/RTL generators, monitors and simulator
+infrastructure are shared.
 
-**Hardware qualification is project-specific:** the existing default SoC
-has actual generated RTL and source-qualified tests. The three-region project
-is currently *source-defined only*, pending real FlooGen direct-link and
-full-chip emission, independently checked AXI transactions and a project-aware
-regression target. Its project webpage must not show legacy results as PASS.
-[Project/Pages architecture](docs/multi-project-pages.md).
+Both projects **compile** with their separately selected FlooNoC RTL,
+full-chip top and C++ Verilator model. Only the original design has
+source-qualified functional regressions; the second design's end-to-end
+AXI/PCIe/Ethernet checks are pending. A compiled top is not a simulation PASS.
+Read [project onboarding](docs/project-onboarding.md) to add more designs.
 
 ## Start here
 

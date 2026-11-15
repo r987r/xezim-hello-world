@@ -1,6 +1,6 @@
 # GitHub Pages verification hub
 
-The [verification hub](https://r987r.github.io/xezim-hello-world/) opens with a **project picker**. Each project has a separate source-defined architecture, address map and run identity. The original project's full legacy views and run-report deep links remain available. Only the original project's current main-source generated topology and source-qualified CI evidence are currently published; project B is source-defined and has no qualified chip RTL or test runs. See [multi-project Pages routing](multi-project-pages.md). `.github/workflows/pages.yml` builds/collects and deploys using GitHub Actions Pages; PRs get offline previews, while trusted merge-to-main or manual `main` dispatches deploy. The GitHub Pages environment records the deployed source SHA.
+The [verification hub](https://r987r.github.io/xezim-hello-world/) opens with a **project picker**. Each project has a separate source-defined architecture, address map and run identity. The original project's full legacy views and run-report deep links remain available. The original project's checked-in RTL, topology and source-qualified test evidence are published directly. The new project has a distinct CI-generated and Verilator-compiled RTL top (available in source-selected GitHub Actions artifacts), but no project-qualified functional test run; the page does not claim a hardware PASS. See [multi-project Pages routing](multi-project-pages.md). `.github/workflows/pages.yml` builds/collects and deploys using GitHub Actions Pages; PRs get offline previews, while trusted merge-to-main or manual `main` dispatches deploy. The GitHub Pages environment records the deployed source SHA.
 
 ## What is published
 
@@ -13,10 +13,12 @@ Each test has an original **tested SHA** distinct from the currently deployed si
 
 ## Published page responsibilities
 
-The public site is an architecture and verification review surface, not an engineering decision log. Pages follow a consistent content model:
+The public site is an architecture and verification review surface, not an engineering decision log. Shared templates must remain project-neutral, with all project names, qualification badges, file catalogs and navigation supplied by the project registry. Pages follow a consistent content model:
 
 | Page | Primary presentation | Detailed references |
 | --- | --- | --- |
+| Project picker | Catalog-driven project directory, separate source and build status | Project registry and onboarding |
+| Project files | Selected SoC top, NoC wrapper, filelist, generated/source manifests | Tracked files or CI-generated source archive |
 | Overview | Canonical architecture image, design facts, verification snapshot | README, implementation boundaries |
 | Topology | Network structure, peripheral attachment inventory, FlooNoC source links | Architecture contracts, network manifests |
 | Chip architecture | Interactive subsystem/IP/router hierarchy and connectivity | RTL bindings and signal inventory |

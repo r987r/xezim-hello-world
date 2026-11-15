@@ -1,48 +1,69 @@
-# Project B: Ethernet -- CPU/DDR -- PCIe
+# Three-region Ethernet / CPU+DDR / PCIe chip
 
-This is a second independent SoC project definition for issue #167 in the
-existing r987r/xezim-hello-world repository. It does NOT modify the five-
-subsystem default project, and is not yet an executable generated full chip.
+Configuration: `config/projects/ethernet-cpu-ddr-pcie/soc.yaml`
+Project ID: `xezim_ethernet_cpu_ddr_pcie`.
 
-## Topology
+This is a different project on the shared SoC infrastructure, not a
+replacement for the original five-subsystem chip. It uses one PicoRV32
+CPU with SRAM and PULP iDMA, a DDR-only memory subsystem, Ethernet0,
+and PCIe0. No SERV, no HBM, no global **data** mesh.
 
-The three physical regions, left to right, are Ethernet0, CPU0+Memory0,
-PCIe0. The center includes two logical reusable subsystems, Compute0 and
-Memory0. The bottom global_config FlooNoC reaches all four subsystems.
+## Physical-region view
 
-Each neighboring pair uses two opposite AXI initiator directions, including
-the normal AXI response channels: Ethernet0 <-> Compute0, Compute0 <->
-Memory0, and Compute0 <-> PCIe0. There is no global data NoC, no HBM, no
-second CPU, and no reset-release protocol.
+```text
+  Ethernet0          CPU0 + Memory0             PCIe0
+  GMII / DMA   <-->   CPU / SRAM / DDR    <-->   PCIe bridge
+           L0            central link         L1
 
-## What the first branch slice actually establishes
+      global_config FlooNoC on the bottom, reaches all four subsystems
+```
 
-- A second source project using schema_version 2 and existing IP IDs, memory
-  map conventions, and interconnect backend names.
-- Shared source validation of DDR-only, one-CPU, direct-link topology and
-  full physical-region coverage, including deliberately invalid fixtures.
-- One-CPU ROM-copy firmware generation without a phantom secondary release.
-- Existing two-CPU global-data project remains the default; neither its RTL
-  nor its generated graphics are replaced by this project configuration.
+There are **four logical subsystems** in three physical regions.
+The data links are bidirectional 1:1 AXI4 FlooNoCs:
+Ethernet0–Compute0, Compute0–Memory0 and Compute0–PCIe0.
+Each link needs two separate AXI initiator directions and normal
+read/write response channels. The source-selected emitter produces
+six directed FlooNoC networks as part of 15 total NoC instances
+in this configuration. The central compute fabric routes by address;
+it does not imply CPU software copies every payload.
 
-The memory subsystem can be unit-generated with one DDR ingress/one target
-from the existing Verilog-AXI memory testbench. That is not proof of whole-
-chip flow routing.
+## Current generated and compiled boundary
 
-## Not yet implemented / do not report as verified
+The shared `tools/floonoc_gen.py`,
+`tools/supernoc_gen.py`,
+`tools/full_chip_gen.py`, and
+`tools/chip_bootgen.py` support this structural project:
+one CPU, DDR-only profile and real bidirectional direct data NoCs.
+No second reset-release CSR is used. The existing generated default
+tree is byte-for-byte unchanged.
 
-Current floonoc_gen.py, supernoc_gen.py, full_chip_gen.py and CPU0's
-full-chip C boot emitter still assume the old global-data/two-core topology.
-The current make gen command is for the default project ONLY.
+Two independent project compile jobs have passed:
+FlooGen/source selection, deterministic regeneration, Bender-pinned
+RTL closure, Verilator elaboration, and `--cc --build` C++
+model compilation. See the [compile workflow](https://github.com/r987r/xezim-hello-world/actions/workflows/project-compile.yml).
+The selected top `chip/soc_top.sv`, network wrapper
+`supernoc/soc_noc.sv`, manifests, and complete
+`chip/sources.f` are attached to that workflow's
+`project-compile-xezim_ethernet_cpu_ddr_pcie-<run_id>` artifact,
+or found in a local `.tools/projects/xezim_ethernet_cpu_ddr_pcie/` build.
+They are not checked in under the canonical `gen/` tree.
 
-Next: emit real FlooNoC direct links, wire selected Ethernet/CPU/DDR/PCIe
-RTL, qualify exact-source AXI traffic and byte integrity, then add two-
-project regression selection and existing GitHub Pages viewer design switch.
-No extra simulator/test/scenario engine, protocol monitor or reporting site.
+## Not yet hardware-qualified
 
-PCIe host transmission initially uses existing local-PCIe-SRAM staging.
-Direct DDR-source PCIe requester access is a separate hardware requirement;
-never claim zero-copy from a source-only topology drawing.
+Compilation is **not** a functional system test. In the compiled
+default-flavor top, selected Ethernet/PCIe endpoint logic may remain
+reserved or idle; the full real Ethernet RX, DDR controller and
+PCIe requester paths have not been exercised together. No Project B
+end-to-end accepted AXI/TLP/GMII packet, DDR contents check or
+byte-integrity PASS is claimed. Original Project A tests cannot
+qualify Project B. Direct DDR-source PCIe DMA (without local SRAM
+staging) is also a separate functional hardware requirement.
 
-Focused source check: python3 -m unittest tests.test_three_region_project -v
-This unit test does not elaborate or simulate whole-chip RTL.
+Next implementation: enable Project B's selected real IP attachments,
+add a separate exact-source regression target using the shared
+INIT/RUN/CHECK and passive monitor infrastructure, and verify
+Ethernet→CPU SRAM/DDR, DDR→PCIe and reverse host operations with real
+completions and byte checks.
+
+Command examples and project source file navigation are in
+[multi-project Pages](multi-project-pages.md).
