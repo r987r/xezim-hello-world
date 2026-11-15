@@ -18,7 +18,7 @@ from socgen import validate as validate_soc
 ROOT = Path(__file__).resolve().parents[1]
 REGISTRY = "config/projects/catalog.yaml"
 IDENT = re.compile(r"^[a-z][a-z0-9_]*$")
-QUALIFICATIONS = {"generated_default", "source_contract_only"}
+QUALIFICATIONS = {"generated_default", "source_contract_only", "ci_generated_compiled"}
 
 
 def projects(root: Path = ROOT) -> list[dict]:
@@ -82,8 +82,10 @@ def projects(root: Path = ROOT) -> list[dict]:
             "data_links": meta.get("direct_data_links", []),
             "layout": soc.get("layout"),
             "address_map": soc["address_map"],
-            "source_evidence": ("generated_default_source_only_not_simulation"
-                                if generated else "configured_only_no_generated_RTL"),
+            "source_evidence": ("tracked_generated_source_not_simulation" if generated else
+                                "selected_compiled_CI_artifact_not_simulation"
+                                if item["qualification"] == "ci_generated_compiled" else
+                                "configured_only_no_generated_RTL"),
         })
     return result
 
