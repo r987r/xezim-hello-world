@@ -177,6 +177,15 @@
       hit.addEventListener("keydown", ev => { if (ev.key === "Enter") open(e.reference); });
       const tt = el("title"); tt.textContent = e.name + ": " + e.a + " ⇄ " + e.b;
       hit.append(tt); svg.append(path, hit);
+      // Show explicit named links at modest graph sizes; larger designs rely
+      // on hover/selection so the drawing does not turn into a text wall.
+      if (edges.length <= 16 && e.reference.startsWith("link:")) {
+        const label = makeText(sameColumn ? x1 + 9 : mid + 7,
+          sameColumn ? (y1 + y2) / 2 : Math.min(y1, y2) - 8,
+          e.name.length > 30 ? e.name.slice(0, 29) + "…" : e.name,
+          10, color, 650);
+        svg.append(label);
+      }
     }
     for (const node of graphNodes) {
       const p = positions.get(node.id);
