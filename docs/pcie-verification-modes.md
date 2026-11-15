@@ -26,8 +26,18 @@ the unrelated experimental CplD first-beat predicate; that predicate
 is **not required for this one readback**, but has not been removed from
 the PR's historical qualification recipe without full review.
 
-**Still open:** ensure the selected **production SoC** OpenPCIe IP overlay
-uses the corrected demux; qualify independent host ↔ endpoint ↔ bridge ↔
+**Selected-provider overlay now updated (source-level, not yet full-chip):**
+`config/pcie_link.yaml` selects the checked-in
+`dv/pcie_link/patches/openpcie_ltssm_comb_assignment.patch`, which now
+includes the four-line `axis_user_demux.sv` handshake repair. Its exact
+SHA-256 is recorded in generated `gen/pcie_link/selection.json`. On a
+pristine pinned OpenPCIe checkout, `tools/pcie_link.py --check
+--check-upstream --apply-selected-overlays` applied the patch cleanly,
+`git diff --check` succeeded, and the selected-source unit tests passed.
+This demonstrates selected-source patch propagation, **not** functional
+host/endpoint/NoC integration.
+
+**Still open:** qualify independent host ↔ endpoint ↔ bridge ↔
 generated NoC ↔ SRAM transactions with original end-to-end byte checks;
 prove continuous bidirectional link monitoring and randomized backpressure
 coverage. The independent real-link `l0`/`bar0`/`mem_ingress` and
