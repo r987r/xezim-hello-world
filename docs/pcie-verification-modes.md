@@ -4,7 +4,31 @@
 [Stimulus scaling #152](https://github.com/r987r/xezim-hello-world/issues/152) ·
 [Active real-link draft #232](https://github.com/r987r/xezim-hello-world/pull/232)
 
-## Current evidence checkpoint — 2026-11-15
+## Verified merge-review checkpoint — 2026-11-15 (PR #232)
+
+**Exact PR head `8b935a77d4ba4c61de944cc0de25c30b3a3e6cca`: 21/21 GitHub Actions workflows SUCCESS.**
+The required [original OpenPCIe self-test](https://github.com/r987r/xezim-hello-world/actions/runs/43741566817)
+ran actual Cocotb (`TESTS=1 PASS=1 FAIL=0 SKIP=0`), archived a nonempty
+RTL FST, and observed 1,440 native endpoint PHY TLPs and 6,675 DLLPs.
+The [separate connected-memory qualification](https://github.com/r987r/xezim-hello-world/actions/runs/43741566984)
+compiled and ran the independent pcievhost RC ↔ selected OpenPCIe endpoint
+↔ pinned TLP-to-AXI bridge ↔ generated PCIe0 local FlooNoC ↔ real SRAM:
+host MWr at `0x80001100` reached SRAM `0x12000100`; original host
+MRd/CplD verified `0xa5c36e91`. Negative evidence mutations fail closed.
+The selected OpenPCIe source **includes a reviewed, SHA-recorded local
+`axis_user_demux.sv` handshake patch**, not an assertion that pristine
+upstream RTL works; original byte oracle remains required. The detached
+FuseSoC self-test uses documented simulation-only timing/host UpdateFC
+configuration. No forced completions or direct TB credit writes are used.
+
+**Do not elevate this to full-chip signoff.** The connected fixture is isolated
+and does not boot CPU0, program endpoint DBI over the actual Config NoC,
+traverse a full global-SoC route, or qualify compliance/stress. Keep
+[#76](https://github.com/r987r/xezim-hello-world/issues/76) OPEN for
+those integration gates. The evidence above is before merging with any newer
+mainline commits; re-qualify integration against the resulting `main`.
+
+## Earlier investigation checkpoint — 2026-11-15
 
 **Standalone OpenPCIe original test: PASS, not full-chip PCIe signoff.**
 On the pinned PR #232 head `5d4cbe516953a9abf1757c14b5ecef894f220914`,
@@ -61,8 +85,7 @@ SRAM write to `0x12000100`, read of the same address, and host readback
 duplicate, reordered or corrupted source observations and requires original
 BAR0 configuration evidence. A new source-triggered
 `.github/workflows/pcie-connected-memory.yml` independently rebuilds and
-qualifies the *same* path on a clean CI runner; **do not claim a current-head
-CI PASS until its actual job completes**. The selected test implements only
+qualifies the *same* path on a clean CI runner; **the connected-memory job subsequently passed at the exact head above**. The selected test implements only
 one 3DW/one-DW MWr/MRd pair; the two narrow byte-format shims are
 verification-owned and reject unsupported formats. They are not new
 production PCIe IP.
@@ -575,8 +598,9 @@ PCIe cumulative ACK semantics and stable ready/valid only after the original
 RTL proves those handshakes. Do not disable the upstream readback test, extend
 timeouts, inject completions or relax the byte oracle.
 
-**Separate next integration gate:** even a fixed original OpenPCIe self-test
-is not full-chip qualification. The trained endpoint's non-config TLP output
-must attach to real `pcie_axi_master` → generated PCIe0 FlooNoC → SRAM and
-return genuine CplD; CPU0 must program endpoint DBI through actual Config-NoC
-in the **same** cold-boot/link/enumerate/DMA/byte-check run. See [issue #76](https://github.com/r987r/xezim-hello-world/issues/76).
+**Separate next full-chip integration gate:** the isolated original
+host→selected OpenPCIe→real `pcie_axi_master`→generated PCIe0 FlooNoC→SRAM→host
+CplD test now passes (see latest checkpoint above). It does **not** substitute
+for CPU0 provisioning endpoint DBI through the actual Config NoC and proving
+cold-boot/link/enumerate/DMA/byte-check in one full-chip run. See
+[issue #76](https://github.com/r987r/xezim-hello-world/issues/76).
