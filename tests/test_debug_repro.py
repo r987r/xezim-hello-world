@@ -1,6 +1,7 @@
 """Source provenance, fail-closed runner behavior and no fabricated RTL PASS."""
 from pathlib import Path
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -71,6 +72,35 @@ class DebugRecipeTests(unittest.TestCase):
             self.assertEqual(record["exit_code"], 7)
             self.assertFalse(record["timed_out"])
             self.assertIn("failed", (output / "stdout-stderr.log").read_text())
+
+    def test_timeout_kills_descendant_process_group(self):
+        # A typical simulator wrapper launches subprocesses which must not
+        # outlive the debug recipe's timeout or hold Vercel CPU resources.
+        with tempfile.TemporaryDirectory(dir=debug_repro.ROOT / ".tools") as directory:
+            output = Path(directory) / "timeout"
+            childpid = Path(directory) / "descendant.pid"
+            launcher = (
+                "import subprocess,sys,time;"
+                "p=subprocess.Popen([sys.executable,'-c',"
+                "'import time; time.sleep(120)']);"
+                "open(sys.argv[1],'w').write(str(p.pid));"
+                "time.sleep(120)"
+            )
+            profile = {"command": [sys.executable, "-c", launcher, str(childpid)],
+                       "timeout_s": 1}
+            with mock.patch.object(debug_repro, "git_output", return_value=""):
+                self.assertEqual(debug_repro.run_profile("timeout", profile, output), 124)
+            record = json.loads((output / "run.json").read_text())
+            self.assertTrue(record["timed_out"])
+            self.assertEqual(record["exit_code"], 124)
+            self.assertEqual(record["qualification"], "exploratory_only")
+            self.assertTrue(childpid.is_file())
+            pid = int(childpid.read_text())
+            # A killed child may briefly remain a zombie until reaped by PID 1.
+            # Inspect /proc state rather than treating a zombie as a live process.
+            stat = Path(f"/proc/{pid}/stat")
+            if stat.exists():
+                self.assertEqual(stat.read_text().split()[2], "Z")
 
     def test_zero_exit_does_not_claim_rtl_pass(self):
         with tempfile.TemporaryDirectory(dir=debug_repro.ROOT / ".tools") as temporary:
