@@ -26,15 +26,29 @@ def emit(soc, noc_root, dest):
     peripheral = [x["name"] for x in soc["subsystems"] if x["type"]=="peripheral"]
     memory = next(x["name"] for x in soc["subsystems"] if x["type"]=="memory")
     links=[]
+    direct = soc["networks"].get("direct_data")
     for c in computes + peripheral:
+        if direct is None:
+            links.extend([
+                ((c+"_local_data","global_out"),("global_data",c)),
+                (("global_data",c+"_sram"),(c+"_local_data","global_in")),
+            ])
         links.extend([
-            ((c+"_local_data","global_out"),("global_data",c)),
-            (("global_data",c+"_sram"),(c+"_local_data","global_in")),
             ((c+"_local_config","global_out"),("global_config",c)),
             (("global_config",c+"_regs"),(c+"_local_config","global_in")),
         ])
-    for output in soc["networks"]["global_data"]["outputs"]:
-        links.append((("global_data",output["name"]),(memory+"_local_data",output["name"])))
+    if direct is None:
+        for output in soc["networks"]["global_data"]["outputs"]:
+            links.append((("global_data",output["name"]),(memory+"_local_data",output["name"])))
+    else:
+        for link in direct["links"]:
+            a, b = link["endpoints"]
+            for source, target in ((a,b),(b,a)):
+                noc = "direct_" + link["name"] + "_" + source + "_to_" + target
+                links.extend([
+                    ((source+"_local_data","to_"+target),(noc,"ingress")),
+                    ((noc,"egress"),(target+"_local_data","from_"+source)),
+                ])
     links.append((("global_config",memory+"_regs"),(memory+"_local_config","global_in")))
 
     def role(k):
@@ -54,9 +68,14 @@ def emit(soc, noc_root, dest):
         for key in ("addr_width","data_width","id_width","user_width"):
             if spec(a)[key]!=spec(b)[key]:
                 raise ValueError(f"AXI {key} mismatch {a}={spec(a)[key]} vs {b}={spec(b)[key]}")
-    for n in ("global_data","global_config"):
+    connected_nocs = ["global_config"]
+    if direct is None:
+        connected_nocs.append("global_data")
+    else:
+        connected_nocs.extend(n for n in eps if n.startswith("direct_"))
+    for n in connected_nocs:
         if any((n,p) not in paired for p in eps[n]):
-            raise ValueError("global NoC dangling port "+n)
+            raise ValueError("NoC dangling port "+n)
 
     onward = dict(links)
 
