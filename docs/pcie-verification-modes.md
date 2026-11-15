@@ -4,6 +4,42 @@
 [Stimulus scaling #152](https://github.com/r987r/xezim-hello-world/issues/152) ·
 [Active real-link draft #232](https://github.com/r987r/xezim-hello-world/pull/232)
 
+## Current evidence checkpoint — 2026-11-15
+
+**Standalone OpenPCIe original test: PASS, not full-chip PCIe signoff.**
+On the pinned PR #232 head `5d4cbe516953a9abf1757c14b5ecef894f220914`,
+[GitHub digital-link run 43630320895](https://github.com/r987r/xezim-hello-world/actions/runs/43630320895)
+passed all nine jobs. Its **actual** original FuseSoC/Verilator 5.055 devel
+Cocotb test reported `TESTS=1 PASS=1 FAIL=0 SKIP=0` at 749120 ns;
+a real FST artifact was preserved, and the existing native PIPE capture
+reported 1440 endpoint-transmit TLPs, 6675 DLLPs, and
+`original_test_pass=true`. Vercel's older Verilator 5.032 also passed
+the unchanged test **without runtime FST**; it cannot substitute for the
+CI waveform result.
+
+The previously failing 1024-byte offset-7 readback was traced to
+`axis_user_demux.sv` advertising downstream output `ready` instead of
+the skid buffer's actual input `ready`, with premature stream-state
+transitions. The exact source-blob-checked **standalone qualification**
+overlay passes. A controlled A/B replay also passed after reverting only
+the unrelated experimental CplD first-beat predicate; that predicate
+is **not required for this one readback**, but has not been removed from
+the PR's historical qualification recipe without full review.
+
+**Still open:** ensure the selected **production SoC** OpenPCIe IP overlay
+uses the corrected demux; qualify independent host ↔ endpoint ↔ bridge ↔
+generated NoC ↔ SRAM transactions with original end-to-end byte checks;
+prove continuous bidirectional link monitoring and randomized backpressure
+coverage. The independent real-link `l0`/`bar0`/`mem_ingress` and
+fast TLP-level integration tests have distinct acceptance boundaries.
+Neither isolated success can be repurposed as a single full-chip proof.
+Keep [issue #76](https://github.com/r987r/xezim-hello-world/issues/76) and
+[draft PR #232](https://github.com/r987r/xezim-hello-world/pull/232) open.
+Shared debug tooling is in
+[draft PR #250](https://github.com/r987r/xezim-hello-world/pull/250),
+with simulator parity/RTL recipe work tracked in
+[issue #251](https://github.com/r987r/xezim-hello-world/issues/251).
+
 Two **complementary** backends remain selectable. Never replace the existing
 TLP-level SoC regression with the much slower digital PIPE/LTSSM qualification,
 and never count a TLP-only pass as a digital-link pass. This documentation
