@@ -1351,6 +1351,8 @@ def project_pages(output, projects, entries, repository, sha):
                 '</div><h1>' + name + '</h1><p class="lede">' +
                 escape(project['subtitle']) + '</p>')
         explorer = project.get('architecture_explorer')
+        if explorer and not (output / explorer).is_file():
+            raise ValueError('catalog-selected project explorer was not published: ' + explorer)
         architecture_href = ('../../' + explorer) if explorer else 'architecture.html'
         nav = ('<div class="actions">'
                '<a href="index.html">Overview</a>'
