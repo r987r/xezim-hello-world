@@ -26,7 +26,9 @@ def main():
         browser.get((site / "index.html").as_uri())
         assert "Choose a chip project" in browser.find_element(By.TAG_NAME, "h1").text
         cards = browser.find_elements(By.CSS_SELECTOR, ".project-card")
-        assert len(cards) == 2, "project picker missing independent projects"
+        import yaml
+        expected = yaml.safe_load(Path("config/projects/catalog.yaml").read_text())["projects"]
+        assert len(cards) == len(expected), "project picker differs from catalog"
         assert all(c.is_displayed() for c in cards)
         browser.save_screenshot(str(args.screenshots / "07-project-picker-desktop.png"))
         b = next(c for c in cards if "Ethernet / CPU" in c.text)
@@ -41,6 +43,13 @@ def main():
         browser.find_element(By.CSS_SELECTOR, "main .actions a[href=\"runs.html\"]").click()
         assert "No project-qualified run evidence" in browser.find_element(By.TAG_NAME, "main").text
         assert "Recorded PASS" not in browser.page_source
+        browser.get((site / "projects/xezim_ethernet_cpu_ddr_pcie/files.html").as_uri())
+        assert "chip/soc_top.sv" in browser.find_element(By.TAG_NAME, "main").text
+        assert "supernoc/soc_noc.sv" in browser.find_element(By.TAG_NAME, "main").text
+        assert "project-compile.yml" in browser.page_source
+        browser.get((site / "projects/xezim_soc_dv/files.html").as_uri())
+        assert "gen/chip/soc_top.sv" in browser.find_element(By.TAG_NAME, "main").text
+        assert browser.find_elements(By.CSS_SELECTOR, 'a[href="../../gen/chip/soc_top.sv"]')
         browser.set_window_size(390, 840)
         browser.get((site / "index.html").as_uri())
         assert browser.find_element(By.CSS_SELECTOR, ".project-grid").is_displayed()

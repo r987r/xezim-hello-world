@@ -22,7 +22,7 @@ class MultiProjectSiteTests(unittest.TestCase):
         first, second = found
         self.assertNotEqual(first["config_sha256"], second["config_sha256"])
         self.assertEqual(first["qualification"], "generated_default")
-        self.assertEqual(second["qualification"], "source_contract_only")
+        self.assertEqual(second["qualification"], "ci_generated_compiled")
         self.assertIsNone(second["generated_source"])
         self.assertEqual(second["memory_targets"], ["memory0.ddr0"])
         self.assertEqual(len(second["data_links"]), 3)
@@ -44,11 +44,72 @@ class MultiProjectSiteTests(unittest.TestCase):
             a = out / "projects/xezim_soc_dv"
             self.assertIn("No project-qualified", (new / "runs.html").read_text())
             self.assertNotIn("chip-ddr4-real", (new / "runs.html").read_text())
-            self.assertIn("source_contract_only", (new / "data/project.json").read_text())
+            self.assertIn("ci_generated_compiled", (new / "data/project.json").read_text())
             self.assertNotIn("memory0.hbm0", (new / "address-map.html").read_text())
             self.assertIn("memory0.hbm0", (a / "address-map.html").read_text())
             self.assertEqual(json.loads((new / "data/project.json").read_text())["runs"], [])
             self.assertIn("original", (a / "index.html").read_text().lower())
+            self.assertIn("gen/chip/soc_top.sv", (a / "files.html").read_text())
+            self.assertIn("chip/soc_top.sv", (new / "files.html").read_text())
+            self.assertIn("chip/sources.f", (new / "files.html").read_text())
+            self.assertIn("project-compile.yml", (new / "files.html").read_text())
+            self.assertNotIn("memory0.hbm0", (new / "files.html").read_text())
+
+
+    def test_ten_catalog_projects_generate_ten_isolated_navigation_pages(self):
+        """Scale proof for catalog/publisher routing, not ten compiled chips."""
+        from contextlib import redirect_stdout
+        from io import StringIO
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "config/projects").mkdir(parents=True)
+            (root / "gen/chip").mkdir(parents=True)
+            (root / "config/soc.yaml").write_text(
+                (ROOT / "config/soc.yaml").read_text())
+            (root / "gen/chip/soc_top.sv").write_text("module soc_top; endmodule\n")
+            baseline = yaml.safe_load(
+                (ROOT / "config/projects/catalog.yaml").read_text())
+            baseline["projects"] = [copy.deepcopy(baseline["projects"][0])]
+            template = yaml.safe_load(
+                (ROOT / "config/projects/ethernet-cpu-ddr-pcie/soc.yaml").read_text())
+            for index in range(1, 10):
+                pid = f"chip_variant_{index:02d}"
+                cfg = copy.deepcopy(template)
+                cfg["name"] = pid
+                relative = f"config/projects/{pid}.yaml"
+                (root / relative).write_text(yaml.safe_dump(cfg, sort_keys=False))
+                baseline["projects"].append({
+                    "id": pid, "title": f"Chip {index:02d}",
+                    "subtitle": "Independent source configuration",
+                    "config": relative,
+                    "qualification": "source_contract_only"})
+            (root / "config/projects/catalog.yaml").write_text(
+                yaml.safe_dump(baseline, sort_keys=False))
+            catalog = project_catalog.projects(root)
+            self.assertEqual(len(catalog), 10)
+            self.assertEqual(len({p["config_sha256"] for p in catalog}), 10)
+            output = StringIO()
+            with patch("sys.argv", ["project_catalog.py", "--root",
+                                   str(root), "--matrix"]), redirect_stdout(output):
+                project_catalog.main()
+            matrix = json.loads(output.getvalue())
+            self.assertEqual(matrix["project"], [p["id"] for p in catalog])
+            out = root / "site"
+            out.mkdir()
+            project_pages(out, catalog, [], "r987r/xezim-hello-world", "b"*40)
+            index = (out / "index.html").read_text()
+            self.assertEqual(index.count('class="project-card"'), 10)
+            for entry in catalog:
+                directory = out / "projects" / entry["id"]
+                for page in ("index.html", "architecture.html",
+                             "address-map.html", "files.html",
+                             "runs.html", "data/project.json"):
+                    self.assertTrue((directory / page).is_file(), (entry["id"], page))
+                self.assertEqual(
+                    json.loads((directory / "data/project.json").read_text())["runs"], [])
+                self.assertIn("No project-qualified",
+                              (directory / "runs.html").read_text())
 
     def test_bad_catalog_rejects_aliased_or_unqualified_sources(self):
         with tempfile.TemporaryDirectory() as temp:

@@ -73,7 +73,7 @@ jobs:
       - name: Extract RTL hierarchy and real named port bindings
         run: python3 tools/rtl_instance_parser.py --slang .tools/bin/slang --output .tools/rtl-architecture.json
       - name: Verify publication, CI trigger and report semantics
-        run: python3 -m unittest tests.test_docs tests.test_published_csr tests.test_published_site tests.test_run_page_chrome tests.test_runtime_contract tests.test_test_identity tests.test_stimulus_catalog tests.test_test_intent tests.test_ci_workflows tests.test_csr_source_references tests.test_publication tests.test_merged_pr_evidence tests.test_fabric_refresh tests.test_axi_report tests.test_fabric_report tests.test_protocol_report tests.test_design_explorer tests.test_selected_variant_diff tests.test_design_netlist tests.test_signal_inventory tests.test_signal_paths tests.test_architecture_explorer tests.test_ddr_csr_catalog tests.test_ddr_csr_pages tests.test_ddr_mr_pages tests.test_rtl_instance_parser tests.test_rtl_instance_bindings tests.test_ethernet_protocol_trace tests.test_axi_monitor_lifecycle tests.test_multi_project_site tests.test_three_region_project -v
+        run: python3 -m unittest tests.test_docs tests.test_published_csr tests.test_published_site tests.test_run_page_chrome tests.test_runtime_contract tests.test_test_identity tests.test_stimulus_catalog tests.test_test_intent tests.test_ci_workflows tests.test_csr_source_references tests.test_publication tests.test_merged_pr_evidence tests.test_fabric_refresh tests.test_axi_report tests.test_fabric_report tests.test_protocol_report tests.test_design_explorer tests.test_selected_variant_diff tests.test_design_netlist tests.test_signal_inventory tests.test_signal_paths tests.test_architecture_explorer tests.test_ddr_csr_catalog tests.test_ddr_csr_pages tests.test_ddr_mr_pages tests.test_rtl_instance_parser tests.test_rtl_instance_bindings tests.test_ethernet_protocol_trace tests.test_axi_monitor_lifecycle tests.test_multi_project_site tests.test_three_region_project tests.test_project_build -v
       - name: Validate distinct project roots and source identities
         run: python3 tools/project_catalog.py --out .tools/project-catalog.json
       - name: Build offline PR or manual branch preview
@@ -106,15 +106,18 @@ jobs:
           site = Path('.tools/pages-site')
           assert 'Choose a chip project' in (site/'index.html').read_text()
           catalog = json.loads((site/'data/projects.json').read_text())['projects']
-          assert len(catalog) == 2
+          from project_catalog import projects
+          assert [item['id'] for item in catalog] == [p['id'] for p in projects()]
           for item in catalog:
               root = site/'projects'/item['id']
-              for page in ('index.html','architecture.html','address-map.html','runs.html','data/project.json'):
+              for page in ('index.html','architecture.html','address-map.html','files.html','runs.html','data/project.json'):
                   assert (root/page).is_file(), (item['id'],page)
           b = site/'projects/xezim_ethernet_cpu_ddr_pcie'
           assert json.loads((b/'data/project.json').read_text())['runs'] == []
           assert 'No project-qualified' in (b/'runs.html').read_text()
           assert 'memory0.hbm0' not in (b/'address-map.html').read_text()
+          assert 'chip/soc_top.sv' in (b/'files.html').read_text()
+          assert 'project-compile.yml' in (b/'files.html').read_text()
           print('PASS separate project dashboards; source-only test runs unavailable')
           PY
       - name: Verify offline 2D diagram preview has embedded graph data

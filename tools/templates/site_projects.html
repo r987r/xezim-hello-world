@@ -1,11 +1,7 @@
-<div class="eyebrow">Multi-project RTL / verification workspace</div>
+<div class="eyebrow">Design library</div>
 <h1>Choose a chip project</h1>
-<p class="lede">Each chip has its own SoC definition, architecture, address map and verification identity. Simulators, test actions, IP providers, monitors and report generators remain shared.</p>
+<p class="lede">Open a project to inspect its architecture, address map, RTL sources and verified test results. Each project has its own selected configuration and build provenance; the verification platform is shared.</p>
 <div class="project-grid" id="project-choices">
 __PROJECT_CARDS__
 </div>
-<section aria-labelledby="project-policy">
-<h2 id="project-policy">Shared platform, separate results</h2>
-<p class="scope-note">Project A retains the existing generated chip, Fabric Explorer and source-qualified CI results. Project B currently has a validated source configuration only; direct FlooNoC RTL and full-chip transfers are not qualified yet. No results from project A are reused as project B PASS.</p>
-<p class="muted">Original report deep links are preserved. <a href="soc-overview.html">Open the original overview</a> or <a href="projects/xezim_ethernet_cpu_ddr_pcie/index.html">inspect the new design</a>.</p>
-</section>
+<p class="muted">Results are shown only when the project and tested source are identified. A compiled design is not automatically a functionally verified design. <a href="docs/multi-project-pages.html">Project and evidence documentation</a>.</p>
