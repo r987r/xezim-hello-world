@@ -1,0 +1,15 @@
+# One versioned project directory, independent authored SoC configurations.
+# The shared generator/RTL/verification infrastructure is NOT copied.
+schema_version: 1
+projects:
+  - id: xezim_soc_dv
+    title: Hierarchical SoC
+    subtitle: Two CPUs, HBM and DDR, global data and configuration FlooNoCs
+    config: config/soc.yaml
+    generated_source: gen/chip/soc_top.sv
+    qualification: generated_default
+  - id: xezim_ethernet_cpu_ddr_pcie
+    title: Ethernet / CPU + DDR / PCIe
+    subtitle: Three physical regions, direct data links, DDR only
+    config: config/projects/ethernet-cpu-ddr-pcie/soc.yaml
+    qualification: source_contract_only
