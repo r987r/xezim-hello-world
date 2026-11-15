@@ -162,6 +162,48 @@ def check_matrix(scenario: Path, soc: Path, output: Path) -> dict:
     return doc
 
 
+def select_distinct_cases(scenario: Path, soc: Path, output: Path, *,
+                          action_instance_id: str,
+                          argument_path: tuple[str, ...], count: int,
+                          exclude_authored_seed: bool = True) -> list[dict]:
+    """Select diverse *intent-only* plans for the existing real RTL runner.
+
+    Reuse the canonical replay checker before selection. A resolved argument
+    (not an invented seed policy or an alternate scenario compiler) defines
+    diversity. Never interpret this selection as hardware execution evidence.
+    """
+    if (not isinstance(action_instance_id, str) or not action_instance_id
+            or not isinstance(argument_path, tuple) or not argument_path
+            or any(not isinstance(key, str) or not key for key in argument_path)
+            or type(count) is not int or not 1 <= count <= MAX_CASES
+            or type(exclude_authored_seed) is not bool):
+        raise MatrixError("invalid distinct-case selection contract")
+    spec, _, _, _ = _read_sources(scenario, soc)
+    manifest = check_matrix(scenario, soc, output)
+    selected: list[dict] = []
+    observed: set[str] = set()
+    for item in manifest["cases"]:
+        if exclude_authored_seed and item["seed"] == spec.get("seed"):
+            continue
+        plan = json.loads((output / item["file"]).read_bytes())
+        matches = [action for action in plan["actions"]
+                   if action["action_instance_id"] == action_instance_id]
+        if len(matches) != 1:
+            raise MatrixError("selected action missing or ambiguous: " + action_instance_id)
+        value = matches[0]["args"]
+        for key in argument_path:
+            if not isinstance(value, dict) or key not in value:
+                raise MatrixError("selected action argument path unavailable")
+            value = value[key]
+        resolved_key = canonical_json(value)
+        if resolved_key not in observed:
+            observed.add(resolved_key)
+            selected.append(item)
+        if len(selected) == count:
+            return selected
+    raise MatrixError("insufficient distinct resolved action arguments in seed matrix")
+
+
 def main() -> int:
     cli = argparse.ArgumentParser(description=__doc__)
     cli.add_argument("--scenario", type=Path, required=True)
