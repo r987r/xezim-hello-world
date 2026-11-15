@@ -1,7 +1,6 @@
 """Source provenance, fail-closed runner behavior and no fabricated RTL PASS."""
 from pathlib import Path
 import json
-import shutil
 import sys
 import tempfile
 import unittest
@@ -11,6 +10,11 @@ from tools import debug_repro
 
 
 class DebugRecipeTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # A fresh CI checkout has no ignored .tools directory yet.
+        (debug_repro.ROOT / ".tools").mkdir(exist_ok=True)
+
     def test_repo_recipes_parse(self):
         profiles = debug_repro.load_profiles(debug_repro.ROOT / "config/debug.yaml")
         self.assertIn("framework-unit", profiles)
