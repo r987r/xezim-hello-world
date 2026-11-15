@@ -51,6 +51,12 @@ Every generated seed is recorded, so later replay uses those exact values;
 there is no fixed-seed policy. The checker rejects missing, added, altered,
 noncanonical or foreign plans and changed source files. It cannot call a
 hardware simulation and therefore **does not qualify M3/M4/M5 protocol PASS**.
+The existing SCN real-RTL CI now calls `select_distinct_cases` from the
+same seed-matrix module to select plans with different *resolved action
+arguments*, with no hardcoded authored seed or duplicate planner. It
+rejects stale/tampered matrix inputs and remains **intent-only** selection;
+the original real RTL runner and independent replay audit qualify execution.
+
 Run the selected cases through the *existing* `tools/regress.py` and
 `ActionDispatcher`, then correlate real passive AXI/TLP/GMII/DFI capture
 and independent expected/observed bytes through `tools/action_evidence.py`.
