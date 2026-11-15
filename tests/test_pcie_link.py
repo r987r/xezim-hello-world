@@ -66,6 +66,23 @@ class PcieLinkSelectionTests(unittest.TestCase):
                     pcie_link.PcieProviderError, "unsafe source-qualified"):
                 self.choose(lambda p: p["endpoint"].update({"patch": path}))
 
+    def test_selected_endpoint_demux_backpressure_fix_is_real_and_auditable(self):
+        # Production-selected provider patch, not just standalone self-test.
+        selected = pcie_link.selection(ROOT)
+        overlay = ROOT / selected["local_source_overlays"][0]["path"]
+        source = overlay.read_text()
+        self.assertIn("diff --git a/src/dllp/axis_user_demux.sv", source)
+        self.assertEqual(source.count("+            s_axis_tready = dllp_ready;"), 1)
+        self.assertEqual(source.count("+            s_axis_tready = tlp_ready;"), 1)
+        self.assertEqual(source.count(
+            "+            if (s_axis_tready && !s_axis_tlast) next_state = ST_DLLP;"), 1)
+        self.assertEqual(source.count(
+            "+            if (s_axis_tready && !s_axis_tlast) next_state = ST_TLP;"), 1)
+        self.assertIn("axis_demux_backpressure_tb.sv",
+                      (ROOT / ".github/workflows/pcie-digital-link.yml").read_text())
+        self.assertIn("tools/pcie_demux_backpressure.py",
+                      (ROOT / ".github/workflows/pcie-digital-link.yml").read_text())
+
     def test_unqualified_replay_activation_stays_disabled(self):
         # The original pinned replay engine needs cumulative ACK handling,
         # a real AXI ready path, and per-slot accepted-frame checks before
