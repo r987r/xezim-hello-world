@@ -12,4 +12,4 @@ projects:
     title: Ethernet / CPU + DDR / PCIe
     subtitle: Three physical regions, direct data links, DDR only
     config: config/projects/ethernet-cpu-ddr-pcie/soc.yaml
-    qualification: source_contract_only
+    qualification: ci_generated_compiled
