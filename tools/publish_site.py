@@ -1350,7 +1350,8 @@ def project_pages(output, projects, entries, repository, sha):
         info = ('<div class="eyebrow">' + escape(pid) +
                 '</div><h1>' + name + '</h1><p class="lede">' +
                 escape(project['subtitle']) + '</p>')
-        architecture_href = '../../explorer.html' if published else 'architecture.html'
+        explorer = project.get('architecture_explorer')
+        architecture_href = ('../../' + explorer) if explorer else 'architecture.html'
         nav = ('<div class="actions">'
                '<a href="index.html">Overview</a>'
                '<a href="' + architecture_href + '">Architecture</a>'
@@ -1431,14 +1432,15 @@ def project_pages(output, projects, entries, repository, sha):
         else:
             runs = ('<p class="empty">No project-qualified run evidence is '
                     'available. No other project results are substituted.</p>')
-        if published:
-            # Compatibility deep link. The original compiler-parsed explorer is
-            # the architecture page itself: no nested iframe or watered-down
-            # duplicate. The selected project's nav points directly to it.
-            architecture = (info +
-                '<p><a href="../../explorer.html">Open complete interactive '
-                'hierarchy, routers, IP and signal inspector</a></p>'
-                '<script>window.location.replace("../../explorer.html");</script>')
+        if explorer:
+            # Only a catalog-owned existing explorer can replace the generic
+            # architecture view. Never lend the original RTL hierarchy to an
+            # unrelated project just because it has compiled hardware.
+            explorer_href = '../../' + explorer
+            architecture = (info + '<p><a href="' + escape(explorer_href, quote=True) +
+                '">Open full selected hierarchy and RTL inspector</a></p>'
+                '<script>window.location.replace(' +
+                json.dumps(explorer_href).replace('<', '\\u003c') + ');</script>')
         else:
             # The one generic source tree applies to any compiled/config-only
             # project; it never imports original-chip router/RTL evidence.
