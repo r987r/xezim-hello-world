@@ -25,6 +25,11 @@ static unsigned completion_byte_count = 0;
 static uint32_t completion_data = 0;
 static unsigned completed_config_packets = 0;
 static unsigned next_tag = 0;
+static int readback_tag = -1;
+static bool readback_pending = false, readback_seen = false;
+static uint32_t readback_word = 0;
+static int readback_status = -1;
+static unsigned readback_bytes = 0;
 static bool bar0_enumerated = false;
 static uint32_t bar0_bus_base = 0, bar0_aperture = 0;
 
@@ -39,7 +44,22 @@ static void on_packet(pPkt_t pkt, int, void*) {
             std::printf("PCIE_RC_CFG_RX_CPL: tag=%d status=%d type=%02x bytes=%u timestamp=%u\n",
                         tag, status, type, bytes, pkt->TimeStamp);
             std::fflush(stdout);
-            if (pending_tag < 0 || tag != pending_tag || completion_seen) {
+            if (readback_pending && tag == readback_tag) {
+                if (readback_seen || type != TL_CPLD || status != 0 || bytes < 4)
+                    unexpected_completion = true;
+                else {
+                    readback_seen = true;
+                    readback_status = status;
+                    readback_bytes = bytes;
+                    const PktData_t *payload = GET_TLP_PAYLOAD_PTR(pkt->data);
+                    readback_word = 0;
+                    for (int byte = 0; byte < 4; ++byte)
+                        readback_word |= static_cast<uint32_t>(payload[byte] & 0xff) << (8*byte);
+                    std::printf("PCIE_RC_BAR_MRD_RX: tag=%d status=%d bytes=%u data=%08x\n",
+                                tag,status,bytes,readback_word);
+                    std::fflush(stdout);
+                }
+            } else if (pending_tag < 0 || tag != pending_tag || completion_seen) {
                 unexpected_completion = true;
             } else {
                 completion_seen = true;
@@ -212,8 +232,33 @@ static int write_selected_bar0(const soc_scn_action_t *action, void *opaque) {
                 static_cast<unsigned>(word),SOC_SCN_PLAN_SHA256);
     std::fflush(stdout);
     rc->memWrite(address,bytes,4,static_cast<int>((next_tag++)&31u),1);
-    // A posted MWr has no Cpl. Never interpret the return as SRAM evidence.
+    // A posted MWr has no Cpl; optionally verify via a separate *genuine*
+    // nonposted host MRd from the same programmed BAR and exact byte oracle.
     rc->sendIdle(1000);
+    const bool check_readback = std::getenv("PCIE_HOST_MEMORY_READBACK") &&
+        std::strcmp(std::getenv("PCIE_HOST_MEMORY_READBACK"), "1") == 0;
+    if (check_readback) {
+        readback_tag = static_cast<int>((next_tag++) & 31u);
+        readback_seen = false;
+        readback_pending = true;
+        std::printf("PCIE_RC_BAR_MRD_TX: action=%s addr=%08x tag=%d\n",
+                    action->action_instance_id,address,readback_tag);
+        std::fflush(stdout);
+        rc->memRead(address, 4, readback_tag, 1);
+        for (int spins = 0; spins < 30000 && !readback_seen && !unexpected_completion; ++spins)
+            rc->sendIdle(1);
+        if (!readback_seen || unexpected_completion || readback_status != 0 ||
+            readback_bytes < 4 || readback_word != static_cast<uint32_t>(word)) {
+            std::fprintf(stderr,"PCIE_RC_BAR_MRD_FAIL: seen=%d unexpected=%d status=%d bytes=%u data=%08x expected=%08x\n",
+                         readback_seen,unexpected_completion,readback_status,readback_bytes,
+                         readback_word,static_cast<uint32_t>(word));
+            return -1;
+        }
+        readback_pending = false;
+        std::printf("PCIE_RC_BAR_MRD_CPLD_PASS: addr=%08x data=%08x same_real_host=1\n",
+                    address,readback_word);
+        std::fflush(stdout);
+    }
     return unexpected_completion ? -1 : 0;
 }
 
