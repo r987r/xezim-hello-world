@@ -223,6 +223,9 @@ module test #(
   );
 
   wire ep_mem_rx_ready;
+  // Legacy L0/BAR-only builds do not compile the connected NoC/bridge RTL.
+  // The connected-memory job must opt in to the actual pinned sources.
+`ifdef PCIE_CONNECTED_MEM
   generate if (VERIFY_REAL_MEM_WRITE) begin : real_mem_write
     wire [63:0] req_data;
     wire [127:0] req_hdr;
@@ -332,6 +335,16 @@ module test #(
     assign ep_tx_tlp_last = 1'b0;
     assign ep_tx_tlp_user = '0;
   end endgenerate
+`else
+  // Source-limited link tests intentionally reject all non-config ingress;
+  // the feature cannot silently claim live SRAM if its real RTL is absent.
+  assign ep_mem_rx_ready = 1'b0;
+  assign ep_tx_tlp_data = '0;
+  assign ep_tx_tlp_keep = '0;
+  assign ep_tx_tlp_valid = 1'b0;
+  assign ep_tx_tlp_last = 1'b0;
+  assign ep_tx_tlp_user = '0;
+`endif
 
   // Original endpoint non-config TLP interface is deliberately NOT accepted
   // until real TLP/AXI/FlooNoC bridge is physically connected. Observe
