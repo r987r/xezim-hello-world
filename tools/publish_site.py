@@ -1236,12 +1236,180 @@ def evidence_index(evidence,output,repository,site_sha=None):
     return runs,entries,notes
 
 
+
+def project_pages(output, projects, entries, repository, sha):
+    """Render independently scoped source pages; never relabel a legacy PASS.
+
+    The original chip retains the established detailed report URLs. The new
+    source-only chip gets its *own* architecture, address map and empty test
+    ledger until an authenticated project-specific run is available.
+    """
+    from project_catalog import QUALIFICATIONS
+    ids = {p['id'] for p in projects}
+    if len(ids) != len(projects):
+        raise ValueError("duplicate project page id")
+    bad = {e.get("project_id") for e in entries if e.get("project_id") is not None} - ids
+    if bad:
+        raise ValueError("run has unknown project identity: " + str(sorted(bad)))
+    cards = []
+    for project in projects:
+        pid = project['id']
+        name = escape(project['title'])
+        active = project['qualification'] == 'generated_default'
+        status = ('Generated original project · see per-run evidence'
+                  if active else 'Source-defined only · no selected chip RTL')
+        cards.append(
+            '<a class="project-card" href="projects/' + pid + '/index.html">'
+            '<div class="eyebrow">PROJECT · ' + escape(pid) + '</div>'
+            '<h2>' + name + '</h2><p>' + escape(project['subtitle']) + '</p>'
+            '<p class="muted">' + escape(status) + '</p>'
+            '<span class="project-open">Open project →</span></a>'
+        )
+        base = output / 'projects' / pid
+        (base / 'data').mkdir(parents=True, exist_ok=True)
+        selected = [
+            e for e in entries if e.get('project_id', 'xezim_soc_dv') == pid
+        ] if active else [
+            e for e in entries if e.get('project_id') == pid
+        ]
+        # Source-only projects must not appear to inherit original recorded
+        # passes. Any future project-B evidence must have its own explicit
+        # source-selected project id and the ordinary trusted collector proof.
+        if not active and selected:
+            raise ValueError("source-only project has unqualified runtime evidence")
+        project_data = dict(project, runs=[
+            {'target': e.get('target'), 'path': e.get('path'),
+             'source_sha': e.get('source_sha'), 'passed': e.get('passed')}
+            for e in selected
+        ], site_source_sha=sha)
+        dump(base / 'data/project.json', project_data)
+        links = ('<div class="actions">'
+                 '<a href="index.html">Project overview</a>'
+                 '<a href="architecture.html">Architecture</a>'
+                 '<a href="address-map.html">Address map</a>'
+                 '<a href="runs.html">Test runs</a>'
+                 '<a href="../../index.html">Choose project</a></div>')
+        info = ('<div class="eyebrow">' + escape(pid) + '</div>'
+                '<h1>' + name + '</h1><p class="lede">'
+                + escape(project['subtitle']) + '</p>')
+        scope = (
+            '<p class="scope-note">Generated architecture is structural. '
+            'Test results are separately source-qualified and historical '
+            'PASS does not automatically qualify the current source.</p>'
+            if active else
+            '<p class="scope-note"><strong>SOURCE-DEFINED ONLY.</strong> '
+            'No generated connected chip, elaborated FlooNoC direct links '
+            'or accepted AXI transfer has been qualified for this project. '
+            'Original SoC test results are intentionally excluded.</p>'
+        )
+        original = ('<div class="actions">'
+                    '<a href="../../soc-overview.html">Existing SoC overview</a>'
+                    '<a href="../../topology.html">Generated topology</a>'
+                    '<a href="../../explorer.html">Full architecture explorer</a>'
+                    '<a href="../../fabric.html">Measured Fabric Explorer</a>'
+                    '<a href="../../runs.html">Complete original test viewer</a>'
+                    '</div>') if active else ''
+        index_body = (info + links + scope
+                      + '<h2>Subsystems</h2><p>' +
+                      escape(' · '.join(project['subsystems'])) +
+                      '</p><h2>Memories</h2><p>' +
+                      escape(' · '.join(project['memory_targets'])) +
+                      '</p>' + original +
+                      '<p class="muted">Source definition: '
+                      '<a href="../../' + escape(project['config']) + '"><code>'
+                      + escape(project['config']) + '</code></a></p>')
+        if active:
+            graph = ('<div class="topology-pan"><img class="topology" '
+                     'src="../../gen/diagrams/noc-hierarchy.svg" '
+                     'alt="Original source-generated hierarchical SoC topology"></div>'
+                     '<p><a href="../../explorer.html">Explore original generated '
+                     'routers and instance hierarchy</a></p>')
+        else:
+            layout = project['layout']
+            groups = layout['regions']
+            blocks = []
+            for i, region in enumerate(groups):
+                blocks.append('<section class="card"><h3>' +
+                              escape(region['name'].replace('_', ' ').title()) +
+                              '</h3><p>' +
+                              escape(' · '.join(region['subsystems'])) +
+                              '</p></section>')
+                if i != len(groups)-1:
+                    blocks.append('<div class="project-link" aria-label="Bidirectional AXI data link">↔</div>')
+            links_table = '<div class="scroll"><table><thead><tr><th>Link</th><th>Endpoints</th><th>Contract</th></tr></thead><tbody>'
+            for link in project['data_links']:
+                links_table += ('<tr><td><code>' + escape(link['name']) +
+                                '</code></td><td>' +
+                                escape(' ↔ '.join(link['endpoints'])) +
+                                '</td><td>AXI4 / duplex / declared</td></tr>')
+            graph = ('<div class="project-fabric">' + ''.join(blocks) + '</div>'
+                     '<div class="card"><strong>Global control FlooNoC · bottom</strong>'
+                     '<p class="muted">AXI-Lite control reaches all four declared '
+                     'subsystems; no global data NoC.</p></div>'
+                     '<h2>Source-defined links</h2>' +
+                     links_table + '</tbody></table></div>'
+                     '<p class="muted">Diagram is generated from the project '
+                     'source layout; it is not emitted or compiled RTL.</p>')
+        addr_rows = []
+        for plane in ('data', 'config'):
+            for item in project['address_map'][plane]:
+                addr_rows.append('<tr><td>' + escape(plane) + '</td><td><code>' +
+                                 escape(item['name']) + '</code></td><td><code>' +
+                                 escape(str(item['base'])) + '</code></td><td><code>' +
+                                 escape(str(item['size'])) + '</code></td></tr>')
+        addresses = ('<div class="scroll"><table><thead><tr>'
+                     '<th>Plane</th><th>Target</th><th>Base</th><th>Size</th>'
+                     '</tr></thead><tbody>' + ''.join(addr_rows) +
+                     '</tbody></table></div>'
+                     '<p class="muted">Address map from this project config. '
+                     'CSR definitions do not prove integrated register RTL.</p>')
+        if selected:
+            run_items = [
+                '<li><a href="../../' + escape(e['path']) + '">' +
+                escape(str(e['target'])) + '</a> · ' +
+                ('Recorded PASS' if e.get('passed') is True else
+                 'Recorded FAIL' if e.get('passed') is False else
+                 'Capture-only / outcome unavailable') +
+                ' · tested <code>' +
+                escape(str(e.get('source_sha', 'unavailable'))[:12]) +
+                '</code></li>' for e in selected if e.get('path')
+            ]
+            run_body = ('<p class="scope-note">Only original-project run '
+                        'references are shown. Per-run SHA, simulated variant '
+                        'and actual observed traffic are authoritative.</p>'
+                        '<ul class="list">' + ''.join(run_items) + '</ul>'
+                        '<p><a href="../../runs.html">Full original run filters and '
+                        'transaction inspector</a></p>')
+        else:
+            run_body = ('<p class="empty">No project-qualified run evidence '
+                        'is available. No default-project data is substituted.</p>')
+        pages = {
+            'index.html': index_body,
+            'architecture.html': info + links + scope + graph,
+            'address-map.html': info + links + scope + addresses,
+            'runs.html': info + links + scope + run_body,
+        }
+        for filename, body in pages.items():
+            relative = Path('projects') / pid / filename
+            (base / filename).write_text(
+                shell(project['title'], body, relative, repository, sha))
+    chooser = (ROOT / 'tools/templates/site_projects.html').read_text()
+    chooser = chooser.replace('__PROJECT_CARDS__', ''.join(cards))
+    (output / 'index.html').write_text(
+        shell('Choose a chip project', chooser, Path('index.html'), repository, sha))
+    dump(output / 'data/projects.json',
+         {'schema_version': 1, 'site_source_sha': sha,
+          'projects': [{k: v for k, v in p.items()
+                        if k not in ('layout', 'address_map')}
+                       for p in projects]})
+
+
 def shell(title,body,relative,repository,sha):
     prefix=os.path.relpath('.',str(Path(relative).parent)).replace(os.sep,'/')
     if prefix=='.':prefix=''
     else:prefix+='/'
     template=(ROOT/'tools/templates/site.html').read_text()
-    navigation_items=[('index.html','Overview'),('topology.html','Topology'),
+    navigation_items=[('index.html','Projects'),('soc-overview.html','Original overview'),('topology.html','Topology'),
                       ('explorer.html','Chip architecture'),('fabric.html','Fabric routes'),
                       ('address-map.html','Address map'),('runs.html','Test runs'),
                       ('docs.html','Documentation'),('reference.html','Source data')]
@@ -1530,7 +1698,11 @@ def build(output,evidence,repository,sha,config):
         if page=='fabric':
             fabric_data=json.dumps(fabric,separators=(',',':')).replace('<','\\u003c')
             body=body.replace('__FABRIC_DATA__',fabric_data)
-        (output/(page+'.html')).write_text(shell(config['title'],body,Path(page+'.html'),repository,sha))
+        published_page = 'soc-overview.html' if page == 'index' else page + '.html'
+        (output/published_page).write_text(
+            shell(config['title'], body, Path(published_page), repository, sha))
+    from project_catalog import projects
+    project_pages(output, projects(ROOT), entries, repository, sha)
     return dataset
 
 
