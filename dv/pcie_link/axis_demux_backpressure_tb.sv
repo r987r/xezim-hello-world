@@ -54,4 +54,63 @@ module axis_demux_backpressure_tb;
     for(int cyc=0;cyc<30000;cyc++) begin
       int unsigned r;
       r=rand32();
- ...[truncated]
+      // Forced full stalls, single-lane stalls, and random backpressure.
+      case ((cyc / 11) % 5)
+        0: begin tlp_ready=0; dllp_ready=0; end
+        1: begin tlp_ready=1; dllp_ready=0; end
+        2: begin tlp_ready=0; dllp_ready=1; end
+        3: begin tlp_ready=r[0]; dllp_ready=r[3]; end
+        default: begin tlp_ready=1; dllp_ready=1; end
+      endcase
+      if(!s_valid && accepted<N) begin
+        if(pending_length==0) begin
+          pending_tlp=rand32()[0];
+          pending_length=1+int'(rand32()%8);
+          packets++;
+        end
+        s_data=32'hD0000000 | accepted;
+        s_user=pending_tlp?2'b10:2'b01;
+        s_last=(pending_length==1);
+        s_valid=1;
+      end
+      #1;
+      if(s_valid && !s_ready) stalled_input++;
+      accepted_this_cycle=(s_valid && s_ready);
+      if(accepted_this_cycle) begin
+        if(s_user[1]) begin
+          tlp_expected_data[tt]=s_data;
+          tlp_expected_last[tt]=s_last;
+          tt++;
+        end else begin
+          dllp_expected_data[dt]=s_data;
+          dllp_expected_last[dt]=s_last;
+          dt++;
+        end
+        accepted++;
+        pending_length--;
+        // Change source valid only AFTER the edge that accepts the beat.
+      end
+      if(tlp_valid && tlp_ready) begin
+        if(th>=tt || tlp_data!==tlp_expected_data[th] || tlp_last!==tlp_expected_last[th] || tlp_user!==2'b10)
+          $fatal(1,"TLP mismatch seed=%0d cycle=%0d idx=%0d got=%h last=%b expected=%h",seed,cyc,th,tlp_data,tlp_last,tlp_expected_data[th]);
+        th++;
+        output_count++;
+      end
+      if(dllp_valid && dllp_ready) begin
+        if(dh>=dt || dllp_data!==dllp_expected_data[dh] || dllp_last!==dllp_expected_last[dh] || dllp_user!==2'b01)
+          $fatal(1,"DLLP mismatch seed=%0d cycle=%0d idx=%0d got=%h last=%b expected=%h",seed,cyc,dh,dllp_data,dllp_last,dllp_expected_data[dh]);
+        dh++;
+        output_count++;
+      end
+      step_clock();
+      if(accepted_this_cycle) s_valid=0;
+      if(accepted==N && output_count==N) begin
+        if(th!=tt||dh!=dt || stalled_input<50 || packets<100)
+          $fatal(1,"incomplete coverage accept=%0d out=%0d stalls=%0d packets=%0d",accepted,output_count,stalled_input,packets);
+        $display("PASS: AXIS_DEMUX_RANDOM_BACKPRESSURE seed=%0d beats=%0d packets=%0d stalls=%0d tlp=%0d dllp=%0d",seed,accepted,packets,stalled_input,tt,dt);
+        $finish;
+      end
+    end
+    $fatal(1,"timeout seed=%0d accepted=%0d delivered=%0d tlp=%0d/%0d dllp=%0d/%0d",seed,accepted,output_count,th,tt,dh,dt);
+  end
+endmodule
