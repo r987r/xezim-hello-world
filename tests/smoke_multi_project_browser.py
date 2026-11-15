@@ -58,8 +58,37 @@ def main():
                 browser.find_element(By.TAG_NAME, "main").text)
             browser.find_element(
                 By.CSS_SELECTOR, 'main .actions a[href="architecture.html"]').click()
-            for link in source["networks"].get("direct_data", {}).get("links", []):
-                assert link["name"] in browser.find_element(By.TAG_NAME, "main").text
+            if item["qualification"] == "generated_default":
+                # The old full hierarchy must remain reachable, including its
+                # parsed RTL, zoom, breadcrumbs and router-level navigation.
+                frame = browser.find_element(By.ID, "project-architecture-frame")
+                browser.switch_to.frame(frame)
+                assert browser.find_element(By.ID, "arch-directory")
+                assert browser.find_element(By.ID, "arch-crumbs")
+                assert browser.find_element(By.ID, "arch-svg")
+                assert browser.find_element(By.ID, "arch-signals")
+                browser.switch_to.default_content()
+            else:
+                assert browser.find_element(By.ID, "arch-h-tree")
+                assert browser.find_element(By.ID, "arch-h-crumbs")
+                assert browser.find_element(By.ID, "arch-h-filter")
+                assert browser.find_element(By.ID, "arch-h-children")
+                for link in source["networks"].get("direct_data", {}).get("links", []):
+                    finder = browser.find_element(By.ID, "arch-h-filter")
+                    finder.clear()
+                    finder.send_keys(link["name"])
+                    matches = browser.find_elements(
+                        By.CSS_SELECTOR, '#arch-h-tree button')
+                    assert any(link["name"] in el.text for el in matches)
+                    next(el for el in matches if link["name"] in el.text).click()
+                    assert link["name"] in browser.find_element(By.ID, "arch-h-title").text
+                    assert link["endpoints"][0] in browser.find_element(
+                        By.ID, "arch-h-facts").text
+                finder = browser.find_element(By.ID, "arch-h-filter")
+                finder.clear()
+                finder.send_keys(source["subsystems"][0]["name"])
+                assert source["subsystems"][0]["name"] in (
+                    browser.find_element(By.ID, "arch-h-tree").text)
             browser.get((expected / "address-map.html").as_uri())
             for target in source["memory_targets"]:
                 assert target["name"] in browser.find_element(By.TAG_NAME, "main").text
