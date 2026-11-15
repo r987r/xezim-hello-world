@@ -85,19 +85,27 @@
     const active = edges.filter(e => e.plane === "data" && subNames.has(e.a) && subNames.has(e.b));
     const neighbors = new Map(names.map(n => [n, []]));
     for (const e of active) { neighbors.get(e.a).push(e.b); neighbors.get(e.b).push(e.a); }
-    const visited = new Set();
-    let offset = 0;
-    for (const root of [...names].sort((a, b) =>
-      (neighbors.get(a).length - neighbors.get(b).length) || a.localeCompare(b))) {
-      if (visited.has(root)) continue;
-      const queue = [[root, offset]];
-      while (queue.length) {
-        const [id, depth] = queue.shift();
-        if (visited.has(id)) continue;
-        visited.add(id); levels.set(id, depth);
-        for (const neighbor of neighbors.get(id).sort()) if (!visited.has(neighbor)) queue.push([neighbor, depth + 1]);
+    if (!active.length) {
+      // Hub-and-spoke NoCs have no direct subsystem pairs. Avoid placing
+      // every leaf into a progressively more distant column: arrange leaves
+      // into a balanced grid around the separately displayed shared fabric.
+      const columns = Math.ceil(Math.sqrt(Math.max(1, names.length)));
+      [...names].sort().forEach((id, i) => levels.set(id, i % columns));
+    } else {
+      const visited = new Set();
+      let offset = 0;
+      for (const root of [...names].sort((a, b) =>
+        (neighbors.get(a).length - neighbors.get(b).length) || a.localeCompare(b))) {
+        if (visited.has(root)) continue;
+        const queue = [[root, offset]];
+        while (queue.length) {
+          const [id, depth] = queue.shift();
+          if (visited.has(id)) continue;
+          visited.add(id); levels.set(id, depth);
+          for (const neighbor of neighbors.get(id).sort()) if (!visited.has(neighbor)) queue.push([neighbor, depth + 1]);
+        }
+        offset = Math.max(...levels.values(), 0) + 2;
       }
-      offset = Math.max(...levels.values(), 0) + 2;
     }
   }
   const maxLevel = Math.max(0, ...levels.values());
