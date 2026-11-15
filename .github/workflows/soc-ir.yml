@@ -5,11 +5,14 @@ on:
     branches: [main]
     paths:
       - 'config/soc.yaml'
+      - 'config/projects/**'
       - 'config/interface_contracts.yaml'
       - 'tools/socgen.py'
+      - 'tools/bootgen.py'
       - 'tools/soc_ir.py'
       - 'gen/diagrams/noc-topology.json'
       - 'tests/test_soc_ir.py'
+      - 'tests/test_three_region_project.py'
       - '.github/workflows/soc-ir.yml'
   workflow_dispatch:
 
@@ -27,6 +30,8 @@ jobs:
       - run: python3 -m pip install 'PyYAML==6.0.3'
       - name: Validate existing source SoC and generated graph
         run: python3 -m unittest tests.test_soc_ir tests.test_design_explorer -v
+      - name: Verify independent three-region project source contract
+        run: python3 -m unittest tests.test_three_region_project -v
       - name: Generate and verify deterministic IR
         run: |
           python3 tools/soc_ir.py --out .tools/soc-ir/default.json
