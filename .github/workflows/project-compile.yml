@@ -15,8 +15,6 @@ on:
       - 'tools/socgen.py'
       - '.github/workflows/project-compile.yml'
   workflow_dispatch:
-  push:
-    branches: [main]
 permissions:
   contents: read
 concurrency:
