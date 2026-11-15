@@ -48,16 +48,36 @@ run cannot arise from elaboration alone; the scoreboard must print its
 actual PASS. The original full OpenPCIe Cocotb byte-readback remains the
 independent functional CI gate; this narrow unit test is not full-link stress.
 
-**Still open:** qualify independent host ↔ endpoint ↔ bridge ↔
-generated NoC ↔ SRAM transactions with original end-to-end byte checks;
-prove continuous bidirectional link monitoring and end-to-end randomized
-backpressure coverage. The independent real-link `l0`/`bar0`/`mem_ingress` and
+**New independent connected-memory experiment (PR #232):** the *original*
+pcievhost RC trains with the actual source-selected OpenPCIe endpoint and
+enumerates BAR0 over real Gen1 digital PIPE. Its MWr reaches the existing
+source-pinned `pcie_axi_master`, *generated PCIe0 local FlooNoC* and
+actual `axi_sram_target`; a separate real MRd returns the SRAM bytes
+through a CplD emitted by the original endpoint and checked by the
+original host callback. The Vercel isolated simulator log has the accepted
+SRAM write to `0x12000100`, read of the same address, and host readback
+`a5c36e91`. This is checked by
+`tools/pcie_connected_roundtrip_evidence.py`, which rejects missing,
+duplicate, reordered or corrupted source observations and requires original
+BAR0 configuration evidence. A new source-triggered
+`.github/workflows/pcie-connected-memory.yml` independently rebuilds and
+qualifies the *same* path on a clean CI runner; **do not claim a current-head
+CI PASS until its actual job completes**. The selected test implements only
+one 3DW/one-DW MWr/MRd pair; the two narrow byte-format shims are
+verification-owned and reject unsupported formats. They are not new
+production PCIe IP.
+
+**Still open:** CPU0 firmware-driven pre-link provisioning and concurrent
+boot, configured full-chip/global NoC routing beyond the isolated real
+PCIe0 fixture, comprehensive bidirectional PIPE monitoring, retry/credits,
+concurrency, varied payloads and end-to-end randomized backpressure.
+This isolated connected-memory PASS must not be called whole-chip signoff. The independent real-link `l0`/`bar0`/`mem_ingress` and
 fast TLP-level integration tests have distinct acceptance boundaries.
 Neither isolated success can be repurposed as a single full-chip proof.
 Keep [issue #76](https://github.com/r987r/xezim-hello-world/issues/76) and
 [draft PR #232](https://github.com/r987r/xezim-hello-world/pull/232) open.
 Shared debug tooling is in
-[draft PR #250](https://github.com/r987r/xezim-hello-world/pull/250),
+[merged PR #250](https://github.com/r987r/xezim-hello-world/pull/250),
 with simulator parity/RTL recipe work tracked in
 [issue #251](https://github.com/r987r/xezim-hello-world/issues/251).
 
