@@ -56,9 +56,13 @@ def main():
             assert item["title"] in browser.find_element(By.TAG_NAME, "h1").text
             assert source["memory_targets"][0]["name"] in (
                 browser.find_element(By.TAG_NAME, "main").text)
+            architecture_href = (
+                "../../" + item["architecture_explorer"]
+                if item.get("architecture_explorer") else "architecture.html")
             browser.find_element(
-                By.CSS_SELECTOR, 'main .actions a[href="architecture.html"]').click()
-            if item["qualification"] == "generated_default":
+                By.CSS_SELECTOR,
+                'main .actions a[href="' + architecture_href + '"]').click()
+            if item.get("architecture_explorer"):
                 # Original project routes DIRECTLY into the existing full
                 # parsed RTL/NoC/router explorer, not an embedded mini-view.
                 assert browser.current_url.endswith("/explorer.html")
