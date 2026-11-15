@@ -33,6 +33,7 @@ class MultiProjectSiteTests(unittest.TestCase):
             out = Path(tmp)
             (out / "data").mkdir()
             (out / "soc-overview.html").write_text("original overview")
+            (out / "explorer.html").write_text("original interactive hierarchy")
             entries = [{"target": "chip-ddr4-real", "passed": True,
                         "source_sha": "a"*40, "path": "runs/legacy/report.html"}]
             project_pages(out, projects, entries, "r987r/xezim-hello-world", "a"*40)
@@ -119,6 +120,7 @@ class MultiProjectSiteTests(unittest.TestCase):
                              ["xezim_soc_dv"])
             out = root / "site"
             out.mkdir()
+            (out / "explorer.html").write_text("original interactive hierarchy")
             project_pages(out, catalog, [], "r987r/xezim-hello-world", "b"*40)
             index = (out / "index.html").read_text()
             self.assertEqual(index.count('class="project-card"'), 10)
@@ -136,6 +138,38 @@ class MultiProjectSiteTests(unittest.TestCase):
                 self.assertIn("arch-h-filter", architecture)
                 self.assertIn(entry["id"], architecture)
 
+
+    def test_other_compiled_projects_cannot_borrow_default_explorer(self):
+        catalog = project_catalog.projects(ROOT)
+        cloned = copy.deepcopy(catalog[1])
+        cloned["architecture_explorer"] = None
+        cloned["qualification"] = "ci_generated_compiled"
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            (out / "explorer.html").write_text("legacy hierarchy")
+            project_pages(out, [cloned], [], "r987r/xezim-hello-world", "c"*40)
+            arch = (out / "projects" / cloned["id"] / "architecture.html").read_text()
+            self.assertIn("arch-h-filter", arch)
+            self.assertNotIn('window.location.replace("../../explorer.html")', arch)
+
+    def test_catalog_requires_unique_explorer_ownership(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "config/projects").mkdir(parents=True)
+            (root / "config/soc.yaml").write_text(
+                (ROOT / "config/soc.yaml").read_text())
+            (root / "gen/chip").mkdir(parents=True)
+            (root / "gen/chip/soc_top.sv").write_text("module soc_top; endmodule")
+            cfg = yaml.safe_load((ROOT / "config/projects/catalog.yaml").read_text())
+            cfg["projects"] = [cfg["projects"][0], copy.deepcopy(cfg["projects"][0])]
+            cfg["projects"][1]["id"] = "another_chip"
+            cfg["projects"][1]["config"] = "config/projects/another_chip.yaml"
+            clone = yaml.safe_load((ROOT / "config/soc.yaml").read_text())
+            clone["name"] = "another_chip"
+            (root / cfg["projects"][1]["config"]).write_text(yaml.safe_dump(clone))
+            (root / "config/projects/catalog.yaml").write_text(yaml.safe_dump(cfg))
+            with self.assertRaisesRegex(ValueError, "more than one project"):
+                project_catalog.projects(root)
 
     def test_bad_catalog_rejects_aliased_or_unqualified_sources(self):
         with tempfile.TemporaryDirectory() as temp:
