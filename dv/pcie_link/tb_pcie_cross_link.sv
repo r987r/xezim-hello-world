@@ -7,6 +7,8 @@ module test #(
   parameter bit SIM_FORCE_FAST_LTSSM = 1'b0,
   parameter bit PARTNER_PRESENT = 1'b1,
   parameter bit VERIFY_MEM_INGRESS = 1'b0,
+  // Dedicated real OpenPCIe->pcie_axi_master->generated NoC->SRAM write.
+  parameter bit VERIFY_REAL_MEM_WRITE = 1'b0,
   parameter integer MAX_PIPE_CYCLES = 100000
 );
   logic symbol_clk = 0;
@@ -29,7 +31,9 @@ module test #(
   logic [31:0] prelink_wdata = '0;
   wire [31:0] prelink_rdata, bar_aperture, bar_target, bar_mask;
   wire prelink_error, bar_committed, ltssm_permitted, bar_mem_ready;
-  logic noc_ready = 0;
+  // The isolated real NoC/SRAM fixture is initialized by reset release.
+  // It is NOT CPU0 boot proof; full-chip readiness stays a separate gate.
+  wire noc_ready = VERIFY_REAL_MEM_WRITE && nreset;
   // All aliases are driven by the original endpoint's completed host Cfg
   // TLPs. They are not TB-programmed and never go back to the host.
   wire [31:0] bar_host_base;
@@ -166,6 +170,10 @@ module test #(
     .phy_phystatus(phy_phystatus), .phy_rxstatus(phy_rxstatus)
   );
 
+  wire [31:0] ep_tx_tlp_data;
+  wire [3:0] ep_tx_tlp_keep;
+  wire ep_tx_tlp_valid,ep_tx_tlp_last,ep_tx_tlp_ready;
+  wire [4:0] ep_tx_tlp_user;
   // Original OpenPCIe endpoint RTL. Unused Gen2+ EQ inputs tied off.
   // Simulation-only acceleration of the original LTSSM's Detect.Quiet
   // timeout. State transitions and TS1/TS2 processing remain original RTL.
@@ -206,13 +214,124 @@ module test #(
     .tx_elec_idle(1'b0), .phy_ready_en(ltssm_permitted), .link_up_o(ep_link_up),
     // Original internal config block consumes over-link Cfg and sends Cpl.
     // Non-config TLP bridge to FlooNoC is a distinct later qualification.
-    .s_tlp_axis_tdata('0), .s_tlp_axis_tkeep('0),
-    .s_tlp_axis_tvalid(1'b0), .s_tlp_axis_tlast(1'b0),
-    .s_tlp_axis_tuser('0), .s_tlp_axis_tready(),
+    .s_tlp_axis_tdata(ep_tx_tlp_data), .s_tlp_axis_tkeep(ep_tx_tlp_keep),
+    .s_tlp_axis_tvalid(ep_tx_tlp_valid), .s_tlp_axis_tlast(ep_tx_tlp_last),
+    .s_tlp_axis_tuser(ep_tx_tlp_user), .s_tlp_axis_tready(ep_tx_tlp_ready),
     .m_tlp_axis_tdata(ep_rx_tlp_data), .m_tlp_axis_tkeep(ep_rx_tlp_keep),
     .m_tlp_axis_tvalid(ep_rx_tlp_valid), .m_tlp_axis_tlast(ep_rx_tlp_last),
-    .m_tlp_axis_tuser(ep_rx_tlp_user), .m_tlp_axis_tready(1'b0)
+    .m_tlp_axis_tuser(ep_rx_tlp_user), .m_tlp_axis_tready(ep_mem_rx_ready)
   );
+
+  wire ep_mem_rx_ready;
+  generate if (VERIFY_REAL_MEM_WRITE) begin : real_mem_write
+    wire [63:0] req_data;
+    wire [127:0] req_hdr;
+    wire req_valid, req_sop, req_eop, req_ready;
+    wire [31:0] received_beats, emitted_requests;
+    wire [63:0] cpl_data;
+    wire [1:0] cpl_strb;
+    wire [127:0] cpl_hdr;
+    wire cpl_valid, cpl_sop, cpl_eop, cpl_ready;
+    wire [31:0] completion_return_count;
+    wire err_cor, err_uncor;
+    wire [31:0] write_count, read_count;
+    wire [63:0] last_write_addr, last_read_addr;
+    wire relocation_enabled;
+    wire adapter_ready;
+    assign ep_mem_rx_ready = bar_mem_ready && adapter_ready;
+    openpcie_axis_req_to_tlp u_mem_axis (
+      .clk_i(core_clk), .rst_i(~nreset),
+      .s_data_i(ep_rx_tlp_data), .s_keep_i(ep_rx_tlp_keep),
+      .s_valid_i(ep_rx_tlp_valid && bar_mem_ready),
+      .s_last_i(ep_rx_tlp_last), .s_ready_o(adapter_ready),
+      .tlp_data_o(req_data), .tlp_hdr_o(req_hdr),
+      .tlp_valid_o(req_valid), .tlp_sop_o(req_sop),
+      .tlp_eop_o(req_eop), .tlp_ready_i(req_ready),
+      .accepted_count_o(received_beats), .emitted_count_o(emitted_requests)
+    );
+    // A genuine pinned verilog-pcie bridge and generated FlooNoC serve
+    // the posted MWr. Read completion return is a separate required gate.
+    pcie_noc_tb #(.BAR0_RELOCATE(1'b1)) u_mem_noc (
+      .clk(core_clk), .rst(~nreset),
+      .rx_req_tlp_data(req_data), .rx_req_tlp_hdr(req_hdr),
+      .rx_req_tlp_valid(req_valid), .rx_req_tlp_sop(req_sop),
+      .rx_req_tlp_eop(req_eop), .rx_req_tlp_ready(req_ready),
+      .tx_cpl_tlp_data(cpl_data), .tx_cpl_tlp_strb(cpl_strb),
+      .tx_cpl_tlp_hdr(cpl_hdr), .tx_cpl_tlp_valid(cpl_valid),
+      .tx_cpl_tlp_sop(cpl_sop), .tx_cpl_tlp_eop(cpl_eop),
+      .tx_cpl_tlp_ready(cpl_ready),
+      .completer_id({ep_bus,ep_device,ep_func}),
+      .max_payload_size(3'd0),
+      .status_error_cor(err_cor), .status_error_uncor(err_uncor),
+      .sram_write_count(write_count), .sram_read_count(read_count),
+      .sram_last_write_addr(last_write_addr),
+      .sram_last_read_addr(last_read_addr),
+      .bar0_relocation_enabled(relocation_enabled)
+    );
+    // Return genuine read completion from the existing SRAM/AXI bridge to
+    // the ORIGINAL OpenPCIe endpoint transmitter. The RC must accept it.
+    openpcie_cpl_to_axis u_mem_reply (
+      .clk_i(core_clk), .rst_i(~nreset),
+      .cpl_data_i(cpl_data), .cpl_strb_i(cpl_strb),
+      .cpl_hdr_i(cpl_hdr), .cpl_valid_i(cpl_valid),
+      .cpl_sop_i(cpl_sop), .cpl_eop_i(cpl_eop),
+      .cpl_ready_o(cpl_ready),
+      .m_data_o(ep_tx_tlp_data), .m_keep_o(ep_tx_tlp_keep),
+      .m_valid_o(ep_tx_tlp_valid), .m_last_o(ep_tx_tlp_last),
+      .m_user_o(ep_tx_tlp_user), .m_ready_i(ep_tx_tlp_ready),
+      .completed_count_o(completion_return_count)
+    );
+    logic write_seen = 0;
+    logic read_seen = 0, return_seen = 0;
+    always @(posedge core_clk) if (nreset) begin
+      if (!read_seen && read_count > 0) begin
+        if (last_read_addr !== 64'h12000100 || !write_seen)
+          $fatal(1,"SRAM read address/order mismatch addr=%h write_seen=%b",
+                 last_read_addr,write_seen);
+        read_seen <= 1;
+        $display("PCIE_CONNECTED_SRAM_READ: real_sram_read=1 addr=%h",last_read_addr);
+      end
+      if (!return_seen && completion_return_count > 0) begin
+        if (!read_seen)
+          $fatal(1,"endpoint completion preceded real SRAM read");
+        return_seen <= 1;
+        $display("PCIE_CONNECTED_EP_TX_CPLD: returned_completion=1 from_actual_sram=1");
+      end
+    end
+    // Check actual bytes at the real SRAM primitive's native memory port,
+    // never just the originating host request or bridge-issued AW/W.
+    always @(posedge core_clk) if (nreset &&
+       u_mem_noc.mem_valid && u_mem_noc.mem_write) begin
+       if (u_mem_noc.mem_addr !== 64'h12000100 ||
+           u_mem_noc.mem_data[31:0] !== 32'ha5c36e91 ||
+           u_mem_noc.mem_strb !== 8'h0f)
+         $fatal(1,"real SRAM bytes mismatch addr=%h data=%h strb=%h",
+                u_mem_noc.mem_addr,u_mem_noc.mem_data,u_mem_noc.mem_strb);
+       $display("PCIE_CONNECTED_SRAM_DATA_OK: addr=%h data=%h strb=%h",
+                u_mem_noc.mem_addr,u_mem_noc.mem_data,u_mem_noc.mem_strb);
+    end
+    always @(posedge core_clk) if (nreset) begin
+      if (err_uncor || err_cor)
+        $fatal(1,"unexpected bridge AXI error");
+      if (!write_seen && write_count > 0) begin
+        if (!relocation_enabled || last_write_addr != 64'h12000100 ||
+            emitted_requests != 1 || received_beats != 4 ||
+            !bar_mem_ready || !ep_link_up)
+          $fatal(1,"unqualified real SRAM posted write addr=%h count=%0d beats=%0d req=%0d gate=%b",
+                 last_write_addr,write_count,received_beats,emitted_requests,bar_mem_ready);
+        write_seen <= 1;
+        $display("PCIE_CONNECTED_SRAM_WRITE: actual_host_mwr=1 real_bridge=1 generated_noc=1 real_sram_write=1 addr=%h beats=%0d",
+                 last_write_addr,received_beats);
+      end
+    end
+  end else begin : no_mem_write
+    assign ep_mem_rx_ready = 1'b0;
+    assign ep_tx_tlp_data = '0;
+    assign ep_tx_tlp_keep = '0;
+    assign ep_tx_tlp_valid = 1'b0;
+    assign ep_tx_tlp_last = 1'b0;
+    assign ep_tx_tlp_user = '0;
+  end endgenerate
 
   // Original endpoint non-config TLP interface is deliberately NOT accepted
   // until real TLP/AXI/FlooNoC bridge is physically connected. Observe
