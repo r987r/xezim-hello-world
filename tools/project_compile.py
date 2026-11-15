@@ -67,19 +67,43 @@ def main():
     p.add_argument("--project", required=True)
     p.add_argument("--verilator", default="verilator")
     p.add_argument("--files-only", action="store_true")
+    p.add_argument("--elaborate-only", action="store_true",
+                   help="Verilator lint/elaboration without generating C++ objects")
     args = p.parse_args()
     out, data = selected(args.project)
+    filelist = str(ROOT / data["filelist"])
     if args.files_only:
         data["compile_status"] = "source_selected_only"
     else:
-        command = [args.verilator, "--lint-only", "--timing", "-Wno-fatal",
-                   "--top-module", data["top"], "-f", str(ROOT / data["filelist"])]
-        completed = subprocess.run(command, cwd=ROOT, text=True, capture_output=True)
-        (out / "compile.log").write_text(
-            " ".join(command) + "\n" + completed.stdout + completed.stderr)
-        data["compile_status"] = ("passed" if completed.returncode == 0 else "failed")
+        commands = [
+            [args.verilator, "--lint-only", "--timing", "-Wno-fatal",
+             "--top-module", data["top"], "-f", filelist],
+        ]
+        if not args.elaborate_only:
+            commands.append(
+                [args.verilator, "--cc", "--build", "-j", "2",
+                 "--timing", "-Wno-fatal", "--top-module", data["top"],
+                 "--Mdir", str(out / "obj_dir"), "-f", filelist])
+        logs = []
+        for idx, command in enumerate(commands):
+            completed = subprocess.run(
+                command, cwd=ROOT, text=True, capture_output=True)
+            logs.append(" ".join(command) + "\n" +
+                        completed.stdout + completed.stderr)
+            if completed.returncode:
+                data["compile_status"] = ("elaboration_failed" if idx == 0
+                                          else "cpp_build_failed")
+                break
+        else:
+            data["compile_status"] = ("elaboration_passed" if args.elaborate_only
+                                      else "cpp_build_passed")
+        (out / "compile.log").write_text("\n".join(logs))
+    data["elaborated"] = data["compile_status"] in (
+        "elaboration_passed", "cpp_build_passed", "cpp_build_failed")
+    data["compiled_cpp"] = data["compile_status"] == "cpp_build_passed"
+    data["simulation_passed"] = False
     (out / "compile-result.json").write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
-    if data["compile_status"] == "failed":
+    if data["compile_status"] in ("elaboration_failed", "cpp_build_failed"):
         print((out / "compile.log").read_text()[-16000:])
         raise SystemExit(1)
     print(data["project_id"], data["compile_status"],
