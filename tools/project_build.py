@@ -83,6 +83,35 @@ def generate_one(root: Path, project: dict, output: Path, *,
     return record
 
 
+
+def _verify_generated_subset(generated: Path, dest: Path) -> None:
+    """Check generator-owned bytes, without treating compiler products as RTL drift.
+
+    The only allowed post-generation additions are exact known compiler
+    artifacts. Unexpected files and modified generated RTL still fail closed.
+    """
+    expected_paths = {
+        f.relative_to(generated).as_posix(): f
+        for f in generated.rglob("*") if f.is_file()
+    }
+    actual_paths = {
+        f.relative_to(dest).as_posix(): f
+        for f in dest.rglob("*") if f.is_file()
+    }
+    for name, original in expected_paths.items():
+        target = actual_paths.get(name)
+        if target is None or target.is_symlink() or sha(target.read_bytes()) != sha(original.read_bytes()):
+            raise ValueError("selected project generated source mismatch: " + name)
+    # The compiler may produce large .o/.cpp products. Compare their names
+    # only; do NOT read all compiled objects into memory during RTL checking.
+    additions = set(actual_paths) - set(expected_paths)
+    allowed = {"chip/sources.f", "chip/compile-result.json", "chip/compile.log"}
+    for name in additions:
+        if (name not in allowed and not name.startswith("chip/obj_dir/")) or actual_paths[name].is_symlink():
+            raise ValueError("unowned or stale generated project file: " + name)
+
+
+
 def build(project_id: str, *, root: Path = ROOT,
           output_root: Path | None = None, check: bool = False,
           full_chip: bool = False) -> dict:
@@ -110,14 +139,9 @@ def build(project_id: str, *, root: Path = ROOT,
         record = generate_one(root, known[project_id], generated,
                               full_chip=full_chip, image_prefix=prefix)
         if check:
-            if not dest.is_dir() or {
-                    f.relative_to(generated).as_posix(): f.read_bytes()
-                    for f in generated.rglob("*") if f.is_file()
-            } != {
-                    f.relative_to(dest).as_posix(): f.read_bytes()
-                    for f in dest.rglob("*") if f.is_file()
-            }:
-                raise ValueError("selected project build differs from generated sources")
+            if not dest.is_dir():
+                raise ValueError("selected project build is missing")
+            _verify_generated_subset(generated, dest)
         else:
             if dest.exists():
                 shutil.rmtree(dest)

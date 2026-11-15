@@ -35,6 +35,29 @@ class ProjectBuildTests(unittest.TestCase):
                 (out / "xezim_ethernet_cpu_ddr_pcie/manifest.json").read_text()
             )["project_id"], "xezim_ethernet_cpu_ddr_pcie")
 
+    def test_recheck_ignores_compiler_products_but_not_mutated_generated_rtl(self):
+        # Compilation extends a project's build tree; rechecking generated
+        # sources must not read huge .o files or delete compiler diagnostics.
+        with tempfile.TemporaryDirectory() as folder:
+            out = Path(folder)
+            build("xezim_soc_dv", output_root=out)
+            chip = out / "xezim_soc_dv/chip"
+            chip.mkdir(exist_ok=True)
+            (chip / "sources.f").write_text("selected")
+            (chip / "compile-result.json").write_text("{}")
+            obj = chip / "obj_dir"
+            obj.mkdir()
+            (obj / "Vfull_chip_tb__ALL.o").write_bytes(b"compiler product")
+            build("xezim_soc_dv", output_root=out, check=True)
+            (chip / "unexpected.sv").write_text("foreign RTL")
+            with self.assertRaisesRegex(ValueError, "unowned or stale"):
+                build("xezim_soc_dv", output_root=out, check=True)
+            (chip / "unexpected.sv").unlink()
+            generated = out / "xezim_soc_dv/memory/memory_tb.sv"
+            generated.write_text(generated.read_text() + "\n// changed\n")
+            with self.assertRaisesRegex(ValueError, "generated source mismatch"):
+                build("xezim_soc_dv", output_root=out, check=True)
+
     def test_cross_project_build_output_is_rejected(self):
         with tempfile.TemporaryDirectory() as folder:
             out = Path(folder)

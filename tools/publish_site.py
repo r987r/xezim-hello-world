@@ -1350,9 +1350,13 @@ def project_pages(output, projects, entries, repository, sha):
         info = ('<div class="eyebrow">' + escape(pid) +
                 '</div><h1>' + name + '</h1><p class="lede">' +
                 escape(project['subtitle']) + '</p>')
+        explorer = project.get('architecture_explorer')
+        if explorer and not (output / explorer).is_file():
+            raise ValueError('catalog-selected project explorer was not published: ' + explorer)
+        architecture_href = ('../../' + explorer) if explorer else 'architecture.html'
         nav = ('<div class="actions">'
                '<a href="index.html">Overview</a>'
-               '<a href="architecture.html">Architecture</a>'
+               '<a href="' + architecture_href + '">Architecture</a>'
                '<a href="address-map.html">Addresses</a>'
                '<a href="files.html">RTL &amp; files</a>'
                '<a href="runs.html">Test runs</a></div>')
@@ -1372,46 +1376,6 @@ def project_pages(output, projects, entries, repository, sha):
                     escape(' · '.join(project['memory_targets'])) + '</p>'
                     '<h2>Design sources</h2><p><a href="files.html">'
                     'Selected top RTL, NoC and input manifests</a></p>')
-        if published:
-            overview += ('<div class="actions">'
-                         '<a href="../../soc-overview.html">Original SoC overview</a>'
-                         '<a href="../../topology.html">Generated topology</a>'
-                         '<a href="../../explorer.html">Chip architecture explorer</a>'
-                         '<a href="../../fabric.html">Fabric measurements</a>'
-                         '<a href="../../runs.html">Detailed test viewer</a></div>')
-            graph = ('<div class="topology-pan"><img class="topology" '
-                     'src="../../gen/diagrams/noc-hierarchy.svg" '
-                     'alt="Source-generated SoC hierarchy"></div>'
-                     '<p><a href="../../explorer.html">'
-                     'Inspect RTL modules and router hierarchy</a></p>')
-        else:
-            placement = project.get('layout') or {}
-            groups = placement.get('regions') or []
-            blocks = []
-            for i, region in enumerate(groups):
-                blocks.append('<section class="card"><h3>' +
-                              escape(region['name'].replace('_', ' ').title()) +
-                              '</h3><p>' + escape(' · '.join(region['subsystems'])) +
-                              '</p></section>')
-                if i + 1 != len(groups):
-                    blocks.append('<div class="project-link" '
-                                  'aria-label="Bidirectional AXI4 link">↔</div>')
-            link_rows = ''.join(
-                '<tr><td><code>' + escape(link['name']) + '</code></td>'
-                '<td>' + escape(' ↔ '.join(link['endpoints'])) +
-                '</td><td>AXI4 · duplex</td></tr>'
-                for link in project['data_links']
-            )
-            graph = ('<div class="project-fabric">' + ''.join(blocks) + '</div>'
-                     '<div class="card"><strong>Global configuration FlooNoC'
-                     '</strong><p class="muted">Bottom edge · independent AXI '
-                     'control fabric; no global data mesh.</p></div>'
-                     '<h2>Data links</h2><div class="scroll"><table>'
-                     '<thead><tr><th>Link</th><th>Endpoints</th><th>Protocol</th>'
-                     '</tr></thead><tbody>' + link_rows + '</tbody></table></div>'
-                     '<p class="muted">Layout and link names are sourced from '
-                     'the selected project configuration; the CI compiled RTL '
-                     'is available through the project files page.</p>')
         addresses = (
             '<div class="scroll"><table><thead><tr><th>Plane</th>'
             '<th>Target</th><th>Base</th><th>Size</th></tr></thead><tbody>' +
@@ -1470,9 +1434,31 @@ def project_pages(output, projects, entries, repository, sha):
         else:
             runs = ('<p class="empty">No project-qualified run evidence is '
                     'available. No other project results are substituted.</p>')
+        if explorer:
+            # Only a catalog-owned existing explorer can replace the generic
+            # architecture view. Never lend the original RTL hierarchy to an
+            # unrelated project just because it has compiled hardware.
+            explorer_href = '../../' + explorer
+            architecture = (info + '<p><a href="' + escape(explorer_href, quote=True) +
+                '">Open full selected hierarchy and RTL inspector</a></p>'
+                '<script>window.location.replace(' +
+                json.dumps(explorer_href).replace('<', '\\u003c') + ');</script>')
+        else:
+            # The one generic source tree applies to any compiled/config-only
+            # project; it never imports original-chip router/RTL evidence.
+            template = (ROOT/'tools/templates/site_project_hierarchy.html').read_text()
+            hierarchy = json.dumps({
+                'id': pid, 'title': project['title'],
+                'config': project['config'],
+                'config_sha256': project['config_sha256'],
+                'qualification': qualification,
+                'design': project['design'],
+            }, separators=(',', ':')).replace('<', '\\u003c')
+            architecture = (info + nav + scope +
+                            template.replace('__PROJECT_HIERARCHY_JSON__', hierarchy))
         pages = {
             'index.html': overview,
-            'architecture.html': info + nav + scope + graph,
+            'architecture.html': architecture,
             'address-map.html': info + nav + scope + addresses,
             'files.html': info + nav + scope + files_page,
             'runs.html': info + nav + scope + runs,

@@ -7,6 +7,7 @@ projects:
     subtitle: Two CPUs, HBM and DDR, global data and configuration FlooNoCs
     config: config/soc.yaml
     generated_source: gen/chip/soc_top.sv
+    architecture_explorer: explorer.html
     qualification: generated_default
   - id: xezim_ethernet_cpu_ddr_pcie
     title: Ethernet / CPU + DDR / PCIe

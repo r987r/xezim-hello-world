@@ -1,0 +1,154 @@
+<section class="hierarchy-app" aria-label="Project architecture explorer">
+  <div class="eyebrow">Source-derived hierarchy / interactive navigation</div>
+  <h2>Explore chip architecture</h2>
+  <p class="muted">Search and drill down through subsystems, IP, NoCs, directed links, memory targets and their source contracts. This view uses only the selected project's configuration, not another project's topology.</p>
+  <div class="arch-h-search">
+    <label for="arch-h-filter">Find any block, interface or network</label>
+    <input type="search" id="arch-h-filter" placeholder="compute0, ethernet, ddr, control, AXI…" autocomplete="off">
+    <span id="arch-h-count" aria-live="polite"></span>
+  </div>
+  <div class="arch-h-layout">
+    <nav class="arch-h-tree" aria-label="Source architecture hierarchy" id="arch-h-tree"></nav>
+    <section class="arch-h-detail" aria-label="Selected architecture component">
+      <div id="arch-h-crumbs" class="arch-h-crumbs" aria-label="Hierarchy breadcrumb"></div>
+      <h3 id="arch-h-title">Full chip</h3>
+      <p id="arch-h-status" class="muted"></p>
+      <div id="arch-h-children" class="arch-h-cards"></div>
+      <div id="arch-h-facts"></div>
+      <p class="muted" id="arch-h-provenance"></p>
+      <div class="actions"><a href="files.html">Selected RTL, filelist and manifests</a><a href="runs.html">Project-qualified test runs</a></div>
+    </section>
+  </div>
+</section>
+<style>
+.hierarchy-app{margin-top:24px}
+.arch-h-search{display:flex;align-items:flex-start;flex-direction:column;gap:7px;margin:18px 0}
+.arch-h-search input{width:100%;max-width:720px}
+.arch-h-layout{display:grid;grid-template-columns:minmax(225px,305px) minmax(0,1fr);gap:14px;align-items:start}
+.arch-h-tree,.arch-h-detail{min-width:0;border:1px solid var(--line);background:var(--panel);border-radius:12px;padding:15px}
+.arch-h-tree{display:block;max-height:72vh;overflow-y:auto}
+.arch-h-tree button,.arch-h-crumbs button,.arch-h-cards button{font:inherit;color:var(--fg);background:transparent;border:1px solid transparent;text-align:left;cursor:pointer}
+.arch-h-tree button{display:block;width:100%;padding:8px 10px;overflow-wrap:anywhere;font-size:13px;border-radius:7px}
+.arch-h-tree button:hover,.arch-h-tree button[aria-current="true"]{background:#203a54;border-color:#406383}
+.arch-h-tree .arch-h-section{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin:20px 5px 7px}
+.arch-h-detail{min-height:340px}
+.arch-h-crumbs{display:flex;flex-wrap:wrap;gap:7px;align-items:center;font-size:13px}
+.arch-h-crumbs button{color:var(--accent);padding:3px 4px}
+.arch-h-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:9px}
+.arch-h-cards button{padding:14px;min-height:72px;background:#112b40;border:1px solid #365a79;border-radius:9px}
+.arch-h-cards button:hover{border-color:var(--accent)}
+.arch-h-cards strong,.arch-h-cards span{display:block;overflow-wrap:anywhere}
+.arch-h-cards span{font-size:12px;color:var(--muted)}
+.arch-h-fact{padding:9px 0;border-bottom:1px solid var(--line);overflow-wrap:anywhere}
+.arch-h-fact dt{font-size:11px;color:var(--muted);text-transform:uppercase}
+.arch-h-fact dd{margin:0;white-space:pre-wrap;font-size:13px}
+@media(max-width:760px){.arch-h-layout{grid-template-columns:1fr}.arch-h-tree{max-height:300px}.arch-h-detail{min-height:300px}}
+</style>
+<script type="application/json" id="arch-h-model">__PROJECT_HIERARCHY_JSON__</script>
+<script>
+(() => {
+  'use strict';
+  const model=JSON.parse(document.getElementById('arch-h-model').textContent);
+  const tree=document.getElementById('arch-h-tree'),filter=document.getElementById('arch-h-filter');
+  const count=document.getElementById('arch-h-count'),crumbs=document.getElementById('arch-h-crumbs');
+  const title=document.getElementById('arch-h-title'),status=document.getElementById('arch-h-status');
+  const children=document.getElementById('arch-h-children'),facts=document.getElementById('arch-h-facts');
+  const provenance=document.getElementById('arch-h-provenance');
+  const items=new Map(),root='chip',bySection=new Map();
+  function add(id,label,kind,parent,details={}) {
+    if(items.has(id))throw Error('duplicate architecture component '+id);
+    const obj={id,label,kind,parent,details,children:[]};
+    items.set(id,obj);if(parent)items.get(parent).children.push(id);
+    if(!bySection.has(kind))bySection.set(kind,[]);
+    bySection.get(kind).push(id);
+    return obj;
+  }
+  add(root,model.title,'chip',null,{project:model.id,qualification:model.qualification});
+  const d=model.design||{};
+  const subRoot='subsystems',fabricRoot='fabrics',networkRoot='networks',memoryRoot='memories';
+  add(subRoot,'Subsystems','section',root);
+  add(fabricRoot,'Fabrics','section',root);
+  add(networkRoot,'Networks and links','section',root);
+  add(memoryRoot,'Memory targets','section',root);
+  for(const s of d.subsystems||[]) {
+    const id='sub:'+s.name;
+    add(id,s.name,'subsystem',subRoot,s);
+    for(const [key,value] of Object.entries(s)) {
+      if(key==='name'||key==='type')continue;
+      if(value && typeof value==='object' && !Array.isArray(value)) {
+        add('ip:'+s.name+':'+key,key,'ip',id,value);
+      } else if(key!=='name') {
+        add('property:'+s.name+':'+key,key,'property',id,{value});
+      }
+    }
+  }
+  for(const [key,value] of Object.entries(d.fabrics||{}))
+    add('fabric:'+key,key,'fabric',fabricRoot,value);
+  for(const [key,value] of Object.entries(d.networks||{})) {
+    const id='network:'+key;
+    add(id,key,'network',networkRoot,{protocol:value.protocol||null,
+      link_backend:value.link_backend||null,
+      reachable_subsystems:value.reachable_subsystems||null});
+    for(const [i,link] of (value.links||[]).entries())
+      add('link:'+key+':'+i,link.name||('link '+(i+1)),'link',id,link);
+    for(const [i,port] of (value.outputs||value.memory_outputs||[]).entries())
+      add('port:'+key+':'+i,port.name||('port '+(i+1)),'port',id,port);
+  }
+  for(const m of d.memory_targets||[])
+    add('memory:'+m.name,m.name,'memory',memoryRoot,m);
+  const busses=Object.entries(d.buses||{});
+  if(busses.length){
+    add('buses','Buses','section',root);
+    for(const [name,def] of busses)add('bus:'+name,name,'bus','buses',def);
+  }
+  function button(text,callback,selected=false) {
+    const b=document.createElement('button');b.type='button';b.textContent=text;
+    if(selected)b.setAttribute('aria-current','true');
+    b.addEventListener('click',callback);return b;
+  }
+  function renderTree() {
+    tree.replaceChildren();const term=filter.value.trim().toLocaleLowerCase();
+    const matches=[...items.values()].filter(x=>x.id!==root && (x.label+' '+x.kind+' '+JSON.stringify(x.details)).toLocaleLowerCase().includes(term));
+    count.textContent=matches.length+' matching components';
+    for(const [kind,values] of bySection){
+      if(kind==='chip')continue;
+      const visible=values.filter(id=>!term||matches.some(x=>x.id===id));
+      if(!visible.length)continue;
+      const heading=document.createElement('div');heading.className='arch-h-section';
+      heading.textContent=kind+' · '+visible.length;tree.append(heading);
+      for(const id of visible)tree.append(button(items.get(id).label,()=>navigate(id),id===current));
+    }
+  }
+  let current=root;
+  function navigate(id) {
+    const node=items.get(id);if(!node)return;
+    current=id;title.textContent=node.label;
+    status.textContent=node.kind+' · '+node.children.length+' child component(s)';
+    crumbs.replaceChildren();const path=[];for(let n=node;n;n=n.parent?items.get(n.parent):null)path.unshift(n);
+    for(const [i,n] of path.entries()){
+      if(i){const sep=document.createElement('span');sep.textContent='/';crumbs.append(sep);}
+      crumbs.append(button(n.label,()=>navigate(n.id)));
+    }
+    children.replaceChildren();
+    for(const childId of node.children){
+      const child=items.get(childId);
+      const b=button('',()=>navigate(childId));
+      const label=document.createElement('strong');label.textContent=child.label;
+      const type=document.createElement('span');type.textContent=child.kind+' · '+child.children.length+' child component(s)';
+      b.append(label,type);children.append(b);
+    }
+    facts.replaceChildren();
+    const dl=document.createElement('dl');for(const [key,val] of Object.entries(node.details)){
+      const row=document.createElement('div');row.className='arch-h-fact';
+      const dt=document.createElement('dt');dt.textContent=key;
+      const dd=document.createElement('dd');dd.textContent=typeof val==='string'?val:JSON.stringify(val,null,2);
+      row.append(dt,dd);dl.append(row);
+    }facts.append(dl);
+    provenance.textContent='Source configuration · '+model.config+
+      ' · '+model.config_sha256.slice(0,12)+
+      '. Declared hierarchy only; use selected compile artifacts for actual RTL instances and ports.';
+    renderTree();
+  }
+  filter.addEventListener('input',renderTree);navigate(root);
+})();
+</script>
