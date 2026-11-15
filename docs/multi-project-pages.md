@@ -19,7 +19,12 @@ per project.
 Pages routes are stable:
 - `index.html` is the project picker.
 - `projects/<id>/index.html` is that project's overview.
-- `projects/<id>/architecture.html` is its topology.
+- `projects/<id>/architecture.html` is its searchable hierarchy entry point.
+  A project may opt into its own fully generated/parsed explorer using the
+  validated `architecture_explorer` catalog field. Only Project A currently
+  owns the legacy `explorer.html`. All other designs use the same
+  searchable, breadcrumbs-based source hierarchy; they never inherit
+  another project's RTL modules, routers, or traffic data.
 - `projects/<id>/address-map.html` is its address map.
 - `projects/<id>/files.html` indexes top RTL, NoC, filelist,
   manifests, boot products and their real source location.
@@ -111,3 +116,26 @@ a reused baseline capture, or an untagged historical run.
 The original project retains its normal regressions. A new project
 requires an explicit qualified test target/run identity before it can
 populate its own Test Runs page.
+
+## Hierarchy restoration and future projects
+
+The original chip's **Architecture** navigation opens its complete existing
+interactive `explorer.html` (subsystems → IP → NoC → routers and interfaces),
+including controls, RTL bindings, signals and evidence. The reduced region
+sketch was removed from the multi-project publisher. The generic
+`site_project_hierarchy.html` renderer instead consumes each project's
+own `soc.yaml` subsystem, IP, fabric, network/link, bus and memory contracts.
+It supports search, breadcrumbs and click-through, but does not pretend to
+know RTL router instances or signal bindings until an actual project-specific
+compiler-parsed explorer is published.
+
+To enable richer RTL drill-down for additional compiled projects, generate a
+source-qualified explorer for *that project* and register its own relative
+`architecture_explorer` URL in the catalog. The publisher rejects missing
+or duplicate explorer ownership. A compiled top alone is insufficient for
+router-/signal-level claims.
+
+The per-project `--check` generation gate remains byte-exact for all
+emitter-owned output; subsequent known Verilator `sources.f`, compile logs,
+result metadata and `obj_dir/` files are permitted without reading their
+large object-file contents or calling them stale generated RTL.
