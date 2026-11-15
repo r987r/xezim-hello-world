@@ -54,6 +54,21 @@ class MultiProjectSiteTests(unittest.TestCase):
             self.assertIn("chip/sources.f", (new / "files.html").read_text())
             self.assertIn("project-compile.yml", (new / "files.html").read_text())
             self.assertNotIn("memory0.hbm0", (new / "files.html").read_text())
+            a_arch = (a / "architecture.html").read_text()
+            self.assertIn('src="../../explorer.html"', a_arch)
+            self.assertIn("complete chip hierarchy", a_arch)
+            b_arch = (new / "architecture.html").read_text()
+            self.assertIn("arch-h-filter", b_arch)
+            self.assertIn("arch-h-tree", b_arch)
+            self.assertIn("arch-h-crumbs", b_arch)
+            self.assertIn("arch-h-children", b_arch)
+            self.assertIn("ethernet0", b_arch)
+            self.assertIn("l0_ethernet_compute", b_arch)
+            self.assertIn("l1_compute_pcie", b_arch)
+            self.assertNotIn('src="../../explorer.html"', b_arch)
+            self.assertNotIn("memory0.hbm0", b_arch)
+            self.assertIn("Declared hierarchy only", b_arch)
+
 
 
     def test_ten_catalog_projects_generate_ten_isolated_navigation_pages(self):
@@ -116,6 +131,10 @@ class MultiProjectSiteTests(unittest.TestCase):
                     json.loads((directory / "data/project.json").read_text())["runs"], [])
                 self.assertIn("No project-qualified",
                               (directory / "runs.html").read_text())
+                architecture = (directory / "architecture.html").read_text()
+                self.assertIn("arch-h-filter", architecture)
+                self.assertIn(entry["id"], architecture)
+
 
     def test_bad_catalog_rejects_aliased_or_unqualified_sources(self):
         with tempfile.TemporaryDirectory() as temp:
