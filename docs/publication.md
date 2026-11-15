@@ -1,6 +1,6 @@
 # GitHub Pages verification hub
 
-The [verification hub](https://r987r.github.io/xezim-hello-world/) publishes the **current main-source** README, documentation, one generated topology and source-qualified CI evidence. `.github/workflows/pages.yml` builds/collects and deploys using GitHub Actions Pages; PRs get offline previews, while trusted merge-to-main or manual `main` dispatches deploy. The GitHub Pages environment records the deployed source SHA.
+The [verification hub](https://r987r.github.io/xezim-hello-world/) opens with a **project picker**. Each project has a separate source-defined architecture, address map and run identity. The original project's full legacy views and run-report deep links remain available. Only the original project's current main-source generated topology and source-qualified CI evidence are currently published; project B is source-defined and has no qualified chip RTL or test runs. See [multi-project Pages routing](multi-project-pages.md). `.github/workflows/pages.yml` builds/collects and deploys using GitHub Actions Pages; PRs get offline previews, while trusted merge-to-main or manual `main` dispatches deploy. The GitHub Pages environment records the deployed source SHA.
 
 ## What is published
 
