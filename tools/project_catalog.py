@@ -97,10 +97,15 @@ def main():
     p.add_argument("--matrix", action="store_true",
                    help="GitHub Actions matrix driven solely by project catalog")
     p.add_argument("--ids", action="store_true", help="print project IDs, one per line")
+    p.add_argument("--compiled-only", action="store_true",
+                   help="select projects claiming compiled RTL, omitting config-only projects")
     args = p.parse_args()
     if args.matrix and args.ids:
         p.error("--matrix and --ids are mutually exclusive")
     selected = projects(args.root)
+    if args.compiled_only:
+        selected = [p for p in selected
+                    if p["qualification"] in ("generated_default", "ci_generated_compiled")]
     if args.matrix:
         # Must remain one compact line for GITHUB_OUTPUT; no 2-project list.
         rendered = json.dumps({"project": [p["id"] for p in selected]},

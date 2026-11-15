@@ -33,7 +33,7 @@ jobs:
         id: projects
         run: |
           python3 -m pip install -r requirements.txt
-          echo "matrix=$(python3 tools/project_catalog.py --matrix)" >> "$GITHUB_OUTPUT"
+          echo "matrix=$(python3 tools/project_catalog.py --matrix --compiled-only)" >> "$GITHUB_OUTPUT"
   selected-projects:
     needs: catalog
     runs-on: ubuntu-24.04

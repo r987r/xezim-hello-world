@@ -95,6 +95,12 @@ class MultiProjectSiteTests(unittest.TestCase):
                 project_catalog.main()
             matrix = json.loads(output.getvalue())
             self.assertEqual(matrix["project"], [p["id"] for p in catalog])
+            compiled = StringIO()
+            with patch("sys.argv", ["project_catalog.py", "--root", str(root),
+                                    "--matrix", "--compiled-only"]), redirect_stdout(compiled):
+                project_catalog.main()
+            self.assertEqual(json.loads(compiled.getvalue())["project"],
+                             ["xezim_soc_dv"])
             out = root / "site"
             out.mkdir()
             project_pages(out, catalog, [], "r987r/xezim-hello-world", "b"*40)
