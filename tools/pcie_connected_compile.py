@@ -53,7 +53,7 @@ def main()->int:
     host=root/'.tools/pcie_host_pcievhost/verilog'
     vproc=root/'.tools/pcie_host_vproc'
     args=['verilator','--binary','--timing','-j','4','-Wno-fatal',
-          '-DVPROC_SV','-GSIM_FORCE_FAST_LTSSM=1',
+          '-DVPROC_SV','-DPCIE_CONNECTED_MEM','-GSIM_FORCE_FAST_LTSSM=1',
           '-GVERIFY_REAL_MEM_WRITE=1','--top-module','test',
           '--Mdir',str(root/'.tools/pcie-connected-obj'),
           '--prefix','Vtop']
