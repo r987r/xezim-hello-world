@@ -23,6 +23,17 @@ Full-chip test writers must be able to express **what** to do using typed action
 
 **Selected cross-language ABI:** `tools/scenario_c.py` emits a C11 action table from the same canonical selected JSON and plan SHA that the Python dispatcher and SV action package use. [PR #180](https://github.com/r987r/xezim-hello-world/pull/180) **merged** the callback-based native C11 action adapter with mandatory selected-plan SHA preflight and rejection of missing/foreign plans. It passed its four exact-head CI workflows, including the existing full-chip boot regression, but that boot regression does **not** establish that selected C11 actions have been delivered to a real CPU via an independent hardware mailbox. The actual CSR/iDMA/PCIe/Ethernet adapters and independently checked multi-protocol chaining remain [#152](https://github.com/r987r/xezim-hello-world/issues/152). `issued`/`driver_done` are driver-only; hardware acceptance and successful bytes require separate passive protocol evidence.
 
+**Config-selected SCN source reuse:** the existing real CPU-C and BFM
+regression entries use one YAML-selected `flow_plan` under
+`config/scenarios/`. The scenario source is passed to both firmware and BFM
+materializers rather than hardcoded inside either adapter. The strict
+eight-action `compile_contract` still rejects unsupported action kinds,
+actors, dependencies, addresses or missing capabilities **before RTL**;
+mismatched CPU/BFM sources fail configuration validation. This is only
+framework reuse of a compatible scenario definition, not new PCIe/Ethernet
+coverage. Both selected runs must still generate identical canonical plans
+and pass the existing independent RTL replay audit.
+
 **Do not create a second scenario compiler, scheduler authority, source catalog, event format, passive monitor, test viewer or report site.**
 
 ## Parallel multi-seed scaling without another test framework
