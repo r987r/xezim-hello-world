@@ -131,10 +131,32 @@ endpoint link.
 Source example: pcievhost's pinned `src/ltssm.c` explicitly describes its
 abbreviated LTSSM as intended for L0 simulation only, not full compliance.
 The upstream OpenPCIe self-test and host standalone demo are **different**
-from the independently cross-connected RTL/host link test, which now proves
-real digital L0. The original upstream Cocotb self-test is still **failing**
-unaligned long BAR readback (1024 bytes / offset 7); do not misclassify the
-isolated L0 as complete original-provider qualification.
+from the independently cross-connected RTL/host link test. The original
+unaligned 1024-byte / offset-7 Cocotb readback now **passes** with the
+exact source-pinned skid-buffer demux correction; a direct randomized
+AXI-Stream negative/positive RTL regression protects that fix. Neither
+standalone success is full-chip qualification.
+
+## Isolated real host/endpoint/NoC/SRAM byte roundtrip
+
+The `pcie-connected-memory.yml` workflow compiles the **original**
+independent pcievhost and OpenPCIe Gen1 RTL, selected endpoint overlay,
+the existing pinned verilog-pcie TLP/AXI bridge, generated PCIe0 local
+FlooNoC and real AXI SRAM. Its original host performs BAR0 sizing,
+assignment, COMMAND MSE, one posted 32-bit MWr to `0x80001100`,
+then one MRd from the same address. Native SRAM data/strobe/address
+and original host-returned CplD bytes must match `0xa5c36e91`.
+The passive `tools/pcie_connected_roundtrip_evidence.py` rejects
+missing/repeated/out-of-order events, wrong tag, bytes, address, data or
+unqualified original BAR0. Raw host/endpoint simulation output,
+source plan and JSON remain CI artifacts. Local RTL execution passed;
+the **exact-head independent GitHub CI** is authoritative before merge.
+
+The two explicit verification-only format shims support **only**
+one-DW 3DW MWr/MRd and one-DW CplD; unsupported traffic fails
+closed rather than silently broadening PCIe claims. No full-chip CPU0
+firmware, production NoC readiness handshake, global routing or DMA
+integration is demonstrated by this fixture.
 
 ## Full-chip parallel boot and PCIe link ownership (integration contract)
 
@@ -186,12 +208,13 @@ Two distinct barriers must never be conflated:
   checker must demonstrate the barriers and byte-level completion.
 
 The current `tb_pcie_cross_link.sv` does **not** instantiate the full SoC,
-run CPU firmware, or implement the NoC transaction-ready handshake.
-It remains an isolated link-training experiment. Implement the full-chip
-parallel boot only *after* actual isolated L0 evidence is green; reuse
-`tools/regress.py`, `config/regression.yaml`, original SCN-C/Python/SV
-action ABI and `dv/pcie0/host_adapter.py` instead of copying an independent
-test runner.
+run CPU firmware, or prove a CPU-driven NoC transaction-ready handshake.
+It now has a source-selected, opt-in **isolated genuine endpoint→bridge→
+generated PCIe0 FlooNoC→SRAM** memory fixture, with independent host
+CplD readback. The local fixture asserts its own readiness at reset
+release and **must not** be cited as CPU0/Config-NoC initialization.
+Full-chip concurrent boot remains a separate gate using the canonical
+`tools/regress.py`, scenario actions and reporting contract.
 
 ## Device-programmed BAR before LTSSM (pre-link hardware milestone)
 
@@ -253,8 +276,10 @@ second PCIe config model, this branch now contains:
   production integration; no vendor source is silently modified.
 - `tb_pcie_cross_link.sv` now connects real endpoint RX TLP to the
   upstream config wrapper and routes generated config completions back to
-  endpoint TLP TX. Existing nonconfig TLPs are explicitly NOT connected to
-  the NoC in this standalone link experiment.
+  endpoint TLP TX. When `VERIFY_REAL_MEM_WRITE=1`, actual received nonconfiguration
+  TLPs feed a one-3DW/one-DW-only verification shim into the real
+  PCIe bridge and FlooNoC. Other link modes retain their original
+  isolated configuration/ingress boundaries.
 - `bar0_noc_translate.sv` computes PCI bus-address offset -> local SRAM
   destination under the separate L0, NoC-ready and host-MSE gate. It does
   not accept AXI beats or synthesize completions.
