@@ -57,7 +57,7 @@ class MultiProjectSiteTests(unittest.TestCase):
             self.assertNotIn("memory0.hbm0", (new / "files.html").read_text())
             a_arch = (a / "architecture.html").read_text()
             self.assertIn('window.location.replace("../../explorer.html")', a_arch)
-            self.assertIn("complete interactive", a_arch)
+            self.assertIn("full selected hierarchy", a_arch)
             self.assertNotIn("project-architecture-frame", a_arch)
             b_arch = (new / "architecture.html").read_text()
             self.assertIn("arch-h-filter", b_arch)
@@ -135,7 +135,11 @@ class MultiProjectSiteTests(unittest.TestCase):
                 self.assertIn("No project-qualified",
                               (directory / "runs.html").read_text())
                 architecture = (directory / "architecture.html").read_text()
-                self.assertIn("arch-h-filter", architecture)
+                if entry.get("architecture_explorer"):
+                    self.assertIn("window.location.replace", architecture)
+                    self.assertNotIn("arch-h-filter", architecture)
+                else:
+                    self.assertIn("arch-h-filter", architecture)
                 self.assertIn(entry["id"], architecture)
 
 
