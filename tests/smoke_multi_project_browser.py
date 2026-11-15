@@ -34,11 +34,11 @@ def main():
         assert "/projects/xezim_ethernet_cpu_ddr_pcie/index.html" in browser.current_url
         assert "memory0.ddr0" in browser.find_element(By.TAG_NAME, "main").text
         assert "memory0.hbm0" not in browser.page_source
-        browser.find_element(By.LINK_TEXT, "Architecture").click()
+        browser.find_element(By.CSS_SELECTOR, "main .actions a[href=\"architecture.html\"]").click()
         assert "l0_ethernet_compute" in browser.find_element(By.TAG_NAME, "main").text
         assert "l1_compute_pcie" in browser.find_element(By.TAG_NAME, "main").text
         assert "Global control FlooNoC" in browser.find_element(By.TAG_NAME, "main").text
-        browser.find_element(By.LINK_TEXT, "Test runs").click()
+        browser.find_element(By.CSS_SELECTOR, "main .actions a[href=\"runs.html\"]").click()
         assert "No project-qualified run evidence" in browser.find_element(By.TAG_NAME, "main").text
         assert "Recorded PASS" not in browser.page_source
         browser.set_window_size(390, 840)
