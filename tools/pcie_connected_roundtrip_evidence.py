@@ -11,7 +11,10 @@ from pathlib import Path
 import re
 import sys
 
-from pcie_bar0_evidence import check as bar_check
+if __package__:
+    from .pcie_bar0_evidence import check as bar_check
+else:
+    from pcie_bar0_evidence import check as bar_check
 
 PATTERNS={
  'host_mwr':r'PCIE_RC_BAR_MWR_TX: action=write_bar0 addr=([0-9a-f]{8}) data=([0-9a-f]{8}) plan=([0-9a-f]{64})',
