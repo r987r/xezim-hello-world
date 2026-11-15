@@ -92,13 +92,27 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--root", type=Path, default=ROOT)
     p.add_argument("--out", type=Path)
+    p.add_argument("--matrix", action="store_true",
+                   help="GitHub Actions matrix driven solely by project catalog")
+    p.add_argument("--ids", action="store_true", help="print project IDs, one per line")
     args = p.parse_args()
-    result = {"schema_version": 1, "projects": projects(args.root)}
+    if args.matrix and args.ids:
+        p.error("--matrix and --ids are mutually exclusive")
+    selected = projects(args.root)
+    if args.matrix:
+        # Must remain one compact line for GITHUB_OUTPUT; no 2-project list.
+        rendered = json.dumps({"project": [p["id"] for p in selected]},
+                              separators=(",", ":"))
+    elif args.ids:
+        rendered = "\n".join(p["id"] for p in selected)
+    else:
+        rendered = json.dumps({"schema_version": 1, "projects": selected},
+                              indent=2, sort_keys=True)
     if args.out:
         args.out.parent.mkdir(parents=True, exist_ok=True)
-        args.out.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
+        args.out.write_text(rendered + "\n")
     else:
-        print(json.dumps(result, indent=2, sort_keys=True))
+        print(rendered)
 
 
 if __name__ == "__main__":
