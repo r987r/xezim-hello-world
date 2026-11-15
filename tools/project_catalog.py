@@ -81,6 +81,17 @@ def projects(root: Path = ROOT) -> list[dict]:
             "memory_targets": [t["name"] for t in soc["memory_targets"]],
             "data_links": meta.get("direct_data_links", []),
             "layout": soc.get("layout"),
+            # Explicit per-project source hierarchy for the reusable viewer.
+            # These are configuration declarations, NOT parsed RTL instances.
+            "design": {
+                "subsystems": soc["subsystems"],
+                "subsystem_types": soc.get("subsystem_types", {}),
+                "fabrics": soc.get("fabrics", {}),
+                "networks": soc.get("networks", {}),
+                "memory_targets": soc["memory_targets"],
+                "buses": soc.get("buses", {}),
+                "boot": soc.get("boot", {}),
+            },
             "address_map": soc["address_map"],
             "source_evidence": ("tracked_generated_source_not_simulation" if generated else
                                 "selected_compiled_CI_artifact_not_simulation"
