@@ -13,8 +13,8 @@ import json
 import os
 from pathlib import Path
 import re
+import signal
 import subprocess
-import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -103,13 +103,22 @@ def run_profile(name: str, profile: dict, out: Path, *, allow_dirty: bool = Fals
     began = time.monotonic()
     try:
         with (out / "stdout-stderr.log").open("w", encoding="utf-8") as log:
-            p = subprocess.run(profile["command"], cwd=ROOT, stdout=log,
-                               stderr=subprocess.STDOUT, timeout=profile["timeout_s"],
-                               check=False)
-        evidence["exit_code"] = p.returncode
-    except subprocess.TimeoutExpired:
-        evidence["timed_out"] = True
-        evidence["exit_code"] = 124
+            # Start a fresh POSIX process group: on timeout, killing only the
+            # simulator launcher can leave compilers, workers or a VM running.
+            child = subprocess.Popen(
+                profile["command"], cwd=ROOT, stdout=log,
+                stderr=subprocess.STDOUT, start_new_session=True,
+            )
+            try:
+                evidence["exit_code"] = child.wait(timeout=profile["timeout_s"])
+            except subprocess.TimeoutExpired:
+                evidence["timed_out"] = True
+                evidence["exit_code"] = 124
+                try:
+                    os.killpg(child.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                child.wait()
     except OSError as exc:
         evidence["exit_code"] = 127
         (out / "launch-error.txt").write_text(str(exc) + "\n")
@@ -122,7 +131,6 @@ def run_profile(name: str, profile: dict, out: Path, *, allow_dirty: bool = Fals
 
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--config", type=Path, default=ROOT / "config/debug.yaml")
     p.add_argument("--profile")
     p.add_argument("--out", type=Path)
     p.add_argument("--allow-dirty", action="store_true")
@@ -130,7 +138,9 @@ def main() -> int:
                    help="validate recipe schema without running commands")
     args = p.parse_args()
     try:
-        profiles = load_profiles(args.config)
+        # CLI executes only checked-in repository recipes, never an arbitrary
+        # replacement YAML file supplied on the command line.
+        profiles = load_profiles(ROOT / "config/debug.yaml")
         if args.audit:
             print("PASS: validated debug recipes:", ", ".join(sorted(profiles)))
             return 0
