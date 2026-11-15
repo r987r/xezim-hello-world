@@ -18,6 +18,8 @@ on:
       - 'tools/pcie_bar0_evidence.py'
       - 'tools/pcie_mem_ingress_evidence.py'
       - 'tools/pcie_upstream_test_timing.py'
+      - 'tools/pcie_demux_backpressure.py'
+      - 'dv/pcie_link/axis_demux_backpressure_tb.sv'
       - 'tools/pcie_native_pipe_capture.py'
       - 'tools/ci_require_cocotb.py'
       - 'tools/generate.py'
@@ -252,6 +254,11 @@ jobs:
           # This does not force LTSSM state or alter the cross-connected test.
           python3 tools/pcie_upstream_test_timing.py \
             --checkout .tools/pcie_endpoint_openpcie
+          # Exercise actual pinned original AXIS skid-register RTL, with a
+          # known original-upstream FAIL witness and three freshly generated
+          # positive seeds. This is not a substitute for the original Cocotb
+          # byte oracle below; test logs/seed evidence remain in .tools/pcie-link.
+          python3 tools/pcie_demux_backpressure.py
           git -C .tools/pcie_endpoint_openpcie diff -- \
             pcie_phy.core verif/tests/test_pcie_core.py \
             verif/sequences/pcie_enumeration_seq.py \
