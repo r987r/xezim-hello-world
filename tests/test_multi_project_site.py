@@ -56,9 +56,13 @@ class MultiProjectSiteTests(unittest.TestCase):
             self.assertIn("project-compile.yml", (new / "files.html").read_text())
             self.assertNotIn("memory0.hbm0", (new / "files.html").read_text())
             a_arch = (a / "architecture.html").read_text()
-            self.assertIn('window.location.replace("../../explorer.html")', a_arch)
-            self.assertIn("full selected hierarchy", a_arch)
-            self.assertNotIn("project-architecture-frame", a_arch)
+            self.assertIn("arch-h-filter", a_arch)
+            self.assertIn("arch-h-tree", a_arch)
+            self.assertIn('id="arch-h-svg"', a_arch)
+            self.assertIn('id="arch-h-plane"', a_arch)
+            self.assertIn("Connection-driven topology", a_arch)
+            self.assertIn("Open detailed generated RTL / router / signal explorer", a_arch)
+            self.assertNotIn("window.location.replace", a_arch)
             b_arch = (new / "architecture.html").read_text()
             self.assertIn("arch-h-filter", b_arch)
             self.assertIn("arch-h-tree", b_arch)
@@ -74,6 +78,9 @@ class MultiProjectSiteTests(unittest.TestCase):
             self.assertIn("l0_ethernet_compute", b_arch)
             self.assertIn("l1_compute_pcie", b_arch)
             self.assertNotIn('src="../../explorer.html"', b_arch)
+            self.assertIn('id="arch-h-svg"', b_arch)
+            self.assertIn("Connection-driven topology", b_arch)
+            self.assertIn("Compiler-parsed RTL/router-level explorer", b_arch)
             self.assertNotIn("memory0.hbm0", b_arch)
             self.assertIn("Declared hierarchy only", b_arch)
 
@@ -141,13 +148,11 @@ class MultiProjectSiteTests(unittest.TestCase):
                 self.assertIn("No project-qualified",
                               (directory / "runs.html").read_text())
                 architecture = (directory / "architecture.html").read_text()
+                self.assertIn("arch-h-filter", architecture)
+                self.assertIn('id="arch-h-svg"', architecture)
+                self.assertIn("const edges = links.filter", architecture)
                 if entry.get("architecture_explorer"):
-                    self.assertIn("window.location.replace", architecture)
-                    self.assertNotIn("arch-h-filter", architecture)
-                else:
-                    self.assertIn("arch-h-filter", architecture)
-                    self.assertIn('id="arch-h-svg"', architecture)
-                    self.assertIn("const edges = links.filter", architecture)
+                    self.assertIn("Open detailed generated RTL", architecture)
                 self.assertIn(entry["id"], architecture)
 
 
