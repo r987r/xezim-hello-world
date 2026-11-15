@@ -1350,9 +1350,10 @@ def project_pages(output, projects, entries, repository, sha):
         info = ('<div class="eyebrow">' + escape(pid) +
                 '</div><h1>' + name + '</h1><p class="lede">' +
                 escape(project['subtitle']) + '</p>')
+        architecture_href = '../../explorer.html' if published else 'architecture.html'
         nav = ('<div class="actions">'
                '<a href="index.html">Overview</a>'
-               '<a href="architecture.html">Architecture</a>'
+               '<a href="' + architecture_href + '">Architecture</a>'
                '<a href="address-map.html">Addresses</a>'
                '<a href="files.html">RTL &amp; files</a>'
                '<a href="runs.html">Test runs</a></div>')
@@ -1431,18 +1432,13 @@ def project_pages(output, projects, entries, repository, sha):
             runs = ('<p class="empty">No project-qualified run evidence is '
                     'available. No other project results are substituted.</p>')
         if published:
-            # Keep the original full interactive/parsed RTL explorer as the
-            # architecture UI. Do not replace it with a static project sketch.
-            architecture = (info + nav + scope +
-                '<h2>Full interactive architecture</h2>'
-                '<p>Open the complete hierarchy: subsystem and IP drill-down, '
-                'NoC router meshes, named RTL bindings, signal explorer and '
-                'source-qualified traffic overlays.</p>'
-                '<p><a href="../../explorer.html">Explore complete chip hierarchy</a></p>' +
-                '<iframe title="Interactive chip architecture and RTL hierarchy" '
-                'src="../../explorer.html" '
-                'style="width:100%;min-height:950px;border:1px solid var(--line);'
-                'border-radius:10px" id="project-architecture-frame"></iframe>')
+            # Compatibility deep link. The original compiler-parsed explorer is
+            # the architecture page itself: no nested iframe or watered-down
+            # duplicate. The selected project's nav points directly to it.
+            architecture = (info +
+                '<p><a href="../../explorer.html">Open complete interactive '
+                'hierarchy, routers, IP and signal inspector</a></p>'
+                '<script>window.location.replace("../../explorer.html");</script>')
         else:
             # The one generic source tree applies to any compiled/config-only
             # project; it never imports original-chip router/RTL evidence.
