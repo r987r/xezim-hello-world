@@ -1470,9 +1470,35 @@ def project_pages(output, projects, entries, repository, sha):
         else:
             runs = ('<p class="empty">No project-qualified run evidence is '
                     'available. No other project results are substituted.</p>')
+        if published:
+            # Keep the original full interactive/parsed RTL explorer as the
+            # architecture UI. Do not replace it with a static project sketch.
+            architecture = (info + nav + scope +
+                '<h2>Full interactive architecture</h2>'
+                '<p>Open the complete hierarchy: subsystem and IP drill-down, '
+                'NoC router meshes, named RTL bindings, signal explorer and '
+                'source-qualified traffic overlays.</p>'
+                '<p><a href="../../explorer.html">Explore complete chip hierarchy</a></p>' +
+                '<iframe title="Interactive chip architecture and RTL hierarchy" '
+                'src="../../explorer.html" loading="lazy" '
+                'style="width:100%;min-height:950px;border:1px solid var(--line);'
+                'border-radius:10px" id="project-architecture-frame"></iframe>')
+        else:
+            # The one generic source tree applies to any compiled/config-only
+            # project; it never imports original-chip router/RTL evidence.
+            template = (ROOT/'tools/templates/site_project_hierarchy.html').read_text()
+            hierarchy = json.dumps({
+                'id': pid, 'title': project['title'],
+                'config': project['config'],
+                'config_sha256': project['config_sha256'],
+                'qualification': qualification,
+                'design': project['design'],
+            }, separators=(',', ':')).replace('<', '\\u003c')
+            architecture = (info + nav + scope +
+                            template.replace('__PROJECT_HIERARCHY_JSON__', hierarchy))
         pages = {
             'index.html': overview,
-            'architecture.html': info + nav + scope + graph,
+            'architecture.html': architecture,
             'address-map.html': info + nav + scope + addresses,
             'files.html': info + nav + scope + files_page,
             'runs.html': info + nav + scope + runs,
