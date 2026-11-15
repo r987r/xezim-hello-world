@@ -1238,161 +1238,240 @@ def evidence_index(evidence,output,repository,site_sha=None):
 
 
 def project_pages(output, projects, entries, repository, sha):
-    """Render independently scoped source pages; never relabel a legacy PASS.
+    """Publish a catalog-sized project workspace without sharing B's test PASS.
 
-    The original chip retains the established detailed report URLs. The new
-    source-only chip gets its *own* architecture, address map and empty test
-    ledger until an authenticated project-specific run is available.
+    This is deliberately driven by the catalog, not a special branch for two
+    named designs. Compiled CI products are linked to the source-qualified
+    workflow artifact, while only checked-in RTL can be served as static files.
     """
     from project_catalog import QUALIFICATIONS
-    ids = {p['id'] for p in projects}
-    if len(ids) != len(projects):
-        raise ValueError("duplicate project page id")
-    bad = {e.get("project_id") for e in entries if e.get("project_id") is not None} - ids
-    if bad:
-        raise ValueError("run has unknown project identity: " + str(sorted(bad)))
+    project_ids = {p['id'] for p in projects}
+    if len(project_ids) != len(projects):
+        raise ValueError('duplicate project page id')
+    unknown = {e.get('project_id') for e in entries
+               if e.get('project_id') is not None} - project_ids
+    if unknown:
+        raise ValueError('run has unknown project identity: ' + str(sorted(unknown)))
     cards = []
     for project in projects:
         pid = project['id']
+        qualification = project['qualification']
+        if qualification not in QUALIFICATIONS:
+            raise ValueError('unknown project qualification')
         name = escape(project['title'])
-        active = project['qualification'] == 'generated_default'
-        status = ('Generated original project · see per-run evidence'
-                  if active else 'Source-defined only · no selected chip RTL')
+        published = qualification == 'generated_default'
+        compiled_ci = qualification == 'ci_generated_compiled'
+        status = (
+            'Generated RTL · detailed source-qualified test results' if published else
+            'RTL compiles in CI · functional tests pending' if compiled_ci else
+            'Configuration defined · RTL not yet qualified'
+        )
         cards.append(
             '<a class="project-card" href="projects/' + pid + '/index.html">'
-            '<div class="eyebrow">PROJECT · ' + escape(pid) + '</div>'
-            '<h2>' + name + '</h2><p>' + escape(project['subtitle']) + '</p>'
-            '<p class="muted">' + escape(status) + '</p>'
-            '<span class="project-open">Open project →</span></a>'
+            '<div class="eyebrow">' + escape(pid) + '</div><h2>' + name + '</h2>'
+            '<p>' + escape(project['subtitle']) + '</p><p class="muted">' +
+            escape(status) + '</p><span class="project-open">Open project →</span></a>'
         )
         base = output / 'projects' / pid
         (base / 'data').mkdir(parents=True, exist_ok=True)
-        selected = [
-            e for e in entries if e.get('project_id', 'xezim_soc_dv') == pid
-        ] if active else [
-            e for e in entries if e.get('project_id') == pid
+        # Old untagged captures are ONLY valid as legacy project A evidence;
+        # no other project may silently adopt them.
+        if published:
+            selected = [e for e in entries
+                        if e.get('project_id', 'xezim_soc_dv') == pid]
+        else:
+            selected = [e for e in entries if e.get('project_id') == pid]
+            if selected:
+                raise ValueError('unqualified project has runtime evidence')
+        workflow_url = (f'https://github.com/{repository}/actions/workflows/'
+                        'project-compile.yml')
+        files = [
+            {'role': 'Project configuration', 'path': project['config'],
+             'location': 'published', 'url': '../../' + project['config']},
+            {'role': 'Shared AXI and NoC contract',
+             'path': 'config/interface_contracts.yaml', 'location': 'published',
+             'url': '../../config/interface_contracts.yaml'},
+            {'role': 'Pinned IP selection', 'path': 'config/ip.lock.yaml',
+             'location': 'published', 'url': '../../config/ip.lock.yaml'},
+            {'role': 'Shared Bender source manifest', 'path': 'Bender.yml',
+             'location': 'published', 'url': '../../Bender.yml'},
+            {'role': 'Project build recipe', 'path': 'tools/project_build.py',
+             'location': 'repository',
+             'url': f'https://github.com/{repository}/blob/{sha}/tools/project_build.py'},
         ]
-        # Source-only projects must not appear to inherit original recorded
-        # passes. Any future project-B evidence must have its own explicit
-        # source-selected project id and the ordinary trusted collector proof.
-        if not active and selected:
-            raise ValueError("source-only project has unqualified runtime evidence")
-        project_data = dict(project, runs=[
+        if published:
+            for role, path in [
+                ('Selected SoC RTL top', project['generated_source']),
+                ('NoC RTL wrapper', 'gen/supernoc/soc_noc.sv'),
+                ('Whole-chip testbench', 'gen/chip/full_chip_tb.sv'),
+                ('NoC RTL inventory', 'gen/noc/floonoc/manifest.json'),
+                ('Chip source manifest', 'gen/chip/manifest.json'),
+                ('Selected variant review top',
+                 f'gen/projects/{pid}/variants/default/rtl/soc_top.sv'),
+                ('Selected variant manifest',
+                 f'gen/projects/{pid}/variants/default/manifest.json'),
+                ('Topology JSON', 'gen/diagrams/noc-topology.json'),
+                ('AXI monitor inventory', 'gen/supernoc/axi_monitors.json')
+            ]:
+                candidate = ROOT / path
+                if not candidate.is_file() or candidate.is_symlink():
+                    raise ValueError('missing required generated project file: ' + path)
+                files.append({'role': role, 'path': path,
+                              'location': 'published', 'url': '../../' + path})
+        elif compiled_ci:
+            for role, path in [
+                ('Selected SoC RTL top', 'chip/soc_top.sv'),
+                ('Generated NoC wrapper', 'supernoc/soc_noc.sv'),
+                ('Whole-chip testbench', 'chip/full_chip_tb.sv'),
+                ('Complete selected compiler filelist', 'chip/sources.f'),
+                ('Project compilation verdict', 'chip/compile-result.json'),
+                ('Verilator diagnostics', 'chip/compile.log'),
+                ('FlooGen instance manifest', 'noc/floonoc/manifest.json'),
+                ('Selected RTL and boot inventory', 'manifest.json')
+            ]:
+                files.append({'role': role, 'path': path, 'location': 'ci_artifact',
+                              'url': workflow_url})
+        data = dict(project, runs=[
             {'target': e.get('target'), 'path': e.get('path'),
              'source_sha': e.get('source_sha'), 'passed': e.get('passed')}
             for e in selected
-        ], site_source_sha=sha)
-        dump(base / 'data/project.json', project_data)
-        links = ('<div class="actions">'
-                 '<a href="index.html">Project overview</a>'
-                 '<a href="architecture.html">Architecture</a>'
-                 '<a href="address-map.html">Address map</a>'
-                 '<a href="runs.html">Test runs</a>'
-                 '<a href="../../index.html">Choose project</a></div>')
-        info = ('<div class="eyebrow">' + escape(pid) + '</div>'
-                '<h1>' + name + '</h1><p class="lede">'
-                + escape(project['subtitle']) + '</p>')
-        scope = (
-            '<p class="scope-note">Generated architecture is structural. '
-            'Test results are separately source-qualified and historical '
-            'PASS does not automatically qualify the current source.</p>'
-            if active else
-            '<p class="scope-note"><strong>SOURCE-DEFINED ONLY.</strong> '
-            'No generated connected chip, elaborated FlooNoC direct links '
-            'or accepted AXI transfer has been qualified for this project. '
-            'Original SoC test results are intentionally excluded.</p>'
-        )
-        original = ('<div class="actions">'
-                    '<a href="../../soc-overview.html">Existing SoC overview</a>'
-                    '<a href="../../topology.html">Generated topology</a>'
-                    '<a href="../../explorer.html">Full architecture explorer</a>'
-                    '<a href="../../fabric.html">Measured Fabric Explorer</a>'
-                    '<a href="../../runs.html">Complete original test viewer</a>'
-                    '</div>') if active else ''
-        index_body = (info + links + scope
-                      + '<h2>Subsystems</h2><p>' +
-                      escape(' · '.join(project['subsystems'])) +
-                      '</p><h2>Memories</h2><p>' +
-                      escape(' · '.join(project['memory_targets'])) +
-                      '</p>' + original +
-                      '<p class="muted">Source definition: '
-                      '<a href="../../' + escape(project['config']) + '"><code>'
-                      + escape(project['config']) + '</code></a></p>')
-        if active:
+        ], site_source_sha=sha, files=files,
+            selected_compile_workflow=workflow_url,
+            functional_test_qualified=bool(selected))
+        dump(base / 'data/project.json', data)
+        info = ('<div class="eyebrow">' + escape(pid) +
+                '</div><h1>' + name + '</h1><p class="lede">' +
+                escape(project['subtitle']) + '</p>')
+        nav = ('<div class="actions">'
+               '<a href="index.html">Overview</a>'
+               '<a href="architecture.html">Architecture</a>'
+               '<a href="address-map.html">Addresses</a>'
+               '<a href="files.html">RTL &amp; files</a>'
+               '<a href="runs.html">Test runs</a></div>')
+        scope = ('<p class="scope-note">Generated design. Test outcomes are '
+                 'qualified per original run and tested source; an older PASS '
+                 'is not a PASS on this source.</p>' if published else
+                 '<p class="scope-note">Selected RTL generated and compiled '
+                 'in CI. Functional AXI traffic and byte-integrity tests are '
+                 'not yet qualified for this project.</p>' if compiled_ci else
+                 '<p class="scope-note">Design configuration only. No RTL '
+                 'compile or functional simulation qualified.</p>')
+        overview = (info + nav + scope +
+                    '<h2>Subsystems</h2><p>' +
+                    escape(' · '.join(project['subsystems'])) +
+                    '</p><h2>Memory targets</h2><p>' +
+                    escape(' · '.join(project['memory_targets'])) + '</p>'
+                    '<h2>Design sources</h2><p><a href="files.html">'
+                    'Selected top RTL, NoC and input manifests</a></p>')
+        if published:
+            overview += ('<div class="actions">'
+                         '<a href="../../soc-overview.html">Original SoC overview</a>'
+                         '<a href="../../topology.html">Generated topology</a>'
+                         '<a href="../../explorer.html">Chip architecture explorer</a>'
+                         '<a href="../../fabric.html">Fabric measurements</a>'
+                         '<a href="../../runs.html">Detailed test viewer</a></div>')
             graph = ('<div class="topology-pan"><img class="topology" '
                      'src="../../gen/diagrams/noc-hierarchy.svg" '
-                     'alt="Original source-generated hierarchical SoC topology"></div>'
-                     '<p><a href="../../explorer.html">Explore original generated '
-                     'routers and instance hierarchy</a></p>')
+                     'alt="Source-generated SoC hierarchy"></div>'
+                     '<p><a href="../../explorer.html">'
+                     'Inspect RTL modules and router hierarchy</a></p>')
         else:
-            layout = project['layout']
-            groups = layout['regions']
+            placement = project.get('layout') or {}
+            groups = placement.get('regions') or []
             blocks = []
             for i, region in enumerate(groups):
                 blocks.append('<section class="card"><h3>' +
                               escape(region['name'].replace('_', ' ').title()) +
-                              '</h3><p>' +
-                              escape(' · '.join(region['subsystems'])) +
+                              '</h3><p>' + escape(' · '.join(region['subsystems'])) +
                               '</p></section>')
-                if i != len(groups)-1:
-                    blocks.append('<div class="project-link" aria-label="Bidirectional AXI data link">↔</div>')
-            links_table = '<div class="scroll"><table><thead><tr><th>Link</th><th>Endpoints</th><th>Contract</th></tr></thead><tbody>'
-            for link in project['data_links']:
-                links_table += ('<tr><td><code>' + escape(link['name']) +
-                                '</code></td><td>' +
-                                escape(' ↔ '.join(link['endpoints'])) +
-                                '</td><td>AXI4 / duplex / declared</td></tr>')
+                if i + 1 != len(groups):
+                    blocks.append('<div class="project-link" '
+                                  'aria-label="Bidirectional AXI4 link">↔</div>')
+            link_rows = ''.join(
+                '<tr><td><code>' + escape(link['name']) + '</code></td>'
+                '<td>' + escape(' ↔ '.join(link['endpoints'])) +
+                '</td><td>AXI4 · duplex</td></tr>'
+                for link in project['data_links']
+            )
             graph = ('<div class="project-fabric">' + ''.join(blocks) + '</div>'
-                     '<div class="card"><strong>Global control FlooNoC · bottom</strong>'
-                     '<p class="muted">AXI-Lite control reaches all four declared '
-                     'subsystems; no global data NoC.</p></div>'
-                     '<h2>Source-defined links</h2>' +
-                     links_table + '</tbody></table></div>'
-                     '<p class="muted">Diagram is generated from the project '
-                     'source layout; it is not emitted or compiled RTL.</p>')
-        addr_rows = []
-        for plane in ('data', 'config'):
-            for item in project['address_map'][plane]:
-                addr_rows.append('<tr><td>' + escape(plane) + '</td><td><code>' +
-                                 escape(item['name']) + '</code></td><td><code>' +
-                                 escape(str(item['base'])) + '</code></td><td><code>' +
-                                 escape(str(item['size'])) + '</code></td></tr>')
-        addresses = ('<div class="scroll"><table><thead><tr>'
-                     '<th>Plane</th><th>Target</th><th>Base</th><th>Size</th>'
-                     '</tr></thead><tbody>' + ''.join(addr_rows) +
-                     '</tbody></table></div>'
-                     '<p class="muted">Address map from this project config. '
-                     'CSR definitions do not prove integrated register RTL.</p>')
+                     '<div class="card"><strong>Global configuration FlooNoC'
+                     '</strong><p class="muted">Bottom edge · independent AXI '
+                     'control fabric; no global data mesh.</p></div>'
+                     '<h2>Data links</h2><div class="scroll"><table>'
+                     '<thead><tr><th>Link</th><th>Endpoints</th><th>Protocol</th>'
+                     '</tr></thead><tbody>' + link_rows + '</tbody></table></div>'
+                     '<p class="muted">Layout and link names are sourced from '
+                     'the selected project configuration; the CI compiled RTL '
+                     'is available through the project files page.</p>')
+        addresses = (
+            '<div class="scroll"><table><thead><tr><th>Plane</th>'
+            '<th>Target</th><th>Base</th><th>Size</th></tr></thead><tbody>' +
+            ''.join(
+                '<tr><td>' + escape(plane) + '</td><td><code>' +
+                escape(item['name']) + '</code></td><td><code>' +
+                escape(str(item['base'])) + '</code></td><td><code>' +
+                escape(str(item['size'])) + '</code></td></tr>'
+                for plane in ('data', 'config')
+                for item in project['address_map'][plane]
+            ) + '</tbody></table></div>'
+            '<p class="muted">Address allocation does not imply a qualified '
+            'transaction or verified real memory controller.</p>')
+        file_rows = ''.join(
+            '<tr><td>' + escape(item['role']) + '</td>'
+            '<td><code>' + escape(item['path']) + '</code></td>'
+            '<td><a href="' + escape(item['url'], quote=True) + '">' +
+            ('Open file' if item['location'] == 'published' else
+             'Open source' if item['location'] == 'repository' else
+             'CI artifact') + '</a></td></tr>'
+            for item in files
+        )
+        files_page = (
+            '<p>Selected top, build inputs, generated NoC and testbench '
+            'sources for this project. All files retain their own source '
+            'identity; external IP remains pinned by the shared lockfile.</p>' +
+            ('<p class="scope-note">CI-generated RTL is stored in the '
+             '<a href="' + escape(workflow_url, quote=True) +
+             '">project compile workflow</a> under the artifact named '
+             '<code>project-compile-' + escape(pid) +
+             '-&lt;run_id&gt;</code>. Open the latest successful run '
+             'for the matching source SHA, then download its artifact. '
+             'These files are not copied into the static website.</p>'
+             if compiled_ci else '') +
+            '<div class="scroll"><table><thead><tr><th>Purpose</th>'
+            '<th>Path</th><th>Location</th></tr></thead><tbody>' +
+            file_rows + '</tbody></table></div>' +
+            '<p><a href="data/project.json">Machine-readable selected file '
+            'index and source fingerprints</a></p>'
+        )
         if selected:
-            run_items = [
-                '<li><a href="../../' + escape(e['path']) + '">' +
+            run_rows = ''.join(
+                '<li><a href="../../' + escape(e['path'], quote=True) + '">' +
                 escape(str(e['target'])) + '</a> · ' +
                 ('Recorded PASS' if e.get('passed') is True else
                  'Recorded FAIL' if e.get('passed') is False else
-                 'Capture-only / outcome unavailable') +
-                ' · tested <code>' +
-                escape(str(e.get('source_sha', 'unavailable'))[:12]) +
+                 'Outcome unavailable') + ' · tested <code>' +
+                escape(str(e.get('source_sha', 'unknown'))[:12]) +
                 '</code></li>' for e in selected if e.get('path')
-            ]
-            run_body = ('<p class="scope-note">Only original-project run '
-                        'references are shown. Per-run SHA, simulated variant '
-                        'and actual observed traffic are authoritative.</p>'
-                        '<ul class="list">' + ''.join(run_items) + '</ul>'
-                        '<p><a href="../../runs.html">Full original run filters and '
-                        'transaction inspector</a></p>')
+            )
+            runs = ('<p class="scope-note">Per-run source, selected variant '
+                    'and captured traffic are authoritative.</p>'
+                    '<ul class="list">' + run_rows + '</ul>'
+                    '<p><a href="../../runs.html">Full archived test viewer'
+                    '</a></p>')
         else:
-            run_body = ('<p class="empty">No project-qualified run evidence '
-                        'is available. No default-project data is substituted.</p>')
+            runs = ('<p class="empty">No project-qualified run evidence is '
+                    'available. No other project results are substituted.</p>')
         pages = {
-            'index.html': index_body,
-            'architecture.html': info + links + scope + graph,
-            'address-map.html': info + links + scope + addresses,
-            'runs.html': info + links + scope + run_body,
+            'index.html': overview,
+            'architecture.html': info + nav + scope + graph,
+            'address-map.html': info + nav + scope + addresses,
+            'files.html': info + nav + scope + files_page,
+            'runs.html': info + nav + scope + runs,
         }
         for filename, body in pages.items():
-            relative = Path('projects') / pid / filename
             (base / filename).write_text(
-                shell(project['title'], body, relative, repository, sha))
+                shell(project['title'], body,
+                      Path('projects') / pid / filename, repository, sha))
     chooser = (ROOT / 'tools/templates/site_projects.html').read_text()
     chooser = chooser.replace('__PROJECT_CARDS__', ''.join(cards))
     (output / 'index.html').write_text(
@@ -1409,12 +1488,28 @@ def shell(title,body,relative,repository,sha):
     if prefix=='.':prefix=''
     else:prefix+='/'
     template=(ROOT/'tools/templates/site.html').read_text()
-    navigation_items=[('index.html','Projects'),('soc-overview.html','Original overview'),('topology.html','Topology'),
-                      ('explorer.html','Chip architecture'),('fabric.html','Fabric routes'),
-                      ('address-map.html','Address map'),('runs.html','Test runs'),
-                      ('docs.html','Documentation'),('reference.html','Source data')]
+    relative_parts=Path(relative).parts
+    if len(relative_parts)>=3 and relative_parts[0]=='projects':
+        # Projects can scale to many without adding global legacy links to
+        # an unrelated project's header. Project-id is catalog validated.
+        base='projects/'+relative_parts[1]+'/'
+        navigation_items=[
+            ('index.html','Projects'), (base+'index.html','Overview'),
+            (base+'architecture.html','Architecture'),
+            (base+'address-map.html','Addresses'),
+            (base+'files.html','RTL & files'),
+            (base+'runs.html','Test runs'),
+            ('docs.html','Documentation')]
+    else:
+        navigation_items=[('index.html','Projects'),('soc-overview.html','Overview'),
+                          ('topology.html','Topology'),('explorer.html','Chip architecture'),
+                          ('fabric.html','Fabric routes'),('address-map.html','Addresses'),
+                          ('runs.html','Test runs'),('docs.html','Documentation'),
+                          ('reference.html','Source data')]
     active=('docs.html' if str(relative).startswith('docs/') or str(relative)=='readme.html'
             else 'runs.html' if str(relative).startswith('runs/')
+            else ('projects/'+relative_parts[1]+'/'+relative_parts[-1])
+            if len(relative_parts)>=3 and relative_parts[0]=='projects'
             else str(relative) if str(relative) in {path for path,_ in navigation_items} else '')
     navigation=''.join(
         f'<a href="{prefix}{path}"'+(' aria-current="page"' if path==active else '')+
