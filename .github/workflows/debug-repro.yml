@@ -1,0 +1,55 @@
+name: Agent debug recipe audit
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'config/debug.yaml'
+      - 'tools/debug_repro.py'
+      - 'tests/test_debug_repro.py'
+      - 'docs/debug-sandbox.md'
+      - 'docs/README.md'
+      - '.github/workflows/debug-repro.yml'
+  workflow_dispatch:
+
+permissions: {contents: read}
+
+jobs:
+  debug-contract:
+    name: Verify reproducible debug contract without replacing RTL CI
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Install repository debug recipe parser
+        run: python3 -m pip install 'PyYAML==6.0.3'
+      - name: Audit YAML and negative runner cases
+        run: |
+          set -euo pipefail
+          python3 tools/debug_repro.py --audit
+          python3 -m unittest tests.test_debug_repro -v
+      - name: Exercise a real source-stamped debug recipe
+        run: |
+          set -euo pipefail
+          python3 tools/debug_repro.py --profile regression-unit \
+            --out .tools/debug-runs/ci-regression-unit
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          run = json.loads(Path('.tools/debug-runs/ci-regression-unit/run.json').read_text())
+          assert run['exit_code'] == 0
+          assert run['qualification'] == 'exploratory_only'
+          assert run['git_sha']
+          assert run['command'] == ['python3', '-m', 'unittest', 'tests.test_regression']
+          print('PASS: debug evidence truth contract, not RTL qualification')
+          PY
+      - name: Retain debug evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-repro-contract-evidence
+          path: .tools/debug-runs/
+          if-no-files-found: warn
+          retention-days: 7
