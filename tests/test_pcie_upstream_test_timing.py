@@ -131,6 +131,23 @@ class UpstreamTimingOverlayTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "changed"):
             patched(DEMUX_READY_REL, source.replace("next_state = ST_DLLP;", "next_state = ST_IDLE;"))
 
+    def test_demux_reuses_exact_selected_overlay_and_rejects_modified_sources(self):
+        from tools.pcie_upstream_test_timing import reconcile_selected_demux
+        original = ("module axis_user_demux;\n"
+                    + DEMUX_TLP_BEFORE + "\n" + DEMUX_DLLP_BEFORE
+                    + "\nendmodule\n")
+        expected = patched(DEMUX_READY_REL, original)
+        self.assertEqual(reconcile_selected_demux(original, original),
+                         (expected, True))
+        self.assertEqual(reconcile_selected_demux(expected, original),
+                         (expected, False))
+        for corrupt in (expected.replace("tlp_ready", "m_tlp_axis_tready", 1),
+                        expected + "// drift\n",
+                        original.replace("dllp_valid = s_axis_tvalid;", "dllp_valid = 1'b1;")):
+            with self.subTest(source=corrupt[:55]), self.assertRaisesRegex(
+                    ValueError, "differs from pinned"):
+                reconcile_selected_demux(corrupt, original)
+
     def test_original_dllp_receiver_credit_debug_is_read_only(self):
         source = "module dllp_handler;\nendmodule\n"
         got = patched(DLLP_HANDLER_REL, source)
