@@ -195,3 +195,21 @@ You can regenerate independently with:
 python3 tools/rtl_instance_parser.py --slang .tools/bin/slang --output .tools/rtl-architecture.json
 python3 -m unittest tests.test_rtl_instance_parser -v
 ~~~
+
+## Uniform project-level connectivity diagram
+
+All projects use the same source-driven architecture diagram and searchable
+hierarchy at `projects/<project_id>/architecture.html`. The graph is derived
+from the selected project's subsystem and network declarations, rather than
+hardcoded compute/memory positions. Optional `layout.regions` hints only
+control visual grouping and never add a physical connection. FlooNoC links
+with explicit endpoints are drawn bidirectionally as declared; configuration
+fabric reachability uses the YAML endpoint list. Graph edges are **design
+contracts**, not proof of elaborated connectivity or observed transactions.
+
+The canonical legacy project's detailed generated router/RTL explorer is
+still available via the additional "detailed generated RTL" link on its
+Architecture page. Future projects get that same extra detail only after
+their own source-qualified parsed hierarchy has been published. The common
+diagram/tree UI does not change between projects merely because the
+qualification level differs.
