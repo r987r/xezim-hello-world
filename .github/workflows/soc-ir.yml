@@ -13,6 +13,10 @@ on:
       - 'gen/diagrams/noc-topology.json'
       - 'tests/test_soc_ir.py'
       - 'tests/test_three_region_project.py'
+      - 'tests/test_project_build.py'
+      - 'tools/project_build.py'
+      - 'tools/project_catalog.py'
+      - 'config/projects/catalog.yaml'
       - '.github/workflows/soc-ir.yml'
   workflow_dispatch:
 
@@ -31,7 +35,7 @@ jobs:
       - name: Validate existing source SoC and generated graph
         run: python3 -m unittest tests.test_soc_ir tests.test_design_explorer -v
       - name: Verify independent three-region project source contract
-        run: python3 -m unittest tests.test_three_region_project -v
+        run: python3 -m unittest tests.test_three_region_project tests.test_project_build -v
       - name: Generate and verify deterministic IR
         run: |
           python3 tools/soc_ir.py --out .tools/soc-ir/default.json
