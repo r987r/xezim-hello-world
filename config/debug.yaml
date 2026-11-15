@@ -1,0 +1,16 @@
+schema_version: 1
+# Debug recipes are investigation aids, not qualification gates.
+# Keep each recipe's command identical to an existing test/runner invocation.
+profiles:
+  framework-unit:
+    description: Self-check of the shared debug evidence wrapper and manifest.
+    command: [python3, -m, unittest, tests.test_debug_repro]
+    timeout_s: 60
+    tool_versions: [python3]
+  regression-unit:
+    description: Existing canonical regression framework unit test (not a new test engine).
+    command: [python3, -m, unittest, tests.test_regression]
+    timeout_s: 180
+    tool_versions: [python3]
+# PCIe original FuseSoC, PHY and Cocotb live on draft PR #232.
+# Do not copy that branch's still-unmerged commands onto main.
