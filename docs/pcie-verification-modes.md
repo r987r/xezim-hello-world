@@ -37,10 +37,21 @@ pristine pinned OpenPCIe checkout, `tools/pcie_link.py --check
 This demonstrates selected-source patch propagation, **not** functional
 host/endpoint/NoC integration.
 
+**Direct RTL backpressure regression:** `dv/pcie_link/axis_demux_backpressure_tb.sv`
+compiles the *actual selected pinned OpenPCIe demux* and its upstream
+`axis_register.v` with Verilator. The checker compares accepted beats
+per TLP/DLLP lane (data, user, last, order), requires 1600 real transfers
+with forced and randomized sink stalls, and runs three fresh reported seeds.
+An independent known witness must FAIL on the pristine original upstream
+source: `DLLP mismatch` at cycle 23 for seed 428173. A green selected
+run cannot arise from elaboration alone; the scoreboard must print its
+actual PASS. The original full OpenPCIe Cocotb byte-readback remains the
+independent functional CI gate; this narrow unit test is not full-link stress.
+
 **Still open:** qualify independent host ↔ endpoint ↔ bridge ↔
 generated NoC ↔ SRAM transactions with original end-to-end byte checks;
-prove continuous bidirectional link monitoring and randomized backpressure
-coverage. The independent real-link `l0`/`bar0`/`mem_ingress` and
+prove continuous bidirectional link monitoring and end-to-end randomized
+backpressure coverage. The independent real-link `l0`/`bar0`/`mem_ingress` and
 fast TLP-level integration tests have distinct acceptance boundaries.
 Neither isolated success can be repurposed as a single full-chip proof.
 Keep [issue #76](https://github.com/r987r/xezim-hello-world/issues/76) and
