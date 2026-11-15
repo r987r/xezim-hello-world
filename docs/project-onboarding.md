@@ -54,6 +54,18 @@ functional verification. A new unsupported IP/clock/CPU topology
 requires work in the shared IP-composition and backend adapters,
 and its own tests—not just a catalog row.
 
+## Architecture explorer ownership
+
+Each project owns its source hierarchy; the project picker, searchable
+subsystem/IP/fabric/network tree and file browser require no hardcoded
+project names. Only register `architecture_explorer: path/to/explorer.html`
+when that exact project publishes a real generated topology/RTL explorer.
+This URL must be unique and present in the website output. Compiled-only
+projects continue using the generic searchable source hierarchy until
+that source-qualified artifact exists. The original project's complete
+`explorer.html` is explicitly owned by its catalog entry, not reused for
+another chip.
+
 ## Report and webpage policy
 
 Project pages should show architecture and actual results, with no
