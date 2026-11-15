@@ -4,7 +4,7 @@
 original repository-owned CI, simulator and unmodified test scoreboard. Related
 PCIe investigation: [draft PR #232](https://github.com/r987r/xezim-hello-world/pull/232)
 and [issue #76](https://github.com/r987r/xezim-hello-world/issues/76). The
-shared debug implementation is [draft PR #250](https://github.com/r987r/xezim-hello-world/pull/250);
+shared debug implementation was merged via [PR #250](https://github.com/r987r/xezim-hello-world/pull/250);
 exact simulator parity and real RTL recipe onboarding are tracked in
 [issue #251](https://github.com/r987r/xezim-hello-world/issues/251).
 This guide does **not** claim the standalone PCIe fix is wired into the full SoC.
