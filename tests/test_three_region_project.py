@@ -105,5 +105,42 @@ class ThreeRegionProjectTest(unittest.TestCase):
             socgen.validate(cfg)
 
 
+
+    def test_direct_floogen_profiles_use_real_bidirectional_nis(self):
+        import floonoc_gen
+        cfg = copy.deepcopy(self.project)
+        knobs = yaml.safe_load((ROOT / "config/interface_contracts.yaml").read_text())
+        profiles = floonoc_gen.profiles(cfg, knobs)
+        self.assertNotIn("global_data", profiles)
+        self.assertIn("global_config", profiles)
+        self.assertEqual(len(profiles), 15)  # 4 subsystem pairs + config + six directions
+        for link in cfg["networks"]["direct_data"]["links"]:
+            a, b = link["endpoints"]
+            for src, dst in ((a, b), (b, a)):
+                name = "direct_" + link["name"] + "_" + src + "_to_" + dst
+                selected = profiles[name]["config"]
+                self.assertEqual(
+                    [e["name"] for e in selected["endpoints"]],
+                    ["ingress", "egress"])
+                self.assertEqual(selected["protocols"][0]["id_width"], 5)
+                self.assertEqual(selected["protocols"][1]["id_width"], 5)
+                own = profiles[src + "_local_data"]["config"]
+                peer = profiles[dst + "_local_data"]["config"]
+                self.assertIn("to_" + dst,
+                              [ep["name"] for ep in own["endpoints"]])
+                self.assertIn("from_" + src,
+                              [ep["name"] for ep in peer["endpoints"]])
+        legacy = floonoc_gen.profiles(copy.deepcopy(self.legacy), knobs)
+        self.assertIn("global_data", legacy)
+        self.assertEqual(len(legacy), 12)
+
+    def test_phased_single_cpu_firmware_reuses_bootstrap(self):
+        import chip_bootgen
+        fw = chip_bootgen.build(copy.deepcopy(self.project))
+        self.assertEqual(len(fw["cores"]), 1)
+        self.assertEqual(list(fw["images"]), ["compute0"])
+        self.assertNotIn("reset_ctrl", fw["addresses"])
+        self.assertFalse(any("reset" in asm.lower() for _, asm in fw["rom"]))
+
 if __name__ == "__main__":
     unittest.main()
