@@ -9,6 +9,7 @@ from pathlib import Path
 from selenium import webdriver
 from selenium.webdriver import ChromeOptions
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
 import yaml
 
 
@@ -38,7 +39,8 @@ def main():
         filter_box.send_keys(catalog[-1]["id"])
         assert len(browser.find_elements(
             By.CSS_SELECTOR, ".project-card:not([hidden])")) == 1
-        filter_box.clear()
+        filter_box.send_keys(Keys.CONTROL, 'a')
+        filter_box.send_keys(Keys.BACKSPACE)
         assert len(browser.find_elements(
             By.CSS_SELECTOR, ".project-card:not([hidden])")) == len(catalog)
 

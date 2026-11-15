@@ -27,6 +27,7 @@ __PROJECT_CARDS__
     count.textContent = visible + ' of ' + cards.length + ' projects';
   }
   input.addEventListener('input', applyFilter);
+  input.addEventListener('change', applyFilter);
   applyFilter();
 })();
 </script>
