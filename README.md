@@ -4,6 +4,23 @@
 
 A hierarchical SoC verification vehicle using pinned open-source CPUs, PULP iDMA, FlooNoC, PCIe and Ethernet IP. The architecture and addresses come from [`config/soc.yaml`](config/soc.yaml); [`config/regression.yaml`](config/regression.yaml) selects executable tests; [interface contracts](config/interface_contracts.yaml) and [IP locks](config/ip.lock.yaml) define integration boundaries. Tracked `gen/` outputs are generated, **not** hand-maintained.
 
+## SoC projects
+
+The [verification hub](https://r987r.github.io/xezim-hello-world/) opens with
+a project picker after the Pages update merges. The canonical hierarchical
+SoC remains defined by [config/soc.yaml](config/soc.yaml). A separate
+[Ethernet / CPU+DDR / PCIe project](config/projects/ethernet-cpu-ddr-pcie/soc.yaml)
+defines one CPU, DDR only and direct FlooNoC data links, with independent
+source identity and [project review guide](docs/three-region-project.md).
+Both are registered under [config/projects/catalog.yaml](config/projects/catalog.yaml).
+
+**Hardware qualification is project-specific:** the existing default SoC
+has actual generated RTL and source-qualified tests. The three-region project
+is currently *source-defined only*, pending real FlooGen direct-link and
+full-chip emission, independently checked AXI transactions and a project-aware
+regression target. Its project webpage must not show legacy results as PASS.
+[Project/Pages architecture](docs/multi-project-pages.md).
+
 ## Start here
 
 ```sh
