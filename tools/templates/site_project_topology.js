@@ -1,7 +1,7 @@
 /* Shared, source-qualified SoC topology SVG. No project-name or fixed node assumptions. */
 (() => {
   "use strict";
-  const host = document.getElementById("arch-h-diagram");
+  const host = document.getElementById("arch-h-svg");
   if (!host) return;
   const model = JSON.parse(document.getElementById("arch-h-model").textContent);
   const d = model.design || {};
