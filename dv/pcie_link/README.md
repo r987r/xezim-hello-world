@@ -3,6 +3,25 @@
 **Scope:** [P0 #76](https://github.com/r987r/xezim-hello-world/issues/76). An
 opt-in **Gen1 x1 digital** test experiment; not a silicon transceiver.
 
+## Verified isolated qualification — 2026-11-15
+
+[Exact-head CI for PR #232](https://github.com/r987r/xezim-hello-world/pull/232)
+passed 21/21 workflows at `8b935a77d4ba4c61de944cc0de25c30b3a3e6cca`.
+The original source-pinned OpenPCIe self-test executed Cocotb 1/1 PASS,
+with original PHY FST and decoded PIPE TLP/DLLP capture. The real
+independent pcievhost RC also completed BAR configuration, MWr to actual
+SRAM through selected OpenPCIe → TLP/AXI → generated PCIe0 FlooNoC, and
+MRd/CplD host byte readback, checked by
+[connected-memory CI](https://github.com/r987r/xezim-hello-world/actions/runs/43741566984).
+This is **isolated digital RTL integration only**; CPU0 Config-NoC DBI
+programming, global SoC NoC route, combined cold-boot, wider stress and
+silicon PHY are **not qualified**. The source-selected vendor handshake fix
+is a recorded local overlay, not pristine upstream; the standalone
+FuseSoC qualification uses explicit test-only timing/host FC scheduling.
+Keep [#76](https://github.com/r987r/xezim-hello-world/issues/76) open.
+
+## Earlier development history
+
 **Current status / visual architecture:** The cross-connected original
 pcievhost RC ↔ OpenPCIe endpoint **reached L0 independently** in
 [GitHub Actions run 43099695972](https://github.com/r987r/xezim-hello-world/actions/runs/43099695972).
@@ -365,11 +384,11 @@ where host MRd tags 10, 11 and 12 requested 1024 bytes at offset 7.
 Endpoint logs show segmented CplD construction but no complete host
 readback. The temporary retry-reservation overlay worsened this to
 offset 1 and was reverted; its ACK/FIFO behavior was not independently
-validated. Keep this required CI gate red until exact-head byte readback
-passes on original source-pinned RTL. Distinguish endpoint CplD driver
+validated. This was an earlier **historical RED** checkpoint; the patched, source-pinned
+RTL subsequently passed the exact-head original byte-readback CI linked above. Distinguish endpoint CplD driver
 completion from accepted DLL/PIPE output and independent RC receipt.
 
-After this blocker, **do not** count isolated link+isolated NoC/SRAM as one
-integrated host-to-memory test: attach actual non-config ingress and
-CplD response and CPU0 Config-NoC prelink programming before claiming
-full-chip readiness. Analog SerDes remains out of scope.
+The subsequent isolated real-link→NoC→SRAM→CplD run meets the *connected*
+host-to-memory checkpoint, not full-chip acceptance. CPU0 Config-NoC
+prelink programming, full-chip cold boot and global integration remain
+required. Analog SerDes remains out of scope.
