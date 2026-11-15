@@ -119,8 +119,10 @@ def emit(soc, noc_root, dest):
             wires=[sig(k,"req"),sig(k,"rsp")]
             duts.extend([f"  {pkg}::axi_{direction}_req_t {wires[0]};",
                          f"  {pkg}::axi_{direction}_rsp_t {wires[1]};"])
-            ports.extend([f".{name}_axi_{direction}_req_{'i' if direction=='in' else 'o'}({wires[0]})",
-                          f".{name}_axi_{direction}_rsp_{'o' if direction=='in' else 'i'}({wires[1]})"])
+            ep = neps[name]
+            interface = (ep.get("mgr_port_protocol") or ep.get("sbr_port_protocol"))[0]
+            ports.extend([f".{name}_{interface}_req_{'i' if direction=='in' else 'o'}({wires[0]})",
+                          f".{name}_{interface}_rsp_{'o' if direction=='in' else 'i'}({wires[1]})"])
             if k not in paired:
                 exposed.append((k,spec(k),direction))
         duts.append(f"  {module} u_{n} (\n    "+",\n    ".join(ports)+"\n  );")
