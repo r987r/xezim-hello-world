@@ -443,6 +443,20 @@ def patched(path: str, source: str) -> str:
     raise ValueError(f"unknown timing-source path {path}")
 
 
+def reconcile_selected_demux(source: str, original: str) -> tuple[str, bool]:
+    """Reuse an exact selected-provider fix, or add it to pristine pinned RTL.
+
+    Never apply a second demux patch, and never accept partial, modified or
+    foreign fixes merely because they contain the expected signal names.
+    """
+    expected = patched(DEMUX_READY_REL, original)
+    if source == original:
+        return expected, True
+    if source == expected:
+        return source, False
+    raise ValueError(f"{DEMUX_READY_REL}: selected demux differs from pinned original/fix")
+
+
 def apply(root:Path) -> None:
     for rel, expected in SOURCES.items():
         path=root/rel
@@ -506,9 +520,16 @@ def apply(root:Path) -> None:
     demux_path = root / DEMUX_READY_REL
     if not demux_path.is_file() or demux_path.is_symlink():
         raise ValueError(f"missing standalone upstream source {DEMUX_READY_REL}")
-    demux_path.write_text(patched(DEMUX_READY_REL, demux_path.read_text()))
-    print("OPENPCIE_SELFTEST_DEMUX_HANDSHAKE: pinned original skid-buffer"
-          " input ready and accepted first-beat state transitions")
+    original_demux = subprocess.run(
+        ["git", "-C", str(root), "show", f"HEAD:{DEMUX_READY_REL}"],
+        check=True, capture_output=True, text=True).stdout
+    reconciled_demux, applied_here = reconcile_selected_demux(
+        demux_path.read_text(), original_demux)
+    if applied_here:
+        demux_path.write_text(reconciled_demux)
+    print("OPENPCIE_SELFTEST_DEMUX_HANDSHAKE: "
+          + ("applied standalone" if applied_here else "reused reviewed selected overlay")
+          + " pinned original skid-buffer input ready/accepted-beat correction")
     print("OPENPCIE_SELFTEST_TIMING: TEST-ONLY; not production or dual-sided L0 evidence")
 
 
