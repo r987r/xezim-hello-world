@@ -7,6 +7,22 @@
     <input type="search" id="arch-h-filter" placeholder="compute0, ethernet, ddr, control, AXI…" autocomplete="off">
     <span id="arch-h-count" aria-live="polite"></span>
   </div>
+  <section class="arch-h-graph" aria-label="Chip connection diagram">
+    <div class="arch-h-graph-controls">
+      <strong>Connection-driven topology</strong>
+      <label>Links <select id="arch-h-plane"><option value="all">Data + control</option><option value="data">Data</option><option value="config">Control</option></select></label>
+      <button type="button" id="arch-h-zoom-out">−</button>
+      <button type="button" id="arch-h-fit">Fit</button>
+      <button type="button" id="arch-h-zoom-in">+</button>
+    </div>
+    <div class="arch-h-viewport" id="arch-h-viewport" tabindex="0">
+      <svg id="arch-h-svg" role="img" aria-label="Source-derived subsystem and interconnect connection topology" xmlns="http://www.w3.org/2000/svg"></svg>
+    </div>
+    <div class="arch-h-graph-footer">
+      <span id="arch-h-graph-status" aria-live="polite">Loading project connections…</span>
+      <span><i class="arch-h-key arch-h-data"></i>Data <i class="arch-h-key arch-h-control"></i>Control</span>
+    </div>
+  </section>
   <div class="arch-h-layout">
     <nav class="arch-h-tree" aria-label="Source architecture hierarchy" id="arch-h-tree"></nav>
     <section class="arch-h-detail" aria-label="Selected architecture component">
@@ -22,6 +38,19 @@
 </section>
 <style>
 .hierarchy-app{margin-top:24px}
+.arch-h-graph{border:1px solid #38506a;border-radius:13px;overflow:hidden;background:#081522;margin:16px 0}
+.arch-h-graph-controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:12px 14px;background:#101f31;border-bottom:1px solid #38506a}
+.arch-h-graph-controls strong{margin-right:auto}
+.arch-h-graph-controls select{padding:5px 8px}
+.arch-h-graph-controls button{padding:5px 11px}
+.arch-h-viewport{width:100%;height:470px;overflow:auto;touch-action:pan-x pan-y}
+#arch-h-svg{display:block;max-width:none;background:#081522;user-select:none;touch-action:pan-x pan-y}
+#arch-h-svg .arch-h-svg-node{cursor:pointer}
+#arch-h-svg .arch-h-svg-node:hover rect{filter:brightness(1.25)}
+.arch-h-graph-footer{border-top:1px solid #38506a;color:#a9b9d0;font-size:12px;display:flex;gap:14px;justify-content:space-between;flex-wrap:wrap;padding:9px 12px}
+.arch-h-key{display:inline-block;width:10px;height:10px;border-radius:2px;margin:0 5px 0 8px}
+.arch-h-data{background:#2fd1c9}.arch-h-control{background:#b69aff}
+
 .arch-h-search{display:flex;align-items:flex-start;flex-direction:column;gap:7px;margin:18px 0}
 .arch-h-search input{width:100%;max-width:720px}
 .arch-h-layout{display:grid;grid-template-columns:minmax(225px,305px) minmax(0,1fr);gap:14px;align-items:start}
@@ -123,6 +152,7 @@
   function navigate(id) {
     const node=items.get(id);if(!node)return;
     current=id;title.textContent=node.label;
+    window.dispatchEvent(new CustomEvent("arch-h-selected", {detail:{id}}));
     status.textContent=node.kind+' · '+node.children.length+' child component(s)';
     crumbs.replaceChildren();const path=[];for(let n=node;n;n=n.parent?items.get(n.parent):null)path.unshift(n);
     for(const [i,n] of path.entries()){
@@ -149,6 +179,8 @@
       '. Declared hierarchy only; use selected compile artifacts for actual RTL instances and ports.';
     renderTree();
   }
+  window.archHierarchyNavigate=navigate;
   filter.addEventListener('input',renderTree);navigate(root);
 })();
 </script>
+<script>__PROJECT_TOPOLOGY_JS__</script>
