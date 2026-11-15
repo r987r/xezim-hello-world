@@ -3,7 +3,10 @@
 **Status:** shared exploratory workflow; final qualification remains with the
 original repository-owned CI, simulator and unmodified test scoreboard. Related
 PCIe investigation: [draft PR #232](https://github.com/r987r/xezim-hello-world/pull/232)
-and [issue #76](https://github.com/r987r/xezim-hello-world/issues/76).
+and [issue #76](https://github.com/r987r/xezim-hello-world/issues/76). The
+shared debug implementation is [draft PR #250](https://github.com/r987r/xezim-hello-world/pull/250);
+exact simulator parity and real RTL recipe onboarding are tracked in
+[issue #251](https://github.com/r987r/xezim-hello-world/issues/251).
 This guide does **not** claim the standalone PCIe fix is wired into the full SoC.
 
 ## Required debugging loop
@@ -43,12 +46,23 @@ python3 tools/debug_repro.py --profile regression-unit \
 
 The runner rejects modified tracked source by default, requires an explicit
 `--allow-dirty` for controlled A/B experiments, refuses to overwrite existing
-run evidence, enforces timeouts, and retains `run.json` plus combined
+run evidence, enforces timeouts (including termination of spawned POSIX
+process groups), and retains `run.json` plus combined
 `stdout-stderr.log`. It records exact commit, branch, dirty flag, command,
-UTC timestamps, tool versions and `SEED` only when actually supplied.
+UTC timestamps, tool versions and `SEED` as a value only when actually supplied
+(otherwise `seed: null`). Tool versions are **observed**, not yet required to
+match CI; simulator parity enforcement belongs to #251.
 A child failure remains a failure; even a zero exit is marked
 `qualification: exploratory_only`. The original Cocotb/scoreboard gate must
 still be evaluated by the existing CI procedure.
+
+The CLI accepts **only** the checked-in `config/debug.yaml` recipes (no
+arbitrary command or external config file). The current profiles are
+**Python unit checks**, not complete RTL reproductions. Full PCIe/DDR/Ethernet
+RTL command onboarding is tracked in #251. The runner does not collect an
+IP-overlay diff or waveform automatically; preserve and attach those from the
+original test infrastructure when relevant. An `--allow-dirty` run records
+that tracked files changed but does not itself capture their content/diff.
 
 All evidence is local and ignored beneath `.tools/debug-runs/`.
 If a run is worth preserving for a PR, attach the raw run directory to the
@@ -65,7 +79,7 @@ sessions have a 45-minute plan limit. The snapshots are per-VM caches, not
 source-of-truth. Always stop on completion and avoid committing `.tools/`
 or `build/`.
 
-**Toolchain audit before RTL:**
+**Toolchain audit before RTL (manual until #251):**
 
 ```bash
 git rev-parse HEAD
@@ -104,7 +118,9 @@ integrating the repair into selected production SoC RTL.
 ## Audit & open gates
 
 - **Source provenance:** frozen lockfile, applied source diff and exact
-  simulator versions; refuse drift instead of silently retargeting IP.
+  simulator versions. The current generic wrapper records version strings,
+  but does not yet enforce simulator/image parity or pin RTL provider overlays;
+  those must be verified by existing source-pinned workflows until #251.
 - **Test authenticity:** original driver + scoreboard, byte-for-byte readback,
   real completions, positive and negative tests. `PASS` must not come from
   a watchdog exit or elaboration alone.
@@ -116,4 +132,6 @@ integrating the repair into selected production SoC RTL.
   host ↔ full SoC NoC ↔ memory qualification. Keep #76 and PR #232 open until
   source-selected endpoint, host, NoC and scoreboard all pass together.
 - **Security/cost:** use isolated sandbox, trusted source revisions, no
-  credentials committed to logs, fixed timeouts and stop after use.
+  credentials committed to logs, fixed timeouts and stop after use. Recipe
+  subprocess trees are killed on timeout on POSIX; sandbox sessions must also
+  be stopped by their owner to end VM billing.
