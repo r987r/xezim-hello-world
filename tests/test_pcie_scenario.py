@@ -120,7 +120,14 @@ class PcieScenarioTests(unittest.TestCase):
     def test_ingress_is_backpressured_without_fake_memory(self):
         rtl = (ROOT/"dv/pcie_link/tb_pcie_cross_link.sv").read_text()
         rc = (ROOT/"dv/pcie_link/host_link_vproc.cpp").read_text()
-        self.assertIn(".m_tlp_axis_tready(1'b0)", rtl)
+        # Default isolated L0/BAR modes still backpressure memory, while the
+        # opt-in connected fixture routes accepted TLP beats to real AXI SRAM.
+        self.assertIn("parameter bit VERIFY_REAL_MEM_WRITE = 1'b0", rtl)
+        self.assertIn(".m_tlp_axis_tready(ep_mem_rx_ready)", rtl)
+        self.assertIn("assign ep_mem_rx_ready = 1'b0;", rtl)
+        self.assertIn("end else begin : no_mem_write", rtl)
+        self.assertIn("assign ep_mem_rx_ready = bar_mem_ready && adapter_ready;", rtl)
+        self.assertIn("pcie_noc_tb #(.BAR0_RELOCATE(1'b1))", rtl)
         self.assertIn("PCIE_EP_MEM_TLP_BACKPRESSURE", rtl)
         self.assertIn("memWrite(address,bytes,4,", rc)
         self.assertIn("A posted MWr has no Cpl", rc)
