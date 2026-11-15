@@ -44,7 +44,7 @@ class MultiProjectSiteTests(unittest.TestCase):
             a = out / "projects/xezim_soc_dv"
             self.assertIn("No project-qualified", (new / "runs.html").read_text())
             self.assertNotIn("chip-ddr4-real", (new / "runs.html").read_text())
-            self.assertIn("source_only", (new / "data/project.json").read_text())
+            self.assertIn("source_contract_only", (new / "data/project.json").read_text())
             self.assertNotIn("memory0.hbm0", (new / "address-map.html").read_text())
             self.assertIn("memory0.hbm0", (a / "address-map.html").read_text())
             self.assertEqual(json.loads((new / "data/project.json").read_text())["runs"], [])
