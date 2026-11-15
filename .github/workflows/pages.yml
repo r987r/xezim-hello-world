@@ -106,6 +106,8 @@ jobs:
           site = Path('.tools/pages-site')
           assert 'Choose a chip project' in (site/'index.html').read_text()
           catalog = json.loads((site/'data/projects.json').read_text())['projects']
+          import sys
+          sys.path.insert(0, 'tools')
           from project_catalog import projects
           assert [item['id'] for item in catalog] == [p['id'] for p in projects()]
           for item in catalog:
