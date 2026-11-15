@@ -83,7 +83,8 @@ def run_profile(name: str, profile: dict, out: Path, *, allow_dirty: bool = Fals
         raise ValueError("git status unavailable: cannot capture source provenance")
     if dirty and not allow_dirty:
         raise ValueError("tracked source is dirty: pass --allow-dirty for exploratory A/B")
-    out.mkdir(parents=True, exist_ok=False)  # immutable per-run record
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.mkdir(exist_ok=False)  # immutable per-run record
     started = dt.datetime.now(dt.timezone.utc).isoformat()
     evidence = {
         "schema_version": 1, "qualification": "exploratory_only",
