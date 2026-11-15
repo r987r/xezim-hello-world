@@ -34,7 +34,7 @@ def projects(root: Path = ROOT) -> list[dict]:
     for item in listed:
         if not isinstance(item, dict) or set(item) - {
                 "id", "title", "subtitle", "config",
-                "generated_source", "qualification"}:
+                "generated_source", "qualification", "architecture_explorer"}:
             raise ValueError("unknown project catalog keys")
         project_id = item.get("id")
         if not isinstance(project_id, str) or not IDENT.fullmatch(project_id):
@@ -70,12 +70,23 @@ def projects(root: Path = ROOT) -> list[dict]:
                 raise ValueError("missing actual generated project RTL")
         elif generated is not None:
             raise ValueError("source-only project cannot claim generated hardware")
+        explorer_rel = item.get("architecture_explorer")
+        if explorer_rel is not None:
+            if item["qualification"] != "generated_default":
+                raise ValueError("a source-only or CI-artifact project cannot borrow a published RTL explorer")
+            if (not isinstance(explorer_rel, str) or not explorer_rel.endswith(".html")
+                    or Path(explorer_rel).is_absolute()
+                    or any(part in ("..", ".") for part in Path(explorer_rel).parts)):
+                raise ValueError("invalid project architecture explorer path")
+            if any(p.get("architecture_explorer") == explorer_rel for p in result):
+                raise ValueError("architecture explorer belongs to more than one project")
         result.append({
             "id": project_id, "title": item["title"], "subtitle": item["subtitle"],
             "config": config_rel.as_posix(), "config_sha256":
                 hashlib.sha256(config.read_bytes()).hexdigest(),
             "qualification": item["qualification"],
             "generated_source": generated,
+            "architecture_explorer": explorer_rel,
             "subsystems": [s["name"] for s in soc["subsystems"]],
             "compute": [s["name"] for s in soc["subsystems"] if s["type"] == "compute"],
             "memory_targets": [t["name"] for t in soc["memory_targets"]],
