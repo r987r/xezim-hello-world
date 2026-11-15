@@ -62,6 +62,12 @@ class MultiProjectSiteTests(unittest.TestCase):
             b_arch = (new / "architecture.html").read_text()
             self.assertIn("arch-h-filter", b_arch)
             self.assertIn("arch-h-tree", b_arch)
+            self.assertIn('id="arch-h-svg"', b_arch)
+            self.assertIn('id="arch-h-plane"', b_arch)
+            self.assertIn('id="arch-h-fit"', b_arch)
+            self.assertIn("Connection-driven topology", b_arch)
+            self.assertIn("const edges = links.filter", b_arch)
+            self.assertNotIn("__PROJECT_TOPOLOGY_JS__", b_arch)
             self.assertIn("arch-h-crumbs", b_arch)
             self.assertIn("arch-h-children", b_arch)
             self.assertIn("ethernet0", b_arch)
@@ -140,6 +146,8 @@ class MultiProjectSiteTests(unittest.TestCase):
                     self.assertNotIn("arch-h-filter", architecture)
                 else:
                     self.assertIn("arch-h-filter", architecture)
+                    self.assertIn('id="arch-h-svg"', architecture)
+                    self.assertIn("const edges = links.filter", architecture)
                 self.assertIn(entry["id"], architecture)
 
 
