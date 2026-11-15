@@ -42,6 +42,20 @@ Once new project test targets exist, project identity belongs in the
 selected immutable run manifest and must be verified at collection time;
 a target-name heuristic is not sufficient.
 
+Project-isolated **unit** generation (no FlooNoC/full-chip PASS):
+
+```sh
+python3 tools/project_build.py --project xezim_soc_dv
+python3 tools/project_build.py --project xezim_ethernet_cpu_ddr_pcie
+python3 tools/project_build.py --project xezim_soc_dv --check
+python3 tools/project_build.py --project xezim_ethernet_cpu_ddr_pcie --check
+```
+
+The generated workspaces live at `.tools/projects/<id>/` and contain only
+project-specific boot and AXI memory-unit artifacts plus selected-source
+manifests. They do not alter default checked-in `gen/` or grant full-chip
+qualification. Build artifacts are separate while the emitters are shared.
+
 Verify with:
 
 \`\`\`sh
