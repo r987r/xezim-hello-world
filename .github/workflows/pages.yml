@@ -181,7 +181,9 @@ jobs:
           print('PASS: self-contained 2D explorer, graph, signals and chip-DMA profile')
           PY
       - name: Validate architecture JavaScript syntax
-        run: node --check tools/templates/site_arch_explorer.js
+        run: |
+          node --check tools/templates/site_arch_explorer.js
+          node --check tools/templates/site_project_topology.js
       - name: Validate unified Test Runs protocol JavaScript syntax
         run: node --check tools/templates/site_runs_traffic.js
       - name: Browser-render chip, subsystem and router-mesh diagrams

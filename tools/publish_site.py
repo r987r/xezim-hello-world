@@ -1353,7 +1353,7 @@ def project_pages(output, projects, entries, repository, sha):
         explorer = project.get('architecture_explorer')
         if explorer and not (output / explorer).is_file():
             raise ValueError('catalog-selected project explorer was not published: ' + explorer)
-        architecture_href = ('../../' + explorer) if explorer else 'architecture.html'
+        architecture_href = 'architecture.html'
         nav = ('<div class="actions">'
                '<a href="index.html">Overview</a>'
                '<a href="' + architecture_href + '">Architecture</a>'
@@ -1434,28 +1434,32 @@ def project_pages(output, projects, entries, repository, sha):
         else:
             runs = ('<p class="empty">No project-qualified run evidence is '
                     'available. No other project results are substituted.</p>')
-        if explorer:
-            # Only a catalog-owned existing explorer can replace the generic
-            # architecture view. Never lend the original RTL hierarchy to an
-            # unrelated project just because it has compiled hardware.
-            explorer_href = '../../' + explorer
-            architecture = (info + '<p><a href="' + escape(explorer_href, quote=True) +
-                '">Open full selected hierarchy and RTL inspector</a></p>'
-                '<script>window.location.replace(' +
-                json.dumps(explorer_href).replace('<', '\\u003c') + ');</script>')
-        else:
-            # The one generic source tree applies to any compiled/config-only
-            # project; it never imports original-chip router/RTL evidence.
-            template = (ROOT/'tools/templates/site_project_hierarchy.html').read_text()
-            hierarchy = json.dumps({
-                'id': pid, 'title': project['title'],
-                'config': project['config'],
-                'config_sha256': project['config_sha256'],
-                'qualification': qualification,
-                'design': project['design'],
-            }, separators=(',', ':')).replace('<', '\\u003c')
-            architecture = (info + nav + scope +
-                            template.replace('__PROJECT_HIERARCHY_JSON__', hierarchy))
+        # Every project uses the exact SAME architecture page and diagram
+        # renderer. A project-owned detailed compiler-parsed explorer is an
+        # optional drill-down, not an alternate main architecture UI.
+        template = (ROOT/'tools/templates/site_project_hierarchy.html').read_text()
+        hierarchy = json.dumps({
+            'id': pid, 'title': project['title'],
+            'config': project['config'],
+            'config_sha256': project['config_sha256'],
+            'qualification': qualification,
+            'design': project['design'],
+            'layout': project.get('layout'),
+        }, separators=(',', ':')).replace('<', '\\u003c')
+        topology_js = (ROOT/'tools/templates/site_project_topology.js').read_text()
+        detailed = (
+            '<div class="actions"><a href="../../' +
+            escape(explorer, quote=True) +
+            '">Open detailed generated RTL / router / signal explorer</a></div>'
+            if explorer else
+            '<p class="muted">Compiler-parsed RTL/router-level explorer '
+            'not published for this project. Build source files and '
+            'compile verdicts remain available under RTL &amp; files.</p>'
+        )
+        architecture = (info + nav + scope +
+                        template.replace('__PROJECT_HIERARCHY_JSON__', hierarchy)
+                                .replace('__PROJECT_TOPOLOGY_JS__', topology_js) +
+                        detailed)
         pages = {
             'index.html': overview,
             'architecture.html': architecture,

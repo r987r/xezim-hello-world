@@ -139,3 +139,20 @@ The per-project `--check` generation gate remains byte-exact for all
 emitter-owned output; subsequent known Verilator `sources.f`, compile logs,
 result metadata and `obj_dir/` files are permitted without reading their
 large object-file contents or calling them stale generated RTL.
+
+## One topology/architecture UI for every project
+
+Every `projects/<id>/architecture.html` uses the same
+`tools/templates/site_project_hierarchy.html` shell, with the shared
+`site_project_topology.js` diagram. It displays subsystem cards and
+data/control connections sourced from that project's validated `soc.yaml`.
+The viewer can use optional `layout.regions` for column placement; without
+hints it derives layers from the adjacency graph, not chip-specific names.
+It has the same search, breadcrumb drill-down, zoom/fit, connection filters,
+inspector and selected-file links for every catalog entry.
+
+The existing `explorer.html` with compiler-parsed RTL/router/signal detail
+is an **additional** catalog-owned drill-down, not an alternative main
+Architecture page. The project-level graph remains declared connectivity
+until a selected project publishes its own parsed elaboration evidence.
+An unqualified design receives no other project's RTL details or traffic.
