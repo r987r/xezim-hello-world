@@ -1372,46 +1372,6 @@ def project_pages(output, projects, entries, repository, sha):
                     escape(' · '.join(project['memory_targets'])) + '</p>'
                     '<h2>Design sources</h2><p><a href="files.html">'
                     'Selected top RTL, NoC and input manifests</a></p>')
-        if published:
-            overview += ('<div class="actions">'
-                         '<a href="../../soc-overview.html">Original SoC overview</a>'
-                         '<a href="../../topology.html">Generated topology</a>'
-                         '<a href="../../explorer.html">Chip architecture explorer</a>'
-                         '<a href="../../fabric.html">Fabric measurements</a>'
-                         '<a href="../../runs.html">Detailed test viewer</a></div>')
-            graph = ('<div class="topology-pan"><img class="topology" '
-                     'src="../../gen/diagrams/noc-hierarchy.svg" '
-                     'alt="Source-generated SoC hierarchy"></div>'
-                     '<p><a href="../../explorer.html">'
-                     'Inspect RTL modules and router hierarchy</a></p>')
-        else:
-            placement = project.get('layout') or {}
-            groups = placement.get('regions') or []
-            blocks = []
-            for i, region in enumerate(groups):
-                blocks.append('<section class="card"><h3>' +
-                              escape(region['name'].replace('_', ' ').title()) +
-                              '</h3><p>' + escape(' · '.join(region['subsystems'])) +
-                              '</p></section>')
-                if i + 1 != len(groups):
-                    blocks.append('<div class="project-link" '
-                                  'aria-label="Bidirectional AXI4 link">↔</div>')
-            link_rows = ''.join(
-                '<tr><td><code>' + escape(link['name']) + '</code></td>'
-                '<td>' + escape(' ↔ '.join(link['endpoints'])) +
-                '</td><td>AXI4 · duplex</td></tr>'
-                for link in project['data_links']
-            )
-            graph = ('<div class="project-fabric">' + ''.join(blocks) + '</div>'
-                     '<div class="card"><strong>Global configuration FlooNoC'
-                     '</strong><p class="muted">Bottom edge · independent AXI '
-                     'control fabric; no global data mesh.</p></div>'
-                     '<h2>Data links</h2><div class="scroll"><table>'
-                     '<thead><tr><th>Link</th><th>Endpoints</th><th>Protocol</th>'
-                     '</tr></thead><tbody>' + link_rows + '</tbody></table></div>'
-                     '<p class="muted">Layout and link names are sourced from '
-                     'the selected project configuration; the CI compiled RTL '
-                     'is available through the project files page.</p>')
         addresses = (
             '<div class="scroll"><table><thead><tr><th>Plane</th>'
             '<th>Target</th><th>Base</th><th>Size</th></tr></thead><tbody>' +
@@ -1480,7 +1440,7 @@ def project_pages(output, projects, entries, repository, sha):
                 'source-qualified traffic overlays.</p>'
                 '<p><a href="../../explorer.html">Explore complete chip hierarchy</a></p>' +
                 '<iframe title="Interactive chip architecture and RTL hierarchy" '
-                'src="../../explorer.html" loading="lazy" '
+                'src="../../explorer.html" '
                 'style="width:100%;min-height:950px;border:1px solid var(--line);'
                 'border-radius:10px" id="project-architecture-frame"></iframe>')
         else:
