@@ -95,8 +95,8 @@ def build(cfg, *, cpu0_run_hook=None, pcie_host_phase=False):
                    key=lambda s: (s['name'] != primary, s['name']))
     if cores[0]['cpu']['ip'] != 'picorv32' or any(c['cpu']['ip'] != 'serv' for c in cores[1:]):
         raise ValueError('full-chip boot currently supports PicoRV32 coordinator and SERV secondaries')
-    if not 2 <= len(cores) <= 16:
-        raise ValueError('full-chip mailbox/reset bootstrap supports 2..16 cores')
+    if not 1 <= len(cores) <= 16:
+        raise ValueError('full-chip mailbox/reset bootstrap supports 1..16 cores')
     data = {r['name']: int(r['base'], 0) for r in cfg['address_map']['data']}
     options = cfg['verification']['full_chip_boot']
     if options['phases'] != ['init', 'run', 'check']:
@@ -123,8 +123,9 @@ def build(cfg, *, cpu0_run_hook=None, pcie_host_phase=False):
             p.wait(0, 2, 'wait_run')
         else:
             p.wait_all(4, 1, len(cores), 'wait_init')
-            p.li(8, addresses['reset_ctrl'])
-            p.wait_all(4, 1, len(cores)-1, 'wait_config', base=8, stride=4)
+            if len(cores) > 1:
+                p.li(8, addresses['reset_ctrl'])
+                p.wait_all(4, 1, len(cores)-1, 'wait_config', base=8, stride=4)
             if pcie_host_phase:
                 # CPU0 firmware really accesses remote PCIe0 SRAM via data
                 # NoCs. Host polls the same bytes via the real TLP/AXI bridge.
@@ -195,8 +196,9 @@ def build(cfg, *, cpu0_run_hook=None, pcie_host_phase=False):
     rom.li(5, mailbox)
     for off in [0, done_offset, *[4+16*i+j for i in range(len(cores)) for j in (0, 4, 8)]]:
         rom.add(rv._sw(0, 5, off), f'sw zero, {off}(x5)')
-    rom.li(5, addresses['reset_ctrl'])
-    rom.store((1 << (len(cores)-1))-1, 0)
+    if len(cores) > 1:
+        rom.li(5, addresses['reset_ctrl'])
+        rom.store((1 << (len(cores)-1))-1, 0)
     rom.li(5, data[primary+'.sram'])
     rom.add(rv._jalr(0, 5), 'jalr zero, 0(x5)')
     return {'cores': cores, 'images': images, 'rom': rom.finish(), 'mailbox': mailbox,
