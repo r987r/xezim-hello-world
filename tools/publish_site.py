@@ -1453,9 +1453,12 @@ def project_pages(output, projects, entries, repository, sha):
                 'config_sha256': project['config_sha256'],
                 'qualification': qualification,
                 'design': project['design'],
+                'layout': project.get('layout'),
             }, separators=(',', ':')).replace('<', '\\u003c')
+            topology_js = (ROOT/'tools/templates/site_project_topology.js').read_text()
             architecture = (info + nav + scope +
-                            template.replace('__PROJECT_HIERARCHY_JSON__', hierarchy))
+                            template.replace('__PROJECT_HIERARCHY_JSON__', hierarchy)
+                                    .replace('__PROJECT_TOPOLOGY_JS__', topology_js))
         pages = {
             'index.html': overview,
             'architecture.html': architecture,
