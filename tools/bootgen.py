@@ -82,7 +82,7 @@ def build(cfg: dict, *, allow_extended_flash_slot=False) -> dict:
     has_secondary = secondary is not None
     release = "mmio" if has_secondary else "none"
     if boot.get("secondary_release") != release:
-        raise ValueError("boot.secondary_release must be mmio for two cores, none for one")
+        raise ValueError("boot.secondary_release not implemented for this CPU count; use mmio for two cores or none for one")
     compute = {s['name']: s for s in cfg['subsystems'] if s['type'] == 'compute'}
     if primary not in compute or compute[primary]['cpu']['ip'] != 'picorv32':
         raise ValueError("boot prototype requires PicoRV32 primary")
