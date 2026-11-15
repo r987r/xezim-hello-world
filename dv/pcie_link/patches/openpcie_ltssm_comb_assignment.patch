@@ -143,3 +143,24 @@ diff --git a/src/dllp/tlp2dllp.sv b/src/dllp/tlp2dllp.sv
            skid_axis_tdata[15:0], next_transmit_seq_r[7:0], 4'h0, next_transmit_seq_r[11:8]
          };
          crc_tlp_axis_tdata = {
+diff --git a/src/dllp/axis_user_demux.sv b/src/dllp/axis_user_demux.sv
+--- a/src/dllp/axis_user_demux.sv
++++ b/src/dllp/axis_user_demux.sv
+@@ -88,13 +88,13 @@
+       ST_IDLE: begin
+         if (s_axis_tvalid) begin
+           if (s_axis_tuser[UserIsTlp]) begin
+-            s_axis_tready = m_tlp_axis_tready;
++            s_axis_tready = tlp_ready;
+             tlp_valid = s_axis_tvalid;
+-            next_state = ST_TLP;
++            if (s_axis_tready && !s_axis_tlast) next_state = ST_TLP;
+           end else if (s_axis_tuser[UserIsDllp]) begin
+-            s_axis_tready = m_dllp_axis_tready;
++            s_axis_tready = dllp_ready;
+             dllp_valid = s_axis_tvalid;
+-            next_state = ST_DLLP;
++            if (s_axis_tready && !s_axis_tlast) next_state = ST_DLLP;
+           end
+         end
+       end
