@@ -59,15 +59,13 @@ def main():
             browser.find_element(
                 By.CSS_SELECTOR, 'main .actions a[href="architecture.html"]').click()
             if item["qualification"] == "generated_default":
-                # The old full hierarchy must remain reachable, including its
-                # parsed RTL, zoom, breadcrumbs and router-level navigation.
-                frame = browser.find_element(By.ID, "project-architecture-frame")
-                browser.switch_to.frame(frame)
+                # Original project routes DIRECTLY into the existing full
+                # parsed RTL/NoC/router explorer, not an embedded mini-view.
+                assert browser.current_url.endswith("/explorer.html")
                 assert browser.find_element(By.ID, "arch-directory")
                 assert browser.find_element(By.ID, "arch-crumbs")
                 assert browser.find_element(By.ID, "arch-svg")
                 assert browser.find_element(By.ID, "arch-signals")
-                browser.switch_to.default_content()
             else:
                 assert browser.find_element(By.ID, "arch-h-tree")
                 assert browser.find_element(By.ID, "arch-h-crumbs")
