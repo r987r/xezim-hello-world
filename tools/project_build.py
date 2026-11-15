@@ -35,7 +35,8 @@ def tree_digest(folder: Path) -> dict[str, str]:
     }
 
 
-def generate_one(root: Path, project: dict, output: Path) -> dict:
+def generate_one(root: Path, project: dict, output: Path, *,
+                 full_chip: bool = False, image_prefix: str | None = None) -> dict:
     """Only a project's own selected source enters the common emitters."""
     config = root / project["config"]
     if sha(config.read_bytes()) != project["config_sha256"]:
@@ -47,7 +48,22 @@ def generate_one(root: Path, project: dict, output: Path) -> dict:
     (output / SENTINEL).write_text(project["id"] + "\n")
     socgen.run(config, output / "memory")
     bootgen.emit(soc, output / "boot")
-    # No full-chip RTL entry in the manifest until it is actually emitted
+    if full_chip:
+        import floonoc_gen
+        import full_chip_gen
+        import supernoc_gen
+        if image_prefix is None:
+            raise ValueError("full-chip selected output requires final image path")
+        knobs = yaml.safe_load(
+            (root / "config/interface_contracts.yaml").read_text())
+        noc_root = output / "noc/floonoc"
+        floonoc_gen.generate_all(soc, knobs, noc_root)
+        noc_manifest = supernoc_gen.emit(
+            soc, noc_root, output / "supernoc/supernoc_tb.sv")
+        full_chip_gen.emit(
+            soc, noc_manifest, noc_root, output / "chip",
+            image_prefix=image_prefix)
+    # No full-chip test PASS may be inferred from successful source emission
     # and verified. Memory-only and boot firmware are separately labelled.
     record = {
         "schema_version": 1,
@@ -56,9 +72,11 @@ def generate_one(root: Path, project: dict, output: Path) -> dict:
         "source_config_sha256": project["config_sha256"],
         "artifacts": {"memory_unit": "memory/memory_tb.sv",
                       "boot_firmware": "boot/bootrom.hex"},
-        "generated_full_chip": False,
+        "generated_full_chip": full_chip,
         "routed_axi_test_passed": False,
-        "evidence": "source_selected_unit_generation_not_simulation",
+        "evidence": ("source_selected_chip_RTL_not_elaborated_or_simulated"
+                     if full_chip else
+                     "source_selected_unit_generation_not_simulation"),
         "files": tree_digest(output),
     }
     (output / "manifest.json").write_text(
@@ -67,7 +85,8 @@ def generate_one(root: Path, project: dict, output: Path) -> dict:
 
 
 def build(project_id: str, *, root: Path = ROOT,
-          output_root: Path | None = None, check: bool = False) -> dict:
+          output_root: Path | None = None, check: bool = False,
+          full_chip: bool = False) -> dict:
     root = root.resolve()
     known = {p["id"]: p for p in project_catalog.projects(root)}
     if project_id not in known:
@@ -83,7 +102,14 @@ def build(project_id: str, *, root: Path = ROOT,
             raise ValueError("project build output belongs to another project")
     with tempfile.TemporaryDirectory(prefix="soc-project-") as temp:
         generated = Path(temp) / project_id
-        record = generate_one(root, known[project_id], generated)
+        # Generated SV references its FINAL run-specific boot image path,
+        # never the temporary generation staging root.
+        prefix = (dest / "chip").relative_to(root).as_posix() if (
+            full_chip and dest.is_relative_to(root)) else None
+        if full_chip and prefix is None:
+            raise ValueError("full-chip output must reside inside checkout")
+        record = generate_one(root, known[project_id], generated,
+                              full_chip=full_chip, image_prefix=prefix)
         if check:
             if not dest.is_dir() or {
                     f.relative_to(generated).as_posix(): f.read_bytes()
@@ -107,11 +133,13 @@ def main() -> int:
     parser.add_argument("--root", type=Path, default=ROOT)
     parser.add_argument("--out", type=Path, default=ROOT / ".tools/projects")
     parser.add_argument("--check", action="store_true")
+    parser.add_argument("--full-chip", action="store_true",
+                        help="emit selected FlooNoC and SoC RTL (no compile or PASS)")
     args = parser.parse_args()
     record = build(args.project, root=args.root, output_root=args.out,
-                   check=args.check)
-    print("PASS project source-selected unit generation "
-          + record["project_id"] + " (not full-chip RTL)")
+                   check=args.check, full_chip=args.full_chip)
+    print("PASS project source-selected generation "
+          + record["project_id"] + " (no compile, elaboration or traffic PASS)")
     return 0
 
 
