@@ -2,7 +2,24 @@
 
 [![SoC regression](https://github.com/r987r/xezim-hello-world/actions/workflows/dv-soc.yml/badge.svg)](https://github.com/r987r/xezim-hello-world/actions/workflows/dv-soc.yml)
 
-A hierarchical SoC verification vehicle using pinned open-source CPUs, PULP iDMA, FlooNoC, PCIe and Ethernet IP. The architecture and addresses come from [`config/soc.yaml`](config/soc.yaml); [`config/regression.yaml`](config/regression.yaml) selects executable tests; [interface contracts](config/interface_contracts.yaml) and [IP locks](config/ip.lock.yaml) define integration boundaries. Tracked `gen/` outputs are generated, **not** hand-maintained.
+A multi-project SoC verification platform using pinned open-source CPUs, PULP iDMA, FlooNoC, PCIe and Ethernet IP. Project configurations are selected through [`config/projects/catalog.yaml`](config/projects/catalog.yaml); the canonical original design is [`config/soc.yaml`](config/soc.yaml); [`config/regression.yaml`](config/regression.yaml) selects executable tests; [interface contracts](config/interface_contracts.yaml) and [IP locks](config/ip.lock.yaml) define integration boundaries. Tracked `gen/` outputs are generated, **not** hand-maintained.
+
+## SoC projects
+
+The [verification hub](https://r987r.github.io/xezim-hello-world/) opens
+with a catalog-driven project picker. Each project has independent
+architecture, addresses, [selected top and source-file navigation](docs/multi-project-pages.md),
+and qualified test views. The current catalog includes the original
+[hierarchical chip](config/soc.yaml) and a separate
+[Ethernet / CPU+DDR / PCIe design](config/projects/ethernet-cpu-ddr-pcie/soc.yaml).
+The same FlooGen, Bender, boot/RTL generators, monitors and simulator
+infrastructure are shared.
+
+Both projects **compile** with their separately selected FlooNoC RTL,
+full-chip top and C++ Verilator model. Only the original design has
+source-qualified functional regressions; the second design's end-to-end
+AXI/PCIe/Ethernet checks are pending. A compiled top is not a simulation PASS.
+Read [project onboarding](docs/project-onboarding.md) to add more designs.
 
 ## Start here
 

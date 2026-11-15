@@ -143,10 +143,65 @@ def validate(doc):
                         "base": matched[0][0], "size": matched[0][1]})
     if not 1 <= len(targets) <= 16 or len({t['name'] for t in targets}) != len(targets):
         raise ConfigError("memory target count must be 1..16 and names unique")
-    if set(t['kind'] for t in targets) != {"hbm", "ddr"}:
-        raise ConfigError("heterogeneous DV requires HBM and DDR memory targets")
-
-    outs = doc["networks"]["global_data"]["outputs"]
+    # Two shapes share this validator; direct links remain declarative until
+    # their own actual RTL emitters and full-chip checks are installed.
+    networks = doc["networks"]
+    global_data = networks.get("global_data")
+    direct_data = networks.get("direct_data")
+    if (global_data is None) == (direct_data is None):
+        raise ConfigError("exactly one of global_data or direct_data is required")
+    direct_links = None
+    if direct_data is None:
+        if set(t['kind'] for t in targets) != {"hbm", "ddr"}:
+            raise ConfigError("heterogeneous DV requires HBM and DDR memory targets")
+        outs = global_data["outputs"]
+    else:
+        if {t['kind'] for t in targets} != {"ddr"}:
+            raise ConfigError("direct data variant requires DDR-only memory targets")
+        if "global_data" in doc["fabrics"]:
+            raise ConfigError("direct data variant must not declare a global_data fabric")
+        if direct_data.get("protocol") != "axi4" or direct_data.get("link_backend") != "floonoc":
+            raise ConfigError("direct data variant requires AXI4 FlooNoC links")
+        if not isinstance(direct_data.get("links"), list) or not direct_data["links"]:
+            raise ConfigError("direct data links must be a nonempty list")
+        direct_links, pairs, adjacency = [], set(), {name: set() for name in names}
+        for link in direct_data["links"]:
+            if not isinstance(link, dict) or set(link) != {"name", "endpoints", "duplex"}:
+                raise ConfigError("direct data link must declare name, endpoints and duplex")
+            eps = link["endpoints"]
+            if (not isinstance(link["name"], str) or not link["name"]
+                    or not isinstance(eps, list) or len(eps) != 2
+                    or any(not isinstance(e, str) or e not in adjacency for e in eps)
+                    or eps[0] == eps[1] or link["duplex"] is not True):
+                raise ConfigError("invalid direct data link endpoint or duplex contract")
+            pair = tuple(sorted(eps))
+            if pair in pairs or any(row["name"] == link["name"] for row in direct_links):
+                raise ConfigError("duplicate direct data link")
+            pairs.add(pair)
+            adjacency[eps[0]].add(eps[1])
+            adjacency[eps[1]].add(eps[0])
+            direct_links.append(link)
+        visited, todo = set(), [doc["boot"]["primary"]]
+        while todo:
+            current = todo.pop()
+            if current in visited:
+                continue
+            visited.add(current)
+            todo.extend(adjacency[current] - visited)
+        if visited != set(names):
+            raise ConfigError("direct data links leave disconnected subsystems")
+        placement = doc.get("layout", {})
+        regions = placement.get("regions", [])
+        if not isinstance(regions, list) or not regions:
+            raise ConfigError("direct data layout must declare regions")
+        placed = [name for region in regions for name in region.get("subsystems", [])]
+        if len(placed) != len(names) or set(placed) != set(names):
+            raise ConfigError("direct data layout must place each subsystem exactly once")
+        control_position = placement.get("control_noc", {})
+        if (control_position.get("fabric") != "global_config"
+                or control_position.get("edge") not in ("top", "bottom", "left", "right")):
+            raise ConfigError("direct data layout needs global_config edge placement")
+        outs = direct_data["memory_outputs"]
     if len(outs) != ingress or len({x['name'] for x in outs}) != len(outs):
         raise ConfigError("global data output count/name mismatch")
     for x in outs:
@@ -157,7 +212,10 @@ def validate(doc):
         raise ConfigError("global config fabric must declare each subsystem exactly once")
 
     fabrics = doc["fabrics"]
-    for fabric in ("local_data", "local_config", "memory_data", "global_data", "global_config"):
+    required_fabrics = ("local_data", "local_config", "memory_data", "global_config")
+    if direct_data is None:
+        required_fabrics += ("global_data",)
+    for fabric in required_fabrics:
         if fabric not in fabrics:
             raise ConfigError(f"missing fabric definition {fabric}")
         try:
@@ -203,6 +261,8 @@ def validate(doc):
         result["memory_crossbar_parameters"] = crossbar_params
     if routing is not None:
         result["memory_connectivity"] = routing
+    if direct_links is not None:
+        result["direct_data_links"] = sorted(direct_links, key=lambda row: row["name"])
     return result
 
 
@@ -229,6 +289,10 @@ def fabric_ir(meta):
         ir["fabrics"]["memory_data"]["parameters"] = meta["memory_crossbar_parameters"]
     if "memory_connectivity" in meta:
         ir["memory"]["connectivity"] = meta["memory_connectivity"]
+    if "direct_data_links" in meta:
+        ir["direct_data"] = {"protocol": "axi4", "backend": "floonoc",
+                             "links": meta["direct_data_links"],
+                             "evidence": "declared_not_emitted"}
     return ir
 
 

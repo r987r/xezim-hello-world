@@ -182,7 +182,7 @@ def main():
         # Verify mobile visibility of the same canonical generated SVG.
         # This is a browser layout test, not a second hand-authored image.
         driver.set_window_size(400,850)
-        homepage=args.page.resolve().parent/"index.html"
+        homepage=args.page.resolve().parent/"soc-overview.html"
         driver.get(homepage.as_uri())
         wait.until(lambda d:d.execute_script(
             "return document.querySelector('.topology-pan img')?.naturalWidth>0"))

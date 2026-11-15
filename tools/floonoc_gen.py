@@ -50,7 +50,7 @@ def mapped_regions(soc, plane):
     return regions
 
 
-def profile(name, plane, mgrs, targets, soc, knobs):
+def profile(name, plane, mgrs, targets, soc, knobs, *, link_managers=()):
     """FlooGen upstream network schema with named endpoints and XY links."""
     if plane not in ("data", "config"):
         raise NoCGenerationError("invalid NoC plane")
@@ -60,6 +60,13 @@ def profile(name, plane, mgrs, targets, soc, knobs):
         out_id = bus["id_bits"]
         if name == "global_data":
             in_id += (2 - 1).bit_length()  # CPU and DMA behind local compute NoC
+        elif soc["networks"].get("direct_data"):
+            # Link NoCs carry the same ID width at ingress and egress. The
+            # local NoC has native initiators with 4-bit IDs and remote links
+            # with 5-bit IDs; preserve the distinction in separate protocols.
+            if name.startswith("direct_"):
+                in_id += 1
+            out_id += 1
         elif name.endswith("_local_data") and name not in {
                 s["name"] + "_local_data" for s in soc["subsystems"] if s["type"] == "memory"}:
             out_id += (2 - 1).bit_length()
@@ -75,7 +82,23 @@ def profile(name, plane, mgrs, targets, soc, knobs):
          "data_width": bus["data_bits"], "addr_width": bus["addr_bits"],
          "id_width": out_id, "user_width": 1, "type_prefix": None}
     ]
-    endpoints = [{"name": x, "mgr_port_protocol": ["axi_in"]} for x in mgrs]
+    link_managers = set(link_managers)
+    if plane != "data" and link_managers:
+        raise NoCGenerationError("link managers are data-plane only")
+    if link_managers - set(mgrs):
+        raise NoCGenerationError("unknown link manager in NoC profile")
+    if link_managers:
+        protocols.append({
+            "name": "axi_link_in", "type": "narrow", "protocol": "AXI4",
+            "data_width": bus["data_bits"], "addr_width": bus["addr_bits"],
+            "id_width": soc["buses"]["data"]["id_bits"] + 1,
+            "user_width": 1, "type_prefix": None,
+        })
+    endpoints = [
+        {"name": x, "mgr_port_protocol": [
+            "axi_link_in" if x in link_managers else "axi_in"]}
+        for x in mgrs
+    ]
     for target, windows in targets:
         if not windows:
             raise NoCGenerationError(f"{name}.{target} has no address ranges")
@@ -121,15 +144,20 @@ def profiles(soc, knobs):
     if len(memories) != 1 or not computes:
         raise NoCGenerationError("memory model currently supports exactly one memory subsystem")
     memory = memories[0]
-    for k in ("global_data", "global_config", "local_data",
-              "local_config", "memory_local_data"):
+    direct_mode = "direct_data" in soc["networks"]
+    required_fabrics = ["global_config", "local_data", "local_config",
+                        "memory_local_data"]
+    if not direct_mode:
+        required_fabrics.append("global_data")
+    for k in required_fabrics:
         if soc["fabrics"][k]["backend"] != "floonoc":
             raise NoCGenerationError(f"FlooNoC selected architecture expects {k}.backend=floonoc")
     if soc["fabrics"]["memory_data"]["backend"] != "verilog_axi":
         raise NoCGenerationError("tested internal memory crossbar must remain Verilog AXI")
     if set(soc["networks"]["global_config"]["reachable_subsystems"]) != set(compute_like + memories):
         raise NoCGenerationError("global config must reach all named subsystems")
-    memory_outputs = soc["networks"]["global_data"]["outputs"]
+    memory_outputs = (soc["networks"]["direct_data"]["memory_outputs"]
+                      if direct_mode else soc["networks"]["global_data"]["outputs"])
     for m in memory_outputs:
         if m["target"] not in regions_data:
             raise NoCGenerationError(f"memory NoC output {m['name']} has unknown destination")
@@ -143,7 +171,7 @@ def profiles(soc, knobs):
         raise NoCGenerationError("memory subsystem needs a config register aperture")
     result = {}
 
-    def add(name, plane, initiators, sinks, family, path):
+    def add(name, plane, initiators, sinks, family, path, *, link_managers=()):
         if name in result:
             raise NoCGenerationError(f"duplicate NoC {name}")
         if family not in knobs["fabric_parameters"]:
@@ -187,8 +215,103 @@ def profiles(soc, knobs):
         result[name] = {
             "path": path, "plane": plane, "family": family,
             "native_parameters": copy.deepcopy(params),
-            "config": profile(name, plane, initiators, sinks, soc, knobs)
+            "config": profile(name, plane, initiators, sinks, soc, knobs,
+                              link_managers=link_managers)
         }
+
+    if direct_mode:
+        # No global_data mesh. Each source-selected neighboring pair has two
+        # independent 1:1 FlooNoC data networks, one per AXI initiator direction.
+        # Local routers remain the shared upstream FlooGen IP.
+        direct_links = soc["networks"]["direct_data"]["links"]
+        adjacency = {name: [] for name in compute_like + memories}
+        for link in direct_links:
+            a, b = link["endpoints"]
+            adjacency[a].append(b)
+            adjacency[b].append(a)
+        for peers in adjacency.values():
+            peers.sort()
+        hbm_ddr = [regions_data[x["target"]] for x in memory_outputs]
+        all_srams = {n: regions_data[n + ".sram"] for n in compute_like}
+        routes = {}
+        for src, peers in sorted(adjacency.items()):
+            for dst in peers:
+                if src in memories:
+                    remote = list(all_srams.values())
+                elif src in computes:
+                    remote = (hbm_ddr if dst in memories
+                              else [all_srams[dst]])
+                else:
+                    # Peripheral can access any other SRAM or DDR through
+                    # compute's address-decoded transit NoC.
+                    remote = [reg for name, reg in sorted(all_srams.items())
+                              if name != src] + hbm_ddr
+                routes[(src, dst)] = remote
+        add("global_config", "config", compute_like,
+            [(name + "_regs", cfg_owned[name])
+             for name in compute_like + memories],
+            "global_config", "global_config")
+        for src in computes:
+            own = all_srams[src]
+            initiators = ["cpu", "dma"] + ["from_" + n for n in adjacency[src]]
+            targets = [("sram", [own])]
+            targets += [("to_" + n, routes[(src, n)]) for n in adjacency[src]]
+            if src == soc["boot"]["primary"]:
+                targets += [
+                    ("boot_rom", [regions_data["boot.rom"]]),
+                    ("boot_flash", [regions_data["boot.flash"]]),
+                ]
+            add(src + "_local_data", "data", initiators, targets,
+                "local_data", src + "/local_data",
+                link_managers=["from_" + n for n in adjacency[src]])
+            cfg_targets = [("dma_regs", [regions_config[src + ".dma"]])]
+            if src == soc["boot"]["primary"] and "boot.reset_ctrl" in regions_config:
+                cfg_targets.append(("reset_ctrl", [regions_config["boot.reset_ctrl"]]))
+            remote_cfg = [addr for owner in compute_like + memories
+                          if owner != src for addr in cfg_owned[owner]]
+            cfg_targets.append(("global_out", remote_cfg))
+            add(src + "_local_config", "config", ["cpu", "global_in"],
+                cfg_targets, "local_config", src + "/local_config")
+        for sub in peripheral_specs:
+            src = sub["name"]
+            initiators = [sub["data_initiator"]] + [
+                "from_" + n for n in adjacency[src]]
+            targets = [("sram", [all_srams[src]])]
+            targets += [("to_" + n, routes[(src, n)])
+                        for n in adjacency[src]]
+            add(src + "_local_data", "data", initiators, targets,
+                "local_data", src + "/local_data",
+                link_managers=["from_" + n for n in adjacency[src]])
+            remote_cfg = [addr for owner in compute_like + memories
+                          if owner != src for addr in cfg_owned[owner]]
+            add(src + "_local_config", "config",
+                [sub["config_initiator"], "global_in"],
+                [("controller_regs", cfg_owned[src]), ("global_out", remote_cfg)],
+                "local_config", src + "/local_config")
+        src = memory
+        # Reserved memory-side DMA requester is tied off in the chip until
+        # a real memory-side initiator IP is selected. No traffic proof.
+        add(src + "_local_data", "data",
+            ["memory_dma"] + ["from_" + n for n in adjacency[src]],
+            [("target_crossbar", hbm_ddr)] + [
+                ("to_" + n, routes[(src, n)]) for n in adjacency[src]],
+            "memory_local_data", src + "/local_data",
+            link_managers=["from_" + n for n in adjacency[src]])
+        add(src + "_local_config", "config", ["global_in"],
+            [("controller_regs", cfg_owned[src])],
+            "local_config", src + "/local_config")
+        for link in direct_links:
+            a, b = link["endpoints"]
+            for source, target in ((a, b), (b, a)):
+                name = "direct_" + link["name"] + "_" + source + "_to_" + target
+                add(name, "data", ["ingress"],
+                    [("egress", routes[(source, target)])],
+                    "local_data", "direct_data/" + link["name"]
+                    + "/" + source + "_to_" + target)
+        expected = 1 + 2 * len(compute_like) + 2 * len(memories) + 2 * len(direct_links)
+        if len(result) != expected:
+            raise NoCGenerationError("direct FlooNoC instance count mismatch")
+        return result
 
     remote_data = [regions_data[n + ".sram"] for n in compute_like]
     hbm_ddr = [regions_data[x["target"]] for x in memory_outputs]

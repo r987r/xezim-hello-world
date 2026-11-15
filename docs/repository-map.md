@@ -23,7 +23,8 @@ generated RTL ownership remains with the established sources linked below.
 
 | Purpose | Authoritative code |
 | --- | --- |
-| SoC/subsystems, ports and address map | `config/soc.yaml` |
+| Project catalog and source identities | `config/projects/catalog.yaml` |
+| SoC/subsystems, ports and address map | `config/soc.yaml` and selected `config/projects/**/soc.yaml` |
 | IP and interface contracts | `config/ip.lock.yaml`, `config/interface_contracts.yaml`, `Bender.yml` |
 | Test selection and acceptance | `config/regression.yaml` |
 | Human-readable intent for all registered tests | `config/stimulus/tests.yaml` |
@@ -33,6 +34,8 @@ generated RTL ownership remains with the established sources linked below.
 | Regression and provenance | `tools/regress.py`, `tools/test_identity.py`, `tools/selected_rtl_provenance.py` |
 | Publishing and visualization | `tools/publish_site.py`, `tools/design_explorer.py`, `tools/templates/` |
 | Generator-owned default sources | `gen/` |
+| Independently built selected projects | `.tools/projects/<id>/` (CI archives, not tracked) |
+| Project selection and compile | `tools/project_catalog.py`, `tools/project_build.py`, `tools/project_compile.py` |
 
 ## Find all generated architectural views
 
@@ -48,6 +51,18 @@ The default SoC currently declares `compute0`, `compute1`, `memory0`,
 the source topology; it does not mean every opt-in PCIe/DDR/Ethernet source
 was selected and compiled in the default generated SoC. Run-local
 observations remain on per-test pages.
+
+## Find each project's actual top and compiler sources
+
+The [site project picker](https://r987r.github.io/xezim-hello-world/)
+shows an **RTL & files** view for every catalog project, not only the
+canonical SoC. For the default chip, links resolve directly to the tracked
+`gen/chip/soc_top.sv`, `gen/supernoc/soc_noc.sv` and related manifests.
+For CI-generated chips, source-selected files live in an independent
+`.tools/projects/<id>/` tree and the Pages view links to the matching
+`project-compile-<id>-<run_id>` build artifact with `chip/sources.f`,
+`chip/soc_top.sv`, `supernoc/soc_noc.sv` and diagnostics.
+Read [project onboarding](project-onboarding.md) for the catalog/CI matrix.
 
 ## Why gen/projects looks small
 

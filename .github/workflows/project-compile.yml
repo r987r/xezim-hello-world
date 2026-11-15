@@ -1,0 +1,74 @@
+name: Independent SoC project selected RTL compile
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'config/projects/**'
+      - 'tools/project_build.py'
+      - 'tools/project_catalog.py'
+      - 'tools/project_compile.py'
+      - 'tools/bootgen.py'
+      - 'tools/chip_bootgen.py'
+      - 'tools/floonoc_gen.py'
+      - 'tools/supernoc_gen.py'
+      - 'tools/full_chip_gen.py'
+      - 'tools/socgen.py'
+      - '.github/workflows/project-compile.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: project-compile-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  catalog:
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.projects.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Resolve and validate all project identities
+        id: projects
+        run: |
+          python3 -m pip install -r requirements.txt
+          echo "matrix=$(python3 tools/project_catalog.py --matrix --compiled-only)" >> "$GITHUB_OUTPUT"
+  selected-projects:
+    needs: catalog
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix: ${{ fromJSON(needs.catalog.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - uses: ./.github/actions/setup-bender
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Install pinned upstream RTL and shared generator
+        run: |
+          python3 -m pip install -r requirements.txt
+          python3 -m pip install 'mako==1.3.10' 'hjson==3.1.0' 'peakrdl>=1.5.0' 'peakrdl-rawheader>=0.2.8' 'peakrdl-cheader>=1.1.0'
+          python3 tools/ip_fetch.py floonoc pulp_idma picorv32 serv verilog_axi wb2axip
+          python3 -m pip install -e .tools/floonoc
+          sudo apt-get update -qq
+          sudo apt-get install -y verilator
+          verilator --version
+      - name: Generate project-selected RTL and reproducibility check
+        run: |
+          python3 tools/project_build.py --project "${{ matrix.project }}" --full-chip
+          python3 tools/project_build.py --project "${{ matrix.project }}" --full-chip --check
+      - name: Compile actual selected FlooNoC, CPU and SoC RTL
+        run: python3 tools/project_compile.py --project "${{ matrix.project }}"
+      - name: Retain full selected filelist RTL diagnostics and manifests
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: project-compile-${{ matrix.project }}-${{ github.run_id }}
+          path: .tools/projects/${{ matrix.project }}/
+          include-hidden-files: true
+          if-no-files-found: warn

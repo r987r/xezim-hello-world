@@ -5,11 +5,18 @@ on:
     branches: [main]
     paths:
       - 'config/soc.yaml'
+      - 'config/projects/**'
       - 'config/interface_contracts.yaml'
       - 'tools/socgen.py'
+      - 'tools/bootgen.py'
       - 'tools/soc_ir.py'
       - 'gen/diagrams/noc-topology.json'
       - 'tests/test_soc_ir.py'
+      - 'tests/test_three_region_project.py'
+      - 'tests/test_project_build.py'
+      - 'tools/project_build.py'
+      - 'tools/project_catalog.py'
+      - 'config/projects/catalog.yaml'
       - '.github/workflows/soc-ir.yml'
   workflow_dispatch:
 
@@ -27,6 +34,14 @@ jobs:
       - run: python3 -m pip install 'PyYAML==6.0.3'
       - name: Validate existing source SoC and generated graph
         run: python3 -m unittest tests.test_soc_ir tests.test_design_explorer -v
+      - name: Verify independent three-region project source contract
+        run: python3 -m unittest tests.test_three_region_project tests.test_project_build -v
+      - name: Generate two independent source-selected boot and memory unit builds
+        run: |
+          python3 tools/project_build.py --project xezim_soc_dv
+          python3 tools/project_build.py --project xezim_ethernet_cpu_ddr_pcie
+          python3 tools/project_build.py --project xezim_soc_dv --check
+          python3 tools/project_build.py --project xezim_ethernet_cpu_ddr_pcie --check
       - name: Generate and verify deterministic IR
         run: |
           python3 tools/soc_ir.py --out .tools/soc-ir/default.json
@@ -36,5 +51,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: canonical-soc-ir-source-only
-          path: .tools/soc-ir/
+          path: |
+            .tools/soc-ir/
+            .tools/projects/
           include-hidden-files: true

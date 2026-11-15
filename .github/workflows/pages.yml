@@ -73,7 +73,9 @@ jobs:
       - name: Extract RTL hierarchy and real named port bindings
         run: python3 tools/rtl_instance_parser.py --slang .tools/bin/slang --output .tools/rtl-architecture.json
       - name: Verify publication, CI trigger and report semantics
-        run: python3 -m unittest tests.test_docs tests.test_published_csr tests.test_published_site tests.test_run_page_chrome tests.test_runtime_contract tests.test_test_identity tests.test_stimulus_catalog tests.test_test_intent tests.test_ci_workflows tests.test_csr_source_references tests.test_publication tests.test_merged_pr_evidence tests.test_fabric_refresh tests.test_axi_report tests.test_fabric_report tests.test_protocol_report tests.test_design_explorer tests.test_selected_variant_diff tests.test_design_netlist tests.test_signal_inventory tests.test_signal_paths tests.test_architecture_explorer tests.test_ddr_csr_catalog tests.test_ddr_csr_pages tests.test_ddr_mr_pages tests.test_rtl_instance_parser tests.test_rtl_instance_bindings tests.test_ethernet_protocol_trace tests.test_axi_monitor_lifecycle -v
+        run: python3 -m unittest tests.test_docs tests.test_published_csr tests.test_published_site tests.test_run_page_chrome tests.test_runtime_contract tests.test_test_identity tests.test_stimulus_catalog tests.test_test_intent tests.test_ci_workflows tests.test_csr_source_references tests.test_publication tests.test_merged_pr_evidence tests.test_fabric_refresh tests.test_axi_report tests.test_fabric_report tests.test_protocol_report tests.test_design_explorer tests.test_selected_variant_diff tests.test_design_netlist tests.test_signal_inventory tests.test_signal_paths tests.test_architecture_explorer tests.test_ddr_csr_catalog tests.test_ddr_csr_pages tests.test_ddr_mr_pages tests.test_rtl_instance_parser tests.test_rtl_instance_bindings tests.test_ethernet_protocol_trace tests.test_axi_monitor_lifecycle tests.test_multi_project_site tests.test_three_region_project tests.test_project_build -v
+      - name: Validate distinct project roots and source identities
+        run: python3 tools/project_catalog.py --out .tools/project-catalog.json
       - name: Build offline PR or manual branch preview
         if: (github.event_name == 'pull_request' && github.event.action != 'closed') || (github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main')
         run: python3 tools/publish_site.py
@@ -96,6 +98,50 @@ jobs:
           FABRIC_MEASURED: ${{ steps.fabric_coverage.outputs.measured }}
           FABRIC_HISTORICAL: ${{ steps.fabric_coverage.outputs.historical }}
         run: python3 tools/fabric_refresh.py --guard --sha "$PUBLISHED_MAIN_SHA" --measured "$FABRIC_MEASURED" --historical "$FABRIC_HISTORICAL"
+      - name: Verify catalog-derived projects, sources and evidence separation
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          import sys
+          sys.path.insert(0, 'tools')
+          from project_catalog import projects
+
+          site = Path('.tools/pages-site')
+          index = (site/'index.html').read_text()
+          assert 'Choose a chip project' in index
+          expected = projects()
+          listed = json.loads((site/'data/projects.json').read_text())['projects']
+          assert [p['id'] for p in listed] == [p['id'] for p in expected]
+          assert index.count('class="project-card"') == len(expected)
+          for p in expected:
+              root = site/'projects'/p['id']
+              for name in ('index.html','architecture.html','address-map.html',
+                           'files.html','runs.html','data/project.json'):
+                  assert (root/name).is_file(), (p['id'],name)
+              data = json.loads((root/'data/project.json').read_text())
+              assert data['id'] == p['id']
+              assert data['config_sha256'] == p['config_sha256']
+              assert data['config'] == p['config']
+              assert (site/p['config']).is_file()
+              assert p['id'] in (root/'index.html').read_text()
+              addresses = (root/'address-map.html').read_text()
+              for mem in p['memory_targets']:
+                  assert mem in addresses, (p['id'],mem)
+              files = (root/'files.html').read_text()
+              if p['qualification'] == 'generated_default':
+                  assert p['generated_source'] in files
+                  assert (site/p['generated_source']).is_file()
+              elif p['qualification'] == 'ci_generated_compiled':
+                  assert 'chip/soc_top.sv' in files
+                  assert 'chip/sources.f' in files
+                  assert 'project-compile.yml' in files
+              else:
+                  assert data['runs'] == []
+              if not data['runs']:
+                  assert 'No project-qualified' in (root/'runs.html').read_text()
+          print('PASS catalog-driven project dashboards, selected top/file links, and evidence isolation')
+          PY
       - name: Verify offline 2D diagram preview has embedded graph data
         run: |
           python3 - <<'PY'
@@ -142,6 +188,7 @@ jobs:
         run: |
           python3 -m pip install 'selenium==4.38.0'
           python3 tests/smoke_architecture_browser.py
+          python3 tests/smoke_multi_project_browser.py
           python3 tests/smoke_address_map_browser.py
           python3 tests/smoke_runs_browser.py
       - name: Browser-execute Fabric latency on desktop and mobile

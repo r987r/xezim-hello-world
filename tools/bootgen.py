@@ -70,7 +70,6 @@ def build(cfg: dict, *, allow_extended_flash_slot=False) -> dict:
     supported = {
         "strategy": "rom_copy",
         "image_source": "mapped_flash",
-        "secondary_release": "mmio",
         "sram_powerup": "unspecified",
     }
     for field, implemented in supported.items():
@@ -79,21 +78,33 @@ def build(cfg: dict, *, allow_extended_flash_slot=False) -> dict:
                 f"boot.{field}={boot.get(field)!r} is not implemented; "
                 f"this generator supports only {implemented!r}"
             )
-    primary, secondary = boot["primary"], boot["secondary"]
+    primary, secondary = boot["primary"], boot.get("secondary")
+    has_secondary = secondary is not None
+    release = "mmio" if has_secondary else "none"
+    if boot.get("secondary_release") != release:
+        raise ValueError("boot.secondary_release not implemented for this CPU count; use mmio for two cores or none for one")
     compute = {s['name']: s for s in cfg['subsystems'] if s['type'] == 'compute'}
-    if primary == secondary or primary not in compute or secondary not in compute or compute[primary]['cpu']['ip'] != 'picorv32' or compute[secondary]['cpu']['ip'] != 'serv':
-        raise ValueError("boot prototype requires PicoRV32 primary and SERV secondary")
+    if primary not in compute or compute[primary]['cpu']['ip'] != 'picorv32':
+        raise ValueError("boot prototype requires PicoRV32 primary")
+    if has_secondary:
+        if primary == secondary or secondary not in compute or compute[secondary]['cpu']['ip'] != 'serv':
+            raise ValueError("boot prototype requires PicoRV32 primary and SERV secondary")
+    elif len(compute) != 1:
+        raise ValueError("single-CPU boot requires exactly one compute subsystem")
     data = {r['name']: int(r['base'], 0) if isinstance(r['base'], str) else r['base'] for r in cfg['address_map']['data']}
     ctrl = {r['name']: int(r['base'], 0) if isinstance(r['base'], str) else r['base'] for r in cfg['address_map']['config']}
-    for expected in ('boot.rom', 'boot.flash', f'{primary}.sram', f'{secondary}.sram'):
+    required_data = ('boot.rom', 'boot.flash', f'{primary}.sram')
+    if has_secondary:
+        required_data += (f'{secondary}.sram',)
+    for expected in required_data:
         if expected not in data:
             raise ValueError(f"missing boot data address: {expected}")
-    if 'boot.reset_ctrl' not in ctrl:
+    if has_secondary and 'boot.reset_ctrl' not in ctrl:
         raise ValueError('missing boot.reset_ctrl MMIO allocation')
     rom_base, flash_base = _lui_base(data['boot.rom']), _lui_base(data['boot.flash'])
     sram0 = _lui_base(data[f'{primary}.sram'])
-    sram1 = _lui_base(data[f'{secondary}.sram'])
-    resetctrl = _lui_base(ctrl['boot.reset_ctrl'])
+    sram1 = _lui_base(data[f'{secondary}.sram']) if has_secondary else None
+    resetctrl = _lui_base(ctrl['boot.reset_ctrl']) if has_secondary else None
     if rom_base != 0:
         raise ValueError('boot ROM is expected at reset PC 0x00000000')
     stride = int(boot['flash_slot_stride'], 0) if isinstance(boot['flash_slot_stride'], str) else boot['flash_slot_stride']
@@ -101,7 +112,7 @@ def build(cfg: dict, *, allow_extended_flash_slot=False) -> dict:
     if (words != 4 or (stride != 256 and not (allow_extended_flash_slot and stride == 512))
             or boot.get('simulation_sram_bytes') != 16384):
         raise ValueError('executable boot requires 4-word images and 16-KiB SRAM; flash slot 256 (or explicit host variant 512)')
-    if (flash_base + stride > 0xffffffff) or (sram1 + 0x100 > 0xffffffff):
+    if (flash_base + stride > 0xffffffff) or (has_secondary and sram1 + 0x100 > 0xffffffff):
         raise ValueError('boot mappings exceed 32-bit CPU address space')
     instructions: list[tuple[int, str]] = []
 
@@ -110,7 +121,10 @@ def build(cfg: dict, *, allow_extended_flash_slot=False) -> dict:
 
     # x5=t0 source pointer, x6=t1 destination pointer, x7=t2 words left,
     # x28=t3 temporary. Both images are copied over *real CPU0 stores*.
-    for label, src, dst in ((primary, flash_base, sram0), (secondary, flash_base + stride, sram1)):
+    copies = [(primary, flash_base, sram0)]
+    if has_secondary:
+        copies.append((secondary, flash_base + stride, sram1))
+    for label, src, dst in copies:
         add(_lui(5, src & ~0xfff), f'lui t0, 0x{src >> 12:x}  # {label} flash')
         if src & 0xfff:
             add(_addi(5, 5, src & 0xfff), f'addi t0, t0, {src & 0xfff}')
@@ -124,29 +138,33 @@ def build(cfg: dict, *, allow_extended_flash_slot=False) -> dict:
         add(_addi(7, 7, -1), 'addi t2, t2, -1')
         branch_offset = 4 * (loop_idx - len(instructions))
         add(_bne(7, 0, branch_offset), f'bne t2, zero, {branch_offset}  # {label} copy')
-    add(_lui(5, resetctrl), f'lui t0, 0x{resetctrl >> 12:x}  # reset control')
-    add(_addi(6, 0, 1), 'addi t1, zero, 1  # release CPU1')
-    add(_sw(6, 5, 0), 'sw t1, 0(t0)')
+    if has_secondary:
+        add(_lui(5, resetctrl), f'lui t0, 0x{resetctrl >> 12:x}  # reset control')
+        add(_addi(6, 0, 1), 'addi t1, zero, 1  # release CPU1')
+        add(_sw(6, 5, 0), 'sw t1, 0(t0)')
     add(_lui(5, sram0), f'lui t0, 0x{sram0 >> 12:x}  # execute loaded image')
     add(_jalr(0, 5), 'jalr zero, 0(t0)')
 
     if len(instructions) * 4 > 4096:
         raise ValueError('boot ROM larger than 4KiB')
     images = {}
-    for label, base, signature in ((primary, sram0, 0x55), (secondary, sram1, 0x66)):
+    image_specs = [(primary, sram0, 0x55)]
+    if has_secondary:
+        image_specs.append((secondary, sram1, 0x66))
+    for label, base, signature in image_specs:
         images[label] = [
             (_lui(5, base), f'lui t0, 0x{base >> 12:x}'),
             (_addi(6, 0, signature), f'addi t1, zero, {signature}'),
             (_sw(6, 5, 0x100), 'sw t1, 0x100(t0)  # completion signature'),
             (_jal_zero(), 'jal zero, 0  # parked'),
         ]
-    return {
-        'bootrom': instructions,
-        'images': images,
-        'addresses': {'bootrom': rom_base, 'flash': flash_base, 'sram0': sram0,
-                      'sram1': sram1, 'reset_ctrl': resetctrl, 'flash_slot_stride': stride,
-                      'signature0': sram0 + 0x100, 'signature1': sram1 + 0x100},
-    }
+    addresses = {'bootrom': rom_base, 'flash': flash_base, 'sram0': sram0}
+    if has_secondary:
+        addresses.update({'sram1': sram1, 'reset_ctrl': resetctrl})
+    addresses.update({'flash_slot_stride': stride, 'signature0': sram0 + 0x100})
+    if has_secondary:
+        addresses['signature1'] = sram1 + 0x100
+    return {'bootrom': instructions, 'images': images, 'addresses': addresses}
 
 
 def emit(cfg: dict, destination: Path) -> dict:
@@ -180,8 +198,12 @@ def emit(cfg: dict, destination: Path) -> dict:
                 'program_words': cfg['boot']['program_words'],
                 'simulated_sram_bytes': cfg['boot']['simulation_sram_bytes'],
                 'addresses': fw['addresses'],
-                'cpu0_signature_value': 0x55, 'cpu1_signature_value': 0x66,
-                'sram_initialization': 'none: CPU0 copies both images with AXI-Lite stores',
-                'release_method': 'CPU0 MMIO write to boot.reset_ctrl'}
+                'cpu0_signature_value': 0x55,
+                'cpu1_signature_value': 0x66 if cfg['boot'].get('secondary') is not None else None,
+                'sram_initialization': ('none: CPU0 copies both images with AXI-Lite stores'
+                                        if cfg['boot'].get('secondary') is not None
+                                        else 'none: CPU0 copies its image with AXI-Lite stores'),
+                'release_method': ('CPU0 MMIO write to boot.reset_ctrl'
+                                   if cfg['boot'].get('secondary') is not None else 'none: single CPU')}
     (destination/'manifest.json').write_text(json.dumps(manifest, sort_keys=True, indent=2)+'\n')
     return manifest

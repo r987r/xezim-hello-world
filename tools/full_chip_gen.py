@@ -168,6 +168,10 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
             raise ValueError('CPU config address classification overlaps a data aperture')
     reg_bytes = 1 << max(2, (4*count-1).bit_length())
     lines += [f'  logic [{reg_bytes-1}:0][7:0] reset_regs;', f'  logic [{count-1}:0] cpu_reset_n;']
+    if count == 1:
+        # Single-CPU designs have no secondary-release CSR. Keep an explicit
+        # constant rather than creating an undriven reset register bus.
+        lines += ["  assign reset_regs = '0;"]
     if peakrdl_reset:
         lines += [
             '  soc_boot_reset_ctrl_regblock_pkg::boot_reset_ctrl__out_t reset_hwif_out;',
@@ -391,6 +395,16 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
                 lines += [f"  assign {req(packet)}.{ch}.{member} = '0;"]
         lines += [f"  assign {req(packet)}.aw.atop = '0;",
                   f"  assign {req(packet)}.w.user = '0;"]
+    if cfg["networks"].get("direct_data"):
+        # No memory-local DMA is attached yet: these deliberately exposed
+        # reverse-link initiator ports must be held inactive, not floating.
+        for sub in cfg["subsystems"]:
+            if sub["type"] != "memory":
+                continue
+            name = "m_" + sub["name"] + "_local_data_memory_dma"
+            if name not in all_ports:
+                raise ValueError("missing selected memory DMA attachment")
+            lines += [f"  assign {req(all_ports[name])} = '0;"]
     for sub in (s for s in cfg["subsystems"] if s["type"] == "peripheral"):
         for plane, endpoint in (("data", sub["data_initiator"]),
                                 ("config", sub["config_initiator"])):
@@ -842,7 +856,7 @@ def emit_tb(cfg, fw, out, *, image_prefix='gen/chip', cpu_dma_mode=False,
         # Clock, exactly as for the already-qualified default CPU/NoC tests.
         # A Verilator-native SCN-2 clock made passive AXI AW/AR observations
         # incomplete despite CPU firmware PASS; do not mix clock authorities.
-        '  reg [N-1:0] hold_mask = 0;', '  initial if ($test$plusargs("HOLD_SECONDARY")) hold_mask[1] = 1;',
+        '  reg [N-1:0] hold_mask = 0;', ('  initial if ($test$plusargs("HOLD_SECONDARY")) hold_mask[1] = 1;' if n > 1 else '  initial if ($test$plusargs("HOLD_SECONDARY")) $fatal(1, "single-CPU design has no secondary CPU to hold");'),
         '  wire [N-1:0] released, fetch_valid, sram_valid, sram_write;',
         '  wire [N*32-1:0] fetch_addr;', '  wire [N*64-1:0] sram_addr, sram_data;',
         '  wire [N*8-1:0] sram_strb;', '  wire [31:0] rom_reads, flash_reads;',
