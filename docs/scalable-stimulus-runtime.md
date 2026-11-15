@@ -1,4 +1,13 @@
-# P0: composable SoC stimulus actions across Python, C, and SV
+# Composable SoC stimulus actions across Python, C, and SV
+
+## Framework-only P0/P1/P2 checkpoint (November 15, 2026)
+
+- **P0 complete and merged:** [PR #252](https://github.com/r987r/xezim-hello-world/pull/252), main squash commit `02120050769fe11859cfac77208edb06d58deb10`. The existing canonical seed matrix selects diverse resolved action arguments without duplicating the resolver; both real CPU-C/BFM randomized replay jobs and exact-head scenario/Pages CI passed.
+- **P1 bounded milestone complete and merged:** [PR #253](https://github.com/r987r/xezim-hello-world/pull/253), main squash commit `91ba696edcf53cc788f4635a0b1dcbc310aee83b`. The same YAML `flow_plan` now feeds existing CPU-C and Cocotb BFM scenario materializers, subject to the original strict eight-action hardware contract and canonical plan-byte/replay checks. All 19 PR-head CI workflows passed, including the original scenario CPU/BFM RTL job and Pages.
+- **P2 TB-framework-only proof remains pending:** demonstrate two differently configured compatible stimulus *sources/selections* using the same existing action ABI, runner and reports. This does **not** constitute the second different *hardware SoC* required by [#167](https://github.com/r987r/xezim-hello-world/issues/167).
+- **Original [#152](https://github.com/r987r/xezim-hello-world/issues/152) stays open:** generic multi-protocol C/SV/Python hardware adapters, independent per-protocol completion/byte proof and chaining remain separate, uncompleted original acceptance. These framework-only milestones do not qualify any new Ethernet, PCIe or DDR coverage.
+
+**Scope lock:** No additional protocol depth, test scenarios, new hardware, alternative runner, duplicated VIP/monitor, or manufactured RTL evidence. The dated architecture and capability sections below describe the broader original issue and may include historical milestones.
 
 **Status:** M0 architecture and M1 generic Python action executor are implemented; the C11/SV source contract is implemented, while universal hardware adapters and independently checked multi-protocol chaining remain open. **Owner:** [P0 issue #152](https://github.com/r987r/xezim-hello-world/issues/152); predecessor [#119](https://github.com/r987r/xezim-hello-world/issues/119) closed after partial progress, but its broader legacy migration is not complete. Integration consumers: [#76](https://github.com/r987r/xezim-hello-world/issues/76), [#34](https://github.com/r987r/xezim-hello-world/issues/34).
 
