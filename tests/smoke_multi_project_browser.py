@@ -31,6 +31,11 @@ def main():
         assert len(cards) == len(expected), "project picker differs from catalog"
         assert all(c.is_displayed() for c in cards)
         browser.save_screenshot(str(args.screenshots / "07-project-picker-desktop.png"))
+        filter_box = browser.find_element(By.ID, "project-filter")
+        filter_box.send_keys("Ethernet")
+        assert len(browser.find_elements(By.CSS_SELECTOR, ".project-card:not([hidden])")) == 1
+        filter_box.clear()
+        assert len(browser.find_elements(By.CSS_SELECTOR, ".project-card:not([hidden])")) == len(cards)
         b = next(c for c in cards if "Ethernet / CPU" in c.text)
         b.click()
         assert "/projects/xezim_ethernet_cpu_ddr_pcie/index.html" in browser.current_url

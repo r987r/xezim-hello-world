@@ -1285,8 +1285,8 @@ def project_pages(output, projects, entries, repository, sha):
                         if e.get('project_id', legacy_default) == pid]
         else:
             selected = [e for e in entries if e.get('project_id') == pid]
-            if selected:
-                raise ValueError('unqualified project has runtime evidence')
+            if selected and qualification == 'source_contract_only':
+                raise ValueError('source-only project cannot have runtime evidence')
         workflow_url = (f'https://github.com/{repository}/actions/workflows/'
                         'project-compile.yml')
         files = [
@@ -1356,8 +1356,9 @@ def project_pages(output, projects, entries, repository, sha):
                  'qualified per original run and tested source; an older PASS '
                  'is not a PASS on this source.</p>' if published else
                  '<p class="scope-note">Selected RTL generated and compiled '
-                 'in CI. Functional AXI traffic and byte-integrity tests are '
-                 'not yet qualified for this project.</p>' if compiled_ci else
+                 'in CI. Check the selected commit and archived build verdict; '
+                 'no functional AXI PASS is inferred from compilation.</p>'
+                 if compiled_ci else
                  '<p class="scope-note">Design configuration only. No RTL '
                  'compile or functional simulation qualified.</p>')
         overview = (info + nav + scope +
