@@ -73,6 +73,40 @@ class ScenarioDmaTests(unittest.TestCase):
                         ScenarioError, "uint32"):
                     materialize(self.cfg, Path(tmp)/"bad", scenario_seed=bad)
 
+    def test_selected_flow_plan_source_reuses_exact_cpu_bfm_contract(self):
+        # Same eight actions via a different selected file, not a new RTL case.
+        with tempfile.NamedTemporaryFile(
+                mode="w", prefix="scn_p1_", suffix=".json",
+                dir=ROOT/"config/scenarios", delete=False) as handle:
+            source = Path(handle.name)
+            handle.write(json.dumps(self.spec))
+        try:
+            selected = source.relative_to(ROOT).as_posix()
+            with tempfile.TemporaryDirectory() as temp:
+                original, co = materialize(self.cfg, Path(temp)/"cpu")
+                replay, cb = materialize(
+                    self.cfg, Path(temp)/"bfm", scenario_source=selected)
+                self.assertEqual(original, replay)
+                self.assertEqual(co, cb)
+                self.assertEqual(
+                    (Path(temp)/"cpu/scenario-plan.json").read_bytes(),
+                    (Path(temp)/"bfm/scenario-plan.json").read_bytes())
+                malformed = copy.deepcopy(self.spec)
+                next(a for a in malformed["actions"]
+                     if a["action_instance_id"]=="copy_out")["actor"] = "cpu0"
+                source.write_text(json.dumps(malformed))
+                with self.assertRaises(ScenarioError):
+                    materialize(self.cfg, Path(temp)/"reject",
+                                scenario_source=selected)
+                for unsafe in ("/tmp/outside.json", "../config/scenarios/x.json",
+                               "config/scenarios/../../../escape.json",
+                               "config/scenarios/dma-roundtrip.json"):
+                    with self.subTest(source=unsafe), self.assertRaises(ScenarioError):
+                        materialize(self.cfg, Path(temp)/"invalid",
+                                    scenario_source=unsafe)
+        finally:
+            source.unlink(missing_ok=True)
+
     def test_shared_random_group_rejects_unequal_pattern_domains(self):
         mismatched = copy.deepcopy(self.spec)
         checked = next(a for a in mismatched["actions"]

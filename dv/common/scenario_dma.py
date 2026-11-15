@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+import re
 
 from dv.common.scenario import ScenarioError, canonical_json, resolve_scenario
 
@@ -162,13 +163,22 @@ def render_c_header(contract: dict) -> str:
 
 
 def materialize(cfg: dict, out: Path, *, source_revision: str | None = None,
-                scenario_seed: int | None = None) -> tuple[dict, dict]:
+                scenario_seed: int | None = None,
+                scenario_source: str | Path | None = None) -> tuple[dict, dict]:
     from dv.common.scenario import canonical_json
-    import yaml
-    # Resolve from checked-in source once; both execution profiles use the
-    # same bytes, with the same optional source SHA, not separate generators.
+    # The selected regression flow_plan is the sole source for both real
+    # CPU-C and reset-isolated Cocotb BFM. Do not accept checkout-absolute,
+    # symlink, escape, or unsupported executable plans.
     root = Path(__file__).resolve().parents[2]
-    spec = json.loads((root / EXAMPLE).read_text())
+    selected = Path(scenario_source) if scenario_source is not None else EXAMPLE
+    parts = selected.parts
+    if (len(parts) != 3 or parts[:2] != ("config", "scenarios")
+            or not re.fullmatch(r"[A-Za-z0-9_-]+\.json", parts[2])):
+        raise ScenarioError("unsafe selected executable scenario source")
+    path = root / selected
+    if path.is_symlink() or not path.is_file():
+        raise ScenarioError("missing or symlink selected executable scenario source")
+    spec = json.loads(path.read_text())
     if scenario_seed is not None:
         if type(scenario_seed) is not int or not 0 <= scenario_seed <= 0xffffffff:
             raise ScenarioError('SCN-2 scenario override must be uint32')
