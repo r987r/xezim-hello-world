@@ -26,7 +26,7 @@
     {
       "path": "dv/pcie_link/patches/openpcie_ltssm_comb_assignment.patch",
       "role": "endpoint",
-      "sha256": "db3a326f7a8097399e4abdd1cc0363be739a9ffa5a2db2310f2de665a4cbf8cd",
+      "sha256": "5f82ff95737a9948357ac6208e6fa5c30fc6c03ce6e8079d0dd3a21d8f7de619",
       "status": "reviewed_source_overlay_not_upstream_revision"
     }
   ],
