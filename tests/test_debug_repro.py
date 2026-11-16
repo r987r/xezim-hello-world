@@ -20,6 +20,8 @@ class DebugRecipeTests(unittest.TestCase):
         profiles = debug_repro.load_profiles(debug_repro.ROOT / "config/debug.yaml")
         self.assertIn("framework-unit", profiles)
         self.assertIn("regression-unit", profiles)
+        self.assertEqual(profiles["chip-pcie-host"]["command"],
+                         ["python3", "tools/regress.py", "chip-pcie-host"])
 
     def test_reject_invalid_recipe(self):
         with tempfile.TemporaryDirectory() as directory:

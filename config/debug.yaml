@@ -12,5 +12,10 @@ profiles:
     command: [python3, -m, unittest, tests.test_regression]
     timeout_s: 180
     tool_versions: [python3]
-# PCIe original FuseSoC, PHY and Cocotb live on draft PR #232.
-# Do not copy that branch's still-unmerged commands onto main.
+  chip-pcie-host:
+    description: Existing real RTL PCIe host/NoC/SRAM/Cocotb regression (modeled RC, not Gen1 PIPE).
+    command: [python3, tools/regress.py, chip-pcie-host]
+    timeout_s: 2400
+    tool_versions: [python3, verilator]
+# Real Gen1 PIPE + independent host is separately qualified on PR #232.
+# This profile reuses the existing mainline RTL regression unchanged.
