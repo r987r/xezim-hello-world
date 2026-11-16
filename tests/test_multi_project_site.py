@@ -75,6 +75,10 @@ class MultiProjectSiteTests(unittest.TestCase):
             self.assertIn("arch-h-crumbs", b_arch)
             self.assertIn("arch-h-children", b_arch)
             for html in (a_arch, b_arch):
+                self.assertLess(html.index('id="arch-h-svg"'), html.index('id="arch-h-filter"'))
+                self.assertNotIn("__PROJECT_EVIDENCE_SCOPE__", html)
+                self.assertIn("arch-h-expanded", html)
+                self.assertIn("dashed desktop links are inferred", html)
                 self.assertIn("SUBSYSTEM COMPOSITION", html)
                 self.assertIn("function drawComposition()", html)
                 self.assertIn("function showFocus(id)", html)

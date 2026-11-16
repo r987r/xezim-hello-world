@@ -119,12 +119,13 @@ populate its own Test Runs page.
 
 ## Hierarchy restoration and future projects
 
-The original chip's **Architecture** navigation opens its complete existing
-interactive `explorer.html` (subsystems → IP → NoC → routers and interfaces),
-including controls, RTL bindings, signals and evidence. The reduced region
-sketch was removed from the multi-project publisher. The generic
-`site_project_hierarchy.html` renderer instead consumes each project's
-own `soc.yaml` subsystem, IP, fabric, network/link, bus and memory contracts.
+Both projects' **Architecture** navigation opens the SAME shared
+`architecture.html` page with chip, subsystem, local FlooNoC, router and NI
+visual drill-down. The original chip additionally links to its separately
+parsed `explorer.html` for deeper RTL instance, signal and evidence inspection.
+The former reduced static-region sketch was removed. The shared
+`site_project_hierarchy.html` renderer consumes each project's own
+`soc.yaml` subsystem, IP, fabric, network/link, bus and memory contracts.
 It supports search, breadcrumbs and click-through, but does not pretend to
 know RTL router instances or signal bindings until an actual project-specific
 compiler-parsed explorer is published.
@@ -181,3 +182,22 @@ Browser CI must click **chip → subsystem → FlooNoC → router** for each
 cataloged project and confirm the displayed NoC and NI data belong to the
 selected SoC. This prevents a future update from silently reverting to
 one flat box per subsystem.
+
+## 2026-11-16 visual visibility audit
+
+Browser tests previously checked the existence and clickability of nested
+SVG rectangles but missed basic usability: project-specific scope and search
+pushed the diagram below the initial screen on desktop, and a fixed 470px
+nested scroll container clipped the mobile component view. The architecture
+page now renders its topology **before** source/search explanations; the
+selected project qualification disclaimer follows the graph. At mobile
+widths, subsystem composition expands to the full natural diagram height
+and uses page scrolling, while long headings are abbreviated to the canvas
+width. Going back to the chip restores standard overview sizing.
+
+The browser gate checks that nested boxes start within the first viewport,
+that mobile NoC cards and headers fit horizontally, and that the full
+composition is not vertically hidden behind a nested scroll region.
+Subnetwork IP-to-NoC dashed lines are name-matched source hints, **not**
+port-level RTL connectivity proof. This is consistent with keeping
+compiler-parsed RTL and passive AXI/TLP data evidence separately qualified.

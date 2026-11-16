@@ -15,6 +15,9 @@ function drawComposition() {
     diagramH = Math.max(340, height);
     svg.setAttribute("width", diagramW);
     svg.setAttribute("height", diagramH);
+    // Reveal the complete composition on narrow screens using document
+    // scrolling rather than a clipped second 470px scroll container.
+    viewport.classList.toggle("arch-h-expanded", viewport.clientWidth < 760);
     background();
   };
   const card = (x, y, w, h, title, subtitle, id, group = "ip") => {
@@ -45,8 +48,13 @@ function drawComposition() {
       stroke:color,fill:"none","stroke-width":2,"stroke-dasharray":"5 3"}),svg.children[1]||null);
   };
   const header=(title,subline)=>{
-    svg.append(makeText(24,37,title,21,"#edf7ff",750),
-               makeText(24,62,subline,12,"#9dbbd2"));
+    // Keep long subsystem/NoC names inside the actual rendered SVG on
+    // narrow screens instead of clipping the header outside the viewport.
+    const maxChars = Math.max(18, Math.floor((diagramW - 42) / 12));
+    const clipped = text => String(text).length > maxChars ?
+      String(text).slice(0, maxChars - 1) + "…" : String(text);
+    svg.append(makeText(20,36,clipped(title),17,"#edf7ff",750),
+               makeText(20,61,clipped(subline),11,"#9dbbd2"));
   };
   const sourceType = s => d.subsystem_types?.[s.type] || {};
   if(kind === "subsystem" && sub) {
@@ -102,7 +110,7 @@ function drawComposition() {
       });
     }
     status.textContent = name+" • "+components.length+" declared IP/memory blocks • "+
-      ownNocs.length+" local FlooNoCs • source topology, not an RTL simulation";
+      ownNocs.length+" local FlooNoCs • dashed desktop links are inferred from NI names, not qualified RTL wiring";
   } else if(kind==="noc" && profiles[name]) {
     const p=profiles[name],router=p.routers?.[0];
     const dims=router?.array||[1,1],nx=dims[0],ny=dims[1];
