@@ -67,6 +67,13 @@ def main():
             graph = browser.find_element(By.ID, "arch-h-svg")
             assert len(graph.find_elements(By.CSS_SELECTOR, ".arch-h-svg-node")) >= len(
                 source["subsystems"])
+            # The requested visual composition must be BOXES inside the
+            # chip-level subsystem surfaces, not merely a textual subtitle.
+            previews = graph.find_elements(
+                By.CSS_SELECTOR, '.arch-h-svg-node [data-component-box]')
+            assert previews, (pid, "chip diagram lacks nested composition boxes")
+            assert all(rect.size["width"] >= 70 and rect.size["height"] >= 20
+                       for rect in previews)
             assert "connections" in browser.find_element(
                 By.ID, "arch-h-graph-status").text
             browser.save_screenshot(str(args.screenshots / ("09-" + pid + "-chip.png")))
@@ -80,6 +87,15 @@ def main():
                 By.CSS_SELECTOR, '#arch-h-svg .arch-h-svg-node[aria-label="Explore '+first_sub+'"]').click()
             assert "local FlooNoCs" in browser.find_element(
                 By.ID, "arch-h-graph-status").text
+            # Drill-down composition has independently clickable rectangular
+            # IP/memory and local FlooNoC nodes.
+            composed = browser.find_element(By.ID, "arch-h-svg")
+            assert composed.find_elements(
+                By.CSS_SELECTOR, '.arch-h-svg-node[data-arch-ref^="noc:"] rect')
+            assert composed.find_elements(
+                By.CSS_SELECTOR, '.arch-h-svg-node[data-arch-ref^="ip:"] rect, '
+                                 '.arch-h-svg-node[data-arch-ref^="profile:"] rect, '
+                                 '.arch-h-svg-node[data-arch-ref^="property:"] rect')
             browser.save_screenshot(str(args.screenshots / ("10-" + pid + "-subsystem.png")))
             assert browser.find_elements(
                 By.CSS_SELECTOR, '#arch-h-svg .arch-h-svg-node[data-arch-ref^="noc:"]')
@@ -145,6 +161,26 @@ def main():
                 assert "Recorded PASS" not in browser.page_source
 
         browser.set_window_size(390, 840)
+        # Mobile must show boxed subsystem contents within the visible
+        # diagram width; previously the 1030px two-column layout hid NoCs.
+        for item in catalog:
+            source = yaml.safe_load(Path(item["config"]).read_text())
+            pid = item["id"]
+            browser.get((site / "projects" / pid / "architecture.html").as_uri())
+            first_sub = source["subsystems"][0]["name"]
+            browser.find_element(
+                By.CSS_SELECTOR, '#arch-h-svg .arch-h-svg-node[aria-label="Explore '+first_sub+'"]').click()
+            viewport = browser.find_element(By.ID, "arch-h-viewport")
+            cards = browser.find_elements(
+                By.CSS_SELECTOR, '#arch-h-svg .arch-h-svg-node[data-arch-ref^="noc:"]')
+            assert cards, (pid, "mobile composition missing local NoC boxes")
+            bounds = viewport.rect
+            for card in cards:
+                rect = card.rect
+                assert rect["x"] + rect["width"] <= bounds["x"] + bounds["width"] + 30, (
+                    pid, "NoC box off mobile viewport", rect, bounds)
+            browser.save_screenshot(
+                str(args.screenshots / ("13-" + pid + "-subsystem-mobile.png")))
         browser.get((site / "index.html").as_uri())
         assert browser.find_element(By.CSS_SELECTOR, ".project-grid").is_displayed()
         assert all(c.is_displayed() for c in browser.find_elements(
