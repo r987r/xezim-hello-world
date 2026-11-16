@@ -68,6 +68,7 @@ def main():
                 source["subsystems"])
             assert "connections" in browser.find_element(
                 By.ID, "arch-h-graph-status").text
+            browser.save_screenshot(str(args.screenshots / ("09-" + pid + "-chip.png")))
             if item.get("architecture_explorer"):
                 assert browser.find_element(
                     By.PARTIAL_LINK_TEXT, "detailed generated RTL")
@@ -78,18 +79,21 @@ def main():
                 By.CSS_SELECTOR, '#arch-h-svg .arch-h-svg-node[aria-label="Explore '+first_sub+'"]').click()
             assert "local FlooNoCs" in browser.find_element(
                 By.ID, "arch-h-graph-status").text
+            browser.save_screenshot(str(args.screenshots / ("10-" + pid + "-subsystem.png")))
             assert browser.find_elements(
                 By.CSS_SELECTOR, '#arch-h-svg .arch-h-svg-node[data-arch-ref^="noc:"]')
             browser.find_elements(
                 By.CSS_SELECTOR, '#arch-h-svg .arch-h-svg-node[data-arch-ref^="noc:"]')[0].click()
             assert "router slots" in browser.find_element(
                 By.ID, "arch-h-graph-status").text
+            browser.save_screenshot(str(args.screenshots / ("11-" + pid + "-noc.png")))
             assert browser.find_elements(
                 By.CSS_SELECTOR, '#arch-h-svg .arch-h-svg-node[data-arch-ref^="router:"]')
             browser.find_elements(
                 By.CSS_SELECTOR, '#arch-h-svg .arch-h-svg-node[data-arch-ref^="router:"]')[0].click()
             assert "NI attachments" in browser.find_element(
                 By.ID, "arch-h-graph-status").text
+            browser.save_screenshot(str(args.screenshots / ("12-" + pid + "-router.png")))
             assert len(browser.find_elements(
                 By.CSS_SELECTOR, "#arch-h-diagram-crumbs button")) >= 3
             browser.find_element(By.CSS_SELECTOR, "#arch-h-diagram-crumbs button").click()
