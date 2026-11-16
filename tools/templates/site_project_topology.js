@@ -116,7 +116,9 @@
     columns.get(level).push(n.id);
   }
   for (const ids of columns.values()) ids.sort((a, b) => (order.get(a) - order.get(b)));
-  const CARD_W = 238, CARD_H = 99, STEP_X = 295, STEP_Y = 145;
+  // Show the actual component boxes INSIDE each chip-level subsystem card.
+  // The same component extraction is used for all project YAMLs.
+  const CARD_W = 252, CARD_H = 178, STEP_X = 318, STEP_Y = 223;
   const ncols = maxLevel + 1;
   const maxRows = Math.max(1, ...[...columns.values()].map(x => x.length));
   const W = Math.max(520, ncols * STEP_X + 85);
@@ -213,13 +215,45 @@
       const memories = (d.memory_targets || []).filter(m => m.name.startsWith(node.id + "."));
       const mappedText = memories.length ? memories.map(m => m.kind.toUpperCase()).join(" / ") :
         mapped.some(a => a.name.endsWith(".sram")) ? "SRAM" : "Mapped endpoints";
-      g.append(rect, makeText(p.x + 13, p.y + 26, label, 15, "#eaf4ff", 700),
-               makeText(p.x + 13, p.y + 50,
-                 node.kind === "fabric" ? "Shared network" : ipName, 12, "#a4bfd0"),
-               makeText(p.x + 13, p.y + 76,
-                 node.kind === "fabric" ? "Click for router / NI view" :
-                 mappedText + " • " + ownNoCs + " local NoCs • open ›",
-                 11, "#7bd5da"));
+      g.append(rect, makeText(p.x + 13, p.y + 25, label, 15, "#eaf4ff", 700),
+               makeText(p.x + 13, p.y + 45,
+                 node.kind === "fabric" ? "Shared network" : sub?.type || "Subsystem",
+                 11, "#a4bfd0"));
+      if (node.kind === "subsystem" && sub) {
+        const components = [];
+        if (sub.cpu?.ip) components.push({ name: sub.cpu.ip, kind: "IP" });
+        if (type.dma) components.push({ name: type.dma, kind: "DMA" });
+        if (sub.ip) components.push({ name: sub.ip, kind: "IP" });
+        for (const mem of memories) components.push({ name: mem.name.split(".").pop(), kind: mem.kind.toUpperCase() });
+        if (mapped.some(a => a.name.endsWith(".sram"))) components.push({ name: "SRAM", kind: "Memory" });
+        const localNames = Object.entries(d.noc_profiles || {}).filter(([nm, q]) =>
+          q.path?.split("/")[0] === node.id || nm.startsWith(node.id + "_local_"));
+        for (const [nm, noc] of localNames) components.push({ name: nm.replace(node.id + "_", ""), kind: noc.plane === "config" ? "Control NoC" : "Data NoC" });
+        // Each preview is a separate visible rectangle, not a summary line.
+        // Cap the preview only; clicking the parent opens ALL components.
+        const show = components.slice(0, 6);
+        show.forEach((comp, i) => {
+          const col = i % 2, row = Math.floor(i / 2);
+          const bx = p.x + 11 + col * 119, by = p.y + 57 + row * 31;
+          g.append(el("rect", { x: bx, y: by, width: 111, height: 27, rx: 5,
+            fill: comp.kind.includes("NoC") ? "#19534d" : "#244563",
+            stroke: comp.kind.includes("NoC") ? "#3ccfc7" : "#7fa9d2",
+            "stroke-width": 1, "data-component-box": comp.kind }));
+          const caption = comp.name.length > 15 ? comp.name.slice(0, 14) + "…" : comp.name;
+          g.append(makeText(bx + 6, by + 17, caption, 10, "#f1f7ff", 600));
+        });
+        if (components.length > show.length) {
+          g.append(makeText(p.x + 13, p.y + 164,
+            "+" + (components.length - show.length) + " more · open subsystem ›",
+            11, "#7bd5da"));
+        } else if (!components.length) {
+          g.append(makeText(p.x + 13, p.y + 90, "Open subsystem for its source profile ›",
+            11, "#7bd5da"));
+        }
+      } else {
+        g.append(makeText(p.x + 13, p.y + 74,
+          "Click for router / network-interface view ›", 12, "#7bd5da"));
+      }
       const tt = el("title"); tt.textContent = node.label + " — click to inspect";
       g.append(tt);
       g.addEventListener("click", () => { selected = node.id; draw(); open(node.ref); });

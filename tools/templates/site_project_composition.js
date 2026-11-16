@@ -11,7 +11,7 @@ function drawComposition() {
     svg.append(el("rect", {width: diagramW, height: diagramH, fill: "#081522"}));
   };
   const setSize = (width, height) => {
-    diagramW = Math.max(600, width);
+    diagramW = Math.max(340, width);
     diagramH = Math.max(340, height);
     svg.setAttribute("width", diagramW);
     svg.setAttribute("height", diagramH);
@@ -25,7 +25,9 @@ function drawComposition() {
     g.append(el("rect", {x, y, width:w, height:h, rx:10,
       stroke:color, "stroke-width":1.6, fill:group === "noc" ? "#123c41" :
         group === "router" ? "#2a2647" : "#132d46"}));
-    const abbrev = v => String(v).length > 34 ? String(v).slice(0,33) + "…" : String(v);
+    const maxChars = Math.max(16, Math.floor((w - 22) / 8));
+    const abbrev = v => String(v).length > maxChars ?
+      String(v).slice(0, maxChars - 1) + "…" : String(v);
     g.append(makeText(x+12,y+27,abbrev(title),14,"#eef7ff",700));
     g.append(makeText(x+12,y+49,abbrev(subtitle),11,"#a9bfd4"));
     g.addEventListener("click",()=>open(id));
@@ -61,29 +63,44 @@ function drawComposition() {
     for(const a of ownAddr.filter(x=>x.name.endsWith(".sram")))components.push({
       title:a.name.split(".").pop(),sub:"SRAM • mapped target",id:"region:"+a.name});
     if(!components.length)components.push({title:sub.type+" subsystem",sub:"No declared CPU / peripheral IP",id:"sub:"+name});
+    const narrow = viewport.clientWidth < 740;
     const rows=Math.max(components.length,ownNocs.length,1);
-    setSize(1030,Math.max(365,115+rows*94));
+    const totalRows = narrow ? components.length + ownNocs.length : rows;
+    const compactWidth = Math.max(340, viewport.clientWidth - 16);
+    setSize(narrow ? compactWidth : 1030,
+      Math.max(365, narrow ? 168 + totalRows * 85 : 115 + rows * 94));
     header(name.toUpperCase()+" / SUBSYSTEM COMPOSITION",
-      "IP / memory targets and local FlooNoC profiles from selected SoC source");
-    svg.append(makeText(35,92,"IP / MEMORY COMPONENTS",12,"#9dbbd2",680),
-               makeText(590,92,"LOCAL NoCs (CLICK TO OPEN)",12,"#9dbbd2",680));
-    const lhs=components.map((c,i)=>card(35,108+i*94,360,67,c.title,c.sub,c.id));
-    const rhs=ownNocs.map(([nm,p],i)=>card(590,108+i*94,395,67,
-      nm,p.plane+" • "+p.endpoints.length+" named NIs","noc:"+nm,"noc"));
-    const belongs=(c,ep)=> {
-      const label=String(ep.name||"").toLowerCase();
-      if(c.id.includes(":cpu"))return label==="cpu";
-      if(c.id.includes(":dma"))return label==="dma"||label.includes("dma");
-      if(c.id.startsWith("memory:"))return label.includes("target")||label.includes("ingress");
-      if(c.id.startsWith("region:"))return label==="sram";
-      if(c.id.includes(":ip"))return label.includes("packet")||label.includes("host")||label.includes("controller");
-      return false;
-    };
-    ownNocs.forEach(([nm,p],i)=>{
-      components.forEach((c,j)=>{
-        if(p.endpoints.some(e=>belongs(c,e)))wire(lhs[j],rhs[i],p.plane==="config"?"#b69aff":"#2fd1c9");
+      "IP, memory and local FlooNoC boxes from this project");
+    if (narrow) {
+      const boxW = diagramW - 38;
+      svg.append(makeText(19,100,"IP / MEMORY COMPONENTS",12,"#9dbbd2",680));
+      components.forEach((c,i)=>card(19,113+i*85,boxW,65,c.title,c.sub,c.id));
+      const y = 120 + components.length*85;
+      svg.append(makeText(19,y,"LOCAL NoCs (CLICK TO OPEN)",12,"#9dbbd2",680));
+      ownNocs.forEach(([nm,p],i)=>card(19,y+17+i*85,boxW,65,
+        nm,p.plane+" • "+p.endpoints.length+" named NIs","noc:"+nm,"noc"));
+    } else {
+      svg.append(makeText(35,92,"IP / MEMORY COMPONENTS",12,"#9dbbd2",680),
+                 makeText(590,92,"LOCAL NoCs (CLICK TO OPEN)",12,"#9dbbd2",680));
+      const lhs=components.map((c,i)=>card(35,108+i*94,360,67,c.title,c.sub,c.id));
+      const rhs=ownNocs.map(([nm,p],i)=>card(590,108+i*94,395,67,
+        nm,p.plane+" • "+p.endpoints.length+" named NIs","noc:"+nm,"noc"));
+      const belongs=(c,ep)=> {
+        const label=String(ep.name||"").toLowerCase();
+        if(c.id.includes(":cpu"))return label==="cpu";
+        if(c.id.includes(":dma"))return label==="dma"||label.includes("dma");
+        if(c.id.startsWith("memory:"))return label.includes("target")||label.includes("ingress");
+        if(c.id.startsWith("region:"))return label==="sram";
+        if(c.id.includes(":ip"))return label.includes("packet")||label.includes("host")||label.includes("controller");
+        return false;
+      };
+      ownNocs.forEach(([nm,p],i)=>{
+        components.forEach((c,j)=>{
+          if(p.endpoints.some(e=>belongs(c,e)))
+            wire(lhs[j],rhs[i],p.plane==="config"?"#b69aff":"#2fd1c9");
+        });
       });
-    });
+    }
     status.textContent = name+" • "+components.length+" declared IP/memory blocks • "+
       ownNocs.length+" local FlooNoCs • source topology, not an RTL simulation";
   } else if(kind==="noc" && profiles[name]) {
