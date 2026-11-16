@@ -36,8 +36,11 @@ def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False, ethernet_cpu
                      scenario_mode=False, use_generated_dma_csr=False,
                      combined_mode=False, pcie_outbound_mode=False,
                      use_config_csr_header=True, use_legacy_dma_csr=False,
-                     scenario_seed=None, scenario_source=None):
+                     scenario_seed=None, scenario_source=None,
+                     pcie_endpoint_frontdoor=False):
     directory.mkdir(parents=True, exist_ok=True)
+    if pcie_endpoint_frontdoor and not pcie_outbound_mode:
+        raise ValueError('endpoint frontdoor requires selected outbound PCIe variant')
     if pcie_outbound_mode and (not pcie_host_mode or combined_mode or ethernet_cpu_mode):
         raise ValueError('outbound requester firmware requires separate PCIe CPU variant')
     if combined_mode and not (pcie_host_mode and ethernet_cpu_mode) or (pcie_host_mode and ethernet_cpu_mode and not combined_mode):
@@ -100,6 +103,21 @@ def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False, ethernet_cpu
         raise ValueError("required generated production DMA CSR header missing")
     generated_dma_header_sha256 = hashlib.sha256(generated_dma_header.read_bytes()).hexdigest()
     csr_base_hash = None
+    if pcie_endpoint_frontdoor:
+        # One source: pinned SystemRDL/PeakRDL register ABI. C-only output.
+        # The generated AXI-Lite hardware is not attached yet.
+        from importlib.metadata import version
+        from tools.pcie_csrgen import VERSIONS, RDL, compile_rdl, registers, header
+        for package, expected in VERSIONS.items():
+            if version(package) != expected:
+                raise ValueError(f'PCIe endpoint frontdoor CSR generator drift: {package}')
+        selected_pcie = next(r for r in cfg["address_map"]["config"]
+                             if r["name"] == "pcie0.ctrl")
+        aperture = dict(name="pcie0.ctrl", base=mapping["pcie0.ctrl"],
+                        size=int(selected_pcie["size"], 0))
+        artifact = header(registers(compile_rdl(RDL), aperture),
+                          aperture["base"], aperture["size"])
+        (directory / "soc_pcie_ep_prelink_regs.h").write_text(artifact)
     csr_base_macros = {
         "SOC_DMA0_CSR": "SOC_CSR_COMPUTE0_DMA_BASE",
         "SOC_RESET_CTRL_CSR": "SOC_CSR_BOOT_RESET_CTRL_BASE",
@@ -158,7 +176,8 @@ def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False, ethernet_cpu
                         else 'sw/dma/tests/scenario_dma_run.c' if scenario_mode
                         else 'sw/ethernet/tests/eth_cpu_run.c' if ethernet_cpu_mode
                         else 'sw/dma/tests/cpu_dma_run.c')),
-            *(['-I', str(directory)] if scenario_mode else []),
+            *(['-I', str(directory)] if scenario_mode or pcie_endpoint_frontdoor else []),
+            *(['-DSOC_PCIE_ENDPOINT_FRONTDOOR=1'] if pcie_endpoint_frontdoor else []),
             str(ROOT / "sw/common/memory_pool.c"),
             str(ROOT / "sw/common/memory_pattern.c"),
             str(ROOT / "sw/common/sram_pool.c"),
@@ -191,7 +210,8 @@ def compile_firmware(cfg, directory: Path, *, pcie_host_mode=False, ethernet_cpu
 def prepare(cfg, noc_manifest, noc_root, output: Path, *, pcie_host_mode=False,
             ethernet_cpu_mode=False, real_ddr_mode=False, ddr_wb_base=0, ddr_wb_adr_bits=30,
             scenario_mode=False, combined_mode=False, pcie_outbound_mode=False,
-            scenario_seed=None, scenario_source=None):
+            scenario_seed=None, scenario_source=None,
+            pcie_endpoint_frontdoor=False):
     from tools import full_chip_gen
     if pcie_outbound_mode and (not pcie_host_mode or combined_mode or real_ddr_mode or ethernet_cpu_mode or scenario_mode):
         raise ValueError('outbound requester firmware requires isolated CPU PCIe mode')
@@ -207,7 +227,8 @@ def prepare(cfg, noc_manifest, noc_root, output: Path, *, pcie_host_mode=False,
                           scenario_mode=scenario_mode, combined_mode=combined_mode,
                           pcie_outbound_mode=pcie_outbound_mode,
                           scenario_seed=scenario_seed,
-                          scenario_source=scenario_source)
+                          scenario_source=scenario_source,
+                          pcie_endpoint_frontdoor=pcie_endpoint_frontdoor)
     image_prefix = output.relative_to(ROOT).as_posix()
     selected_scn = None
     if scenario_mode:
