@@ -156,3 +156,28 @@ is an **additional** catalog-owned drill-down, not an alternative main
 Architecture page. The project-level graph remains declared connectivity
 until a selected project publishes its own parsed elaboration evidence.
 An unqualified design receives no other project's RTL details or traffic.
+
+## Restored visual drill-down for every project
+
+The same selected-project `architecture.html` draws multiple *visual*
+levels: whole-chip connections and summaries; subsystem composition with
+CPU/IP, DMA, mapped SRAM/memory targets and local NoCs; actual
+FlooGen-declared NoC router grids and named NIs; then router/NI details.
+Click a diagram block to move deeper and use its visual breadcrumbs to
+return to the chip. The searchable side hierarchy uses the same component
+identities and selection state, and the AXI data/control filter continues
+to apply at the chip level. There are no project-name-specific layout rules.
+
+FlooGen profiles are obtained from the shared hardware profile builder in
+`tools/floonoc_gen.py` using each project's own `soc.yaml` and shared
+`interface_contracts.yaml`. Physical NoC router counts and named network
+interfaces are source-profile declarations, **not** proof of elaborated
+RTL, connectivity through conditional generates, or simulation traffic.
+The original separately parsed RTL explorer is still linked as *optional*
+additional evidence only for its owning project; Project B must get its own
+parser artifact before it can make identical RTL-internal claims.
+
+Browser CI must click **chip → subsystem → FlooNoC → router** for each
+cataloged project and confirm the displayed NoC and NI data belong to the
+selected SoC. This prevents a future update from silently reverting to
+one flat box per subsystem.

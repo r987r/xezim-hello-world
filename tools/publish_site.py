@@ -1445,8 +1445,13 @@ def project_pages(output, projects, entries, repository, sha):
             'qualification': qualification,
             'design': project['design'],
             'layout': project.get('layout'),
+            'address_map': project['address_map'],
         }, separators=(',', ':')).replace('<', '\\u003c')
         topology_js = (ROOT/'tools/templates/site_project_topology.js').read_text()
+        composition_js = (ROOT/'tools/templates/site_project_composition.js').read_text()
+        if topology_js.count('/*__COMPOSITION_IMPL__*/') != 1:
+            raise ValueError('missing project composition renderer insertion point')
+        topology_js = topology_js.replace('/*__COMPOSITION_IMPL__*/', composition_js)
         detailed = (
             '<div class="actions"><a href="../../' +
             escape(explorer, quote=True) +

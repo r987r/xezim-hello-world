@@ -116,7 +116,7 @@
     columns.get(level).push(n.id);
   }
   for (const ids of columns.values()) ids.sort((a, b) => (order.get(a) - order.get(b)));
-  const CARD_W = 215, CARD_H = 78, STEP_X = 280, STEP_Y = 125;
+  const CARD_W = 238, CARD_H = 99, STEP_X = 295, STEP_Y = 145;
   const ncols = maxLevel + 1;
   const maxRows = Math.max(1, ...[...columns.values()].map(x => x.length));
   const W = Math.max(520, ncols * STEP_X + 85);
@@ -131,11 +131,15 @@
   fabrics.forEach((n, i) =>
     positions.set(n.id, { x: Math.max(35, (W - CARD_W) / 2), y: baseH + 18 + i * 97 }));
   let selected = null, zoom = 1, panX = 0, panY = 0, dragging = null;
-  function view() { svg.setAttribute("viewBox", [panX, panY, W / zoom, H / zoom].join(" ")); }
+  let focus = {kind: "chip"}, diagramW = W, diagramH = H;
+  function view() { svg.setAttribute("viewBox", [panX, panY, diagramW / zoom, diagramH / zoom].join(" ")); }
   function fit() {
     zoom = 1; panX = 0; panY = 0; view();
   }
+  /*__COMPOSITION_IMPL__*/
   function draw() {
+    if (focus.kind !== "chip") { drawComposition(); return; }
+    diagramW = W; diagramH = H;
     svg.replaceChildren();
     svg.setAttribute("width", W);
     svg.setAttribute("height", H);
@@ -200,8 +204,22 @@
         fill: node.kind === "fabric" ? "#2b214a" : "#122f46"
       });
       const label = node.label.length > 25 ? node.label.slice(0, 24) + "…" : node.label;
-      g.append(rect, makeText(p.x + 13, p.y + 30, label, 15, "#eaf4ff", 700),
-               makeText(p.x + 13, p.y + 55, node.kind === "fabric" ? "Shared network" : "Subsystem", 12, "#a4bfd0"));
+      const sub = (d.subsystems || []).find(x => x.name === node.id);
+      const ownNoCs = Object.entries(d.noc_profiles || {}).filter(([_, q]) =>
+        q.path?.split("/")[0] === node.id).length;
+      const type = d.subsystem_types?.[sub?.type] || {};
+      const ipName = sub?.cpu?.ip || sub?.ip || type.dma || sub?.type || "Subsystem";
+      const mapped = (model.address_map?.data || []).filter(a => a.name?.startsWith(node.id + "."));
+      const memories = (d.memory_targets || []).filter(m => m.name.startsWith(node.id + "."));
+      const mappedText = memories.length ? memories.map(m => m.kind.toUpperCase()).join(" / ") :
+        mapped.some(a => a.name.endsWith(".sram")) ? "SRAM" : "Mapped endpoints";
+      g.append(rect, makeText(p.x + 13, p.y + 26, label, 15, "#eaf4ff", 700),
+               makeText(p.x + 13, p.y + 50,
+                 node.kind === "fabric" ? "Shared network" : ipName, 12, "#a4bfd0"),
+               makeText(p.x + 13, p.y + 76,
+                 node.kind === "fabric" ? "Click for router / NI view" :
+                 mappedText + " • " + ownNoCs + " local NoCs • open ›",
+                 11, "#7bd5da"));
       const tt = el("title"); tt.textContent = node.label + " — click to inspect";
       g.append(tt);
       g.addEventListener("click", () => { selected = node.id; draw(); open(node.ref); });
@@ -214,13 +232,70 @@
       " connections · configuration-derived, not runtime-verified";
   }
   function open(ref) {
-    if (typeof window.archHierarchyNavigate === "function") window.archHierarchyNavigate(ref);
+    if (typeof window.archHierarchyNavigate === "function") {
+      window.archHierarchyNavigate(ref);
+    } else {
+      showFocus(ref);
+    }
+  }
+  function showFocus(id) {
+    if (id === "chip" || id === "subsystems") focus = {kind: "chip"};
+    else if (id.startsWith("sub:")) focus = {kind:"subsystem", id:id.slice(4)};
+    else if (id.startsWith("noc:")) focus = {kind:"noc", id:id.slice(4)};
+    else if (id.startsWith("link:") || id.startsWith("port:"))
+      focus={kind:"chip"};
+    else if ((id.startsWith("network:") || id.startsWith("fabric:")) &&
+             d.noc_profiles?.[id.split(":")[1]])
+      focus = {kind:"noc", id:id.split(":")[1]};
+    else if (id.startsWith("router:")) {
+      const parts=id.slice(7).split(":");
+      if(parts.length===3 && Number.isInteger(+parts[1]) && Number.isInteger(+parts[2]))
+        focus={kind:"router",noc:parts[0],x:+parts[1],y:+parts[2]};
+    } else if (id.startsWith("endpoint:")) {
+      const bits=id.slice(9).split(":");
+      if(bits.length===2) focus={kind:"endpoint",noc:bits[0],endpoint:bits[1]};
+    } else if (id.startsWith("ip:") || id.startsWith("profile:") || id.startsWith("property:")) {
+      const bits=id.split(":");
+      if (bits.length===3 && subNames.has(bits[1]))
+        focus={kind:"ip",sub:bits[1],id:bits[2]};
+    } else if (id.startsWith("memory:") || id.startsWith("region:")) {
+      const sub=id.split(":")[1].split(".")[0];
+      if (subNames.has(sub)) focus={kind:"subsystem",id:sub};
+    }
+    draw(); updateVisualBread();
+  }
+  function updateVisualBread() {
+    const crumb=document.getElementById("arch-h-diagram-crumbs");
+    if(!crumb)return;
+    const spans=[{label:"Chip",id:"chip"}];
+    if(focus.kind==="subsystem")spans.push({label:focus.id,id:"sub:"+focus.id});
+    if(focus.kind==="noc")spans.push({label:focus.id,id:"noc:"+focus.id});
+    if(focus.kind==="ip")spans.push({label:focus.sub,id:"sub:"+focus.sub},
+      {label:focus.id,id:"ip:"+focus.sub+":"+focus.id});
+    if(focus.kind==="router"||focus.kind==="endpoint"){
+      spans.push({label:focus.noc,id:"noc:"+focus.noc});
+      spans.push({label:focus.kind==="router"?
+        "["+focus.x+","+focus.y+"]":focus.endpoint,
+        id:focus.kind==="router"?"router:"+focus.noc+":"+focus.x+":"+focus.y:
+          "endpoint:"+focus.noc+":"+focus.endpoint});
+    }
+    crumb.replaceChildren();
+    for (const [idx,item] of spans.entries()) {
+      if(idx) {const sep=document.createElement("span");sep.textContent=" / ";crumb.append(sep);}
+      const b=document.createElement("button");b.type="button";b.textContent=item.label;
+      b.addEventListener("click",()=>open(item.id));crumb.append(b);
+    }
   }
   const zoomTo = k => { zoom = Math.max(0.45, Math.min(3, zoom * k)); view(); };
   document.getElementById("arch-h-zoom-in").addEventListener("click", () => zoomTo(1.25));
   document.getElementById("arch-h-zoom-out").addEventListener("click", () => zoomTo(1 / 1.25));
   document.getElementById("arch-h-fit").addEventListener("click", fit);
-  planes.addEventListener("change", draw);
+  planes.addEventListener("change", () => {
+    // Data/control plane is a whole-chip connectivity filter. Bring users
+    // back from a selected local NoC/router/NI before redrawing links.
+    focus = {kind: "chip"};
+    draw(); updateVisualBread();
+  });
   viewport.addEventListener("wheel", ev => {
     if (!ev.ctrlKey) return;
     ev.preventDefault();
@@ -243,7 +318,8 @@
   window.addEventListener("arch-h-selected", ev => {
     const id = ev.detail?.id;
     const n = graphNodes.find(node => node.ref === id);
-    if (n) { selected = n.id; draw(); }
+    if (n) selected = n.id;
+    if(id)showFocus(id);
   });
-  fit(); draw();
+  fit(); draw(); updateVisualBread();
 })();
