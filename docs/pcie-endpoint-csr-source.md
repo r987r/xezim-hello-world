@@ -35,3 +35,22 @@ the CPU0 firmware actually executed endpoint MMIO, a real link reached L0,
 or any full-chip PCIe readback. Issue #76 remains open until these original
 hardware gates are independently qualified. PR #232's real PCIe-to-SRAM
 qualification remains an isolated, separately proven path.
+
+### CPU0 real frontdoor qualification candidate (November 16, 2026)
+
+The selected `chip-pcie-outbound` C firmware now uses a **freshly generated**
+header from the original endpoint SystemRDL source (pinned
+`csr/requirements.txt`), not duplicated register offsets.
+CPU0 issues actual MMIO writes and reads for BAR0 aperture, local target,
+COMMIT and START, then checks the committed status and that PHY/L0/host
+memory-enable remain inactive. The original `execute_cold_boot` passive
+AXI audit now requires both CPU-side and target-side accepted Config-NoC
+transactions in the endpoint window, in addition to the original requester
+doorbells and full data path.
+
+This is **a candidate until the exact PR-head RTL run passes**. Passing the
+freestanding RV32I link and static source checks does not constitute a
+hardware MMIO PASS. The endpoint register **storage** is still the existing
+prelink prototype, not the PeakRDL-generated AXI-Lite block; no actual
+OpenPCIe PHY/L0 or host BAR state is attached to this full-chip variant.
+Issue #76 remains open until the true trained link and end-to-end flow.
