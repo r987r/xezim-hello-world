@@ -2,7 +2,7 @@
 
 import cocotb
 from cocotb.clock import Clock
-from cocotb.triggers import RisingEdge, with_timeout
+from cocotb.triggers import RisingEdge, Timer, with_timeout
 from discovery import enumerate_root_complex
 from cocotbext.pcie.core import RootComplex
 # Cocotb runner constructs its own PYTHONPATH. Make the locked upstream
@@ -21,22 +21,49 @@ async def host_to_real_floonoc_tc_sram(dut):
     dut.rst.value = 1
     dut.clk.value = 0
     cocotb.start_soon(Clock(dut.clk, 10, units="ns").start())
+    # The BAR0_RELOCATE constant is an elaboration-time SV parameter,
+    # but Verilator's continuous output assignment is not VPI-visible
+    # until a simulator evaluation. Reading at time 0 can return the
+    # stale default 0 even when "-GBAR0_RELOCATE=1" was compiled.
+    # Observe the real selected RTL mode AFTER clock and delta evaluation.
+    await RisingEdge(dut.clk)
+    await Timer(1, units="ns")
+    relocated = bool(int(dut.bar0_relocation_enabled.value))
+    dut._log.info("PCIE0_RTL_BAR_RELOCATE_SAMPLED=%d after actual clock evaluation",
+                  int(relocated))
     rc = RootComplex()
-    # In cocotbext-pcie 0.2.14 the RC constructor registers the outbound
-    # TLP region at its DEFAULT mem_base (0xc0000000). Changing mem_base
-    # afterward moves BAR allocation, but does not change the AddressSpace
-    # mapping, so BAR accesses fail before any TLP is sent. Install the
-    # address-qualified outbound TLP region inside its low-address mem_pool.
-    # This is RC BFM setup, not an RTL address-translation shortcut.
-    rc.mem_pool.register_region(rc.mem_region, 0x12000000, 0x100000, offset=None)
-    rc.mem_base = 0x12000000
+    # The upstream RC has two reserved mappings: low mem_pool spans
+    # [0, 0x80000000), while the 16-byte MSI aperture starts at 0x80000000.
+    # Consequently the older low-pool mapping failed "address out of range";
+    # replacing it with a 1MiB root mapping at 0x80000000 failed "overlaps
+    # existing region" because of that MSI aperture. The device's BAR0 is
+    # exactly 4KiB at 0x80001000: route ONLY its actual address window.
+    # offset=None preserves absolute addresses in authentic TLP requests.
+    # This never substitutes host RAM for real RTL or fabricates a completion.
+    if relocated:
+        host_bar = 0x80001000
+        bar_size = 0x1000
+        assert not rc.mem_address_space.find_regions(host_bar, bar_size), (
+            "host BAR collides with an upstream reserved RC region"
+        )
+        rc.mem_address_space.register_region(
+            rc.mem_region, host_bar, bar_size, offset=None
+        )
+        rc.mem_base = host_bar
+        matches = rc.mem_address_space.find_regions(host_bar, bar_size)
+        assert len(matches) == 1 and matches[0][3] is rc.mem_region, (
+            "relocated PCIe host BAR must use the real TLP route"
+        )
+    else:
+        rc.mem_pool.register_region(rc.mem_region, 0x12000000, 0x100000, offset=None)
+        rc.mem_base = 0x12000000
     dev = PcieIfDevice(
         clk=dut.clk, rst=dut.rst,
         rx_req_tlp_bus=PcieIfRxBus.from_prefix(dut, "rx_req_tlp"),
         tx_cpl_tlp_bus=PcieIfTxBus.from_prefix(dut, "tx_cpl_tlp"),
         cfg_max_payload=dut.max_payload_size,
     )
-    dev.functions[0].configure_bar(0, 1024 * 1024)
+    dev.functions[0].configure_bar(0, 4096 if relocated else 1024 * 1024)
     rc.make_port().connect(dev)
     for _ in range(12):
         await RisingEdge(dut.clk)
@@ -55,6 +82,12 @@ async def host_to_real_floonoc_tc_sram(dut):
         (0x125, bytes((i * 7 + 3) & 255 for i in range(17))),
         (0x200, bytes((i * 13 + 9) & 255 for i in range(64))),
     ]
+    if relocated:
+        # Upper edge completes exactly at the end of the 4KiB BAR.
+        vectors.append((0xff0, bytes((i * 11 + 1) & 255 for i in range(16))))
+    dut._log.info("PCIE0_BAR_MODE=%s host_base=%#x sram_base=%#x",
+                  "relocated" if relocated else "legacy",
+                  0x80001000 if relocated else 0x12000000, 0x12000000)
     for offset, payload in vectors:
         before_w = int(dut.sram_write_count.value)
         before_r = int(dut.sram_read_count.value)
@@ -69,6 +102,7 @@ async def host_to_real_floonoc_tc_sram(dut):
     assert not int(dut.status_error_cor.value)
     assert not int(dut.status_error_uncor.value)
     dut._log.info(
-        "PCIE0_REAL_NOC_SRAM_PASS vectors=%d SRAM_WRITES=%d SRAM_READS=%d",
-        len(vectors), int(dut.sram_write_count.value), int(dut.sram_read_count.value)
+        "PCIE0_REAL_NOC_SRAM_PASS mode=%s vectors=%d SRAM_WRITES=%d SRAM_READS=%d",
+        "relocated" if relocated else "legacy", len(vectors),
+        int(dut.sram_write_count.value), int(dut.sram_read_count.value)
     )

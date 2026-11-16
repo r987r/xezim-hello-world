@@ -4,6 +4,10 @@ runs:
   using: composite
   steps:
     - shell: bash
+      env:
+        # Authenticate the existing checksum-pinned release fetch to avoid
+        # shared-runner unauthenticated GitHub API rate-limit (HTTP 403).
+        GH_TOKEN: ${{ github.token }}
       run: |
         set -euo pipefail
         mkdir -p .tools/bin

@@ -56,7 +56,14 @@ jobs:
           name: pcie0-dedicated-noc-${{ github.run_id }}
           # Preserve result/protocol/AXI/flow provenance, not 1+ GiB of
           # reproducible Verilator object files and precompiled headers.
-          path: .tools/regression/chip-pcie-host/
+          path: |
+            .tools/regression/chip-pcie-host/
+            .tools/pcie0/noc_build/build.log
+            .tools/pcie0/noc_build/simulation.log
+            .tools/pcie0/noc_build/results.xml
+            .tools/pcie0/noc_relocated_build/build.log
+            .tools/pcie0/noc_relocated_build/simulation.log
+            .tools/pcie0/noc_relocated_build/results.xml
           include-hidden-files: true
           if-no-files-found: warn
 

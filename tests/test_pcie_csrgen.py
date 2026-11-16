@@ -7,6 +7,7 @@ independently of the still-unconnected CPU0 Config-NoC frontdoor.
 from __future__ import annotations
 
 import json
+from importlib.util import find_spec
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -18,6 +19,18 @@ from tools.pcie_csrgen import (
 
 
 class PcieCsrGenerationTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # Normal SoC build intentionally installs only requirements.txt.
+        # Do not treat the dedicated PCIe/CSR tooling as a common-runtime
+        # dependency. The dedicated pcie-csr-source workflow installs exact
+        # pinned csr/requirements.txt and executes every test, never skipping.
+        if find_spec("systemrdl") is None or find_spec("peakrdl_regblock") is None:
+            raise unittest.SkipTest(
+                "PCIe PeakRDL optional generator packages unavailable; "
+                "mandatory real RTL generation is tested by pcie-csr-source CI"
+            )
+
     def test_source_compiles_and_preserves_existing_pcie_requester_abi(self):
         aperture = config_aperture(SOC)
         self.assertEqual(aperture["base"], 0x40040000)

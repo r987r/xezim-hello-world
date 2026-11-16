@@ -2,6 +2,15 @@
 
 The `chip-pcie-host` regression runs a **modeled** Cocotb PCIe Root Complex with the pinned real `pcie_axi_master` TLP-to-AXI bridge, dedicated PCIe0 Data/Config NoCs, real CPU0/PULP iDMA and PCIe SRAM. The DDR destination in **this test is behavioral AXI RAM**, not the opt-in LiteDRAM RTL controller. PCIe controller-management CSR remains reserved.
 
+**Two supported PCIe modes:** See the [PCIe verification and report architecture](pcie-verification-modes.md)
+for a source-backed diagram and side-by-side evidence matrix. This file's
+`chip-pcie-host` flow is the **original fast TLP-only mode**; it remains
+the normal regression because it has real CPU/FlooNoC/TLP/AXI/byte reporting.
+The new opt-in digital-link test separately proves independent host↔device
+LTSSM to L0 using real PIPE, and archives a source-qualified **isolated**
+JSON/HTML event timeline. It is not yet a full-chip AXI/NoC reporter
+and must not borrow this flow's PASS.
+
 ## Execution ownership
 
 - `dv/full_chip/test_boot.py::execute_cold_boot` owns the shared CPU INIT/RUN/CHECK phases; `dv/pcie0/host_adapter.py` is the host enumeration/BAR participant. The PCIe test does **not** add a second coordinator or test runner.

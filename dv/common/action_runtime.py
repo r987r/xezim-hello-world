@@ -116,6 +116,8 @@ def _default_claims(action: dict) -> tuple[ResourceClaim, ...] | None:
                 ResourceClaim("buffer", _field(action, "dst")))
     if kind == "dma.wait_idle":
         return (ResourceClaim("engine", _field(action, "engine")),)
+    if kind == "pcie.link.train":
+        return (ResourceClaim("pcie_link", _field(action, "link")),)
     if kind in ("event.emit", "event.wait"):
         queue = _field(action, "queue")
         token = _field(action, "token")

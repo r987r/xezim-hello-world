@@ -14,4 +14,5 @@ This PR **does not wire generated RTL to the real CPU0 Config-NoC**. The
 in CPU firmware yet. Actual hardware policy (write freeze and validation),
 Config-NoC fanout, sampled host aliases, legitimate AXI error responses,
 real over-link BAR and end-to-end cold-boot verification are tracked in
-issue #76 and draft PR #230. No synthetic CSR writes or boot PASS.
+issue #76 and active draft PR #232 (superseding closed #230). No synthetic
+CSR writes or boot PASS.

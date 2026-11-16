@@ -19,7 +19,8 @@ RANDOM_ALGORITHM = "sha256-rejection-v1"
 PHASES = ("init", "run", "check")
 KINDS = frozenset(("memory.allocate", "memory.initialize", "memory.check",
                    "memory.release", "dma.configure", "dma.copy", "dma.wait_idle",
-                   "event.emit", "event.wait"))
+                   "event.emit", "event.wait", "pcie.link.train",
+                   "pcie.config.bar0", "pcie.memory.write"))
 NAME = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]{0,95}$")
 PATTERNS = frozenset(("constant", "counter8", "address_xor"))
 POLICIES = frozenset(("strict", "fast", "hybrid", "auto"))
@@ -286,6 +287,11 @@ def _validate_memory(ordered: list[dict], ancestors: dict[str, set[str]],
     # The emitter's adapter must actually drive the mailbox before declaring
     # driver_done; only a passive checker can prove device receipt.
     emitters: dict[tuple[str, str], str] = {}
+    last_pcie_train: dict[str, str] = {}
+    last_pcie_bar: dict[str, tuple[str, int, int]] = {}
+    available_pcie = {s["name"] for s in config["subsystems"]
+                      if s.get("type") == "peripheral" and s["name"].startswith("pcie")}
+
 
     def use(buffer: str, aid: str, *, offset: int = 0,
             length: int | None = None, write: bool = False, read: bool = False) -> tuple[int, int]:
@@ -422,6 +428,70 @@ def _validate_memory(ordered: list[dict], ancestors: dict[str, set[str]],
                 source = emitters.get(pair)
                 if source is None or source not in ancestors[aid]:
                     raise ScenarioError(f"{aid}: event wait requires causal emit dependency")
+        elif kind == "pcie.link.train":
+            # A source-selected host action; NOT evidence that the endpoint
+            # has reached L0. Host completion and RTL L0 remain independent.
+            if phase != "init":
+                raise ScenarioError(f"{aid}: PCIe link training is an INIT action")
+            _fields(args, {"link", "lanes", "generation", "data_width_bits"},
+                    set(), aid)
+            link = _name(args["link"], f"{aid}.link")
+            if link not in available_pcie:
+                raise ScenarioError(f"{aid}: unknown configured PCIe link {link}")
+            # Current digital provider is Gen1 x1 / 16-bit active PIPE per lane.
+            # Changing PHY width/revision requires explicit capability
+            # qualification, not silently accepting a plan parameter.
+            if (_int(args["lanes"], f"{aid}.lanes", low=1, high=16) != 1
+                    or _int(args["generation"], f"{aid}.generation", low=1, high=5) != 1
+                    or _int(args["data_width_bits"], f"{aid}.data_width_bits",
+                            low=8, high=64) != 16):
+                raise ScenarioError(f"{aid}: unqualified PCIe link profile")
+            predecessor = last_pcie_train.get(link)
+            if predecessor is not None and predecessor not in ancestors[aid]:
+                raise ScenarioError(
+                    f"{aid}: unordered concurrent training on PCIe link {link}")
+            last_pcie_train[link] = aid
+        elif kind == "pcie.config.bar0":
+            # Host-owned Type-0 transactions after its own link training.
+            # Device prelink BAR capability is independently configured.
+            if phase != "init":
+                raise ScenarioError(f"{aid}: PCIe host enumeration is an INIT action")
+            _fields(args, {"link", "bar_index", "aperture_bytes", "host_bus_base"},
+                    set(), aid)
+            link = _name(args["link"], f"{aid}.link")
+            if link not in available_pcie or link not in last_pcie_train:
+                raise ScenarioError(f"{aid}: PCIe BAR requires selected trained link")
+            if last_pcie_train[link] not in ancestors[aid]:
+                raise ScenarioError(f"{aid}: BAR enumeration must depend on trained link")
+            if _int(args["bar_index"], f"{aid}.bar_index", low=0, high=5) != 0:
+                raise ScenarioError(f"{aid}: only BAR0 qualified")
+            aperture = _int(args["aperture_bytes"], f"{aid}.aperture_bytes",
+                            low=4096, high=1048576)
+            host_base = _int(args["host_bus_base"], f"{aid}.host_bus_base",
+                             low=4096, high=U32)
+            if (aperture & (aperture-1)) or (host_base & (aperture-1)):
+                raise ScenarioError(f"{aid}: BAR aperture or host base misaligned")
+            if host_base + aperture > (1 << 32):
+                raise ScenarioError(f"{aid}: BAR address wraps 32-bit PCI bus space")
+            last_pcie_bar[link] = (aid, aperture, host_base)
+        elif kind == "pcie.memory.write":
+            # Source-selected original root-complex posted write. Plan intent
+            # is never evidence of endpoint acceptance or actual SRAM bytes.
+            if phase != "run":
+                raise ScenarioError(f"{aid}: PCIe BAR memory write is a RUN action")
+            _fields(args, {"link", "bar_index", "offset", "data_word"}, set(), aid)
+            link = _name(args["link"], f"{aid}.link")
+            if link not in available_pcie or link not in last_pcie_bar:
+                raise ScenarioError(f"{aid}: Memory Write needs host BAR enumeration")
+            parent, aperture, _base = last_pcie_bar[link]
+            if parent not in ancestors[aid]:
+                raise ScenarioError(f"{aid}: Memory Write must depend on BAR enumeration")
+            if _int(args["bar_index"], f"{aid}.bar_index", low=0, high=5) != 0:
+                raise ScenarioError(f"{aid}: only BAR0 Memory Write qualified")
+            offset = _int(args["offset"], f"{aid}.offset", high=aperture-4)
+            _int(args["data_word"], f"{aid}.data_word", high=U32)
+            if offset & 3:
+                raise ScenarioError(f"{aid}: Memory Write needs DWORD-aligned offset")
         elif kind == "memory.release":
             if phase not in ("run", "check"):
                 raise ScenarioError(f"{aid}: release outside RUN/CHECK")
