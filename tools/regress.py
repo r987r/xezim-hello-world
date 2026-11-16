@@ -539,7 +539,8 @@ def run_target(name, test, resolver, options):
             from cpu_dma_firmware import prepare as prepare_cpu_dma
             prepare_cpu_dma(cfg, noc_manifest, ROOT/'gen/noc/floonoc', variant,
                             pcie_host_mode=True,
-                            pcie_outbound_mode=test['firmware_mode']=='pcie_outbound')
+                            pcie_outbound_mode=test['firmware_mode']=='pcie_outbound',
+                            pcie_endpoint_frontdoor=test['firmware_mode']=='pcie_outbound')
         else:
             emit_chip(cfg, noc_manifest, ROOT/'gen/noc/floonoc', variant,
                       image_prefix=variant.relative_to(ROOT).as_posix(),
