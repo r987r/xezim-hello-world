@@ -71,6 +71,30 @@ def main():
             if item.get("architecture_explorer"):
                 assert browser.find_element(
                     By.PARTIAL_LINK_TEXT, "detailed generated RTL")
+            # Exact same diagram path on every project: chip -> selected
+            # subsystem -> actual FlooGen NoC -> router -> attached NI.
+            first_sub = source["subsystems"][0]["name"]
+            browser.find_element(
+                By.CSS_SELECTOR, '#arch-h-svg .arch-h-svg-node[aria-label="Explore '+first_sub+'"]').click()
+            assert "local FlooNoCs" in browser.find_element(
+                By.ID, "arch-h-graph-status").text
+            assert browser.find_elements(
+                By.CSS_SELECTOR, '#arch-h-svg .arch-h-svg-node[data-arch-ref^="noc:"]')
+            browser.find_elements(
+                By.CSS_SELECTOR, '#arch-h-svg .arch-h-svg-node[data-arch-ref^="noc:"]')[0].click()
+            assert "router slots" in browser.find_element(
+                By.ID, "arch-h-graph-status").text
+            assert browser.find_elements(
+                By.CSS_SELECTOR, '#arch-h-svg .arch-h-svg-node[data-arch-ref^="router:"]')
+            browser.find_elements(
+                By.CSS_SELECTOR, '#arch-h-svg .arch-h-svg-node[data-arch-ref^="router:"]')[0].click()
+            assert "NI attachments" in browser.find_element(
+                By.ID, "arch-h-graph-status").text
+            assert len(browser.find_elements(
+                By.CSS_SELECTOR, "#arch-h-diagram-crumbs button")) >= 3
+            browser.find_element(By.CSS_SELECTOR, "#arch-h-diagram-crumbs button").click()
+            assert "connections" in browser.find_element(
+                By.ID, "arch-h-graph-status").text
             for link in source["networks"].get("direct_data", {}).get("links", []):
                 finder = browser.find_element(By.ID, "arch-h-filter")
                 finder.clear()
