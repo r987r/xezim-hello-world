@@ -20,7 +20,9 @@ module pcie_requester_axi_regs #(
   parameter logic [31:0] CsrBase = 32'h40040000,
   parameter int unsigned RamBytes = 16384,
   // Existing CPU Config-NoC request path, opt-in endpoint DBI policy.
-  parameter bit EndpointPrelink = 1'b0
+  parameter bit EndpointPrelink = 1'b0,
+  parameter logic [31:0] EndpointSramBase = 32'h1200_0000,
+  parameter logic [31:0] EndpointSramBytes = 32'h0010_0000
 )(
   input logic clk_i, rst_ni,
   input axi_req_t cfg_req_i,
@@ -106,11 +108,11 @@ module pcie_requester_axi_regs #(
   // Reuse the real AXI4 -> AXI-Lite converter, with one owner for AW/W/B
   // and AR/R. This policy block is not the generated PeakRDL regbank.
   assign ep_size_valid = ep_aperture >= 32'h1000 &&
-                         ep_aperture <= 32'h0010_0000 &&
+                         ep_aperture <= EndpointSramBytes &&
                          (ep_aperture & (ep_aperture - 1)) == 0;
-  assign ep_target_valid = ep_target >= 32'h1200_0000 &&
+  assign ep_target_valid = ep_target >= EndpointSramBase &&
                            {1'b0, ep_target} + {1'b0, ep_aperture} <=
-                           33'h0_1210_0000 &&
+                           {1'b0, EndpointSramBase} + {1'b0, EndpointSramBytes} &&
                            (ep_target & (ep_aperture - 1)) == 0;
   always_comb begin
     ep_illegal_write = w_strb_q != 4'hf;
@@ -129,7 +131,9 @@ module pcie_requester_axi_regs #(
   assign ep_ltssm_enable_o = ep_allow;
   assign ep_mem_ready_o = ep_ready;
   if (EndpointPrelink) begin : gen_endpoint_prelink
-    pcie_endpoint_prelink_ctrl u_endpoint_dbi (
+    pcie_endpoint_prelink_ctrl #(
+      .SRAM_BASE(EndpointSramBase), .SRAM_SIZE(EndpointSramBytes)
+    ) u_endpoint_dbi (
       .clk_i, .rst_ni, .cfg_wr_i(ep_cfg_write),
       .cfg_addr_i(ep_cfg_addr), .cfg_wdata_i(w_data_q),
       .cfg_wstrb_i(w_strb_q), .cfg_rdata_o(ep_cfg_rdata),
