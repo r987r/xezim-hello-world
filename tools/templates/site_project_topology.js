@@ -141,6 +141,7 @@
   /*__COMPOSITION_IMPL__*/
   function draw() {
     if (focus.kind !== "chip") { drawComposition(); return; }
+    viewport.classList.remove("arch-h-expanded");
     diagramW = W; diagramH = H;
     svg.replaceChildren();
     svg.setAttribute("width", W);
