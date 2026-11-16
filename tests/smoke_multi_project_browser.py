@@ -72,6 +72,10 @@ def main():
             previews = graph.find_elements(
                 By.CSS_SELECTOR, '.arch-h-svg-node [data-component-box]')
             assert previews, (pid, "chip diagram lacks nested composition boxes")
+            # Presence alone allowed all boxes to be below the fold.
+            first = previews[0].rect
+            assert first["y"] < browser.execute_script("return window.innerHeight"), (
+                pid, "first nested composition box is below initial viewport", first)
             assert all(rect.size["width"] >= 70 and rect.size["height"] >= 20
                        for rect in previews)
             assert "connections" in browser.find_element(
@@ -174,6 +178,18 @@ def main():
             cards = browser.find_elements(
                 By.CSS_SELECTOR, '#arch-h-svg .arch-h-svg-node[data-arch-ref^="noc:"]')
             assert cards, (pid, "mobile composition missing local NoC boxes")
+            assert "arch-h-expanded" in viewport.get_attribute("class"), (
+                pid, "mobile composition still uses nested fixed-height vertical scroll")
+            assert viewport.size["height"] >= 550, (
+                pid, "mobile composition boxes are clipped vertically")
+            # Long source subsystem names must remain within SVG bounds.
+            svg = browser.find_element(By.ID, "arch-h-svg")
+            all_text = svg.find_elements(By.CSS_SELECTOR, "text")
+            assert all_text
+            svg_box = svg.rect
+            assert all(t.rect["x"] >= svg_box["x"] - 3 and
+                       t.rect["x"] + t.rect["width"] <= svg_box["x"] + svg_box["width"] + 3
+                       for t in all_text[:2]), (pid, "SVG title clipped horizontally")
             bounds = viewport.rect
             for card in cards:
                 rect = card.rect
