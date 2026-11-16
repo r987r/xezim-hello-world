@@ -85,7 +85,23 @@ function drawComposition() {
       const lhs=components.map((c,i)=>card(35,108+i*94,360,67,c.title,c.sub,c.id));
       const rhs=ownNocs.map(([nm,p],i)=>card(590,108+i*94,395,67,
         nm,p.plane+" • "+p.endpoints.length+" named NIs","noc:"+nm,"noc"));
-      status.textContent = name+" • "+components.length+" declared IP/memory blocks • "+
+      const belongs=(c,ep)=> {
+        const label=String(ep.name||"").toLowerCase();
+        if(c.id.includes(":cpu"))return label==="cpu";
+        if(c.id.includes(":dma"))return label==="dma"||label.includes("dma");
+        if(c.id.startsWith("memory:"))return label.includes("target")||label.includes("ingress");
+        if(c.id.startsWith("region:"))return label==="sram";
+        if(c.id.includes(":ip"))return label.includes("packet")||label.includes("host")||label.includes("controller");
+        return false;
+      };
+      ownNocs.forEach(([nm,p],i)=>{
+        components.forEach((c,j)=>{
+          if(p.endpoints.some(e=>belongs(c,e)))
+            wire(lhs[j],rhs[i],p.plane==="config"?"#b69aff":"#2fd1c9");
+        });
+      });
+    }
+    status.textContent = name+" • "+components.length+" declared IP/memory blocks • "+
       ownNocs.length+" local FlooNoCs • source topology, not an RTL simulation";
   } else if(kind==="noc" && profiles[name]) {
     const p=profiles[name],router=p.routers?.[0];
