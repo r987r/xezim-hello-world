@@ -57,9 +57,21 @@ A child failure remains a failure; even a zero exit is marked
 still be evaluated by the existing CI procedure.
 
 The CLI accepts **only** the checked-in `config/debug.yaml` recipes (no
-arbitrary command or external config file). The current profiles are
-**Python unit checks**, not complete RTL reproductions. Full PCIe/DDR/Ethernet
-RTL command onboarding is tracked in #251. The runner does not collect an
+arbitrary command or external config file). The `chip-pcie-host` debug profile runs the **existing real RTL**
+`python3 tools/regress.py chip-pcie-host` unchanged: it includes actual CPU,
+PCIe TLP/AXI bridge, FlooNoC and SRAM with a modeled host link, **not**
+the independent Gen1 digital PIPE on PR #232. Run it with:
+
+```bash
+python3 tools/debug_repro.py --profile chip-pcie-host \\
+  --out .tools/debug-runs/pcie-host-001
+```
+
+The canonical regression still owns simulator PASS/FAIL and keeps its existing
+per-test traces/reports in `.tools/regression/chip-pcie-host/`; the debug
+wrapper keeps its separate source-stamped transcript and run metadata.
+On-demand real Gen1 PIPE, DDR and Ethernet recipe onboarding remains #251.
+No new simulator, stimulus dispatcher, or reporting format is introduced. The runner does not collect an
 IP-overlay diff or waveform automatically; preserve and attach those from the
 original test infrastructure when relevant. An `--allow-dirty` run records
 that tracked files changed but does not itself capture their content/diff.
