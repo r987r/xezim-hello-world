@@ -242,6 +242,8 @@
     if (id === "chip" || id === "subsystems") focus = {kind: "chip"};
     else if (id.startsWith("sub:")) focus = {kind:"subsystem", id:id.slice(4)};
     else if (id.startsWith("noc:")) focus = {kind:"noc", id:id.slice(4)};
+    else if (id.startsWith("link:") || id.startsWith("port:"))
+      focus={kind:"chip"};
     else if ((id.startsWith("network:") || id.startsWith("fabric:")) &&
              d.noc_profiles?.[id.split(":")[1]])
       focus = {kind:"noc", id:id.split(":")[1]};
