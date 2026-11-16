@@ -290,7 +290,12 @@
   document.getElementById("arch-h-zoom-in").addEventListener("click", () => zoomTo(1.25));
   document.getElementById("arch-h-zoom-out").addEventListener("click", () => zoomTo(1 / 1.25));
   document.getElementById("arch-h-fit").addEventListener("click", fit);
-  planes.addEventListener("change", draw);
+  planes.addEventListener("change", () => {
+    // Data/control plane is a whole-chip connectivity filter. Bring users
+    // back from a selected local NoC/router/NI before redrawing links.
+    focus = {kind: "chip"};
+    draw(); updateVisualBread();
+  });
   viewport.addEventListener("wheel", ev => {
     if (!ev.ctrlKey) return;
     ev.preventDefault();
