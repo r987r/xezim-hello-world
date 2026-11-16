@@ -110,7 +110,7 @@ function drawComposition() {
       });
     }
     status.textContent = name+" • "+components.length+" declared IP/memory blocks • "+
-      ownNocs.length+" local FlooNoCs • source topology, not an RTL simulation";
+      ownNocs.length+" local FlooNoCs • dashed desktop links are inferred from NI names, not qualified RTL wiring";
   } else if(kind==="noc" && profiles[name]) {
     const p=profiles[name],router=p.routers?.[0];
     const dims=router?.array||[1,1],nx=dims[0],ny=dims[1];
