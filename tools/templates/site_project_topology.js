@@ -131,11 +131,15 @@
   fabrics.forEach((n, i) =>
     positions.set(n.id, { x: Math.max(35, (W - CARD_W) / 2), y: baseH + 18 + i * 97 }));
   let selected = null, zoom = 1, panX = 0, panY = 0, dragging = null;
-  function view() { svg.setAttribute("viewBox", [panX, panY, W / zoom, H / zoom].join(" ")); }
+  let focus = {kind: "chip"}, diagramW = W, diagramH = H;
+  function view() { svg.setAttribute("viewBox", [panX, panY, diagramW / zoom, diagramH / zoom].join(" ")); }
   function fit() {
     zoom = 1; panX = 0; panY = 0; view();
   }
+  /*__COMPOSITION_IMPL__*/
   function draw() {
+    if (focus.kind !== "chip") { drawComposition(); return; }
+    diagramW = W; diagramH = H;
     svg.replaceChildren();
     svg.setAttribute("width", W);
     svg.setAttribute("height", H);
@@ -214,7 +218,54 @@
       " connections · configuration-derived, not runtime-verified";
   }
   function open(ref) {
-    if (typeof window.archHierarchyNavigate === "function") window.archHierarchyNavigate(ref);
+    if (typeof window.archHierarchyNavigate === "function") {
+      window.archHierarchyNavigate(ref);
+    } else {
+      showFocus(ref);
+    }
+  }
+  function showFocus(id) {
+    if (id === "chip" || id === "subsystems") focus = {kind: "chip"};
+    else if (id.startsWith("sub:")) focus = {kind:"subsystem", id:id.slice(4)};
+    else if (id.startsWith("noc:")) focus = {kind:"noc", id:id.slice(4)};
+    else if (id.startsWith("router:")) {
+      const parts=id.slice(7).split(":");
+      if(parts.length===3 && Number.isInteger(+parts[1]) && Number.isInteger(+parts[2]))
+        focus={kind:"router",noc:parts[0],x:+parts[1],y:+parts[2]};
+    } else if (id.startsWith("endpoint:")) {
+      const bits=id.slice(9).split(":");
+      if(bits.length===2) focus={kind:"endpoint",noc:bits[0],endpoint:bits[1]};
+    } else if (id.startsWith("ip:") || id.startsWith("profile:") || id.startsWith("property:")) {
+      const bits=id.split(":");
+      if (bits.length===3 && subNames.has(bits[1]))
+        focus={kind:"ip",sub:bits[1],id:bits[2]};
+    } else if (id.startsWith("memory:") || id.startsWith("region:")) {
+      const sub=id.split(":")[1].split(".")[0];
+      if (subNames.has(sub)) focus={kind:"subsystem",id:sub};
+    }
+    draw(); updateVisualBread();
+  }
+  function updateVisualBread() {
+    const crumb=document.getElementById("arch-h-diagram-crumbs");
+    if(!crumb)return;
+    const spans=[{label:"Chip",id:"chip"}];
+    if(focus.kind==="subsystem")spans.push({label:focus.id,id:"sub:"+focus.id});
+    if(focus.kind==="noc")spans.push({label:focus.id,id:"noc:"+focus.id});
+    if(focus.kind==="ip")spans.push({label:focus.sub,id:"sub:"+focus.sub},
+      {label:focus.id,id:"ip:"+focus.sub+":"+focus.id});
+    if(focus.kind==="router"||focus.kind==="endpoint"){
+      spans.push({label:focus.noc,id:"noc:"+focus.noc});
+      spans.push({label:focus.kind==="router"?
+        "["+focus.x+","+focus.y+"]":focus.endpoint,
+        id:focus.kind==="router"?"router:"+focus.noc+":"+focus.x+":"+focus.y:
+          "endpoint:"+focus.noc+":"+focus.endpoint});
+    }
+    crumb.replaceChildren();
+    for (const [idx,item] of spans.entries()) {
+      if(idx) {const sep=document.createElement("span");sep.textContent=" / ";crumb.append(sep);}
+      const b=document.createElement("button");b.type="button";b.textContent=item.label;
+      b.addEventListener("click",()=>open(item.id));crumb.append(b);
+    }
   }
   const zoomTo = k => { zoom = Math.max(0.45, Math.min(3, zoom * k)); view(); };
   document.getElementById("arch-h-zoom-in").addEventListener("click", () => zoomTo(1.25));
@@ -243,7 +294,8 @@
   window.addEventListener("arch-h-selected", ev => {
     const id = ev.detail?.id;
     const n = graphNodes.find(node => node.ref === id);
-    if (n) { selected = n.id; draw(); }
+    if (n) selected = n.id;
+    if(id)showFocus(id);
   });
-  fit(); draw();
+  fit(); draw(); updateVisualBread();
 })();
