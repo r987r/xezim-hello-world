@@ -10,6 +10,7 @@ from selenium import webdriver
 from selenium.webdriver import ChromeOptions
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.support.ui import Select
 import yaml
 
 
@@ -114,9 +115,10 @@ def main():
             finder.send_keys(source["subsystems"][0]["name"])
             assert source["subsystems"][0]["name"] in (
                 browser.find_element(By.ID, "arch-h-tree").text)
-            browser.find_element(By.ID, "arch-h-plane").send_keys("data")
-            assert "connections" in browser.find_element(
-                By.ID, "arch-h-graph-status").text
+            Select(browser.find_element(By.ID, "arch-h-plane")).select_by_value("data")
+            graph_status = browser.find_element(By.ID, "arch-h-graph-status").text
+            assert "connections" in graph_status, (pid, graph_status,
+                browser.find_element(By.ID, "arch-h-diagram-crumbs").text)
             browser.find_element(By.ID, "arch-h-fit").click()
             browser.get((expected / "address-map.html").as_uri())
             for target in source["memory_targets"]:
