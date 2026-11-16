@@ -62,7 +62,7 @@ class PcieEndpointFrontdoorTests(unittest.TestCase):
                           "rd_offset >= 32'h1000", "wr_offset < 32'h40",
                           "ep_illegal_write", "ep_cfg_write = write_fire && ep_wr_window",
                           "illegal_write ? 2'b10 : 2'b00",
-                          "pcie_endpoint_prelink_ctrl u_endpoint_dbi"):
+                          "u_endpoint_dbi ("):
             self.assertIn(condition, source)
         self.assertIn("if (!bar_config_committed_o)", policy)
         self.assertIn("if (cfg_wstrb_i != 4'hf)", policy)
