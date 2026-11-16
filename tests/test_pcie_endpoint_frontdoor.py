@@ -68,6 +68,23 @@ class PcieEndpointFrontdoorTests(unittest.TestCase):
         self.assertIn("if (cfg_wstrb_i != 4'hf)", policy)
         self.assertIn("endpoint_prelink_ctrl.sv", build)
 
+    def test_real_cpu_firmware_passive_endpoint_qualification_gate(self):
+        source=(ROOT/"sw/dma/tests/cpu_dma_run.c").read_text()
+        compiler=(ROOT/"tools/cpu_dma_firmware.py").read_text()
+        boot=(ROOT/"dv/full_chip/test_boot.py").read_text()
+        for symbol in ("SOC_PCIE_ENDPOINT_FRONTDOOR", "soc_pcie_ep_dbi",
+                       "SOC_PCIE_EP_BAR0_APERTURE_OFFSET",
+                       "SOC_PCIE_EP_BAR0_TARGET_OFFSET",
+                       "SOC_PCIE_EP_CONTROL_COMMIT_MASK",
+                       "SOC_PCIE_EP_CONTROL_START_MASK",
+                       "SOC_PCIE_EP_STATUS_COMMITTED_MASK"):
+            self.assertIn(symbol, source)
+        self.assertIn("compile_rdl(RDL)", compiler)
+        self.assertIn("pcie_endpoint_frontdoor", compiler)
+        for key in ("ep_aperture_wr", "ep_target_wr", "ep_commit_start_wr",
+                    "ep_status_rd", "ep_slave_write", "ep_slave_read"):
+            self.assertIn(key, boot)
+
 
 if __name__ == "__main__":
     unittest.main()
