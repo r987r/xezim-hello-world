@@ -64,8 +64,12 @@ def projects(root: Path = ROOT) -> list[dict]:
         # Use the SAME FlooGen configuration builder as the actual RTL
         # generation path. These are source-qualified topology contracts,
         # not a claim that source-selected hardware has been elaborated.
-        contracts = yaml.safe_load(
-            (root / "config/interface_contracts.yaml").read_text())
+        contracts_path = root / "config/interface_contracts.yaml"
+        # Isolated catalog test fixtures intentionally supply only project
+        # configs; they exercise the same checked-in shared contract.
+        if not contracts_path.is_file():
+            contracts_path = ROOT / "config/interface_contracts.yaml"
+        contracts = yaml.safe_load(contracts_path.read_text())
         noc_profiles = floonoc_profiles(soc, contracts)
         noc_descriptions = {}
         for noc_name, noc in sorted(noc_profiles.items()):
