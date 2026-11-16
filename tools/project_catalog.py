@@ -14,6 +14,7 @@ import re
 import yaml
 
 from socgen import validate as validate_soc
+from floonoc_gen import profiles as floonoc_profiles
 
 ROOT = Path(__file__).resolve().parents[1]
 REGISTRY = "config/projects/catalog.yaml"
@@ -60,6 +61,24 @@ def projects(root: Path = ROOT) -> list[dict]:
         if soc.get("name") != project_id:
             raise ValueError("project identity differs from SoC config name")
         meta = validate_soc(soc)
+        # Use the SAME FlooGen configuration builder as the actual RTL
+        # generation path. These are source-qualified topology contracts,
+        # not a claim that source-selected hardware has been elaborated.
+        contracts = yaml.safe_load(
+            (root / "config/interface_contracts.yaml").read_text())
+        noc_profiles = floonoc_profiles(soc, contracts)
+        noc_descriptions = {}
+        for noc_name, noc in sorted(noc_profiles.items()):
+            config = noc["config"]
+            noc_descriptions[noc_name] = {
+                "name": noc_name, "plane": noc["plane"], "path": noc["path"],
+                "family": noc["family"],
+                "routers": config["routers"],
+                "connections": config["connections"],
+                "endpoints": config["endpoints"],
+                "routing": config["routing"],
+                "evidence": "generator_profile_not_elaborated_or_tested",
+            }
         generated = item.get("generated_source")
         if item["qualification"] == "generated_default":
             if not isinstance(generated, str):
@@ -102,6 +121,7 @@ def projects(root: Path = ROOT) -> list[dict]:
                 "memory_targets": soc["memory_targets"],
                 "buses": soc.get("buses", {}),
                 "boot": soc.get("boot", {}),
+                "noc_profiles": noc_descriptions,
             },
             "address_map": soc["address_map"],
             "source_evidence": ("tracked_generated_source_not_simulation" if generated else
