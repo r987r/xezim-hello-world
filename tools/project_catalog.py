@@ -73,14 +73,14 @@ def projects(root: Path = ROOT) -> list[dict]:
         noc_profiles = floonoc_profiles(soc, contracts)
         noc_descriptions = {}
         for noc_name, noc in sorted(noc_profiles.items()):
-            config = noc["config"]
+            profile_cfg = noc["config"]
             noc_descriptions[noc_name] = {
                 "name": noc_name, "plane": noc["plane"], "path": noc["path"],
                 "family": noc["family"],
-                "routers": config["routers"],
-                "connections": config["connections"],
-                "endpoints": config["endpoints"],
-                "routing": config["routing"],
+                "routers": profile_cfg["routers"],
+                "connections": profile_cfg["connections"],
+                "endpoints": profile_cfg["endpoints"],
+                "routing": profile_cfg["routing"],
                 "evidence": "generator_profile_not_elaborated_or_tested",
             }
         generated = item.get("generated_source")
