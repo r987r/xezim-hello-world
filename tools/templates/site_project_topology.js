@@ -116,7 +116,7 @@
     columns.get(level).push(n.id);
   }
   for (const ids of columns.values()) ids.sort((a, b) => (order.get(a) - order.get(b)));
-  const CARD_W = 215, CARD_H = 78, STEP_X = 280, STEP_Y = 125;
+  const CARD_W = 238, CARD_H = 99, STEP_X = 295, STEP_Y = 145;
   const ncols = maxLevel + 1;
   const maxRows = Math.max(1, ...[...columns.values()].map(x => x.length));
   const W = Math.max(520, ncols * STEP_X + 85);
@@ -204,8 +204,22 @@
         fill: node.kind === "fabric" ? "#2b214a" : "#122f46"
       });
       const label = node.label.length > 25 ? node.label.slice(0, 24) + "…" : node.label;
-      g.append(rect, makeText(p.x + 13, p.y + 30, label, 15, "#eaf4ff", 700),
-               makeText(p.x + 13, p.y + 55, node.kind === "fabric" ? "Shared network" : "Subsystem", 12, "#a4bfd0"));
+      const sub = (d.subsystems || []).find(x => x.name === node.id);
+      const ownNoCs = Object.entries(d.noc_profiles || {}).filter(([_, q]) =>
+        q.path?.split("/")[0] === node.id).length;
+      const type = d.subsystem_types?.[sub?.type] || {};
+      const ipName = sub?.cpu?.ip || sub?.ip || type.dma || sub?.type || "Subsystem";
+      const mapped = (model.address_map?.data || []).filter(a => a.name?.startsWith(node.id + "."));
+      const memories = (d.memory_targets || []).filter(m => m.name.startsWith(node.id + "."));
+      const mappedText = memories.length ? memories.map(m => m.kind.toUpperCase()).join(" / ") :
+        mapped.some(a => a.name.endsWith(".sram")) ? "SRAM" : "Mapped endpoints";
+      g.append(rect, makeText(p.x + 13, p.y + 26, label, 15, "#eaf4ff", 700),
+               makeText(p.x + 13, p.y + 50,
+                 node.kind === "fabric" ? "Shared network" : ipName, 12, "#a4bfd0"),
+               makeText(p.x + 13, p.y + 76,
+                 node.kind === "fabric" ? "Click for router / NI view" :
+                 mappedText + " • " + ownNoCs + " local NoCs • open ›",
+                 11, "#7bd5da"));
       const tt = el("title"); tt.textContent = node.label + " — click to inspect";
       g.append(tt);
       g.addEventListener("click", () => { selected = node.id; draw(); open(node.ref); });
@@ -228,6 +242,9 @@
     if (id === "chip" || id === "subsystems") focus = {kind: "chip"};
     else if (id.startsWith("sub:")) focus = {kind:"subsystem", id:id.slice(4)};
     else if (id.startsWith("noc:")) focus = {kind:"noc", id:id.slice(4)};
+    else if ((id.startsWith("network:") || id.startsWith("fabric:")) &&
+             d.noc_profiles?.[id.split(":")[1]])
+      focus = {kind:"noc", id:id.split(":")[1]};
     else if (id.startsWith("router:")) {
       const parts=id.slice(7).split(":");
       if(parts.length===3 && Number.isInteger(+parts[1]) && Number.isInteger(+parts[2]))
