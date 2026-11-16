@@ -33,6 +33,8 @@ class PcieEndpointFrontdoorTests(unittest.TestCase):
             rtl = (root/"soc_top.sv").read_text()
             self.assertIn("pcie_requester_axi_regs", rtl)
             self.assertIn(".EndpointPrelink(1'b1)", rtl)
+            self.assertIn(".EndpointSramBase(32'h12000000)", rtl)
+            self.assertIn(".EndpointSramBytes(32'h00100000)", rtl)
             self.assertEqual(rtl.count("u_pcie_requester_csrs"), 1)
             for pin in ("ep_phy_ready_i", "ep_link_up_i",
                         "ep_host_mem_enable_i", "ep_ltssm_l0_i",
