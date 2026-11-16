@@ -1461,9 +1461,10 @@ def project_pages(output, projects, entries, repository, sha):
             'not published for this project. Build source files and '
             'compile verdicts remain available under RTL &amp; files.</p>'
         )
-        architecture = (info + nav + scope +
+        architecture = (info + nav +
                         template.replace('__PROJECT_HIERARCHY_JSON__', hierarchy)
-                                .replace('__PROJECT_TOPOLOGY_JS__', topology_js) +
+                                .replace('__PROJECT_TOPOLOGY_JS__', topology_js)
+                                .replace('__PROJECT_EVIDENCE_SCOPE__', scope) +
                         detailed)
         pages = {
             'index.html': overview,
