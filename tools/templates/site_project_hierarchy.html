@@ -1,12 +1,6 @@
 <section class="hierarchy-app" aria-label="Project architecture explorer">
   <div class="eyebrow">Source-derived hierarchy / interactive navigation</div>
   <h2>Explore chip architecture</h2>
-  <p class="muted">Click the chip to open a subsystem composition diagram, then drill into its IP, local FlooNoCs, router arrays and network interfaces. The same viewer reads each selected project's real source profiles; it never borrows another chip's RTL evidence.</p>
-  <div class="arch-h-search">
-    <label for="arch-h-filter">Find any block, interface or network</label>
-    <input type="search" id="arch-h-filter" placeholder="compute0, ethernet, ddr, control, AXI…" autocomplete="off">
-    <span id="arch-h-count" aria-live="polite"></span>
-  </div>
   <section class="arch-h-graph" aria-label="Chip connection diagram">
     <div class="arch-h-graph-controls">
       <strong>Interactive composition diagram</strong>
@@ -24,6 +18,12 @@
       <span><i class="arch-h-key arch-h-data"></i>Data <i class="arch-h-key arch-h-control"></i>Control</span>
     </div>
   </section>
+  <p class="muted">Click the chip to open a subsystem composition diagram, then drill into its IP, local FlooNoCs, router arrays and network interfaces. The same viewer reads each selected project's real source profiles; it never borrows another chip's RTL evidence.</p>
+  <div class="arch-h-search">
+    <label for="arch-h-filter">Find any block, interface or network</label>
+    <input type="search" id="arch-h-filter" placeholder="compute0, ethernet, ddr, control, AXI…" autocomplete="off">
+    <span id="arch-h-count" aria-live="polite"></span>
+  </div>
   <div class="arch-h-layout">
     <nav class="arch-h-tree" aria-label="Source architecture hierarchy" id="arch-h-tree"></nav>
     <section class="arch-h-detail" aria-label="Selected architecture component">
@@ -48,6 +48,8 @@
 .arch-h-graph-controls select{padding:5px 8px}
 .arch-h-graph-controls button{padding:5px 11px}
 .arch-h-viewport{width:100%;height:470px;overflow:auto;touch-action:pan-x pan-y}
+@media(max-width:760px){.arch-h-viewport.arch-h-expanded{height:auto;max-height:none;overflow-y:visible;overflow-x:auto;touch-action:pan-x pan-y}}
+.arch-h-graph{scroll-margin-top:16px}
 #arch-h-svg{display:block;max-width:none;background:#081522;user-select:none;touch-action:pan-x pan-y}
 #arch-h-svg .arch-h-svg-node{cursor:pointer}
 #arch-h-svg .arch-h-svg-node:hover rect{filter:brightness(1.25)}
