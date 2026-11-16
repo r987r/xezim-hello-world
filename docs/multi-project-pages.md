@@ -119,12 +119,13 @@ populate its own Test Runs page.
 
 ## Hierarchy restoration and future projects
 
-The original chip's **Architecture** navigation opens its complete existing
-interactive `explorer.html` (subsystems → IP → NoC → routers and interfaces),
-including controls, RTL bindings, signals and evidence. The reduced region
-sketch was removed from the multi-project publisher. The generic
-`site_project_hierarchy.html` renderer instead consumes each project's
-own `soc.yaml` subsystem, IP, fabric, network/link, bus and memory contracts.
+Both projects' **Architecture** navigation opens the SAME shared
+`architecture.html` page with chip, subsystem, local FlooNoC, router and NI
+visual drill-down. The original chip additionally links to its separately
+parsed `explorer.html` for deeper RTL instance, signal and evidence inspection.
+The former reduced static-region sketch was removed. The shared
+`site_project_hierarchy.html` renderer consumes each project's own
+`soc.yaml` subsystem, IP, fabric, network/link, bus and memory contracts.
 It supports search, breadcrumbs and click-through, but does not pretend to
 know RTL router instances or signal bindings until an actual project-specific
 compiler-parsed explorer is published.
