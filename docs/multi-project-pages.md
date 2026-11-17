@@ -81,22 +81,32 @@ first. Verilator lint/elaboration **and C++ model-object build** are
 required for a compile PASS, and neither implies executed RTL behavior.
 The catalog-driven CI matrix uses bounded parallelism rather than an
 unbounded ten-job burst. A failing project does not hide behind a passing one.
+For each compiled entry it also runs the same source-selected real CPU boot
+smoke, and archives its own result and simulator log. The per-project Test runs
+page is a separate evidence-ingestion ledger, not an alias for that workflow.
 
 ## Source/RTL/behavior qualification ladder
 
 1. **Configuration only**: schema validated; no generated hardware claimed.
 2. **CI compiled**: selected Bender filelist and actual FlooGen/CPU/SoC RTL
    generated, repeat-checked, elaborated and C++ compiled with logs.
-3. **Functional PASS**: project-specific immutable run identity, actual
-   executed stimuli, passive AXI/TLP/GMII/DFI observations as applicable,
-   expected byte-level results, and accepted completions.
-4. **Real controller/PHY qualified**: separate selected-IP regression,
+3. **CPU cold-boot smoke PASS**: selected RTL actually simulated, with
+   firmware greetings and ordered INIT/RUN/CHECK observed in that project's
+   generated checker. This does **not** prove routed AXI memory payloads.
+4. **Protocol/data functional PASS**: project-specific immutable run identity,
+   real accepted AXI/TLP/GMII/DFI transactions as applicable, independent
+   response/contents checking, and project-owned archived evidence.
+5. **Real controller/PHY qualified**: separate selected-IP regression,
    not inferred from modeled DDR or a top-level source file.
 
 Project A has independently verified functional tests on its selected
-variants. Project B is at **compiled** status; Ethernet, PCIe and DDR
-active-variant integration and bytes-checked through-routing are still
-pending. Its run page remains empty, not green.
+variants. Project B has **compiled RTL and its own executed CPU/NoC cold-boot
+smoke PASS**, verified alongside A in
+[CI run 44139473560](https://github.com/r987r/xezim-hello-world/actions/runs/44139473560).
+Project B's Ethernet, PCIe, and DDR data-path qualifications remain pending.
+The site's Project B **Test runs** page still has no admitted project-qualified
+functional protocol records; a green compile/boot Actions job must not be
+silently copied into that ledger or treated as AXI/DDR/PCIe proof.
 
 To add a project, follow [project onboarding](project-onboarding.md).
 Ten-project tests exercise catalog enumeration, independent source
