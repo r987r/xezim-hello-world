@@ -14,6 +14,7 @@ on:
       - 'tests/test_soc_ir.py'
       - 'tests/test_three_region_project.py'
       - 'tests/test_project_build.py'
+      - 'tests/test_third_project_onboarding.py'
       - 'tools/project_build.py'
       - 'tools/project_catalog.py'
       - 'tools/project_scaffold.py'
@@ -36,7 +37,7 @@ jobs:
       - name: Validate existing source SoC and generated graph
         run: python3 -m unittest tests.test_soc_ir tests.test_design_explorer -v
       - name: Verify independent three-region project source contract
-        run: python3 -m unittest tests.test_three_region_project tests.test_project_build -v
+        run: python3 -m unittest tests.test_three_region_project tests.test_project_build tests.test_third_project_onboarding -v
       - name: Generate and verify every catalog source-selected boot and memory unit build
         run: |
           python3 tools/project_catalog.py --ids | while IFS= read -r project; do
