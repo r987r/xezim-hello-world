@@ -8,17 +8,12 @@ for every arbitrary subsystem, clock or IP combination.
 
 ## Author a new configuration
 
-1. Copy an existing supported `soc.yaml` into
-   `config/projects/<new-id>/soc.yaml` and give the
-   source's `name` the same unique identifier.
+1. Start from an existing supported SoC via the source-only scaffolder:\n\n   ```sh\n   python3 tools/project_scaffold.py --id chip_third \\\n     --from-project xezim_ethernet_cpu_ddr_pcie \\\n     --title 'Third chip' --subtitle 'New chip configuration'\n   ```\n\n   This creates `config/projects/chip_third/soc.yaml` and registers it with\n   `qualification: source_contract_only`. The copied shape is a starting\n   point, **not** evidence of a new design or an RTL qualification.
 2. Adjust subsystems, memory targets, addresses, boot and FlooNoC links.
    Keep address windows unique and every initiator/target routed. Use
    supported CPU/IP and NoC adapters only; fail closed on unsupported IPs.
-3. Add one entry in `config/projects/catalog.yaml`:
-   `id`, human title, subtitle, config path, and
-   `qualification: source_contract_only`. Do not give
-   a source-only design an imaginary generated top path.
-4. Run catalog source validation and negative topology tests.
+3. The scaffolder adds the catalog entry; do not add project IDs to CI or\n   the shared architecture viewer. Do not give a source-only design an\n   imaginary generated top path.
+4. Run catalog source validation and negative topology tests, including\n   `python3 -m unittest tests.test_third_project_onboarding -v`.\n   Verify the new chip changes actual connectivity/addresses/composition,\n   not just the name of a copied configuration.
 5. Generate selected boot/memory RTL, then `--full-chip` if
    the chosen composition is supported. Compile with shared pinned
    FlooGen/Bender/Verilator; only then promote its catalog qualification
@@ -77,3 +72,19 @@ project's pass/fail counts for a new design.
 
 See [multi-project platform](multi-project-pages.md),
 [repository map](repository-map.md), and [publication provenance](publication.md).
+
+## Third-design scalability gate
+
+The shared source-IR workflow loops over **every** catalog ID for source-selected
+boot/memory generation and exact regeneration checks; it no longer enumerates
+the two originals. The website's same topology and nested composition viewer
+is reused for a structurally different third-source fixture (five direct
+neighbor links rather than four, and a different region layout). The compiled
+RTL matrix remains gated by qualification and must not silently count a
+source-only third project as compiled or functionally passed.
+
+This does **not** remove the current hardware boundaries: one memory subsystem,
+supported PicoRV32/SERV boot shapes, pinned peripheral adapters, and supported
+NoC protocols. Extending the configuration to a new hardware shape must update
+and test the relevant shared generator. The source-only browser test is not
+Verilator, real AXI routing, or traffic qualification.
