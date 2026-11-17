@@ -451,13 +451,27 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
         elif pcie_outbound_mode and ep == 'controller_regs' and p['network'] == pcie[0]['name']+'_local_config':
             pcie_csr = next(r for r in cfg['address_map']['config']
                             if r['name'] == pcie[0]['name']+'.ctrl')
+            pcie_sram = next(r for r in cfg['address_map']['data']
+                             if r['name'] == pcie[0]['name']+'.sram')
             lines += [module('pcie_requester_axi_regs', 'u_pcie_requester_csrs', {
                 'axi_req_t':dtype(p,'req'), 'axi_rsp_t':dtype(p,'rsp'),
                 'lite_req_t':'lite_req_t', 'lite_rsp_t':'lite_resp_t',
                 'AxiIdWidth':p['id_width'],
-                'CsrBase':f"32'h{int(pcie_csr['base'],0):08x}"}, {
+                'CsrBase':f"32'h{int(pcie_csr['base'],0):08x}",
+                'EndpointPrelink':"1'b1",
+                'EndpointSramBase':f"32'h{int(pcie_sram['base'],0):08x}",
+                'EndpointSramBytes':f"32'h{int(pcie_sram['size'],0):08x}"}, {
                 'clk_i':'clk_i', 'rst_ni':'rst_ni',
                 'cfg_req_i':req(p), 'cfg_rsp_o':rsp(p),
+                # This variant has no actual OpenPCIe controller/PHY; keep
+                # all hardware status inactive, never fabricate L0 or MSE.
+                **{port:"1'b0" for port in (
+                    'ep_phy_ready_i','ep_noc_ready_i','ep_link_up_i',
+                    'ep_host_mem_enable_i','ep_host_cfg_violation_i',
+                    'ep_ltssm_l0_i')},
+                'ep_host_bar0_bus_base_i':"32'b0",
+                'ep_bar_committed_o':'',
+                'ep_ltssm_enable_o':'', 'ep_mem_ready_o':'',
                 **pcie_outbound.csr_ports()})]
         elif ep == 'controller_regs' and p['network'] == 'memory0_local_config' and real_ddr_mode:
             # Live memory controller wrapper below owns this separate Config NoC target.

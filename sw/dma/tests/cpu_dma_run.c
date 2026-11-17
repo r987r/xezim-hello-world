@@ -7,6 +7,9 @@
 #include "../../common/memory_pool.h"
 #ifdef SOC_PCIE_OUTBOUND
 #include "../../pcie/pcie_requester.h"
+#ifdef SOC_PCIE_ENDPOINT_FRONTDOOR
+#include "../../pcie/pcie_endpoint_ctrl.h"
+#endif
 #endif
 
 #include "../../common/memory_pattern.h"
@@ -65,6 +68,37 @@ int cpu_dma_run(void) {
         *evidence = 0xd0000025u;
         return 37;
     }
+#ifdef SOC_PCIE_ENDPOINT_FRONTDOOR
+    /* Real CPU0 C performs Config-NoC writes/reads to the device DBI
+     * policy. No actual endpoint PHY exists in this outbound variant:
+     * L0 and host MSE MUST remain false. No fake link success.
+     */
+    volatile uint32_t *const dbi = soc_pcie_ep_dbi();
+    dbi[SOC_PCIE_EP_BAR0_APERTURE_OFFSET / 4u] = UINT32_C(0x1000);
+    dbi[SOC_PCIE_EP_BAR0_TARGET_OFFSET / 4u] = (uint32_t)SOC_PCIE_SRAM;
+    soc_pcie_ep_mmio_fence();
+    if (dbi[SOC_PCIE_EP_BAR0_APERTURE_OFFSET / 4u] != UINT32_C(0x1000) ||
+        dbi[SOC_PCIE_EP_BAR0_TARGET_OFFSET / 4u] != (uint32_t)SOC_PCIE_SRAM) {
+        *evidence = 0xd0000031u; return 49;
+    }
+    dbi[SOC_PCIE_EP_CONTROL_OFFSET / 4u] =
+        SOC_PCIE_EP_CONTROL_COMMIT_MASK;
+    soc_pcie_ep_mmio_fence();
+    uint32_t dbi_state = soc_pcie_ep_read_status(dbi);
+    if (dbi_state != SOC_PCIE_EP_STATUS_COMMITTED_MASK) {
+        *evidence = 0xd0000032u; return 50;
+    }
+    dbi[SOC_PCIE_EP_CONTROL_OFFSET / 4u] =
+        SOC_PCIE_EP_CONTROL_START_MASK;
+    soc_pcie_ep_mmio_fence();
+    dbi_state = soc_pcie_ep_read_status(dbi);
+    if (dbi_state != SOC_PCIE_EP_STATUS_COMMITTED_MASK ||
+        dbi[SOC_PCIE_EP_HOST_BAR0_OFFSET / 4u] != 0 ||
+        dbi[SOC_PCIE_EP_HOST_COMMAND_OFFSET / 4u] != 0 ||
+        dbi[SOC_PCIE_EP_LINK_STATUS_OFFSET / 4u] != 0) {
+        *evidence = 0xd0000033u; return 51;
+    }
+#endif
     /* One writer, one physical MMIO trace word, separate from runtime
      * allocator telemetry and the CPU0 DONE state. Real AXI monitor is
      * authoritative; these markers alone do not prove DMA completion. */

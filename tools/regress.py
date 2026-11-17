@@ -539,7 +539,8 @@ def run_target(name, test, resolver, options):
             from cpu_dma_firmware import prepare as prepare_cpu_dma
             prepare_cpu_dma(cfg, noc_manifest, ROOT/'gen/noc/floonoc', variant,
                             pcie_host_mode=True,
-                            pcie_outbound_mode=test['firmware_mode']=='pcie_outbound')
+                            pcie_outbound_mode=test['firmware_mode']=='pcie_outbound',
+                            pcie_endpoint_frontdoor=test['firmware_mode']=='pcie_outbound')
         else:
             emit_chip(cfg, noc_manifest, ROOT/'gen/noc/floonoc', variant,
                       image_prefix=variant.relative_to(ROOT).as_posix(),
@@ -562,6 +563,7 @@ def run_target(name, test, resolver, options):
             sources += [str(ROOT/'.tools/verilog_pcie'/item) for item in required]
             sources += [str(ROOT/'rtl/adapters/pcie_dma_sram_target.sv')]
             sources += [str(ROOT/'rtl/adapters/pcie_requester_axi_regs.sv')]
+            sources += [str(ROOT/'dv/pcie_link/endpoint_prelink_ctrl.sv')]
     if test.get('firmware_mode') == 'ddr_cpu_dma':
         # Same CPU C/iDMA INIT/RUN/CHECK; opt-in generated 16KiB
         # independent Config NoC and pinned LiteDRAM memory target.
