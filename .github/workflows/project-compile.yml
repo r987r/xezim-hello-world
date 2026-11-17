@@ -72,8 +72,6 @@ jobs:
         run: python3 -m unittest tests.test_project_smoke -v
       - name: Simulate selected real CPU cold boot and INIT/RUN/CHECK
         run: python3 tools/project_smoke.py --project "${{ matrix.project }}"
-      - name: Run selected real CPU and NoC cold-boot RTL smoke
-        run: python3 tools/project_smoke.py --project "${{ matrix.project }}"
       - name: Retain full selected filelist RTL diagnostics and manifests
         if: always()
         uses: actions/upload-artifact@v4
