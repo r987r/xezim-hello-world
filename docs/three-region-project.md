@@ -11,21 +11,33 @@ and PCIe0. No SERV, no HBM, no global **data** mesh.
 ## Physical-region view
 
 ```text
-  Ethernet0          CPU0 + Memory0             PCIe0
-  GMII / DMA   <-->   CPU / SRAM / DDR    <-->   PCIe bridge
-           L0            central link         L1
+  Ethernet0 local data NoC       Compute0 local NoC         PCIe0 local NoC
+       packet DMA ----- L0 -----> CPU / SRAM ------ L1 -----> PCIe bridge
+                 \\
+                  \\ independent DDR egress (address decoded)
+                   \\-----> Memory0 local NoC -----> DDR0
+                            ^
+                            |
+                Compute0 <--+-- central compute/memory link
 
-      global_config FlooNoC on the bottom, reaches all four subsystems
+      Global config FlooNoC: bottom, reaches all four subsystems
 ```
 
 There are **four logical subsystems** in three physical regions.
 The data links are bidirectional 1:1 AXI4 FlooNoCs:
-Ethernet0–Compute0, Compute0–Memory0 and Compute0–PCIe0.
-Each link needs two separate AXI initiator directions and normal
-read/write response channels. The source-selected emitter produces
-six directed FlooNoC networks as part of 15 total NoC instances
-in this configuration. The central compute fabric routes by address;
-it does not imply CPU software copies every payload.
+Ethernet0–Compute0, **Ethernet0–Memory0**, Compute0–Memory0 and
+Compute0–PCIe0. The Ethernet-local FlooNoC has two separate address-decoded
+egresses for its traffic: `to_compute0` handles CPU/SRAM and reachable PCIe
+ranges, and `to_memory0` handles the DDR range. AXI DDR writes do not
+traverse the Compute0 local NoC or require CPU payload forwarding.
+The shared route builder selects the shortest available physical path to a
+target owner for all subsystems; optional placement hints affect the diagram,
+not routing.
+
+Each bidirectional link is implemented by two independent AXI initiator
+directions, for eight directed FlooNoC networks and **17 total NoC instances**
+in this configuration. The local DDR target still uses the memory subsystem's
+selected controller/model. Project B functional traffic is not yet qualified.
 
 ## Current generated and compiled boundary
 

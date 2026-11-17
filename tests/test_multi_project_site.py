@@ -25,7 +25,11 @@ class MultiProjectSiteTests(unittest.TestCase):
         self.assertEqual(second["qualification"], "ci_generated_compiled")
         self.assertIsNone(second["generated_source"])
         self.assertEqual(second["memory_targets"], ["memory0.ddr0"])
-        self.assertEqual(len(second["data_links"]), 3)
+        declared = yaml.safe_load((ROOT / second["config"]).read_text())
+        self.assertEqual(second["data_links"],
+                         sorted(declared["networks"]["direct_data"]["links"],
+                                key=lambda link: link["name"]))
+        self.assertEqual(len(second["data_links"]), 4)
 
     def test_project_page_isolation_with_unattributed_legacy_capture(self):
         projects = project_catalog.projects(ROOT)

@@ -27,7 +27,7 @@ class ThreeRegionProjectTest(unittest.TestCase):
         self.assertEqual([t["name"] for t in meta["targets"]], ["memory0.ddr0"])
         self.assertEqual(meta["ingress"], 1)
         self.assertNotIn("global_data", meta["fabrics"])
-        self.assertEqual(len(meta["direct_data_links"]), 3)
+        self.assertEqual(len(meta["direct_data_links"]), 4)
         self.assertEqual(
             [x["name"] for x in self.project["layout"]["regions"]],
             ["ethernet", "cpu_memory", "pcie"])
@@ -113,7 +113,7 @@ class ThreeRegionProjectTest(unittest.TestCase):
         profiles = floonoc_gen.profiles(cfg, knobs)
         self.assertNotIn("global_data", profiles)
         self.assertIn("global_config", profiles)
-        self.assertEqual(len(profiles), 15)  # 4 subsystem pairs + config + six directions
+        self.assertEqual(len(profiles), 17)  # 8 local + global config + 8 directed links
         for link in cfg["networks"]["direct_data"]["links"]:
             a, b = link["endpoints"]
             for src, dst in ((a, b), (b, a)):
@@ -133,6 +133,63 @@ class ThreeRegionProjectTest(unittest.TestCase):
         legacy = floonoc_gen.profiles(copy.deepcopy(self.legacy), knobs)
         self.assertIn("global_data", legacy)
         self.assertEqual(len(legacy), 12)
+
+    def test_ethernet_has_two_independent_addr_decoded_data_outputs(self):
+        import floonoc_gen
+        cfg = copy.deepcopy(self.project)
+        knobs = yaml.safe_load((ROOT / "config/interface_contracts.yaml").read_text())
+        profiles = floonoc_gen.profiles(cfg, knobs)
+        ethernet = profiles["ethernet0_local_data"]["config"]
+        compute = profiles["compute0_local_data"]["config"]
+        ports = {ep["name"]: ep for ep in ethernet["endpoints"]}
+        self.assertIn("to_compute0", ports)
+        self.assertIn("to_memory0", ports)
+        ddr_base = int(next(x["base"] for x in cfg["address_map"]["data"]
+                            if x["name"] == "memory0.ddr0"), 0)
+        cpu_base = int(next(x["base"] for x in cfg["address_map"]["data"]
+                            if x["name"] == "compute0.sram"), 0)
+
+        def decodes(port, address):
+            ranges = port.get("addr_range", [])
+            if isinstance(ranges, dict):
+                ranges = [ranges]
+            return any(int(x["base"]) <= address < int(x["base"]) + int(x["size"])
+                       for x in ranges)
+
+        self.assertTrue(decodes(ports["to_memory0"], ddr_base))
+        self.assertFalse(decodes(ports["to_compute0"], ddr_base))
+        self.assertTrue(decodes(ports["to_compute0"], cpu_base))
+        self.assertFalse(decodes(ports["to_memory0"], cpu_base))
+        compute_ports = {ep["name"]: ep for ep in compute["endpoints"]}
+        # CPU, DMA and PCIe can still reach DDR via central compute->memory.
+        self.assertTrue(decodes(compute_ports["to_memory0"], ddr_base))
+        self.assertFalse(decodes(compute_ports["to_ethernet0"], ddr_base))
+        for direction in (("ethernet0", "memory0"), ("memory0", "ethernet0")):
+            src, dest = direction
+            self.assertIn(
+                "direct_l0_ethernet_memory_" + src + "_to_" + dest,
+                profiles)
+
+    def test_local_router_decodes_no_duplicate_target_windows(self):
+        import floonoc_gen
+        cfg = copy.deepcopy(self.project)
+        knobs = yaml.safe_load((ROOT / "config/interface_contracts.yaml").read_text())
+        profiles = floonoc_gen.profiles(cfg, knobs)
+        for name, row in profiles.items():
+            endpoints = row["config"]["endpoints"]
+            ranges = []
+            for ep in endpoints:
+                if "sbr_port_protocol" not in ep:
+                    continue
+                windows = ep.get("addr_range", [])
+                if isinstance(windows, dict):
+                    windows = [windows]
+                ranges.extend((int(w["base"]), int(w["base"]) + int(w["size"]), ep["name"])
+                              for w in windows)
+            for i, (a, b, left) in enumerate(ranges):
+                for c, d, right in ranges[i+1:]:
+                    self.assertTrue(b <= c or d <= a,
+                                    f"{name}: {left} and {right} overlap")
 
     def test_phased_single_cpu_firmware_reuses_bootstrap(self):
         import chip_bootgen

@@ -233,20 +233,53 @@ def profiles(soc, knobs):
             peers.sort()
         hbm_ddr = [regions_data[x["target"]] for x in memory_outputs]
         all_srams = {n: regions_data[n + ".sram"] for n in compute_like}
+        # Every local FlooNoC owns one address-decoded egress for EACH
+        # physically connected neighbor. Route by target owner, not by a
+        # project-specific CPU/memory shortcut. All egress windows must be
+        # disjoint: a DMA DDR request must never match both the compute and
+        # memory ports of Ethernet's local NoC.
+        destinations = {name: [window] for name, window in all_srams.items()}
+        for output in memory_outputs:
+            owner = output["target"].split(".", 1)[0]
+            if owner not in adjacency:
+                raise NoCGenerationError("unknown direct-data target owner " + owner)
+            destinations.setdefault(owner, []).append(regions_data[output["target"]])
+
+        def first_hop(source, target):
+            # Breadth-first graph routing: direct neighbor wins; equal-hop
+            # alternatives are resolved by stable subsystem names. No fixed
+            # assumption about Ethernet, DDR, PCIe or the central CPU.
+            queue = [(source, None)]
+            seen = {source}
+            while queue:
+                current, first = queue.pop(0)
+                for peer in sorted(adjacency[current]):
+                    if peer in seen:
+                        continue
+                    hop = first or peer
+                    if peer == target:
+                        return hop
+                    seen.add(peer)
+                    queue.append((peer, hop))
+            raise NoCGenerationError(
+                f"direct data target {target} unreachable from {source}")
+
         routes = {}
-        for src, peers in sorted(adjacency.items()):
-            for dst in peers:
-                if src in memories:
-                    remote = list(all_srams.values())
-                elif src in computes:
-                    remote = (hbm_ddr if dst in memories
-                              else [all_srams[dst]])
-                else:
-                    # Peripheral can access any other SRAM or DDR through
-                    # compute's address-decoded transit NoC.
-                    remote = [reg for name, reg in sorted(all_srams.items())
-                              if name != src] + hbm_ddr
-                routes[(src, dst)] = remote
+        for source, peers in sorted(adjacency.items()):
+            directed = {peer: [] for peer in peers}
+            for owner, windows in sorted(destinations.items()):
+                if owner != source:
+                    directed[first_hop(source, owner)].extend(windows)
+            all_windows = [int(window["base"]) for group in directed.values()
+                           for window in group]
+            if len(all_windows) != len(set(all_windows)):
+                raise NoCGenerationError(
+                    "ambiguous direct data destination decode at " + source)
+            for peer, windows in sorted(directed.items()):
+                if not windows:
+                    raise NoCGenerationError(
+                        f"unused direct data port {source} -> {peer}")
+                routes[(source, peer)] = windows
         add("global_config", "config", compute_like,
             [(name + "_regs", cfg_owned[name])
              for name in compute_like + memories],
