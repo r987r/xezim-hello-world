@@ -7,6 +7,8 @@ on:
       - 'tools/project_build.py'
       - 'tools/project_catalog.py'
       - 'tools/project_compile.py'
+      - 'tools/project_smoke.py'
+      - 'tests/test_project_smoke.py'
       - 'tools/bootgen.py'
       - 'tools/chip_bootgen.py'
       - 'tools/floonoc_gen.py'
@@ -64,11 +66,19 @@ jobs:
           python3 tools/project_build.py --project "${{ matrix.project }}" --full-chip --check
       - name: Compile actual selected FlooNoC, CPU and SoC RTL
         run: python3 tools/project_compile.py --project "${{ matrix.project }}"
+      - name: Test native full-chip PASS criteria and negative logs
+        run: python3 -m unittest tests.test_project_smoke -v
+      - name: Simulate selected real CPU cold boot and INIT/RUN/CHECK
+        run: python3 tools/project_smoke.py --project "${{ matrix.project }}"
       - name: Retain full selected filelist RTL diagnostics and manifests
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: project-compile-${{ matrix.project }}-${{ github.run_id }}
-          path: .tools/projects/${{ matrix.project }}/
+          path: |
+            .tools/projects/${{ matrix.project }}/
+            .tools/project-smoke/${{ matrix.project }}/result.json
+            .tools/project-smoke/${{ matrix.project }}/native-build.log
+            .tools/project-smoke/${{ matrix.project }}/native-sim.log
           include-hidden-files: true
           if-no-files-found: warn
