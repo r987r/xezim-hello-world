@@ -9,6 +9,9 @@ on:
       - 'tools/project_compile.py'
       - 'tools/project_smoke.py'
       - 'tests/test_project_smoke.py'
+      - 'tools/project_axi_smoke.py'
+      - 'dv/full_chip/test_project_axi.py'
+      - 'tests/test_project_axi_smoke.py'
       - 'tools/bootgen.py'
       - 'tools/chip_bootgen.py'
       - 'tools/floonoc_gen.py'
@@ -70,6 +73,12 @@ jobs:
         run: python3 -m unittest tests.test_project_smoke -v
       - name: Simulate selected real CPU cold boot and INIT/RUN/CHECK
         run: python3 tools/project_smoke.py --project "${{ matrix.project }}"
+      - name: Test project-selected AXI readback runner safety
+        run: python3 -m unittest tests.test_project_axi_smoke -v
+      - name: Install existing pinned Cocotb AXI verification libraries
+        run: python3 -m pip install 'cocotb==1.9.2' 'cocotbext-axi==0.1.24'
+      - name: Byte-check real selected FlooNoC AXI4 memory readback
+        run: python3 tools/project_axi_smoke.py --project "${{ matrix.project }}"
       - name: Retain full selected filelist RTL diagnostics and manifests
         if: always()
         uses: actions/upload-artifact@v4
@@ -80,5 +89,6 @@ jobs:
             .tools/project-smoke/${{ matrix.project }}/result.json
             .tools/project-smoke/${{ matrix.project }}/native-build.log
             .tools/project-smoke/${{ matrix.project }}/native-sim.log
+            .tools/project-axi/${{ matrix.project }}/
           include-hidden-files: true
           if-no-files-found: warn
