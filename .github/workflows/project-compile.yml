@@ -9,8 +9,6 @@ on:
       - 'tools/project_compile.py'
       - 'tools/project_smoke.py'
       - 'tests/test_project_smoke.py'
-      - 'tools/project_smoke.py'
-      - 'tests/test_project_smoke.py'
       - 'tools/bootgen.py'
       - 'tools/chip_bootgen.py'
       - 'tools/floonoc_gen.py'
