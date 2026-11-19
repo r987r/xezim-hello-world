@@ -2,7 +2,7 @@
 
 **Owner:** [PCIe P0 #76](https://github.com/r987r/xezim-hello-world/issues/76) ·
 [Stimulus scaling #152](https://github.com/r987r/xezim-hello-world/issues/152) ·
-[Active real-link draft #232](https://github.com/r987r/xezim-hello-world/pull/232)
+[Merged real-link PR #232](https://github.com/r987r/xezim-hello-world/pull/232)
 
 ## Verified merge-review checkpoint — 2026-11-15 (PR #232)
 
@@ -97,8 +97,7 @@ concurrency, varied payloads and end-to-end randomized backpressure.
 This isolated connected-memory PASS must not be called whole-chip signoff. The independent real-link `l0`/`bar0`/`mem_ingress` and
 fast TLP-level integration tests have distinct acceptance boundaries.
 Neither isolated success can be repurposed as a single full-chip proof.
-Keep [issue #76](https://github.com/r987r/xezim-hello-world/issues/76) and
-[draft PR #232](https://github.com/r987r/xezim-hello-world/pull/232) open.
+[Issue #76](https://github.com/r987r/xezim-hello-world/issues/76) tracks full-chip qualification after #232 merged.
 Shared debug tooling is in
 [merged PR #250](https://github.com/r987r/xezim-hello-world/pull/250),
 with simulator parity/RTL recipe work tracked in
@@ -261,7 +260,7 @@ flowchart LR
     CPL --> RC
 ```
 
-**Where the integration code lives** (active draft PR #232; former #225 closed):
+**Where the integration code lives** (merged PR #232; former #225 closed):
 
 - `dv/pcie_link/host_link_vproc.cpp` — source-selected host action
   `pcie.config.bar0`; invokes *original pcievhost* `cfgWrite`/`cfgRead`;
@@ -407,8 +406,7 @@ makes the original FuseSoC `sim` target explicitly compile
 is source-hash-checked and archived as an upstream source diff;
 it does **not** force a link-up state, alter synthesizable defaults, or
 claim cross-provider BAR/TLP/AXI acceptance. A real nonempty Cocotb
-completed-test table remains mandatory. Until exact-head CI demonstrates
-this upstream PASS, issue #76 remains open and active PR #232 remains draft; historical PR #225 is closed.
+completed-test table remains mandatory. The merged #232 checkpoint above records the passing upstream run. Issue #76 tracks full-chip integration.
 
 **Policy:** default regular regressions keep their existing fast modeled
 TLP provider. Real digital link is explicit/opt-in and adds coverage; never
@@ -502,7 +500,7 @@ original host's next launch. It also rejects a MemWr before the final
 config completion. **There is still no SRAM write or PCIe completion
 here**: the NoC path must be physically attached and qualified next.
 
-## Shared monitor-to-report integration (draft #232)
+## Shared monitor-to-report integration (#232)
 
 The original OpenPCIe `pipe_monitor_bfm.py` remains the **only** source
 for reconstructed PHY TLP and DLLP packets in the standalone upstream
@@ -545,7 +543,7 @@ sink; it observes accepted transaction-layer TLPs rather than the
 physical PIPE boundary. Both are existing upstream open-source IP,
 not newly written parsers.
 
-**On draft #232**, the isolated original FuseSoC/Cocotb upstream test
+**During #232 review**, the isolated original FuseSoC/Cocotb upstream test
 now attaches non-mutating, version-pin-qualified
 `PCIE_UPSTREAM_PIPE_MON_TLP` / `PCIE_UPSTREAM_PIPE_MON_DLLP`
 raw-hex events to these *native* callback outputs. Compare these to
@@ -579,7 +577,7 @@ Runs reports, not a competing packet dashboard.
 
 The **original upstream OpenPCIe Cocotb** `test_pcie_core.link_up_test` is
 still a required gate even when isolated `l0`, `bar0` and `mem_ingress`
-lanes pass. On [draft #232 exact head `2bdbb2c`](https://github.com/r987r/xezim-hello-world/pull/232),
+lanes pass. On [historical #232 head `2bdbb2c`](https://github.com/r987r/xezim-hello-world/pull/232),
 [workflow 43413751149](https://github.com/r987r/xezim-hello-world/actions/runs/43413751149)
 failed its original 1024-byte offset-7 BAR readback. Real host MRd tags
 10/11/12 reached the endpoint; source logs show endpoint CplD fragment

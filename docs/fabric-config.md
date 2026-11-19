@@ -85,9 +85,4 @@ scope-only stages are explicitly left unmeasured, not assigned fake
 latencies. Source-equivalence is still independently attested against the
 site commit by the trusted collection path.
 
-This **does not yet close #155**: the isolated local-subsystem FlooNoC RTL
-benchmark and its independent passive AXI/DMA target test are still missing.
-No local results are synthesized from full-chip or SuperNoC timings. Once
-a local top and matching exact-head test are qualified, this schema will
-publish a defensible comparison using the existing Explorer and original
-run links, not a second visualization.
+The [latency workflow](../.github/workflows/dv-fabric-latency.yml) runs the SuperNoC and full-chip benchmarks. [#155](https://github.com/r987r/xezim-hello-world/issues/155) records the publication history. A standalone local-subsystem comparison requires an independently measured local run with matching cases.

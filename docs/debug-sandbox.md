@@ -2,10 +2,10 @@
 
 **Status:** shared exploratory workflow; final qualification remains with the
 original repository-owned CI, simulator and unmodified test scoreboard. Related
-PCIe investigation: [draft PR #232](https://github.com/r987r/xezim-hello-world/pull/232)
+PCIe investigation: [merged PR #232](https://github.com/r987r/xezim-hello-world/pull/232)
 and [issue #76](https://github.com/r987r/xezim-hello-world/issues/76). The
 shared debug implementation was merged via [PR #250](https://github.com/r987r/xezim-hello-world/pull/250);
-exact simulator parity and real RTL recipe onboarding are tracked in
+[PR #259](https://github.com/r987r/xezim-hello-world/pull/259) added the existing modeled-RC PCIe replay recipe. Exact simulator parity is tracked in
 [issue #251](https://github.com/r987r/xezim-hello-world/issues/251).
 This guide does **not** claim the standalone PCIe fix is wired into the full SoC.
 
@@ -141,7 +141,7 @@ integrating the repair into selected production SoC RTL.
 - **Scalability:** reuse existing protocol monitors, reports and INIT/RUN/CHECK
   executor; no duplicate PCIe decoder or action runtime.
 - **Scope limits:** standalone OpenPCIe PASS is not yet real end-to-end PCIe
-  host ↔ full SoC NoC ↔ memory qualification. Keep #76 and PR #232 open until
+  host ↔ full SoC NoC ↔ memory qualification. Issue #76 remains open until
   source-selected endpoint, host, NoC and scoreboard all pass together.
 - **Security/cost:** use isolated sandbox, trusted source revisions, no
   credentials committed to logs, fixed timeouts and stop after use. Recipe
