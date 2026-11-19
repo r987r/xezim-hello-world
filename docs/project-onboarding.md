@@ -8,12 +8,27 @@ for every arbitrary subsystem, clock or IP combination.
 
 ## Author a new configuration
 
-1. Start from an existing supported SoC via the source-only scaffolder:\n\n   ```sh\n   python3 tools/project_scaffold.py --id chip_third \\\n     --from-project xezim_ethernet_cpu_ddr_pcie \\\n     --title 'Third chip' --subtitle 'New chip configuration'\n   ```\n\n   This creates `config/projects/chip_third/soc.yaml` and registers it with\n   `qualification: source_contract_only`. The copied shape is a starting\n   point, **not** evidence of a new design or an RTL qualification.
+1. Start from an existing supported SoC via the source-only scaffolder:
+
+   ```sh
+   python3 tools/project_scaffold.py --id chip_third \
+     --from-project xezim_ethernet_cpu_ddr_pcie \
+     --title 'Third chip' --subtitle 'New chip configuration'
+   ```
+
+   This creates `config/projects/chip_third/soc.yaml` and registers it with
+   `qualification: source_contract_only`. The copied shape is a starting
+   point, **not** evidence of a new design or an RTL qualification.
 2. Adjust subsystems, memory targets, addresses, boot and FlooNoC links.
    Keep address windows unique and every initiator/target routed. Use
    supported CPU/IP and NoC adapters only; fail closed on unsupported IPs.
-3. The scaffolder adds the catalog entry; do not add project IDs to CI or\n   the shared architecture viewer. Do not give a source-only design an\n   imaginary generated top path.
-4. Run catalog source validation and negative topology tests, including\n   `python3 -m unittest tests.test_third_project_onboarding -v`.\n   Verify the new chip changes actual connectivity/addresses/composition,\n   not just the name of a copied configuration.
+3. The scaffolder adds the catalog entry; do not add project IDs to CI or
+   the shared architecture viewer. Do not give a source-only design an
+   imaginary generated top path.
+4. Run catalog source validation and negative topology tests, including
+   `python3 -m unittest tests.test_third_project_onboarding -v`.
+   Verify the new chip changes actual connectivity/addresses/composition,
+   not just the name of a copied configuration.
 5. Generate selected boot/memory RTL, then `--full-chip` if
    the chosen composition is supported. Compile with shared pinned
    FlooGen/Bender/Verilator; only then promote its catalog qualification

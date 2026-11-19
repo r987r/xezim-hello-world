@@ -50,6 +50,8 @@ class MultiProjectSiteTests(unittest.TestCase):
             self.assertIn("No project-qualified", (new / "runs.html").read_text())
             self.assertNotIn("chip-ddr4-real", (new / "runs.html").read_text())
             self.assertIn("ci_generated_compiled", (new / "data/project.json").read_text())
+            self.assertIn("CPU boot simulation passed in CI", index)
+            self.assertIn("no functional AXI PASS is inferred", (new / "index.html").read_text())
             self.assertNotIn("memory0.hbm0", (new / "address-map.html").read_text())
             self.assertIn("memory0.hbm0", (a / "address-map.html").read_text())
             self.assertEqual(json.loads((new / "data/project.json").read_text())["runs"], [])
