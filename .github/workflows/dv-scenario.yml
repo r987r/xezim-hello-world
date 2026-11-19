@@ -21,6 +21,7 @@ on:
       - 'tools/regress.py'
       - 'config/regression.yaml'
       - 'tests/test_scenario_dma.py'
+      - 'tests/test_scenario_portability.py'
       - 'tools/scenario_replay_audit.py'
       - 'tools/scenario_cpu_plan_witness.py'
       - 'tests/test_scenario_cpu_plan_witness.py'
@@ -62,7 +63,7 @@ jobs:
       - name: Install existing configuration parser
         run: python3 -m pip install 'PyYAML==6.0.3'
       - name: Test typed scenarios, allocator contract and multi-seed replay
-        run: python3 -m unittest tests.test_scenario_plan tests.test_scenario_seed_matrix tests.test_action_runtime tests.test_scenario_dma tests.test_scenario_cpu_plan_witness tests.test_scenario_cpu_action_trace tests.test_scenario_replay_audit tests.test_axi_event_sink tests.test_memory_plan tests.test_dma_vectors -v
+        run: python3 -m unittest tests.test_scenario_plan tests.test_scenario_seed_matrix tests.test_action_runtime tests.test_scenario_dma tests.test_scenario_portability tests.test_scenario_cpu_plan_witness tests.test_scenario_cpu_action_trace tests.test_scenario_replay_audit tests.test_axi_event_sink tests.test_memory_plan tests.test_dma_vectors -v
       - name: Resolve and independently verify directed plus randomized SCN plan matrix
         run: |
           python3 tools/scenario_seed_matrix.py --scenario config/scenarios/dma-roundtrip.json --soc config/soc.yaml --out .tools/scenarios/ci-seed-matrix --seeds 1 22 31337 --source-revision "${GITHUB_SHA}"
