@@ -76,10 +76,10 @@ reused run ID, path traversal, external/symlink target or foreign identity
 fails closed. `verify_run` checks the on-disk identity, and
 `canonical_artifact` returns a safe, not-yet-existing path for a producer.
 
-This is a *partial migration primitive*, **not** a changed default
-`regress.py` root. All existing build/filelist caches and target-named scratch
-directories remain intentionally unchanged until each producer and its CI
-upload/postprocessor are migrated together. Never silently redirect a test
+The existing runner reserves the canonical workspace for `smoke`, `sram`,
+`serv` and `dma-rtl`. Other targets still use their selection-key directories.
+[#139](https://github.com/r987r/xezim-hello-world/issues/139) owns migration
+of the remaining producers, CI uploads and readers together. Never silently redirect a test
 writer without moving its compiled source/verifier dependencies, and never
 relabel previous Actions artifacts as canonical. The selected path conveys no
 hardware PASS: real output still requires independent simulator/monitor
@@ -91,7 +91,7 @@ Add one regression YAML test entry with an explicit `logical_test`.
 Select its existing simulator/source/firmware/scenario fields. The identity
 resolver determines the canonical configuration and refuses any collision.
 A new runtime stimulus target still needs a real typed action adapter or a
-separately tracked #119 legacy exception; naming metadata can never waive
+legacy driver explicitly identified in the stimulus catalog under #152; naming metadata can never waive
 checker evidence, change the seed, or turn planned INIT/RUN/CHECK into
 observed execution.
 
