@@ -13,13 +13,19 @@ sys.path.insert(0, str(ROOT / "tools"))
 import project_catalog
 from publish_site import project_pages
 
+ORIGINAL_PROJECT = "xezim_soc_dv"
+DIRECT_LINK_PROJECT = "xezim_ethernet_cpu_ddr_pcie"
+
+
+def original_catalog_entry(catalog):
+    return next(p for p in catalog["projects"] if p["id"] == ORIGINAL_PROJECT)
+
 
 class MultiProjectSiteTests(unittest.TestCase):
     def test_two_independent_projects_no_hardware_alias(self):
-        found = project_catalog.projects(ROOT)
-        self.assertEqual([x["id"] for x in found],
-                         ["xezim_soc_dv", "xezim_ethernet_cpu_ddr_pcie"])
-        first, second = found
+        found = {p["id"]: p for p in project_catalog.projects(ROOT)}
+        first = found[ORIGINAL_PROJECT]
+        second = found[DIRECT_LINK_PROJECT]
         self.assertNotEqual(first["config_sha256"], second["config_sha256"])
         self.assertEqual(first["qualification"], "generated_default")
         self.assertEqual(second["qualification"], "ci_generated_compiled")
@@ -126,7 +132,7 @@ class MultiProjectSiteTests(unittest.TestCase):
             (root / "gen/chip/soc_top.sv").write_text("module soc_top; endmodule\n")
             baseline = yaml.safe_load(
                 (ROOT / "config/projects/catalog.yaml").read_text())
-            baseline["projects"] = [copy.deepcopy(baseline["projects"][0])]
+            baseline["projects"] = [original_catalog_entry(baseline)]
             template = yaml.safe_load(
                 (ROOT / "config/projects/ethernet-cpu-ddr-pcie/soc.yaml").read_text())
             for index in range(1, 10):
@@ -156,7 +162,7 @@ class MultiProjectSiteTests(unittest.TestCase):
                                     "--matrix", "--compiled-only"]), redirect_stdout(compiled):
                 project_catalog.main()
             self.assertEqual(json.loads(compiled.getvalue())["project"],
-                             ["xezim_soc_dv"])
+                             [ORIGINAL_PROJECT])
             out = root / "site"
             out.mkdir()
             (out / "explorer.html").write_text("original interactive hierarchy")
@@ -184,7 +190,7 @@ class MultiProjectSiteTests(unittest.TestCase):
 
     def test_other_compiled_projects_cannot_borrow_default_explorer(self):
         catalog = project_catalog.projects(ROOT)
-        cloned = copy.deepcopy(catalog[1])
+        cloned = copy.deepcopy(next(p for p in catalog if p["id"] == DIRECT_LINK_PROJECT))
         cloned["architecture_explorer"] = None
         cloned["qualification"] = "ci_generated_compiled"
         with tempfile.TemporaryDirectory() as tmp:
@@ -204,19 +210,18 @@ class MultiProjectSiteTests(unittest.TestCase):
             (root / "gen/chip").mkdir(parents=True)
             (root / "gen/chip/soc_top.sv").write_text("module soc_top; endmodule")
             cfg = yaml.safe_load((ROOT / "config/projects/catalog.yaml").read_text())
-            cfg["projects"] = [cfg["projects"][0], copy.deepcopy(cfg["projects"][0])]
-            cfg["projects"][1]["id"] = "another_chip"
-            cfg["projects"][1]["config"] = "config/projects/another_chip.yaml"
+            original = original_catalog_entry(cfg)
+            alias = dict(original, id="another_chip", config="config/projects/another_chip.yaml")
+            cfg["projects"] = [original, alias]
             clone = yaml.safe_load((ROOT / "config/soc.yaml").read_text())
             clone["name"] = "another_chip"
-            (root / cfg["projects"][1]["config"]).write_text(yaml.safe_dump(clone))
+            (root / alias["config"]).write_text(yaml.safe_dump(clone))
             (root / "config/projects/catalog.yaml").write_text(yaml.safe_dump(cfg))
             with self.assertRaisesRegex(ValueError, "more than one project"):
                 project_catalog.projects(root)
 
     def test_bad_catalog_rejects_aliased_or_unqualified_sources(self):
         with tempfile.TemporaryDirectory() as temp:
-            import shutil
             root = Path(temp)
             (root / "config/projects").mkdir(parents=True)
             (root / "gen/chip").mkdir(parents=True)
@@ -224,7 +229,8 @@ class MultiProjectSiteTests(unittest.TestCase):
                 (ROOT / "config/soc.yaml").read_text())
             (root / "gen/chip/soc_top.sv").write_text("module soc_top; endmodule")
             catalog = yaml.safe_load((ROOT / "config/projects/catalog.yaml").read_text())
-            catalog["projects"] = [copy.deepcopy(catalog["projects"][0])]*2
+            original = original_catalog_entry(catalog)
+            catalog["projects"] = [original, copy.deepcopy(original)]
             (root / "config/projects/catalog.yaml").write_text(
                 yaml.safe_dump(catalog))
             with self.assertRaisesRegex(ValueError, "duplicate project identity"):

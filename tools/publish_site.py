@@ -27,6 +27,7 @@ import yaml
 
 from axi_report import render_report
 from run_page_chrome import decorate_run_pages
+import project_boot_evidence as boot_evidence
 from protocol_report import render as render_protocol_report
 from test_flow_report import render_summary as render_test_flow
 from test_intent import (catalog as intended_flow_catalog, plan as intended_flow_plan,
@@ -88,7 +89,8 @@ class GitHub:
         return site
 
 
-def extract_archive(data,destination,config,digest=None,*,evidence_only=False):
+def extract_archive(data,destination,config,digest=None,*,evidence_only=False,
+                    allowed_files=None):
     """Verify CI ZIP provenance and safely extract only useful regression evidence.
 
     Simulator object directories can be >1 GiB even for a small test.
@@ -108,6 +110,11 @@ def extract_archive(data,destination,config,digest=None,*,evidence_only=False):
             mode=info.external_attr>>16
             if path.is_absolute() or '..' in path.parts or '\\' in info.filename or stat.S_ISLNK(mode):
                 raise ValueError('unsafe CI archive member')
+            if allowed_files is not None:
+                if path.parts != (path.name,) or path.name not in allowed_files:
+                    raise ValueError('unexpected file in project boot archive')
+                if any(previous.filename == info.filename for previous in selected):
+                    raise ValueError('duplicate file in project boot archive')
             if evidence_only:
                 # Reject simulator products and previously generated HTML: the
                 # trusted Pages builder re-renders reports from checked JSON.
@@ -222,6 +229,10 @@ FABRIC_EXCLUDED_PREFIXES = (
 FABRIC_EXCLUDED_FILES = {
     'README.md', 'AGENTS.md', 'tools/publish_site.py',
     'tools/fabric_report.py', 'tools/templates/site.html',
+    # Project scaffolding and the separate native Verilator boot receipt
+    # are not imported by the controlled Cocotb AXI latency benchmark.
+    'tools/project_scaffold.py', 'tools/project_smoke.py',
+    'tools/project_boot_evidence.py',
     'tools/templates/run_report.html',
     # Generation-control metadata is not an executable simulation input.
     # The benchmark's make check-generated gate verifies generated outputs,
@@ -544,6 +555,51 @@ def invalid_artifact_trace_provenance(artifact_folder, run):
     return None
 
 
+def collect_project_boot(client, config, folder, run, artifact, projects,
+                         site_sha, tree_cache, verified_cache):
+    """Admit only bounded, original native boot output from trusted CI."""
+    match=re.fullmatch(r'project-boot-([a-z][a-z0-9_]*)-([0-9]+)-([0-9]+)', artifact["name"])
+    project=projects.get(match[1]) if match else None
+    if not project:
+        raise ValueError("unknown project identity")
+    if not run.get("verified_merged_pr") and (run.get("head_branch") != "main"
+            or run.get("event") != "workflow_dispatch"
+            or (run.get("head_repository") or {}).get("full_name") != client.repository):
+        raise ValueError("project boot run is not main or an exact merged PR")
+    digest=artifact.get("digest") or ""
+    if (artifact.get("expired") or artifact.get("size_in_bytes", 0) > 8 * 1024**2
+            or not re.fullmatch(r'sha256:[0-9a-f]{64}', digest)):
+        raise ValueError("project boot archive expired, oversized or missing digest")
+    artifact_id=artifact.get("id")
+    if type(artifact_id) is not int or artifact_id < 1:
+        raise ValueError("invalid project boot artifact ID")
+    target=folder/f"project-boot-{artifact_id}"
+    if target.exists():
+        shutil.rmtree(target)
+    try:
+        raw=client.request(f'/repos/{client.repository}/actions/artifacts/{artifact_id}/zip',binary=True)
+        target.mkdir()
+        limits=dict(config, max_archive_mib=min(config['max_archive_mib'],8),
+                    max_expanded_mib=min(config['max_expanded_mib'],32))
+        extract_archive(raw,target,limits,digest,allowed_files=boot_evidence.FILES)
+        result=boot_evidence.validate(target,project,run,artifact["name"])
+        tested_sha=result["tested_sha"]
+        if not verified_pr_test_commit(client,run,tested_sha,verified_cache):
+            raise ValueError("project boot source commit mismatch")
+        record=dict(project_id=project["id"], config_sha256=project["config_sha256"],
+                    status=result["status"], tested_sha=tested_sha,
+                    cpu_count=result["cpu_count"], filelist_sha256=result["filelist_sha256"],
+                    run_id=run["id"], attempt=run.get("run_attempt",1),
+                    run_url=f'https://github.com/{client.repository}/actions/runs/{run["id"]}')
+        if tested_sha != site_sha and verified_pr_tree_equivalent(
+                client,run,tested_sha,site_sha,tree_cache):
+            record["equivalent_site_sha"]=site_sha
+        dump(target/'verified-boot.json',record)
+    except (ValueError,OSError,zipfile.BadZipFile):
+        shutil.rmtree(target,ignore_errors=True)
+        raise
+
+
 def collect(client,config,destination):
     destination.mkdir(parents=True,exist_ok=True)
     producers=discover_test_workflows()
@@ -558,6 +614,7 @@ def collect(client,config,destination):
     # never executed by this trusted Pages job.
 
     verified_cache={}
+    boot_projects=None
     for workflow in producers.values():
         for run in selected[workflow['file']]:
             folder=destination/(str(run['id'])+'-'+str(run.get('run_attempt',1)))
@@ -569,6 +626,18 @@ def collect(client,config,destination):
             artifacts=client.request(f'/repos/{client.repository}/actions/runs/{run["id"]}/artifacts?per_page=100')['artifacts']
             # Only collect named regression archives uploaded by this CI workflow.
             for artifact in artifacts:
+                if (workflow['file'] == boot_evidence.WORKFLOW
+                        and artifact['name'].startswith('project-boot-')):
+                    if boot_projects is None:
+                        from project_catalog import projects
+                        boot_projects={p["id"]:p for p in projects(ROOT)}
+                    try:
+                        collect_project_boot(client, config, folder, run, artifact,
+                                             boot_projects, site_sha, tree_cache, verified_cache)
+                    except (ValueError, OSError, zipfile.BadZipFile) as exc:
+                        notes.append(f'Run {run["id"]}, artifact {artifact["name"]}: '
+                                     f'excluded unverified project boot evidence ({exc})')
+                    continue
                 allowed=workflow['artifacts']
                 if not any(artifact['name']==pattern or
                            ('${' in pattern and artifact['name'].startswith(pattern.split('${',1)[0]))
@@ -1243,7 +1312,7 @@ def evidence_index(evidence,output,repository,site_sha=None):
 
 
 
-def project_pages(output, projects, entries, repository, sha):
+def project_pages(output, projects, entries, repository, sha, *, boots=None):
     """Publish a catalog-sized project workspace without sharing B's test PASS.
 
     This is deliberately driven by the catalog, not a special branch for two
@@ -1341,7 +1410,25 @@ def project_pages(output, projects, entries, repository, sha):
             ]:
                 files.append({'role': role, 'path': path, 'location': 'ci_artifact',
                               'url': workflow_url})
-        data = dict(project, runs=[
+        boot=(boots or {}).get(pid)
+        if boot and boot["config_sha256"] != project["config_sha256"]:
+            boot=None
+        boot_status = ('<p class="scope-note">Native CPU cold boot: no verified '
+                       "project-owned result is available.</p>")
+        if boot and (published or compiled_ci):
+            label = "PASS" if boot["status"] == "passed" else "FAIL"
+            scope_label = "Current source" if boot["current_source"] else "Historical source"
+            boot_status = ('<p class="scope-note">Native CPU cold boot: <strong>' +
+                           scope_label + ' ' + label + '</strong> · tested <code>' +
+                           escape(boot["tested_sha"][:12]) + '</code> · <a href="' +
+                           escape(boot["run_url"], quote=True) + '">GitHub Actions run</a>' +
+                           ''.join(' · <a href="' + escape(path, quote=True) + '">' +
+                                   escape(name) + '</a>' for name,path in boot["logs"].items()) +
+                           '. Boot is not routed protocol or payload qualification.</p>')
+        if not (published or compiled_ci):
+            boot_status = ''
+            boot = None
+        data = dict(project, native_boot=boot, runs=[
             {'target': e.get('target'), 'path': e.get('path'),
              'source_sha': e.get('source_sha'), 'passed': e.get('passed')}
             for e in selected
@@ -1375,7 +1462,7 @@ def project_pages(output, projects, entries, repository, sha):
                  if compiled_ci else
                  '<p class="scope-note">Design configuration only. No RTL '
                  'compile or functional simulation qualified.</p>')
-        overview = (info + nav + scope +
+        overview = (info + nav + scope + boot_status +
                     '<h2>Subsystems</h2><p>' +
                     escape(' · '.join(project['subsystems'])) +
                     '</p><h2>Memory targets</h2><p>' +
@@ -1440,6 +1527,7 @@ def project_pages(output, projects, entries, repository, sha):
         else:
             runs = ('<p class="empty">No project-qualified run evidence is '
                     'available. No other project results are substituted.</p>')
+        runs = boot_status + runs
         # Every project uses the exact SAME architecture page and diagram
         # renderer. A project-owned detailed compiler-parsed explorer is an
         # optional drill-down, not an alternate main architecture UI.
@@ -1808,7 +1896,8 @@ def build(output,evidence,repository,sha,config):
         (output/published_page).write_text(
             shell(config['title'], body, Path(published_page), repository, sha))
     from project_catalog import projects
-    project_pages(output, projects(ROOT), entries, repository, sha)
+    project_pages(output, projects(ROOT), entries, repository, sha,
+                  boots=boot_evidence.publish(evidence,output,sha))
     return dataset
 
 
