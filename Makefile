@@ -1,8 +1,10 @@
-.PHONY: dv-memory-service bench-memory help gen check-generated check-config check-docs dv-memory dv-memory-negative dv-cpu dv-serv dv-sram dv-boot dv-supernoc dv-chip dv-chip-dma dv-chip-cpu-dma dv-chip-ddr4-real dv-dma dv-dma-vectors smoke test test-xezim test-noc test-list
+.PHONY: gen-combined check-generated-combined dv-memory-service bench-memory help gen check-generated check-config check-docs dv-memory dv-memory-negative dv-cpu dv-serv dv-sram dv-boot dv-supernoc dv-chip dv-chip-dma dv-chip-cpu-dma dv-chip-ddr4-real dv-dma dv-dma-vectors smoke test test-xezim test-noc test-list
 
 help:
-	@echo 'make gen             Generate tracked RTL, firmware and documentation'
-	@echo 'make check-generated Check exact generated file/content drift'
+	@echo 'make gen             Generate tracked default RTL, firmware and documentation'
+	@echo 'make check-generated Check exact default generated files and README'
+	@echo 'make gen-combined    Generate selected real Ethernet+DDR+PCIe RTL after pinned toolchain setup'
+	@echo 'make check-generated-combined  Replay real combined RTL and reject byte drift'
 	@echo 'make check-config    Run configuration/generator/runner unit tests'
 	@echo 'make check-docs      Validate Markdown local links and stale progress claims'
 	@echo 'make dv-memory-service  Fast common INIT/CHECK and C-pattern tests'
@@ -25,6 +27,14 @@ gen:
 
 check-generated:
 	python3 tools/generate.py --check
+
+# Opt-in heavy real controller/CPU/PCIe source generation uses the same
+# regress.py compiler-source path; normal default 'make gen' stays lightweight.
+gen-combined:
+	python3 tools/generate_combined_variant.py
+
+check-generated-combined:
+	python3 tools/generate_combined_variant.py --check
 
 check-config:
 	python3 -m unittest discover -s tests -v
