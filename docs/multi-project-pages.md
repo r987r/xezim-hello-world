@@ -82,8 +82,12 @@ required for a compile PASS, and neither implies executed RTL behavior.
 The catalog-driven CI matrix uses bounded parallelism rather than an
 unbounded ten-job burst. A failing project does not hide behind a passing one.
 For each compiled entry it also runs the same source-selected real CPU boot
-smoke, and archives its own result and simulator log. The per-project Test runs
-page is a separate evidence-ingestion ledger, not an alias for that workflow.
+smoke, and archives its own result and simulator log. The project overview
+and Test Runs show the verified, project-owned boot verdict and original logs
+separately from the protocol/data ledger. A tested commit must be the published
+source or have the same verified Git tree to count as current. Older results
+are labeled historical; a missing, incompatible or unverified receipt is
+unavailable, not a passing boot.
 
 ## Source/RTL/behavior qualification ladder
 

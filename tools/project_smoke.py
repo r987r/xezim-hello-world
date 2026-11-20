@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -98,9 +99,14 @@ def run(project_id: str, *, verilator: str = "verilator",
     out.mkdir(parents=True, exist_ok=True)
     object_dir = out / "obj_dir"
     filelist = ROOT / selected_build["filelist"]
-    report_file = out / "result.json"
+    report_file = out / "boot-result.json"
     report = {
         "schema_version": 1,
+        "tested_sha": subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
+        ).strip(),
+        "workflow_run_id": os.environ.get("GITHUB_RUN_ID"),
+        "workflow_attempt": os.environ.get("GITHUB_RUN_ATTEMPT"),
         "project_id": project_id,
         "test": "native-selected-real-cpu-cold-boot",
         "engine": "verilator-native",
@@ -117,6 +123,9 @@ def run(project_id: str, *, verilator: str = "verilator",
     build_cmd = [verilator, "--binary", "--timing", "-Wno-fatal", "-j", "2",
                  "--top-module", "full_chip_tb", "--Mdir", str(object_dir),
                  "-f", str(filelist)]
+    log_names = ("native-build.log", "native-sim.log")
+    for name in log_names:
+        (out / name).unlink(missing_ok=True)
     try:
         built = subprocess.run(build_cmd, cwd=ROOT, capture_output=True, text=True,
                                errors="replace", timeout=build_timeout, check=False)
@@ -145,6 +154,10 @@ def run(project_id: str, *, verilator: str = "verilator",
         report["error"] = str(exc)
         raise
     finally:
+        report["log_sha256"] = {
+            name: hashlib.sha256((out / name).read_bytes()).hexdigest()
+            for name in log_names if (out / name).is_file()
+        }
         report_file.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
     return report_file
 
