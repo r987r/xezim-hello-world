@@ -61,3 +61,16 @@ DMA subsystem. Only full-chip `outbound-dma-proof.json`, actual C/iDMA AXI trace
 ## Passive outbound TLP evidence (#154)
 
 The existing `dv/pcie0/tlp_trace.py` captures accepted request/completion packets using pinned upstream `PcieIfFrame.to_tlp()`. The outbound variant additionally records `pcie0.tx_wr_req`, `pcie0.tx_rd_req`, and `pcie0.rx_cpl` with independent host/device read-tag spaces and fail-closed unmatched completions. Posted Memory Writes are **observed requests**, not completion evidence. Independent host-memory byte and guard checks and CPU SRAM readback remain mandatory. No second TLP parser, AXI driver, or report page is introduced. Complete sign-off still requires exact-head CI.
+
+## Relocated BAR0 address-domain check using real bridge and FlooNoC
+
+The PCIe NoC smoke now runs the unchanged fast TLP-only backend and a separate
+opt-in RTL build with *host PCIe BAR0=0x80001000 (4KiB)*, distinct from local
+SRAM=0x12000000. The actual pinned `pcie_axi_master` AXI AW/AR bursts go
+through `pcie_bar0_noc_translate` into the real generated PCIe0 FlooNoC and
+real SRAM, with independent Cocotb byte readback, including the last 16 bytes
+of the BAR. Out-of-window requests fail this isolated fixture rather than
+producing synthetic successes. The separate production error-response
+policy and live device/host programming remain open. **This is not trained
+OpenPCIe Gen1 link proof**; the original standalone cross-provider link still
+needs to attach its non-config TLP ingress and completion return path.

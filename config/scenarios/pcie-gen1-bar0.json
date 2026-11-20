@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "scenario_id": "pcie_gen1_x1_bar0_enumeration",
+  "seed": 79,
+  "variant": "boot_live",
+  "actors": [
+    "host0"
+  ],
+  "actions": [
+    {
+      "action_instance_id": "train_link",
+      "kind": "pcie.link.train",
+      "actor": "host0",
+      "phase": "init",
+      "args": {
+        "link": "pcie0",
+        "lanes": 1,
+        "generation": 1,
+        "data_width_bits": 16
+      }
+    },
+    {
+      "action_instance_id": "enumerate_bar0",
+      "kind": "pcie.config.bar0",
+      "actor": "host0",
+      "phase": "init",
+      "depends_on": [
+        "train_link"
+      ],
+      "args": {
+        "link": "pcie0",
+        "bar_index": 0,
+        "aperture_bytes": 4096,
+        "host_bus_base": 2147487744
+      }
+    }
+  ]
+}

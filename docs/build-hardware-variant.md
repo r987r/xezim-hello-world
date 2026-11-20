@@ -67,17 +67,16 @@ are recorded. A missing image, extra temporary reference, unknown emitted
 source category, 312-source closure change or modified checked-in file
 fails without passing.
 
-This is the first reproducible **named selected variant publisher**, not a
-second SV generator. Normal `make gen` and `make check-generated` still
-cover the lightweight default variant and do not install or run the heavy
-opt-in pinned controller/PCIe toolchain. Therefore, **the combined variant
-is not fully integrated with the default atomic generator lifecycle yet**:
-a later default `make gen` can still replace `gen/` and remove the
-combined subtree. Before #184 closes, combine these into one coordinated
-atomic `make gen`/check-generation publication and commit actual bytes
-produced by final-head CI; prove the portable generated RTL elaborates and
-passes the existing real combined transaction checker. Do not treat an
-artifact upload or this opt-in generator as issue closure.
+This is a **named selected variant publisher**, not a second SV generator.
+Normal `make gen` and `make check-generated` do not install or run the
+heavy opt-in pinned controller/PCIe toolchain. If the named subtree is
+present, they verify its ownership, config, file inventory and hashes
+before preserving it during default generation. To create or independently
+rebuild the named subtree, use the combined targets above. CI compares the
+tracked bytes to a fresh selected-source replay without rewriting or
+pushing files, independently elaborates the portable tree, then runs
+the original combined transaction checker against its selected inputs.
+Source replay and elaboration are not bit-level proof or issue closure.
 
 The original 312-source compiler-input SHA in the selected run archive
 can include checkout-absolute compiler/include paths, so it is **not**

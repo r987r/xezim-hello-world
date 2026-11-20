@@ -31,7 +31,7 @@ Prefer existing public AXI, SRAM, DMA, NoC, CPU, BFM and controller IP. Add
 only small, explicit, reviewed glue needed for a real protocol boundary.
 Never invent a custom bus fabric, SRAM or AXI VIP simply because it is easy.
 
-**Do not claim a full combined SoC pass from separate NoC, DMA, Ethernet, PCIe or DDR RTL tests.** `config/soc.yaml` describes topology, not proof that every optional IP or PHY is instantiated in the same tested variant. The default `gen/chip/soc_top.sv` contains CPU, SRAM/reset and memory stand-ins; opt-in iDMA, PCIe, Ethernet and LiteDRAM builds have separate evidence. CPU0 C polling-based DMA is verified; interrupt service, true HBM and analog PHYs remain separate. See [architecture](docs/architecture.md) and [open integration epic](https://github.com/r987r/xezim-hello-world/issues/34).
+**Do not claim a full combined SoC pass from separate NoC, DMA, Ethernet, PCIe or DDR RTL tests.** `config/soc.yaml` describes topology, not proof that every optional IP or PHY is instantiated in the same tested variant. The default `gen/chip/soc_top.sv` contains CPU, SRAM/reset and memory stand-ins; opt-in iDMA, PCIe, Ethernet and LiteDRAM builds have separate evidence. CPU0 C polling-based DMA is verified; interrupt service, true HBM and analog PHYs remain separate. See [architecture](docs/architecture.md) and [completed functional MVP](https://github.com/r987r/xezim-hello-world/issues/34).
 
 Unified region allocation: `sw/common/memory_pool.[ch]` owns the
 physical SRAM, DDR and HBM allocator and `tools/memory_plan.py` independently

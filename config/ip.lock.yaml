@@ -73,3 +73,37 @@ third_party:
     commit: 2bff825b54b42176c544ed2326d26ec91d660bc2
     integration: planned
     dependency: AMD-Xilinx-HBM-PHY-and-Questa
+
+  # EXPERIMENTAL DIGITAL PCIe link: source-pinned, NOT trained or qualified.
+  # OpenPCIe README and source headers claim MIT but no root LICENSE is checked
+  # in at this commit. Resolve source/dependency redistribution terms before
+  # vendoring or distributing a derivative endpoint.
+  pcie_endpoint_openpcie:
+    git: https://github.com/isomoye-msu/pcie_datalink_layer.git
+    commit: 4b4779c6c68048240c9a625b45156e864bf6105a
+    license: needs-review-upstream-mit-claim-no-root-license
+    integration: digital_link_candidate_unqualified
+    modules:
+      - src/pcie_phy_core/pcie_phy_top.sv
+      - src/pcie_cfg/pcie_config.rdl
+      - pcie_phy.core
+    submodules:
+      - src/async_fifo
+      - src/verilog-pcie
+      - src/verilog-axis
+  # GPLv3 ROOT-COMPLEX *TESTBENCH* ONLY. Never combine into delivered RTL.
+  pcie_host_pcievhost:
+    git: https://github.com/wyvernSemi/pcievhost.git
+    commit: b82b2ff3a047f742354c9607dea34b9b97bf108c
+    license: GPL-3.0
+    integration: simulation_host_only
+    modules:
+      - verilog/pcieVHost/pcieVHostPipex1.v
+      - verilog/testpipex1/makefile.verilator
+      - LICENSE
+  pcie_host_vproc:
+    git: https://github.com/wyvernSemi/vproc.git
+    commit: ae80e5b5cb43d4e9f82f9d45aa3b614e053f9df4
+    license: GPL-3.0
+    integration: simulation_host_dependency_only
+    modules: [LICENSE, README.md]

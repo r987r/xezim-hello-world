@@ -21,6 +21,7 @@ on:
       - 'tools/regress.py'
       - 'config/regression.yaml'
       - 'tests/test_scenario_dma.py'
+      - 'tests/test_scenario_portability.py'
       - 'tools/scenario_replay_audit.py'
       - 'tools/scenario_cpu_plan_witness.py'
       - 'tests/test_scenario_cpu_plan_witness.py'
@@ -62,7 +63,7 @@ jobs:
       - name: Install existing configuration parser
         run: python3 -m pip install 'PyYAML==6.0.3'
       - name: Test typed scenarios, allocator contract and multi-seed replay
-        run: python3 -m unittest tests.test_scenario_plan tests.test_scenario_seed_matrix tests.test_action_runtime tests.test_scenario_dma tests.test_scenario_cpu_plan_witness tests.test_scenario_cpu_action_trace tests.test_scenario_replay_audit tests.test_axi_event_sink tests.test_memory_plan tests.test_dma_vectors -v
+        run: python3 -m unittest tests.test_scenario_plan tests.test_scenario_seed_matrix tests.test_action_runtime tests.test_scenario_dma tests.test_scenario_portability tests.test_scenario_cpu_plan_witness tests.test_scenario_cpu_action_trace tests.test_scenario_replay_audit tests.test_axi_event_sink tests.test_memory_plan tests.test_dma_vectors -v
       - name: Resolve and independently verify directed plus randomized SCN plan matrix
         run: |
           python3 tools/scenario_seed_matrix.py --scenario config/scenarios/dma-roundtrip.json --soc config/soc.yaml --out .tools/scenarios/ci-seed-matrix --seeds 1 22 31337 --source-revision "${GITHUB_SHA}"
@@ -144,7 +145,7 @@ jobs:
           import subprocess
           import sys
 
-          from tools.scenario_seed_matrix import write_matrix, check_matrix
+          from tools.scenario_seed_matrix import write_matrix, check_matrix, select_distinct_cases
           from tools.scenario_replay_audit import audit
 
           source = Path("config/scenarios/cpu-bfm-ddr-roundtrip.json")
@@ -152,17 +153,9 @@ jobs:
           matrix_dir = Path(".tools/scenarios/rtl-seed-matrix/selected")
           matrix = write_matrix(source, soc, matrix_dir, random_runs=32)
           check_matrix(source, soc, matrix_dir)
-          by_pattern = {}
-          for item in matrix["cases"]:
-              plan = json.loads((matrix_dir / item["file"]).read_text())
-              source_init = next(a for a in plan["actions"]
-                                 if a["action_instance_id"] == "init_source")
-              value = source_init["args"]["pattern"]["seed"]
-              if plan["seed"] != 79 and value not in by_pattern:
-                  by_pattern[value] = item
-          if len(by_pattern) < 2:
-              raise RuntimeError("random cases did not exercise two different real payloads")
-          selected = list(by_pattern.values())[:2]
+          selected = select_distinct_cases(
+              source, soc, matrix_dir, action_instance_id="init_source",
+              argument_path=("pattern", "seed"), count=2)
           collected = []
           root = Path(".tools/scenarios/rtl-seed-matrix")
           for item in selected:

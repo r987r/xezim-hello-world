@@ -18,7 +18,11 @@ module pcie_requester_axi_regs #(
   parameter type lite_rsp_t = logic,
   parameter int unsigned AxiIdWidth = 1,
   parameter logic [31:0] CsrBase = 32'h40040000,
-  parameter int unsigned RamBytes = 16384
+  parameter int unsigned RamBytes = 16384,
+  // Existing CPU Config-NoC request path, opt-in endpoint DBI policy.
+  parameter bit EndpointPrelink = 1'b0,
+  parameter logic [31:0] EndpointSramBase = 32'h1200_0000,
+  parameter logic [31:0] EndpointSramBytes = 32'h0010_0000
 )(
   input logic clk_i, rst_ni,
   input axi_req_t cfg_req_i,
@@ -40,7 +44,11 @@ module pcie_requester_axi_regs #(
   input logic s_axis_read_desc_ready,
   input logic [7:0] m_axis_read_desc_status_tag,
   input logic [3:0] m_axis_read_desc_status_error,
-  input logic m_axis_read_desc_status_valid
+  input logic m_axis_read_desc_status_valid,
+  input logic ep_phy_ready_i, ep_noc_ready_i, ep_link_up_i,
+  input logic ep_host_mem_enable_i, ep_host_cfg_violation_i, ep_ltssm_l0_i,
+  input logic [31:0] ep_host_bar0_bus_base_i,
+  output logic ep_bar_committed_o, ep_ltssm_enable_o, ep_mem_ready_o
 );
   lite_req_t lite_req;
   lite_rsp_t lite_rsp;
@@ -59,6 +67,10 @@ module pcie_requester_axi_regs #(
   logic [3:0] w_strb_q;
   logic [1:0] bresp_q, rresp_q;
   logic write_fire, read_fire, aw_in_window, ar_in_window;
+  logic ep_wr_window, ep_rd_window, ep_illegal_write, ep_size_valid, ep_target_valid;
+  logic ep_cfg_write, ep_cfg_error, ep_committed, ep_allow, ep_ready;
+  logic [12:0] ep_cfg_addr;
+  logic [31:0] ep_cfg_rdata, ep_aperture, ep_target, ep_size_mask;
   logic [31:0] wr_offset, rd_offset;
   logic illegal_write;
   logic [63:0] wr_host_q, rd_host_q;
@@ -82,10 +94,72 @@ module pcie_requester_axi_regs #(
   assign lite_rsp.r.resp = rresp_q;
   assign wr_offset = aw_addr_q - CsrBase;
   assign rd_offset = lite_req.ar.addr - CsrBase;
-  assign aw_in_window = aw_addr_q >= CsrBase && wr_offset < 32'h40 &&
+  assign ep_wr_window = EndpointPrelink && aw_addr_q >= CsrBase &&
+                        wr_offset >= 32'h1000 && wr_offset <= 32'h1018 &&
                         aw_addr_q[1:0] == 2'b0;
-  assign ar_in_window = lite_req.ar.addr >= CsrBase && rd_offset < 32'h40 &&
+  assign ep_rd_window = EndpointPrelink && lite_req.ar.addr >= CsrBase &&
+                        rd_offset >= 32'h1000 && rd_offset <= 32'h1018 &&
                         lite_req.ar.addr[1:0] == 2'b0;
+  assign aw_in_window = (aw_addr_q >= CsrBase && wr_offset < 32'h40 &&
+                         aw_addr_q[1:0] == 2'b0) || ep_wr_window;
+  assign ar_in_window = (lite_req.ar.addr >= CsrBase && rd_offset < 32'h40 &&
+                         lite_req.ar.addr[1:0] == 2'b0) || ep_rd_window;
+
+  // Reuse the real AXI4 -> AXI-Lite converter, with one owner for AW/W/B
+  // and AR/R. This policy block is not the generated PeakRDL regbank.
+  assign ep_size_valid = ep_aperture >= 32'h1000 &&
+                         ep_aperture <= EndpointSramBytes &&
+                         (ep_aperture & (ep_aperture - 1)) == 0;
+  assign ep_target_valid = ep_target >= EndpointSramBase &&
+                           {1'b0, ep_target} + {1'b0, ep_aperture} <=
+                           {1'b0, EndpointSramBase} + {1'b0, EndpointSramBytes} &&
+                           (ep_target & (ep_aperture - 1)) == 0;
+  always_comb begin
+    ep_illegal_write = w_strb_q != 4'hf;
+    case (wr_offset)
+      32'h1000, 32'h1004: ep_illegal_write |= ep_committed;
+      32'h1008: ep_illegal_write |=
+          !((w_data_q == 32'h1 && !ep_committed && ep_size_valid && ep_target_valid) ||
+            (w_data_q == 32'h2 && ep_committed));
+      default: ep_illegal_write = 1'b1;
+    endcase
+  end
+  assign ep_cfg_write = write_fire && ep_wr_window;
+  assign ep_cfg_addr = read_fire && ep_rd_window ?
+                       rd_offset[12:0] : wr_offset[12:0];
+  assign ep_bar_committed_o = ep_committed;
+  assign ep_ltssm_enable_o = ep_allow;
+  assign ep_mem_ready_o = ep_ready;
+  if (EndpointPrelink) begin : gen_endpoint_prelink
+    pcie_endpoint_prelink_ctrl #(
+      .SRAM_BASE(EndpointSramBase), .SRAM_SIZE(EndpointSramBytes)
+    ) u_endpoint_dbi (
+      .clk_i, .rst_ni, .cfg_wr_i(ep_cfg_write),
+      .cfg_addr_i(ep_cfg_addr), .cfg_wdata_i(w_data_q),
+      .cfg_wstrb_i(w_strb_q), .cfg_rdata_o(ep_cfg_rdata),
+      .cfg_error_o(ep_cfg_error),
+      .phy_ready_i(ep_phy_ready_i), .noc_ready_i(ep_noc_ready_i),
+      .link_up_i(ep_link_up_i),
+      .host_mem_enable_i(ep_host_mem_enable_i),
+      .host_bar0_bus_base_i(ep_host_bar0_bus_base_i),
+      .host_cfg_violation_i(ep_host_cfg_violation_i),
+      .ltssm_l0_i(ep_ltssm_l0_i),
+      .bar0_aperture_o(ep_aperture),
+      .bar0_local_target_o(ep_target),
+      .bar0_size_mask_o(ep_size_mask),
+      .bar_config_committed_o(ep_committed),
+      .ltssm_enable_o(ep_allow), .bar_mem_ready_o(ep_ready)
+    );
+  end else begin : gen_no_endpoint_prelink
+    assign ep_cfg_rdata = 32'd0;
+    assign ep_cfg_error = 1'b0;
+    assign ep_aperture = 32'd0;
+    assign ep_target = 32'd0;
+    assign ep_size_mask = 32'd0;
+    assign ep_committed = 1'b0;
+    assign ep_allow = 1'b0;
+    assign ep_ready = 1'b0;
+  end
 
   // Each request's entire source/destination must fit the qualified SRAM.
   // The host address is 64-bit and may cross a 4K PCIe boundary.
@@ -94,6 +168,9 @@ module pcie_requester_axi_regs #(
     // Descriptor fields must remain immutable until hardware reports
     // completion. High bits on 16-bit addresses/lengths and 8-bit tags
     // must be rejected rather than silently wrapping into SRAM.
+    if (ep_wr_window) begin
+      illegal_write = ep_illegal_write;
+    end else begin
     if ((wr_offset <= 32'h10 && wr_busy_q) ||
         (wr_offset >= 32'h20 && wr_offset <= 32'h30 && rd_busy_q))
       illegal_write = 1'b1;
@@ -113,6 +190,7 @@ module pcie_requester_axi_regs #(
                         (int'(rd_ram_q) + int'(rd_len_q) > RamBytes);
       default: illegal_write = 1'b1;
     endcase
+    end
   end
 
   assign s_axis_write_desc_pcie_addr = wr_host_q;
@@ -158,7 +236,7 @@ module pcie_requester_axi_regs #(
         bvalid_q <= 1;
         bresp_q <= !aw_in_window ? 2'b11 :
                    illegal_write ? 2'b10 : 2'b00;
-        if (aw_in_window && !illegal_write) begin
+        if (aw_in_window && !illegal_write && !ep_wr_window) begin
           case (wr_offset)
             32'h00: wr_host_q[31:0] <= w_data_q;
             32'h04: wr_host_q[63:32] <= w_data_q;
@@ -193,7 +271,9 @@ module pcie_requester_axi_regs #(
         rvalid_q <= 1;
         rresp_q <= ar_in_window ? 2'b00 : 2'b11;
         rdata_q <= 0;
-        if (ar_in_window) begin
+        if (ep_rd_window) begin
+          rdata_q <= ep_cfg_rdata;
+        end else if (ar_in_window) begin
           case (rd_offset)
             32'h00: rdata_q <= wr_host_q[31:0];
             32'h04: rdata_q <= wr_host_q[63:32];

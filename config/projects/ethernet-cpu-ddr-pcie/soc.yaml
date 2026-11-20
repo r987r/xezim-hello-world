@@ -1,0 +1,116 @@
+# Second independent project, same schema as config/soc.yaml.
+# Source-selected FlooNoC RTL is generated/compiled; functional traffic is pending.
+schema_version: 2
+name: xezim_ethernet_cpu_ddr_pcie
+
+buses:
+  data: {protocol: axi4, addr_bits: 64, data_bits: 64, id_bits: 4}
+  config: {protocol: axi4_lite, addr_bits: 32, data_bits: 32}
+
+subsystem_types:
+  compute:
+    dma: pulp_idma
+    dma_parameters: {num_ax_in_flight: 2, buffer_depth: 3, descriptor_prefetch: 0}
+    sram_count: 1
+    local_data_fabric: local_data
+    local_config_fabric: local_config
+  memory:
+    local_data_fabric: memory_data
+    local_config_fabric: local_config
+    data_ingress_ports: 1
+  peripheral:
+    local_data_fabric: local_data
+    local_config_fabric: local_config
+    sram_count: 1
+
+subsystems:
+  - name: compute0
+    type: compute
+    cpu: {ip: picorv32, bus: axi4_lite, adapter: picorv32_axi}
+  - {name: memory0, type: memory}
+  - {name: pcie0, type: peripheral, ip: verilog_pcie,
+     data_initiator: host, config_initiator: management, clock_domain: soc}
+  - {name: ethernet0, type: peripheral, ip: ethernet_queue_mac,
+     data_initiator: packet_dma, config_initiator: management, clock_domain: soc}
+
+boot:
+  strategy: rom_copy
+  image_source: mapped_flash
+  secondary_release: none
+  sram_powerup: unspecified
+  primary: compute0
+  secondary: null
+  flash_slot_stride: 256
+  program_words: 4
+  simulation_sram_bytes: 16384
+
+fabrics:
+  local_data: {topology: mesh, backend: floonoc}
+  local_config: {topology: mesh, backend: floonoc}
+  memory_data: {topology: crossbar, backend: verilog_axi}
+  memory_local_data: {topology: mesh, backend: floonoc}
+  global_config: {topology: mesh, backend: floonoc}
+  # No global_data fabric.
+
+networks:
+  # Duplex requires two independent AXI4 initiator directions, not only AXI responses.
+  direct_data:
+    protocol: axi4
+    link_backend: floonoc
+    links:
+      - {name: l0_ethernet_compute, endpoints: [ethernet0, compute0], duplex: true}
+      # A second Ethernet-local FlooNoC egress bypasses the compute router.
+      # AXI destination address selects CPU/SRAM versus DDR.
+      - {name: l0_ethernet_memory, endpoints: [ethernet0, memory0], duplex: true}
+      - {name: central_compute_memory, endpoints: [compute0, memory0], duplex: true}
+      - {name: l1_compute_pcie, endpoints: [compute0, pcie0], duplex: true}
+    memory_outputs:
+      - {name: memory_ingress0, target: memory0.ddr0}
+  global_config:
+    protocol: axi4_lite
+    reachable_subsystems: [compute0, memory0, pcie0, ethernet0]
+
+layout:
+  regions:
+    - {name: ethernet, subsystems: [ethernet0]}
+    - {name: cpu_memory, subsystems: [compute0, memory0]}
+    - {name: pcie, subsystems: [pcie0]}
+  control_noc: {fabric: global_config, edge: bottom}
+
+memory_targets:
+  - name: memory0.ddr0
+    kind: ddr
+    controller: litedram
+    simulation: {backend: axi_ram, pipeline_output: true}
+
+address_map:
+  data:
+    - {name: boot.rom, base: '0x00000000', size: '0x00001000'}
+    - {name: boot.flash, base: '0x20000000', size: '0x00010000'}
+    - {name: compute0.sram, base: '0x10000000', size: '0x00100000'}
+    - {name: pcie0.sram, base: '0x12000000', size: '0x00100000'}
+    - {name: ethernet0.sram, base: '0x13000000', size: '0x00100000'}
+    - {name: memory0.ddr0, base: '0x140000000', size: '0x40000000'}
+  config:
+    - {name: compute0.dma, base: '0x40000000', size: '0x10000'}
+    - {name: memory0.ctrl, base: '0x40030000', size: '0x1000'}
+    - {name: pcie0.ctrl, base: '0x40040000', size: '0x10000'}
+    - {name: ethernet0.ctrl, base: '0x40050000', size: '0x10000'}
+
+verification:
+  full_chip_boot:
+    memory_model: axi_to_mem_tc_sram
+    phases: [init, run, check]
+    mailbox_offset: '0x400'
+    timeout_cycles: 80000
+    phase_timeout_cycles: 6000
+  memory:
+    ingress_master_agents: 1
+    model_address_bits: 16
+    burst_beats: 4
+  scopes:
+    - name: three_region_chip
+      dut: soc_top
+      status: planned
+      checks: [real_rtl_direct_links, ethernet_to_ddr, ethernet_to_cpu_sram,
+               cpu_ddr_to_pcie, global_config, protocol_monitors]

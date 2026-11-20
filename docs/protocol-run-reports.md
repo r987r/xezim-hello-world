@@ -192,6 +192,53 @@ The decoder records operation, direction, address, requester/tag, length,
 header/payload, byte enables and completions. It **does not** measure
 electrical PCIe PHY traffic, negotiated link training or physical-layer timing.
 
+### PCIe native PIPE traffic — one monitor, one exporter
+
+The [OpenPCIe original, SHA-pinned](../config/ip.lock.yaml) `pipe_monitor_bfm.py`
+already reconstructs TLP and DLLP packets from its original endpoint PHY
+`phy_txdata/phy_txdatak` monitor. Our standalone FuseSoC/Cocotb job
+instruments its existing `pipe_agent.py` callbacks **without changing
+or duplicating the packet decoder or queue semantics**. Original events carry
+Cocotb simulation picoseconds, the native reassembled raw packet bytes and
+their original appearance order.
+
+The small, reusable `tools/pcie_native_pipe_capture.py` adapter converts
+**both** native packet callback types to the *single* shared monitor catalog
+source `pcie0.pipe.ep_tx`, with `tlp_frame` and `dllp_frame` events.
+It uses `ProtocolTrace` and the unchanged `tools/protocol_report.py`
+renderer. It preserves repeated frames/retries, data hex, byte length,
+source log line, endpoint-transmit direction and
+`openpcie_native_pipe_monitor` implementation provenance. Unknown or
+malformed native events, missing Cocotb result summaries, nonmonotonic
+simulation timestamps, duplicate/inconsistent fields and event overflow
+fail closed. There is **no new PCIe VIP, independent decoder, HTML renderer,
+transaction correlator or special-case Pages list**.
+
+The CI job runs the adapter with `if: always()` after the original source
+test. It uploads the same `protocol-events.jsonl`,
+`protocol-transactions.json`, and `protocols.html` artifact paths
+as other protocols, including if the Cocotb readback **fails**.
+`run.test_status` preserves the actual Cocotb PASS/FAIL and
+`run.qualification=capture_only_original_upstream` prevents a
+source-authentic capture from being interpreted as chip-level PASS.
+`capture_complete` means only that the passive capture itself is
+well formed: **it does not override test failure**. The original
+`ci_require_cocotb.py` remains the mandatory test gate and no
+`result.json` is invented.
+
+This first source has **EP PHY transmit** visibility; it does not establish
+independent RC receipt, all physical PIPE traffic, host→EP visibility,
+link compliance or an on-chip NoC transaction. The cross-provider bench's
+existing capped raw PIPE samples are not full transaction tracing.
+For complete bidirectional coverage, feed genuine provider-observed
+host TX/RX and endpoint TX/RX into the **same event adapter/source catalog**,
+each with its own source ID and clock domain; reuse the existing source
+decoder instead of implementing a second TLP parser. A packet is marked
+fully delivered only after the independent receiving monitor observes it.
+Link-packet ACK/NAK, credit updates and LTSSM become further observed
+events with source-native fields, not host traffic inferred from endpoint
+callbacks. This is the remaining #76 integration gate.
+
 ## Supported now / later
 
 | Protocol | Existing capture | Generic display |

@@ -2,6 +2,15 @@
 
 The `chip-pcie-host` regression runs a **modeled** Cocotb PCIe Root Complex with the pinned real `pcie_axi_master` TLP-to-AXI bridge, dedicated PCIe0 Data/Config NoCs, real CPU0/PULP iDMA and PCIe SRAM. The DDR destination in **this test is behavioral AXI RAM**, not the opt-in LiteDRAM RTL controller. PCIe controller-management CSR remains reserved.
 
+**Two supported PCIe modes:** See the [PCIe verification and report architecture](pcie-verification-modes.md)
+for a source-backed diagram and side-by-side evidence matrix. This file's
+`chip-pcie-host` flow is the **original fast TLP-only mode**; it remains
+the normal regression because it has real CPU/FlooNoC/TLP/AXI/byte reporting.
+The new opt-in digital-link test separately proves independent host↔device
+LTSSM to L0 using real PIPE, and archives a source-qualified **isolated**
+JSON/HTML event timeline. It is not yet a full-chip AXI/NoC reporter
+and must not borrow this flow's PASS.
+
 ## Execution ownership
 
 - `dv/full_chip/test_boot.py::execute_cold_boot` owns the shared CPU INIT/RUN/CHECK phases; `dv/pcie0/host_adapter.py` is the host enumeration/BAR participant. The PCIe test does **not** add a second coordinator or test runner.
@@ -21,4 +30,4 @@ python3 tools/regress.py chip-cpu-dma
 
 The exact selected run retains `result.json`, `test-flow.json`, `axi-transactions.json`, `protocol-transactions.json`, latency metadata and offline reports. The existing shared Test Runs viewer correlates actual accepted TLP requests/completions and AXI handshakes. Missing, duplicate, failed or timed-out required steps are failures; unrelated NoC ordering/stress has its own gate.
 
-**Limits of `chip-pcie-host`:** Root Complex/link is modeled (no PIPE/SerDes/LTSSM silicon); this **specific** regression uses host BAR pulls, not endpoint-initiated DMA; DDR is modeled and Ethernet is absent. The **separate** `chip-pcie-outbound` regression CPU-programs real Config-NoC requester CSRs and transfers to modeled host RAM ([merged #149](https://github.com/r987r/xezim-hello-world/pull/149)). Broader PCIe stress/trace coverage remains [#76](https://github.com/r987r/xezim-hello-world/issues/76); combined chaining remains [#158](https://github.com/r987r/xezim-hello-world/issues/158).
+**Limits of `chip-pcie-host`:** Root Complex/link is modeled (no PIPE/SerDes/LTSSM silicon); this **specific** regression uses host BAR pulls, not endpoint-initiated DMA; DDR is modeled and Ethernet is absent. The **separate** `chip-pcie-outbound` regression CPU-programs real Config-NoC requester CSRs and transfers to modeled host RAM ([merged #149](https://github.com/r987r/xezim-hello-world/pull/149)). Broader PCIe stress/trace coverage remains [#76](https://github.com/r987r/xezim-hello-world/issues/76); combined chaining remains [#152](https://github.com/r987r/xezim-hello-world/issues/152).

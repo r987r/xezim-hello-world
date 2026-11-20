@@ -1,4 +1,13 @@
-# P0: composable SoC stimulus actions across Python, C, and SV
+# Composable SoC stimulus actions across Python, C, and SV
+
+## Framework-only P0/P1/P2 checkpoint (November 19, 2026)
+
+- **P0 complete and merged:** [PR #252](https://github.com/r987r/xezim-hello-world/pull/252), main squash commit `02120050769fe11859cfac77208edb06d58deb10`. The existing canonical seed matrix selects diverse resolved action arguments without duplicating the resolver; both real CPU-C/BFM randomized replay jobs and exact-head scenario/Pages CI passed.
+- **P1 bounded milestone complete and merged:** [PR #253](https://github.com/r987r/xezim-hello-world/pull/253), main squash commit `91ba696edcf53cc788f4635a0b1dcbc310aee83b`. The same YAML `flow_plan` now feeds existing CPU-C and Cocotb BFM scenario materializers, subject to the original strict eight-action hardware contract and canonical plan-byte/replay checks. All 19 PR-head CI workflows passed, including the original scenario CPU/BFM RTL job and Pages.
+- **P2 framework portability proof merged:** [framework portability test](../tests/test_scenario_portability.py) ([PR #258](https://github.com/r987r/xezim-hello-world/pull/258)) selects two distinct compatible source configurations through the same existing `flow_plan` validator, canonical seed-matrix/resolver, generated C11/SV contract, Python `ActionDispatcher`, and driver-only event format. It asserts different plan identity and rejects foreign SHA. This is a **source/ABI framework contract test**, not two different *hardware SoCs*, not a real hardware transfer, and not the independent AXI qualification required by [#167](https://github.com/r987r/xezim-hello-world/issues/167). It merged as `2feeaf5` after [scenario CI](https://github.com/r987r/xezim-hello-world/actions/runs/43813062676).
+- **Original [#152](https://github.com/r987r/xezim-hello-world/issues/152) stays open:** generic multi-protocol C/SV/Python hardware adapters, independent per-protocol completion/byte proof and chaining remain separate, uncompleted original acceptance. These framework-only milestones do not qualify any new Ethernet, PCIe or DDR coverage.
+
+**Scope lock:** No additional protocol depth, test scenarios, new hardware, alternative runner, duplicated VIP/monitor, or manufactured RTL evidence. The dated architecture and capability sections below describe the broader original issue and may include historical milestones.
 
 **Status:** M0 architecture and M1 generic Python action executor are implemented; the C11/SV source contract is implemented, while universal hardware adapters and independently checked multi-protocol chaining remain open. **Owner:** [P0 issue #152](https://github.com/r987r/xezim-hello-world/issues/152); predecessor [#119](https://github.com/r987r/xezim-hello-world/issues/119) closed after partial progress, but its broader legacy migration is not complete. Integration consumers: [#76](https://github.com/r987r/xezim-hello-world/issues/76), [#34](https://github.com/r987r/xezim-hello-world/issues/34).
 
@@ -22,6 +31,17 @@ Full-chip test writers must be able to express **what** to do using typed action
 | `dv/common/action_events.py`, `dv/common/test_flow.py` | Action driver events and existing INIT/RUN/CHECK evidence | Independently checked transfers without passive monitors/scoreboards |
 
 **Selected cross-language ABI:** `tools/scenario_c.py` emits a C11 action table from the same canonical selected JSON and plan SHA that the Python dispatcher and SV action package use. [PR #180](https://github.com/r987r/xezim-hello-world/pull/180) **merged** the callback-based native C11 action adapter with mandatory selected-plan SHA preflight and rejection of missing/foreign plans. It passed its four exact-head CI workflows, including the existing full-chip boot regression, but that boot regression does **not** establish that selected C11 actions have been delivered to a real CPU via an independent hardware mailbox. The actual CSR/iDMA/PCIe/Ethernet adapters and independently checked multi-protocol chaining remain [#152](https://github.com/r987r/xezim-hello-world/issues/152). `issued`/`driver_done` are driver-only; hardware acceptance and successful bytes require separate passive protocol evidence.
+
+**Config-selected SCN source reuse:** the existing real CPU-C and BFM
+regression entries use one YAML-selected `flow_plan` under
+`config/scenarios/`. The scenario source is passed to both firmware and BFM
+materializers rather than hardcoded inside either adapter. The strict
+eight-action `compile_contract` still rejects unsupported action kinds,
+actors, dependencies, addresses or missing capabilities **before RTL**;
+mismatched CPU/BFM sources fail configuration validation. This is only
+framework reuse of a compatible scenario definition, not new PCIe/Ethernet
+coverage. Both selected runs must still generate identical canonical plans
+and pass the existing independent RTL replay audit.
 
 **Do not create a second scenario compiler, scheduler authority, source catalog, event format, passive monitor, test viewer or report site.**
 
@@ -51,6 +71,12 @@ Every generated seed is recorded, so later replay uses those exact values;
 there is no fixed-seed policy. The checker rejects missing, added, altered,
 noncanonical or foreign plans and changed source files. It cannot call a
 hardware simulation and therefore **does not qualify M3/M4/M5 protocol PASS**.
+The existing SCN real-RTL CI now calls `select_distinct_cases` from the
+same seed-matrix module to select plans with different *resolved action
+arguments*, with no hardcoded authored seed or duplicate planner. It
+rejects stale/tampered matrix inputs and remains **intent-only** selection;
+the original real RTL runner and independent replay audit qualify execution.
+
 Run the selected cases through the *existing* `tools/regress.py` and
 `ActionDispatcher`, then correlate real passive AXI/TLP/GMII/DFI capture
 and independent expected/observed bytes through `tools/action_evidence.py`.

@@ -1236,17 +1236,285 @@ def evidence_index(evidence,output,repository,site_sha=None):
     return runs,entries,notes
 
 
+
+def project_pages(output, projects, entries, repository, sha):
+    """Publish a catalog-sized project workspace without sharing B's test PASS.
+
+    This is deliberately driven by the catalog, not a special branch for two
+    named designs. Compiled CI products are linked to the source-qualified
+    workflow artifact, while only checked-in RTL can be served as static files.
+    """
+    from project_catalog import QUALIFICATIONS
+    project_ids = {p['id'] for p in projects}
+    if len(project_ids) != len(projects):
+        raise ValueError('duplicate project page id')
+    unknown = {e.get('project_id') for e in entries
+               if e.get('project_id') is not None} - project_ids
+    if unknown:
+        raise ValueError('run has unknown project identity: ' + str(sorted(unknown)))
+    # Untagged historical evidence belongs only to the canonical default
+    # SoC config, never to a newly cataloged project.
+    legacy_default = next((p['id'] for p in projects
+                           if p['config'] == 'config/soc.yaml'), None)
+    cards = []
+    for project in projects:
+        pid = project['id']
+        qualification = project['qualification']
+        if qualification not in QUALIFICATIONS:
+            raise ValueError('unknown project qualification')
+        name = escape(project['title'])
+        published = qualification == 'generated_default'
+        compiled_ci = qualification == 'ci_generated_compiled'
+        status = (
+            'Generated RTL · detailed source-qualified test results' if published else
+            'CI-selected RTL · see project compile and boot results' if compiled_ci else
+            'Configuration defined · RTL not yet qualified'
+        )
+        cards.append(
+            '<a class="project-card" href="projects/' + pid + '/index.html">'
+            '<div class="eyebrow">' + escape(pid) + '</div><h2>' + name + '</h2>'
+            '<p>' + escape(project['subtitle']) + '</p><p class="muted">' +
+            escape(status) + '</p><span class="project-open">Open project →</span></a>'
+        )
+        base = output / 'projects' / pid
+        (base / 'data').mkdir(parents=True, exist_ok=True)
+        # Old untagged captures are ONLY valid as legacy project A evidence;
+        # no other project may silently adopt them.
+        if published:
+            selected = [e for e in entries
+                        if e.get('project_id', legacy_default) == pid]
+        else:
+            selected = [e for e in entries if e.get('project_id') == pid]
+            if selected and qualification == 'source_contract_only':
+                raise ValueError('source-only project cannot have runtime evidence')
+        workflow_url = (f'https://github.com/{repository}/actions/workflows/'
+                        'project-compile.yml')
+        files = [
+            {'role': 'Project configuration', 'path': project['config'],
+             'location': 'published', 'url': '../../' + project['config']},
+            {'role': 'Shared AXI and NoC contract',
+             'path': 'config/interface_contracts.yaml', 'location': 'published',
+             'url': '../../config/interface_contracts.yaml'},
+            {'role': 'Pinned IP selection', 'path': 'config/ip.lock.yaml',
+             'location': 'published', 'url': '../../config/ip.lock.yaml'},
+            {'role': 'Shared Bender source manifest', 'path': 'Bender.yml',
+             'location': 'published', 'url': '../../Bender.yml'},
+            {'role': 'Project build recipe', 'path': 'tools/project_build.py',
+             'location': 'repository',
+             'url': f'https://github.com/{repository}/blob/{sha}/tools/project_build.py'},
+        ]
+        if published:
+            for role, path in [
+                ('Selected SoC RTL top', project['generated_source']),
+                ('NoC RTL wrapper', 'gen/supernoc/soc_noc.sv'),
+                ('Whole-chip testbench', 'gen/chip/full_chip_tb.sv'),
+                ('NoC RTL inventory', 'gen/noc/floonoc/manifest.json'),
+                ('Chip source manifest', 'gen/chip/manifest.json'),
+                ('Selected variant review top',
+                 f'gen/projects/{pid}/variants/default/rtl/soc_top.sv'),
+                ('Selected variant manifest',
+                 f'gen/projects/{pid}/variants/default/manifest.json'),
+                ('Topology JSON', 'gen/diagrams/noc-topology.json'),
+                ('AXI monitor inventory', 'gen/supernoc/axi_monitors.json')
+            ]:
+                candidate = ROOT / path
+                if not candidate.is_file() or candidate.is_symlink():
+                    raise ValueError('missing required generated project file: ' + path)
+                files.append({'role': role, 'path': path,
+                              'location': 'published', 'url': '../../' + path})
+        elif compiled_ci:
+            for role, path in [
+                ('Selected SoC RTL top', 'chip/soc_top.sv'),
+                ('Generated NoC wrapper', 'supernoc/soc_noc.sv'),
+                ('Whole-chip testbench', 'chip/full_chip_tb.sv'),
+                ('Complete selected compiler filelist', 'chip/sources.f'),
+                ('Project compilation verdict', 'chip/compile-result.json'),
+                ('Verilator diagnostics', 'chip/compile.log'),
+                ('FlooGen instance manifest', 'noc/floonoc/manifest.json'),
+                ('Selected RTL and boot inventory', 'manifest.json')
+            ]:
+                files.append({'role': role, 'path': path, 'location': 'ci_artifact',
+                              'url': workflow_url})
+        data = dict(project, runs=[
+            {'target': e.get('target'), 'path': e.get('path'),
+             'source_sha': e.get('source_sha'), 'passed': e.get('passed')}
+            for e in selected
+        ], site_source_sha=sha, files=files,
+            selected_compile_workflow=workflow_url,
+            historical_run_records_present=bool(selected),
+            current_source_functional_pass=any(
+                e.get('project_id') == pid and
+                e.get('source_sha') == sha and
+                e.get('passed') is True for e in selected))
+        dump(base / 'data/project.json', data)
+        info = ('<div class="eyebrow">' + escape(pid) +
+                '</div><h1>' + name + '</h1><p class="lede">' +
+                escape(project['subtitle']) + '</p>')
+        explorer = project.get('architecture_explorer')
+        if explorer and not (output / explorer).is_file():
+            raise ValueError('catalog-selected project explorer was not published: ' + explorer)
+        architecture_href = 'architecture.html'
+        nav = ('<div class="actions">'
+               '<a href="index.html">Overview</a>'
+               '<a href="' + architecture_href + '">Architecture</a>'
+               '<a href="address-map.html">Addresses</a>'
+               '<a href="files.html">RTL &amp; files</a>'
+               '<a href="runs.html">Test runs</a></div>')
+        scope = ('<p class="scope-note">Generated design. Test outcomes are '
+                 'qualified per original run and tested source; an older PASS '
+                 'is not a PASS on this source.</p>' if published else
+                 '<p class="scope-note">Selected RTL generated and compiled '
+                 'in CI. Check the selected commit and archived build verdict; '
+                 'no functional AXI PASS is inferred from compilation.</p>'
+                 if compiled_ci else
+                 '<p class="scope-note">Design configuration only. No RTL '
+                 'compile or functional simulation qualified.</p>')
+        overview = (info + nav + scope +
+                    '<h2>Subsystems</h2><p>' +
+                    escape(' · '.join(project['subsystems'])) +
+                    '</p><h2>Memory targets</h2><p>' +
+                    escape(' · '.join(project['memory_targets'])) + '</p>'
+                    '<h2>Design sources</h2><p><a href="files.html">'
+                    'Selected top RTL, NoC and input manifests</a></p>')
+        addresses = (
+            '<div class="scroll"><table><thead><tr><th>Plane</th>'
+            '<th>Target</th><th>Base</th><th>Size</th></tr></thead><tbody>' +
+            ''.join(
+                '<tr><td>' + escape(plane) + '</td><td><code>' +
+                escape(item['name']) + '</code></td><td><code>' +
+                escape(str(item['base'])) + '</code></td><td><code>' +
+                escape(str(item['size'])) + '</code></td></tr>'
+                for plane in ('data', 'config')
+                for item in project['address_map'][plane]
+            ) + '</tbody></table></div>'
+            '<p class="muted">Address allocation does not imply a qualified '
+            'transaction or verified real memory controller.</p>')
+        file_rows = ''.join(
+            '<tr><td>' + escape(item['role']) + '</td>'
+            '<td><code>' + escape(item['path']) + '</code></td>'
+            '<td><a href="' + escape(item['url'], quote=True) + '">' +
+            ('Open file' if item['location'] == 'published' else
+             'Open source' if item['location'] == 'repository' else
+             'CI artifact') + '</a></td></tr>'
+            for item in files
+        )
+        files_page = (
+            '<p>Selected top, build inputs, generated NoC and testbench '
+            'sources for this project. All files retain their own source '
+            'identity; external IP remains pinned by the shared lockfile.</p>' +
+            ('<p class="scope-note">CI-generated RTL is stored in the '
+             '<a href="' + escape(workflow_url, quote=True) +
+             '">project compile workflow</a> under the artifact named '
+             '<code>project-compile-' + escape(pid) +
+             '-&lt;run_id&gt;</code>. Open the latest successful run '
+             'for the matching source SHA, then download its artifact. '
+             'These files are not copied into the static website.</p>'
+             if compiled_ci else '') +
+            '<div class="scroll"><table><thead><tr><th>Purpose</th>'
+            '<th>Path</th><th>Location</th></tr></thead><tbody>' +
+            file_rows + '</tbody></table></div>' +
+            '<p><a href="data/project.json">Machine-readable selected file '
+            'index and source fingerprints</a></p>'
+        )
+        if selected:
+            run_rows = ''.join(
+                '<li><a href="../../' + escape(e['path'], quote=True) + '">' +
+                escape(str(e['target'])) + '</a> · ' +
+                ('Recorded PASS' if e.get('passed') is True else
+                 'Recorded FAIL' if e.get('passed') is False else
+                 'Outcome unavailable') + ' · tested <code>' +
+                escape(str(e.get('source_sha', 'unknown'))[:12]) +
+                '</code></li>' for e in selected if e.get('path')
+            )
+            runs = ('<p class="scope-note">Per-run source, selected variant '
+                    'and captured traffic are authoritative.</p>'
+                    '<ul class="list">' + run_rows + '</ul>'
+                    '<p><a href="../../runs.html">Full archived test viewer'
+                    '</a></p>')
+        else:
+            runs = ('<p class="empty">No project-qualified run evidence is '
+                    'available. No other project results are substituted.</p>')
+        # Every project uses the exact SAME architecture page and diagram
+        # renderer. A project-owned detailed compiler-parsed explorer is an
+        # optional drill-down, not an alternate main architecture UI.
+        template = (ROOT/'tools/templates/site_project_hierarchy.html').read_text()
+        hierarchy = json.dumps({
+            'id': pid, 'title': project['title'],
+            'config': project['config'],
+            'config_sha256': project['config_sha256'],
+            'qualification': qualification,
+            'design': project['design'],
+            'layout': project.get('layout'),
+            'address_map': project['address_map'],
+        }, separators=(',', ':')).replace('<', '\\u003c')
+        topology_js = (ROOT/'tools/templates/site_project_topology.js').read_text()
+        composition_js = (ROOT/'tools/templates/site_project_composition.js').read_text()
+        if topology_js.count('/*__COMPOSITION_IMPL__*/') != 1:
+            raise ValueError('missing project composition renderer insertion point')
+        topology_js = topology_js.replace('/*__COMPOSITION_IMPL__*/', composition_js)
+        detailed = (
+            '<div class="actions"><a href="../../' +
+            escape(explorer, quote=True) +
+            '">Open detailed generated RTL / router / signal explorer</a></div>'
+            if explorer else
+            '<p class="muted">Compiler-parsed RTL/router-level explorer '
+            'not published for this project. Build source files and '
+            'compile verdicts remain available under RTL &amp; files.</p>'
+        )
+        architecture = (info + nav +
+                        template.replace('__PROJECT_HIERARCHY_JSON__', hierarchy)
+                                .replace('__PROJECT_TOPOLOGY_JS__', topology_js)
+                                .replace('__PROJECT_EVIDENCE_SCOPE__', scope) +
+                        detailed)
+        pages = {
+            'index.html': overview,
+            'architecture.html': architecture,
+            'address-map.html': info + nav + scope + addresses,
+            'files.html': info + nav + scope + files_page,
+            'runs.html': info + nav + scope + runs,
+        }
+        for filename, body in pages.items():
+            (base / filename).write_text(
+                shell(project['title'], body,
+                      Path('projects') / pid / filename, repository, sha))
+    chooser = (ROOT / 'tools/templates/site_projects.html').read_text()
+    chooser = chooser.replace('__PROJECT_CARDS__', ''.join(cards))
+    (output / 'index.html').write_text(
+        shell('Choose a chip project', chooser, Path('index.html'), repository, sha))
+    dump(output / 'data/projects.json',
+         {'schema_version': 1, 'site_source_sha': sha,
+          'projects': [{k: v for k, v in p.items()
+                        if k not in ('layout', 'address_map')}
+                       for p in projects]})
+
+
 def shell(title,body,relative,repository,sha):
     prefix=os.path.relpath('.',str(Path(relative).parent)).replace(os.sep,'/')
     if prefix=='.':prefix=''
     else:prefix+='/'
     template=(ROOT/'tools/templates/site.html').read_text()
-    navigation_items=[('index.html','Overview'),('topology.html','Topology'),
-                      ('explorer.html','Chip architecture'),('fabric.html','Fabric routes'),
-                      ('address-map.html','Address map'),('runs.html','Test runs'),
-                      ('docs.html','Documentation'),('reference.html','Source data')]
+    relative_parts=Path(relative).parts
+    if len(relative_parts)>=3 and relative_parts[0]=='projects':
+        # Projects can scale to many without adding global legacy links to
+        # an unrelated project's header. Project-id is catalog validated.
+        base='projects/'+relative_parts[1]+'/'
+        navigation_items=[
+            ('index.html','Projects'), (base+'index.html','Overview'),
+            (base+'architecture.html','Architecture'),
+            (base+'address-map.html','Addresses'),
+            (base+'files.html','RTL & files'),
+            (base+'runs.html','Test runs'),
+            ('docs.html','Documentation')]
+    else:
+        navigation_items=[('index.html','Projects'),('soc-overview.html','Overview'),
+                          ('topology.html','Topology'),('explorer.html','Chip architecture'),
+                          ('fabric.html','Fabric routes'),('address-map.html','Addresses'),
+                          ('runs.html','Test runs'),('docs.html','Documentation'),
+                          ('reference.html','Source data')]
     active=('docs.html' if str(relative).startswith('docs/') or str(relative)=='readme.html'
             else 'runs.html' if str(relative).startswith('runs/')
+            else ('projects/'+relative_parts[1]+'/'+relative_parts[-1])
+            if len(relative_parts)>=3 and relative_parts[0]=='projects'
             else str(relative) if str(relative) in {path for path,_ in navigation_items} else '')
     navigation=''.join(
         f'<a href="{prefix}{path}"'+(' aria-current="page"' if path==active else '')+
@@ -1530,7 +1798,11 @@ def build(output,evidence,repository,sha,config):
         if page=='fabric':
             fabric_data=json.dumps(fabric,separators=(',',':')).replace('<','\\u003c')
             body=body.replace('__FABRIC_DATA__',fabric_data)
-        (output/(page+'.html')).write_text(shell(config['title'],body,Path(page+'.html'),repository,sha))
+        published_page = 'soc-overview.html' if page == 'index' else page + '.html'
+        (output/published_page).write_text(
+            shell(config['title'], body, Path(published_page), repository, sha))
+    from project_catalog import projects
+    project_pages(output, projects(ROOT), entries, repository, sha)
     return dataset
 
 

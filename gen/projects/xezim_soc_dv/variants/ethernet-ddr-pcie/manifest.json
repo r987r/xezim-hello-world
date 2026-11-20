@@ -225,7 +225,7 @@
   ],
   "network_filelists": {},
   "original_source_attestation": ".tools/regression/chip-ethernet-ddr-pcie/selected-rtl-manifest.json",
-  "portable_compiler_input_sha256": "4a8ae3a154adb125c468dca34d57f9f4824b32f2f368ed9b590a8edd1b5e6a5c",
+  "portable_compiler_input_sha256": "c91fdaebd990a14dad18c41160ebe0dbc760e78225d4268424955e1a76b13b95",
   "portable_filelist": "compiler/sources.f",
   "portable_filelist_sha256": "ce5babb2d8afb63f34134c797c3829fefd1dd0956d9ddfb9120f0d5cda453cec",
   "portable_source_map": {
@@ -586,7 +586,7 @@
   },
   "selection_sha256": "be16273d479468d29b8b08dfbb609918db58b62f28bd6412aa6b54b1a3f3d4dc",
   "soc_config_sha256": "7ee80c5e2b19b429c96c12fdd779709454c2c615eae0404b964c9abddc9abd62",
-  "source_config_sha256": "7847d51cc59fc58e39ac7bd06705eb2d3c4648c53565bfb23fd4c9a10137871f",
+  "source_config_sha256": "ecab5b9ea798b3d2fb44c3967fe6f36b127e678b415ae6ec727386e3a9121a80",
   "source_count": 312,
   "source_profile": "chip-ethernet-ddr-pcie",
   "variant": "ethernet-ddr-pcie"

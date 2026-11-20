@@ -8,7 +8,7 @@ import tempfile
 import unittest
 
 from tools.scenario_seed_matrix import (
-    MatrixError, check_matrix, choose_seeds, write_matrix,
+    MatrixError, check_matrix, choose_seeds, select_distinct_cases, write_matrix,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -48,6 +48,51 @@ class SeedMatrixTests(unittest.TestCase):
         write_matrix(SCENARIO, SOC, self.output, seeds=seeds)
         self.assertEqual([c["seed"] for c in check_matrix(
             SCENARIO, SOC, self.output)["cases"]], seeds)
+
+    def test_reusable_argument_diversity_selection_is_not_seed_hardcoded(self):
+        source = ROOT / "config/scenarios/cpu-bfm-ddr-roundtrip.json"
+        write_matrix(source, SOC, self.output, seeds=list(range(32)))
+        selected = select_distinct_cases(
+            source, SOC, self.output, action_instance_id="init_source",
+            argument_path=("pattern", "seed"), count=2)
+        self.assertEqual(len(selected), 2)
+        self.assertEqual(len({entry["seed"] for entry in selected}), 2)
+        values = set()
+        for entry in selected:
+            plan = json.loads((self.output / entry["file"]).read_text())
+            action = next(x for x in plan["actions"]
+                          if x["action_instance_id"] == "init_source")
+            values.add(action["args"]["pattern"]["seed"])
+        self.assertEqual(values, {90, 91})
+        self.assertNotIn(79, [entry["seed"] for entry in selected])
+
+    def test_diversity_selector_fails_closed_on_missing_capability_and_tamper(self):
+        source = ROOT / "config/scenarios/cpu-bfm-ddr-roundtrip.json"
+        write_matrix(source, SOC, self.output, seeds=list(range(12)))
+        with self.assertRaisesRegex(MatrixError, "insufficient distinct"):
+            select_distinct_cases(
+                source, SOC, self.output, action_instance_id="init_source",
+                argument_path=("pattern", "seed"), count=3)
+        with self.assertRaisesRegex(MatrixError, "missing or ambiguous"):
+            select_distinct_cases(
+                source, SOC, self.output, action_instance_id="not_registered",
+                argument_path=("pattern", "seed"), count=1)
+        with self.assertRaisesRegex(MatrixError, "unavailable"):
+            select_distinct_cases(
+                source, SOC, self.output, action_instance_id="init_source",
+                argument_path=("pattern", "unknown"), count=1)
+        for bad in (0, True, 129):
+            with self.subTest(count=bad), self.assertRaisesRegex(MatrixError, "invalid"):
+                select_distinct_cases(
+                    source, SOC, self.output, action_instance_id="init_source",
+                    argument_path=("pattern", "seed"), count=bad)
+        index = self.output / "matrix.json"
+        index.write_text(index.read_text().replace(
+            "source_selected_intent_only_not_hardware_execution", "hardware_pass"))
+        with self.assertRaises(MatrixError):
+            select_distinct_cases(
+                source, SOC, self.output, action_instance_id="init_source",
+                argument_path=("pattern", "seed"), count=2)
 
     def test_duplicate_invalid_seed_or_overwrite_is_rejected(self):
         spec = json.loads(SCENARIO.read_text())

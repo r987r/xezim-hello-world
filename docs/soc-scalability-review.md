@@ -1,6 +1,6 @@
 # Review a SoC hardware variant and its executable tests
 
-This is an **inspection and reproduction guide**, not a duplicate generator or progress tracker. The parent [scalability epic #162](https://github.com/r987r/xezim-hello-world/issues/162) and individual issues own progress. The authoritative project SoC is [config/soc.yaml](../config/soc.yaml), the test and selected backend inventory is [config/regression.yaml](../config/regression.yaml), and build identity is resolved by [tools/test_identity.py](../tools/test_identity.py).
+This is an **inspection and reproduction guide**, not a duplicate generator or progress tracker. The parent [scalability epic #162](https://github.com/r987r/xezim-hello-world/issues/162) and individual issues own progress. The [project catalog](../config/projects/catalog.yaml) selects each SoC configuration. Project A uses [config/soc.yaml](../config/soc.yaml) and [project onboarding](project-onboarding.md) describes selection for additional designs. For Project A, the test and selected backend inventory is [config/regression.yaml](../config/regression.yaml), and build identity is resolved by [tools/test_identity.py](../tools/test_identity.py).
 
 ## Find the real RTL, not a diagram
 

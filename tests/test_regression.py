@@ -90,6 +90,31 @@ class RegressionTests(unittest.TestCase):
                     'unsupported or unsafe executable scenario path'):
                     regress.load_config(cfg_path)
 
+    def test_config_drives_one_shared_compatible_scenario_source(self):
+        with tempfile.NamedTemporaryFile(
+                mode="w", prefix="scn_p1_", suffix=".json",
+                dir=ROOT/"config/scenarios", delete=False) as handle:
+            source = Path(handle.name)
+            handle.write((ROOT/"config/scenarios/cpu-bfm-ddr-roundtrip.json").read_text())
+        try:
+            cfg = copy.deepcopy(self.config)
+            relative = source.relative_to(ROOT).as_posix()
+            for name in ("chip-cpu-scenario", "chip-dma-scenario"):
+                cfg["tests"][name]["flow_plan"] = relative
+            with tempfile.TemporaryDirectory() as temp:
+                path = Path(temp)/"regression.yaml"
+                path.write_text(yaml.safe_dump(cfg))
+                selected = regress.load_config(path)
+                self.assertEqual(
+                    selected["tests"]["chip-cpu-scenario"]["flow_plan"], relative)
+                cfg["tests"]["chip-dma-scenario"]["flow_plan"] = (
+                    "config/scenarios/cpu-bfm-ddr-roundtrip.json")
+                path.write_text(yaml.safe_dump(cfg))
+                with self.assertRaisesRegex(ValueError, "must share one selected"):
+                    regress.load_config(path)
+        finally:
+            source.unlink(missing_ok=True)
+
     def test_report_configuration_fails_closed(self):
         for mutation in ('engine','clock','limit','field'):
             cfg=copy.deepcopy(self.config)

@@ -168,6 +168,10 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
             raise ValueError('CPU config address classification overlaps a data aperture')
     reg_bytes = 1 << max(2, (4*count-1).bit_length())
     lines += [f'  logic [{reg_bytes-1}:0][7:0] reset_regs;', f'  logic [{count-1}:0] cpu_reset_n;']
+    if count == 1:
+        # Single-CPU designs have no secondary-release CSR. Keep an explicit
+        # constant rather than creating an undriven reset register bus.
+        lines += ["  assign reset_regs = '0;"]
     if peakrdl_reset:
         lines += [
             '  soc_boot_reset_ctrl_regblock_pkg::boot_reset_ctrl__out_t reset_hwif_out;',
@@ -391,6 +395,16 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
                 lines += [f"  assign {req(packet)}.{ch}.{member} = '0;"]
         lines += [f"  assign {req(packet)}.aw.atop = '0;",
                   f"  assign {req(packet)}.w.user = '0;"]
+    if cfg["networks"].get("direct_data"):
+        # No memory-local DMA is attached yet: these deliberately exposed
+        # reverse-link initiator ports must be held inactive, not floating.
+        for sub in cfg["subsystems"]:
+            if sub["type"] != "memory":
+                continue
+            name = "m_" + sub["name"] + "_local_data_memory_dma"
+            if name not in all_ports:
+                raise ValueError("missing selected memory DMA attachment")
+            lines += [f"  assign {req(all_ports[name])} = '0;"]
     for sub in (s for s in cfg["subsystems"] if s["type"] == "peripheral"):
         for plane, endpoint in (("data", sub["data_initiator"]),
                                 ("config", sub["config_initiator"])):
@@ -437,13 +451,27 @@ def emit(cfg, noc_manifest, noc_root, out, *, cpu0_run_hook=None,
         elif pcie_outbound_mode and ep == 'controller_regs' and p['network'] == pcie[0]['name']+'_local_config':
             pcie_csr = next(r for r in cfg['address_map']['config']
                             if r['name'] == pcie[0]['name']+'.ctrl')
+            pcie_sram = next(r for r in cfg['address_map']['data']
+                             if r['name'] == pcie[0]['name']+'.sram')
             lines += [module('pcie_requester_axi_regs', 'u_pcie_requester_csrs', {
                 'axi_req_t':dtype(p,'req'), 'axi_rsp_t':dtype(p,'rsp'),
                 'lite_req_t':'lite_req_t', 'lite_rsp_t':'lite_resp_t',
                 'AxiIdWidth':p['id_width'],
-                'CsrBase':f"32'h{int(pcie_csr['base'],0):08x}"}, {
+                'CsrBase':f"32'h{int(pcie_csr['base'],0):08x}",
+                'EndpointPrelink':"1'b1",
+                'EndpointSramBase':f"32'h{int(pcie_sram['base'],0):08x}",
+                'EndpointSramBytes':f"32'h{int(pcie_sram['size'],0):08x}"}, {
                 'clk_i':'clk_i', 'rst_ni':'rst_ni',
                 'cfg_req_i':req(p), 'cfg_rsp_o':rsp(p),
+                # This variant has no actual OpenPCIe controller/PHY; keep
+                # all hardware status inactive, never fabricate L0 or MSE.
+                **{port:"1'b0" for port in (
+                    'ep_phy_ready_i','ep_noc_ready_i','ep_link_up_i',
+                    'ep_host_mem_enable_i','ep_host_cfg_violation_i',
+                    'ep_ltssm_l0_i')},
+                'ep_host_bar0_bus_base_i':"32'b0",
+                'ep_bar_committed_o':'',
+                'ep_ltssm_enable_o':'', 'ep_mem_ready_o':'',
                 **pcie_outbound.csr_ports()})]
         elif ep == 'controller_regs' and p['network'] == 'memory0_local_config' and real_ddr_mode:
             # Live memory controller wrapper below owns this separate Config NoC target.
@@ -842,7 +870,7 @@ def emit_tb(cfg, fw, out, *, image_prefix='gen/chip', cpu_dma_mode=False,
         # Clock, exactly as for the already-qualified default CPU/NoC tests.
         # A Verilator-native SCN-2 clock made passive AXI AW/AR observations
         # incomplete despite CPU firmware PASS; do not mix clock authorities.
-        '  reg [N-1:0] hold_mask = 0;', '  initial if ($test$plusargs("HOLD_SECONDARY")) hold_mask[1] = 1;',
+        '  reg [N-1:0] hold_mask = 0;', ('  initial if ($test$plusargs("HOLD_SECONDARY")) hold_mask[1] = 1;' if n > 1 else '  initial if ($test$plusargs("HOLD_SECONDARY")) $fatal(1, "single-CPU design has no secondary CPU to hold");'),
         '  wire [N-1:0] released, fetch_valid, sram_valid, sram_write;',
         '  wire [N*32-1:0] fetch_addr;', '  wire [N*64-1:0] sram_addr, sram_data;',
         '  wire [N*8-1:0] sram_strb;', '  wire [31:0] rom_reads, flash_reads;',

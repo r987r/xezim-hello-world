@@ -1,0 +1,33 @@
+<div class="eyebrow">Design library</div>
+<h1>Choose a chip project</h1>
+<p class="lede">Open a project to inspect its architecture, address map, RTL sources and verified test results. Each project has its own selected configuration and build provenance; the verification platform is shared.</p>
+<div class="project-search">
+  <label for="project-filter">Find a project</label>
+  <input id="project-filter" type="search" placeholder="Search project name, ID or subsystem" autocomplete="off" />
+  <p class="muted" id="project-match-count" aria-live="polite"></p>
+</div>
+<div class="project-grid" id="project-choices">
+__PROJECT_CARDS__
+</div>
+<p class="muted">Results are shown only when the project and tested source are identified. A compiled design is not automatically a functionally verified design. <a href="docs/multi-project-pages.html">Project and evidence documentation</a>.</p>
+
+<script>
+(() => {
+  const input = document.getElementById('project-filter');
+  const cards = [...document.querySelectorAll('#project-choices .project-card')];
+  const count = document.getElementById('project-match-count');
+  function applyFilter() {
+    const query = input.value.toLocaleLowerCase().trim();
+    let visible = 0;
+    for (const card of cards) {
+      const matches = card.textContent.toLocaleLowerCase().includes(query);
+      card.hidden = !matches;
+      if (matches) visible += 1;
+    }
+    count.textContent = visible + ' of ' + cards.length + ' projects';
+  }
+  input.addEventListener('input', applyFilter);
+  input.addEventListener('change', applyFilter);
+  applyFilter();
+})();
+</script>

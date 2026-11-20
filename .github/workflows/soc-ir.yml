@@ -5,11 +5,20 @@ on:
     branches: [main]
     paths:
       - 'config/soc.yaml'
+      - 'config/projects/**'
       - 'config/interface_contracts.yaml'
       - 'tools/socgen.py'
+      - 'tools/bootgen.py'
       - 'tools/soc_ir.py'
       - 'gen/diagrams/noc-topology.json'
       - 'tests/test_soc_ir.py'
+      - 'tests/test_three_region_project.py'
+      - 'tests/test_project_build.py'
+      - 'tests/test_third_project_onboarding.py'
+      - 'tools/project_build.py'
+      - 'tools/project_catalog.py'
+      - 'tools/project_scaffold.py'
+      - 'config/projects/catalog.yaml'
       - '.github/workflows/soc-ir.yml'
   workflow_dispatch:
 
@@ -24,9 +33,18 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: '3.12'}
-      - run: python3 -m pip install 'PyYAML==6.0.3'
+      - run: python3 -m pip install -r requirements.txt
       - name: Validate existing source SoC and generated graph
         run: python3 -m unittest tests.test_soc_ir tests.test_design_explorer -v
+      - name: Verify independent three-region project source contract
+        run: python3 -m unittest tests.test_three_region_project tests.test_project_build tests.test_third_project_onboarding -v
+      - name: Generate and verify every catalog source-selected boot and memory unit build
+        run: |
+          python3 tools/project_catalog.py --ids | while IFS= read -r project; do
+            [ -n "$project" ] || continue
+            python3 tools/project_build.py --project "$project"
+            python3 tools/project_build.py --project "$project" --check
+          done
       - name: Generate and verify deterministic IR
         run: |
           python3 tools/soc_ir.py --out .tools/soc-ir/default.json
@@ -36,5 +54,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: canonical-soc-ir-source-only
-          path: .tools/soc-ir/
+          path: |
+            .tools/soc-ir/
+            .tools/projects/
           include-hidden-files: true

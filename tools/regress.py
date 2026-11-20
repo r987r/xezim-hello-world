@@ -78,13 +78,20 @@ def load_config(path):
             if (not isinstance(source,str)
                     or not re.fullmatch(r'config/scenarios/[A-Za-z0-9_-]+\.json',source)
                     or not (ROOT/source).is_file()
-                    # Only this exact pinned scenario is supported by the
-                    # current eight-action C/BFM executor. A new scenario
-                    # must add a real adapter rather than silently driving
-                    # a different plan than the Test Runs viewer displays.
-                    or source != 'config/scenarios/cpu-bfm-ddr-roundtrip.json'
+                    or (ROOT/source).is_symlink()
                     or test.get('firmware_mode') not in ('cpu_dma_scenario','scenario_bfm')):
                 raise ValueError(f'{name}: unsupported or unsafe executable scenario path')
+            # The existing real-hardware eight-action adapter remains strict:
+            # unsupported actors, kinds and dependencies fail before RTL.
+            from dv.common.scenario import resolve_scenario
+            from dv.common.scenario_dma import compile_contract
+            try:
+                selected = json.loads((ROOT/source).read_text())
+                soc = yaml.safe_load((ROOT/'config/soc.yaml').read_text())
+                compile_contract(resolve_scenario(selected, soc))
+            except (ValueError, TypeError, KeyError, OSError) as exc:
+                raise ValueError(
+                    f'{name}: unsupported or unsafe executable scenario path') from exc
         if test.get('firmware_mode') in ('cpu_dma_scenario','scenario_bfm') and 'flow_plan' not in test:
             raise ValueError(f'{name}: scenario adapter requires explicit flow_plan')
         if test.get('firmware_mode') == 'peakrdl_reset' and (
@@ -203,6 +210,11 @@ def load_config(path):
     validate_identity_catalog(config["tests"])
     from runtime_contract import validate_migration_inventory
     validate_migration_inventory(config)
+    if all(name in config['tests'] for name in ('chip-cpu-scenario', 'chip-dma-scenario')):
+        cpu = config['tests']['chip-cpu-scenario'].get('flow_plan')
+        bfm = config['tests']['chip-dma-scenario'].get('flow_plan')
+        if cpu != bfm:
+            raise ValueError('scenario CPU/BFM must share one selected flow_plan')
     return config
 
 
@@ -467,7 +479,8 @@ def run_target(name, test, resolver, options):
         variant = out/'variant'
         prepare_cpu_dma(cfg, noc_manifest, ROOT/'gen/noc/floonoc', variant,
                         scenario_mode=test['firmware_mode']=='cpu_dma_scenario',
-                        scenario_seed=options.scenario_seed)
+                        scenario_seed=options.scenario_seed,
+                        scenario_source=test.get('flow_plan'))
         generated_root = ROOT/'gen/chip'
         replacements = {'soc_top.sv', 'full_chip_tb.sv', 'full_chip_dma_tb.sv'}
         sources = [str(variant/Path(filename).name)
@@ -526,7 +539,8 @@ def run_target(name, test, resolver, options):
             from cpu_dma_firmware import prepare as prepare_cpu_dma
             prepare_cpu_dma(cfg, noc_manifest, ROOT/'gen/noc/floonoc', variant,
                             pcie_host_mode=True,
-                            pcie_outbound_mode=test['firmware_mode']=='pcie_outbound')
+                            pcie_outbound_mode=test['firmware_mode']=='pcie_outbound',
+                            pcie_endpoint_frontdoor=test['firmware_mode']=='pcie_outbound')
         else:
             emit_chip(cfg, noc_manifest, ROOT/'gen/noc/floonoc', variant,
                       image_prefix=variant.relative_to(ROOT).as_posix(),
@@ -549,6 +563,7 @@ def run_target(name, test, resolver, options):
             sources += [str(ROOT/'.tools/verilog_pcie'/item) for item in required]
             sources += [str(ROOT/'rtl/adapters/pcie_dma_sram_target.sv')]
             sources += [str(ROOT/'rtl/adapters/pcie_requester_axi_regs.sv')]
+            sources += [str(ROOT/'dv/pcie_link/endpoint_prelink_ctrl.sv')]
     if test.get('firmware_mode') == 'ddr_cpu_dma':
         # Same CPU C/iDMA INIT/RUN/CHECK; opt-in generated 16KiB
         # independent Config NoC and pinned LiteDRAM memory target.
@@ -643,7 +658,8 @@ def run_target(name, test, resolver, options):
     if test.get('firmware_mode') == 'scenario_bfm':
         from dv.common.scenario_dma import materialize
         cfg = yaml.safe_load((ROOT/'config/soc.yaml').read_text())
-        materialize(cfg, out, scenario_seed=options.scenario_seed)
+        materialize(cfg, out, scenario_seed=options.scenario_seed,
+                    scenario_source=test['flow_plan'])
     sources = list(dict.fromkeys(sources))
     includes = list(dict.fromkeys(includes))
     defines = list(dict.fromkeys(defines))

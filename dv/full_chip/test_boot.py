@@ -374,10 +374,13 @@ async def execute_cold_boot(dut, *, external=None, benchmark=False):
             from dv.common.selected_aperture import selected_aperture
             csr_base, csr_bytes = selected_aperture(
                 "pcie0.ctrl", "config", plan_path=plan)
-            assert csr_bytes >= 0x40
+            assert csr_bytes >= 0x101c
             seen = {"wr_doorbell":0, "rd_doorbell":0,
                     "wr_status":0, "rd_status":0,
-                    "slave_write":0, "slave_read":0}
+                    "slave_write":0, "slave_read":0,
+                    "ep_aperture_wr":0, "ep_target_wr":0,
+                    "ep_commit_start_wr":0, "ep_status_rd":0,
+                    "ep_slave_write":0, "ep_slave_read":0}
             for event in events:
                 channel=event.get("channel")
                 if channel not in ("aw","ar"):
@@ -392,9 +395,18 @@ async def execute_cold_boot(dut, *, external=None, benchmark=False):
                         ("rd_status","ar",0x38)):
                         if channel==expected_channel and addr==csr_base+offset:
                             seen[key]+=1
-                if monitor=="pcie0_local_config.controller_regs" and (
-                    csr_base <= addr < csr_base+0x40):
-                    seen["slave_write" if channel=="aw" else "slave_read"]+=1
+                    for key,expected_channel,offset in (
+                        ("ep_aperture_wr","aw",0x1000),
+                        ("ep_target_wr","aw",0x1004),
+                        ("ep_commit_start_wr","aw",0x1008),
+                        ("ep_status_rd","ar",0x100c)):
+                        if channel==expected_channel and addr==csr_base+offset:
+                            seen[key]+=1
+                if monitor=="pcie0_local_config.controller_regs":
+                    if csr_base <= addr < csr_base+0x40:
+                        seen["slave_write" if channel=="aw" else "slave_read"]+=1
+                    if csr_base+0x1000 <= addr < csr_base+0x101c:
+                        seen["ep_slave_write" if channel=="aw" else "ep_slave_read"]+=1
             assert all(value>0 for value in seen.values()), (
                 "missing real CPU Config-NoC CSR or target handshakes: ",seen)
             dut._log.info("PCIE0_CPU_REQUESTER_CONFIG_NOC_AXI=%s",seen)

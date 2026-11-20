@@ -30,9 +30,21 @@ h2{font-size:clamp(20px,2vw,24px)}
 .doc-group .list{margin:0}
 .docs-controls label{flex:1;max-width:480px}
 .docs-controls input{width:100%}
+.project-search{max-width:520px;margin:20px 0}.project-search label{display:block;margin-bottom:8px}.project-search input{width:100%}.project-card[hidden]{display:none !important}
+.project-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,330px),1fr));gap:18px;margin:28px 0}
+.project-card{display:block;min-width:0;text-decoration:none;color:var(--fg);background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:24px;transition:border-color .2s,background .2s}
+.project-card:hover,.project-card:focus-visible{border-color:var(--accent);background:#182a42}
+.project-card h2{margin:10px 0;font-size:25px}
+.project-card p{font-size:15px;color:var(--muted)}
+.project-card .project-open{color:var(--accent);font-weight:700;font-size:14px}
+.project-fabric{display:flex;align-items:stretch;gap:10px;margin:18px 0}
+.project-fabric>.card{flex:1;min-width:0;text-align:center}
+.project-fabric .project-link{align-self:center;color:var(--accent);font-size:24px}
 @media(max-width:800px){
  nav{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px;scrollbar-width:thin}
  nav a{white-space:nowrap}
+ .project-fabric{flex-direction:column}
+ .project-fabric .project-link{transform:rotate(90deg)}
 }
 @media(max-width:520px){
  .grid,.doc-groups{grid-template-columns:1fr}
