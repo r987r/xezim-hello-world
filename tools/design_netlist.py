@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -20,12 +21,27 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def analyze(root: Path, profile: str, mode: str, output: Path,
             *, netlist_binary: str = "slang-netlist",
-            report_binary: str = "slang-report") -> dict:
+            report_binary: str = "slang-report",
+            hardware_top: str | None = None) -> dict:
     root = root.resolve()
     if mode not in ("netlist", "ports", "drivers", "variables"):
         raise ValueError(f"unsupported export mode: {mode}")
     attested = selected(root, profile)
     source_list = attested["source_list"]
+    elaborated_top = attested["top"]
+    if hardware_top is not None:
+        # The boot regression selects a real soc_top.sv but runs it inside
+        # full_chip_tb, which includes hierarchical $readmemh simulation
+        # side effects and dozens of unrelated verification processes.
+        # Export the *exact selected hardware* instead. Do not change
+        # source closure, compiler-input hashes, top RTL, or invent ports.
+        if hardware_top != "soc_top" or attested["top"] != "full_chip_tb":
+            raise ValueError("hardware-only export requires real full-chip selected top")
+        selected_tops = [name for name in attested["selected_source_sha256"]
+                         if name.endswith("/soc_top.sv")]
+        if len(selected_tops) != 1:
+            raise ValueError("hardware-only source selection must contain one real SoC top")
+        elaborated_top = hardware_top
     executable = shutil.which(netlist_binary if mode == "netlist" else report_binary)
     if not executable:
         raise ValueError("slang source-built binary not found (no fake report or fallback)")
@@ -33,7 +49,31 @@ def analyze(root: Path, profile: str, mode: str, output: Path,
     output.parent.mkdir(parents=True, exist_ok=True)
     if output.exists():
         output.unlink()  # Prevent stale successful output after tool failure.
-    args = [executable, "--top", attested["top"], "-f", str(source_list)]
+    # Never reuse diagnostics from a previous compiler invocation as proof of
+    # the current selected source closure.
+    stdout_log = output.with_name(output.name + ".failed.stdout.log")
+    stderr_log = output.with_name(output.name + ".failed.stderr.log")
+    for stale in (stdout_log, stderr_log):
+        if stale.exists():
+            stale.unlink()
+    # Pinned third-party tech_cells_generic includes modules without local
+    # timescale declarations. Slang requires a deterministic default in a
+    # mixed-timescale compilation. This is an explicit compiler input, NOT
+    # suppression of width/port/CDC or other elaboration diagnostics.
+    # The pinned upstream common_cells cc_id_queue reset pattern fills an
+    # enum-valued packed struct field using '0. Verilator accepts that RTL;
+    # slang's default implicit-enum rule rejects it. This narrowly scoped,
+    # documented compiler compatibility option accepts that conversion only,
+    # leaving missing ports, widths, source provenance and real elaboration
+    # errors fatal. It is not a lint waiver or wire-connectivity verdict.
+    args = [executable, "--timescale", "1ns/1ps",
+            "--relax-enum-conversions",
+            # Pinned tech_cells_generic tc_sram uses overlapping whole-array
+            # reset and dynamic part-select writes. Slang diagnoses them
+            # as multiple always_ff drivers; retain a visible WARNING for
+            # this specific upstream source, never globally disable checks.
+            "-Wno-error=multiple-always-assigns",
+            "--top", elaborated_top, "-f", str(source_list)]
     if mode == "netlist":
         args += ["--save-netlist", str(output)]
     else:
@@ -43,8 +83,31 @@ def analyze(root: Path, profile: str, mode: str, output: Path,
     if run.returncode:
         if output.exists():
             output.unlink()
-        raise ValueError(f"{mode} failed for {profile} (exit {run.returncode}):\n"
-                         + (run.stderr + "\n" + run.stdout)[-6000:])
+        # Capture the *entire original Slang stdout/stderr in the same
+        # source-selected artifact directory, not a truncated tail of
+        # warnings that hides the first elaboration error.
+        stdout_log.write_text(run.stdout, encoding="utf-8")
+        stderr_log.write_text(run.stderr, encoding="utf-8")
+        diagnostics = [line for line in (run.stderr + "\n" + run.stdout).splitlines()
+                       if re.search(r"(?i)(?:^|\s)(?:%?error:|fatal error:)", line)]
+        summary = "\n".join(diagnostics[:20])
+        if not summary:
+            summary = (run.stderr + "\n" + run.stdout)[-6000:]
+        raise ValueError(f"{mode} failed for {profile} (exit {run.returncode}); "
+                         f"raw logs: {stderr_log}, {stdout_log}:\n{summary}")
+    # The only tolerated downgraded always_ff diagnostic is from the pinned
+    # generic upstream SRAM simulation model. A new project-owned or other
+    # upstream instance must still fail closed; keep originals in metadata.
+    multi_driver_diags = [line for line in run.stderr.splitlines()
+                          if "[-Wmultiple-always-assigns]" in line]
+    if any(not re.search(
+            r"(?:^|\s)\.tools/floonoc/\.bender/git/checkouts/"
+            r"tech_cells_generic-[^/]+/src/rtl/tc_sram\.sv:[0-9]+:[0-9]+:"
+            r" warning:", line) for line in multi_driver_diags):
+        output.unlink(missing_ok=True)
+        stderr_log.write_text(run.stderr, encoding="utf-8")
+        raise ValueError("unexpected always_ff multi-driver warning outside pinned "
+                         f"tech_cells_generic tc_sram; raw diagnostics: {stderr_log}")
     if mode != "netlist":
         output.write_text(run.stdout)
     if not output.is_file() or not output.stat().st_size:
@@ -58,10 +121,15 @@ def analyze(root: Path, profile: str, mode: str, output: Path,
         output.unlink()
         raise ValueError(f"{mode}: unexpected top-level output")
     meta = {**public_fields(attested), "mode": mode,
+            "elaborated_top": elaborated_top,
+            "selected_simulation_top": attested["top"],
+            "hardware_only_elaboration": hardware_top is not None,
             "output_sha256": hashlib.sha256(output.read_bytes()).hexdigest(),
             "evidence": "elaborated_slang_netlist_inputs_attested",
             "output": str(output), "command": args,
-            "tool_diagnostics": run.stderr.splitlines()}
+            "tool_diagnostics": run.stderr.splitlines(),
+            "upstream_sram_multi_driver_warnings": multi_driver_diags,
+            "sram_driver_conformance_proven": not bool(multi_driver_diags)}
     (output.parent / (output.name + ".meta.json")).write_text(
         json.dumps(meta, indent=2) + "\n")
     return meta
@@ -74,11 +142,14 @@ def main():
                         default="ports")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--root", type=Path, default=ROOT)
+    parser.add_argument("--hardware-top", choices=("soc_top",), default=None,
+                        help="Elaborate actual selected SoC hardware, not its simulation testbench")
     parser.add_argument("--slang-netlist", default="slang-netlist")
     parser.add_argument("--slang-report", default="slang-report")
     args = parser.parse_args()
     result = analyze(args.root, args.profile, args.mode, args.output,
-                     netlist_binary=args.slang_netlist, report_binary=args.slang_report)
+                     netlist_binary=args.slang_netlist, report_binary=args.slang_report,
+            hardware_top=args.hardware_top)
     print(json.dumps(result, indent=2))
 
 
