@@ -195,6 +195,19 @@ class RegressionTests(unittest.TestCase):
                 rtl.write_text('module dut; wire changed; endmodule\n')
                 self.assertNotEqual(initial, sim_cocotb.build_fingerprint(plan))
 
+    def test_static_and_structural_runs_share_canonical_workspace(self):
+        # Check workspace routing only, not compiler/RTL behavior.
+        originals = ('cpu-fetch', 'sram-synthesis', 'boot',
+                     'chip-xezim-compile', 'noc-xezim', 'noc-verilator')
+        for name in originals:
+            with self.subTest(target=name):
+                self.assertTrue(regress.uses_canonical_workspace(
+                    name, self.config['tests'][name]))
+        for name in ('memory', 'memory-full', 'boot-relocated', 'chip-boot'):
+            with self.subTest(target=name):
+                self.assertFalse(regress.uses_canonical_workspace(
+                    name, self.config['tests'][name]))
+
     def test_new_cocotb_target_does_not_inherit_noc_wrapper(self):
         # An existing engine can be reused with a new Bender source target.
         # Only the NoC source provider is allowed to add NoC packages/wrapper.

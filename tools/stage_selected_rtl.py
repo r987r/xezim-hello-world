@@ -106,9 +106,11 @@ def stage(root: Path, profile: str, definition: dict,
         # Keep exact original selected paths under snapshot/ to make source
         # diffs unambiguous; don't flatten two similarly named generated RTL.
         files["snapshot/" + source] = (source, raw)
-    filelist = (root / ".tools/regression" / profile / "sources.f").read_bytes()
+    # verify_selected_archive already reconciled this copy with the actual
+    # runner filelist; derive its owning directory from the verified archive.
+    original_filelist = source_root.parent.parent / "sources.f"
     files["compiler/sources.f"] = (
-        ".tools/regression/" + profile + "/sources.f", filelist)
+        original_filelist.relative_to(root).as_posix(), original_filelist.read_bytes())
     missing = [p for p in ("snapshot/" + selected, "compiler/sources.f")
                if p not in files]
     if missing:

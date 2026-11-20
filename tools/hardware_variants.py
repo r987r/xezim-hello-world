@@ -11,6 +11,7 @@ from pathlib import Path
 import yaml
 from test_identity import config_target
 from selected_rtl_provenance import verify_selected_archive
+from run_workspace import selected_run_folder
 
 ROOT = Path(__file__).resolve().parents[1]
 CHIP_TOPS = frozenset(("full_chip_tb", "full_chip_dma_tb"))
@@ -37,10 +38,11 @@ def catalog(root: Path, tests: dict, require_resolved: bool = False) -> dict:
                 or obj["source_target"] != test["sources"]):
             raise ValueError(name + ": incompatible selections use one hardware variant")
         obj["profiles"].append(profile)
-        archive = root / ".tools/regression" / profile / "selected-rtl-manifest.json"
-        if archive.is_symlink():
+        folder = selected_run_folder(root, profile, test)
+        archive = folder / "selected-rtl-manifest.json" if folder else None
+        if archive and archive.is_symlink():
             raise ValueError(profile + ": selected archive symlink is forbidden")
-        if not archive.is_file():
+        if archive is None or not archive.is_file():
             if require_resolved:
                 raise ValueError(profile + ": missing selected RTL archive")
             continue

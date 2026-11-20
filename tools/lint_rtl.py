@@ -93,60 +93,43 @@ def parse_diagnostics(path: Path, root: Path, profile: str, mode: str) -> list[d
 
 
 def verify_plan(root: Path, profile: str, top: str) -> Path:
-    """Find the ACTUAL source-selected filelist in its owning run workspace.
-
-    Standalone Cocotb DMA is the first migrated Verilator producer. Never
-    create or read a parallel legacy alias for it: verify its unique
-    identity, original selected plan, filelist fingerprint and independently
-    archived input bytes before running real Slang. Other profiles retain
-    the established legacy lint path until their separate migration.
-    """
+    """Use the source-selected filelist and verify canonical archives in place."""
+    try:
+        from .run_workspace import selected_run_folder, uses_canonical_workspace
+        from .selected_rtl_provenance import verify_selected_archive
+    except ImportError:
+        from run_workspace import selected_run_folder, uses_canonical_workspace
+        from selected_rtl_provenance import verify_selected_archive
     root = Path(root).resolve()
     cfg = yaml.safe_load((root / "config/regression.yaml").read_text())
     definition = cfg["tests"].get(profile)
     if definition is None or definition.get("top") != top:
         raise ValueError(f"{profile}: lint selection disagrees with regression YAML")
-    if profile == "dma-rtl":
-        try:
-            from .test_identity import load, simulator, config_target
-            from .run_workspace import verify_run
-            from .selected_rtl_provenance import verify_selected_archive
-        except ImportError:
-            from test_identity import load, simulator, config_target
-            from run_workspace import verify_run
-            from selected_rtl_provenance import verify_selected_archive
-        if (definition.get("engine") != "cocotb-verilator"
-                or definition.get("sources") != "noc"
-                or definition.get("bender_targets") != ["dma"]
-                or not isinstance(definition.get("logical_test"), str)):
-            raise ValueError("dma-rtl canonical lint producer selection changed")
-        if (root / ".tools/regression/dma-rtl").exists():
-            raise ValueError("legacy dma-rtl mirror forbidden after canonical migration")
-        parent = (root / ".tools/runs" / simulator(definition)
-                  / config_target(definition) / definition["logical_test"])
-        ids = sorted(parent.glob("*/identity.json"))
-        if len(ids) != 1:
-            raise ValueError("dma-rtl lint requires exactly one selected canonical run")
-        identity = load(ids[0], target=profile, plan=definition)
-        directory = verify_run(ids[0].parent, identity, plan=definition)
-        filelist, planfile = directory / "sources.f", directory / "plan.json"
-        if (filelist.is_symlink() or planfile.is_symlink()
-                or not filelist.is_file() or not planfile.is_file()):
-            raise ValueError("dma-rtl selected canonical filelist/plan missing")
-        plan = json.loads(planfile.read_text())
+    if profile == "dma-rtl" and (
+            definition.get("engine") != "cocotb-verilator"
+            or definition.get("sources") != "noc"
+            or definition.get("bender_targets") != ["dma"]
+            or not isinstance(definition.get("logical_test"), str)):
+        raise ValueError("dma-rtl canonical lint producer selection changed")
+    canonical = uses_canonical_workspace(profile, definition)
+    directory = selected_run_folder(root, profile, definition)
+    if directory is None:
+        raise ValueError(f"{profile}: missing selected canonical run (run regress.py --stage files)")
+    filelist, planfile = directory / "sources.f", directory / "plan.json"
+    if not filelist.is_file() or not planfile.is_file():
+        raise ValueError(
+            f"{profile}: resolved Bender sources missing (run regress.py --stage files)")
+    if canonical and (filelist.is_symlink() or planfile.is_symlink()):
+        raise ValueError(f"{profile}: selected canonical filelist/plan unsafe")
+    plan = json.loads(planfile.read_text())
+    if canonical:
+        identity = json.loads((directory / "identity.json").read_text())
         if plan.get("identity") != identity:
-            raise ValueError("dma-rtl lint plan not bound to canonical identity")
+            raise ValueError(f"{profile}: lint plan not bound to canonical identity")
         if (hashlib.sha256(filelist.read_bytes()).hexdigest()
                 != identity["selection"]["filelist_sha256"]):
-            raise ValueError("dma-rtl source-selected filelist SHA mismatch")
+            raise ValueError(f"{profile}: source-selected filelist SHA mismatch")
         verify_selected_archive(root, profile, definition, directory=directory)
-    else:
-        directory = root / ".tools/regression" / profile
-        filelist, planfile = directory / "sources.f", directory / "plan.json"
-        if not filelist.is_file() or not planfile.is_file():
-            raise ValueError(
-                f"{profile}: resolved Bender sources missing (run regress.py --stage files)")
-        plan = json.loads(planfile.read_text())
     if plan.get("top") != top or plan.get("target") != profile:
         raise ValueError(f"{profile}: plan does not match registered RTL top")
     if not plan.get("sources") or not isinstance(plan.get("sources"), list):

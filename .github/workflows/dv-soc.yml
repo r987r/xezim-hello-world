@@ -20,6 +20,8 @@ on:
       - 'tools/generate.py'
       - 'tools/interface_contracts.py'
       - 'tools/regress.py'
+      - 'tools/run_workspace.py'
+      - 'tools/selected_rtl_provenance.py'
       - 'tools/sim_cocotb.py'
       - 'tools/ip_fetch.py'
       - 'tests/test_boot_policy.py'
@@ -91,16 +93,20 @@ jobs:
           echo "XEZIM_BIN=$GITHUB_WORKSPACE/.tools/bin/$XEZIM_ASSET_NAME" >> "$GITHUB_ENV"
       - name: Run YAML-defined Xezim profiles and relocated cold boot
         run: python3 tools/regress.py xezim diagnostics
-      - name: Verify canonical Xezim smoke/SRAM/SERV execution and source archive
+      - name: Verify canonical static Xezim simulations and source archives
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import yaml
-          from tools.run_workspace import require_completed_xezim_run
-          tests = yaml.safe_load(Path('config/regression.yaml').read_text())['tests']
-          for target in ('smoke', 'sram', 'serv'):
-              result = require_completed_xezim_run(
-                  Path('.tools/runs'), target, tests[target])
+          import sys
+          sys.path.insert(0, 'tools')
+          from regress import expand, load_config
+          from run_workspace import require_completed_xezim_run, uses_canonical_workspace
+          config = load_config(Path('config/regression.yaml'))
+          for target in expand(config, ['xezim', 'diagnostics']):
+              test = config['tests'][target]
+              if not uses_canonical_workspace(target, test):
+                  continue
+              result = require_completed_xezim_run(Path('.tools/runs'), target, test)
               print('PASS canonical Xezim producer:', result['canonical_id'])
               if (Path('.tools/regression') / target).exists():
                   raise AssertionError('legacy test alias unexpectedly written: ' + target)
