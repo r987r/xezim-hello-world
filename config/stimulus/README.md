@@ -40,7 +40,7 @@ the Python/C/SV code still decides the actual internal sequence.
 `non_runtime` covers lint/compile-only targets and has no INIT/RUN/CHECK
 stimulus. YAML descriptions are **not hardware evidence** and never create PASS.
 
-As #119 progresses, move specific action parameters and dependencies from
+As the remaining #152 adapters land, move specific action parameters and dependencies from
 opaque code into the existing SCN action runtime, then change the verified
 adoption status in this one YAML. **Never** add a fake source-declared action
 that claims RTL acceptance without independent AXI/TLP/GMII/DFI/checker evidence.

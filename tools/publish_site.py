@@ -1267,7 +1267,7 @@ def project_pages(output, projects, entries, repository, sha):
         compiled_ci = qualification == 'ci_generated_compiled'
         status = (
             'Generated RTL · detailed source-qualified test results' if published else
-            'RTL compiles · CPU boot simulation passed in CI; data-path tests pending' if compiled_ci else
+            'CI-selected RTL · see project compile and boot results' if compiled_ci else
             'Configuration defined · RTL not yet qualified'
         )
         cards.append(

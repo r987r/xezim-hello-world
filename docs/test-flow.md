@@ -36,4 +36,4 @@ C firmware uses the allocated telemetry sink and `sw/common/test_flow.h`; host/P
 
 Raw `test-flow-events.jsonl`, normalized `test-flow.json`, optional `scenario-execution.json`, protocol/AXI traces and HTML summaries remain together under the original run identity. A green PCIe host test needs complete matching accepted TLP/AXI/host-byte evidence; a modeled Root Complex callback measures API time, **not** physical PCIe link latency. See [PCIe host acceptance](pcie0-host-phases.md), [unified protocol reporter](protocol-run-reports.md), and [publication constraints](publication.md).
 
-Implementation/migration backlog belongs to active [#152](https://github.com/r987r/xezim-hello-world/issues/152) and post-MVP [flow coverage #158](https://github.com/r987r/xezim-hello-world/issues/158); do not maintain a separate rollout checklist here.
+Implementation/migration backlog belongs to [#152](https://github.com/r987r/xezim-hello-world/issues/152), which also owns post-MVP flow coverage; do not maintain a separate rollout checklist here.

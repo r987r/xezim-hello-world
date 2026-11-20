@@ -103,7 +103,7 @@ Project A has independently verified functional tests on its selected
 variants. Project B has **compiled RTL and its own executed CPU/NoC cold-boot
 smoke PASS**, verified alongside A in
 [CI run 44139473560](https://github.com/r987r/xezim-hello-world/actions/runs/44139473560).
-Project B's Ethernet, PCIe, and DDR data-path qualifications remain pending.
+The existing [project smoke runner](../tools/project_smoke.py) writes a per-project boot result and logs in Actions. [#270](https://github.com/r987r/xezim-hello-world/issues/270) tracks verifying and publishing those records in the project views. Project B's Ethernet, PCIe, and DDR data-path qualifications remain pending.
 The site's Project B **Test runs** page still has no admitted project-qualified
 functional protocol records; a green compile/boot Actions job must not be
 silently copied into that ledger or treated as AXI/DDR/PCIe proof.

@@ -2,7 +2,7 @@
 
 Tracks [PCIe #76](https://github.com/r987r/xezim-hello-world/issues/76),
 [CSR firmware #90](https://github.com/r987r/xezim-hello-world/issues/90),
-and [draft PR #225](https://github.com/r987r/xezim-hello-world/pull/225).
+and [superseded PR #225](https://github.com/r987r/xezim-hello-world/pull/225).
 
 The original link-training proof must not be confused with SoC-owned
 register-bank integration. **CPU0 does not program the pinned endpoint
@@ -13,10 +13,10 @@ configures BAR0 aperture/target/start before enabling the endpoint LTSSM.
 
 | Domain | Source of truth | Addresses / semantics | Current hardware |
 | --- | --- | --- | --- |
-| CPU0 / Config FlooNoC PCIe management | `config/soc.yaml` + `csr/rdl/pcie_endpoint_prelink_ctrl.rdl` + existing PCIe requester ABI | `pcie0.ctrl = 0x40040000`; outbound requester `+0x0000..0x003f`; endpoint pre-link `+0x1000..0x100c` | Requester already live in opt-in PCIe outbound SoC; endpoint prelink **RDL source and generated RTL only**, no selected Config-NoC attachment yet |
+| CPU0 / Config FlooNoC PCIe management | `config/soc.yaml` + `csr/rdl/pcie_endpoint_prelink_ctrl.rdl` + existing PCIe requester ABI | `pcie0.ctrl = 0x40040000`; outbound requester `+0x0000..0x003f`; endpoint pre-link `+0x1000..0x1018` | Requester already live in opt-in PCIe outbound SoC; CPU0 reaches the prelink prototype over the Config NoC in #261. The generated register bank still needs integration |
 | Root Complex → endpoint Type-0 PCIe configuration | Pinned upstream `src/pcie_cfg/pcie_config.rdl` + generated `pcie_config_reg` | Host ConfigRd0/CfgWr0: COMMAND `0x04`, BAR0 `0x10`; **not** CPU0 MMIO | Real PHY/DLL/config-TLP path passes; current BAR0 and MSE override in `pcie_bar0_host_cfg.sv` because upstream BAR0 is generated read-only |
 | Host PCIe memory address | Original host enumeration TLPs | Host assigned BAR0 `0x80001000` (dynamic, relocatable) | Genuine host config Cpl/CplD and bus-base readback passed; memory TLP path remains separate |
-| SoC SRAM / data FlooNoC | `config/soc.yaml` | `pcie0.sram = 0x12000000` | Existing TLP-only bridge/no-link flows pass; real endpoint nonconfig TLP ingress to this bridge is **not yet connected** |
+| SoC SRAM / data FlooNoC | `config/soc.yaml` | `pcie0.sram = 0x12000000` | Existing TLP-only bridge/no-link flows pass; the isolated trained-link fixture in #232 also qualified this bridge, local NoC and SRAM |
 
 **Do not allocate an independent second `pcie0.ctrl` window** and do not
 overwrite the existing outbound-requester firmware ABI. The 0x1000 endpoint
@@ -118,5 +118,5 @@ illegal writes. Do not silently patch generated SV or mask
    independent bytes/latency/ordering and reset tests. Preserve the old
    fast `chip-pcie-host`/`chip-pcie-outbound` coverage permanently.
 
-Do not close issue #76 or merge PR #225 until selected hardware/firmware
+Issue #76 remains open until selected hardware/firmware
 tests and reporting gates are satisfied on the exact tested head.

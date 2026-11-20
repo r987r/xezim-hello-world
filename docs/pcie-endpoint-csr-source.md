@@ -1,4 +1,4 @@
-# PCIe Endpoint CPU0 DBI — source ABI only
+# PCIe Endpoint CPU0 DBI and frontdoor qualification
 
 The original `csr/rdl/pcie_endpoint_prelink_ctrl.rdl` is the sole
 CPU-side BAR aperture/target/COMMIT/START/status definition. Pinned
@@ -9,13 +9,12 @@ aliases. Existing outbound PCIe requester at `pcie0.ctrl+0x00..0x3f`
 remains unchanged; endpoint registers are `pcie0.ctrl+0x1000..0x1018`.
 Host PCIe Type-0 configuration offsets 0x10/0x04 are a separate domain.
 
-This PR **does not wire generated RTL to the real CPU0 Config-NoC**. The
-`soc_pcie_ep_configure()` C helper is ready to compile but does not run
-in CPU firmware yet. Actual hardware policy (write freeze and validation),
+The initial source-ABI milestone in #231 generated the register bank. At that milestone the
+`soc_pcie_ep_configure()` C helper was ready to compile but did not run
+in CPU firmware. Actual hardware policy (write freeze and validation),
 Config-NoC fanout, sampled host aliases, legitimate AXI error responses,
 real over-link BAR and end-to-end cold-boot verification are tracked in
-issue #76 and active draft PR #232 (superseding closed #230). No synthetic
-CSR writes or boot PASS.
+issue #76. Merged PR #232 qualified the isolated trained-link path.
 
 ## P0 #76 Config-NoC address-path increment — November 16, 2026
 
@@ -36,7 +35,7 @@ or any full-chip PCIe readback. Issue #76 remains open until these original
 hardware gates are independently qualified. PR #232's real PCIe-to-SRAM
 qualification remains an isolated, separately proven path.
 
-### CPU0 real frontdoor qualification candidate (November 16, 2026)
+### CPU0 real frontdoor qualification (merged #261)
 
 The selected `chip-pcie-outbound` C firmware now uses a **freshly generated**
 header from the original endpoint SystemRDL source (pinned
@@ -48,9 +47,7 @@ AXI audit now requires both CPU-side and target-side accepted Config-NoC
 transactions in the endpoint window, in addition to the original requester
 doorbells and full data path.
 
-This is **a candidate until the exact PR-head RTL run passes**. Passing the
-freestanding RV32I link and static source checks does not constitute a
-hardware MMIO PASS. The endpoint register **storage** is still the existing
+[PR #261](https://github.com/r987r/xezim-hello-world/pull/261) merged with the real CPU0 frontdoor and passive Config-NoC AXI checks passing. The endpoint register **storage** is still the existing
 prelink prototype, not the PeakRDL-generated AXI-Lite block; no actual
 OpenPCIe PHY/L0 or host BAR state is attached to this full-chip variant.
 Issue #76 remains open until the true trained link and end-to-end flow.
