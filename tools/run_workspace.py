@@ -1,8 +1,8 @@
 """One safe canonical run-directory allocator built on existing test_identity.
 
-This is a migration foundation for #139. Existing regress.py and legacy
-scratch paths are intentionally unchanged until each producer is migrated.
-Never mirror or relabel archived output, and never infer PASS from a path.
+Migrated producers use one immutable workspace. Legacy producers retain their
+existing paths until their consumers move. Never mirror or relabel archived
+output, and never infer PASS from a path.
 """
 from __future__ import annotations
 
@@ -13,9 +13,44 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 try:
-    from .test_identity import IdentityError, relative_path, save, validate
+    from .test_identity import (IdentityError, config_target, load, neutral_testname,
+                                relative_path, save, simulator, slug, validate)
 except ImportError:
-    from test_identity import IdentityError, relative_path, save, validate
+    from test_identity import (IdentityError, config_target, load, neutral_testname,
+                               relative_path, save, simulator, slug, validate)
+
+
+def uses_canonical_workspace(name, test):
+    """Select migrated families without a second per-target registry."""
+    if name == 'dma-rtl':
+        return True
+    return (test.get('engine') in {'xezim', 'xezim-compile', 'verilator-lint'}
+            # Dynamic memory and relocated firmware materialize source inside
+            # their run directory; they need a separate producer migration.
+            and test.get('sources') != 'memory'
+            and not any(test.get(key) for key in
+                        ('memory_config', 'boot_relocate', 'firmware_mode')))
+
+
+def selected_run_folder(checkout: Path, target: str, plan: dict) -> Path | None:
+    """Resolve the one selected canonical workspace, never guess the latest."""
+    checkout = Path(checkout).resolve()
+    slug(target, "legacy target")
+    if not uses_canonical_workspace(target, plan):
+        return checkout / ".tools/regression" / target
+    legacy = checkout / ".tools/regression" / target
+    if legacy.exists() or legacy.is_symlink():
+        raise IdentityError(f"legacy {target} mirror forbidden after canonical migration")
+    parent = (checkout / ".tools/runs" / simulator(plan) / config_target(plan)
+              / neutral_testname(plan["logical_test"]))
+    _existing_ancestors_safe(parent)
+    candidates = sorted(parent.glob("*/identity.json"))
+    if not candidates:
+        return None
+    if len(candidates) != 1:
+        raise IdentityError(f"{target} requires exactly one selected canonical run")
+    identity = load(candidates[0], target=target, plan=plan)
+    return verify_run(candidates[0].parent, identity, plan=plan)
 
 
 def _existing_ancestors_safe(path: Path) -> None:
@@ -66,10 +101,6 @@ def verify_run(directory: Path, identity: dict, *, plan: dict | None = None) -> 
     _existing_ancestors_safe(directory)
     if tuple(directory.parts[-4:]) != expected.parts:
         raise IdentityError("run folder does not match immutable selected identity")
-    try:
-        from .test_identity import load
-    except ImportError:
-        from test_identity import load
     recorded = load(directory / "identity.json",
                     target=identity["legacy_target"], plan=plan)
     if recorded != identity:
@@ -143,7 +174,9 @@ def require_completed_xezim_run(root: Path, target: str, plan: dict) -> dict:
         raise IdentityError("missing canonical Xezim run root")
     _existing_ancestors_safe(root)
     if (plan.get("engine") != "xezim"
-            or target not in ("smoke", "sram", "serv")
+            or not uses_canonical_workspace(target, plan)
+            or not plan.get("pass") or plan.get("expect_failure")
+            or plan.get("mode", "simulate") != "simulate"
             or (target == "serv" and
                 (plan.get("top") != "serv_minimal_tb"
                  or plan.get("sources") != "serv"

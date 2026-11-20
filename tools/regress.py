@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Resolve standard Bender filelists and execute config/regression.yaml.
 
-No shell evaluation: commands are argv arrays. Each target retains its resolved
-filelist, plan, transcript and result under .tools/regression/<target>/.
+No shell evaluation: commands are argv arrays. Migrated targets retain their
+files under .tools/runs/<simulator>/<config_target>/<testname>/<run_id>/.
 """
 from __future__ import annotations
 
@@ -20,6 +20,11 @@ import sys
 import time
 
 import yaml
+
+try:
+    from .run_workspace import uses_canonical_workspace
+except ImportError:
+    from run_workspace import uses_canonical_workspace
 
 ROOT = Path(__file__).resolve().parents[1]
 ENGINES = {'xezim', 'xezim-compile', 'verilator-lint', 'cocotb-verilator'}
@@ -391,49 +396,37 @@ def append_pinned_dma_and_bender_sources(test, resolver, sources, includes, defi
         defines += defs
 
 
+def include_runtime_noc(sources, networks, root):
+    # All packages must precede the network tops in the compiler filelist.
+    sources += [str(root/entry['package']) for _, entry in sorted(networks.items())]
+    sources += [str(root/entry['top']) for _, entry in sorted(networks.items())]
+
+
 def run_target(name, test, resolver, options):
-    # Migrate the original selected SERV CPU instruction smoke test to the
-    # same one-writer canonical Xezim workspace as smoke/SRAM. No source
-    # variant or firmware is generated per run for this reviewed profile.
-    # Other targets still require separate producer/consumer qualification.
-    canonical_cocotb_dma = name == 'dma-rtl'
-    canonical = name in ('smoke', 'sram', 'serv') or canonical_cocotb_dma
+    canonical = uses_canonical_workspace(name, test)
+    structural = test['engine'] in {'xezim-compile', 'verilator-lint'}
     identity = None
     if canonical:
         from test_identity import selected as select_identity
         from run_workspace import reserve_run
+        if (name == 'dma-rtl' and
+                (test['engine'] != 'cocotb-verilator' or test['sources'] != 'noc'
+                 or test.get('bender_targets') != ['dma'] or options.network
+                 or test.get('firmware_mode') or test.get('memory_config')
+                 or test.get('boot_relocate'))):
+            raise ValueError('unreviewed canonical Cocotb producer variant')
         sources, includes, defines = resolver.sources(test)
         args = list(test.get('args', [])) + options.arg
-        if canonical_cocotb_dma:
-            # DMA has no per-run generated CPU/chip top. Resolve the SAME
-            # actual NoC/Bender/PULP backend and APB closure as normal, before
-            # selecting the immutable identity; never hash only the initial
-            # unexpanded Bender source group or use a second source resolver.
-            if (test['engine'] != 'cocotb-verilator' or test['sources'] != 'noc'
-                    or test.get('bender_targets') != ['dma'] or options.network
-                    or test.get('firmware_mode') or test.get('memory_config')
-                    or test.get('boot_relocate')):
-                raise ValueError('unreviewed canonical Cocotb producer variant')
-            noc_entries = noc_contracts()
-            noc_root = ROOT/'gen/noc/floonoc'
-            # Preserve the original selected filelist sequence EXACTLY:
-            # every FlooNoC package first, then every corresponding top.
-            # Interleaving package/top changes compiler input order even
-            # when the same files are present, and would make the canonical
-            # migration alter execution rather than only its output root.
-            sources += [str(noc_root/entry['package'])
-                        for _, entry in sorted(noc_entries.items())]
-            sources += [str(noc_root/entry['top'])
-                        for _, entry in sorted(noc_entries.items())]
-            append_pinned_dma_and_bender_sources(
-                test, resolver, sources, includes, defines)
-            sources = list(dict.fromkeys(sources))
-            includes = list(dict.fromkeys(includes))
-            defines = list(dict.fromkeys(defines))
+        networks = noc_contracts() if test['sources'] == 'noc' else {}
+        network_base = (list(sources), list(includes), list(defines))
+        if not structural:
+            include_runtime_noc(sources, networks, ROOT/'gen/noc/floonoc')
+        append_pinned_dma_and_bender_sources(test, resolver, sources, includes, defines)
+        sources, includes, defines = [list(dict.fromkeys(items))
+                                      for items in (sources, includes, defines)]
         selected_test = {**test, 'source_target': test['sources'], 'args': args}
-        identity = select_identity(
-            name, selected_test,
-            filelist_bytes=filelist_text(sources, includes, defines).encode('utf-8'))
+        selected_bytes = filelist_text(sources, includes, defines).encode('utf-8')
+        identity = select_identity(name, selected_test, filelist_bytes=selected_bytes, root=ROOT)
         out = reserve_run(ROOT/'.tools/runs', identity, plan=selected_test)
     else:
         out = ROOT/'.tools/regression'/name
@@ -453,19 +446,22 @@ def run_target(name, test, resolver, options):
         boot_variant(test['boot_relocate'], out/'boot')
         sources = [str(out/'boot/boot_config_pkg.sv') if p == str(ROOT/'gen/boot/boot_config_pkg.sv') else p for p in sources]
         args += [f'+BOOTROM_FILE={out}/boot/bootrom.hex', f'+FLASH_FILE={out}/boot/flash.hex']
-    networks = noc_contracts() if test['sources'] == 'noc' else {}
+    if not canonical:
+        networks = noc_contracts() if test['sources'] == 'noc' else {}
     root = ROOT/'gen/noc/floonoc'
-    if options.network and (test['engine'] not in {'xezim-compile', 'verilator-lint'} or set(options.network) - set(networks)):
+    if options.network and (not structural or set(options.network) - set(networks)):
         raise ValueError('--network requires known structural NoC network names')
+    per_network = network_base if canonical and not structural else (sources, includes, defines)
     for network, entry in sorted(networks.items()):
+        # Per-network lists are compiler inputs only for structural probes.
+        # Keep the existing network diagnostics for other runners.
         (out/f'{network}.f').write_text(filelist_text(
-            sources + [str(root/entry['package']), str(root/entry['top'])], includes, defines))
-    if not canonical_cocotb_dma:
-        if networks and test['engine'] not in {'xezim-compile', 'verilator-lint'}:
-            sources += [str(root/entry['package']) for _, entry in sorted(networks.items())]
-            sources += [str(root/entry['top']) for _, entry in sorted(networks.items())]
-        append_pinned_dma_and_bender_sources(
-            test, resolver, sources, includes, defines)
+            per_network[0] + [str(root/entry['package']), str(root/entry['top'])],
+            per_network[1], per_network[2]))
+    if not canonical:
+        if not structural:
+            include_runtime_noc(sources, networks, root)
+        append_pinned_dma_and_bender_sources(test, resolver, sources, includes, defines)
     if test.get('firmware_mode') in ('cpu_dma', 'cpu_dma_scenario'):
         # Compile real C firmware into an alternate immutable FLASH image;
         # change only this run's generated top/checker, not tracked gen/.
@@ -670,7 +666,7 @@ def run_target(name, test, resolver, options):
     from test_identity import selected as select_identity, save as save_identity, relative_path
     if canonical:
         from run_workspace import verify_run
-        if filelist.read_bytes() != filelist_text(sources, includes, defines).encode('utf-8'):
+        if filelist.read_bytes() != selected_bytes:
             raise ValueError('canonical selected filelist changed after run reservation')
         verify_run(out, identity, plan=selected_test)
     else:

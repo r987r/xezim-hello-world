@@ -123,12 +123,17 @@ sources, headers, defines, options, simulator/cocotb versions, and the
 built executable's hash. Changed RTL or a missing build is rejected.
 Python stimulus can be rerun without rebuilding unchanged RTL.
 
-Results live in `.tools/regression/<target>/`: `sources.f`, per-network
-filelists, `plan.json`, transcripts, `result.json`, cocotb `results.xml`,
-separate cocotb `build.log`/`simulation.log`, and generated variant inputs/
-firmware where relevant. Each attempt replaces
-that target's previous outputs. CI retains these artifacts on success
-and failure; preparation failures are failures even if no result is written.
+Static Xezim simulations, structural NoC lint/compile, the Xezim chip
+compile, and `dma-rtl` retain independent runs at
+`.tools/runs/<simulator>/<config_target>/<testname>/<run_id>/`. The runner
+prints the selected directory; there is no second target-named copy.
+Memory variants, relocated boot and other Cocotb producers still use
+`.tools/regression/<target>/`, where each attempt replaces that target's
+previous output until their migration ([#139](https://github.com/r987r/xezim-hello-world/issues/139)).
+Both layouts retain `sources.f`, per-network filelists, `plan.json`,
+transcripts, `result.json`, and Cocotb XML/logs and generated variant
+inputs where relevant. CI retains these artifacts on success and failure;
+preparation failures are failures even if no result is written.
 
 The optional strict `report.flow` contract uses the **same**
 `config/regression.yaml` and shared INIT/RUN/CHECK phase engine to

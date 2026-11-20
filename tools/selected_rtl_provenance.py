@@ -14,6 +14,12 @@ from pathlib import Path
 import yaml
 
 
+try:
+    from .run_workspace import selected_run_folder, uses_canonical_workspace
+except ImportError:
+    from run_workspace import selected_run_folder, uses_canonical_workspace
+
+
 def selected(root: Path, profile: str) -> dict:
     root = Path(root).resolve()
     if not isinstance(profile, str) or not profile or "/" in profile or ".." in profile:
@@ -22,7 +28,11 @@ def selected(root: Path, profile: str) -> dict:
     test = config.get("tests", {}).get(profile)
     if not isinstance(test, dict) or not isinstance(test.get("top"), str):
         raise ValueError(f"unknown or non-elaboratable profile: {profile}")
-    folder = root / ".tools/regression" / profile
+    folder = selected_run_folder(root, profile, test)
+    if folder is None:
+        raise ValueError(f"{profile}: missing original resolved filelist/plan")
+    if uses_canonical_workspace(profile, test):
+        verify_selected_archive(root, profile, test, directory=folder)
     source_list, plan_file = folder / "sources.f", folder / "plan.json"
     if not source_list.is_file() or not plan_file.is_file():
         raise ValueError(f"{profile}: missing original resolved filelist/plan")
@@ -293,8 +303,11 @@ def archive_selected_filelist(root: Path, profile: str, definition: dict,
 def verify_selected_archive(root: Path, profile: str, definition: dict, *, directory: Path | None = None) -> dict:
     """Fail closed on stale, foreign, missing or tampered source/artifact bytes."""
     root = Path(root).resolve()
-    folder = Path(directory) if directory is not None else root / ".tools/regression" / profile
-    if directory is not None:
+    canonical = directory is not None or uses_canonical_workspace(profile, definition)
+    folder = Path(directory) if directory is not None else selected_run_folder(root, profile, definition)
+    if folder is None:
+        raise ValueError("selected compiler-input manifest missing or unsafe")
+    if canonical:
         try:
             from .run_workspace import verify_run
         except ImportError:
@@ -434,15 +447,19 @@ def explain_target(root: Path, name: str, definition: dict,
         "expected_soc_top_path_hint_not_verified": hint,
         "selected_source_status": "declared_only_no_resolved_filelist",
         "resolve_without_simulation": f"python3 tools/regress.py {name} --stage files",
-        "run_directory": f".tools/regression/{name}",
+        "run_directory": (".tools/runs/<simulator>/<config_target>/<testname>/<run_id>"
+                          if uses_canonical_workspace(name, definition)
+                          else f".tools/regression/{name}"),
     }
-    selected_manifest = root / ".tools/regression" / name / "selected-rtl-manifest.json"
-    if selected_manifest.is_file() or selected_manifest.is_symlink():
+    folder = selected_run_folder(root, name, definition)
+    selected_manifest = folder / "selected-rtl-manifest.json" if folder else None
+    if selected_manifest is not None and (selected_manifest.is_file() or selected_manifest.is_symlink()):
+        detail["run_directory"] = folder.relative_to(root).as_posix()
         snapshot = verify_selected_archive(root, name, definition)
         detail["selected_source_status"] = (
             "verified_selected_filelist_and_generated_bytes_not_elaborated")
         detail["selected_inputs"] = {
-            "manifest": f".tools/regression/{name}/selected-rtl-manifest.json",
+            "manifest": selected_manifest.relative_to(root).as_posix(),
             "archive": snapshot["archive"],
             "compiler_input_sha256": snapshot["compiler_input_sha256"],
             "source_count": snapshot["source_count"],
