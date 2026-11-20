@@ -1,5 +1,6 @@
 """Project hardware variants are not synonymous with test names."""
 import copy
+import tempfile
 import sys
 from pathlib import Path
 import unittest
@@ -17,7 +18,12 @@ class VariantCatalogTests(unittest.TestCase):
             (ROOT / "config/regression.yaml").read_text())["tests"]
 
     def test_catalog_is_derived_from_current_test_sources(self):
-        got = hardware_variants.catalog(ROOT, self.targets)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "config").mkdir()
+            (root / "config/soc.yaml").write_bytes(
+                (ROOT / "config/soc.yaml").read_bytes())
+            got = hardware_variants.catalog(root, self.targets)
         variants = {x["name"]: x for x in got["variants"]}
         self.assertIn("soc-default", variants)
         self.assertIn("soc-ethernet-ddr-pcie", variants)

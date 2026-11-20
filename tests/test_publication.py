@@ -491,6 +491,36 @@ class PublicationTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'digest mismatch'):
                 site.evidence_index(root/'evidence',output,'r987r/xezim-hello-world')
 
+    def test_canonical_structural_compile_is_not_reported_as_simulation(self):
+        from test_identity import relative_path, selected
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            old = fixture(root/'evidence')
+            name = 'noc-xezim'
+            plan = {'engine': 'xezim-compile', 'sources': 'noc',
+                    'logical_test': 'noc-rtl-compile'}
+            identity = selected(name, plan, filelist=old/'sources.f',
+                                run_id='ci-123-a1-012345abcdef')
+            run_dir = old.parent/relative_path(identity)
+            run_dir.parent.mkdir(parents=True)
+            old.rename(run_dir)
+            site.dump(run_dir/'identity.json', identity)
+            site.dump(run_dir/'plan.json', {**plan, 'identity': identity})
+            site.dump(run_dir/'result.json', {
+                'target': name, 'passed': True, 'stage': 'all',
+                'identity_sha256': identity['identity_sha256'],
+                'canonical_id': relative_path(identity).as_posix()})
+            out = root/'site'
+            out.mkdir()
+            _, entries, _ = site.evidence_index(
+                root/'evidence', out, 'r987r/xezim-hello-world')
+            entry, = entries
+            self.assertEqual(entry['acceptance_scope'], 'compile_only')
+            self.assertFalse(entry['axi'])
+            self.assertEqual(entry['protocols'], [])
+            self.assertIn('Compile/lint only PASS', (out/entry['path']).read_text())
+            self.assertNotIn('Regression PASS', (out/entry['path']).read_text())
+
     def test_ci_attempt_identity_cannot_be_published_under_other_run(self):
         from test_identity import selected,relative_path
         with tempfile.TemporaryDirectory() as tmp:

@@ -1107,7 +1107,10 @@ def evidence_index(evidence,output,repository,site_sha=None):
                 raise ValueError('published PCIe latency summary differs from verified protocol report')
             if protocol_data and protocol_data.get('latency') and latency_data is None:
                 raise ValueError('PCIe latency evidence file missing')
+            compile_only = (result.get('stage') == 'build' or plan.get('mode') == 'compile'
+                            or plan.get('engine') in ('xezim-compile', 'verilator-lint'))
             entry={'target':target,'engine':plan.get('engine','unknown'),'passed':result.get('passed') is True,
+                   'acceptance_scope':'compile_only' if compile_only else 'regression',
                    'fabric_scope':(plan.get('report') or {}).get('fabric_scope','unspecified'),
                    'expected_failure':plan.get('expect_failure'),'stage':result.get('stage'),
                    'run_id':run['id'],'attempt':run.get('run_attempt',1),'source_sha':run['tested_sha'],
@@ -1259,7 +1262,10 @@ def evidence_index(evidence,output,repository,site_sha=None):
                     entries.append(entry)
                     continue
                 body='<p>This scope publishes its actual result, plan, filelist and logs. It has no AXI traffic observer.</p>'
-                body+=f'<p><strong>Regression {"PASS" if entry["passed"] else "FAIL"}</strong> · {escape(entry["engine"])} · tested SHA <code>{escape(entry["source_sha"])}</code></p>'
+                label = 'Compile/lint only' if compile_only else 'Regression'
+                if compile_only:
+                    body += '<p>Compiler or lint outcome only. No simulation or protocol qualification.</p>'
+                body+=f'<p><strong>{label} {"PASS" if entry["passed"] else "FAIL"}</strong> · {escape(entry["engine"])} · tested SHA <code>{escape(entry["source_sha"])}</code></p>'
                 if entry['expected_failure']:body+='<p>Expected-failure case: '+escape(entry['expected_failure'])+'</p>'
                 body+='<pre>'+escape(json.dumps(result,indent=2))+'</pre>'
                 body+='<ul>'+''.join(f'<li><a href="{escape(name)}">{escape(name)}</a></li>' for name in assets)+'</ul>'

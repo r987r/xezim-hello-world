@@ -318,7 +318,8 @@ function render(){
                  e.evidence_only?"muted":e.passed?"good":"bad"),
       text("div",e.evidence_only?"Capture only · "+(e.workflow_conclusion||"unknown")+
            " workflow; never a full-chip PASS":
-           e.expected_failure?"Required negative check":"Positive / compile gate","muted"),
+           e.acceptance_scope==="compile_only"?"Compile/lint only · no simulation":
+           e.expected_failure?"Required negative check":"Positive regression","muted"),
       text("div",evidenceRelation,"muted"));
     td(tr,e.engine);
     const protocols=e.protocols||[];

@@ -51,9 +51,7 @@ class SelectedRtlArchiveTests(unittest.TestCase):
         return archive_selected_filelist(
             self.root, "example", self.definition, self.plan, self.filelist)
 
-    def test_real_canonical_run_contains_exact_selected_compiler_archive(self):
-        from test_identity import selected
-        from run_workspace import reserve_run
+    def prepare_identity_sources(self):
         from shutil import copyfile
         config_files = (
             "config/soc.yaml", "config/interface_contracts.yaml",
@@ -62,6 +60,10 @@ class SelectedRtlArchiveTests(unittest.TestCase):
             dest = self.root / rel
             dest.parent.mkdir(parents=True, exist_ok=True)
             copyfile(ROOT / rel, dest)
+    def test_real_canonical_run_contains_exact_selected_compiler_archive(self):
+        from test_identity import selected
+        from run_workspace import reserve_run
+        self.prepare_identity_sources()
         definition = {"sources": "smoke", "engine": "xezim",
                       "top": "hello_world_tb", "logical_test": "hello-world",
                       "args": ["--max-time", "1us"]}
@@ -83,6 +85,7 @@ class SelectedRtlArchiveTests(unittest.TestCase):
         self.assertEqual(verify_selected_archive(
             self.root, "smoke", definition, directory=directory), archive)
         self.assertFalse((self.root / ".tools/regression/smoke").exists())
+        self.assertEqual(verify_selected_archive(self.root, "smoke", definition), archive)
         filelist.write_text("forged\n")
         with self.assertRaisesRegex(ValueError, "filelist"):
             verify_selected_archive(self.root, "smoke", definition,
@@ -122,6 +125,17 @@ class SelectedRtlArchiveTests(unittest.TestCase):
         self.definition.pop("top")
         self.plan.pop("top")
         self.plan["engine"] = self.definition["engine"] = "xezim-compile"
+        from test_identity import selected
+        from run_workspace import reserve_run
+        self.prepare_identity_sources()
+        raw = self.filelist.read_bytes()
+        self.filelist.unlink()
+        self.out.rmdir()
+        self.plan["identity"] = selected("example", self.definition, filelist_bytes=raw,
+                                         root=self.root, run_id="local-012345abcdef")
+        self.out = reserve_run(self.root / ".tools/runs", self.plan["identity"])
+        self.filelist = self.out / "sources.f"
+        self.filelist.write_bytes(raw)
         network = self.root / "gen/noc/floonoc/noc_top.sv"
         network.parent.mkdir(parents=True)
         network.write_text("module noc_top; endmodule\n")
@@ -133,7 +147,9 @@ class SelectedRtlArchiveTests(unittest.TestCase):
         self.plan["selected_networks"] = {
             "local_data": {"top": "noc_top", "filelist": str(compiled)}
         }
-        value = self.make_archive()
+        (self.out / "plan.json").write_text(json.dumps(self.plan))
+        value = archive_selected_filelist(self.root, "example", self.definition,
+                                          self.plan, self.filelist, directory=self.out)
         self.assertIsNone(value["compiled_top"])
         self.assertIsNone(value["selected_soc_top"])
         self.assertEqual(value["source_count"], 4)
