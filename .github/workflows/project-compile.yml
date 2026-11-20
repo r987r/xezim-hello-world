@@ -4,11 +4,23 @@ on:
     branches: [main]
     paths:
       - 'config/projects/**'
+      - 'config/soc.yaml'
+      - 'config/interface_contracts.yaml'
+      - 'config/ip.lock.yaml'
+      - 'config/regression.yaml'
+      - 'Bender.yml'
+      - 'Bender.lock'
+      - 'requirements.txt'
+      - 'tools/ip_fetch.py'
+      - 'tools/regress.py'
+      - '.github/actions/setup-bender/action.yml'
       - 'tools/project_build.py'
       - 'tools/project_catalog.py'
       - 'tools/project_compile.py'
       - 'tools/project_smoke.py'
       - 'tests/test_project_smoke.py'
+      - 'tools/project_boot_evidence.py'
+      - 'tests/test_project_boot_evidence.py'
       - 'tools/bootgen.py'
       - 'tools/chip_bootgen.py'
       - 'tools/floonoc_gen.py'
@@ -67,7 +79,7 @@ jobs:
       - name: Compile actual selected FlooNoC, CPU and SoC RTL
         run: python3 tools/project_compile.py --project "${{ matrix.project }}"
       - name: Test native full-chip PASS criteria and negative logs
-        run: python3 -m unittest tests.test_project_smoke -v
+        run: python3 -m unittest tests.test_project_smoke tests.test_project_boot_evidence -v
       - name: Simulate selected real CPU cold boot and INIT/RUN/CHECK
         run: python3 tools/project_smoke.py --project "${{ matrix.project }}"
       - name: Retain full selected filelist RTL diagnostics and manifests
@@ -77,8 +89,18 @@ jobs:
           name: project-compile-${{ matrix.project }}-${{ github.run_id }}
           path: |
             .tools/projects/${{ matrix.project }}/
-            .tools/project-smoke/${{ matrix.project }}/result.json
+            .tools/project-smoke/${{ matrix.project }}/boot-result.json
             .tools/project-smoke/${{ matrix.project }}/native-build.log
             .tools/project-smoke/${{ matrix.project }}/native-sim.log
           include-hidden-files: true
           if-no-files-found: warn
+      - name: Archive only the project boot verdict and native logs for Pages
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: project-boot-${{ matrix.project }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            .tools/project-smoke/${{ matrix.project }}/boot-result.json
+            .tools/project-smoke/${{ matrix.project }}/native-build.log
+            .tools/project-smoke/${{ matrix.project }}/native-sim.log
+          if-no-files-found: ignore
