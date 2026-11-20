@@ -55,11 +55,26 @@ def create_project(project_id: str, from_project: str, title: str, subtitle: str
         "config": target.relative_to(root).as_posix(),
         "qualification": "source_contract_only",
     }
-    # Append one entry without rewriting comments or changing existing projects.
-    item = yaml.safe_dump([entry], sort_keys=False, allow_unicode=True)
-    catalog_text = original.rstrip() + "\n" + "\n".join(
-        "  " + line for line in item.rstrip().splitlines()) + "\n"
-    if yaml.safe_load(catalog_text)["projects"][-1] != entry:
+    # Insert inside the authors' existing YAML sequence, not at a fixed
+    # indentation or after the entire file. Preserve comments and existing keys.
+    sequence = next(node for key, node in yaml.compose(original).value
+                    if key.value == "projects")
+    if sequence.flow_style:
+        offset = sequence.value[-1].end_mark.index
+        item = yaml.safe_dump(entry, sort_keys=False, allow_unicode=True,
+                              default_flow_style=True).strip()
+        catalog_text = original[:offset] + ", " + item + original[offset:]
+    else:
+        offset = sequence.end_mark.index
+        indent = " " * sequence.start_mark.column
+        item = yaml.safe_dump([entry], sort_keys=False, allow_unicode=True)
+        prefix = original[:offset]
+        if not prefix.endswith("\n"):
+            prefix += "\n"
+        catalog_text = prefix + "".join(indent + line for line in item.splitlines(True)) + original[offset:]
+    expected = yaml.safe_load(original)
+    expected["projects"].append(entry)
+    if yaml.safe_load(catalog_text) != expected:
         raise ValueError("project catalog append failed validation")
 
     stage = None

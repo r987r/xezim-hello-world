@@ -14,6 +14,22 @@ from selenium.webdriver.support.ui import Select
 import yaml
 
 
+def verify_boot(browser, base, project):
+    boot = project["native_boot"]
+    if project["qualification"] == "source_contract_only":
+        assert boot is None and "Native CPU cold boot:" not in browser.page_source
+    elif not boot:
+        assert "Native CPU cold boot: no verified" in browser.page_source
+    else:
+        assert boot["project_id"] == project["id"]
+        status = ("Current source" if boot["current_source"] else "Historical source")
+        status += (" PASS" if boot["status"] == "passed" else " FAIL")
+        assert status in browser.find_element(By.TAG_NAME, "main").text
+        for relative in [*boot["logs"].values(), boot["run_url"]]:
+            assert browser.find_element(By.CSS_SELECTOR, f'a[href="{relative}"]').is_displayed()
+        assert all((base / log).is_file() for log in boot["logs"].values())
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--site", type=Path, default=Path(".tools/pages-site"))
@@ -159,6 +175,7 @@ def main():
                 assert "chip/soc_top.sv" not in content
 
             browser.get((expected / "runs.html").as_uri())
+            verify_boot(browser, expected, project_json)
             if not project_json["runs"]:
                 assert "No project-qualified run evidence" in (
                     browser.find_element(By.TAG_NAME, "main").text)
@@ -197,6 +214,9 @@ def main():
                     pid, "NoC box off mobile viewport", rect, bounds)
             browser.save_screenshot(
                 str(args.screenshots / ("13-" + pid + "-subsystem-mobile.png")))
+            base = site / "projects" / pid
+            browser.get((base / "runs.html").as_uri())
+            verify_boot(browser, base, json.loads((base / "data/project.json").read_text()))
         browser.get((site / "index.html").as_uri())
         assert browser.find_element(By.CSS_SELECTOR, ".project-grid").is_displayed()
         assert all(c.is_displayed() for c in browser.find_elements(

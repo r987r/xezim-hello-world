@@ -1,4 +1,5 @@
 """GitHub Actions must be PR-to-main or manually dispatched only."""
+from fnmatch import fnmatchcase
 from pathlib import Path
 import unittest
 
@@ -7,6 +8,21 @@ import yaml
 ROOT=Path(__file__).resolve().parents[1]
 
 class WorkflowPolicyTests(unittest.TestCase):
+    def test_project_compile_covers_both_project_sources_and_shared_contracts(self):
+        workflow = ROOT / '.github/workflows/project-compile.yml'
+        doc = yaml.load(workflow.read_text(), Loader=yaml.BaseLoader)
+        paths = doc['on']['pull_request']['paths']
+        catalog = yaml.safe_load((ROOT / 'config/projects/catalog.yaml').read_text())
+        sources = {p['config'] for p in catalog['projects']
+                   if p['qualification'] != 'source_contract_only'}
+        sources.update({'config/interface_contracts.yaml', 'config/ip.lock.yaml',
+                        'config/regression.yaml', 'Bender.yml', 'Bender.lock',
+                        'requirements.txt', 'tools/ip_fetch.py', 'tools/regress.py',
+                        '.github/actions/setup-bender/action.yml'})
+        for source in sorted(sources):
+            with self.subTest(source=source):
+                self.assertTrue(any(fnmatchcase(source, path) for path in paths), source)
+
     def test_only_pr_to_main_or_manual_dispatch(self):
         for path in sorted((ROOT/'.github/workflows').glob('*.yml')):
             with self.subTest(workflow=path.name):
