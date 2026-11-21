@@ -139,6 +139,37 @@ class WorkspaceTests(unittest.TestCase):
         with self.assertRaisesRegex(IdentityError, "missing canonical"):
             require_completed_xezim_run(root, "smoke", plan)
 
+    def test_negative_canonical_gate_requires_named_mismatch_without_pass(self):
+        target = "memory-negative"
+        plan = self.catalog[target]
+        root = Path(self.temp.name) / ".tools/runs"
+        identity = selected(target, plan, run_id="local-aaaaaaaaaaaa")
+        directory = reserve_run(root, identity, plan=plan)
+        (directory / "plan.json").write_text(json.dumps({"identity": identity}))
+        for name in ("sources.f", "selected-rtl-manifest.json", "runner-events.json"):
+            (directory / name).touch()
+        result = {
+            "target": target, "passed": True, "stage": "all",
+            "identity_sha256": identity["identity_sha256"],
+            "canonical_id": relative_path(identity).as_posix(),
+            "results": [{"name": target, "passed": True, "exit_code": 1}],
+        }
+        (directory / "result.json").write_text(json.dumps(result))
+        transcript = directory / f"{target}.log"
+        transcript.write_text(plan["expect_failure"])
+        with patch("tools.selected_rtl_provenance.verify_selected_archive"):
+            self.assertEqual(require_completed_xezim_run(root, target, plan)["status"],
+                             "runner_completed_xezim_expected_negative")
+            transcript.write_text(plan["expect_failure"] + plan["pass"])
+            with self.assertRaisesRegex(IdentityError, "named negative"):
+                require_completed_xezim_run(root, target, plan)
+            transcript.write_text(plan["expect_failure"])
+            for bad in (0, -9, True):
+                result["results"][0]["exit_code"] = bad
+                (directory / "result.json").write_text(json.dumps(result))
+                with self.assertRaisesRegex(IdentityError, "completed selected Xezim outcome"):
+                    require_completed_xezim_run(root, target, plan)
+
     def test_canonical_serv_cpu_requires_selected_real_execution(self):
         plan = self.catalog["serv"]
         root = Path(self.temp.name) / ".tools/runs"

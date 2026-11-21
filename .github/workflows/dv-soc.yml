@@ -109,7 +109,7 @@ jobs:
               if not uses_canonical_workspace(target, test):
                   continue
               result = require_completed_xezim_run(Path('.tools/runs'), target, test)
-              print('PASS canonical Xezim producer:', result['canonical_id'])
+              print('PASS canonical Xezim producer:', result['canonical_id'], result['status'])
               if (Path('.tools/regression') / target).exists():
                   raise AssertionError('legacy test alias unexpectedly written: ' + target)
           PY

@@ -17,6 +17,8 @@ import uuid
 ROOT = Path(__file__).resolve().parents[1]
 SLUG = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*\Z")
 RUN = re.compile(r"(?:ci-[0-9]+-a[0-9]+|local)-[a-f0-9]{12}\Z")
+MEMORY_EXAMPLE = re.compile(r"config/examples/[a-z0-9-]+\.yaml\Z")
+MEMORY_CONFIG_SNAPSHOT = "memory-input/config.yaml"
 ENGINE_SIMULATOR = {
     "xezim": "xezim",
     "xezim-compile": "xezim",
@@ -61,6 +63,24 @@ def simulator(test):
         raise IdentityError("unsupported simulator engine") from exc
 
 
+def memory_config_label(source):
+    """Expose stable checkout names, never absolute/custom paths."""
+    if source == "config/soc.yaml" or (
+            isinstance(source, str) and MEMORY_EXAMPLE.fullmatch(source)):
+        return source
+    return "custom"
+
+
+def validate_effective_memory_config(value):
+    if (not isinstance(value, dict) or set(value) != {"source", "sha256"}
+            or (value["source"] != "custom"
+                and memory_config_label(value["source"]) == "custom")
+            or not isinstance(value["sha256"], str)
+            or not re.fullmatch(r"[0-9a-f]{64}", value["sha256"])):
+        raise IdentityError("invalid effective memory configuration")
+    return value
+
+
 def config_target(test):
     """Label the actual *selected* variant without a second profile registry."""
     source = slug(test.get("source_target", test["sources"]).replace("_", "-"), "sources")
@@ -69,10 +89,17 @@ def config_target(test):
     qualifiers = []
     if test.get("firmware_mode"):
         qualifiers.append(slug(test["firmware_mode"].replace("_", "-"), "firmware_mode"))
-    if test.get("memory_config"):
+    if "memory_config_effective" in test:
+        selected = validate_effective_memory_config(test["memory_config_effective"])
+        if source != "memory":
+            raise IdentityError("effective memory configuration requires memory sources")
+        if selected["source"] == "custom":
+            qualifiers.append("custom-" + selected["sha256"][:12])
+        elif selected["source"] != "config/soc.yaml":
+            qualifiers.append(Path(selected["source"]).stem)
+    elif test.get("memory_config"):
         path = test["memory_config"]
-        if (not isinstance(path, str) or not re.fullmatch(
-                r"config/examples/[a-z0-9-]+\.yaml", path)):
+        if not isinstance(path, str) or not MEMORY_EXAMPLE.fullmatch(path):
             raise IdentityError("memory configuration must be a checked-in source")
         qualifiers.append(Path(path).stem)
     if test.get("boot_relocate"):
@@ -124,7 +151,7 @@ def catalog(tests):
 
 def declared_selection(plan):
     """Exactly the selected fields carried by the original execution plan."""
-    return {
+    selection = {
         "sources": plan.get("source_target", plan.get("sources")),
         "top": plan.get("top"),
         "firmware_mode": plan.get("firmware_mode"),
@@ -133,6 +160,11 @@ def declared_selection(plan):
         "bender_targets": plan.get("bender_targets", []),
         "report_address_map": (plan.get("report") or {}).get("address_map"),
     }
+    # Preserve the historical schema/fingerprint for pre-migration artifacts.
+    if "memory_config_effective" in plan:
+        selection["memory_config_effective"] = validate_effective_memory_config(
+            plan["memory_config_effective"])
+    return selection
 
 
 def selected(name, plan, *, filelist=None, filelist_bytes=None, run_id=None, env=None, root=ROOT):

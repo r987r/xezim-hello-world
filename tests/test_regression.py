@@ -198,15 +198,42 @@ class RegressionTests(unittest.TestCase):
     def test_static_and_structural_runs_share_canonical_workspace(self):
         # Check workspace routing only, not compiler/RTL behavior.
         originals = ('cpu-fetch', 'sram-synthesis', 'boot', 'boot-relocated',
+                     'memory', 'memory-full', 'memory-sparse', 'memory-negative',
                      'chip-xezim-compile', 'noc-xezim', 'noc-verilator')
         for name in originals:
             with self.subTest(target=name):
                 self.assertTrue(regress.uses_canonical_workspace(
                     name, self.config['tests'][name]))
-        for name in ('memory', 'memory-full', 'chip-boot'):
+        for name in ('chip-boot', 'supernoc'):
             with self.subTest(target=name):
                 self.assertFalse(regress.uses_canonical_workspace(
                     name, self.config['tests'][name]))
+
+    def test_memory_override_hashes_the_effective_config_without_leaking_path(self):
+        from test_identity import config_target, sha
+
+        test = self.config['tests']['memory-full']
+        default = self.config['tests']['memory']
+        alternate, data, metadata = regress.select_memory_config(default, None)
+        self.assertFalse(alternate)
+        self.assertEqual(metadata, {'source': 'config/soc.yaml', 'sha256': sha(data)})
+        self.assertEqual(config_target(dict(default, memory_config_effective=metadata)),
+                         'memory-default')
+        sparse = 'config/examples/memory-fabric-sparse.yaml'
+        alternate, data, metadata = regress.select_memory_config(test, sparse)
+        self.assertTrue(alternate)
+        self.assertEqual(metadata, {'source': sparse, 'sha256': sha(data)})
+        self.assertEqual(config_target(dict(test, memory_config_effective=metadata)),
+                         'memory-memory-fabric-sparse')
+        self.assertNotEqual(test['memory_config'], sparse)
+        with tempfile.TemporaryDirectory() as tmp:
+            private = Path(tmp)/'caller path.yaml'
+            private.write_bytes(data)
+            _, selected_bytes, metadata = regress.select_memory_config(test, str(private))
+        self.assertEqual(selected_bytes, data)
+        self.assertEqual(metadata, {'source': 'custom', 'sha256': sha(data)})
+        self.assertEqual(config_target(dict(test, memory_config_effective=metadata)),
+                         f'memory-custom-{sha(data)[:12]}')
 
     def test_new_cocotb_target_does_not_inherit_noc_wrapper(self):
         # An existing engine can be reused with a new Bender source target.
