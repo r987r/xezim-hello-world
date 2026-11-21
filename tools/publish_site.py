@@ -1734,6 +1734,56 @@ def ddr_csr_views(entries, output):
     return views[:12]
 
 
+def combined_source_review(source_root, site_root):
+    """Link only the checked generated snapshots, never a run or bit-level claim."""
+    from design_explorer import source_text_diff
+    from generate_combined_variant import VARIANT, verify_published_tree
+
+    cfg = source_root / 'config/soc.yaml'
+    project = yaml.safe_load(cfg.read_text())['name']
+    if not re.fullmatch(r'[a-z][a-z0-9_]*', project):
+        raise ValueError('invalid generated project name')
+    base = Path('gen/projects') / project / 'variants'
+    combined = base / VARIANT
+    if not (source_root / combined).exists() and not (source_root / combined).is_symlink():
+        return ''
+    selected = verify_published_tree(source_root / combined, cfg)
+    default = base / 'default'
+    default_rtl = default / 'rtl/soc_top.sv'
+    combined_rtl = combined / 'rtl/soc_top.sv'
+    default_manifest = json.loads((source_root / default / 'manifest.json').read_text())
+    default_bytes = (source_root / default_rtl).read_bytes()
+    if 'rtl/soc_top.sv' not in selected['files']:
+        raise ValueError('combined generated review top is not hash-bound')
+    if (default_manifest.get('project') != project
+            or default_manifest.get('variant') != 'default'
+            or default_manifest.get('source') != 'gen/chip/soc_top.sv'
+            or default_manifest.get('generated_sv_sha256') != hashlib.sha256(default_bytes).hexdigest()
+            or default_bytes != (site_root / 'gen/chip/soc_top.sv').read_bytes()):
+        raise ValueError('default generated review top differs from its source or manifest')
+    diff = source_text_diff(source_root / default_rtl, source_root / combined_rtl,
+                            default_rtl.as_posix(), combined_rtl.as_posix())
+    diff_path = Path('data/default-vs-combined-top.diff')
+    (site_root / diff_path).write_text(
+        '# SHA-checked generated top text; not an elaborated or semantic diff.\n'
+        f'# {diff["total"]} diff lines' + (' (first 500 shown)' if diff['truncated'] else '') +
+        '\n' + '\n'.join(diff['diff_lines']) + '\n')
+    links = (
+        ('Default generated top', default_rtl),
+        ('Combined selected top', combined_rtl),
+        ('Top RTL text diff', diff_path),
+        ('Combined source hashes', combined / 'manifest.json'),
+        ('Portable compiler source order', combined / 'compiler/sources.f'),
+    )
+    actions = ''.join(f'<a href="{path.as_posix()}">{label}</a>' for label, path in links)
+    return ('<details id="arch-combined-source" class="arch-signal-panel">'
+            '<summary>Review default and combined RTL sources</summary>'
+            '<p class="muted">SHA-checked generated source only. The combined Ethernet, DDR and '
+            f'PCIe compiler list identifies {selected["source_count"]} source inputs. '
+            'The top text diff does not show elaborated connections or observed traffic.</p>'
+            f'<div class="actions">{actions}</div></details>')
+
+
 def build(output,evidence,repository,sha,config):
     if output.exists():
         if not (output/'.soc-site').is_file():raise ValueError('refusing to replace an unowned site directory')
@@ -1841,6 +1891,7 @@ def build(output,evidence,repository,sha,config):
     for page in ('index','topology','explorer','fabric','address-map','runs','docs','reference'):
         body=(ROOT/('tools/templates/site_'+page+'.html')).read_text().replace('__SITE_DATA__',data)
         if page=='explorer':
+            body = body.replace('__COMBINED_SOURCE_REVIEW__', combined_source_review(ROOT, output))
             graph_data = json.dumps(design_graph, separators=(',', ':')).replace('<','\\u003c')
             body = body.replace('__GRAPH_DATA__',graph_data)
             signal_data = json.dumps(signal_inventory, separators=(',', ':')).replace('<','\\u003c')

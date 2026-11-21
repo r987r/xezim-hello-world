@@ -3,6 +3,7 @@ import hashlib
 from html.parser import HTMLParser
 import io
 import json
+import shutil
 from pathlib import Path
 import sys
 import tempfile
@@ -259,6 +260,18 @@ class PublicationTests(unittest.TestCase):
         self.assertEqual(selected["new-protocol.yml"],[])
         self.assertEqual(client.request.call_count,2)
         self.assertIn("truncated",notes[0])
+    def test_combined_source_review_fails_closed_on_tampered_source(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / 'config').mkdir()
+            shutil.copyfile(ROOT / 'config/soc.yaml', root / 'config/soc.yaml')
+            self.assertEqual(site.combined_source_review(root, root), '')
+            relative = Path('gen/projects/xezim_soc_dv/variants/ethernet-ddr-pcie')
+            shutil.copytree(ROOT / relative, root / relative)
+            (root / relative / 'rtl/soc_top.sv').write_text('module foreign; endmodule\n')
+            with self.assertRaisesRegex(ValueError, 'generated file digest changed'):
+                site.combined_source_review(root, root)
+
     def test_protocol_link_index_tracks_arbitrary_vip_source_fields(self):
         report={'capture_complete':True,
                 'sources':[
@@ -380,6 +393,20 @@ class PublicationTests(unittest.TestCase):
             self.assertIn('id="arch-embedded-protocol-links"',(output/'explorer.html').read_text())
             self.assertIn('id="ex-embedded-rtl-bindings"',(output/'explorer.html').read_text())
             self.assertNotIn('__RTL_INSTANCE_BINDINGS__',(output/'explorer.html').read_text())
+            explorer = (output/'explorer.html').read_text()
+            self.assertNotIn('__COMBINED_SOURCE_REVIEW__', explorer)
+            self.assertIn('id="arch-combined-source"', explorer)
+            self.assertIn('does not show elaborated connections or observed traffic', explorer)
+            prefix = 'gen/projects/xezim_soc_dv/variants/'
+            for rel in ('default/rtl/soc_top.sv', 'ethernet-ddr-pcie/rtl/soc_top.sv',
+                        'ethernet-ddr-pcie/manifest.json', 'ethernet-ddr-pcie/compiler/sources.f'):
+                self.assertIn(f'href="{prefix}{rel}"', explorer)
+                self.assertEqual((output/(prefix+rel)).read_bytes(), (ROOT/(prefix+rel)).read_bytes())
+            diff = (output/'data/default-vs-combined-top.diff').read_text()
+            self.assertIn('not an elaborated or semantic diff', diff)
+            self.assertIn('--- '+prefix+'default/rtl/soc_top.sv', diff)
+            self.assertIn('+++ '+prefix+'ethernet-ddr-pcie/rtl/soc_top.sv', diff)
+            self.assertIn('href="data/default-vs-combined-top.diff"', explorer)
             bindings=json.loads((output/'data/rtl-instance-bindings.json').read_text())
             self.assertIn('compute0.cpu', bindings)
             self.assertIn(bindings['compute0.cpu']['status'],
