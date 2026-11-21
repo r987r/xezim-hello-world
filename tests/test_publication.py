@@ -97,6 +97,19 @@ class PublicationTests(unittest.TestCase):
                              ["original-verilator-${{ github.run_id }}"])
             self.assertNotIn("legacy", str(result))
 
+    def test_supernoc_migration_preserves_ci_archive_discovery(self):
+        workflows = site.discover_test_workflows(ROOT)
+        self.assertIn("supernoc-real-axi-traffic",
+                      workflows["floonoc-elab.yml"]["artifacts"])
+        self.assertTrue(any(a.startswith("supernoc-axi-run-reports-")
+                            for a in workflows["floonoc-elab.yml"]["artifacts"]))
+        self.assertTrue(any(a.startswith("fabric-latency-supernoc-")
+                            for a in workflows["dv-fabric-latency.yml"]["artifacts"]))
+        self.assertNotIn(".tools/regression/supernoc",
+                         (ROOT/".github/workflows/floonoc-elab.yml").read_text())
+        self.assertNotIn(".tools/regression/supernoc",
+                         (ROOT/".github/workflows/dv-fabric-latency.yml").read_text())
+
     def test_any_future_protocol_capture_artifact_is_discovered(self):
         # No protocol or controller-name registration is needed.
         with tempfile.TemporaryDirectory() as temp:

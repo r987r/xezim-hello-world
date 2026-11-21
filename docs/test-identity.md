@@ -77,7 +77,8 @@ fails closed. `verify_run` checks the on-disk identity, and
 `canonical_artifact` returns a safe, not-yet-existing path for a producer.
 
 The runner reserves canonical workspaces for the Xezim simulations, structural
-probes and standalone `dma-rtl`. Dynamic boot and memory profiles claim the
+probes, standalone `dma-rtl`, and the Cocotb SuperNoC family. Dynamic boot
+and memory profiles claim the
 directory before generating inputs and publish the complete identity only
 after the selected filelist exists. Memory profiles archive and hash the
 effective YAML, including local overrides; custom config names use a content

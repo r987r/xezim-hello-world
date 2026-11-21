@@ -24,6 +24,15 @@ def uses_canonical_workspace(name, test):
     """Select migrated families without a second per-target registry."""
     if name == 'dma-rtl':
         return True
+    # The source-static SuperNoC runners share one compiled executable.
+    # Only their run output is canonical; their source-keyed build lives
+    # separately and is shared by the positive, negative and latency tests.
+    if (test.get('engine') == 'cocotb-verilator'
+            and test.get('sources') == 'noc' and test.get('top') == 'supernoc_tb'
+            and test.get('bender_targets') == ['supernoc']
+            and not any(test.get(key) for key in
+                        ('memory_config', 'boot_relocate', 'firmware_mode'))):
+        return True
     return (test.get('engine') in {'xezim', 'xezim-compile', 'verilator-lint'}
             # Only Xezim memory materialization has a migrated producer.
             and (test.get('sources') != 'memory' or test['engine'] == 'xezim')

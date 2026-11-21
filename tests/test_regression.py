@@ -199,15 +199,30 @@ class RegressionTests(unittest.TestCase):
         # Check workspace routing only, not compiler/RTL behavior.
         originals = ('cpu-fetch', 'sram-synthesis', 'boot', 'boot-relocated',
                      'memory', 'memory-full', 'memory-sparse', 'memory-negative',
-                     'chip-xezim-compile', 'noc-xezim', 'noc-verilator')
+                     'chip-xezim-compile', 'noc-xezim', 'noc-verilator',
+                     'supernoc', 'supernoc-negative', 'supernoc-latency')
         for name in originals:
             with self.subTest(target=name):
                 self.assertTrue(regress.uses_canonical_workspace(
                     name, self.config['tests'][name]))
-        for name in ('chip-boot', 'supernoc'):
+        for name in ('chip-boot', 'chip-dma'):
             with self.subTest(target=name):
                 self.assertFalse(regress.uses_canonical_workspace(
                     name, self.config['tests'][name]))
+
+    def test_supernoc_build_cache_is_independent_of_runtime_output(self):
+        from test_identity import selected, relative_path
+        catalog = self.config['tests']
+        names = ('supernoc', 'supernoc-negative', 'supernoc-latency')
+        plans = [copy.deepcopy(catalog[name]) for name in names]
+        self.assertEqual(len({p['build'] for p in plans}), 1)
+        self.assertFalse(plans[0].get('reuse_build', False))
+        self.assertTrue(all(p.get('reuse_build') for p in plans[1:]))
+        outputs = {relative_path(selected(name, p, run_id='local-012345abcdef'))
+                   for name, p in zip(names, plans)}
+        self.assertEqual(len(outputs), 3)
+        self.assertFalse(regress.uses_canonical_workspace(
+            'supernoc-generated-variant', dict(plans[0], firmware_mode='generated')))
 
     def test_memory_override_hashes_the_effective_config_without_leaking_path(self):
         from test_identity import config_target, sha

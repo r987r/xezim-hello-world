@@ -15,6 +15,8 @@ on:
       - 'dv/full_chip/test_latency.py'
       - 'tools/fabric_report.py'
       - 'tools/regress.py'
+      - 'tools/run_workspace.py'
+      - 'tools/test_identity.py'
       - 'tools/axi_report.py'
       - 'tools/publish_site.py'
       - 'tools/templates/site_fabric.html'
@@ -70,13 +72,32 @@ jobs:
         run: python3 tools/regress.py supernoc --stage build
       - name: Controlled real FlooNoC latency benchmark
         run: python3 tools/regress.py supernoc-latency --stage run
+      - name: Locate the selected benchmark run, not its build workspace
+        if: always()
+        id: supernoc-latency-run
+        run: |
+          PYTHONPATH=tools python3 - <<'PY'
+          import os
+          from pathlib import Path
+          import yaml
+          from run_workspace import selected_run_folder
+
+          root = Path.cwd()
+          name = "supernoc-latency"
+          plan = yaml.safe_load((root / "config/regression.yaml").read_text())["tests"][name]
+          workspace = selected_run_folder(root, name, plan)
+          if workspace is not None:
+              canonical_id = workspace.relative_to(root / ".tools/runs").as_posix()
+              with open(os.environ["GITHUB_OUTPUT"], "a") as outputs:
+                  print(f"canonical_id={canonical_id}", file=outputs)
+          PY
       - name: Retain plans, actual passive AXI and fail-closed benchmark evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: fabric-latency-supernoc-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            .tools/regression/supernoc-latency/
+            ${{ steps.supernoc-latency-run.outputs.canonical_id != '' && format('.tools/runs/{0}/', steps.supernoc-latency-run.outputs.canonical_id) || '' }}
             gen/supernoc/manifest.json
             gen/supernoc/axi_monitors.json
           include-hidden-files: true

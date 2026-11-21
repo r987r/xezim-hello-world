@@ -124,7 +124,7 @@ built executable's hash. Changed RTL or a missing build is rejected.
 Python stimulus can be rerun without rebuilding unchanged RTL.
 
 Xezim simulations, structural NoC lint/compile, the Xezim chip compile,
-and `dma-rtl` retain independent runs at
+standalone `dma-rtl`, and the Cocotb SuperNoC family retain independent runs at
 `.tools/runs/<simulator>/<config_target>/<testname>/<run_id>/`. The runner
 prints the selected directory; there is no second target-named copy.
 The relocated boot variant's generated package, firmware, and filelist live
@@ -135,7 +135,10 @@ RTL is generated from that snapshot, not a second read of the caller's file.
 Checkout example names stay readable; custom files use a content-derived name
 without recording the original local path. The override and the modified YAML
 are local run inputs, not new test catalog entries.
-Nonmigrated Cocotb producers still use
+SuperNoC reports use their own run identity; the positive, negative and
+latency profiles still share the separate build cache checked against
+sources, headers, simulator and executable. Nonmigrated Cocotb producers
+still use
 `.tools/regression/<target>/`, where each attempt replaces that target's
 previous output until their migration ([#139](https://github.com/r987r/xezim-hello-world/issues/139)).
 Both layouts retain `sources.f`, per-network filelists, `plan.json`,
