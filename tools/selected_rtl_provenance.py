@@ -221,7 +221,7 @@ def archive_selected_filelist(root: Path, profile: str, definition: dict,
             generated[rel] = sha
     extensions = {".sv", ".svh", ".v", ".vh", ".json", ".yaml", ".yml",
                   ".hex", ".mem", ".bin", ".elf"}
-    for subdir in ("variant", "boot", "memory", "csr", "ddr", "noc"):
+    for subdir in ("variant", "boot", "memory", "memory-input", "csr", "ddr", "noc"):
         directory = folder / subdir
         if not directory.exists():
             continue
@@ -358,6 +358,16 @@ def verify_selected_archive(root: Path, profile: str, definition: dict, *, direc
             or identity.get("selection", {}).get("filelist_sha256")
                != value.get("filelist_sha256")):
         raise ValueError("selected plan/identity differs from recorded compiler inputs")
+    if canonical and plan.get("source_target") == "memory":
+        try:
+            from .test_identity import MEMORY_CONFIG_SNAPSHOT, validate
+        except ImportError:
+            from test_identity import MEMORY_CONFIG_SNAPSHOT, validate
+        validate(identity, target=profile, plan=plan)
+        memory = identity["selection"].get("memory_config_effective")
+        source = (folder / MEMORY_CONFIG_SNAPSHOT).relative_to(root).as_posix()
+        if not memory or value["generated_sha256"].get(source) != memory["sha256"]:
+            raise ValueError("selected memory configuration snapshot differs from identity")
     declared_networks = plan.get("selected_networks", {})
     if set(declared_networks) != set(value.get("network_filelists", {})):
         raise ValueError("selected NoC network selection changed since archive")
