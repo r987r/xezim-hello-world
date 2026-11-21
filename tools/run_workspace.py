@@ -13,10 +13,10 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 try:
-    from .test_identity import (IdentityError, config_target, load, neutral_testname,
+    from .test_identity import (IdentityError, bind_filelist, config_target, load, neutral_testname,
                                 relative_path, save, simulator, slug, validate)
 except ImportError:
-    from test_identity import (IdentityError, config_target, load, neutral_testname,
+    from test_identity import (IdentityError, bind_filelist, config_target, load, neutral_testname,
                                relative_path, save, simulator, slug, validate)
 
 
@@ -25,11 +25,12 @@ def uses_canonical_workspace(name, test):
     if name == 'dma-rtl':
         return True
     return (test.get('engine') in {'xezim', 'xezim-compile', 'verilator-lint'}
-            # Dynamic memory and relocated firmware materialize source inside
-            # their run directory; they need a separate producer migration.
+            # Standalone memory profiles and generated chip firmware still
+            # have legacy producer/consumer paths.
             and test.get('sources') != 'memory'
-            and not any(test.get(key) for key in
-                        ('memory_config', 'boot_relocate', 'firmware_mode')))
+            and not any(test.get(key) for key in ('memory_config', 'firmware_mode'))
+            and (not test.get('boot_relocate')
+                 or (test['engine'] == 'xezim' and test.get('sources') == 'boot')))
 
 
 def selected_run_folder(checkout: Path, target: str, plan: dict) -> Path | None:
@@ -59,12 +60,7 @@ def _existing_ancestors_safe(path: Path) -> None:
             raise IdentityError("symlink ancestor in canonical run workspace")
 
 
-def reserve_run(root: Path, identity: dict, *, plan: dict | None = None) -> Path:
-    """Atomically reserve a new immutable run ID; fail on duplicates or aliases.
-
-    Caller must provide an existing immutable identity from test_identity.selected.
-    No creation of another run ID or source of configuration names occurs here.
-    """
+def _reserve_directory(root: Path, identity: dict, *, plan: dict | None) -> Path:
     identity = validate(identity, plan=plan)
     root = Path(root)
     if not root.is_absolute() or root.is_symlink():
@@ -81,14 +77,40 @@ def reserve_run(root: Path, identity: dict, *, plan: dict | None = None) -> Path
         directory.mkdir()
     except FileExistsError as exc:
         raise IdentityError("duplicate canonical run identity or concurrent writer") from exc
+    return directory
+
+
+def reserve_run(root: Path, identity: dict, *, plan: dict | None = None) -> Path:
+    """Reserve an immutable workspace from an already selected identity."""
+    directory = _reserve_directory(root, identity, plan=plan)
     try:
-        save(directory / "identity.json", identity)
+        save(directory / "identity.json", identity, exclusive=True)
     except Exception:
         # Ownership was just acquired; no historical result is being removed.
         (directory / "identity.json").unlink(missing_ok=True)
         directory.rmdir()
         raise
     return directory
+
+
+def reserve_materialized_run(root: Path, identity: dict, materialize, *, plan=None):
+    """Reserve once, generate in place, then expose only the final identity.
+
+    Materialization writes the actual compiler filelist into the workspace.
+    Failed preparation can retain diagnostics there, but an incomplete
+    workspace has no identity.json or PASS evidence.
+    """
+    validate(identity, plan=plan)
+    if identity["selection"].get("filelist_sha256") is not None:
+        raise IdentityError("dynamic workspace requires an unbound filelist")
+    directory = _reserve_directory(root, identity, plan=plan)
+    materialize(directory)
+    filelist = directory / "sources.f"
+    if filelist.is_symlink() or not filelist.is_file():
+        raise IdentityError("materialized compiler filelist missing or unsafe")
+    complete = bind_filelist(identity, filelist.read_bytes())
+    save(directory / "identity.json", complete, exclusive=True)
+    return directory, complete
 
 
 def verify_run(directory: Path, identity: dict, *, plan: dict | None = None) -> Path:

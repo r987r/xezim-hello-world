@@ -123,11 +123,13 @@ sources, headers, defines, options, simulator/cocotb versions, and the
 built executable's hash. Changed RTL or a missing build is rejected.
 Python stimulus can be rerun without rebuilding unchanged RTL.
 
-Static Xezim simulations, structural NoC lint/compile, the Xezim chip
-compile, and `dma-rtl` retain independent runs at
+Migrated Xezim simulations (including relocated cold boot), structural NoC
+lint/compile, the Xezim chip compile, and `dma-rtl` retain independent runs at
 `.tools/runs/<simulator>/<config_target>/<testname>/<run_id>/`. The runner
 prints the selected directory; there is no second target-named copy.
-Memory variants, relocated boot and other Cocotb producers still use
+The relocated boot variant's generated package, firmware, and filelist live
+in its own run. The identity binds the generated filelist before dispatch.
+The standalone memory family and other Cocotb producers still use
 `.tools/regression/<target>/`, where each attempt replaces that target's
 previous output until their migration ([#139](https://github.com/r987r/xezim-hello-world/issues/139)).
 Both layouts retain `sources.f`, per-network filelists, `plan.json`,

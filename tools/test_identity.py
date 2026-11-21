@@ -191,6 +191,19 @@ def selected(name, plan, *, filelist=None, filelist_bytes=None, run_id=None, env
     return {**value, "identity_sha256": sha(encoded(value))}
 
 
+def bind_filelist(value, payload):
+    """Complete a reserved dynamic run identity without changing selection."""
+    validate(value)
+    if value["selection"].get("filelist_sha256") is not None:
+        raise IdentityError("run identity already bound to a filelist")
+    if not isinstance(payload, bytes) or not payload:
+        raise IdentityError("selected filelist must be nonempty raw bytes")
+    selection = {**value["selection"], "filelist_sha256": sha(payload)}
+    complete = {key: item for key, item in value.items() if key != "identity_sha256"}
+    complete.update(selection=selection, config_sha256=sha(encoded(selection)))
+    return {**complete, "identity_sha256": sha(encoded(complete))}
+
+
 def validate(value, *, target=None, plan=None):
     if not isinstance(value, dict) or value.get("schema_version") != SCHEMA:
         raise IdentityError("unsupported or missing run identity")
@@ -232,12 +245,13 @@ def relative_path(value):
     return Path(value["simulator"]) / value["config_target"] / value["testname"] / value["run_id"]
 
 
-def save(path, value):
+def save(path, value, *, exclusive=False):
     validate(value)
     path = Path(path)
     if path.is_symlink():
         raise IdentityError("refusing symlink run identity")
-    path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n")
+    with path.open("x" if exclusive else "w") as output:
+        output.write(json.dumps(value, indent=2, sort_keys=True) + "\n")
 
 
 def load(path, *, target=None, plan=None):

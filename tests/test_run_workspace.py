@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 import yaml
 
-from tools.run_workspace import reserve_run, verify_run, canonical_artifact, require_completed_xezim_run, require_completed_cocotb_run, verify_artifact_inventory
+from tools.run_workspace import reserve_run, reserve_materialized_run, verify_run, canonical_artifact, require_completed_xezim_run, require_completed_cocotb_run, verify_artifact_inventory
 from tools.test_identity import IdentityError, selected, relative_path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -66,6 +66,45 @@ class WorkspaceTests(unittest.TestCase):
         altered["identity_sha256"] = "0" * 64
         with self.assertRaises(IdentityError):
             reserve_run(self.root, altered)
+
+    def test_dynamic_materialization_binds_final_compiler_filelist(self):
+        import hashlib
+
+        plan = self.catalog["boot-relocated"]
+        initial = selected("boot-relocated", plan, run_id="local-012345abcdef")
+        expected = self.root / relative_path(initial)
+
+        def materialize(folder):
+            self.assertEqual(folder, expected)
+            self.assertFalse((folder / "identity.json").exists())
+            (folder / "sources.f").write_bytes(b"selected/boot_config_pkg.sv\n")
+
+        folder, final = reserve_materialized_run(self.root, initial, materialize, plan=plan)
+        self.assertEqual(folder, expected)
+        self.assertNotEqual(final["identity_sha256"], initial["identity_sha256"])
+        self.assertEqual(final["selection"]["filelist_sha256"], hashlib.sha256(
+            (folder / "sources.f").read_bytes()).hexdigest())
+        self.assertEqual(verify_run(folder, final, plan=plan), folder)
+        with self.assertRaisesRegex(IdentityError, "duplicate"):
+            reserve_materialized_run(self.root, initial, materialize, plan=plan)
+        with self.assertRaisesRegex(IdentityError, "unbound"):
+            reserve_materialized_run(self.root, final, materialize, plan=plan)
+
+    def test_failed_materialization_is_not_a_discoverable_run(self):
+        from tools.run_workspace import selected_run_folder
+
+        plan = self.catalog["boot-relocated"]
+        initial = selected("boot-relocated", plan, run_id="local-012345abcdef")
+        checkout = Path(self.temp.name)
+        runs = checkout / ".tools/runs"
+
+        def incomplete(folder):
+            (folder / "prepare.log").write_text("preparation failed")
+
+        with self.assertRaisesRegex(IdentityError, "filelist missing"):
+            reserve_materialized_run(runs, initial, incomplete, plan=plan)
+        self.assertTrue((runs / relative_path(initial) / "prepare.log").is_file())
+        self.assertIsNone(selected_run_folder(checkout, "boot-relocated", plan))
 
     def test_existing_run_artifact_integrity_is_recorded_not_claimed_pass(self):
         directory = reserve_run(self.root, self.identity, plan=self.plan)
