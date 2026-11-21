@@ -6,6 +6,10 @@ on:
     paths:
       - '.github/workflows/real-netlist.yml'
       - 'tools/design_netlist.py'
+      - 'tools/regress.py'
+      - 'tools/run_workspace.py'
+      - 'tools/test_identity.py'
+      - 'tools/selected_rtl_provenance.py'
       - 'tools/real_netlist_contract.py'
       - 'tools/real_netlist_negative.py'
       - 'tools/signal_paths.py'
@@ -50,8 +54,13 @@ jobs:
         run: |
           set -euo pipefail
           python3 tools/regress.py memory --stage files
-          test -s .tools/regression/memory/sources.f
-          test -s .tools/regression/memory/plan.json
+          PYTHONPATH=tools python3 - <<'PY'
+          from pathlib import Path
+          from selected_rtl_provenance import selected
+
+          attested = selected(Path.cwd(), "memory")
+          print(f"Verified selected memory compiler input: {attested['source_list']}")
+          PY
       - name: Build the exact upstream slang-netlist v0.12.0 source
         shell: bash
         run: |
@@ -88,8 +97,6 @@ jobs:
           name: connect46-real-memory-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             .tools/connect46/
-            .tools/regression/memory/plan.json
-            .tools/regression/memory/sources.f
-            .tools/regression/memory/identity.json
+            .tools/runs/xezim/
           include-hidden-files: true
           if-no-files-found: warn

@@ -25,10 +25,10 @@ def uses_canonical_workspace(name, test):
     if name == 'dma-rtl':
         return True
     return (test.get('engine') in {'xezim', 'xezim-compile', 'verilator-lint'}
-            # Standalone memory profiles and generated chip firmware still
-            # have legacy producer/consumer paths.
-            and test.get('sources') != 'memory'
-            and not any(test.get(key) for key in ('memory_config', 'firmware_mode'))
+            # Only Xezim memory materialization has a migrated producer.
+            and (test.get('sources') != 'memory' or test['engine'] == 'xezim')
+            and (not test.get('memory_config') or test.get('sources') == 'memory')
+            and not test.get('firmware_mode')
             and (not test.get('boot_relocate')
                  or (test['engine'] == 'xezim' and test.get('sources') == 'boot')))
 
@@ -179,8 +179,10 @@ def verify_artifact_inventory(directory: Path, identity: dict, names: list[str],
             "artifacts": sorted(records, key=lambda item: item["path"])}
 
 def require_completed_xezim_run(root: Path, target: str, plan: dict) -> dict:
-    """Fail closed unless a real selected Xezim producer wrote its sole PASS.
+    """Fail closed unless a real selected Xezim producer met its outcome.
 
+    For a negative target that means the original named mismatch and a
+    positive nonzero simulator exit, not a simulation success marker.
     This verifies completed runner evidence; it does not turn Xezim stdout
     into AXI/CSR/coverage evidence. The existing source provenance validator
     independently verifies original inputs and generated collateral.
@@ -197,7 +199,7 @@ def require_completed_xezim_run(root: Path, target: str, plan: dict) -> dict:
     _existing_ancestors_safe(root)
     if (plan.get("engine") != "xezim"
             or not uses_canonical_workspace(target, plan)
-            or not plan.get("pass") or plan.get("expect_failure")
+            or not plan.get("pass")
             or plan.get("mode", "simulate") != "simulate"
             or (target == "serv" and
                 (plan.get("top") != "serv_minimal_tb"
@@ -225,23 +227,32 @@ def require_completed_xezim_run(root: Path, target: str, plan: dict) -> dict:
         resolved = json.loads((folder / "plan.json").read_text())
     except (OSError, ValueError) as exc:
         raise IdentityError("missing or invalid simulator result/plan") from exc
+    expected_failure = plan.get("expect_failure")
+    outcomes = record.get("results", [])
+    outcome = outcomes[0] if isinstance(outcomes, list) and len(outcomes) == 1 else {}
+    exit_code = outcome.get("exit_code") if isinstance(outcome, dict) else None
+    expected_exit = type(exit_code) is int and (
+        (exit_code > 0) if expected_failure else (exit_code == 0))
     if (record.get("target") != target or record.get("passed") is not True
             or record.get("stage") != "all"
             or record.get("identity_sha256") != identity["identity_sha256"]
             or record.get("canonical_id") != relative_path(identity).as_posix()
             or resolved.get("identity") != identity
-            or len(record.get("results", [])) != 1
-            or record["results"][0].get("name") != target
-            or record["results"][0].get("passed") is not True
-            or record["results"][0].get("exit_code") != 0):
-        raise IdentityError("canonical run lacks completed selected Xezim PASS")
-    if plan.get("pass") not in (folder / expected_log).read_text(errors="replace"):
+            or not expected_exit or outcome.get("name") != target
+            or outcome.get("passed") is not True):
+        raise IdentityError("canonical run lacks completed selected Xezim outcome")
+    transcript = (folder / expected_log).read_text(errors="replace")
+    if expected_failure:
+        if expected_failure not in transcript or plan["pass"] in transcript:
+            raise IdentityError("canonical simulator transcript lacks the named negative outcome")
+    elif plan["pass"] not in transcript:
         raise IdentityError("canonical simulator transcript missing original PASS marker")
     if root.name != 'runs' or root.parent.name != '.tools':
         raise IdentityError('canonical Xezim root is not the configured run root')
     verify_selected_archive(root.parent.parent, target, plan, directory=folder)
     return {"target": target, "canonical_id": relative_path(identity).as_posix(),
-            "status": "runner_completed_xezim_no_protocol_coverage_claim"}
+            "status": ("runner_completed_xezim_expected_negative" if expected_failure
+                       else "runner_completed_xezim_no_protocol_coverage_claim")}
 
 
 def require_completed_cocotb_run(root: Path, target: str, plan: dict) -> dict:

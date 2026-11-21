@@ -345,6 +345,19 @@ def select_relocated_boot(overrides, directory, sources, args):
                  f'+FLASH_FILE={boot_dir}/flash.hex'))
 
 
+def select_memory_config(test, override):
+    """Snapshot the original supported config once, before variant generation."""
+    from test_identity import memory_config_label, sha
+
+    choice = override or test.get('memory_config')
+    source = ROOT/(choice or 'config/soc.yaml')
+    data = source.read_bytes()
+    resolved = source.resolve()
+    label = memory_config_label(
+        resolved.relative_to(ROOT).as_posix() if resolved.is_relative_to(ROOT) else None)
+    return bool(choice), data, {'source': label, 'sha256': sha(data)}
+
+
 def filelist_text(sources, includes, defines):
     return '\n'.join(shlex.quote(t) for t in [*['+incdir+' + p for p in includes],
                                              *['+define+' + d for d in defines], *sources]) + '\n'
@@ -417,9 +430,10 @@ def run_target(name, test, resolver, options):
     canonical = uses_canonical_workspace(name, test)
     structural = test['engine'] in {'xezim-compile', 'verilator-lint'}
     relocated_boot = test.get('boot_relocate')
+    canonical_memory = canonical and test['sources'] == 'memory'
     identity = None
     if canonical:
-        from test_identity import selected as select_identity
+        from test_identity import MEMORY_CONFIG_SNAPSHOT, selected as select_identity
         from run_workspace import reserve_materialized_run, reserve_run
         if (name == 'dma-rtl' and
                 (test['engine'] != 'cocotb-verilator' or test['sources'] != 'noc'
@@ -437,15 +451,30 @@ def run_target(name, test, resolver, options):
         sources, includes, defines = [list(dict.fromkeys(items))
                                       for items in (sources, includes, defines)]
         selected_test = {**test, 'source_target': test['sources'], 'args': args}
-        if relocated_boot:
+        if canonical_memory:
+            alternate, config_bytes, selected_test['memory_config_effective'] = (
+                select_memory_config(test, options.memory_config))
+        if relocated_boot or canonical_memory:
             seed_identity = select_identity(name, selected_test, root=ROOT)
 
-            def materialize_boot(directory):
-                select_relocated_boot(relocated_boot, directory, sources, args)
+            def materialize(directory):
+                if relocated_boot:
+                    select_relocated_boot(relocated_boot, directory, sources, args)
+                if canonical_memory:
+                    config_snapshot = directory/MEMORY_CONFIG_SNAPSHOT
+                    config_snapshot.parent.mkdir()
+                    config_snapshot.write_bytes(config_bytes)
+                    if alternate:
+                        capture([sys.executable, str(ROOT/'tools/socgen.py'), '--config',
+                                 str(config_snapshot), '--out', str(directory/'memory')])
+                        default_top = str(ROOT/'gen/memory/memory_tb.sv')
+                        if sources.count(default_top) != 1:
+                            raise ValueError('alternate memory requires exactly one selected memory top')
+                        sources[sources.index(default_top)] = str(directory/'memory/memory_tb.sv')
                 (directory/'sources.f').write_text(filelist_text(sources, includes, defines))
 
             out, identity = reserve_materialized_run(ROOT/'.tools/runs', seed_identity,
-                                                     materialize_boot, plan=selected_test)
+                                                     materialize, plan=selected_test)
         else:
             identity = select_identity(name, selected_test,
                 filelist_bytes=filelist_text(sources, includes, defines).encode('utf-8'),
@@ -460,7 +489,7 @@ def run_target(name, test, resolver, options):
         args = list(test.get('args', [])) + options.arg
     # Legacy runs replace prior artifacts. Canonical runs are exclusively
     # reserved by immutable run_id and never delete another writer's output.
-    if test.get('memory_config') or options.memory_config:
+    if not canonical_memory and (test.get('memory_config') or options.memory_config):
         import socgen
         config = ROOT/(options.memory_config or test['memory_config'])
         capture([sys.executable, str(ROOT/'tools/socgen.py'), '--config', str(config), '--out', str(out/'memory')])
@@ -681,7 +710,7 @@ def run_target(name, test, resolver, options):
     includes = list(dict.fromkeys(includes))
     defines = list(dict.fromkeys(defines))
     filelist = out/'sources.f'
-    if not (canonical and relocated_boot):
+    if not (canonical_memory or (canonical and relocated_boot)):
         filelist.write_text(filelist_text(sources, includes, defines))
     # Capture the single source-selected identity before the RTL executor runs.
     # Keep legacy target artifact paths stable while old CI consumers migrate.
@@ -700,6 +729,8 @@ def run_target(name, test, resolver, options):
             'sources': sources, 'includes': includes, 'defines': defines,
             'args': args, 'results_xml': str(out/'results.xml'), 'stage': options.stage,
             'identity': identity}
+    if canonical_memory:
+        plan['memory_config_effective'] = selected_test['memory_config_effective']
     if test['engine'] in {'xezim-compile', 'verilator-lint'} and networks:
         plan['selected_networks'] = {
             net: {'filelist': str(out/f'{net}.f'), 'top': entry['top_module']}

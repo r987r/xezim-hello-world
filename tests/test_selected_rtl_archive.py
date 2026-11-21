@@ -91,6 +91,41 @@ class SelectedRtlArchiveTests(unittest.TestCase):
             verify_selected_archive(self.root, "smoke", definition,
                                     directory=directory)
 
+    def test_canonical_memory_archive_binds_actual_config_snapshot(self):
+        from test_identity import MEMORY_CONFIG_SNAPSHOT, selected, sha
+        from run_workspace import reserve_run
+
+        self.prepare_identity_sources()
+        definition = {"sources": "memory", "engine": "xezim",
+                      "top": "memory_tb", "logical_test": "axi-routing-smoke"}
+        snapshot_bytes = b"chosen configuration bytes\n"
+        effective = {"source": "custom", "sha256": sha(snapshot_bytes)}
+        selected_definition = dict(definition, memory_config_effective=effective)
+        raw = (str(self.tb) + "\n").encode()
+        identity = selected("memory", selected_definition, filelist_bytes=raw,
+                            run_id="local-012345abcdef", root=self.root)
+        directory = reserve_run(self.root / ".tools/runs", identity,
+                                plan=selected_definition)
+        snapshot = directory / MEMORY_CONFIG_SNAPSHOT
+        snapshot.parent.mkdir()
+        snapshot.write_bytes(snapshot_bytes)
+        filelist = directory / "sources.f"
+        filelist.write_bytes(raw)
+        plan = {**selected_definition, "target": "memory", "source_target": "memory",
+                "sources": [str(self.tb)], "includes": [], "defines": [],
+                "identity": identity}
+        (directory / "plan.json").write_text(json.dumps(plan))
+        archive = archive_selected_filelist(
+            self.root, "memory", definition, plan, filelist, directory=directory)
+        snapshot_rel = snapshot.relative_to(self.root)
+        self.assertEqual(archive["generated_sha256"][snapshot_rel.as_posix()],
+                         effective["sha256"])
+        staged = self.root / archive["archive"] / snapshot_rel
+        self.assertEqual(staged.read_bytes(), snapshot_bytes)
+        staged.write_bytes(b"stale or tampered bytes")
+        with self.assertRaisesRegex(ValueError, "collateral mismatch"):
+            verify_selected_archive(self.root, "memory", definition, directory=directory)
+
     def test_archive_preserves_exact_generated_top_and_source_hashes(self):
         value = self.make_archive()
         self.assertEqual(value["source_count"], 2)
