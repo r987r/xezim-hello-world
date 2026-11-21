@@ -102,6 +102,13 @@ success can be inferred from the comparison. Source archives are independently
 SHA-verified first, and modified, missing or foreign archives fail closed.
 These are comparison artifacts, not a second architecture dashboard.
 
+The detailed Architecture Explorer links the SHA-checked generated default
+and combined Ethernet/DDR/PCIe tops, the combined source manifest, and the
+portable compiler file order. Its bounded top RTL text diff is source review
+only. Use the selected-build comparison above to compare actual archived
+compiler contracts; neither view implies bit connectivity or runtime traffic.
+
+
 ## Genericity and future subsystems
 
 The explorer does not know about compute, memory, Ethernet, PCIe or DDR

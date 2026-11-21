@@ -334,10 +334,22 @@ def difference(before: dict, after: dict) -> dict:
 
 
 
+def source_text_diff(before: Path, after: Path, fromfile: str, tofile: str) -> dict:
+    """Bounded text comparison shared by the offline and published explorers."""
+    from difflib import unified_diff
+
+    if max(before.stat().st_size, after.stat().st_size) > 2000000:
+        raise ValueError("RTL top too large for bounded text review")
+    lines = list(unified_diff(
+        before.read_text().splitlines(), after.read_text().splitlines(),
+        fromfile=fromfile, tofile=tofile, lineterm=""))
+    return {"changed": bool(lines), "diff_lines": lines[:500],
+            "truncated": len(lines) > 500, "total": len(lines)}
+
+
 def selected_variant_diff(root_before: Path, profile_before: str,
                           root_after: Path, profile_after: str) -> dict:
     """Source-only comparison of two independently verified selected runs."""
-    from difflib import unified_diff
     from selected_rtl_provenance import verify_selected_archive
 
     def read(root, profile):
@@ -366,14 +378,8 @@ def selected_variant_diff(root_before: Path, profile_before: str,
         path_b = root_b / b["archive"] / top_after
         if not path_a.is_file() or not path_b.is_file():
             raise ValueError("missing verified generated SoC top")
-        if max(path_a.stat().st_size, path_b.stat().st_size) > 2000000:
-            raise ValueError("RTL top too large for bounded text review")
-        differences = list(unified_diff(
-            path_a.read_text().splitlines(), path_b.read_text().splitlines(),
-            fromfile=profile_before + "/" + top_before,
-            tofile=profile_after + "/" + top_after, lineterm=""))
-        rtl = {"changed": bool(differences), "diff_lines": differences[:500],
-               "truncated": len(differences) > 500, "total": len(differences)}
+        rtl = source_text_diff(path_a, path_b, profile_before + "/" + top_before,
+                               profile_after + "/" + top_after)
     # Compare source-selected compiler/variant semantics rather than
     # per-invocation identity or review-stage manifest self hashes. This
     # captures selected RTL topology/backend changes that a text diff alone
