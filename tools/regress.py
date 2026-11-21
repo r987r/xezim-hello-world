@@ -334,6 +334,17 @@ def boot_variant(overrides, out):
     (out/'soc.yaml').write_text(yaml.safe_dump(cfg, sort_keys=False))
 
 
+def select_relocated_boot(overrides, directory, sources, args):
+    boot_dir = directory/'boot'
+    original_package = str(ROOT/'gen/boot/boot_config_pkg.sv')
+    if sources.count(original_package) != 1:
+        raise ValueError('relocated boot requires exactly one selected boot package')
+    boot_variant(overrides, boot_dir)
+    sources[sources.index(original_package)] = str(boot_dir/'boot_config_pkg.sv')
+    args.extend((f'+BOOTROM_FILE={boot_dir}/bootrom.hex',
+                 f'+FLASH_FILE={boot_dir}/flash.hex'))
+
+
 def filelist_text(sources, includes, defines):
     return '\n'.join(shlex.quote(t) for t in [*['+incdir+' + p for p in includes],
                                              *['+define+' + d for d in defines], *sources]) + '\n'
@@ -405,10 +416,11 @@ def include_runtime_noc(sources, networks, root):
 def run_target(name, test, resolver, options):
     canonical = uses_canonical_workspace(name, test)
     structural = test['engine'] in {'xezim-compile', 'verilator-lint'}
+    relocated_boot = test.get('boot_relocate')
     identity = None
     if canonical:
         from test_identity import selected as select_identity
-        from run_workspace import reserve_run
+        from run_workspace import reserve_materialized_run, reserve_run
         if (name == 'dma-rtl' and
                 (test['engine'] != 'cocotb-verilator' or test['sources'] != 'noc'
                  or test.get('bender_targets') != ['dma'] or options.network
@@ -425,9 +437,20 @@ def run_target(name, test, resolver, options):
         sources, includes, defines = [list(dict.fromkeys(items))
                                       for items in (sources, includes, defines)]
         selected_test = {**test, 'source_target': test['sources'], 'args': args}
-        selected_bytes = filelist_text(sources, includes, defines).encode('utf-8')
-        identity = select_identity(name, selected_test, filelist_bytes=selected_bytes, root=ROOT)
-        out = reserve_run(ROOT/'.tools/runs', identity, plan=selected_test)
+        if relocated_boot:
+            seed_identity = select_identity(name, selected_test, root=ROOT)
+
+            def materialize_boot(directory):
+                select_relocated_boot(relocated_boot, directory, sources, args)
+                (directory/'sources.f').write_text(filelist_text(sources, includes, defines))
+
+            out, identity = reserve_materialized_run(ROOT/'.tools/runs', seed_identity,
+                                                     materialize_boot, plan=selected_test)
+        else:
+            identity = select_identity(name, selected_test,
+                filelist_bytes=filelist_text(sources, includes, defines).encode('utf-8'),
+                root=ROOT)
+            out = reserve_run(ROOT/'.tools/runs', identity, plan=selected_test)
     else:
         out = ROOT/'.tools/regression'/name
         if out.exists():
@@ -442,10 +465,8 @@ def run_target(name, test, resolver, options):
         config = ROOT/(options.memory_config or test['memory_config'])
         capture([sys.executable, str(ROOT/'tools/socgen.py'), '--config', str(config), '--out', str(out/'memory')])
         sources = [str(out/'memory/memory_tb.sv') if p == str(ROOT/'gen/memory/memory_tb.sv') else p for p in sources]
-    if test.get('boot_relocate'):
-        boot_variant(test['boot_relocate'], out/'boot')
-        sources = [str(out/'boot/boot_config_pkg.sv') if p == str(ROOT/'gen/boot/boot_config_pkg.sv') else p for p in sources]
-        args += [f'+BOOTROM_FILE={out}/boot/bootrom.hex', f'+FLASH_FILE={out}/boot/flash.hex']
+    if relocated_boot and not canonical:
+        select_relocated_boot(relocated_boot, out, sources, args)
     if not canonical:
         networks = noc_contracts() if test['sources'] == 'noc' else {}
     root = ROOT/'gen/noc/floonoc'
@@ -660,13 +681,15 @@ def run_target(name, test, resolver, options):
     includes = list(dict.fromkeys(includes))
     defines = list(dict.fromkeys(defines))
     filelist = out/'sources.f'
-    filelist.write_text(filelist_text(sources, includes, defines))
+    if not (canonical and relocated_boot):
+        filelist.write_text(filelist_text(sources, includes, defines))
     # Capture the single source-selected identity before the RTL executor runs.
     # Keep legacy target artifact paths stable while old CI consumers migrate.
     from test_identity import selected as select_identity, save as save_identity, relative_path
     if canonical:
         from run_workspace import verify_run
-        if filelist.read_bytes() != selected_bytes:
+        from test_identity import sha
+        if sha(filelist.read_bytes()) != identity['selection']['filelist_sha256']:
             raise ValueError('canonical selected filelist changed after run reservation')
         verify_run(out, identity, plan=selected_test)
     else:
