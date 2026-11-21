@@ -21,6 +21,8 @@ on:
       - 'tools/interface_contracts.py'
       - 'tools/regress.py'
       - 'tools/run_workspace.py'
+      - 'tools/test_identity.py'
+      - 'tests/test_run_workspace.py'
       - 'tools/selected_rtl_provenance.py'
       - 'tools/sim_cocotb.py'
       - 'tools/ip_fetch.py'
@@ -93,7 +95,7 @@ jobs:
           echo "XEZIM_BIN=$GITHUB_WORKSPACE/.tools/bin/$XEZIM_ASSET_NAME" >> "$GITHUB_ENV"
       - name: Run YAML-defined Xezim profiles and relocated cold boot
         run: python3 tools/regress.py xezim diagnostics
-      - name: Verify canonical static Xezim simulations and source archives
+      - name: Verify canonical Xezim simulations and source archives
         run: |
           python3 - <<'PY'
           from pathlib import Path

@@ -11,7 +11,7 @@ The independent `make dv-boot` test runs actual PicoRV32 (CPU0) and SERV (CPU1) 
 
 Only ROM/flash may use initialization files. This **cold boot never preloads writable SRAM**. The stand-alone bootstrap is a simple memory model, not a silicon SRAM macro, QSPI controller, secure boot or HBM/DDR initialization. Those require their own selected hardware tests.
 
-The generator derives instruction images, listings, reset address and memory-map constants from `config/soc.yaml` into `gen/boot/`. Unsupported boot policies, wrong image size or overlaps fail before simulation. The relocated profile `boot-relocated` selects SRAM0 `0x12000000`, SRAM1 `0x13000000`, flash `0x21000000` and reset CSR `0x41020000` in its **per-run generated variant**, not by hand-editing tracked RTL.
+The generator derives instruction images, listings, reset address and memory-map constants from `config/soc.yaml` into `gen/boot/`. Unsupported boot policies, wrong image size or overlaps fail before simulation. The relocated profile `boot-relocated` selects SRAM0 `0x15000000`, SRAM1 `0x16000000`, flash `0x21000000` and reset CSR `0x41020000` in its **per-run generated variant**, not by hand-editing tracked RTL.
 
 ## Regression commands
 
