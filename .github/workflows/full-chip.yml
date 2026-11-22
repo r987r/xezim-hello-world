@@ -74,7 +74,7 @@ jobs:
           echo "XEZIM_BIN=$GITHUB_WORKSPACE/.tools/bin/$XEZIM_ASSET_NAME" >> "$GITHUB_ENV"
       - name: 'Run common SoC INIT/RUN/CHECK: real CPU C DMA, dual BFM DMA, negatives, Xezim compile'
         run: make dv-chip FAST_FAIL=1
-      - name: Locate only the selected static chip boot evidence
+      - name: Locate only the selected static full-chip evidence
         if: always()
         id: static-chip-runs
         run: |
@@ -87,7 +87,7 @@ jobs:
           root = Path.cwd()
           catalog = yaml.safe_load((root / "config/regression.yaml").read_text())["tests"]
           directories = []
-          for name in ("chip-boot", "chip-boot-negative", "chip-boot-latency"):
+          for name in ("chip-boot", "chip-boot-negative", "chip-boot-latency", "chip-dma"):
               workspace = selected_run_folder(root, name, catalog[name])
               if workspace is not None:
                   relative = workspace.relative_to(root / ".tools/runs")
@@ -122,8 +122,6 @@ jobs:
         with:
           name: chip-axi-run-reports-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            .tools/regression/chip-dma/report.html
-            .tools/regression/chip-dma/axi-*.json*
             .tools/regression/chip-cpu-dma/report.html
             .tools/regression/chip-cpu-dma/axi-*.json*
             ${{ steps.static-chip-runs.outputs.reports }}

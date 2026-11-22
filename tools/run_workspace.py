@@ -31,12 +31,18 @@ def uses_canonical_workspace(name, test):
             and not test.get('firmware_mode')
             and (not test.get('boot_relocate')
                  or (test['engine'] == 'xezim' and test.get('sources') == 'boot'))) or (
-        # The static boot cohort keeps its shared source-keyed simulator.
-        # Firmware/RTL variants have separate materialization and consumers.
-        test.get('engine') == 'cocotb-verilator'
-        and test.get('sources') == 'noc' and test.get('top') == 'full_chip_tb'
-        and test.get('bender_targets') == ['chip_boot']
+        # Static full-chip cases keep their source-keyed simulators. Firmware,
+        # memory and scenario variants retain their existing consumers.
+        test.get('engine') == 'cocotb-verilator' and test.get('sources') == 'noc'
         and not any(test.get(key) for key in ('memory_config', 'boot_relocate', 'firmware_mode'))
+        and (
+            (test.get('top') == 'full_chip_tb'
+             and test.get('bender_targets') == ['chip_boot'])
+            or (name == 'chip-dma' and test.get('logical_test') == 'dma-fabric-roundtrip'
+                and test.get('top') == 'full_chip_dma_tb'
+                and test.get('bender_targets') == ['chip_boot', 'dma', 'chip_dma']
+                and not test.get('flow_plan'))
+        )
     )
 
 
