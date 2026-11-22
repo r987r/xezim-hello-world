@@ -11,6 +11,7 @@ on:
       - 'dv/csr/**'
       - 'tools/full_chip_gen.py'
       - 'tools/regress.py'
+      - 'tools/run_workspace.py'
       - 'tests/test_full_chip_gen.py'
       - 'config/regression.yaml'
       - 'tools/csr_source_references.py'
@@ -98,18 +99,54 @@ jobs:
           clang --target=riscv32-unknown-elf -march=rv32i -mabi=ilp32 -std=c11 -Wall -Wextra -Werror -Oz -ffunction-sections -fdata-sections -I .tools/csr-smoke -c tests/fixtures/csr_headers_smoke.c -o .tools/csr-smoke/csr_headers_smoke.o
       - name: Fast standalone generated AXI-Lite register behavior
         run: python3 tools/run_csr_axi.py
+      - name: Require a clean checkout before measuring CSR traffic
+        run: |
+          dirty="$(git status --porcelain --untracked-files=all)"
+          if [[ -n "$dirty" ]]; then
+            printf 'Unexpected checkout dirt before CSR boot:\n%s\n' "$dirty" >&2
+            exit 1
+          fi
       - name: Simulate CPU cold boot through PeakRDL Config NoC
+        id: csr-boot
         run: python3 tools/regress.py chip-peakrdl-reset --fail-fast
+      - name: Locate this selected CSR boot workspace
+        if: always()
+        id: csr-run
+        env:
+          CSR_BOOT_OUTCOME: ${{ steps.csr-boot.outcome }}
+        run: |
+          PYTHONPATH=tools python3 - <<'PY'
+          import os
+          from pathlib import Path
+          import yaml
+          from run_workspace import selected_run_folder
+
+          root = Path.cwd()
+          target = 'chip-peakrdl-reset'
+          catalog = yaml.safe_load((root/'config/regression.yaml').read_text())['tests']
+          directory = selected_run_folder(root, target, catalog[target], stage='all')
+          if os.environ['CSR_BOOT_OUTCOME'] == 'success' and (
+                  directory is None or not (directory/'result.json').is_file()):
+              raise SystemExit('successful CSR boot lacks canonical result')
+          if directory is not None:
+              canonical_id = directory.relative_to(root/'.tools/runs').as_posix()
+              with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+                  print(f'canonical_id={canonical_id}', file=output)
+          PY
       - name: Verify qualified CSR catalog and observed Config-NoC traffic
+        env:
+          CSR_RUN: .tools/runs/${{ steps.csr-run.outputs.canonical_id }}
         run: |
           python3 - <<'PY'
           import json
+          import os
           from pathlib import Path
-          root=Path('.tools/regression/chip-peakrdl-reset')
+          root=Path(os.environ['CSR_RUN'])
           catalog=json.loads((root/'csr/csr-map.json').read_text())
           assert catalog['variant']=='cold_boot'
           assert catalog['register_count']==2
           real=json.loads((root/'axi-transactions.json').read_text())
+          assert real['run']['dirty'] is False, 'CSR traffic must assert clean source'
           mapping=real['sections']['address_map']
           assert mapping['variant']=='cold_boot'
           reset=[r for r in mapping['regions'] if r['name']=='boot.reset_ctrl']
@@ -122,10 +159,10 @@ jobs:
           print('PASS: exact compiled CSR variant plus passive real AXI frontdoor traffic')
           PY
       - name: Upload CSR RTL compile and traffic evidence
-        if: always()
+        if: always() && steps.csr-run.outputs.canonical_id != ''
         uses: actions/upload-artifact@v4
         with:
           name: csr-peakrdl-real-chip-boot
-          path: .tools/regression/chip-peakrdl-reset/
+          path: .tools/runs/${{ steps.csr-run.outputs.canonical_id }}/
           include-hidden-files: true
           if-no-files-found: warn

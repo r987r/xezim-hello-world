@@ -195,6 +195,30 @@ class AxiReportTests(unittest.TestCase):
         self.assertEqual(dma['compute0_local_config.cpu']['kind'],'verification_bfm')
 
 
+    def test_selected_csr_catalog_cannot_fall_back_or_follow_symlinks(self):
+        plan = {'target': 'chip-peakrdl-reset', 'firmware_mode': 'peakrdl_reset'}
+        locator = 'csr/csr-map.json'
+        old = '.tools/regression/chip-peakrdl-reset/csr/csr-map.json'
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run = root / 'current'
+            history = root / 'historical' / locator
+            history.parent.mkdir(parents=True)
+            history.write_text('{}')
+            run.mkdir()
+            with self.assertRaisesRegex(ValueError, 'missing or unsafe'):
+                axi_report.csr_catalog_path(run, plan, locator)
+            (run / 'csr').symlink_to(history.parent, target_is_directory=True)
+            with self.assertRaisesRegex(ValueError, 'missing or unsafe'):
+                axi_report.csr_catalog_path(run, plan, locator)
+            (run / 'csr').unlink()
+            (run / 'csr').mkdir()
+            (run / locator).write_text('{}')
+            self.assertEqual(axi_report.csr_catalog_path(run, plan, locator), run / locator)
+            with self.assertRaisesRegex(ValueError, 'not selected'):
+                axi_report.csr_catalog_path(run, {**plan, 'target': 'another-test'}, locator)
+            self.assertEqual(axi_report.csr_catalog_path(run, plan, old), ROOT / old)
+
     def test_optional_architecture_address_map_on_original_html_report(self):
         with tempfile.TemporaryDirectory() as tmp:
             directory=Path(tmp)

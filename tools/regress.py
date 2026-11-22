@@ -23,10 +23,14 @@ import yaml
 
 try:
     from .run_workspace import (uses_canonical_cpu_firmware_workspace,
-                                uses_canonical_ethernet_workspace, uses_canonical_workspace)
+                                uses_canonical_ethernet_workspace,
+                                uses_canonical_peakrdl_reset_workspace,
+                                uses_canonical_scenario_workspace, uses_canonical_workspace)
 except ImportError:
     from run_workspace import (uses_canonical_cpu_firmware_workspace,
-                                uses_canonical_ethernet_workspace, uses_canonical_workspace)
+                                uses_canonical_ethernet_workspace,
+                                uses_canonical_peakrdl_reset_workspace,
+                                uses_canonical_scenario_workspace, uses_canonical_workspace)
 
 ROOT = Path(__file__).resolve().parents[1]
 ENGINES = {'xezim', 'xezim-compile', 'verilator-lint', 'cocotb-verilator'}
@@ -540,6 +544,42 @@ def select_pcie_variant(test, out, sources, *, private_build=None):
     return sources
 
 
+def materialize_bfm_scenario(test, out, options):
+    from dv.common.scenario_dma import materialize
+    cfg = yaml.safe_load((ROOT/'config/soc.yaml').read_text())
+    materialize(cfg, out, scenario_seed=options.scenario_seed,
+                scenario_source=test['flow_plan'])
+
+
+def select_peakrdl_reset_variant(out, sources):
+    # Generate the opt-in reset bank without mutating checked-in gen/chip.
+    from full_chip_gen import emit as emit_chip
+    from csrgen import generate as generate_csr
+    cfg = yaml.safe_load((ROOT/'config/soc.yaml').read_text())
+    noc_manifest = json.loads((ROOT/'gen/supernoc/manifest.json').read_text())
+    variant = out/'variant'
+    variant.mkdir(parents=True, exist_ok=True)
+    emit_chip(cfg, noc_manifest, ROOT/'gen/noc/floonoc', variant,
+              image_prefix=variant.relative_to(ROOT).as_posix(),
+              peakrdl_reset=True)
+    generated_root = ROOT/'gen/chip'
+    replacements = {'soc_top.sv', 'full_chip_tb.sv', 'full_chip_dma_tb.sv'}
+    sources = [str(variant/Path(filename).name)
+               if Path(filename).parent == generated_root
+               and Path(filename).name in replacements else filename
+               for filename in sources]
+    csr_out = out/'csr'
+    generate_csr(ROOT/'config/soc.yaml', ROOT/'csr/rdl/boot_reset_ctrl.rdl',
+                 csr_out, 'cold_boot')
+    pkg = str(csr_out/'rtl/soc_boot_reset_ctrl_regblock_pkg.sv')
+    bank = str(csr_out/'rtl/soc_boot_reset_ctrl_regblock.sv')
+    top_src = str(variant/'soc_top.sv')
+    if sources.count(top_src) != 1:
+        raise ValueError('expected one generated SoC RTL top in PeakRDL variant')
+    sources[sources.index(top_src):sources.index(top_src)] = [pkg, bank]
+    return sources
+
+
 def _private_firmware_build(test, run_id):
     build_root = (ROOT / test['build']).resolve()
     if (not build_root.is_relative_to(ROOT / '.tools')
@@ -554,7 +594,10 @@ def run_target(name, test, resolver, options):
     relocated_boot = test.get('boot_relocate')
     canonical_ethernet = uses_canonical_ethernet_workspace(name, test)
     canonical_cpu_firmware = uses_canonical_cpu_firmware_workspace(name, test)
-    canonical_firmware = canonical_ethernet or canonical_cpu_firmware
+    canonical_scenario = uses_canonical_scenario_workspace(name, test)
+    canonical_peakrdl = uses_canonical_peakrdl_reset_workspace(name, test)
+    canonical_firmware = (canonical_ethernet or canonical_cpu_firmware
+                          or canonical_scenario or canonical_peakrdl)
     if canonical_firmware and (options.stage == 'run' or test.get('reuse_build')):
         raise ValueError('runtime firmware variant requires its own build; use --stage all')
     canonical_memory = canonical and test['sources'] == 'memory'
@@ -589,8 +632,12 @@ def run_target(name, test, resolver, options):
                 if canonical_firmware:
                     if canonical_ethernet:
                         sources = select_ethernet_variant(test, directory, sources)
-                    elif test['firmware_mode'] == 'cpu_dma':
+                    elif test['firmware_mode'] in ('cpu_dma', 'cpu_dma_scenario'):
                         sources = select_cpu_dma_variant(test, directory, sources, options)
+                    elif test['firmware_mode'] == 'scenario_bfm':
+                        materialize_bfm_scenario(test, directory, options)
+                    elif canonical_peakrdl:
+                        sources = select_peakrdl_reset_variant(directory, sources)
                     else:
                         sources = select_pcie_variant(
                             test, directory, sources,
@@ -650,7 +697,8 @@ def run_target(name, test, resolver, options):
         if not structural:
             include_runtime_noc(sources, networks, root)
         append_pinned_dma_and_bender_sources(test, resolver, sources, includes, defines)
-    if not canonical_cpu_firmware and test.get('firmware_mode') in ('cpu_dma', 'cpu_dma_scenario'):
+    if not (canonical_cpu_firmware or canonical_scenario) and test.get('firmware_mode') in (
+            'cpu_dma', 'cpu_dma_scenario'):
         sources = select_cpu_dma_variant(test, out, sources, options)
     if not canonical_ethernet and test.get('firmware_mode') in ('ethernet_mvp', 'ethernet_cpu'):
         sources = select_ethernet_variant(test, out, sources)
@@ -721,37 +769,10 @@ def run_target(name, test, resolver, options):
         sources += [str(bridge)] + [
             str(ROOT/'.tools/verilog_pcie'/item)
             for item in vendor_pin['rtl_modules'] if item != 'rtl/pcie_axi_master.v']
-    if test.get('firmware_mode') == 'peakrdl_reset':
-        # Generate the opt-in reset bank without mutating checked-in gen/chip.
-        from full_chip_gen import emit as emit_chip
-        from csrgen import generate as generate_csr
-        cfg = yaml.safe_load((ROOT/'config/soc.yaml').read_text())
-        noc_manifest = json.loads((ROOT/'gen/supernoc/manifest.json').read_text())
-        variant = out/'variant'
-        variant.mkdir(parents=True, exist_ok=True)
-        emit_chip(cfg, noc_manifest, ROOT/'gen/noc/floonoc', variant,
-                  image_prefix=variant.relative_to(ROOT).as_posix(),
-                  peakrdl_reset=True)
-        generated_root = ROOT/'gen/chip'
-        replacements = {'soc_top.sv', 'full_chip_tb.sv', 'full_chip_dma_tb.sv'}
-        sources = [str(variant/Path(filename).name)
-                   if Path(filename).parent == generated_root
-                   and Path(filename).name in replacements else filename
-                   for filename in sources]
-        csr_out = out/'csr'
-        generate_csr(ROOT/'config/soc.yaml', ROOT/'csr/rdl/boot_reset_ctrl.rdl',
-                     csr_out, 'cold_boot')
-        pkg = str(csr_out/'rtl/soc_boot_reset_ctrl_regblock_pkg.sv')
-        bank = str(csr_out/'rtl/soc_boot_reset_ctrl_regblock.sv')
-        top_src = str(variant/'soc_top.sv')
-        if sources.count(top_src) != 1:
-            raise ValueError('expected one generated SoC RTL top in PeakRDL variant')
-        sources[sources.index(top_src):sources.index(top_src)] = [pkg, bank]
-    if test.get('firmware_mode') == 'scenario_bfm':
-        from dv.common.scenario_dma import materialize
-        cfg = yaml.safe_load((ROOT/'config/soc.yaml').read_text())
-        materialize(cfg, out, scenario_seed=options.scenario_seed,
-                    scenario_source=test['flow_plan'])
+    if not canonical_peakrdl and test.get('firmware_mode') == 'peakrdl_reset':
+        sources = select_peakrdl_reset_variant(out, sources)
+    if not canonical_scenario and test.get('firmware_mode') == 'scenario_bfm':
+        materialize_bfm_scenario(test, out, options)
     sources = list(dict.fromkeys(sources))
     includes = list(dict.fromkeys(includes))
     defines = list(dict.fromkeys(defines))
@@ -781,12 +802,23 @@ def run_target(name, test, resolver, options):
         # Generated SRAM/flash paths depend on this immutable run. Compile
         # outside its evidence directory; no other run may write this binary.
         plan['build'] = _private_firmware_build(test, identity['run_id']).relative_to(ROOT).as_posix()
+    if canonical_firmware and test.get('firmware_mode') != 'scenario_bfm':
         report = test['report']
-        actor_manifest = out / 'variant/manifest.json'
-        if report['axi'].get('actors') != 'variant/manifest.json' or not actor_manifest.is_file():
-            raise ValueError('selected AXI actor manifest must belong to this firmware variant')
-        plan['report'] = {**report, 'axi': {**report['axi'],
-                           'actors': actor_manifest.relative_to(ROOT).as_posix()}}
+        if canonical_peakrdl:
+            address_map = report.get('address_map', {})
+            csr_map = out / 'csr/csr-map.json'
+            if (address_map.get('csr_map') != 'csr/csr-map.json'
+                    or csr_map.parent.is_symlink() or csr_map.is_symlink()
+                    or not csr_map.is_file()):
+                raise ValueError('selected CSR catalog must belong to this reset variant')
+            # Keep the selected report spec immutable; the AXI reader resolves
+            # this run-owned locator against the same selected workspace.
+        else:
+            actor_manifest = out / 'variant/manifest.json'
+            if report['axi'].get('actors') != 'variant/manifest.json' or not actor_manifest.is_file():
+                raise ValueError('selected AXI actor manifest must belong to this firmware variant')
+            plan['report'] = {**report, 'axi': {**report['axi'],
+                               'actors': actor_manifest.relative_to(ROOT).as_posix()}}
     if test['engine'] in {'xezim-compile', 'verilator-lint'} and networks:
         plan['selected_networks'] = {
             net: {'filelist': str(out/f'{net}.f'), 'top': entry['top_module']}

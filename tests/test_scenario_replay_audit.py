@@ -8,7 +8,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from tools.scenario_replay_audit import audit, ReplayAuditError
+from tools.scenario_replay_audit import audit, verify_replay_input, ReplayAuditError
 
 
 class ScenarioReplayAuditTests(unittest.TestCase):
@@ -76,6 +76,61 @@ class ScenarioReplayAuditTests(unittest.TestCase):
         self.assertEqual(report["status"], "validated_both_real_rtl_profiles")
         self.assertEqual(report["bfm_test_flow"], "unmeasured")
         self.assertEqual(report["memory_target"], "modeled_ddr_only")
+
+    def test_replay_input_rejects_stale_seed_and_foreign_selected_envelope(self):
+        import yaml
+        from tools.run_workspace import reserve_run
+        from tools.runtime_contract import SCHEMA, PHASES, digest
+        from tools.test_identity import relative_path, selected
+
+        root = Path(__file__).resolve().parents[1]
+        definition = yaml.safe_load((root / "config/regression.yaml").read_text())["tests"]
+        raw = (self.bfm / "scenario-plan.json").read_bytes()
+        for target in ("chip-cpu-scenario", "chip-dma-scenario"):
+            with self.subTest(target=target):
+                base = Path(self.tmp.name) / ".tools/runs"
+                files = b"selected/soc_top.sv\n"
+                identity = selected(target, definition[target], filelist_bytes=files,
+                                    run_id="ci-2345-a2-123456789abc")
+                folder = reserve_run(base, identity, plan=definition[target])
+                (folder / "sources.f").write_bytes(files)
+                plan = folder / ("variant" if target == "chip-cpu-scenario" else "") / "scenario-plan.json"
+                plan.parent.mkdir(parents=True, exist_ok=True)
+                plan.write_bytes(raw)
+                result = {"target": target, "canonical_id": relative_path(identity).as_posix(),
+                          "identity_sha256": identity["identity_sha256"], "stage": "all",
+                          "passed": True}
+                (folder / "result.json").write_text(json.dumps(result))
+                payload = {
+                    "schema_version": SCHEMA, "target": target, "stage": "all",
+                    "source_revision": "a"*40, "adapter": "scenario_dispatch_adapter",
+                    "evidence_kind": "selected_definition_not_runtime_execution",
+                    "intent": {"target": target, "phases": {p: [] for p in PHASES},
+                               "declared_actions": 1},
+                    "scenario_plan_sha256": hashlib.sha256(raw).hexdigest(),
+                    "identity_sha256": identity["identity_sha256"],
+                }
+                def save():
+                    (folder / "selected-test-plan.json").write_text(json.dumps(
+                        {**payload, "plan_sha256": digest(payload)}))
+                def verify(seed=12345, source="a"*40, prefix="ci-2345-a2-"):
+                    return verify_replay_input(folder, target, seed=seed, plan_bytes=raw,
+                                               source_revision=source, run_prefix=prefix)
+                save()
+                self.assertEqual(verify(), relative_path(identity).as_posix())
+                for seed, source in ((12346, "a"*40), (12345, "b"*40)):
+                    with self.assertRaisesRegex(ReplayAuditError, "invocation/seed"):
+                        verify(seed, source)
+                with self.assertRaisesRegex(ReplayAuditError, "invocation/seed"):
+                    verify(prefix="ci-2345-a1-")
+                (folder / "sources.f").write_bytes(b"unexpected source filelist\n")
+                with self.assertRaisesRegex(ReplayAuditError, "invocation/seed"):
+                    verify()
+                (folder / "sources.f").write_bytes(files)
+                payload["identity_sha256"] = "b"*64
+                save()
+                with self.assertRaisesRegex(ReplayAuditError, "invocation/seed"):
+                    verify()
 
     def test_effective_driver_seed_must_match_source_selected_pattern(self):
         self.cpu_ev["executed_pattern_seed"] = 91

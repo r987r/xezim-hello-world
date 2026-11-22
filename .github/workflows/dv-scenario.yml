@@ -19,6 +19,7 @@ on:
       - 'tests/test_scenario_memory_trace.py'
       - 'tests/test_scenario_memory_finalization.py'
       - 'tools/regress.py'
+      - 'tools/run_workspace.py'
       - 'config/regression.yaml'
       - 'tests/test_scenario_dma.py'
       - 'tests/test_scenario_portability.py'
@@ -135,6 +136,7 @@ jobs:
           python3 -m unittest tests.test_scenario_plan tests.test_scenario_dma tests.test_scenario_cpu_plan_witness tests.test_scenario_cpu_action_trace tests.test_scenario_replay_audit tests.test_scenario_memory_trace tests.test_scenario_memory_finalization tests.test_cpu_dma_firmware tests.test_axi_event_sink -v
           make check-generated
       - name: Execute two freshly randomized source-selected scenarios in actual CPU and BFM RTL
+        id: real-scenario-replay
         run: |
           python3 - <<'PY'
           import hashlib
@@ -144,9 +146,11 @@ jobs:
           import shutil
           import subprocess
           import sys
+          import yaml
 
+          from tools.run_workspace import selected_run_folder, snapshot_run_ids
           from tools.scenario_seed_matrix import write_matrix, check_matrix, select_distinct_cases
-          from tools.scenario_replay_audit import audit
+          from tools.scenario_replay_audit import audit, verify_replay_input
 
           source = Path("config/scenarios/cpu-bfm-ddr-roundtrip.json")
           soc = Path("config/soc.yaml")
@@ -158,41 +162,68 @@ jobs:
               argument_path=("pattern", "seed"), count=2)
           collected = []
           root = Path(".tools/scenarios/rtl-seed-matrix")
-          for item in selected:
-              seed = item["seed"]
-              print(f"REAL RTL RANDOM SEED {seed}; plan {item['plan_sha256']}", flush=True)
-              subprocess.run([sys.executable, "tools/regress.py", "scenario",
-                              "--scenario-seed", str(seed)], check=True)
-              cpu = Path(".tools/regression/chip-cpu-scenario")
-              bfm = Path(".tools/regression/chip-dma-scenario")
-              expected = (matrix_dir / item["file"]).read_bytes()
-              for actual in (cpu/"variant/scenario-plan.json", bfm/"scenario-plan.json"):
-                  if actual.read_bytes() != expected:
-                      raise RuntimeError(f"{actual}: executed RTL plan differs from selected matrix")
-              verified = audit(cpu, bfm)
-              if verified["plan_sha256"] != item["plan_sha256"]:
-                  raise RuntimeError("actual observed evidence differs from selected seed plan")
-              case = root / f"seed-{seed}"
-              case.mkdir(parents=True, exist_ok=False)
-              for folder in (cpu, bfm):
-                  shutil.copytree(folder, case/folder.name)
-              (case/"scenario-replay-audit.json").write_text(
-                  json.dumps(verified, indent=2, sort_keys=True)+"\n")
-              # Keep each complete original run as its own compressed archive.
-              # The current Pages importer accepts one result per legacy target
-              # per workflow. Publishing multiple target-named result.json files
-              # from one artifact would falsely collide until #139 canonical
-              # per-execution ingestion is fully migrated.
-              archive = shutil.make_archive(str(case), "gztar",
-                                            root_dir=root, base_dir=case.name)
-              shutil.rmtree(case)
-              collected.append({"seed":seed, "plan_sha256":item["plan_sha256"],
-                                "pattern_seed":next(a for a in json.loads(expected)["actions"]
-                                                    if a["action_instance_id"]=="init_source")
-                                               ["args"]["pattern"]["seed"],
-                                "archive":Path(archive).name,
-                                "evidence":"real_cpu_and_bfm_passive_AXI_and_independent_bytes",
-                                "status":verified["status"]})
+          checkout = Path.cwd()
+          targets = ("chip-cpu-scenario", "chip-dma-scenario")
+          catalog = yaml.safe_load(Path("config/regression.yaml").read_text())["tests"]
+          canonical_roots = checkout / ".tools/runs"
+          run_prefix = f"ci-{os.environ['GITHUB_RUN_ID']}-a{os.environ['GITHUB_RUN_ATTEMPT']}-"
+          last_pair = []
+          try:
+              for item in selected:
+                  seed = item["seed"]
+                  print(f"REAL RTL RANDOM SEED {seed}; plan {item['plan_sha256']}", flush=True)
+                  last_pair = []
+                  before = {name: snapshot_run_ids(checkout, name, catalog[name]) for name in targets}
+                  execution = subprocess.run([sys.executable, "tools/regress.py", "scenario",
+                                              "--scenario-seed", str(seed)], check=False)
+                  for name in targets:
+                      added = snapshot_run_ids(checkout, name, catalog[name]) - before[name]
+                      if len(added) > 1 or (execution.returncode == 0 and len(added) != 1):
+                          raise RuntimeError(f"{name}: ambiguous or missing invocation for seed {seed}")
+                      folder = selected_run_folder(
+                          checkout, name, catalog[name], prior_run_ids=before[name],
+                          stage="all" if execution.returncode == 0 else None)
+                      if folder is not None:
+                          last_pair.append(folder)
+                  execution.check_returncode()
+                  if len(last_pair) != 2:
+                      raise RuntimeError("successful replay lacks one canonical CPU/BFM pair")
+                  cpu, bfm = last_pair
+                  expected = (matrix_dir / item["file"]).read_bytes()
+                  run_ids = {name: verify_replay_input(folder, name, seed=seed,
+                                                       plan_bytes=expected,
+                                                       source_revision=os.environ["GITHUB_SHA"],
+                                                       run_prefix=run_prefix)
+                             for name, folder in zip(targets, last_pair)}
+                  verified = audit(cpu, bfm)
+                  if verified["plan_sha256"] != item["plan_sha256"]:
+                      raise RuntimeError("actual observed evidence differs from selected seed plan")
+                  case = root / f"seed-{seed}"
+                  case.mkdir(parents=True, exist_ok=False)
+                  for folder in last_pair:
+                      shutil.copytree(folder, case / folder.relative_to(canonical_roots))
+                  (case/"scenario-replay-audit.json").write_text(
+                      json.dumps(verified, indent=2, sort_keys=True)+"\n")
+                  archive = shutil.make_archive(str(case), "gztar",
+                                                root_dir=root, base_dir=case.name)
+                  shutil.rmtree(case)
+                  collected.append({"seed":seed, "plan_sha256":item["plan_sha256"],
+                                    "pattern_seed":next(a for a in json.loads(expected)["actions"]
+                                                        if a["action_instance_id"]=="init_source")
+                                                   ["args"]["pattern"]["seed"],
+                                    "archive":Path(archive).name, "canonical_runs":run_ids,
+                                    "evidence":"real_cpu_and_bfm_passive_AXI_and_independent_bytes",
+                                    "status":verified["status"]})
+          finally:
+              # Preserve the existing publication contract: only the final
+              # pair is directly indexed. Both original pairs stay in the
+              # seed bundles, since Pages still admits one result per target.
+              with open(os.environ["GITHUB_OUTPUT"], "a") as outputs:
+                  print("paths<<SCENARIO_RUNS", file=outputs)
+                  paths = [folder.relative_to(checkout).as_posix() + "/" for folder in last_pair]
+                  if paths:
+                      print("\n".join(paths).removeprefix(".tools/runs/"), file=outputs)
+                  print("SCENARIO_RUNS", file=outputs)
           check_matrix(source, soc, matrix_dir)
           if len({x["seed"] for x in collected}) != 2 or len({x["pattern_seed"] for x in collected}) != 2:
               raise RuntimeError("real RTL random replay did not vary scenario seed and payload")
@@ -209,8 +240,7 @@ jobs:
         with:
           name: dv-scenario-rtl-${{ github.run_id }}
           path: |
-            .tools/regression/chip-cpu-scenario/
-            .tools/regression/chip-dma-scenario/
+            ${{ steps.real-scenario-replay.outputs.paths != '' && format('.tools/runs/{0}', steps.real-scenario-replay.outputs.paths) || '' }}
             .tools/scenarios/rtl-seed-matrix/
           include-hidden-files: true
           if-no-files-found: warn

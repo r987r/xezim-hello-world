@@ -204,8 +204,7 @@ class RegressionTests(unittest.TestCase):
             with self.subTest(target=name):
                 self.assertTrue(regress.uses_canonical_workspace(
                     name, self.config['tests'][name]))
-        for name in ('chip-peakrdl-reset', 'chip-cpu-scenario',
-                     'chip-dma-scenario', 'chip-ddr4-real', 'chip-ethernet-ddr-pcie'):
+        for name in ('chip-ddr4-real', 'chip-ethernet-ddr-pcie'):
             with self.subTest(target=name):
                 self.assertFalse(regress.uses_canonical_workspace(
                     name, self.config['tests'][name]))
@@ -260,7 +259,8 @@ class RegressionTests(unittest.TestCase):
 
     def test_run_owned_firmware_cannot_use_another_variants_build(self):
         for name in ('chip-ethernet', 'chip-ethernet-cpu', 'chip-cpu-dma',
-                     'chip-pcie-host', 'chip-pcie-outbound'):
+                     'chip-pcie-host', 'chip-pcie-outbound', 'chip-cpu-scenario',
+                     'chip-dma-scenario'):
             with self.subTest(target=name):
                 plan = self.config['tests'][name]
                 self.assertTrue(regress.uses_canonical_workspace(name, plan))
@@ -272,6 +272,32 @@ class RegressionTests(unittest.TestCase):
                 self.assertEqual(one.parent, ROOT / plan['build'])
                 self.assertNotEqual(one, two)
                 self.assertFalse(one.is_relative_to(ROOT / '.tools/runs'))
+
+    def test_csr_reset_selects_one_canonical_run_without_generic_variant_migration(self):
+        from test_identity import relative_path, selected
+        from run_workspace import uses_canonical_peakrdl_reset_workspace
+
+        target = 'chip-peakrdl-reset'
+        plan = self.config['tests'][target]
+        self.assertTrue(uses_canonical_peakrdl_reset_workspace(target, plan))
+        self.assertTrue(regress.uses_canonical_workspace(target, plan))
+        identity = selected(target, plan, run_id='local-012345abcdef')
+        self.assertEqual(relative_path(identity).as_posix(),
+                         'verilator/soc-peakrdl-reset/reset-ack-register-access/local-012345abcdef')
+        self.assertEqual(plan['build'], '.tools/chip-peakrdl-reset-obj')
+        self.assertEqual(plan['report']['address_map']['csr_map'], 'csr/csr-map.json')
+        self.assertFalse(uses_canonical_peakrdl_reset_workspace('another-csr-experiment', plan))
+        for key, value in {
+            'logical_test': 'other-csr-test', 'engine': 'xezim',
+            'sources': 'chip', 'top': 'full_chip_dma_tb',
+            'bender_targets': ['chip_boot', 'dma'], 'firmware_mode': 'cpu_dma',
+            'flow_plan': 'config/scenarios/other.json',
+        }.items():
+            with self.subTest(key=key):
+                self.assertFalse(uses_canonical_peakrdl_reset_workspace(
+                    target, {**plan, key: value}))
+        with self.assertRaisesRegex(ValueError, 'requires its own build'):
+            regress.run_target(target, plan, None, types.SimpleNamespace(stage='run'))
 
     def test_new_cocotb_target_does_not_inherit_noc_wrapper(self):
         # An existing engine can be reused with a new Bender source target.

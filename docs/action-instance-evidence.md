@@ -26,12 +26,13 @@ A `checked` record must link to `{"capture":"scoreboard","ref":"check123"}` and 
 ## Analyze an opt-in test artifact
 
 ```sh
+RUN="path/to/the/exact/canonical/BFM/run"
 python3 tools/action_evidence.py \
-  --plan .tools/regression/chip-dma-scenario/scenario-plan.json \
-  --events .tools/regression/chip-dma-scenario/action-events.jsonl \
-  --axi .tools/regression/chip-dma-scenario/axi-transactions.json \
-  --protocols .tools/regression/chip-dma-scenario/protocol-transactions.json \
-  --out .tools/regression/chip-dma-scenario/action-evidence.json \
+  --plan "$RUN/scenario-plan.json" \
+  --events "$RUN/action-events.jsonl" \
+  --axi "$RUN/axi-transactions.json" \
+  --protocols "$RUN/protocol-transactions.json" \
+  --out "$RUN/action-evidence.json" \
   --require-all
 ```
 
