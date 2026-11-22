@@ -101,6 +101,14 @@ def main():
         sample("chip-cpu-dma","PCIe0 supplemental CPU test"),
         sample("chip-cpu-dma","Full-chip CPU boot test"),
     ]
+    manifest_name="selected-rtl-manifest.json"
+    manifest_record={"path":manifest_name,"source_count":249}
+    data["entries"][0].update(compiler_inputs=manifest_record,assets=[manifest_name])
+    # A foreign manifest URL and an unarchived asset must not yield links.
+    data["entries"][2].update(
+        compiler_inputs=dict(manifest_record,path="https://example.com/foreign.json"),
+        assets=[manifest_name])
+    data["entries"][3].update(compiler_inputs=manifest_record,assets=[])
     embedded=json.dumps(data,separators=(",",":")).replace("<","\\u003c")
     page=html[:start]+embedded+html[end:]
 
@@ -119,6 +127,8 @@ def main():
         path.write_text(page)
         report_root=Path(tmp)/"runs/example"
         report_root.mkdir(parents=True)
+        (report_root/manifest_name).write_text(
+            json.dumps({"scope":"synthetic browser fixture","source_count":249}))
         (report_root/"report.html").write_text(
             '<html><style>header{display:flex}</style><main>'
             '<header><h1>AXI Run Explorer</h1></header>'
@@ -136,6 +146,21 @@ def main():
             assert "chip-pcie-host" in catalog
             assert "chip-ethernet" in catalog
             assert "PASS" in driver.find_element(By.ID,"results").text
+
+            compiler_links=driver.find_elements(
+                By.CSS_SELECTOR,'#results a[href$="selected-rtl-manifest.json"]')
+            # Also catches an anchor on the missing or malformed rows.
+            assert len(compiler_links)==1
+            compiler_link=compiler_links[0]
+            assert compiler_link.text=="Compiler manifest · 249 RTL sources"
+            assert compiler_link.get_dom_attribute("href")=="runs/example/"+manifest_name
+            assert not driver.find_elements(By.CSS_SELECTOR,'#results a[href*="foreign.json"]')
+            driver.execute_script("arguments[0].click()",compiler_link)
+            wait.until(lambda d:d.current_url.endswith("/runs/example/"+manifest_name))
+            wait.until(lambda d:"synthetic browser fixture" in
+                       d.find_element(By.TAG_NAME,"body").text)
+            driver.back()
+            wait.until(lambda d:d.find_elements(By.CSS_SELECTOR,"#suite-summary button"))
 
             driver.execute_script(
                 """const f=document.getElementById("family");
