@@ -68,7 +68,8 @@ python3 tools/debug_repro.py --profile chip-pcie-host \\
 ```
 
 The canonical regression still owns simulator PASS/FAIL and keeps its existing
-per-test traces/reports in `.tools/regression/chip-pcie-host/`; the debug
+per-test traces/reports in the original canonical run directory printed by
+the runner under `.tools/runs/`; the debug
 wrapper keeps its separate source-stamped transcript and run metadata.
 On-demand real Gen1 PIPE, DDR and Ethernet recipe onboarding remains #251.
 No new simulator, stimulus dispatcher, or reporting format is introduced. The runner does not collect an

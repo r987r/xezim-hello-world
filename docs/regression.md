@@ -143,6 +143,10 @@ run-private build directories outside archived evidence. `--stage files`,
 `--stage build`, and `--stage all` are supported; use `all` for simulation.
 The separate `--stage run` cannot reuse another run's binary, since the
 generated RTL binds that run's firmware image paths.
+The existing CPU-DMA, PCIe host BAR, and PCIe outbound cases use the same
+run-owned approach. Their existing workflow stages, named evidence archives,
+and raw DMA/AXI/TLP results are unchanged; PCIe bridge normalization and its
+compile check keep generated sources and disposable binaries separate.
 Nonmigrated Cocotb producers still use
 `.tools/regression/<target>/`, where each attempt replaces that target's
 previous output until their migration ([#139](https://github.com/r987r/xezim-hello-world/issues/139)).

@@ -46,9 +46,34 @@ jobs:
       - name: PCIe TLP -> PCIe0 FlooNoC -> real PULP SRAM
         run: python3 dv/pcie0/run_noc_smoke.py
       - name: Real CPU iDMA DDR-model exchange with host PCIe BAR readback
+        id: run-pcie-host
         run: |
           python3 -m unittest tests.test_pcie_host_phase -v
           python3 tools/regress.py chip-pcie-host
+      - name: Locate the selected chip-pcie-host execution evidence
+        if: always()
+        id: pcie-host-execution
+        env:
+          SIMULATION_OUTCOME: ${{ steps.run-pcie-host.outcome }}
+        run: |
+          PYTHONPATH=tools python3 - <<'PYRUN'
+          import os
+          from pathlib import Path
+          import yaml
+          from run_workspace import selected_run_folder
+
+          root = Path.cwd()
+          name = "chip-pcie-host"
+          plan = yaml.safe_load((root / "config/regression.yaml").read_text())["tests"][name]
+          workspace = selected_run_folder(root, name, plan, stage="all")
+          if os.environ["SIMULATION_OUTCOME"] == "success" and (
+                  workspace is None or not (workspace / "result.json").is_file()):
+              raise SystemExit(f"successful {name} regression lacks canonical result")
+          if workspace is not None:
+              canonical_id = workspace.relative_to(root / ".tools/runs").as_posix()
+              with open(os.environ["GITHUB_OUTPUT"], "a") as outputs:
+                  print(f"canonical_id={canonical_id}", file=outputs)
+          PYRUN
       - name: Preserve canonical PCIe results, Cocotb XML and transaction logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -57,7 +82,7 @@ jobs:
           # Preserve result/protocol/AXI/flow provenance, not 1+ GiB of
           # reproducible Verilator object files and precompiled headers.
           path: |
-            .tools/regression/chip-pcie-host/
+            ${{ steps.pcie-host-execution.outputs.canonical_id != '' && format('.tools/runs/{0}/', steps.pcie-host-execution.outputs.canonical_id) || '' }}
             .tools/pcie0/noc_build/build.log
             .tools/pcie0/noc_build/simulation.log
             .tools/pcie0/noc_build/results.xml
@@ -91,12 +116,37 @@ jobs:
           make check-generated
           python3 -m unittest tests.test_test_flow tests.test_test_flow_cross_source tests.test_cpu_dma_firmware -v
       - name: Run actual CPU C and dual-DMA test using shared phase-flow reporter
+        id: run-cpu-dma
         run: python3 tools/regress.py chip-cpu-dma
-      - name: Retain real C firmware and AXI/step evidence
+      - name: Locate the selected chip-cpu-dma execution evidence
         if: always()
+        id: cpu-dma-execution
+        env:
+          SIMULATION_OUTCOME: ${{ steps.run-cpu-dma.outcome }}
+        run: |
+          PYTHONPATH=tools python3 - <<'PYRUN'
+          import os
+          from pathlib import Path
+          import yaml
+          from run_workspace import selected_run_folder
+
+          root = Path.cwd()
+          name = "chip-cpu-dma"
+          plan = yaml.safe_load((root / "config/regression.yaml").read_text())["tests"][name]
+          workspace = selected_run_folder(root, name, plan, stage="all")
+          if os.environ["SIMULATION_OUTCOME"] == "success" and (
+                  workspace is None or not (workspace / "result.json").is_file()):
+              raise SystemExit(f"successful {name} regression lacks canonical result")
+          if workspace is not None:
+              canonical_id = workspace.relative_to(root / ".tools/runs").as_posix()
+              with open(os.environ["GITHUB_OUTPUT"], "a") as outputs:
+                  print(f"canonical_id={canonical_id}", file=outputs)
+          PYRUN
+      - name: Retain real C firmware and AXI/step evidence
+        if: always() && steps.cpu-dma-execution.outputs.canonical_id != ''
         uses: actions/upload-artifact@v4
         with:
           name: cpu-c-init-run-check-flow-${{ github.run_id }}
-          path: .tools/regression/chip-cpu-dma/
+          path: ${{ format('.tools/runs/{0}/', steps.cpu-dma-execution.outputs.canonical_id) }}
           include-hidden-files: true
           if-no-files-found: warn

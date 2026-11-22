@@ -15,9 +15,9 @@ from pathlib import Path
 import yaml
 
 try:
-    from .run_workspace import uses_canonical_ethernet_workspace
+    from .run_workspace import uses_canonical_generated_firmware_workspace
 except ImportError:
-    from run_workspace import uses_canonical_ethernet_workspace
+    from run_workspace import uses_canonical_generated_firmware_workspace
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -128,7 +128,7 @@ def catalog(root: Path = ROOT, *, verification_reports: dict[str, Path] | None =
         actors = {}
         actor_catalog_status = "not_declared"
         if (actors_file == "variant/manifest.json"
-                and uses_canonical_ethernet_workspace(name, test)):
+                and uses_canonical_generated_firmware_workspace(name, test)):
             # A declaration-only explorer has no selected run. Only the
             # original run report binds this variant's generated actors.
             actor_catalog_status = "runtime_generated_not_available"

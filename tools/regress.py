@@ -22,9 +22,11 @@ import time
 import yaml
 
 try:
-    from .run_workspace import uses_canonical_ethernet_workspace, uses_canonical_workspace
+    from .run_workspace import (uses_canonical_cpu_firmware_workspace,
+                                uses_canonical_ethernet_workspace, uses_canonical_workspace)
 except ImportError:
-    from run_workspace import uses_canonical_ethernet_workspace, uses_canonical_workspace
+    from run_workspace import (uses_canonical_cpu_firmware_workspace,
+                                uses_canonical_ethernet_workspace, uses_canonical_workspace)
 
 ROOT = Path(__file__).resolve().parents[1]
 ENGINES = {'xezim', 'xezim-compile', 'verilator-lint', 'cocotb-verilator'}
@@ -465,13 +467,96 @@ def select_ethernet_variant(test, out, sources):
     return sources
 
 
+def select_cpu_dma_variant(test, out, sources, options):
+    # Compile real C firmware into an alternate immutable FLASH image;
+    # change only this run's generated top/checker, not tracked gen/.
+    # Script invocation from tools/ otherwise omits the repository root
+    # from sys.path; the shared tools.memory_plan namespace needs it.
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
+    from cpu_dma_firmware import prepare as prepare_cpu_dma
+    cfg = yaml.safe_load((ROOT/'config/soc.yaml').read_text())
+    noc_manifest = json.loads((ROOT/'gen/supernoc/manifest.json').read_text())
+    variant = out/'variant'
+    prepare_cpu_dma(cfg, noc_manifest, ROOT/'gen/noc/floonoc', variant,
+                    scenario_mode=test['firmware_mode']=='cpu_dma_scenario',
+                    scenario_seed=options.scenario_seed,
+                    scenario_source=test.get('flow_plan'))
+    generated_root = ROOT/'gen/chip'
+    replacements = {'soc_top.sv', 'full_chip_tb.sv', 'full_chip_dma_tb.sv'}
+    sources = [str(variant/Path(filename).name)
+               if Path(filename).parent == generated_root and
+               Path(filename).name in replacements else filename
+               for filename in sources]
+    return sources
+
+
+def select_pcie_variant(test, out, sources, *, private_build=None):
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
+    # Same generated SoC and CPU firmware semantics; only variant wires
+    # the real pinned PCIe bridge and CPU0<->host SRAM phase barriers.
+    from full_chip_gen import emit as emit_chip
+    from dv.pcie0.run_rtl_smoke import source_contract
+    from dv.pcie0.prepare_rtl import assert_iverilog_clean
+    cfg = yaml.safe_load((ROOT/'config/soc.yaml').read_text())
+    noc_manifest = json.loads((ROOT/'gen/supernoc/manifest.json').read_text())
+    variant = out/'variant'
+    vendor_pin = source_contract()
+    if private_build is None:
+        bridge = assert_iverilog_clean()
+    else:
+        bridge = assert_iverilog_clean(output=variant / 'pcie/pcie_axi_master.v',
+                                       probe=private_build / 'pcie_bridge_check.vvp')
+    if test['firmware_mode'] in ('pcie_dma_host', 'pcie_outbound'):
+        from cpu_dma_firmware import prepare as prepare_cpu_dma
+        prepare_cpu_dma(cfg, noc_manifest, ROOT/'gen/noc/floonoc', variant,
+                        pcie_host_mode=True,
+                        pcie_outbound_mode=test['firmware_mode']=='pcie_outbound',
+                        pcie_endpoint_frontdoor=test['firmware_mode']=='pcie_outbound')
+    else:
+        emit_chip(cfg, noc_manifest, ROOT/'gen/noc/floonoc', variant,
+                  image_prefix=variant.relative_to(ROOT).as_posix(),
+                  pcie_host_mode=True)
+    generated_root = ROOT/'gen/chip'
+    replacements = {'soc_top.sv', 'full_chip_tb.sv'}
+    sources = [str(variant/Path(filename).name)
+               if Path(filename).parent == generated_root and
+               Path(filename).name in replacements else filename
+               for filename in sources]
+    sources += [str(bridge)] + [
+        str(ROOT/'.tools/verilog_pcie'/item)
+        for item in vendor_pin['rtl_modules'] if item != 'rtl/pcie_axi_master.v']
+    if test['firmware_mode'] == 'pcie_outbound':
+        required = ['rtl/dma_if_pcie.v','rtl/dma_if_pcie_rd.v',
+                    'rtl/dma_if_pcie_wr.v','rtl/priority_encoder.v',
+                    'rtl/pulse_merge.v']
+        if vendor_pin.get('outbound_rtl_modules') != required:
+            raise ValueError('unreviewed pinned PCIe outbound requester source list')
+        sources += [str(ROOT/'.tools/verilog_pcie'/item) for item in required]
+        sources += [str(ROOT/'rtl/adapters/pcie_dma_sram_target.sv')]
+        sources += [str(ROOT/'rtl/adapters/pcie_requester_axi_regs.sv')]
+        sources += [str(ROOT/'dv/pcie_link/endpoint_prelink_ctrl.sv')]
+    return sources
+
+
+def _private_firmware_build(test, run_id):
+    build_root = (ROOT / test['build']).resolve()
+    if (not build_root.is_relative_to(ROOT / '.tools')
+            or build_root.is_relative_to(ROOT / '.tools/runs')):
+        raise ValueError('firmware build directory must be outside archived runs')
+    return build_root / run_id
+
+
 def run_target(name, test, resolver, options):
     canonical = uses_canonical_workspace(name, test)
     structural = test['engine'] in {'xezim-compile', 'verilator-lint'}
     relocated_boot = test.get('boot_relocate')
     canonical_ethernet = uses_canonical_ethernet_workspace(name, test)
-    if canonical_ethernet and (options.stage == 'run' or test.get('reuse_build')):
-        raise ValueError('Ethernet runtime variant requires its own build; use --stage all')
+    canonical_cpu_firmware = uses_canonical_cpu_firmware_workspace(name, test)
+    canonical_firmware = canonical_ethernet or canonical_cpu_firmware
+    if canonical_firmware and (options.stage == 'run' or test.get('reuse_build')):
+        raise ValueError('runtime firmware variant requires its own build; use --stage all')
     canonical_memory = canonical and test['sources'] == 'memory'
     identity = None
     if canonical:
@@ -496,13 +581,21 @@ def run_target(name, test, resolver, options):
         if canonical_memory:
             alternate, config_bytes, selected_test['memory_config_effective'] = (
                 select_memory_config(test, options.memory_config))
-        if relocated_boot or canonical_memory or canonical_ethernet:
+        if relocated_boot or canonical_memory or canonical_firmware:
             seed_identity = select_identity(name, selected_test, root=ROOT)
 
             def materialize(directory):
                 nonlocal sources
-                if canonical_ethernet:
-                    sources = list(dict.fromkeys(select_ethernet_variant(test, directory, sources)))
+                if canonical_firmware:
+                    if canonical_ethernet:
+                        sources = select_ethernet_variant(test, directory, sources)
+                    elif test['firmware_mode'] == 'cpu_dma':
+                        sources = select_cpu_dma_variant(test, directory, sources, options)
+                    else:
+                        sources = select_pcie_variant(
+                            test, directory, sources,
+                            private_build=_private_firmware_build(test, directory.name))
+                    sources = list(dict.fromkeys(sources))
                 if relocated_boot:
                     select_relocated_boot(relocated_boot, directory, sources, args)
                 if canonical_memory:
@@ -557,71 +650,12 @@ def run_target(name, test, resolver, options):
         if not structural:
             include_runtime_noc(sources, networks, root)
         append_pinned_dma_and_bender_sources(test, resolver, sources, includes, defines)
-    if test.get('firmware_mode') in ('cpu_dma', 'cpu_dma_scenario'):
-        # Compile real C firmware into an alternate immutable FLASH image;
-        # change only this run's generated top/checker, not tracked gen/.
-        # Script invocation from tools/ otherwise omits the repository root
-        # from sys.path; the shared tools.memory_plan namespace needs it.
-        if str(ROOT) not in sys.path:
-            sys.path.insert(0, str(ROOT))
-        from cpu_dma_firmware import prepare as prepare_cpu_dma
-        cfg = yaml.safe_load((ROOT/'config/soc.yaml').read_text())
-        noc_manifest = json.loads((ROOT/'gen/supernoc/manifest.json').read_text())
-        variant = out/'variant'
-        prepare_cpu_dma(cfg, noc_manifest, ROOT/'gen/noc/floonoc', variant,
-                        scenario_mode=test['firmware_mode']=='cpu_dma_scenario',
-                        scenario_seed=options.scenario_seed,
-                        scenario_source=test.get('flow_plan'))
-        generated_root = ROOT/'gen/chip'
-        replacements = {'soc_top.sv', 'full_chip_tb.sv', 'full_chip_dma_tb.sv'}
-        sources = [str(variant/Path(filename).name)
-                   if Path(filename).parent == generated_root and
-                   Path(filename).name in replacements else filename
-                   for filename in sources]
+    if not canonical_cpu_firmware and test.get('firmware_mode') in ('cpu_dma', 'cpu_dma_scenario'):
+        sources = select_cpu_dma_variant(test, out, sources, options)
     if not canonical_ethernet and test.get('firmware_mode') in ('ethernet_mvp', 'ethernet_cpu'):
         sources = select_ethernet_variant(test, out, sources)
-    if test.get('firmware_mode') in ('pcie_host', 'pcie_dma_host', 'pcie_outbound'):
-        if str(ROOT) not in sys.path:
-            sys.path.insert(0, str(ROOT))
-        # Same generated SoC and CPU firmware semantics; only variant wires
-        # the real pinned PCIe bridge and CPU0<->host SRAM phase barriers.
-        from full_chip_gen import emit as emit_chip
-        from dv.pcie0.run_rtl_smoke import source_contract
-        from dv.pcie0.prepare_rtl import assert_iverilog_clean
-        cfg = yaml.safe_load((ROOT/'config/soc.yaml').read_text())
-        noc_manifest = json.loads((ROOT/'gen/supernoc/manifest.json').read_text())
-        variant = out/'variant'
-        vendor_pin = source_contract()
-        bridge = assert_iverilog_clean()
-        if test['firmware_mode'] in ('pcie_dma_host', 'pcie_outbound'):
-            from cpu_dma_firmware import prepare as prepare_cpu_dma
-            prepare_cpu_dma(cfg, noc_manifest, ROOT/'gen/noc/floonoc', variant,
-                            pcie_host_mode=True,
-                            pcie_outbound_mode=test['firmware_mode']=='pcie_outbound',
-                            pcie_endpoint_frontdoor=test['firmware_mode']=='pcie_outbound')
-        else:
-            emit_chip(cfg, noc_manifest, ROOT/'gen/noc/floonoc', variant,
-                      image_prefix=variant.relative_to(ROOT).as_posix(),
-                      pcie_host_mode=True)
-        generated_root = ROOT/'gen/chip'
-        replacements = {'soc_top.sv', 'full_chip_tb.sv'}
-        sources = [str(variant/Path(filename).name)
-                   if Path(filename).parent == generated_root and
-                   Path(filename).name in replacements else filename
-                   for filename in sources]
-        sources += [str(bridge)] + [
-            str(ROOT/'.tools/verilog_pcie'/item)
-            for item in vendor_pin['rtl_modules'] if item != 'rtl/pcie_axi_master.v']
-        if test['firmware_mode'] == 'pcie_outbound':
-            required = ['rtl/dma_if_pcie.v','rtl/dma_if_pcie_rd.v',
-                        'rtl/dma_if_pcie_wr.v','rtl/priority_encoder.v',
-                        'rtl/pulse_merge.v']
-            if vendor_pin.get('outbound_rtl_modules') != required:
-                raise ValueError('unreviewed pinned PCIe outbound requester source list')
-            sources += [str(ROOT/'.tools/verilog_pcie'/item) for item in required]
-            sources += [str(ROOT/'rtl/adapters/pcie_dma_sram_target.sv')]
-            sources += [str(ROOT/'rtl/adapters/pcie_requester_axi_regs.sv')]
-            sources += [str(ROOT/'dv/pcie_link/endpoint_prelink_ctrl.sv')]
+    if not canonical_cpu_firmware and test.get('firmware_mode') in ('pcie_host', 'pcie_dma_host', 'pcie_outbound'):
+        sources = select_pcie_variant(test, out, sources)
     if test.get('firmware_mode') == 'ddr_cpu_dma':
         # Same CPU C/iDMA INIT/RUN/CHECK; opt-in generated 16KiB
         # independent Config NoC and pinned LiteDRAM memory target.
@@ -722,7 +756,7 @@ def run_target(name, test, resolver, options):
     includes = list(dict.fromkeys(includes))
     defines = list(dict.fromkeys(defines))
     filelist = out/'sources.f'
-    if not (canonical_memory or canonical_ethernet or (canonical and relocated_boot)):
+    if not (canonical_memory or canonical_firmware or (canonical and relocated_boot)):
         filelist.write_text(filelist_text(sources, includes, defines))
     # Capture the single source-selected identity before the RTL executor runs.
     # Keep legacy target artifact paths stable while old CI consumers migrate.
@@ -743,18 +777,14 @@ def run_target(name, test, resolver, options):
             'identity': identity}
     if canonical_memory:
         plan['memory_config_effective'] = selected_test['memory_config_effective']
-    if canonical_ethernet:
+    if canonical_firmware:
         # Generated SRAM/flash paths depend on this immutable run. Compile
         # outside its evidence directory; no other run may write this binary.
-        build_root = (ROOT / test['build']).resolve()
-        if (not build_root.is_relative_to(ROOT / '.tools')
-                or build_root.is_relative_to(ROOT / '.tools/runs')):
-            raise ValueError('Ethernet build directory must be outside archived runs')
-        plan['build'] = (build_root / identity['run_id']).relative_to(ROOT).as_posix()
+        plan['build'] = _private_firmware_build(test, identity['run_id']).relative_to(ROOT).as_posix()
         report = test['report']
         actor_manifest = out / 'variant/manifest.json'
         if report['axi'].get('actors') != 'variant/manifest.json' or not actor_manifest.is_file():
-            raise ValueError('selected Ethernet AXI actor manifest must belong to this variant')
+            raise ValueError('selected AXI actor manifest must belong to this firmware variant')
         plan['report'] = {**report, 'axi': {**report['axi'],
                            'actors': actor_manifest.relative_to(ROOT).as_posix()}}
     if test['engine'] in {'xezim-compile', 'verilator-lint'} and networks:

@@ -55,18 +55,20 @@ class WorkflowPolicyTests(unittest.TestCase):
                         if step.get('with', {}).get('name', '').startswith(name))
 
         fullchip = steps('full-chip.yml', 'boot')
-        self.assertIn('.tools/regression/chip-*/', upload(fullchip, 'full-chip-boot-results'))
+        self.assertNotIn('.tools/regression/', upload(fullchip, 'full-chip-boot-results'))
         archive = upload(fullchip, 'full-chip-boot-results')
         reports = upload(fullchip, 'chip-axi-run-reports-')
-        select_boot = next(step['run'] for step in fullchip if step.get('id') == 'static-chip-runs')
-        self.assertIn('for name in ("chip-boot", "chip-boot-negative", "chip-boot-latency", "chip-dma")',
+        select_boot = next(step['run'] for step in fullchip if step.get('id') == 'chip-runs')
+        self.assertIn('for name in ("chip-boot", "chip-boot-negative", "chip-boot-latency",',
                       select_boot)
+        self.assertIn('"chip-dma", "chip-cpu-dma")', select_boot)
+        self.assertIn('successful chip-cpu-dma regression lacks canonical result', select_boot)
         self.assertIn('selected_run_folder(root, name, catalog[name])', select_boot)
-        self.assertIn('steps.static-chip-runs.outputs.directories', archive)
+        self.assertIn('steps.chip-runs.outputs.directories', archive)
         self.assertIn('.tools/runs/xezim/', archive)
-        self.assertIn('steps.static-chip-runs.outputs.reports', reports)
+        self.assertIn('steps.chip-runs.outputs.reports', reports)
         self.assertNotIn('.tools/regression/chip-dma/', reports)
-        self.assertIn('.tools/regression/chip-cpu-dma/report.html', reports)
+        self.assertNotIn('.tools/regression/chip-cpu-dma/', reports)
         self.assertNotIn('.tools/runs/verilator/', archive + reports)
         self.assertNotIn('.tools/regression/chip-boot', reports)
 
@@ -88,6 +90,8 @@ class WorkflowPolicyTests(unittest.TestCase):
                       upload(mux, 'ethernet-axi-mux-sources-'))
         discovered = discover_test_workflows(ROOT)
         self.assertIn('full-chip-boot-results', discovered['full-chip.yml']['artifacts'])
+        self.assertTrue(any(name.startswith('chip-axi-run-reports-')
+                            for name in discovered['full-chip.yml']['artifacts']))
         self.assertTrue(any(name.startswith('fabric-latency-fullchip-')
                             for name in discovered['dv-fabric-latency.yml']['artifacts']))
 
@@ -116,6 +120,26 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertIn('stage="files"', preflight)
         for member in ('variant/cpu_dma.elf', 'variant/flash.hex', 'sources.f'):
             self.assertIn(member, preflight)
+
+    def test_cpu_and_pcie_workflows_preserve_original_archive_names(self):
+        from publish_site import discover_test_workflows
+        cases = (
+            ('pcie0-integrated.yml', 'pcie0-real-noc', 'pcie-host-execution',
+             'run-pcie-host', 'pcie0-dedicated-noc-'),
+            ('pcie0-integrated.yml', 'cpu-c-same-flow', 'cpu-dma-execution',
+             'run-cpu-dma', 'cpu-c-init-run-check-flow-'),
+            ('pcie-outbound.yml', 'full-chip-outbound-idma', 'pcie-outbound-execution',
+             'run-pcie-outbound', 'pcie-outbound-fullchip-'),
+        )
+        discovered = discover_test_workflows(ROOT)
+        for workflow, job, helper, producer, name in cases:
+            path = ROOT / '.github/workflows' / workflow
+            steps = yaml.load(path.read_text(), Loader=yaml.BaseLoader)['jobs'][job]['steps']
+            sel = next(step for step in steps if step.get('id') == helper)
+            self.assertIn('stage="all"', sel['run'])
+            self.assertIn(f'steps.{producer}.outcome', sel['env']['SIMULATION_OUTCOME'])
+            self.assertTrue(any(item.startswith(name)
+                                for item in discovered[workflow]['artifacts']))
 
     def test_only_pr_to_main_or_manual_dispatch(self):
         for path in sorted((ROOT/'.github/workflows').glob('*.yml')):
