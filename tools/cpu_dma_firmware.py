@@ -5,7 +5,7 @@ instances and passive AXI monitors as normal full-chip verification.
 No testbench backdoor preload or duplicate RTL; only the immutable flash
 image and C-hook-enabled test configuration differ.
 
-All generated variants live in ignored .tools/regression, never tracked gen/.
+All generated variants live in the selected ignored .tools workspace, never tracked gen/.
 """
 from __future__ import annotations
 import json

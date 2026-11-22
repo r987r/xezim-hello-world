@@ -73,10 +73,13 @@ jobs:
           chmod +x ".tools/bin/$XEZIM_ASSET_NAME"
           echo "XEZIM_BIN=$GITHUB_WORKSPACE/.tools/bin/$XEZIM_ASSET_NAME" >> "$GITHUB_ENV"
       - name: 'Run common SoC INIT/RUN/CHECK: real CPU C DMA, dual BFM DMA, negatives, Xezim compile'
+        id: run-full-chip
         run: make dv-chip FAST_FAIL=1
-      - name: Locate only the selected static full-chip evidence
+      - name: Locate only the selected full-chip evidence
         if: always()
-        id: static-chip-runs
+        id: chip-runs
+        env:
+          SIMULATION_OUTCOME: ${{ steps.run-full-chip.outcome }}
         run: |
           PYTHONPATH=tools python3 - <<'PYRUN'
           import os
@@ -87,8 +90,12 @@ jobs:
           root = Path.cwd()
           catalog = yaml.safe_load((root / "config/regression.yaml").read_text())["tests"]
           directories = []
-          for name in ("chip-boot", "chip-boot-negative", "chip-boot-latency", "chip-dma"):
+          for name in ("chip-boot", "chip-boot-negative", "chip-boot-latency",
+                       "chip-dma", "chip-cpu-dma"):
               workspace = selected_run_folder(root, name, catalog[name])
+              if name == "chip-cpu-dma" and os.environ["SIMULATION_OUTCOME"] == "success" and (
+                      workspace is None or not (workspace / "result.json").is_file()):
+                  raise SystemExit("successful chip-cpu-dma regression lacks canonical result")
               if workspace is not None:
                   relative = workspace.relative_to(root / ".tools/runs")
                   directories.append((Path(".tools/runs") / relative).as_posix())
@@ -99,9 +106,12 @@ jobs:
                   print(f"{directory}/", file=outputs)
               print("CHIP_BOOT_PATHS", file=outputs)
               print("reports<<CHIP_BOOT_PATHS", file=outputs)
-              for directory in directories:
-                  print(f"{directory}/report.html", file=outputs)
-                  print(f"{directory}/axi-*.json*", file=outputs)
+              reports = [f"{directory}/{member}" for directory in directories
+                         for member in ("report.html", "axi-*.json*")]
+              # The upload expression restores the first root prefix so
+              # Pages recognizes the archive without a broad capture glob.
+              if reports:
+                  print("\n".join(reports).removeprefix(".tools/runs/"), file=outputs)
               print("CHIP_BOOT_PATHS", file=outputs)
           PYRUN
       - name: Retain all chip build/phase/memory results
@@ -110,20 +120,16 @@ jobs:
         with:
           name: full-chip-boot-results
           path: |
-            .tools/regression/chip-*/
-            ${{ steps.static-chip-runs.outputs.directories }}
+            ${{ steps.chip-runs.outputs.directories }}
             .tools/runs/xezim/
             gen/chip/
           include-hidden-files: true
           if-no-files-found: error
       - name: Publish AXI run explorer pages and transaction data
-        if: always()
+        if: always() && steps.chip-runs.outputs.reports != ''
         uses: actions/upload-artifact@v4
         with:
           name: chip-axi-run-reports-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            .tools/regression/chip-cpu-dma/report.html
-            .tools/regression/chip-cpu-dma/axi-*.json*
-            ${{ steps.static-chip-runs.outputs.reports }}
+          path: ${{ format('.tools/runs/{0}', steps.chip-runs.outputs.reports) }}
           include-hidden-files: true
           if-no-files-found: warn

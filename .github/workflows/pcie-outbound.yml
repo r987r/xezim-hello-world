@@ -99,21 +99,37 @@ jobs:
           python3 tools/regress.py --check-noc
           make check-generated
       - name: Real CPU iDMA and outbound PCIe TLPs with independent host RAM proof
+        id: run-pcie-outbound
         run: python3 tools/regress.py chip-pcie-outbound
-      - name: Preserve selected SoC, CPU firmware, real AXI, TLP and host memory evidence
+      - name: Locate the selected chip-pcie-outbound execution evidence
         if: always()
+        id: pcie-outbound-execution
+        env:
+          SIMULATION_OUTCOME: ${{ steps.run-pcie-outbound.outcome }}
+        run: |
+          PYTHONPATH=tools python3 - <<'PYRUN'
+          import os
+          from pathlib import Path
+          import yaml
+          from run_workspace import selected_run_folder
+
+          root = Path.cwd()
+          name = "chip-pcie-outbound"
+          plan = yaml.safe_load((root / "config/regression.yaml").read_text())["tests"][name]
+          workspace = selected_run_folder(root, name, plan, stage="all")
+          if os.environ["SIMULATION_OUTCOME"] == "success" and (
+                  workspace is None or not (workspace / "result.json").is_file()):
+              raise SystemExit(f"successful {name} regression lacks canonical result")
+          if workspace is not None:
+              canonical_id = workspace.relative_to(root / ".tools/runs").as_posix()
+              with open(os.environ["GITHUB_OUTPUT"], "a") as outputs:
+                  print(f"canonical_id={canonical_id}", file=outputs)
+          PYRUN
+      - name: Preserve selected SoC, CPU firmware, real AXI, TLP and host memory evidence
+        if: always() && steps.pcie-outbound-execution.outputs.canonical_id != ''
         uses: actions/upload-artifact@v4
         with:
           name: pcie-outbound-fullchip-${{ github.run_id }}
-          path: |
-            .tools/regression/chip-pcie-outbound/result.json
-            .tools/regression/chip-pcie-outbound/test-flow.json
-            .tools/regression/chip-pcie-outbound/outbound-dma-proof.json
-            .tools/regression/chip-pcie-outbound/axi-transactions.json
-            .tools/regression/chip-pcie-outbound/protocol-transactions.json
-            .tools/regression/chip-pcie-outbound/build.log
-            .tools/regression/chip-pcie-outbound/simulation.log
-            .tools/regression/chip-pcie-outbound/variant/manifest.json
-            .tools/regression/chip-pcie-outbound/results.xml
+          path: ${{ format('.tools/runs/{0}/', steps.pcie-outbound-execution.outputs.canonical_id) }}
           include-hidden-files: true
           if-no-files-found: warn

@@ -204,7 +204,7 @@ class RegressionTests(unittest.TestCase):
             with self.subTest(target=name):
                 self.assertTrue(regress.uses_canonical_workspace(
                     name, self.config['tests'][name]))
-        for name in ('chip-peakrdl-reset', 'chip-cpu-dma', 'chip-cpu-scenario',
+        for name in ('chip-peakrdl-reset', 'chip-cpu-scenario',
                      'chip-dma-scenario', 'chip-ddr4-real', 'chip-ethernet-ddr-pcie'):
             with self.subTest(target=name):
                 self.assertFalse(regress.uses_canonical_workspace(
@@ -258,12 +258,20 @@ class RegressionTests(unittest.TestCase):
         self.assertEqual(config_target(dict(test, memory_config_effective=metadata)),
                          f'memory-custom-{sha(data)[:12]}')
 
-    def test_ethernet_run_only_cannot_use_another_variants_build(self):
-        for name in ('chip-ethernet', 'chip-ethernet-cpu'):
+    def test_run_owned_firmware_cannot_use_another_variants_build(self):
+        for name in ('chip-ethernet', 'chip-ethernet-cpu', 'chip-cpu-dma',
+                     'chip-pcie-host', 'chip-pcie-outbound'):
             with self.subTest(target=name):
+                plan = self.config['tests'][name]
+                self.assertTrue(regress.uses_canonical_workspace(name, plan))
                 with self.assertRaisesRegex(ValueError, 'requires its own build'):
-                    regress.run_target(name, self.config['tests'][name], None,
+                    regress.run_target(name, plan, None,
                                        types.SimpleNamespace(stage='run'))
+                one = regress._private_firmware_build(plan, 'local-012345abcdef')
+                two = regress._private_firmware_build(plan, 'local-012345abcdee')
+                self.assertEqual(one.parent, ROOT / plan['build'])
+                self.assertNotEqual(one, two)
+                self.assertFalse(one.is_relative_to(ROOT / '.tools/runs'))
 
     def test_new_cocotb_target_does_not_inherit_noc_wrapper(self):
         # An existing engine can be reused with a new Bender source target.

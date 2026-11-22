@@ -1032,9 +1032,12 @@ class PublicationTests(unittest.TestCase):
                         for job in parsed["jobs"].values()
                         for step in job.get("steps",[])
                         if step.get("uses","").startswith("actions/upload-artifact@")]
-        self.assertTrue(any(".tools/regression/chip-pcie-host/" in path
+        self.assertTrue(any("format('.tools/runs/{0}/', steps.pcie-host-execution" in path
                             for path in artifact_paths),
-                        "PCIe CI must preserve the host regression evidence")
+                        "PCIe CI must preserve the selected host regression evidence")
+        self.assertTrue(any(".tools/pcie0/noc_build/results.xml" in path
+                            for path in artifact_paths),
+                        "original standalone PCIe captures must still be retained")
         self.assertNotIn("            .tools/pcie0/full_chip_build/",workflow)
         self.assertGreaterEqual(CONFIG["max_archive_mib"],130)
         site_html=(ROOT/"tools/templates/site_runs.html").read_text()

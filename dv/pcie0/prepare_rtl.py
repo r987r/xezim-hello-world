@@ -21,7 +21,7 @@ TIE_OFFS = {
 }
 
 
-def prepare_bridge_source():
+def prepare_bridge_source(*, output=None):
     cfg = json.loads(LOCK.read_text())
     if cfg["commit"] != subprocess.check_output(
         ["git", "-C", str(UPSTREAM), "rev-parse", "HEAD"], text=True).strip():
@@ -34,19 +34,20 @@ def prepare_bridge_source():
             raise ValueError(f"pinned upstream changed width-tie anchor {anchor!r}")
         patched = patched.replace(anchor, f".{port}({sized_zero}),")
     assert patched != src
-    OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-    OUTPUT.write_text(patched)
-    return OUTPUT
+    output = Path(output) if output is not None else OUTPUT
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(patched)
+    return output
 
 
-def assert_iverilog_clean():
-    import shutil
-    out = prepare_bridge_source()
+def assert_iverilog_clean(*, output=None, probe=None):
+    out = prepare_bridge_source(output=output)
     files = [out] + [
         UPSTREAM / name for name in json.loads(LOCK.read_text())["rtl_modules"]
         if name != "rtl/pcie_axi_master.v"
     ]
-    dest = out.parent / "pcie_bridge_check.vvp"
+    dest = Path(probe) if probe is not None else out.parent / "pcie_bridge_check.vvp"
+    dest.parent.mkdir(parents=True, exist_ok=True)
     process = subprocess.run(
         ["iverilog", "-g2012", "-s", "pcie_axi_master", "-o", str(dest),
          *map(str, files)],

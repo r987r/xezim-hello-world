@@ -32,6 +32,22 @@ def uses_canonical_ethernet_workspace(name, test):
                 and actual == ('ethernet_cpu', 'full_chip_tb', ['chip_boot', 'dma'])))
 
 
+def uses_canonical_cpu_firmware_workspace(name, test):
+    """Only the existing CPU-DMA and two separately qualified PCIe cases."""
+    mode = {'chip-cpu-dma': 'cpu_dma', 'chip-pcie-host': 'pcie_dma_host',
+            'chip-pcie-outbound': 'pcie_outbound'}.get(name)
+    return (mode is not None and test.get('firmware_mode') == mode
+            and test.get('engine') == 'cocotb-verilator' and test.get('sources') == 'noc'
+            and test.get('top') == 'full_chip_tb'
+            and test.get('bender_targets') == ['chip_boot', 'dma']
+            and not any(test.get(key) for key in ('memory_config', 'boot_relocate', 'flow_plan')))
+
+
+def uses_canonical_generated_firmware_workspace(name, test):
+    return (uses_canonical_ethernet_workspace(name, test)
+            or uses_canonical_cpu_firmware_workspace(name, test))
+
+
 def uses_canonical_workspace(name, test):
     """Select migrated families without a second per-target registry."""
     if name == 'dma-rtl':
@@ -55,7 +71,7 @@ def uses_canonical_workspace(name, test):
                 and test.get('bender_targets') == ['chip_boot', 'dma', 'chip_dma']
                 and not test.get('flow_plan'))
         )
-    ) or uses_canonical_ethernet_workspace(name, test)
+    ) or uses_canonical_generated_firmware_workspace(name, test)
 
 
 def selected_run_folder(checkout: Path, target: str, plan: dict, *, stage=None) -> Path | None:

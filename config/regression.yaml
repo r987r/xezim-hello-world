@@ -210,7 +210,7 @@ tests:
           address: '0x1000045c'
           actors: {'1': cpu0}
           steps: {'101': alloc_phys, '102': dma_roundtrip, '103': verify_memory}
-      axi: {scope: dut.u_noc, clock: clk, reset: rst_n, catalog: gen/supernoc/axi_monitors.json, actors: .tools/regression/chip-cpu-dma/variant/manifest.json, max_events: 500000, required_complete: true}
+      axi: {scope: dut.u_noc, clock: clk, reset: rst_n, catalog: gen/supernoc/axi_monitors.json, actors: variant/manifest.json, max_events: 500000, required_complete: true}
   chip-cpu-scenario:
     logical_test: dma-sram-ddr-roundtrip
     # Same generated soc_top and full_chip_tb checker, but real PicoRV32 runs
@@ -500,7 +500,7 @@ tests:
           address: '0x1000045c'
           actors: {'1': cpu0}
           steps: {'101': alloc_phys, '104': pcie_ddr_exchange}
-      axi: {scope: dut.u_noc, clock: clk, reset: rst_n, catalog: gen/supernoc/axi_monitors.json, actors: .tools/regression/chip-pcie-host/variant/manifest.json, max_events: 500000, required_complete: true}
+      axi: {scope: dut.u_noc, clock: clk, reset: rst_n, catalog: gen/supernoc/axi_monitors.json, actors: variant/manifest.json, max_events: 500000, required_complete: true}
       protocols:
         sources:
           pcie0.rx_req: {protocol: pcie, clock_domain: soc_single_clock, role: target, implementation: verilog_pcie_pcieifframe, modeling: rtl_bridge_with_modeled_root_complex}
@@ -588,7 +588,7 @@ tests:
           address: '0x1000045c'
           actors: {'1': cpu0}
           steps: {'101': alloc_phys, '104': pcie_ddr_exchange}
-      axi: {scope: dut.u_noc, clock: clk, reset: rst_n, catalog: gen/supernoc/axi_monitors.json, actors: .tools/regression/chip-pcie-outbound/variant/manifest.json, max_events: 500000, required_complete: true}
+      axi: {scope: dut.u_noc, clock: clk, reset: rst_n, catalog: gen/supernoc/axi_monitors.json, actors: variant/manifest.json, max_events: 500000, required_complete: true}
       protocols:
         sources:
           pcie0.rx_req: {protocol: pcie, clock_domain: soc_single_clock, role: target, implementation: verilog_pcie_pcieifframe, modeling: rtl_bridge_with_modeled_root_complex}
