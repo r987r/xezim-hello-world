@@ -15,11 +15,14 @@ and qualified test views. The current catalog includes the original
 The same FlooGen, Bender, boot/RTL generators, monitors and simulator
 infrastructure are shared.
 
-Both projects **compile** with their separately selected FlooNoC RTL,
-full-chip top and C++ Verilator model. Only the original design has
-source-qualified functional regressions; the second design's end-to-end
-AXI/PCIe/Ethernet checks are pending. A compiled top is not a simulation PASS.
-Read [project onboarding](docs/project-onboarding.md) to add more designs.
+Both projects independently compile and run a real CPU cold-boot simulation
+on their own selected RTL. The [project Test Runs views](docs/multi-project-pages.md)
+link each project's original boot result and simulator log. The second design's
+[Test Runs page](https://r987r.github.io/xezim-hello-world/projects/xezim_ethernet_cpu_ddr_pcie/runs.html)
+links the native simulation log for PicoRV32's INIT/RUN/CHECK. That does not qualify routed
+AXI/PCIe/Ethernet traffic, and the second design does not inherit the original
+design's protocol results. Read [project onboarding](docs/project-onboarding.md)
+to add more designs.
 
 ## Start here
 
@@ -51,7 +54,7 @@ See [setup and regression options](docs/regression.md), [simulator limits](docs/
 | Boot | PicoRV32 and SERV, ROM/flash-to-SRAM cold boot, reset MMIO | No writable SRAM preload in cold-boot tests |
 | NoC/iDMA | Twelve generated FlooNoC meshes, real PULP iDMA RTL and AXI/CSR paths | BFM-driven tests are not CPU firmware; route checks are not all-path bit proof |
 | Ethernet | Opt-in real GMII MAC, RX/TX queues, descriptor DMA, SRAM/CQ and CPU0 C tests | Default generated packet/management ports remain reserved |
-| PCIe | Opt-in TLP-to-AXI bridge and separately tested CPU0/Config-NoC-controlled endpoint DMA to modeled host RAM | No physical PCIe PHY; outbound packet-level reporting and multi-tag stress remain follow-ups (#76) |
+| PCIe | Opt-in TLP-to-AXI bridge and separately tested CPU0/Config-NoC-controlled endpoint DMA to modeled host RAM | [Test Runs](https://r987r.github.io/xezim-hello-world/runs.html) links passive AXI/TLP results for `chip-pcie-outbound`; physical PHY and broader full-chip trained-link qualification are separate (#76) |
 | DDR | Opt-in pinned LiteDRAM RTL and AXI/DFI command evidence | Model SDRAM PHY/banks, not silicon DDR4 PHY; default DDR is AXI RAM |
 | HBM | Configured aperture and bounded AXI RAM stand-in | No integrated real HBM controller/PHY |
 

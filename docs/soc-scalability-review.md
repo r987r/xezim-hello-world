@@ -4,7 +4,7 @@ This is an **inspection and reproduction guide**, not a duplicate generator or p
 
 ## Find the real RTL, not a diagram
 
-The tracked [default top](../gen/chip/soc_top.sv) and [generated NoC](../gen/supernoc/soc_noc.sv) are generated and hash-recorded under [gen/manifest.json](../gen/manifest.json). They describe the **default** configuration. They are not necessarily the top that an opt-in Ethernet, PCIe, CPU/iDMA, or LiteDRAM regression compiles. Optional tests can substitute source under `.tools/regression/<target>/variant/soc_top.sv`, which is ignored by Git.
+The tracked [default top](../gen/chip/soc_top.sv) and [generated NoC](../gen/supernoc/soc_noc.sv) are generated and hash-recorded under [gen/manifest.json](../gen/manifest.json). They describe the **default** configuration. They are not necessarily the top that an opt-in Ethernet, PCIe, CPU/iDMA, or LiteDRAM regression compiles. Optional tests can substitute source under `variant/` in their selected run output, which is ignored by Git.
 
 For an existing target, inspect selection and evidence **without** compiling:
 
@@ -23,7 +23,7 @@ python3 tools/regress.py chip-ethernet-ddr-pcie --stage files
 python3 tools/regress.py chip-ethernet-ddr-pcie --explain
 ```
 
-The selected input record is `.tools/regression/chip-ethernet-ddr-pcie/selected-rtl-manifest.json`; its SHA-named `selected-rtl/` archive contains generated inputs. The source filelist is `.tools/regression/chip-ethernet-ddr-pcie/sources.f`. View the exact compiler-resolved top named by `selected_soc_top` in that manifest, **not** an assumed path. The `--explain` recheck detects modified/foreign sources, missing generated files, identity drift and changed header/filelist inputs. Re-running `--stage files` selects sources; it does **not** execute a simulator or establish functional correctness.
+In the output directory printed by the runner, `selected-rtl-manifest.json` records the inputs, `sources.f` gives compiler order, and the SHA-named `selected-rtl/` archive contains generated inputs. View the exact compiler-resolved top named by `selected_soc_top` in that manifest, **not** an assumed path. The `--explain` recheck detects modified/foreign sources, missing generated files, identity drift and changed header/filelist inputs. Re-running `--stage files` selects sources; it does **not** execute a simulator or establish functional correctness.
 
 ## Rebuild the selected combined hardware source without simulating
 
@@ -34,10 +34,11 @@ its SHA-verified actual selected RTL; `--check` independently regenerates
 the same sources into a separate temporary directory and rejects drift.
 It does not overwrite the baseline and does not imply passing a simulator.
 
-The reviewed generated **default** RTL remains checked into `gen/projects/`.
-The combined RTL is still staged under `.tools/` pending the full #184
-generator-owned promotion gate. Neither source hash nor pass-through test
-metadata proves the actual AXI/PCIe/Ethernet/DDR hardware path.
+The reviewed generated **default and combined** RTL are both checked into
+`gen/projects/`. The combined tree is reproduced by the opt-in generator
+target in the rebuild guide; the ignored `.tools/` archive remains per-run
+evidence. Neither source hash nor staging proves the actual
+AXI/PCIe/Ethernet/DDR hardware path.
 
 ## Compare two exact selected builds
 
@@ -53,7 +54,7 @@ This compares source hashes and bounded text changes of the **selected generated
 
 ## Review the generated source tree in a PR
 
-`make gen` writes the **generator-owned** default `gen/` tree; `make check-generated` verifies identical paths, bytes and README without changing tracked outputs. On the current mainline, compare [gen/chip/soc_top.sv](../gen/chip/soc_top.sv) directly. The generator-owned [default variant review top](../gen/projects/xezim_soc_dv/variants/default/rtl/soc_top.sv) and [adjacent SHA manifest](../gen/projects/xezim_soc_dv/variants/default/manifest.json) were merged in [PR #178](https://github.com/r987r/xezim-hello-world/pull/178) after 7/7 exact-head workflows passed. This is a byte-exact copy of the default generated top, not a test-selected combined variant. The selected combined Ethernet/DDR/PCIe RTL is **different** from the default top and needs a reproducible, source-verified variant-promotion step under [#163](https://github.com/r987r/xezim-hello-world/issues/163) before it may be called checked in.
+`make gen` writes the **generator-owned** default `gen/` tree; `make check-generated` verifies identical paths, bytes and README without changing tracked outputs. On the current mainline, compare [gen/chip/soc_top.sv](../gen/chip/soc_top.sv) directly. The generator-owned [default variant review top](../gen/projects/xezim_soc_dv/variants/default/rtl/soc_top.sv) and [adjacent SHA manifest](../gen/projects/xezim_soc_dv/variants/default/manifest.json) were merged in [PR #178](https://github.com/r987r/xezim-hello-world/pull/178) after 7/7 exact-head workflows passed. This is a byte-exact copy of the default generated top, not a test-selected combined variant. The tracked [combined Ethernet/DDR/PCIe review top](../gen/projects/xezim_soc_dv/variants/ethernet-ddr-pcie/rtl/soc_top.sv) is **different** from the default. The [public Explorer](https://r987r.github.io/xezim-hello-world/explorer.html) links both tops, the combined manifest and compiler order, and a bounded text diff. It is a source review, not an elaborated netlist or a substitute for matching original run evidence.
 
 The canonical IR from [tools/soc_ir.py](../tools/soc_ir.py) and typed contracts from [tools/soc_ip_compose.py](../tools/soc_ip_compose.py) are **declarative**, not yet full replacements for the legacy RTL emitters. The atomic generator's IR/IP source-consistency gate **merged in [#177](https://github.com/r987r/xezim-hello-world/pull/177)**; the default reviewable RTL **merged in [#178](https://github.com/r987r/xezim-hello-world/pull/178)**. [#193](https://github.com/r987r/xezim-hello-world/pull/193) subsequently merged IR-derived default review-artifact identity; it does **not** establish generic IR-driven RTL wiring. No generic hardware composition is established merely by generating a manifest.
 
