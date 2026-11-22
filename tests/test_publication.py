@@ -476,6 +476,96 @@ class PublicationTests(unittest.TestCase):
             self.assertIn('results.xml',entries[0]['assets'])
             self.assertEqual((report.parent/'simulation.log').read_text(),'actual simulator transcript')
 
+    def test_run_compiler_manifest_is_extracted_bound_to_attempt_and_linked(self):
+        from runtime_contract import digest
+        from run_workspace import reserve_run
+        from selected_rtl_provenance import archive_selected_filelist
+        from test_identity import relative_path, selected
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            original=fixture(root/'evidence')
+            repo=root/'writer'
+            repo.mkdir()
+            top=repo/'gen/chip/soc_top.sv'
+            top.parent.mkdir(parents=True)
+            top.write_text('module soc_top; endmodule\n')
+            raw=(str(top)+'\n').encode()
+            profile='chip-boot'
+            definition={'engine':'cocotb-verilator','sources':'noc',
+                        'top':'full_chip_tb','logical_test':'multicore-cold-boot'}
+            identity=selected(profile,definition,filelist_bytes=raw,
+                              run_id='ci-123-a1-012345abcdef')
+            run_dir=reserve_run(repo/'.tools/runs',identity)
+            filelist=run_dir/'sources.f'
+            filelist.write_bytes(raw)
+            plan={**definition,'target':profile,'source_target':'noc','sources':[str(top)],
+                  'includes':[],'defines':[],'identity':identity}
+            site.dump(run_dir/'plan.json',plan)
+            manifest=archive_selected_filelist(repo,profile,definition,plan,filelist,directory=run_dir)
+            plan['selected_source_manifest']={
+                'path':(run_dir/site.SELECTED_RTL_MANIFEST).relative_to(repo).as_posix(),
+                'compiler_input_sha256':manifest['compiler_input_sha256']}
+            site.dump(run_dir/'plan.json',plan)
+            site.dump(run_dir/'result.json',{
+                'target':profile,'passed':False,'stage':'run',
+                'identity_sha256':identity['identity_sha256'],
+                'canonical_id':relative_path(identity).as_posix()})
+            for path in original.iterdir():
+                path.unlink()
+            original.rmdir()
+            archive=io.BytesIO()
+            with zipfile.ZipFile(archive,'w') as zip_file:
+                for name in ('plan.json','result.json','identity.json','sources.f',
+                             site.SELECTED_RTL_MANIFEST):
+                    value=run_dir/name
+                    zip_file.write(value,value.relative_to(repo))
+                zip_file.writestr('unselected.sv','not web evidence')
+            site.extract_archive(archive.getvalue(),original.parent,CONFIG,evidence_only=True)
+            extracted=original.parent/run_dir.relative_to(repo)
+            self.assertTrue((extracted/site.SELECTED_RTL_MANIFEST).is_file())
+            self.assertFalse((original.parent/'unselected.sv').exists())
+            for case in ('original','missing','tampered','foreign','rehash','unbound'):
+                with self.subTest(case=case):
+                    path=extracted/site.SELECTED_RTL_MANIFEST
+                    candidate=dict(manifest)
+                    supplied=dict(plan)
+                    if case=='missing':
+                        path.unlink()
+                    else:
+                        if case=='tampered':
+                            candidate['source_count']=99
+                        if case=='foreign':
+                            candidate['identity_sha256']='b'*64
+                        if case=='rehash':
+                            candidate['source_sha256']={'gen/chip/soc_top.sv':'b'*64}
+                        if case in ('foreign','rehash'):
+                            candidate['manifest_sha256']=digest({k:v for k,v in
+                                candidate.items() if k!='manifest_sha256'})
+                        path.write_bytes((run_dir/site.SELECTED_RTL_MANIFEST).read_bytes())
+                        if case in ('tampered','foreign','rehash'):
+                            site.dump(path,candidate)
+                    if case=='unbound':
+                        supplied.pop('selected_source_manifest')
+                    site.dump(extracted/'plan.json',supplied)
+                    output=root/case
+                    _,entries,notes=site.evidence_index(root/'evidence',output,
+                                                       'r987r/xezim-hello-world')
+                    e=entries[0]
+                    report=output/e['path']
+                    self.assertFalse(e['passed'])
+                    if case=='original':
+                        self.assertEqual(e['compiler_inputs']['compiler_input_sha256'],
+                                         manifest['compiler_input_sha256'])
+                        self.assertIn('Archived compiler input manifest',report.read_text())
+                        self.assertEqual((report.parent/site.SELECTED_RTL_MANIFEST).read_bytes(),
+                                         (run_dir/site.SELECTED_RTL_MANIFEST).read_bytes())
+                    else:
+                        self.assertIsNone(e['compiler_inputs'])
+                        self.assertNotIn('Archived compiler input manifest',report.read_text())
+                        self.assertFalse((report.parent/site.SELECTED_RTL_MANIFEST).exists())
+                        self.assertEqual(bool(notes),case!='missing')
+
     def test_archived_canonical_identity_uses_primary_current_run_path(self):
         from test_identity import selected, relative_path
         with tempfile.TemporaryDirectory() as tmp:
