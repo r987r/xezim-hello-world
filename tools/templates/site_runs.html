@@ -89,6 +89,18 @@ const text=(tag,value,cls)=>{
 const link=(name,url)=>{
   const a=text("a",name);a.href=url;return a;
 };
+const compilerManifestLink=e=>{
+  const filename="selected-rtl-manifest.json";
+  const inputs=e.compiler_inputs;
+  if(e.evidence_only || inputs?.path!==filename ||
+     !Number.isSafeInteger(inputs.source_count) || inputs.source_count<=0 ||
+     !Array.isArray(e.assets) || !e.assets.includes(filename) ||
+     !/^runs\/(?:[a-z0-9_-]+\/)+report\.html$/.test(e.path))return null;
+  // The manifest belongs to the same published run as the report.
+  // Do not navigate to a URL supplied by an artifact.
+  return link("Compiler manifest · "+inputs.source_count+" RTL sources",
+              e.path.replace(/report\.html$/,filename));
+};
 const td=(row,...items)=>{
   const c=document.createElement("td");
   for(const v of items)c.append(typeof v==="string"?document.createTextNode(v):v);
@@ -321,7 +333,12 @@ function render(){
            e.acceptance_scope==="compile_only"?"Compile/lint only · no simulation":
            e.expected_failure?"Required negative check":"Positive regression","muted"),
       text("div",evidenceRelation,"muted"));
-    td(tr,e.engine);
+    const manifestLink=compilerManifestLink(e);
+    if(manifestLink){
+      const manifestRow=text("div","","muted");
+      manifestRow.append(manifestLink);
+      td(tr,e.engine,manifestRow);
+    }else td(tr,e.engine);
     const protocols=e.protocols||[];
     td(tr,protocols.length?
       String(e.protocol_observations)+" "+protocols.join(", ")+" observations":
