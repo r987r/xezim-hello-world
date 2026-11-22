@@ -13,9 +13,11 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 try:
+    from .ddr_split_workspace import eligible as uses_canonical_ddr_split
     from .test_identity import (IdentityError, bind_filelist, config_target, load, neutral_testname,
                                 relative_path, save, simulator, slug, validate)
 except ImportError:
+    from ddr_split_workspace import eligible as uses_canonical_ddr_split
     from test_identity import (IdentityError, bind_filelist, config_target, load, neutral_testname,
                                relative_path, save, simulator, slug, validate)
 
@@ -69,7 +71,8 @@ def uses_canonical_generated_firmware_workspace(name, test):
     return (uses_canonical_ethernet_workspace(name, test)
             or uses_canonical_cpu_firmware_workspace(name, test)
             or uses_canonical_scenario_workspace(name, test)
-            or uses_canonical_peakrdl_reset_workspace(name, test))
+            or uses_canonical_peakrdl_reset_workspace(name, test)
+            or uses_canonical_ddr_split(name, test))
 
 
 def uses_canonical_workspace(name, test):

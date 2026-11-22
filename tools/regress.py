@@ -22,11 +22,13 @@ import time
 import yaml
 
 try:
+    from . import ddr_split_workspace as ddr_split
     from .run_workspace import (uses_canonical_cpu_firmware_workspace,
                                 uses_canonical_ethernet_workspace,
                                 uses_canonical_peakrdl_reset_workspace,
                                 uses_canonical_scenario_workspace, uses_canonical_workspace)
 except ImportError:
+    import ddr_split_workspace as ddr_split
     from run_workspace import (uses_canonical_cpu_firmware_workspace,
                                 uses_canonical_ethernet_workspace,
                                 uses_canonical_peakrdl_reset_workspace,
@@ -588,6 +590,56 @@ def _private_firmware_build(test, run_id):
     return build_root / run_id
 
 
+def select_ddr_variant(out, sources):
+    # Same CPU C/iDMA INIT/RUN/CHECK; opt-in generated 16KiB
+    # independent Config NoC and pinned LiteDRAM memory target.
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
+    import ddr_chip
+    from cpu_dma_firmware import prepare as prepare_cpu_dma
+    cfg = yaml.safe_load((ROOT/'config/soc.yaml').read_text())
+    info = ddr_chip.prepare(cfg, out)
+    variant = out / 'variant'
+    prepare_cpu_dma(info['variant_cfg'], info['noc_manifest'], info['noc_root'],
+                    variant, real_ddr_mode=True,
+                    ddr_wb_base=info['wb_base'], ddr_wb_adr_bits=info['wb_bits'])
+    generated_root = ROOT/'gen/chip'
+    replacements = {'soc_top.sv', 'full_chip_tb.sv'}
+    sources = [str(variant/Path(filename).name)
+               if Path(filename).parent == generated_root
+               and Path(filename).name in replacements else filename
+               for filename in sources]
+    return ddr_chip.source_closure(sources, info)
+
+
+def cocotb_command(name, plan_file):
+    return [(name, [sys.executable, str(ROOT/'tools/sim_cocotb.py'), str(plan_file)])]
+
+
+def seal_ddr_build(name, out, plan, test):
+    """Compile the prepared DDR plan without consuming the execution identity."""
+    from selected_rtl_provenance import verify_selected_archive
+
+    verify_selected_archive(ROOT, name, test, directory=out)
+    build = ROOT / plan['build']
+    if (build.exists() or any(path.is_symlink() for path in (build, *build.parents))):
+        raise ValueError('refusing to reuse another DDR build directory')
+    prepared = ddr_split.input_snapshot(ROOT, out, plan)
+    build_plan = out/'ddr-build-plan.json'
+    ddr_split.write_once(ROOT, build_plan, (json.dumps({**plan, 'stage': 'build'}, indent=2)+'\n').encode())
+    print(f'DDR_BUILD {name} {plan["identity"]["run_id"]} {out.relative_to(ROOT)}', flush=True)
+    command = cocotb_command(name, build_plan)[0][1]
+    env = {**os.environ, **test.get('env', {})}
+    code, timed_out = run_process(command, out/'ddr-build-invocation.log', test['timeout_s'], env)
+    if code or timed_out:
+        print(f'FAIL {name}/build; logs={out.relative_to(ROOT)}/', flush=True)
+        return False
+    verify_selected_archive(ROOT, name, test, directory=out)
+    ddr_split.seal(ROOT, out, plan, prepared)
+    print(f'PASS {name}/build; sealed={out.relative_to(ROOT)}/', flush=True)
+    return True
+
+
 def run_target(name, test, resolver, options):
     canonical = uses_canonical_workspace(name, test)
     structural = test['engine'] in {'xezim-compile', 'verilator-lint'}
@@ -598,6 +650,16 @@ def run_target(name, test, resolver, options):
     canonical_peakrdl = uses_canonical_peakrdl_reset_workspace(name, test)
     canonical_firmware = (canonical_ethernet or canonical_cpu_firmware
                           or canonical_scenario or canonical_peakrdl)
+    canonical_ddr = ddr_split.eligible(name, test)
+    if canonical_ddr and options.stage == 'run':
+        from selected_rtl_provenance import verify_selected_archive
+        from sim_cocotb import build_fingerprint
+
+        out, identity, plan = ddr_split.prepare_continuation(
+            ROOT, test, getattr(options, 'continue_run_id', None),
+            verify_archive=verify_selected_archive, fingerprint=build_fingerprint,
+            command=lambda path: [[name, cocotb_command(name, path)[0][1]]])
+        return execute_target(name, test, resolver, options, out, identity, plan, {}, canonical)
     if canonical_firmware and (options.stage == 'run' or test.get('reuse_build')):
         raise ValueError('runtime firmware variant requires its own build; use --stage all')
     canonical_memory = canonical and test['sources'] == 'memory'
@@ -624,11 +686,13 @@ def run_target(name, test, resolver, options):
         if canonical_memory:
             alternate, config_bytes, selected_test['memory_config_effective'] = (
                 select_memory_config(test, options.memory_config))
-        if relocated_boot or canonical_memory or canonical_firmware:
+        if relocated_boot or canonical_memory or canonical_firmware or canonical_ddr:
             seed_identity = select_identity(name, selected_test, root=ROOT)
 
             def materialize(directory):
                 nonlocal sources
+                if canonical_ddr:
+                    sources = select_ddr_variant(directory, sources)
                 if canonical_firmware:
                     if canonical_ethernet:
                         sources = select_ethernet_variant(test, directory, sources)
@@ -704,26 +768,8 @@ def run_target(name, test, resolver, options):
         sources = select_ethernet_variant(test, out, sources)
     if not canonical_cpu_firmware and test.get('firmware_mode') in ('pcie_host', 'pcie_dma_host', 'pcie_outbound'):
         sources = select_pcie_variant(test, out, sources)
-    if test.get('firmware_mode') == 'ddr_cpu_dma':
-        # Same CPU C/iDMA INIT/RUN/CHECK; opt-in generated 16KiB
-        # independent Config NoC and pinned LiteDRAM memory target.
-        if str(ROOT) not in sys.path:
-            sys.path.insert(0, str(ROOT))
-        import ddr_chip
-        from cpu_dma_firmware import prepare as prepare_cpu_dma
-        cfg = yaml.safe_load((ROOT/'config/soc.yaml').read_text())
-        info = ddr_chip.prepare(cfg, out)
-        variant = out / 'variant'
-        prepare_cpu_dma(info['variant_cfg'], info['noc_manifest'], info['noc_root'],
-                        variant, real_ddr_mode=True,
-                        ddr_wb_base=info['wb_base'], ddr_wb_adr_bits=info['wb_bits'])
-        generated_root = ROOT/'gen/chip'
-        replacements = {'soc_top.sv', 'full_chip_tb.sv'}
-        sources = [str(variant/Path(filename).name)
-                   if Path(filename).parent == generated_root
-                   and Path(filename).name in replacements else filename
-                   for filename in sources]
-        sources = ddr_chip.source_closure(sources, info)
+    if not canonical_ddr and test.get('firmware_mode') == 'ddr_cpu_dma':
+        sources = select_ddr_variant(out, sources)
     if test.get('firmware_mode') == 'ethernet_ddr_pcie':
         # Compose the three real opt-in source closures in one variant. In
         # particular use the re-generated DDR NoCs, NOT default reserved
@@ -777,11 +823,11 @@ def run_target(name, test, resolver, options):
     includes = list(dict.fromkeys(includes))
     defines = list(dict.fromkeys(defines))
     filelist = out/'sources.f'
-    if not (canonical_memory or canonical_firmware or (canonical and relocated_boot)):
+    if not (canonical_memory or canonical_firmware or canonical_ddr or (canonical and relocated_boot)):
         filelist.write_text(filelist_text(sources, includes, defines))
     # Capture the single source-selected identity before the RTL executor runs.
     # Keep legacy target artifact paths stable while old CI consumers migrate.
-    from test_identity import selected as select_identity, save as save_identity, relative_path
+    from test_identity import selected as select_identity, save as save_identity
     if canonical:
         from run_workspace import verify_run
         from test_identity import sha
@@ -796,6 +842,17 @@ def run_target(name, test, resolver, options):
             'sources': sources, 'includes': includes, 'defines': defines,
             'args': args, 'results_xml': str(out/'results.xml'), 'stage': options.stage,
             'identity': identity}
+    if canonical_ddr:
+        private_build = _private_firmware_build(test, identity['run_id']).relative_to(ROOT)
+        if private_build != Path(test['build']) / identity['run_id']:
+            raise ValueError('unsafe DDR private build path')
+        plan['build'] = private_build.as_posix()
+        plan['report'] = ddr_split.plan_report(ROOT, out, test['report'])
+        if options.stage == 'build':
+            # Bind the exact future command and plan before compiling. The
+            # private build projection cannot be published as a test result.
+            plan['stage'] = 'run'
+            plan['commands'] = cocotb_command(name, out/'plan.json')
     if canonical_memory:
         plan['memory_config_effective'] = selected_test['memory_config_effective']
     if canonical_firmware:
@@ -837,6 +894,17 @@ def run_target(name, test, resolver, options):
         "compiler_input_sha256": selected_inputs["compiler_input_sha256"],
     }
     plan_file.write_text(json.dumps(plan, indent=2) + '\n')
+    if canonical_ddr and options.stage == 'build':
+        return seal_ddr_build(name, out, plan, test)
+    return execute_target(name, test, resolver, options, out, identity, plan, networks, canonical)
+
+
+def execute_target(name, test, resolver, options, out, identity, plan, networks, canonical):
+    from test_identity import relative_path
+
+    filelist, plan_file = out/'sources.f', out/'plan.json'
+    args = plan['args']
+    ddr_continuation = ddr_split.eligible(name, test) and options.stage == 'run'
     # A separate source-fingerprinted *command dispatch envelope* is not
     # another INIT/RUN/CHECK scenario planner. The canonical intent remains
     # planned-flow.json and the original scenario-plan.json for SCN-2.
@@ -870,9 +938,13 @@ def run_target(name, test, resolver, options):
         sim = executable('XEZIM_BIN', ROOT/'.tools/bin/xezim-linux-x86_64', 'xezim')
         commands = [(name, [sim, *(['--compile'] if options.stage == 'build' or test.get('mode') == 'compile' else []), '--no-cache', '-s', test['top'], '-f', str(filelist), *args])]
     else:
-        commands = [(name, [sys.executable, str(ROOT/'tools/sim_cocotb.py'), str(plan_file)])]
-    plan['commands'] = commands
-    plan_file.write_text(json.dumps(plan, indent=2) + '\n')
+        commands = cocotb_command(name, plan_file)
+    if ddr_continuation:
+        if plan.get('commands') != [[name, commands[0][1]]]:
+            raise ValueError('DDR continuation command differs from prepared build')
+    else:
+        plan['commands'] = commands
+        plan_file.write_text(json.dumps(plan, indent=2) + '\n')
     # Resolve and archive the exact declared intent BEFORE the simulator is
     # launched, including the selected command arguments. This is *not* a
     # claim of dispatch, completion or PASS. Incomplete/failed runs retain it.
@@ -950,7 +1022,8 @@ def run_target(name, test, resolver, options):
             raise
         text = (out/f'{label}.log').read_text(errors='replace')
         if engine == 'cocotb-verilator':
-            for collateral in ('build.log', 'simulation.log'):
+            for collateral in (('simulation.log',) if ddr_continuation
+                               else ('build.log', 'simulation.log')):
                 if (out/collateral).is_file():
                     text += '\n' + (out/collateral).read_text(errors='replace')
         expectation = {} if options.stage == 'build' or test.get('mode') == 'compile' else test
@@ -1095,6 +1168,8 @@ def main():
     cli.add_argument('--fail-fast', action='store_true',
                      help='stop this suite at the first failing target (CI quick feedback)')
     cli.add_argument('--stage', choices=['files', 'build', 'run', 'all'], default='all')
+    cli.add_argument('--continue-run-id',
+                     help='continue only the exact sealed chip-ddr4-real build (run stage)')
     cli.add_argument('--memory-config')
     cli.add_argument('--network', action='append', default=[])
     cli.add_argument('--arg', action='append', default=[])
@@ -1103,6 +1178,16 @@ def main():
     options = cli.parse_args()
     config = load_config(options.config)
     targets = expand(config, options.targets)
+    if options.continue_run_id is not None and (
+            options.stage != 'run' or options.targets != [ddr_split.TARGET]
+            or not ddr_split.eligible(ddr_split.TARGET, config['tests'][ddr_split.TARGET])
+            or options.config.resolve() != ROOT/'config/regression.yaml'
+            or options.arg or options.network or options.memory_config
+            or options.scenario_seed is not None or options.explain
+            or options.list or options.check_noc):
+        raise ValueError('--continue-run-id requires only the registered DDR run target and no overrides')
+    if options.stage == 'run' and ddr_split.TARGET in targets and not options.continue_run_id:
+        raise ValueError('use --continue-run-id from the exact chip-ddr4-real build')
     if options.scenario_seed is not None:
         if (not 0 <= options.scenario_seed <= 0xffffffff or
                 options.stage not in ('all','files') or

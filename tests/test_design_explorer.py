@@ -89,6 +89,13 @@ class ExplorerTests(unittest.TestCase):
         self.assertEqual(graph["profiles"]["chip-cpu-dma"]["actor_catalog_status"],
                          "runtime_generated_not_available")
 
+    def test_standalone_ddr_profile_keeps_runtime_only_monitor_and_actor_metadata(self):
+        profile = design_explorer.catalog(ROOT)["profiles"]["chip-ddr4-real"]
+        self.assertEqual(profile["actor_catalog_status"], "runtime_generated_not_available")
+        self.assertEqual(profile["monitor_catalog_status"], "opt_in_runtime_generated_not_available")
+        self.assertFalse(profile["actors"])
+        self.assertFalse(profile["monitors"])
+
     def test_new_subsystem_is_generic_without_parser_changes(self):
         graph = design_explorer.catalog(ROOT)
         source = graph["nodes"][0]

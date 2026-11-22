@@ -141,6 +141,31 @@ class WorkflowPolicyTests(unittest.TestCase):
             self.assertTrue(any(item.startswith(name)
                                 for item in discovered[workflow]['artifacts']))
 
+    def test_ddr_split_archive_still_feeds_pages_without_uploading_unbound_runs(self):
+        from publish_site import discover_test_workflows
+        from test_identity import RUN, relative_path, selected
+
+        workflow = 'ddr4-fullchip.yml'
+        path = ROOT / '.github/workflows' / workflow
+        steps = yaml.load(path.read_text(), Loader=yaml.BaseLoader)['jobs']['cpu-idma-ddr']['steps']
+        archive_name = 'ddr4-fullchip-cpu-dma-evidence'
+        upload = next(step['with'] for step in steps
+                      if step.get('with', {}).get('name') == archive_name)
+        self.assertIn(archive_name, discover_test_workflows(ROOT)[workflow]['artifacts'])
+
+        target = 'chip-ddr4-real'
+        plan = yaml.safe_load((ROOT/'config/regression.yaml').read_text())['tests'][target]
+        example = selected(target, plan, run_id='ci-123-a1-012345abcdef')
+        prefix = f".tools/runs/{relative_path(example).parent.as_posix()}/"
+        canonical = [line for line in upload['path'].splitlines() if line.startswith('.tools/runs/')]
+        fallback = '_no-ddr-build_'
+        self.assertEqual(canonical, [
+            prefix + "${{ steps.ddr-build.outputs.run_id || '_no-ddr-build_' }}/"])
+        self.assertIsNone(RUN.fullmatch(fallback))
+        self.assertNotIn(".tools/chip-ddr4-real-obj/", upload['path'])
+        self.assertNotIn(".tools/regression/", upload['path'])
+        self.assertNotIn('steps.ddr-build.outputs.run_dir', upload['path'])
+
     def test_scenario_archives_exact_replay_pairs_under_the_original_name(self):
         from publish_site import discover_test_workflows
         path = ROOT / '.github/workflows/dv-scenario.yml'

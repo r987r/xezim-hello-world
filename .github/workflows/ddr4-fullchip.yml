@@ -10,6 +10,11 @@ on:
       - 'dv/full_chip/**'
       - 'config/regression.yaml'
       - 'tools/ddr_chip.py'
+      - 'tools/ddr_split_workspace.py'
+      - 'tools/run_workspace.py'
+      - 'tools/test_identity.py'
+      - 'tools/sim_cocotb.py'
+      - 'tests/test_ddr_split_workspace.py'
       - 'tools/ddr_csr_catalog.py'
       - 'tools/address_map.py'
       - 'tests/test_ddr_csr_catalog.py'
@@ -96,28 +101,49 @@ jobs:
           print('DDR generated RTL byte repeatable:',report['repeatable'])
           print('DDR differing paths:',report['changed_generated_paths'])
           PY
-          python3 -m unittest tests.test_ddr_csr_catalog tests.test_ddr_csr_pages -v
+          python3 -m unittest tests.test_ddr_csr_catalog tests.test_ddr_csr_pages tests.test_ddr_split_workspace -v
       - name: Build exact-head real LiteDRAM full-chip RTL
+        id: ddr-build
         timeout-minutes: 25
         run: |
           set -euo pipefail
-          python3 tools/regress.py chip-ddr4-real --stage build --fail-fast
-          test -x .tools/chip-ddr4-real-obj/full_chip_tb
+          build_exit=0
+          python3 tools/regress.py chip-ddr4-real --stage build --fail-fast \
+            | tee "$RUNNER_TEMP/ddr-build.log" || build_exit=$?
+          mapfile -t records < <(awk '$1=="DDR_BUILD" && $2=="chip-ddr4-real" {print $3 " " $4}' "$RUNNER_TEMP/ddr-build.log")
+          if (( ${#records[@]} == 1 )); then
+            read -r run_id run_dir <<< "${records[0]}"
+            [[ "$run_id" =~ ^ci-${GITHUB_RUN_ID}-a${GITHUB_RUN_ATTEMPT}-[a-f0-9]{12}$ ]]
+            [[ "$run_dir" == .tools/runs/verilator/soc-ddr-cpu-dma/dma-controller-readback/"$run_id" ]]
+            printf 'run_id=%s\nrun_dir=%s\n' "$run_id" "$run_dir" >> "$GITHUB_OUTPUT"
+          fi
+          (( build_exit == 0 && ${#records[@]} == 1 ))
+          test -s "$run_dir/ddr-split-build.json"
+          test -x ".tools/chip-ddr4-real-obj/$run_id/full_chip_tb"
       - name: Run real CPU/iDMA to real LiteDRAM through generated Data and Config NoCs
         timeout-minutes: 55
+        env:
+          DDR_RUN_ID: ${{ steps.ddr-build.outputs.run_id }}
+          DDR_RUN_DIR: ${{ steps.ddr-build.outputs.run_dir }}
         run: |
           set -euo pipefail
           # Same fingerprint-verified binary as the prior step: compilation
           # time must not consume our expensive simulation budget.
-          python3 tools/regress.py chip-ddr4-real --stage run --fail-fast
-          test -s .tools/regression/chip-ddr4-real/ddr4_fullchip_evidence.json
-          test -s .tools/regression/chip-ddr4-real/ddr4_mrs_evidence.json
-          test -s .tools/regression/chip-ddr4-real/report.html
-          test -s .tools/regression/chip-ddr4-real/ddr-native-csr-map.json
+          python3 tools/regress.py chip-ddr4-real --stage run --continue-run-id "$DDR_RUN_ID" --fail-fast
+          test -s "$DDR_RUN_DIR/ddr4_fullchip_evidence.json"
+          test -s "$DDR_RUN_DIR/ddr4_mrs_evidence.json"
+          test -s "$DDR_RUN_DIR/report.html"
+          test -s "$DDR_RUN_DIR/ddr-native-csr-map.json"
           python3 - <<'PY'
-          import json
+          import json, os
           from pathlib import Path
-          p=Path('.tools/regression/chip-ddr4-real')
+          p=Path(os.environ['DDR_RUN_DIR'])
+          claim=p/'ddr-split-run.claim'
+          assert claim.is_file()
+          build=json.loads((p/'ddr-split-build.json').read_text())
+          plan=json.loads((p/'plan.json').read_text())
+          assert plan['stage']=='run' and plan['identity']['run_id']==os.environ['DDR_RUN_ID']
+          assert build['identity_sha256']==plan['identity']['identity_sha256']
           evidence=json.loads((p/'ddr4_fullchip_evidence.json').read_text())
           assert evidence['status']=='pass'
           assert evidence['init_done']==1 and evidence['init_error']==0
@@ -180,7 +206,7 @@ jobs:
             .tools/ddr4/ddr-source-repeatability.json
             .tools/ddr4/litedram_sim/csr.json
             .tools/ddr4/litedram_sim/ddr4_init_plan.json
-            .tools/regression/chip-ddr4-real/
+            .tools/runs/verilator/soc-ddr-cpu-dma/dma-controller-readback/${{ steps.ddr-build.outputs.run_id || '_no-ddr-build_' }}/
           if-no-files-found: warn
           include-hidden-files: true
           retention-days: 14

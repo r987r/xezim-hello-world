@@ -199,12 +199,12 @@ class RegressionTests(unittest.TestCase):
         # Check workspace routing only, not compiler/RTL behavior.
         originals = ('cpu-fetch', 'sram-synthesis', 'boot', 'boot-relocated',
                      'memory', 'memory-full', 'memory-sparse', 'memory-negative',
-                     'chip-xezim-compile', 'noc-xezim', 'noc-verilator')
+                     'chip-xezim-compile', 'noc-xezim', 'noc-verilator', 'chip-ddr4-real')
         for name in originals:
             with self.subTest(target=name):
                 self.assertTrue(regress.uses_canonical_workspace(
                     name, self.config['tests'][name]))
-        for name in ('chip-ddr4-real', 'chip-ethernet-ddr-pcie'):
+        for name in ('chip-ethernet-ddr-pcie',):
             with self.subTest(target=name):
                 self.assertFalse(regress.uses_canonical_workspace(
                     name, self.config['tests'][name]))
