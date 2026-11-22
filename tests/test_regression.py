@@ -204,7 +204,7 @@ class RegressionTests(unittest.TestCase):
             with self.subTest(target=name):
                 self.assertTrue(regress.uses_canonical_workspace(
                     name, self.config['tests'][name]))
-        for name in ('chip-boot', 'supernoc'):
+        for name in ('chip-peakrdl-reset', 'chip-dma'):
             with self.subTest(target=name):
                 self.assertFalse(regress.uses_canonical_workspace(
                     name, self.config['tests'][name]))

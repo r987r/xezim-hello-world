@@ -1,11 +1,13 @@
 """GitHub Actions must be PR-to-main or manually dispatched only."""
 from fnmatch import fnmatchcase
 from pathlib import Path
+import sys
 import unittest
 
 import yaml
 
 ROOT=Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "tools"))
 
 class WorkflowPolicyTests(unittest.TestCase):
     def test_project_compile_covers_both_project_sources_and_shared_contracts(self):
@@ -22,6 +24,71 @@ class WorkflowPolicyTests(unittest.TestCase):
         for source in sorted(sources):
             with self.subTest(source=source):
                 self.assertTrue(any(fnmatchcase(source, path) for path in paths), source)
+
+    def test_static_chip_boot_workspaces_keep_current_ci_consumers(self):
+        from publish_site import discover_test_workflows
+        from run_workspace import uses_canonical_workspace
+        from test_identity import relative_path, selected
+
+        catalog = yaml.safe_load((ROOT / 'config/regression.yaml').read_text())['tests']
+        names = ('chip-boot', 'chip-boot-negative', 'chip-boot-latency')
+        selected_family = {name for name, plan in catalog.items()
+                           if plan.get('engine') == 'cocotb-verilator'
+                           and name.startswith('chip-')
+                           and uses_canonical_workspace(name, plan)}
+        self.assertEqual(selected_family, set(names))
+        plans = [catalog[name] for name in names]
+        self.assertEqual({p['build'] for p in plans}, {'.tools/chip-obj'})
+        self.assertFalse(plans[0].get('reuse_build', False))
+        self.assertTrue(all(p['reuse_build'] for p in plans[1:]))
+        paths = [relative_path(selected(name, plan, run_id='local-012345abcdef'))
+                 for name, plan in zip(names, plans)]
+        self.assertEqual(len(set(paths)), 3)
+
+        def steps(workflow, job):
+            path = ROOT / '.github/workflows' / workflow
+            return yaml.load(path.read_text(), Loader=yaml.BaseLoader)['jobs'][job]['steps']
+
+        def upload(steps, name):
+            return next(step['with']['path'] for step in steps
+                        if step.get('with', {}).get('name', '').startswith(name))
+
+        fullchip = steps('full-chip.yml', 'boot')
+        self.assertIn('.tools/regression/chip-*/', upload(fullchip, 'full-chip-boot-results'))
+        archive = upload(fullchip, 'full-chip-boot-results')
+        reports = upload(fullchip, 'chip-axi-run-reports-')
+        select_boot = next(step['run'] for step in fullchip if step.get('id') == 'static-chip-runs')
+        self.assertIn('for name in ("chip-boot", "chip-boot-negative", "chip-boot-latency")',
+                      select_boot)
+        self.assertIn('selected_run_folder(root, name, catalog[name])', select_boot)
+        self.assertIn('steps.static-chip-runs.outputs.directories', archive)
+        self.assertIn('.tools/runs/xezim/', archive)
+        self.assertIn('steps.static-chip-runs.outputs.reports', reports)
+        self.assertIn('.tools/regression/chip-dma/report.html', reports)
+        self.assertIn('.tools/regression/chip-cpu-dma/report.html', reports)
+        self.assertNotIn('.tools/runs/verilator/', archive + reports)
+        self.assertNotIn('.tools/regression/chip-boot', reports)
+
+        latency = steps('dv-fabric-latency.yml', 'unloaded-full-chip')
+        select_latency = next(step['run'] for step in latency
+                              if step.get('id') == 'fullchip-latency-run')
+        self.assertIn('selected_run_folder(root, name, plan)', select_latency)
+        self.assertIn('name = "chip-boot-latency"', select_latency)
+        self.assertIn('steps.fullchip-latency-run.outputs.canonical_id',
+                      upload(latency, 'fabric-latency-fullchip-'))
+
+        mux = steps('ethernet-mvp.yml', 'noc-axi-mux')
+        select_mux = next(step['run'] for step in mux if step.get('id') == 'chip-boot-source')
+        self.assertIn('chip-boot --stage files', select_mux)
+        self.assertIn('selected_run_folder(root, name, plan)', select_mux)
+        self.assertIn('-f "$filelist"', select_mux)
+        self.assertNotIn('.tools/regression/', select_mux)
+        self.assertIn('steps.chip-boot-source.outputs.filelist',
+                      upload(mux, 'ethernet-axi-mux-sources-'))
+        discovered = discover_test_workflows(ROOT)
+        self.assertIn('full-chip-boot-results', discovered['full-chip.yml']['artifacts'])
+        self.assertTrue(any(name.startswith('fabric-latency-fullchip-')
+                            for name in discovered['dv-fabric-latency.yml']['artifacts']))
 
     def test_only_pr_to_main_or_manual_dispatch(self):
         for path in sorted((ROOT/'.github/workflows').glob('*.yml')):

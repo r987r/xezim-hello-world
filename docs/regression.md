@@ -143,6 +143,11 @@ transcripts, `result.json`, and Cocotb XML/logs and generated variant
 inputs where relevant. CI retains these artifacts on success and failure;
 preparation failures are failures even if no result is written.
 
+The static full-chip Verilator boot, expected-negative boot and boot latency
+targets also write only to their canonical run directories. Those three
+targets still use the same source- and binary-verified `.tools/chip-obj` build;
+generated firmware variants keep their existing staging until migrated.
+
 The optional strict `report.flow` contract uses the **same**
 `config/regression.yaml` and shared INIT/RUN/CHECK phase engine to
 enumerate every required actor/routine step. Python/Cocotb actions,

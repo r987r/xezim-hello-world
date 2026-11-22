@@ -81,8 +81,10 @@ probes and standalone `dma-rtl`. Dynamic boot and memory profiles claim the
 directory before generating inputs and publish the complete identity only
 after the selected filelist exists. Memory profiles archive and hash the
 effective YAML, including local overrides; custom config names use a content
-hash without exposing the caller's path. Other Cocotb targets still use
-selection-key directories.
+hash without exposing the caller's path. Static full-chip Verilator boot,
+its named-negative test, and boot latency use separate canonical run
+directories while sharing the verified compiled boot image. Nonmigrated
+Cocotb targets still use selection-key directories.
 [#139](https://github.com/r987r/xezim-hello-world/issues/139) owns migration
 of the remaining producers, CI uploads and readers together. Never silently redirect a test
 writer without moving its compiled source/verifier dependencies, and never
