@@ -60,6 +60,13 @@ A temporary PR merge SHA need not equal final squash-merge SHA. The collector au
 
 The collector reads the **existing** regression/workflow catalogs, not an artifact-maintained allowlist. It accepts completed main CI or authenticated merged-PR runs, verifies exact tested run/attempt, clean source checkout, selected original plans, captured source hashes and the PR temporary-merge parent when applicable. Unmerged/unverifiable branches and expired captures are **not** promoted to PASS. It validates ZIP paths/symlinks, selected member limits and file digests, and republishes only known report/trace/filelist types. It **re-renders** HTML from trusted templates, never executes artifact-supplied HTML or trusts a fabricated result.
 
+A per-run report links the original compiler input manifest only when it
+matches that CI attempt's immutable identity, archived filelist, and
+selected-plan fingerprint. Missing or inconsistent manifests do not appear
+as compiler evidence. This describes the build inputs, not elaborated
+connectivity or a passing simulation; use the run result and captures for
+those claims.
+
 Source history is bounded by `config/publication.yaml` and provider artifact retention; Pages is **not archival storage**. A workflow with no target artifacts is workflow-only evidence. New public report URLs use
 `runs/<simulator>/<config_target>/<testname>/<run_id>/report.html`; immutable old captures retain original historical URLs for comparison. [#139](https://github.com/r987r/xezim-hello-world/issues/139) owns the remaining producer, upload and reader migration. On the audited revision, the runner reserves a canonical workspace for `smoke`, `sram`, `serv` and `dma-rtl`. A canonical public URL alone does not establish which writer produced its archive.
 
