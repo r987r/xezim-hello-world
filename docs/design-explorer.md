@@ -43,8 +43,11 @@ relationships. This is substantially more useful than porting the older
 Sv-test static parser. Direct signal accesses in cocotb are inferred, and
 dynamic constructs may be missed: preserve those confidence limitations.
 
+Run `python3 tools/regress.py chip-dma --stage files`, then set
+`chip_dma_filelist` to the exact `sources.f` path printed for that run.
+
 ~~~sh
-hdl-kgraph build -f .tools/regression/chip-dma/sources.f
+hdl-kgraph build -f "$chip_dma_filelist"
 hdl-kgraph query uvm --json > .tools/uvm-static.json
 python3 tools/design_explorer.py \
   --verification-report chip-dma=.tools/uvm-static.json \

@@ -204,10 +204,33 @@ class RegressionTests(unittest.TestCase):
             with self.subTest(target=name):
                 self.assertTrue(regress.uses_canonical_workspace(
                     name, self.config['tests'][name]))
-        for name in ('chip-peakrdl-reset', 'chip-dma'):
+        for name in ('chip-peakrdl-reset', 'chip-cpu-dma', 'chip-cpu-scenario',
+                     'chip-dma-scenario', 'chip-ddr4-real', 'chip-ethernet-ddr-pcie'):
             with self.subTest(target=name):
                 self.assertFalse(regress.uses_canonical_workspace(
                     name, self.config['tests'][name]))
+
+    def test_only_the_existing_static_chip_dma_selection_is_canonical(self):
+        from test_identity import relative_path, selected
+
+        plan = self.config['tests']['chip-dma']
+        self.assertTrue(regress.uses_canonical_workspace('chip-dma', plan))
+        identity = selected('chip-dma', plan, run_id='local-012345abcdef')
+        self.assertEqual(relative_path(identity).as_posix(),
+                         'verilator/soc-default/dma-fabric-roundtrip/local-012345abcdef')
+        self.assertEqual(plan['build'], '.tools/chip-dma-obj')
+        self.assertFalse(regress.uses_canonical_workspace('chip-dma-other', plan))
+        for key, value in {
+            'logical_test': 'different-test', 'engine': 'verilator',
+            'sources': 'chip', 'top': 'full_chip_tb',
+            'bender_targets': ['chip_boot', 'dma'],
+            'firmware_mode': 'cpu_dma', 'flow_plan': 'config/scenarios/custom.json',
+            'memory_config': 'config/examples/memory-fabric-sparse.yaml',
+            'boot_relocate': 'custom-boot',
+        }.items():
+            with self.subTest(key=key):
+                self.assertFalse(regress.uses_canonical_workspace(
+                    'chip-dma', {**plan, key: value}))
 
     def test_memory_override_hashes_the_effective_config_without_leaking_path(self):
         from test_identity import config_target, sha

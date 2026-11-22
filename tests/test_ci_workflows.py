@@ -25,7 +25,7 @@ class WorkflowPolicyTests(unittest.TestCase):
             with self.subTest(source=source):
                 self.assertTrue(any(fnmatchcase(source, path) for path in paths), source)
 
-    def test_static_chip_boot_workspaces_keep_current_ci_consumers(self):
+    def test_static_full_chip_workspaces_keep_current_ci_consumers(self):
         from publish_site import discover_test_workflows
         from run_workspace import uses_canonical_workspace
         from test_identity import relative_path, selected
@@ -36,7 +36,7 @@ class WorkflowPolicyTests(unittest.TestCase):
                            if plan.get('engine') == 'cocotb-verilator'
                            and name.startswith('chip-')
                            and uses_canonical_workspace(name, plan)}
-        self.assertEqual(selected_family, set(names))
+        self.assertEqual(selected_family, set(names) | {'chip-dma'})
         plans = [catalog[name] for name in names]
         self.assertEqual({p['build'] for p in plans}, {'.tools/chip-obj'})
         self.assertFalse(plans[0].get('reuse_build', False))
@@ -58,13 +58,13 @@ class WorkflowPolicyTests(unittest.TestCase):
         archive = upload(fullchip, 'full-chip-boot-results')
         reports = upload(fullchip, 'chip-axi-run-reports-')
         select_boot = next(step['run'] for step in fullchip if step.get('id') == 'static-chip-runs')
-        self.assertIn('for name in ("chip-boot", "chip-boot-negative", "chip-boot-latency")',
+        self.assertIn('for name in ("chip-boot", "chip-boot-negative", "chip-boot-latency", "chip-dma")',
                       select_boot)
         self.assertIn('selected_run_folder(root, name, catalog[name])', select_boot)
         self.assertIn('steps.static-chip-runs.outputs.directories', archive)
         self.assertIn('.tools/runs/xezim/', archive)
         self.assertIn('steps.static-chip-runs.outputs.reports', reports)
-        self.assertIn('.tools/regression/chip-dma/report.html', reports)
+        self.assertNotIn('.tools/regression/chip-dma/', reports)
         self.assertIn('.tools/regression/chip-cpu-dma/report.html', reports)
         self.assertNotIn('.tools/runs/verilator/', archive + reports)
         self.assertNotIn('.tools/regression/chip-boot', reports)
