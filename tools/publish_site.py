@@ -34,6 +34,7 @@ from test_intent import (catalog as intended_flow_catalog, plan as intended_flow
                          render as render_intended_flow, validate_snapshot)
 
 ROOT=Path(__file__).resolve().parents[1]
+SELECTED_RTL_MANIFEST='selected-rtl-manifest.json'
 FILES={'result.json','plan.json','sources.f','simulation.log','build.log','results.xml',
        'axi-transactions.json','axi-events.jsonl',
        'protocol-transactions.json','protocol-events.jsonl','memory-operations.json',
@@ -42,7 +43,8 @@ FILES={'result.json','plan.json','sources.f','simulation.log','build.log','resul
        'planned-flow.json','memory-lifetimes.json','scenario-execution.json','scenario-plan.json',
        'variant-connectivity.json','variant-topology.json','variant-chip-manifest.json',
        'selected-test-plan.json','runner-events.json','selected-flow-correlation.json',
-       'identity.json','fabric-benchmark-plan.json','fabric-benchmark-evidence.json'}
+       'identity.json','fabric-benchmark-plan.json','fabric-benchmark-evidence.json',
+       SELECTED_RTL_MANIFEST}
 
 
 def dump(path,data):
@@ -499,6 +501,66 @@ def verify_archived_identity(source_dir, plan, result, target, run):
     return selected
 
 
+def archived_selected_rtl_manifest(source_dir, plan, identity, run):
+    """Require the optional compiler manifest to match the original run inputs."""
+    from runtime_contract import digest
+
+    manifest=source_dir/SELECTED_RTL_MANIFEST
+    if not manifest.exists() and not manifest.is_symlink():
+        return None
+    prefix=f"ci-{run['id']}-a{run.get('run_attempt',1)}-"
+    if manifest.is_symlink() or not manifest.is_file() or not identity:
+        raise ValueError('compiler manifest must accompany an original run identity')
+    if not identity['run_id'].startswith(prefix):
+        raise ValueError('compiler manifest identity is not bound to this CI attempt')
+    recorded=json.loads(manifest.read_text())
+    selected=plan.get('selected_source_manifest')
+    if not isinstance(recorded,dict) or not isinstance(selected,dict):
+        raise ValueError('missing compiler manifest plan reference')
+    content={key:value for key,value in recorded.items() if key!='manifest_sha256'}
+    if (type(recorded.get('schema_version')) is not int
+            or recorded['schema_version']!=1
+            or recorded.get('evidence')!='selected_filelist_and_copied_generated_inputs_not_elaborated_or_observed'
+            or recorded.get('manifest_sha256')!=digest(content)):
+        raise ValueError('compiler manifest failed its integrity check')
+    expected_filelist=identity['selection'].get('filelist_sha256')
+    filelist=source_dir/'sources.f'
+    if (recorded.get('profile')!=plan.get('target')
+            or recorded.get('identity_sha256')!=identity['identity_sha256']
+            or recorded.get('config_sha256')!=identity['config_sha256']
+            or recorded.get('compiled_top')!=plan.get('top')
+            or not expected_filelist
+            or recorded.get('filelist_sha256')!=expected_filelist
+            or filelist.is_symlink() or not filelist.is_file()
+            or hashlib.sha256(filelist.read_bytes()).hexdigest()!=expected_filelist):
+        raise ValueError('compiler manifest does not match run identity, top or filelist')
+    if any(recorded.get(key)!=plan.get(key,[]) for key in ('includes','defines','args')):
+        raise ValueError('compiler manifest flags or arguments differ from the original plan')
+    fields=('includes','defines','args','source_sha256','include_headers_sha256',
+            'filelist_sha256','network_filelists','config_sha256','generated_sha256')
+    projection={key:recorded[key] for key in fields}
+    projection.update(engine=plan['engine'],top=plan.get('top'),
+                      source_target=plan['source_target'],firmware_mode=plan.get('firmware_mode'))
+    compiler_sha=digest(projection)
+    declared_path=PurePosixPath(selected.get('path',''))
+    expected_archive=declared_path.parent/'selected-rtl'/compiler_sha[:20]
+    if (declared_path.is_absolute() or '..' in declared_path.parts
+            or declared_path.name!=SELECTED_RTL_MANIFEST
+            or recorded.get('archive')!=expected_archive.as_posix()
+            or recorded.get('compiler_input_sha256')!=compiler_sha
+            or selected.get('compiler_input_sha256')!=compiler_sha):
+        raise ValueError('compiler manifest differs from the selected plan fingerprint')
+    sources=recorded['source_sha256']
+    top=recorded.get('selected_soc_top')
+    count=recorded.get('source_count')
+    if (not isinstance(sources,dict) or type(count) is not int or not sources
+            or len(sources)!=count or (top is not None and
+                (not isinstance(top,str) or top not in sources))):
+        raise ValueError('invalid compiler manifest source inventory')
+    return {'path':SELECTED_RTL_MANIFEST,'compiler_input_sha256':compiler_sha,
+            'source_count':count,'selected_soc_top':top}
+
+
 def invalid_artifact_identity_provenance(artifact_folder, run):
     """Quarantine an entire incomplete identity archive, not the whole site.
 
@@ -927,7 +989,19 @@ def evidence_index(evidence,output,repository,site_sha=None):
                 raise ValueError('duplicate published canonical run or historical evidence path')
             destination.mkdir(parents=True,exist_ok=False)
             assets=[]
+            try:
+                compiler_inputs=archived_selected_rtl_manifest(source_dir,plan,selected_identity,run)
+            except (ValueError,KeyError,TypeError,OSError) as exc:
+                compiler_inputs=None
+                notes.append(f"Run {run['id']}, {target}: compiler manifest withheld ({exc})")
+            compiler_note=''
+            if compiler_inputs is not None:
+                compiler_note=(f'<p><a href="{SELECTED_RTL_MANIFEST}">Archived compiler input manifest</a>'
+                               f' · {compiler_inputs["source_count"]} selected RTL sources. '
+                               'Source selection only, not execution or traffic proof.</p>')
             for item in source_dir.iterdir():
+                if item.name==SELECTED_RTL_MANIFEST and compiler_inputs is None:
+                    continue
                 if item.is_file() and (item.name in FILES or item.suffix in ('.log','.f')):
                     shutil.copyfile(item,destination/item.name);assets.append(item.name)
             # Benchmark-run publication must retain and independently check
@@ -1123,6 +1197,7 @@ def evidence_index(evidence,output,repository,site_sha=None):
                    'pr_head_sha':run['head_sha'],'merged_pr':run.get('merged_pr'),
                    'recorded_at':run['created_at'],'workflow':run['label'],'workflow_url':run['html_url'],
                    'path':str(relative/'report.html'),'assets':sorted(assets),
+                   'compiler_inputs':compiler_inputs,
                    'axi':trace is not None,
                    'protocols':sorted({r['protocol'] for r in protocol_data.get('records',[])}) if protocol_data else [],
                    'protocol_observations':len(protocol_data['records']) if protocol_data else 0,
@@ -1209,7 +1284,7 @@ def evidence_index(evidence,output,repository,site_sha=None):
                 html=(destination/'report.html').read_text()
                 up=os.path.relpath(output,destination).replace(os.sep,'/')
                 nav=f'<p style="margin:0 0 12px"><a href="{up}/index.html">Verification hub</a> · <a href="{up}/runs.html">All runs</a> · <a href="{escape(run["html_url"])}">CI evidence</a></p>'
-                nav+='<details><summary>Original evidence: raw events, transactions, logs, plan and filelists</summary><ul>'
+                nav+=compiler_note+'<details><summary>Original evidence: raw events, transactions, logs, plan and filelists</summary><ul>'
                 nav+=''.join(f'<li><a href="{escape(name)}">{escape(name)}</a></li>' for name in sorted(assets))+'</ul></details>'
                 if protocol_data:
                     # The canonical per-test landing page contains a visible
@@ -1253,7 +1328,7 @@ def evidence_index(evidence,output,repository,site_sha=None):
                     html=(destination/'report.html').read_text()
                     if '<main>' in html:
                         (destination/'report.html').write_text(
-                            html.replace('<main>','<main>'+(
+                            html.replace('<main>','<main>'+compiler_note+(
                                 '<p><strong>Canonical run:</strong> <code>'+escape(canonical_path(selected_identity).as_posix())+
                                 '</code> · <a href="identity.json">Immutable identity</a></p>'
                                 if selected_identity else '')+render_intended_flow(intended),1))
@@ -1261,7 +1336,7 @@ def evidence_index(evidence,output,repository,site_sha=None):
                                        site_sha or run['head_sha'],shell_fn=shell)
                     entries.append(entry)
                     continue
-                body='<p>This scope publishes its actual result, plan, filelist and logs. It has no AXI traffic observer.</p>'
+                body=compiler_note+'<p>This scope publishes its actual result, plan, filelist and logs. It has no AXI traffic observer.</p>'
                 label = 'Compile/lint only' if compile_only else 'Regression'
                 if compile_only:
                     body += '<p>Compiler or lint outcome only. No simulation or protocol qualification.</p>'

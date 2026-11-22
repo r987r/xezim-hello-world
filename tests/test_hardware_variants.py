@@ -9,6 +9,8 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 import hardware_variants
+from run_workspace import reserve_run
+from test_identity import selected
 
 
 class VariantCatalogTests(unittest.TestCase):
@@ -34,34 +36,52 @@ class VariantCatalogTests(unittest.TestCase):
                             for x in variants.values()))
         self.assertIn("not_protocol_acceptance", got["evidence"])
 
+    def _stage_profiles(self, root, profiles, *, manifest=True):
+        (root / "config").mkdir()
+        (root / "config/soc.yaml").write_bytes(
+            (ROOT / "config/soc.yaml").read_bytes())
+        tests = {}
+        for index, profile in enumerate(profiles):
+            plan = copy.deepcopy(self.targets["chip-boot"])
+            plan["logical_test"] = profile
+            tests[profile] = plan
+            identity = selected(profile, plan, root=ROOT, run_id=f"local-{index:012x}")
+            workspace = reserve_run(root / ".tools/runs", identity, plan=plan)
+            if manifest:
+                # The catalog must select an actual per-profile workspace and
+                # find its manifest. Tests stub only the archive verifier.
+                (workspace / "selected-rtl-manifest.json").write_text("{}\n")
+        return tests
+
     def test_identical_real_top_can_be_reused_by_separate_tests(self):
-        original = copy.deepcopy(self.targets["chip-boot"])
-        tests = {"chip-a": original, "chip-b": copy.deepcopy(original)}
-        selected = {"selected_soc_top": "gen/chip/soc_top.sv",
+        verified = {"selected_soc_top": "gen/chip/soc_top.sv",
                     "source_sha256": {"gen/chip/soc_top.sv": "a"*64}}
-        with patch.object(hardware_variants.Path, "is_file", return_value=True), \
-             patch("hardware_variants.verify_selected_archive",
-                   return_value=selected):
-            variants = hardware_variants.catalog(ROOT, tests, True)["variants"]
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch("hardware_variants.verify_selected_archive", return_value=verified):
+            root = Path(tmp)
+            tests = self._stage_profiles(root, ("chip-a", "chip-b"))
+            variants = hardware_variants.catalog(root, tests, True)["variants"]
         self.assertEqual(variants[0]["verified_profiles"], ["chip-a", "chip-b"])
         self.assertEqual(variants[0]["selected_soc_top_sha256"], "a"*64)
 
     def test_divergent_hardware_with_same_name_fails(self):
-        original = copy.deepcopy(self.targets["chip-boot"])
-        tests = {"chip-a": original, "chip-b": copy.deepcopy(original)}
         values = [
             {"selected_soc_top": "gen/chip/soc_top.sv",
              "source_sha256": {"gen/chip/soc_top.sv": x*64}}
             for x in "ab"]
-        with patch.object(hardware_variants.Path, "is_file", return_value=True), \
+        with tempfile.TemporaryDirectory() as tmp, \
              patch("hardware_variants.verify_selected_archive", side_effect=values):
+            root = Path(tmp)
+            tests = self._stage_profiles(root, ("chip-a", "chip-b"))
             with self.assertRaisesRegex(ValueError, "different RTL tops"):
-                hardware_variants.catalog(ROOT, tests, True)
+                hardware_variants.catalog(root, tests, True)
 
     def test_strict_does_not_infer_hardware_from_test_definition(self):
-        tests = {"chip-a": copy.deepcopy(self.targets["chip-boot"])}
-        with self.assertRaisesRegex(ValueError, "missing selected RTL"):
-            hardware_variants.catalog(ROOT, tests, True)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            tests = self._stage_profiles(root, ("chip-a",), manifest=False)
+            with self.assertRaisesRegex(ValueError, "chip-a: missing selected RTL archive"):
+                hardware_variants.catalog(root, tests, True)
 
 
 if __name__ == "__main__":
