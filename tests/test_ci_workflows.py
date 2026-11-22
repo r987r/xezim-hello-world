@@ -34,6 +34,7 @@ class WorkflowPolicyTests(unittest.TestCase):
         names = ('chip-boot', 'chip-boot-negative', 'chip-boot-latency')
         selected_family = {name for name, plan in catalog.items()
                            if plan.get('engine') == 'cocotb-verilator'
+                           and not plan.get('firmware_mode')
                            and name.startswith('chip-')
                            and uses_canonical_workspace(name, plan)}
         self.assertEqual(selected_family, set(names) | {'chip-dma'})
@@ -89,6 +90,32 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertIn('full-chip-boot-results', discovered['full-chip.yml']['artifacts'])
         self.assertTrue(any(name.startswith('fabric-latency-fullchip-')
                             for name in discovered['dv-fabric-latency.yml']['artifacts']))
+
+    def test_ethernet_variant_archives_only_the_existing_execution(self):
+        from publish_site import discover_test_workflows
+        workflow = ROOT / '.github/workflows/ethernet-mvp.yml'
+        jobs = yaml.load(workflow.read_text(), Loader=yaml.BaseLoader)['jobs']
+        for job, selector, simulator, prefix in (
+                ('chip-real-noc', 'ethernet-execution', 'run-ethernet',
+                 'ethernet-chip-data-config-noc-'),
+                ('chip-cpu-ethernet', 'ethernet-cpu-execution', 'run-ethernet-cpu',
+                 'ethernet-cpu0-c-queue-cq-')):
+            steps = jobs[job]['steps']
+            select = next(step for step in steps if step.get('id') == selector)
+            upload = next(step for step in steps
+                          if step.get('with', {}).get('name', '').startswith(prefix))
+            self.assertIn('stage="all"', select['run'])
+            self.assertIn(f'steps.{simulator}.outcome', select['env']['SIMULATION_OUTCOME'])
+            self.assertIn('successful Ethernet regression lacks canonical result', select['run'])
+            self.assertIn("format('.tools/runs/{0}/'", upload['with']['path'])
+            self.assertIn(f'steps.{selector}.outputs.canonical_id', upload['with']['path'])
+            discovered = discover_test_workflows(ROOT)['ethernet-mvp.yml']['artifacts']
+            self.assertTrue(any(name.startswith(prefix) for name in discovered))
+        preflight = next(step['run'] for step in jobs['chip-cpu-ethernet']['steps']
+                         if 'Verify RV32I' in step.get('name', ''))
+        self.assertIn('stage="files"', preflight)
+        for member in ('variant/cpu_dma.elf', 'variant/flash.hex', 'sources.f'):
+            self.assertIn(member, preflight)
 
     def test_only_pr_to_main_or_manual_dispatch(self):
         for path in sorted((ROOT/'.github/workflows').glob('*.yml')):

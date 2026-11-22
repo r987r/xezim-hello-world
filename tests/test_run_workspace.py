@@ -67,6 +67,33 @@ class WorkspaceTests(unittest.TestCase):
         with self.assertRaises(IdentityError):
             reserve_run(self.root, altered)
 
+    def test_ethernet_preflight_and_execution_are_distinct(self):
+        from tools.run_workspace import selected_run_folder, uses_canonical_workspace
+
+        self.assertTrue(uses_canonical_workspace('chip-ethernet', self.catalog['chip-ethernet']))
+        self.assertFalse(uses_canonical_workspace(
+            'chip-ethernet-ddr-pcie', self.catalog['chip-ethernet-ddr-pcie']))
+        target = 'chip-ethernet-cpu'
+        plan = self.catalog[target]
+        checkout = Path(self.temp.name)
+
+        def add_stage(stage, suffix):
+            identity = selected(target, plan, run_id=f'local-{suffix:012x}')
+            work = reserve_run(checkout / '.tools/runs', identity, plan=plan)
+            (work / 'plan.json').write_text(json.dumps({'stage': stage, 'identity': identity}))
+            return work
+
+        preflight = add_stage('files', 1)
+        self.assertIsNone(selected_run_folder(checkout, target, plan, stage='all'))
+        executed = add_stage('all', 2)
+        self.assertEqual(selected_run_folder(checkout, target, plan, stage='files'), preflight)
+        self.assertEqual(selected_run_folder(checkout, target, plan, stage='all'), executed)
+        with self.assertRaisesRegex(IdentityError, 'exactly one'):
+            selected_run_folder(checkout, target, plan)
+        add_stage('all', 3)
+        with self.assertRaisesRegex(IdentityError, 'exactly one'):
+            selected_run_folder(checkout, target, plan, stage='all')
+
     def test_dynamic_materialization_binds_final_compiler_filelist(self):
         import hashlib
 

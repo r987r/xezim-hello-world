@@ -144,13 +144,19 @@ class ExplorerTests(unittest.TestCase):
                 "cpu-dma": {"engine": "cocotb-verilator", "top": "chip_tb",
                             "report": {"axi": {
                                 "actors": ".tools/regression/cpu-dma/variant/manifest.json"}}}}}
+            from_main = yaml.safe_load((ROOT / "config/regression.yaml").read_text())["tests"]
+            for name in ("chip-ethernet", "chip-ethernet-cpu"):
+                plan = from_main[name]
+                tests["tests"][name] = {**plan, "report": {
+                    "axi": {"actors": plan["report"]["axi"]["actors"]}}}
             (root / "config/regression.yaml").write_text(yaml.safe_dump(tests))
             graph = design_explorer.catalog(root)
-            entry = graph["profiles"]["cpu-dma"]
-            self.assertEqual(entry["actor_catalog_status"],
-                             "runtime_generated_not_available")
-            self.assertEqual(entry["actors"], {})
-            self.assertEqual(entry["monitors"], [])
+            for name in tests["tests"]:
+                entry = graph["profiles"][name]
+                self.assertEqual(entry["actor_catalog_status"],
+                                 "runtime_generated_not_available")
+                self.assertEqual(entry["actors"], {})
+                self.assertEqual(entry["monitors"], [])
 
     def test_missing_checked_in_actor_manifest_is_an_error(self):
         with tempfile.TemporaryDirectory() as tmp:
