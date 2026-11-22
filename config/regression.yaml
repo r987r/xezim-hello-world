@@ -432,7 +432,7 @@ tests:
           address: '0x1000045c'
           actors: {'1': cpu0}
           steps: {'201': eth_queue, '202': eth_rx, '203': eth_tx}
-      axi: {scope: dut.u_noc, clock: clk, reset: rst_n, catalog: gen/supernoc/axi_monitors.json, actors: .tools/regression/chip-ethernet-cpu/variant/manifest.json, max_events: 500000, required_complete: true}
+      axi: {scope: dut.u_noc, clock: clk, reset: rst_n, catalog: gen/supernoc/axi_monitors.json, actors: variant/manifest.json, max_events: 500000, required_complete: true}
       protocols:
         max_events: 1000
         sources:
@@ -460,7 +460,7 @@ tests:
     report:
       address_map: {config: config/soc.yaml, variant: architecture}
       context: 'Real GMII through actual Ethernet0 local/global Data NoC to SRAM and modeled DDR, with AXI CQ completions and Config NoC BFM queue CSR. Real PULP AXI mux; CPU0 C firmware and PCIe host remain separate gates.'
-      axi: {scope: dut.u_noc, clock: clk_i, reset: rst_ni, catalog: gen/supernoc/axi_monitors.json, actors: .tools/regression/chip-ethernet/variant/manifest.json, max_events: 500000, required_complete: true}
+      axi: {scope: dut.u_noc, clock: clk_i, reset: rst_ni, catalog: gen/supernoc/axi_monitors.json, actors: variant/manifest.json, max_events: 500000, required_complete: true}
       protocols:
         max_events: 1000
         sources:

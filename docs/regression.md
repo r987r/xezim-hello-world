@@ -135,6 +135,14 @@ RTL is generated from that snapshot, not a second read of the caller's file.
 Checkout example names stay readable; custom files use a content-derived name
 without recording the original local path. The override and the modified YAML
 are local run inputs, not new test catalog entries.
+The existing Ethernet GMII/CQ and real CPU Ethernet checks materialize and
+archive their generated RTL and actor manifests inside their own canonical
+run. A CPU `--stage files` preflight has a different identity from the live
+simulation and never becomes its result. Both Ethernet profiles use
+run-private build directories outside archived evidence. `--stage files`,
+`--stage build`, and `--stage all` are supported; use `all` for simulation.
+The separate `--stage run` cannot reuse another run's binary, since the
+generated RTL binds that run's firmware image paths.
 Nonmigrated Cocotb producers still use
 `.tools/regression/<target>/`, where each attempt replaces that target's
 previous output until their migration ([#139](https://github.com/r987r/xezim-hello-world/issues/139)).

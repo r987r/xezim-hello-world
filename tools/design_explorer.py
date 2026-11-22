@@ -14,6 +14,11 @@ from pathlib import Path
 
 import yaml
 
+try:
+    from .run_workspace import uses_canonical_ethernet_workspace
+except ImportError:
+    from run_workspace import uses_canonical_ethernet_workspace
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -122,7 +127,12 @@ def catalog(root: Path = ROOT, *, verification_reports: dict[str, Path] | None =
         actors_file = axi.get("actors")
         actors = {}
         actor_catalog_status = "not_declared"
-        if actors_file:
+        if (actors_file == "variant/manifest.json"
+                and uses_canonical_ethernet_workspace(name, test)):
+            # A declaration-only explorer has no selected run. Only the
+            # original run report binds this variant's generated actors.
+            actor_catalog_status = "runtime_generated_not_available"
+        elif actors_file:
             # Some positive regression variants (e.g. chip-cpu-dma) generate
             # their actor manifest only when that particular test executes.
             # Keep the profile visible without falsely claiming its runtime

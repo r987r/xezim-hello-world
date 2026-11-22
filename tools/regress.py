@@ -22,9 +22,9 @@ import time
 import yaml
 
 try:
-    from .run_workspace import uses_canonical_workspace
+    from .run_workspace import uses_canonical_ethernet_workspace, uses_canonical_workspace
 except ImportError:
-    from run_workspace import uses_canonical_workspace
+    from run_workspace import uses_canonical_ethernet_workspace, uses_canonical_workspace
 
 ROOT = Path(__file__).resolve().parents[1]
 ENGINES = {'xezim', 'xezim-compile', 'verilator-lint', 'cocotb-verilator'}
@@ -426,10 +426,52 @@ def include_runtime_noc(sources, networks, root):
     sources += [str(root/entry['top']) for _, entry in sorted(networks.items())]
 
 
+def select_ethernet_variant(test, out, sources):
+    """Generate the existing Ethernet variant in this run's workspace."""
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0,str(ROOT))
+    from full_chip_gen import emit as emit_chip
+    from dv.ethernet0.run_mac_gmii import fetch_pinned
+    cfg = yaml.safe_load((ROOT/'config/soc.yaml').read_text())
+    noc_manifest = json.loads((ROOT/'gen/supernoc/manifest.json').read_text())
+    variant = out/'variant'
+    if test['firmware_mode'] == 'ethernet_cpu':
+        from cpu_dma_firmware import prepare as prepare_cpu_firmware
+        prepare_cpu_firmware(cfg,noc_manifest,ROOT/'gen/noc/floonoc',variant,
+                             ethernet_cpu_mode=True)
+    else:
+        emit_chip(cfg,noc_manifest,ROOT/'gen/noc/floonoc',variant,
+                  image_prefix=variant.relative_to(ROOT).as_posix(),
+                  ethernet_mode=True)
+    generated_root=ROOT/'gen/chip'
+    replacements={'soc_top.sv','full_chip_tb.sv','full_chip_dma_tb.sv'}
+    sources=[str(variant/Path(filename).name)
+             if Path(filename).parent==generated_root and
+             Path(filename).name in replacements else filename
+             for filename in sources]
+    eth_rtl=ROOT/'rtl/io/ethernet0'
+    sources += [str(eth_rtl/name) for name in (
+        'ethernet0_axi_mvp.sv','ethernet0_mvp.v','ethernet0_rx_mvp.v',
+        'ethernet0_tx_mvp.v','ethernet0_rx_gmii_stager.v',
+        'ethernet0_mac_gmii.v','ethernet_rx_frame_stager.v',
+        'ethernet_rx_queue_engine.v','ethernet_queue_ctrl.sv',
+        'ethernet_rx_desc_fetch.v','ethernet_rx_dma.v',
+        'ethernet_tx_dma.v','ethernet_cq_axi_writer.v',
+        'ethernet_queue_axi_regs.sv')]
+    for directory,meta in fetch_pinned().values():
+        sources += [str(directory/name) for name in meta['modules']]
+    sources += [str(ROOT/'.tools/verilog_axi/rtl'/name)
+                for name in ('axi_dma_rd.v','axi_dma_wr.v')]
+    return sources
+
+
 def run_target(name, test, resolver, options):
     canonical = uses_canonical_workspace(name, test)
     structural = test['engine'] in {'xezim-compile', 'verilator-lint'}
     relocated_boot = test.get('boot_relocate')
+    canonical_ethernet = uses_canonical_ethernet_workspace(name, test)
+    if canonical_ethernet and (options.stage == 'run' or test.get('reuse_build')):
+        raise ValueError('Ethernet runtime variant requires its own build; use --stage all')
     canonical_memory = canonical and test['sources'] == 'memory'
     identity = None
     if canonical:
@@ -454,10 +496,13 @@ def run_target(name, test, resolver, options):
         if canonical_memory:
             alternate, config_bytes, selected_test['memory_config_effective'] = (
                 select_memory_config(test, options.memory_config))
-        if relocated_boot or canonical_memory:
+        if relocated_boot or canonical_memory or canonical_ethernet:
             seed_identity = select_identity(name, selected_test, root=ROOT)
 
             def materialize(directory):
+                nonlocal sources
+                if canonical_ethernet:
+                    sources = list(dict.fromkeys(select_ethernet_variant(test, directory, sources)))
                 if relocated_boot:
                     select_relocated_boot(relocated_boot, directory, sources, args)
                 if canonical_memory:
@@ -533,41 +578,8 @@ def run_target(name, test, resolver, options):
                    if Path(filename).parent == generated_root and
                    Path(filename).name in replacements else filename
                    for filename in sources]
-    if test.get('firmware_mode') in ('ethernet_mvp', 'ethernet_cpu'):
-        if str(ROOT) not in sys.path:
-            sys.path.insert(0,str(ROOT))
-        from full_chip_gen import emit as emit_chip
-        from dv.ethernet0.run_mac_gmii import fetch_pinned
-        cfg = yaml.safe_load((ROOT/'config/soc.yaml').read_text())
-        noc_manifest = json.loads((ROOT/'gen/supernoc/manifest.json').read_text())
-        variant = out/'variant'
-        if test['firmware_mode'] == 'ethernet_cpu':
-            from cpu_dma_firmware import prepare as prepare_cpu_firmware
-            prepare_cpu_firmware(cfg,noc_manifest,ROOT/'gen/noc/floonoc',variant,
-                                 ethernet_cpu_mode=True)
-        else:
-            emit_chip(cfg,noc_manifest,ROOT/'gen/noc/floonoc',variant,
-                      image_prefix=variant.relative_to(ROOT).as_posix(),
-                      ethernet_mode=True)
-        generated_root=ROOT/'gen/chip'
-        replacements={'soc_top.sv','full_chip_tb.sv','full_chip_dma_tb.sv'}
-        sources=[str(variant/Path(filename).name)
-                 if Path(filename).parent==generated_root and
-                 Path(filename).name in replacements else filename
-                 for filename in sources]
-        eth_rtl=ROOT/'rtl/io/ethernet0'
-        sources += [str(eth_rtl/name) for name in (
-            'ethernet0_axi_mvp.sv','ethernet0_mvp.v','ethernet0_rx_mvp.v',
-            'ethernet0_tx_mvp.v','ethernet0_rx_gmii_stager.v',
-            'ethernet0_mac_gmii.v','ethernet_rx_frame_stager.v',
-            'ethernet_rx_queue_engine.v','ethernet_queue_ctrl.sv',
-            'ethernet_rx_desc_fetch.v','ethernet_rx_dma.v',
-            'ethernet_tx_dma.v','ethernet_cq_axi_writer.v',
-            'ethernet_queue_axi_regs.sv')]
-        for directory,meta in fetch_pinned().values():
-            sources += [str(directory/name) for name in meta['modules']]
-        sources += [str(ROOT/'.tools/verilog_axi/rtl'/name)
-                    for name in ('axi_dma_rd.v','axi_dma_wr.v')]
+    if not canonical_ethernet and test.get('firmware_mode') in ('ethernet_mvp', 'ethernet_cpu'):
+        sources = select_ethernet_variant(test, out, sources)
     if test.get('firmware_mode') in ('pcie_host', 'pcie_dma_host', 'pcie_outbound'):
         if str(ROOT) not in sys.path:
             sys.path.insert(0, str(ROOT))
@@ -710,7 +722,7 @@ def run_target(name, test, resolver, options):
     includes = list(dict.fromkeys(includes))
     defines = list(dict.fromkeys(defines))
     filelist = out/'sources.f'
-    if not (canonical_memory or (canonical and relocated_boot)):
+    if not (canonical_memory or canonical_ethernet or (canonical and relocated_boot)):
         filelist.write_text(filelist_text(sources, includes, defines))
     # Capture the single source-selected identity before the RTL executor runs.
     # Keep legacy target artifact paths stable while old CI consumers migrate.
@@ -731,6 +743,20 @@ def run_target(name, test, resolver, options):
             'identity': identity}
     if canonical_memory:
         plan['memory_config_effective'] = selected_test['memory_config_effective']
+    if canonical_ethernet:
+        # Generated SRAM/flash paths depend on this immutable run. Compile
+        # outside its evidence directory; no other run may write this binary.
+        build_root = (ROOT / test['build']).resolve()
+        if (not build_root.is_relative_to(ROOT / '.tools')
+                or build_root.is_relative_to(ROOT / '.tools/runs')):
+            raise ValueError('Ethernet build directory must be outside archived runs')
+        plan['build'] = (build_root / identity['run_id']).relative_to(ROOT).as_posix()
+        report = test['report']
+        actor_manifest = out / 'variant/manifest.json'
+        if report['axi'].get('actors') != 'variant/manifest.json' or not actor_manifest.is_file():
+            raise ValueError('selected Ethernet AXI actor manifest must belong to this variant')
+        plan['report'] = {**report, 'axi': {**report['axi'],
+                           'actors': actor_manifest.relative_to(ROOT).as_posix()}}
     if test['engine'] in {'xezim-compile', 'verilator-lint'} and networks:
         plan['selected_networks'] = {
             net: {'filelist': str(out/f'{net}.f'), 'top': entry['top_module']}

@@ -435,7 +435,10 @@ def explain_target(root: Path, name: str, definition: dict,
     stimulus = load_stimuli(regression_config)[name]
     adoption = validate_migration_inventory(regression_config, root=root)[name]
     mode = definition.get("firmware_mode")
-    hint = (f".tools/regression/{name}/variant/soc_top.sv" if mode
+    run_directory = (".tools/runs/<simulator>/<config_target>/<testname>/<run_id>"
+                     if uses_canonical_workspace(name, definition)
+                     else f".tools/regression/{name}")
+    hint = (f"{run_directory}/variant/soc_top.sv" if mode
             else "gen/chip/soc_top.sv" if definition.get("top") in
             ("full_chip_tb", "full_chip_dma_tb") else None)
     detail = {
@@ -457,9 +460,7 @@ def explain_target(root: Path, name: str, definition: dict,
         "expected_soc_top_path_hint_not_verified": hint,
         "selected_source_status": "declared_only_no_resolved_filelist",
         "resolve_without_simulation": f"python3 tools/regress.py {name} --stage files",
-        "run_directory": (".tools/runs/<simulator>/<config_target>/<testname>/<run_id>"
-                          if uses_canonical_workspace(name, definition)
-                          else f".tools/regression/{name}"),
+        "run_directory": run_directory,
     }
     folder = selected_run_folder(root, name, definition)
     selected_manifest = folder / "selected-rtl-manifest.json" if folder else None

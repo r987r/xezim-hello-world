@@ -20,6 +20,18 @@ except ImportError:
                                relative_path, save, simulator, slug, validate)
 
 
+def uses_canonical_ethernet_workspace(name, test):
+    """The two existing Ethernet consumers share the dynamic variant producer."""
+    if (test.get('engine') != 'cocotb-verilator' or test.get('sources') != 'noc'
+            or any(test.get(key) for key in ('memory_config', 'boot_relocate', 'flow_plan'))):
+        return False
+    actual = (test.get('firmware_mode'), test.get('top'), test.get('bender_targets'))
+    return ((name == 'chip-ethernet'
+             and actual == ('ethernet_mvp', 'full_chip_dma_tb', ['chip_boot', 'dma', 'chip_dma']))
+            or (name == 'chip-ethernet-cpu'
+                and actual == ('ethernet_cpu', 'full_chip_tb', ['chip_boot', 'dma'])))
+
+
 def uses_canonical_workspace(name, test):
     """Select migrated families without a second per-target registry."""
     if name == 'dma-rtl':
@@ -43,10 +55,10 @@ def uses_canonical_workspace(name, test):
                 and test.get('bender_targets') == ['chip_boot', 'dma', 'chip_dma']
                 and not test.get('flow_plan'))
         )
-    )
+    ) or uses_canonical_ethernet_workspace(name, test)
 
 
-def selected_run_folder(checkout: Path, target: str, plan: dict) -> Path | None:
+def selected_run_folder(checkout: Path, target: str, plan: dict, *, stage=None) -> Path | None:
     """Resolve the one selected canonical workspace, never guess the latest."""
     checkout = Path(checkout).resolve()
     slug(target, "legacy target")
@@ -59,6 +71,24 @@ def selected_run_folder(checkout: Path, target: str, plan: dict) -> Path | None:
               / neutral_testname(plan["logical_test"]))
     _existing_ancestors_safe(parent)
     candidates = sorted(parent.glob("*/identity.json"))
+    if stage is not None:
+        if stage not in ('files', 'build', 'run', 'all'):
+            raise IdentityError("invalid selected run stage")
+        scoped = []
+        for file in candidates:
+            stored = load(file, target=target, plan=plan)
+            workspace = verify_run(file.parent, stored, plan=plan)
+            plan_file = workspace / "plan.json"
+            if plan_file.is_symlink():
+                raise IdentityError("selected run plan symlink is forbidden")
+            if not plan_file.is_file():
+                continue  # No phase was dispatched for this reservation.
+            snapshot = json.loads(plan_file.read_text())
+            if not isinstance(snapshot, dict) or snapshot.get("identity") != stored:
+                raise IdentityError("selected stage plan does not match run identity")
+            if snapshot.get("stage") == stage:
+                scoped.append(file)
+        candidates = scoped
     if not candidates:
         return None
     if len(candidates) != 1:

@@ -195,13 +195,38 @@ jobs:
           python3 -m unittest tests.test_ethernet_chip_variant -v
           make check-generated
       - name: Run real generated chip Ethernet GMII to SRAM and modeled DDR
+        id: run-ethernet
         run: python3 tools/regress.py chip-ethernet
-      - name: Preserve full-chip real AXI, GMII and CQ report provenance
+      - name: Locate the selected chip-ethernet execution evidence
         if: always()
+        id: ethernet-execution
+        env:
+          SIMULATION_OUTCOME: ${{ steps.run-ethernet.outcome }}
+        run: |
+          PYTHONPATH=tools python3 - <<'PYRUN'
+          import os
+          from pathlib import Path
+          import yaml
+          from run_workspace import selected_run_folder
+
+          root = Path.cwd()
+          name = "chip-ethernet"
+          plan = yaml.safe_load((root / "config/regression.yaml").read_text())["tests"][name]
+          workspace = selected_run_folder(root, name, plan, stage="all")
+          if os.environ["SIMULATION_OUTCOME"] == "success" and (
+                  workspace is None or not (workspace / "result.json").is_file()):
+              raise SystemExit("successful Ethernet regression lacks canonical result")
+          if workspace is not None:
+              canonical_id = workspace.relative_to(root / ".tools/runs").as_posix()
+              with open(os.environ["GITHUB_OUTPUT"], "a") as outputs:
+                  print(f"canonical_id={canonical_id}", file=outputs)
+          PYRUN
+      - name: Preserve full-chip real AXI, GMII and CQ report provenance
+        if: always() && steps.ethernet-execution.outputs.canonical_id != ''
         uses: actions/upload-artifact@v4
         with:
           name: ethernet-chip-data-config-noc-${{ github.run_id }}
-          path: .tools/regression/chip-ethernet/
+          path: ${{ format('.tools/runs/{0}/', steps.ethernet-execution.outputs.canonical_id) }}
           include-hidden-files: true
           if-no-files-found: warn
   chip-cpu-ethernet:
@@ -231,15 +256,52 @@ jobs:
           python3 -m unittest tests.test_ethernet_chip_variant -v
           make check-generated
           python3 tools/regress.py chip-ethernet-cpu --stage files
-          test -f .tools/regression/chip-ethernet-cpu/variant/cpu_dma.elf
-          test -f .tools/regression/chip-ethernet-cpu/variant/flash.hex
-          test -f .tools/regression/chip-ethernet-cpu/sources.f
+          PYTHONPATH=tools python3 - <<'PYRUN'
+          from pathlib import Path
+          import yaml
+          from run_workspace import selected_run_folder
+
+          root = Path.cwd()
+          name = "chip-ethernet-cpu"
+          plan = yaml.safe_load((root / "config/regression.yaml").read_text())["tests"][name]
+          workspace = selected_run_folder(root, name, plan, stage="files")
+          if workspace is None:
+              raise SystemExit("missing selected Ethernet CPU preflight workspace")
+          for member in ("variant/cpu_dma.elf", "variant/flash.hex", "sources.f"):
+              if not (workspace / member).is_file():
+                  raise SystemExit(f"missing Ethernet CPU preflight input: {member}")
+          PYRUN
       - name: Run actual PicoRV32 C queue CSR, GMII and B-gated CQ regression
+        id: run-ethernet-cpu
         run: python3 tools/regress.py chip-ethernet-cpu
-      - uses: actions/upload-artifact@v4
+      - name: Locate the selected chip-ethernet-cpu execution evidence
         if: always()
+        id: ethernet-cpu-execution
+        env:
+          SIMULATION_OUTCOME: ${{ steps.run-ethernet-cpu.outcome }}
+        run: |
+          PYTHONPATH=tools python3 - <<'PYRUN'
+          import os
+          from pathlib import Path
+          import yaml
+          from run_workspace import selected_run_folder
+
+          root = Path.cwd()
+          name = "chip-ethernet-cpu"
+          plan = yaml.safe_load((root / "config/regression.yaml").read_text())["tests"][name]
+          workspace = selected_run_folder(root, name, plan, stage="all")
+          if os.environ["SIMULATION_OUTCOME"] == "success" and (
+                  workspace is None or not (workspace / "result.json").is_file()):
+              raise SystemExit("successful Ethernet regression lacks canonical result")
+          if workspace is not None:
+              canonical_id = workspace.relative_to(root / ".tools/runs").as_posix()
+              with open(os.environ["GITHUB_OUTPUT"], "a") as outputs:
+                  print(f"canonical_id={canonical_id}", file=outputs)
+          PYRUN
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.ethernet-cpu-execution.outputs.canonical_id != ''
         with:
           name: ethernet-cpu0-c-queue-cq-${{ github.run_id }}
-          path: .tools/regression/chip-ethernet-cpu/
+          path: ${{ format('.tools/runs/{0}/', steps.ethernet-cpu-execution.outputs.canonical_id) }}
           include-hidden-files: true
           if-no-files-found: warn

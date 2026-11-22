@@ -258,6 +258,13 @@ class RegressionTests(unittest.TestCase):
         self.assertEqual(config_target(dict(test, memory_config_effective=metadata)),
                          f'memory-custom-{sha(data)[:12]}')
 
+    def test_ethernet_run_only_cannot_use_another_variants_build(self):
+        for name in ('chip-ethernet', 'chip-ethernet-cpu'):
+            with self.subTest(target=name):
+                with self.assertRaisesRegex(ValueError, 'requires its own build'):
+                    regress.run_target(name, self.config['tests'][name], None,
+                                       types.SimpleNamespace(stage='run'))
+
     def test_new_cocotb_target_does_not_inherit_noc_wrapper(self):
         # An existing engine can be reused with a new Bender source target.
         # Only the NoC source provider is allowed to add NoC packages/wrapper.
