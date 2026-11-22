@@ -43,9 +43,33 @@ def uses_canonical_cpu_firmware_workspace(name, test):
             and not any(test.get(key) for key in ('memory_config', 'boot_relocate', 'flow_plan')))
 
 
+def uses_canonical_scenario_workspace(name, test):
+    """Move only the established CPU/BFM replay pair together."""
+    if (test.get('engine') != 'cocotb-verilator' or test.get('sources') != 'noc'
+            or not test.get('flow_plan')
+            or any(test.get(key) for key in ('memory_config', 'boot_relocate'))):
+        return False
+    actual = (test.get('firmware_mode'), test.get('top'), test.get('bender_targets'))
+    return ((name == 'chip-cpu-scenario'
+             and actual == ('cpu_dma_scenario', 'full_chip_tb', ['chip_boot', 'dma']))
+            or (name == 'chip-dma-scenario'
+                and actual == ('scenario_bfm', 'full_chip_dma_tb', ['chip_boot', 'dma', 'chip_dma'])))
+
+
+def uses_canonical_peakrdl_reset_workspace(name, test):
+    """Only the existing source-selected full-chip CSR cold-boot proof."""
+    return (name == 'chip-peakrdl-reset' and test.get('logical_test') == 'reset-ack-register-access'
+            and test.get('firmware_mode') == 'peakrdl_reset'
+            and test.get('engine') == 'cocotb-verilator' and test.get('sources') == 'noc'
+            and test.get('top') == 'full_chip_tb' and test.get('bender_targets') == ['chip_boot']
+            and not any(test.get(key) for key in ('memory_config', 'boot_relocate', 'flow_plan')))
+
+
 def uses_canonical_generated_firmware_workspace(name, test):
     return (uses_canonical_ethernet_workspace(name, test)
-            or uses_canonical_cpu_firmware_workspace(name, test))
+            or uses_canonical_cpu_firmware_workspace(name, test)
+            or uses_canonical_scenario_workspace(name, test)
+            or uses_canonical_peakrdl_reset_workspace(name, test))
 
 
 def uses_canonical_workspace(name, test):
@@ -74,19 +98,36 @@ def uses_canonical_workspace(name, test):
     ) or uses_canonical_generated_firmware_workspace(name, test)
 
 
-def selected_run_folder(checkout: Path, target: str, plan: dict, *, stage=None) -> Path | None:
-    """Resolve the one selected canonical workspace, never guess the latest."""
-    checkout = Path(checkout).resolve()
-    slug(target, "legacy target")
-    if not uses_canonical_workspace(target, plan):
-        return checkout / ".tools/regression" / target
+def _run_identity_files(checkout: Path, target: str, plan: dict) -> list[Path]:
     legacy = checkout / ".tools/regression" / target
     if legacy.exists() or legacy.is_symlink():
         raise IdentityError(f"legacy {target} mirror forbidden after canonical migration")
     parent = (checkout / ".tools/runs" / simulator(plan) / config_target(plan)
               / neutral_testname(plan["logical_test"]))
     _existing_ancestors_safe(parent)
-    candidates = sorted(parent.glob("*/identity.json"))
+    return sorted(parent.glob("*/identity.json"))
+
+
+def snapshot_run_ids(checkout: Path, target: str, plan: dict) -> frozenset[str]:
+    """Record earlier identities before a replay starts; no time/order guesses."""
+    slug(target, "legacy target")
+    if not uses_canonical_workspace(target, plan):
+        raise IdentityError("run snapshot needs a canonical target")
+    return frozenset(path.parent.name for path in
+                     _run_identity_files(Path(checkout).resolve(), target, plan))
+
+
+def selected_run_folder(checkout: Path, target: str, plan: dict, *,
+                        stage=None, prior_run_ids=frozenset()) -> Path | None:
+    """Resolve one selected workspace, optionally only one new invocation."""
+    checkout = Path(checkout).resolve()
+    slug(target, "legacy target")
+    if not uses_canonical_workspace(target, plan):
+        if prior_run_ids:
+            raise IdentityError("run snapshot needs a canonical target")
+        return checkout / ".tools/regression" / target
+    candidates = [path for path in _run_identity_files(checkout, target, plan)
+                  if path.parent.name not in prior_run_ids]
     if stage is not None:
         if stage not in ('files', 'build', 'run', 'all'):
             raise IdentityError("invalid selected run stage")

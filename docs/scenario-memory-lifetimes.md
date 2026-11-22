@@ -5,16 +5,21 @@
 ## Reproduce for a selected SCN-2 run
 
 ```sh
+RUN="path/to/the/exact/canonical/CPU/run"
 python3 tools/scenario_memory_trace.py \
-  --plan .tools/regression/chip-cpu-scenario/variant/scenario-plan.json \
-  --axi .tools/regression/chip-cpu-scenario/axi-transactions.json \
-  --scenario-execution .tools/regression/chip-cpu-scenario/scenario-execution.json \
-  --result .tools/regression/chip-cpu-scenario/result.json \
-  --out .tools/regression/chip-cpu-scenario/memory-lifetimes.json \
-  --report-html .tools/regression/chip-cpu-scenario/report.html
+  --plan "$RUN/variant/scenario-plan.json" \
+  --axi "$RUN/axi-transactions.json" \
+  --scenario-execution "$RUN/scenario-execution.json" \
+  --result "$RUN/result.json" \
+  --out "$RUN/memory-lifetimes.json" \
+  --report-html "$RUN/report.html"
 ```
 
-This is the existing **private** runtime scratch convention; published new reports use [canonical identity paths](test-identity.md). Re-run the CLI using the real current run's selected paths if they change under [#139](https://github.com/r987r/xezim-hello-world/issues/139). For the BFM profile substitute `chip-dma-scenario` and its matching original plan/capture. The HTML option adds one safe static table to the existing report, never a second site.
+Use the exact canonical directory printed by the runner under `.tools/runs/`;
+do not select by latest timestamp or combine captures from different runs.
+For the BFM profile use that run's own directory and its top-level
+`scenario-plan.json`. The HTML option adds one safe static table to the
+existing report, never a second site.
 
 ## What may be claimed
 

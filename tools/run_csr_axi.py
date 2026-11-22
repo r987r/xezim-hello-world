@@ -35,6 +35,7 @@ def main():
         hdl_toplevel_lang="verilog",
         test_module="dv.csr.test_reset_axi",
         test_dir=ROOT,
+        results_xml=str(CSR / "results.xml"),
         seed=82,
     )
 

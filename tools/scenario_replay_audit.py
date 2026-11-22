@@ -27,6 +27,41 @@ def _read_json(path: Path) -> dict:
     return data
 
 
+def verify_replay_input(folder: Path, target: str, *, seed: int, plan_bytes: bytes,
+                        source_revision: str, run_prefix: str) -> str:
+    """Bind one run to the CI invocation and exact already selected matrix input."""
+    try:
+        from .test_identity import load, relative_path
+        from .runtime_contract import load as load_selection
+    except ImportError:
+        from test_identity import load, relative_path
+        from runtime_contract import load as load_selection
+    identity = load(folder / "identity.json", target=target)
+    selection = load_selection(folder / "selected-test-plan.json", target=target)
+    result = _read_json(folder / "result.json")
+    path = folder / ("variant" if target == "chip-cpu-scenario" else "") / "scenario-plan.json"
+    filelist = folder / "sources.f"
+    relative = relative_path(identity)
+    plan_sha = hashlib.sha256(plan_bytes).hexdigest()
+    if (tuple(folder.parts[-4:]) != relative.parts
+            or not identity["run_id"].startswith(run_prefix)
+            or not filelist.is_file() or filelist.is_symlink()
+            or hashlib.sha256(filelist.read_bytes()).hexdigest()
+                != identity["selection"]["filelist_sha256"]
+            or result.get("target") != target or result.get("canonical_id") != relative.as_posix()
+            or identity["identity_sha256"] != result.get("identity_sha256")
+            or identity["identity_sha256"] != selection.get("identity_sha256")
+            or result.get("stage") != "all" or selection.get("stage") != "all"
+            or result.get("passed") is not True
+            or selection.get("adapter") != "scenario_dispatch_adapter"
+            or selection.get("source_revision") != source_revision
+            or selection.get("scenario_plan_sha256") != plan_sha
+            or path.is_symlink() or path.read_bytes() != plan_bytes
+            or _read_json(path).get("seed") != seed):
+        raise ReplayAuditError(f"{target}: replay selection does not match original invocation/seed")
+    return relative.as_posix()
+
+
 def audit(cpu_dir: Path, bfm_dir: Path) -> dict:
     inputs = []
     for folder, label, rel in (

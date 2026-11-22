@@ -253,7 +253,7 @@ tests:
           address: '0x1000045c'
           actors: {'1': cpu0}
           steps: {'101': alloc_phys, '102': dma_roundtrip, '103': verify_memory}
-      axi: {scope: dut.u_noc, clock: clk, reset: rst_n, catalog: gen/supernoc/axi_monitors.json, actors: .tools/regression/chip-cpu-scenario/variant/manifest.json, max_events: 500000, required_complete: true}
+      axi: {scope: dut.u_noc, clock: clk, reset: rst_n, catalog: gen/supernoc/axi_monitors.json, actors: variant/manifest.json, max_events: 500000, required_complete: true}
   chip-dma-scenario:
     logical_test: dma-sram-ddr-roundtrip
     engine: cocotb-verilator
@@ -368,7 +368,7 @@ tests:
     timeout_s: 1800
     pass: 'PASS fullchip:'
     report:
-      address_map: {config: config/soc.yaml, variant: cold_boot, csr_map: .tools/regression/chip-peakrdl-reset/csr/csr-map.json}
+      address_map: {config: config/soc.yaml, variant: cold_boot, csr_map: csr/csr-map.json}
       context: 'Real PeakRDL reset/ACK over CPU0 Config NoC, PicoRV32/SERV ROM cold boot; DDR/HBM remain behavioral AXI RAM, no PHY.'
       flow:
         required_steps:

@@ -94,6 +94,28 @@ class WorkspaceTests(unittest.TestCase):
         with self.assertRaisesRegex(IdentityError, 'exactly one'):
             selected_run_folder(checkout, target, plan, stage='all')
 
+    def test_replay_selects_only_one_new_invocation_never_latest(self):
+        from tools.run_workspace import selected_run_folder, snapshot_run_ids
+
+        checkout = Path(self.temp.name)
+        target = "chip-cpu-scenario"
+        def stage(run_id):
+            identity = selected(target, self.plan, run_id=run_id)
+            path = reserve_run(checkout / ".tools/runs", identity, plan=self.plan)
+            (path / "plan.json").write_text(json.dumps({"identity": identity, "stage": "all"}))
+            return path
+
+        stage("local-999999999999")
+        previous = snapshot_run_ids(checkout, target, self.plan)
+        self.assertIsNone(selected_run_folder(checkout, target, self.plan, stage="all",
+                                              prior_run_ids=previous))
+        fresh = stage("local-000000000001")
+        self.assertEqual(selected_run_folder(checkout, target, self.plan, stage="all",
+                                             prior_run_ids=previous), fresh)
+        stage("local-000000000002")
+        with self.assertRaisesRegex(IdentityError, "exactly one"):
+            selected_run_folder(checkout, target, self.plan, stage="all", prior_run_ids=previous)
+
     def test_dynamic_materialization_binds_final_compiler_filelist(self):
         import hashlib
 

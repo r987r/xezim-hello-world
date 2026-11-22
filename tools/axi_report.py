@@ -163,6 +163,20 @@ def read_events(path):
     return events, issues
 
 
+def csr_catalog_path(directory, plan, locator):
+    if locator != 'csr/csr-map.json':
+        # Pre-migration selections already name their checkout-relative map.
+        return ROOT / locator if locator else None
+    if (plan.get('target') != 'chip-peakrdl-reset'
+            or plan.get('firmware_mode') != 'peakrdl_reset'):
+        raise ValueError('run-owned CSR catalog locator not selected by this target')
+    path = directory / locator
+    if (path.parent.is_symlink() or path.is_symlink() or not path.is_file()
+            or not path.resolve().is_relative_to(directory.resolve())):
+        raise ValueError('selected run-owned CSR catalog missing or unsafe')
+    return path
+
+
 def write_report(directory, plan, result):
     catalog = json.loads((ROOT/plan['report']['axi']['catalog']).read_text())
     events, issues = read_events(directory/'axi-events.jsonl')
@@ -236,7 +250,7 @@ def write_report(directory, plan, result):
         from address_map import build as build_address_map, observe as annotate_address_map
         spec = plan['report']['address_map']
         config = ROOT / spec['config']
-        csr_path = ROOT / spec['csr_map'] if spec.get('csr_map') else None
+        csr_path = csr_catalog_path(directory, plan, spec.get('csr_map'))
         map_data = build_address_map(config, csr_path=csr_path, variant=spec['variant'])
         payload['sections']['address_map'] = annotate_address_map(
             map_data, rows,

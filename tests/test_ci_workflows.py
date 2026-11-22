@@ -141,6 +141,48 @@ class WorkflowPolicyTests(unittest.TestCase):
             self.assertTrue(any(item.startswith(name)
                                 for item in discovered[workflow]['artifacts']))
 
+    def test_scenario_archives_exact_replay_pairs_under_the_original_name(self):
+        from publish_site import discover_test_workflows
+        path = ROOT / '.github/workflows/dv-scenario.yml'
+        steps = yaml.load(path.read_text(), Loader=yaml.BaseLoader)['jobs']['scenario-real-rtl']['steps']
+        replay = next(step for step in steps if step.get('id') == 'real-scenario-replay')
+        archive = next(step['with'] for step in steps
+                       if step.get('with', {}).get('name', '').startswith('dv-scenario-rtl-'))
+        self.assertIn("prior_run_ids=before[name]", replay['run'])
+        self.assertIn("ambiguous or missing invocation", replay['run'])
+        self.assertIn("verify_replay_input", replay['run'])
+        self.assertIn("shutil.make_archive", replay['run'])
+        self.assertIn("steps.real-scenario-replay.outputs.paths", archive['path'])
+        self.assertIn(".tools/scenarios/rtl-seed-matrix/", archive['path'])
+        self.assertNotIn(".tools/regression/", archive['path'])
+        self.assertIn(archive['name'],
+                      discover_test_workflows(ROOT)['dv-scenario.yml']['artifacts'])
+
+    def test_csr_boot_archive_keeps_existing_pages_consumer(self):
+        from publish_site import discover_test_workflows
+
+        path = ROOT / '.github/workflows/csr.yml'
+        steps = yaml.load(path.read_text(), Loader=yaml.BaseLoader)['jobs']['csr-rtl-boot']['steps']
+        preflight = next(i for i, step in enumerate(steps)
+                         if step.get('run') == 'python3 tools/run_csr_axi.py')
+        clean_gate = next(i for i, step in enumerate(steps)
+                          if 'git status --porcelain --untracked-files=all' in step.get('run', ''))
+        chip_boot = next(i for i, step in enumerate(steps) if step.get('id') == 'csr-boot')
+        self.assertLess(preflight, clean_gate)
+        self.assertLess(clean_gate, chip_boot)
+        self.assertTrue(any("assert real['run']['dirty'] is False" in step.get('run', '')
+                            for step in steps[chip_boot:]))
+        selector = next(step for step in steps if step.get('id') == 'csr-run')
+        self.assertIn("selected_run_folder(root, target, catalog[target], stage='all')",
+                      selector['run'])
+        self.assertIn('successful CSR boot lacks canonical result', selector['run'])
+        archive_name = 'csr-peakrdl-real-chip-boot'
+        upload = next(step['with'] for step in steps
+                      if step.get('with', {}).get('name') == archive_name)
+        self.assertIn('.tools/runs/${{ steps.csr-run.outputs.canonical_id }}/', upload['path'])
+        self.assertNotIn('.tools/regression/', upload['path'])
+        self.assertIn(archive_name, discover_test_workflows(ROOT)['csr.yml']['artifacts'])
+
     def test_only_pr_to_main_or_manual_dispatch(self):
         for path in sorted((ROOT/'.github/workflows').glob('*.yml')):
             with self.subTest(workflow=path.name):

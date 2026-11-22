@@ -147,6 +147,10 @@ The existing CPU-DMA, PCIe host BAR, and PCIe outbound cases use the same
 run-owned approach. Their existing workflow stages, named evidence archives,
 and raw DMA/AXI/TLP results are unchanged; PCIe bridge normalization and its
 compile check keep generated sources and disposable binaries separate.
+The SCN-2 CPU/BFM replay pair also uses private workspaces. The workflow
+checks the exact new run IDs and the selected seed/plan hash before replay
+audit. Both seed bundles are retained by their existing names; the final
+pair is directly indexed, as before.
 Nonmigrated Cocotb producers still use
 `.tools/regression/<target>/`, where each attempt replaces that target's
 previous output until their migration ([#139](https://github.com/r987r/xezim-hello-world/issues/139)).
