@@ -151,6 +151,21 @@ def catalog(tests):
 
 def declared_selection(plan):
     """Exactly the selected fields carried by the original execution plan."""
+    address_map = (plan.get("report") or {}).get("address_map")
+    # The standalone DDR producer declares immutable workspace-local report
+    # paths. Runtime consumers see their explicit canonical run paths. Old
+    # .tools/regression records must keep their original selection verbatim.
+    identity = plan.get("identity")
+    if (plan.get("target") == "chip-ddr4-real" and isinstance(address_map, dict)
+            and isinstance(identity, dict) and identity.get("legacy_target") == "chip-ddr4-real"
+            and isinstance(identity.get("run_id"), str) and RUN.fullmatch(identity["run_id"])
+            and all(isinstance(identity.get(k), str) and SLUG.fullmatch(identity[k])
+                    for k in ("simulator", "config_target", "testname"))):
+        prefix = (Path(".tools/runs") / relative_path(identity)).as_posix()
+        if (address_map.get("config") == prefix + "/ddr_noc/soc.yaml"
+                and address_map.get("csr_map") == prefix + "/ddr-native-csr-map.json"):
+            address_map = {**address_map, "config": "ddr_noc/soc.yaml",
+                           "csr_map": "ddr-native-csr-map.json"}
     selection = {
         "sources": plan.get("source_target", plan.get("sources")),
         "top": plan.get("top"),
@@ -158,7 +173,7 @@ def declared_selection(plan):
         "memory_config": plan.get("memory_config"),
         "boot_relocate": plan.get("boot_relocate"),
         "bender_targets": plan.get("bender_targets", []),
-        "report_address_map": (plan.get("report") or {}).get("address_map"),
+        "report_address_map": address_map,
     }
     # Preserve the historical schema/fingerprint for pre-migration artifacts.
     if "memory_config_effective" in plan:

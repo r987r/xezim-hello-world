@@ -15,9 +15,13 @@ from pathlib import Path
 import yaml
 
 try:
-    from .run_workspace import uses_canonical_generated_firmware_workspace
+    from .ddr_split_workspace import DDR_MONITOR_CATALOG
+    from .run_workspace import (uses_canonical_ddr_split,
+                                uses_canonical_generated_firmware_workspace)
 except ImportError:
-    from run_workspace import uses_canonical_generated_firmware_workspace
+    from ddr_split_workspace import DDR_MONITOR_CATALOG
+    from run_workspace import (uses_canonical_ddr_split,
+                               uses_canonical_generated_firmware_workspace)
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -155,7 +159,12 @@ def catalog(root: Path = ROOT, *, verification_reports: dict[str, Path] | None =
                 actor_catalog_status = "loaded_checked_in" if not generated_runtime else "loaded_runtime_generated"
         monitors = []
         monitor_catalog_status = "not_declared"
-        if axi.get("catalog"):
+        if (uses_canonical_ddr_split(name, test)
+                and axi.get("catalog") == DDR_MONITOR_CATALOG):
+            # Report from the selected DDR simulation, not this source-only
+            # explorer, owns the generated LiteDRAM monitor catalog.
+            monitor_catalog_status = "opt_in_runtime_generated_not_available"
+        elif axi.get("catalog"):
             candidate = (root / axi["catalog"]).resolve()
             generated_runtime = (candidate.is_relative_to((root / ".tools/regression").resolve())
                                  and candidate.is_relative_to(root.resolve()))
