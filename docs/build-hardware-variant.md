@@ -30,14 +30,12 @@ A compiler source, filelist, pinned include, firmware image or generated
 RTL change must be resolved and reviewed explicitly; it cannot be silently
 renamed the same hardware build.
 
-**Qualification boundary:** This script is actual selected source
-*generation*, not simulation, validated bit connectivity, or generator-owned
-checked-in `gen/projects` output. It depends on pinned Bender, FlooGen,
-clang/LLVM and upstream IP being installed. CI currently verifies the
-CLI's scheduling/reproduction/rejection logic with mocked runner calls;
-a real default/combined source rebuild + passive simulation acceptance
-must still be qualified before #184 can close. Do not copy a one-time CI
-snapshot into `gen/`; issue #184 tracks canonical generator integration.
+**Qualification boundary:** This CLI stages and compares actual selected
+sources; it neither runs a simulation nor writes the tracked `gen/projects`
+tree. It requires pinned Bender, FlooGen, clang/LLVM and upstream IP. For
+independent replay of the tracked combined variant and separate real combined
+simulation, see the [combined CI workflow](../.github/workflows/dv-combined34.yml)
+and the generator target below. Do not copy a one-time CI snapshot into `gen/`.
 
 ## Generator-owned combined RTL (P0 #184)
 

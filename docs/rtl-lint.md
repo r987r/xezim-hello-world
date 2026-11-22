@@ -34,16 +34,19 @@ positive profiles become available automatically.
 python3 tools/lint_rtl.py --list
 
 # With pinned Bender, generator dependencies and slang installed:
-python3 tools/regress.py supernoc dma-rtl chip-dma chip-boot --stage files
+mapfile -t lint_profiles < <(python3 tools/lint_rtl.py --list)
+test "${#lint_profiles[@]}" -gt 0
+python3 tools/regress.py "${lint_profiles[@]}" --stage files
 python3 tools/lint_rtl.py --slang .tools/bin/slang
-python3 tools/lint_rtl.py --slang .tools/bin/slang --enforce
 ~~~
 
 Each profile produces `lint.raw.json`, `lint.log`, `elaborate.raw.json`,
 `elaborate.log`, and `report.json`; the overall inventory is
 `summary.json`. Each finding records severity, code, message, source
-location, symbol path when available, and whether its source is within
-vendor RTL or project RTL. The artifact also retains `sources.f` and
+location, symbol path when available, and a path-based origin label. The
+current label treats files under `.tools/` as vendor, which can include
+generated or staged selected inputs; use the source manifest to review
+ownership before assigning waivers. The artifact also retains `sources.f` and
 `plan.json` so a cleanup PR can reproduce problems exactly.
 
 ## Parallel issue cleanup

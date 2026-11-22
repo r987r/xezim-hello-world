@@ -14,7 +14,7 @@ actor overlays. It contains no 3D view.
 | Regression YAML | Top modules, selected profiles, test modules and AXI report configuration | Test registration, not test execution |
 | Generated actor/monitor JSON | Real RTL, BFM, SRAM model and CSR roles per profile | Declared scope, not runtime proof |
 | slang-hier probe | Exact elaborated hierarchy for a resolved filelist | Only authoritative after a successful run |
-| slang-netlist | Bit-level driver and path tracing | Planned next integration; not yet executed against SoC |
+| slang-netlist | Bit-level driver and path tracing | Selected memory-crossbar CI is scoped; selected full-chip proof is not established |
 | hdl-kgraph | UVM class inheritance, role classification, cocotb direct DUT access | Static inference, not dynamically constructed TB topology |
 
 The diagram must never present generated/declared connectivity as verified
@@ -85,9 +85,11 @@ masters; chip boot has real CPUs and disabled DMAs; chip DMA has active PULP
 iDMA engines and host BFMs at CPU0 boundaries. The same configured block
 should not be misrepresented as having identical actors in every test.
 
-This PR does not yet pin/build slang or slang-netlist, or certify the full
-generated RTL through them. Those integration checks belong in a dedicated
-toolchain validation step with reproducible version pins.
+The [Slang lint workflow](../.github/workflows/slang-lint.yml) installs a
+checksum-pinned frontend and retains diagnostics in report-only mode. The
+separate [real-netlist workflow](../.github/workflows/real-netlist.yml) builds
+the pinned slang-netlist revision and qualifies the selected memory crossbar.
+Neither substitutes for full-chip netlist proof; see [#46](https://github.com/r987r/xezim-hello-world/issues/46).
 
 ## Source-attested selected hardware comparisons
 
