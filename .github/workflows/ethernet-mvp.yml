@@ -113,21 +113,39 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends verilator clang llvm lld
       - name: Resolve source-true chip Bender filelist and compile six-source AXI mux
+        id: chip-boot-source
         run: |
           set -euo pipefail
           python3 tools/regress.py chip-boot --stage files
-          test -f .tools/regression/chip-boot/sources.f
-          python3 - <<'PY'
+          filelist=$(PYTHONPATH=tools python3 - <<'PYRUN'
+          from pathlib import Path
+          import yaml
+          from run_workspace import selected_run_folder
+
+          root = Path.cwd()
+          name = "chip-boot"
+          plan = yaml.safe_load((root / "config/regression.yaml").read_text())["tests"][name]
+          workspace = selected_run_folder(root, name, plan)
+          if workspace is None:
+              raise SystemExit("missing selected chip-boot filelist workspace")
+          print((workspace / "sources.f").relative_to(root).as_posix())
+          PYRUN
+          )
+          test -f "$filelist"
+          printf 'filelist=%s\n' "$filelist" >> "$GITHUB_OUTPUT"
+          pinned_filelist="$RUNNER_TEMP/ethernet-pinned.f"
+          python3 - "$pinned_filelist" <<'PY'
+          import sys
           from dv.ethernet0.run_mac_gmii import fetch_pinned
-          with open('.tools/regression/ethernet-pinned.f','w') as out:
+          with open(sys.argv[1], 'w') as out:
               for directory,spec in fetch_pinned().values():
                   for module in spec['modules']:
                       print(directory/module,file=out)
           PY
           verilator --lint-only --timing -Wno-fatal \
             --top-module ethernet0_axi_mvp \
-            -f .tools/regression/chip-boot/sources.f \
-            -f .tools/regression/ethernet-pinned.f \
+            -f "$filelist" \
+            -f "$pinned_filelist" \
             rtl/io/ethernet0/ethernet0_axi_mvp.sv \
             rtl/io/ethernet0/ethernet0_mvp.v \
             rtl/io/ethernet0/ethernet0_rx_mvp.v \
@@ -145,10 +163,10 @@ jobs:
             .tools/verilog_axi/rtl/axi_dma_wr.v
           echo "PASS Ethernet0 six-initiator PULP AXI mux source elaboration"
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && steps.chip-boot-source.outputs.filelist != ''
         with:
           name: ethernet-axi-mux-sources-${{ github.run_id }}
-          path: .tools/regression/chip-boot/sources.f
+          path: ${{ steps.chip-boot-source.outputs.filelist }}
           if-no-files-found: warn
   chip-real-noc:
     runs-on: ubuntu-24.04

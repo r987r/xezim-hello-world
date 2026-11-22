@@ -74,6 +74,36 @@ jobs:
           echo "XEZIM_BIN=$GITHUB_WORKSPACE/.tools/bin/$XEZIM_ASSET_NAME" >> "$GITHUB_ENV"
       - name: 'Run common SoC INIT/RUN/CHECK: real CPU C DMA, dual BFM DMA, negatives, Xezim compile'
         run: make dv-chip FAST_FAIL=1
+      - name: Locate only the selected static chip boot evidence
+        if: always()
+        id: static-chip-runs
+        run: |
+          PYTHONPATH=tools python3 - <<'PYRUN'
+          import os
+          from pathlib import Path
+          import yaml
+          from run_workspace import selected_run_folder
+
+          root = Path.cwd()
+          catalog = yaml.safe_load((root / "config/regression.yaml").read_text())["tests"]
+          directories = []
+          for name in ("chip-boot", "chip-boot-negative", "chip-boot-latency"):
+              workspace = selected_run_folder(root, name, catalog[name])
+              if workspace is not None:
+                  relative = workspace.relative_to(root / ".tools/runs")
+                  directories.append((Path(".tools/runs") / relative).as_posix())
+
+          with open(os.environ["GITHUB_OUTPUT"], "a") as outputs:
+              print("directories<<CHIP_BOOT_PATHS", file=outputs)
+              for directory in directories:
+                  print(f"{directory}/", file=outputs)
+              print("CHIP_BOOT_PATHS", file=outputs)
+              print("reports<<CHIP_BOOT_PATHS", file=outputs)
+              for directory in directories:
+                  print(f"{directory}/report.html", file=outputs)
+                  print(f"{directory}/axi-*.json*", file=outputs)
+              print("CHIP_BOOT_PATHS", file=outputs)
+          PYRUN
       - name: Retain all chip build/phase/memory results
         if: always()
         uses: actions/upload-artifact@v4
@@ -81,6 +111,7 @@ jobs:
           name: full-chip-boot-results
           path: |
             .tools/regression/chip-*/
+            ${{ steps.static-chip-runs.outputs.directories }}
             .tools/runs/xezim/
             gen/chip/
           include-hidden-files: true
@@ -95,7 +126,6 @@ jobs:
             .tools/regression/chip-dma/axi-*.json*
             .tools/regression/chip-cpu-dma/report.html
             .tools/regression/chip-cpu-dma/axi-*.json*
-            .tools/regression/chip-boot*/report.html
-            .tools/regression/chip-boot*/axi-*.json*
+            ${{ steps.static-chip-runs.outputs.reports }}
           include-hidden-files: true
           if-no-files-found: warn

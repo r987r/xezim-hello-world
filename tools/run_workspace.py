@@ -30,7 +30,14 @@ def uses_canonical_workspace(name, test):
             and (not test.get('memory_config') or test.get('sources') == 'memory')
             and not test.get('firmware_mode')
             and (not test.get('boot_relocate')
-                 or (test['engine'] == 'xezim' and test.get('sources') == 'boot')))
+                 or (test['engine'] == 'xezim' and test.get('sources') == 'boot'))) or (
+        # The static boot cohort keeps its shared source-keyed simulator.
+        # Firmware/RTL variants have separate materialization and consumers.
+        test.get('engine') == 'cocotb-verilator'
+        and test.get('sources') == 'noc' and test.get('top') == 'full_chip_tb'
+        and test.get('bender_targets') == ['chip_boot']
+        and not any(test.get(key) for key in ('memory_config', 'boot_relocate', 'firmware_mode'))
+    )
 
 
 def selected_run_folder(checkout: Path, target: str, plan: dict) -> Path | None:

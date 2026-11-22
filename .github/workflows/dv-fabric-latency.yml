@@ -111,13 +111,32 @@ jobs:
         run: python3 tools/regress.py chip-boot --stage build
       - name: Boot real CPUs and benchmark only the unowned DMA BFM port
         run: python3 tools/regress.py chip-boot-latency --stage run
+      - name: Locate the selected full-chip benchmark run, not its build workspace
+        if: always()
+        id: fullchip-latency-run
+        run: |
+          PYTHONPATH=tools python3 - <<'PYRUN'
+          import os
+          from pathlib import Path
+          import yaml
+          from run_workspace import selected_run_folder
+
+          root = Path.cwd()
+          name = "chip-boot-latency"
+          plan = yaml.safe_load((root / "config/regression.yaml").read_text())["tests"][name]
+          workspace = selected_run_folder(root, name, plan)
+          if workspace is not None:
+              canonical_id = workspace.relative_to(root / ".tools/runs").as_posix()
+              with open(os.environ["GITHUB_OUTPUT"], "a") as outputs:
+                  print(f"canonical_id={canonical_id}", file=outputs)
+          PYRUN
       - name: Retain original full-chip boot, AXI and benchmark evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: fabric-latency-fullchip-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            .tools/regression/chip-boot-latency/
+            ${{ steps.fullchip-latency-run.outputs.canonical_id != '' && format('.tools/runs/{0}/', steps.fullchip-latency-run.outputs.canonical_id) || '' }}
             gen/supernoc/manifest.json
             gen/supernoc/axi_monitors.json
           include-hidden-files: true
