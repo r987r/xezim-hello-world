@@ -5,6 +5,8 @@ on:
     paths:
       - 'rtl/io/ethernet0/**'
       - 'dv/ethernet0/**'
+      - 'tools/test_identity.py'
+      - 'tools/run_workspace.py'
       - '.github/workflows/ethernet-mvp.yml'
   workflow_dispatch:
 permissions:
@@ -30,9 +32,11 @@ jobs:
           python3 tools/ip_fetch.py verilog_axi
           python3 -m unittest tests.test_ethernet_chip_variant -v
       - name: Elaborate actual GMII MAC to CQ writer connectivity
+        id: native-mvp
         run: |
           python3 - <<'PY'
           from dv.ethernet0.run_mac_gmii import fetch_pinned
+          from dv.ethernet0.native_workspace import run_existing_icarus
           from pathlib import Path
           import subprocess
           root=Path.cwd()
@@ -65,33 +69,20 @@ jobs:
               root/".tools/verilog_axi/rtl/axi_ram.v",
               root/"dv/ethernet0/ethernet0_rx_mvp_tb.v",
           ))
-          from cocotb_test.simulator import run
-          run(simulator="icarus",verilog_sources=[str(p) for p in sources],
-              toplevel="ethernet0_rx_mvp_tb",
-              module="dv.ethernet0.tb_rx_mvp",
-              python_search=[str(root)],
-              sim_build=str(root/".tools/regression/ethernet-mvp/sim_build"),
-              timescale="1ns/1ps",waves=False)
+          run_existing_icarus("ethernet0-mvp-rx", sources)
           print("PASS real GMII RX -> SRAM packet -> 32-byte CQ AXI B and independent readback")
           sources.append(root/"dv/ethernet0/ethernet0_tx_mvp_tb.v")
-          run(simulator="icarus",verilog_sources=[str(p) for p in sources],
-              toplevel="ethernet0_tx_mvp_tb",
-              module="dv.ethernet0.tb_tx_mvp",
-              python_search=[str(root)],
-              sim_build=str(root/".tools/regression/ethernet-mvp/tx_sim_build"),
-              timescale="1ns/1ps",waves=False)
+          run_existing_icarus("ethernet0-mvp-tx", sources)
           print("PASS real SRAM TX descriptor -> GMII wire frame/FCS -> B-gated TX CQ")
           PY
-      - name: Archive structural source list
-        if: always()
-        run: |
-          mkdir -p .tools/regression/ethernet-mvp
-          git rev-parse HEAD > .tools/regression/ethernet-mvp/source-head.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: ethernet-mvp-structural-${{ github.run_id }}
-          path: .tools/regression/ethernet-mvp/
+          path: |
+            .tools/runs/*/ethernet-standalone-default/gmii-rx-to-sram/${{ steps.native-mvp.outputs.ethernet0_mvp_rx_run_id || '_no-native-rx_' }}/
+            .tools/runs/*/ethernet-standalone-default/sram-to-gmii-tx/${{ steps.native-mvp.outputs.ethernet0_mvp_tx_run_id || '_no-native-tx_' }}/
+          include-hidden-files: true
           if-no-files-found: warn
   noc-axi-mux:
     runs-on: ubuntu-24.04

@@ -24,6 +24,7 @@ ENGINE_SIMULATOR = {
     "xezim-compile": "xezim",
     "verilator-lint": "verilator",
     "cocotb-verilator": "verilator",
+    "cocotb-icarus": "icarus",
 }
 SCHEMA = 1
 
