@@ -1989,6 +1989,9 @@ def build(output,evidence,repository,sha,config):
     catalog=yaml.safe_load((ROOT/'config/regression.yaml').read_text())
     source_scenario=json.loads((ROOT/'config/scenarios/cpu-bfm-ddr-roundtrip.json').read_text())
     flow_intents=intended_flow_catalog(catalog,scenario=source_scenario)
+    from test_identity import catalog as identity_catalog
+    test_names={target:'/'.join(identity)
+                for identity,target in identity_catalog(catalog['tests']).items()}
     noc=json.loads((ROOT/'gen/noc/floonoc/manifest.json').read_text())
     chip=json.loads((ROOT/'gen/chip/manifest.json').read_text())
     monitors=json.loads((ROOT/'gen/supernoc/axi_monitors.json').read_text())
@@ -2076,7 +2079,7 @@ def build(output,evidence,repository,sha,config):
              'built_at':datetime.now(timezone.utc).isoformat(),'runs':runs,'entries':entries,
              'notes':notes,'documents':docs,'networks':noc['networks'],'chip':chip,
              'monitors':monitors['monitors'],'fabric':fabric['summary'],'tests':catalog['tests'],
-             'test_intents':flow_intents}
+             'test_names':test_names,'test_intents':flow_intents}
     dump(output/'data/site.json',dataset)
     data=json.dumps(dataset,separators=(',',':')).replace('<','\\u003c')
     for page in ('index','topology','explorer','fabric','address-map','runs','docs','reference'):

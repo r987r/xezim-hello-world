@@ -352,6 +352,12 @@ class PublicationTests(unittest.TestCase):
                 yaml.safe_load((ROOT/'config/regression.yaml').read_text())['tests']))
             self.assertIn('dma-rtl',dataset['tests'])
             self.assertIn('chip-dma',dataset['tests'])
+            self.assertEqual(set(dataset['test_names']),set(dataset['tests']))
+            self.assertEqual(dataset['test_names']['chip-boot'],
+                             'verilator/soc-default/multicore-cold-boot')
+            self.assertEqual(dataset['test_names']['chip-ddr4-real'],
+                             'verilator/soc-ddr-cpu-dma/dma-controller-readback')
+            self.assertFalse(dataset['entries'],'a configured identity is not a run')
             self.assertTrue((output/'fabric.html').is_file())
             self.assertTrue((output/'address-map.html').is_file())
             addr=json.loads((output/'data/soc-address-map.json').read_text())
