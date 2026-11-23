@@ -29,6 +29,20 @@ class RegressionTests(unittest.TestCase):
         self.assertTrue({'memory-full', 'memory-sparse', 'boot-relocated',
                          'supernoc', 'supernoc-negative', 'noc-xezim'} <= set(names))
 
+    def test_list_displays_configured_names_and_preserves_invocation_selectors(self):
+        from contextlib import redirect_stdout
+        from io import StringIO
+
+        output = StringIO()
+        with patch.object(sys, 'argv', ['regress.py', 'chip-boot', 'ddr-real', '--list']), \
+             patch.object(regress, 'run_target') as run_target, redirect_stdout(output):
+            self.assertEqual(regress.main(), 0)
+        run_target.assert_not_called()
+        self.assertEqual(output.getvalue().splitlines(), [
+            'verilator/soc-default/multicore-cold-boot\tinvoke: chip-boot',
+            'verilator/soc-ddr-cpu-dma/dma-controller-readback\tinvoke: chip-ddr4-real',
+        ])
+
     def test_opt_in_requires_explicit_suite_and_boolean(self):
         import tempfile
         for bad in ("boolean", "unlisted", "default"):

@@ -53,6 +53,8 @@
 </style>
 
 <h2 id="recorded-tests">Recorded test results</h2>
+<p class="muted">Canonical names identify individual runs. Retained legacy reports are labeled historical; isolated captures are observations only.</p>
+<style>.run-identity{display:inline-block;max-inline-size:min(30rem,48vw);overflow-wrap:anywhere;white-space:normal;line-height:1.4}</style>
 <div class="filters">
   <label>Suite<select id="family"><option value="">All suites</option></select></label>
   <label>Search<input id="search" type="search" placeholder="Target, commit, workflow or protocol"></label>
@@ -62,7 +64,7 @@
   <label>History<select id="history"><option value="latest">Latest per test / workflow</option><option value="all">All retained runs</option></select></label>
   <span id="count" class="muted" aria-live="polite"></span>
 </div>
-<div class="scroll"><table><thead><tr><th>Test target</th><th>Suite</th><th>Acceptance</th><th>Scope / engine</th><th>Traffic observations</th><th>Tested commit</th><th>Workflow / time (UTC)</th></tr></thead><tbody id="results"></tbody></table></div>
+<div class="scroll"><table><thead><tr><th>Run identity</th><th>Suite</th><th>Acceptance</th><th>Traffic observations</th><th>Tested commit</th><th>Workflow / time (UTC)</th></tr></thead><tbody id="results"></tbody></table></div>
 
 <h2>Workflow history</h2>
 <p class="muted">Includes stand-alone test workflows with no canonical per-target report. Only main and exact GitHub-verified merged PR runs are shown. CI-only success is not a per-test PASS.</p>
@@ -71,7 +73,7 @@
 
 <h2 id="test-catalog">Configured test catalog</h2>
 <p class="muted">These targets are automatically read from config/regression.yaml. Missing evidence is labeled "No recorded result", not FAIL.</p>
-<div class="scroll"><table><thead><tr><th>Target</th><th>Suite</th><th>Recorded result</th><th>Engine</th><th>Top / source scope</th><th>Acceptance rule</th></tr></thead><tbody id="catalog"></tbody></table></div>
+<div class="scroll"><table><thead><tr><th>Configured test</th><th>Suite</th><th>Recorded result</th><th>Top / source scope</th><th>Acceptance rule</th></tr></thead><tbody id="catalog"></tbody></table></div>
 
 <script type="application/json" id="site-data">__SITE_DATA__</script>
 <script>__RUN_TRAFFIC_JS__</script>
@@ -80,6 +82,7 @@
 "use strict";
 const D=JSON.parse(document.getElementById("site-data").textContent);
 const byId=id=>document.getElementById(id);
+const configuredTest=name=>D.test_names[name];
 const text=(tag,value,cls)=>{
   const n=document.createElement(tag);
   n.textContent=String(value);
@@ -143,7 +146,7 @@ const flowSelect=byId("flow-target");
 const flowNames=Object.keys(D.tests).sort();
 for(const name of flowNames){
   const option=document.createElement("option");
-  option.value=name;option.textContent=name;flowSelect.append(option);
+  option.value=name;option.textContent=configuredTest(name);flowSelect.append(option);
 }
 let selectedFlowEntry=null;
 const markFlow=(target,entry=null)=>{
@@ -290,7 +293,7 @@ function render(){
   for(const e of D.entries){
     if(fam&&suite(e.target,e.workflow)!==fam)continue;
     if(protocolFilter.value&&!(e.protocols||[]).includes(protocolFilter.value))continue;
-    if(!matchesQuery([e.target,e.testname,e.config_target,e.simulator,e.execution_id,e.workflow,e.source_sha,e.engine,(e.protocols||[]).join(" ")],q))continue;
+    if(!matchesQuery([e.target,e.canonical_id,e.testname,e.config_target,e.simulator,e.execution_id,e.workflow,e.source_sha,e.engine,(e.protocols||[]).join(" ")],q))continue;
     if(outcome&&(e.evidence_only||(outcome==="pass")!==e.passed))continue;
     if(kind==="axi"&&!e.axi)continue;
     if(kind==="protocol"&&!(e.protocols||[]).length)continue;
@@ -305,7 +308,8 @@ function render(){
     if(latest&&seen.has(key))continue;
     seen.add(key);
     const tr=document.createElement("tr");
-    const testLink=link(e.target,e.path);
+    const testLink=link(e.canonical_id||e.target,e.path);
+    testLink.classList.add("run-identity");
     const inspect=document.createElement("button");inspect.type="button";
     inspect.textContent="Inspect traffic";inspect.style.display="block";
     inspect.style.marginTop="7px";inspect.style.fontSize="12px";
@@ -317,28 +321,23 @@ function render(){
     openFlow.onclick=()=>markFlow(e.target,e);
     const named=e.evidence_only?
       text("div","Isolated source-verified monitor capture · no regression result.json","muted"):
-      e.canonical_id?
-      text("div","Canonical: "+e.simulator+"/"+e.config_target+"/"+e.testname,"muted"):
-      text("div","Historical run: canonical identity not archived","muted");
-    td(tr,testLink,named,e.canonical_url?link("Open canonical run",e.canonical_url):text("span","","muted"),inspect,openFlow);
+      !e.canonical_id?text("div","Historical run: canonical identity not archived","muted"):null;
+    td(tr,testLink,...(named?[named]:[]),inspect,openFlow);
     td(tr,suite(e.target,e.workflow));
     const evidenceRelation=e.source_sha===D.source_sha?"Exact tested/site SHA":
       e.verified_site_source_sha===D.source_sha?"Verified same Git tree":
       e.verified_fabric_source_sha===D.source_sha?"Fabric inputs equivalent only":
       "Historical tested SHA";
+    const manifestLink=compilerManifestLink(e);
+    const manifestRow=text("div","","muted");
+    if(manifestLink)manifestRow.append(manifestLink);
     td(tr,text("span",e.evidence_only?"OBSERVED":e.passed?"PASS":"FAIL",
                  e.evidence_only?"muted":e.passed?"good":"bad"),
       text("div",e.evidence_only?"Capture only · "+(e.workflow_conclusion||"unknown")+
            " workflow; never a full-chip PASS":
            e.acceptance_scope==="compile_only"?"Compile/lint only · no simulation":
            e.expected_failure?"Required negative check":"Positive regression","muted"),
-      text("div",evidenceRelation,"muted"));
-    const manifestLink=compilerManifestLink(e);
-    if(manifestLink){
-      const manifestRow=text("div","","muted");
-      manifestRow.append(manifestLink);
-      td(tr,e.engine,manifestRow);
-    }else td(tr,e.engine);
+      text("div",evidenceRelation,"muted"),...(manifestLink?[manifestRow]:[]));
     const protocols=e.protocols||[];
     td(tr,protocols.length?
       String(e.protocol_observations)+" "+protocols.join(", ")+" observations":
@@ -358,7 +357,7 @@ function render(){
   if(!count){
     const tr=document.createElement("tr");
     const cell=text("td","No recorded test evidence matches these filters. Check the configured catalog and workflow history below.","empty");
-    cell.colSpan=7;tr.append(cell);results.append(tr);
+    cell.colSpan=6;tr.append(cell);results.append(tr);
   }
   byId("count").textContent=count+" recorded results shown";
 
@@ -393,15 +392,16 @@ function render(){
     const recorded=latestTarget.get(name);
     if(protocolFilter.value&&!plannedProtocols.includes(protocolFilter.value)&&
        !(recorded?.protocols||[]).includes(protocolFilter.value))continue;
-    if(!matchesQuery([name,t.logical_test,t.engine,t.top,t.sources,t.pass],q))continue;
+    if(!matchesQuery([name,configuredTest(name),t.engine,t.top,t.sources,t.pass],q))continue;
     const tr=document.createElement("tr"),e=latestTarget.get(name);
     const flowBtn=document.createElement("button");
     flowBtn.type="button";flowBtn.textContent="View flow";
     flowBtn.onclick=()=>markFlow(name);
-    td(tr,name,text("div",t.logical_test||"Legacy naming not archived","muted"),flowBtn);td(tr,suite(name));
+    td(tr,text("span",configuredTest(name),"run-identity"),
+       text("div","Invocation selector: "+name,"muted"),flowBtn);
+    td(tr,suite(name));
     if(e)td(tr,link(e.passed?"PASS · run #"+e.run_id:"FAIL · run #"+e.run_id,e.path));
     else td(tr,text("span","No recorded result","muted"));
-    td(tr,t.engine);
     td(tr,t.top||t.sources||"Generated scope");
     td(tr,t.expect_failure?"Required failure: "+t.expect_failure:t.pass||"Runner acceptance / diagnostics");
     catalog.append(tr);

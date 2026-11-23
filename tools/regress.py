@@ -1186,7 +1186,8 @@ def main():
     cli = argparse.ArgumentParser(description=__doc__)
     cli.add_argument('targets', nargs='*', default=['full'])
     cli.add_argument('--config', type=Path, default=ROOT/'config/regression.yaml')
-    cli.add_argument('--list', action='store_true')
+    cli.add_argument('--list', action='store_true',
+                     help='list configured simulator/config/test names and invocation selectors')
     cli.add_argument('--explain', action='store_true', help='read-only test/build and selected RTL provenance (no Bender or simulator)')
     cli.add_argument('--check-noc', action='store_true')
     cli.add_argument('--fail-fast', action='store_true',
@@ -1232,8 +1233,11 @@ def main():
                          else explanations, indent=2))
         return 0
     if options.list:
+        from test_identity import catalog as identity_catalog
+        configured = {target: '/'.join(identity)
+                      for identity, target in identity_catalog(config['tests']).items()}
         for name in targets:
-            print(f'{name:22} {config["tests"][name]["engine"]}')
+            print(f'{configured[name]}\tinvoke: {name}')
         return 0
     if options.check_noc:
         print(f'PASS: {len(noc_contracts())} configured NoC module/package/native contracts')

@@ -83,6 +83,11 @@ make test-noc                # all configured meshes + connected traffic + corru
 python3 tools/regress.py compatibility  # Xezim structural NoC compilation only
 ```
 
+`make test-list` shows the configured `simulator/config_target/testname`
+prefix and its unchanged invocation selector. A run ID is assigned only
+when a run is created. Pass the selector to `tools/regress.py`, not the
+displayed prefix.
+
 Individual targets retain existing Make aliases, such as `make dv-boot`
 and `make dv-memory`. `AXI_CONFIG=... make dv-memory` still selects an
 additional memory profile. `make dv-cpu` is a request-only diagnostic;

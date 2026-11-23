@@ -101,6 +101,15 @@ def main():
         sample("chip-cpu-dma","PCIe0 supplemental CPU test"),
         sample("chip-cpu-dma","Full-chip CPU boot test"),
     ]
+    # Give only the Ethernet fixture archived canonical identity; the other
+    # fixture rows exercise unmodified historical URL/label behavior.
+    ethernet_identity="verilator/soc-ethernet-mvp/network-frame-transfer/ci-123-a1-012345abcdef"
+    ethernet_path="runs/"+ethernet_identity+"/report.html"
+    data["entries"][1].update(
+        canonical_id=ethernet_identity, canonical_url=ethernet_path,
+        simulator="verilator", config_target="soc-ethernet-mvp",
+        testname="network-frame-transfer", execution_id="ci-123-a1-012345abcdef",
+        path=ethernet_path)
     manifest_name="selected-rtl-manifest.json"
     manifest_record={"path":manifest_name,"source_count":249}
     data["entries"][0].update(compiler_inputs=manifest_record,assets=[manifest_name])
@@ -143,9 +152,28 @@ def main():
             wait=WebDriverWait(driver,20)
             wait.until(lambda d: d.find_elements(By.CSS_SELECTOR,"#suite-summary button"))
             catalog=driver.find_element(By.ID,"catalog").text
-            assert "chip-pcie-host" in catalog
-            assert "chip-ethernet" in catalog
+            assert "Invocation selector: chip-pcie-host" in catalog
+            assert "Invocation selector: chip-ethernet" in catalog
+            assert data["test_names"]["chip-ethernet"] in catalog
             assert "PASS" in driver.find_element(By.ID,"results").text
+            results=driver.find_element(By.ID,"results")
+            canonical=results.find_element(By.LINK_TEXT,ethernet_identity)
+            assert canonical.get_dom_attribute("href")==ethernet_path
+            historical=results.find_element(
+                By.XPATH,'.//a[normalize-space(.)="chip-pcie-host"]/..')
+            assert "Historical run: canonical identity not archived" in historical.text
+            assert "Canonical:" not in historical.text, "legacy row inferred a canonical name"
+            headings=[element.text for element in driver.find_elements(By.CSS_SELECTOR,"table th")]
+            assert not any("engine" in title.lower() for title in headings)
+            # The full identity stays visible but wraps inside a narrow cell.
+            driver.execute_cdp_cmd("Emulation.setDeviceMetricsOverride", {
+                "width":390,"height":844,"deviceScaleFactor":1,"mobile":False,
+            })
+            assert driver.execute_script("""
+                const e=arguments[0], style=getComputedStyle(e), box=e.getBoundingClientRect();
+                return box.width<=innerWidth*0.5 && box.height>parseFloat(style.lineHeight)*1.5;
+                """,canonical), "canonical link did not wrap at 390 px"
+            driver.execute_cdp_cmd("Emulation.clearDeviceMetricsOverride", {})
 
             compiler_links=driver.find_elements(
                 By.CSS_SELECTOR,'#results a[href$="selected-rtl-manifest.json"]')
@@ -180,12 +208,13 @@ def main():
                    for row in driver.find_elements(By.CSS_SELECTOR,"#results tr")
                    if row.find_elements(By.TAG_NAME,"a")]
             assert names.count("chip-cpu-dma")==2, names
-            assert "chip-pcie-host" in names and "chip-ethernet" in names
+            assert "chip-pcie-host" in names and ethernet_identity in names
+            assert "chip-ethernet" not in names, "canonical ledger exposed a legacy alias"
 
             driver.execute_script(
                 """const q=document.getElementById("search");
                    q.value="ethernet";q.dispatchEvent(new Event("input"));""")
-            assert "chip-ethernet" in driver.find_element(By.ID,"results").text
+            assert ethernet_identity in driver.find_element(By.ID,"results").text
             assert "chip-pcie-host" not in driver.find_element(By.ID,"results").text
             # The main page, not a separate protocol report, must display
             # source-native TLP and GMII records with a run and protocol filter.
