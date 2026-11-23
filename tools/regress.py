@@ -17,6 +17,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 
 import yaml
@@ -612,6 +613,64 @@ def select_ddr_variant(out, sources):
     return ddr_chip.source_closure(sources, info)
 
 
+def select_combined_variant(out, sources, *, runtime=False):
+    # Compose the three real opt-in source closures in one variant. In
+    # particular use the re-generated DDR NoCs, NOT default reserved
+    # attachments. No second firmware image or fabricated PHY/host RAM.
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
+    import ddr_chip
+    from cpu_dma_firmware import prepare as prepare_cpu_firmware
+    from dv.ethernet0.run_mac_gmii import fetch_pinned
+    from dv.pcie0.run_rtl_smoke import source_contract
+    from dv.pcie0.prepare_rtl import assert_iverilog_clean
+    cfg = yaml.safe_load((ROOT/'config/soc.yaml').read_text())
+    info = ddr_chip.prepare(cfg, out)
+    variant = out / 'variant'
+    prepare_cpu_firmware(info['variant_cfg'], info['noc_manifest'],
+                         info['noc_root'], variant,
+                         pcie_host_mode=True, ethernet_cpu_mode=True,
+                         real_ddr_mode=True, combined_mode=True,
+                         ddr_wb_base=info['wb_base'],
+                         ddr_wb_adr_bits=info['wb_bits'])
+    generated_root = ROOT/'gen/chip'
+    replacements = {'soc_top.sv', 'full_chip_tb.sv'}
+    sources = [str(variant/Path(filename).name)
+               if Path(filename).parent == generated_root
+               and Path(filename).name in replacements else filename
+               for filename in sources]
+    sources = ddr_chip.source_closure(sources, info)
+    eth_rtl = ROOT/'rtl/io/ethernet0'
+    sources += [str(eth_rtl/name) for name in (
+        'ethernet0_axi_mvp.sv','ethernet0_mvp.v','ethernet0_rx_mvp.v',
+        'ethernet0_tx_mvp.v','ethernet0_rx_gmii_stager.v',
+        'ethernet0_mac_gmii.v','ethernet_rx_frame_stager.v',
+        'ethernet_rx_queue_engine.v','ethernet_queue_ctrl.sv',
+        'ethernet_rx_desc_fetch.v','ethernet_rx_dma.v',
+        'ethernet_tx_dma.v','ethernet_cq_axi_writer.v',
+        'ethernet_queue_axi_regs.sv')]
+    for directory,meta in fetch_pinned().values():
+        sources += [str(directory/name) for name in meta['modules']]
+    sources += [str(ROOT/'.tools/verilog_axi/rtl'/name)
+                for name in ('axi_dma_rd.v','axi_dma_wr.v')]
+    vendor_pin = source_contract()
+    if runtime:
+        try:
+            from .combined_runtime_provenance import BRIDGE
+        except ImportError:
+            from combined_runtime_provenance import BRIDGE
+        # Only generated RTL remains in the archive, never Icarus's object.
+        with tempfile.TemporaryDirectory(prefix='combined-pcie-lint-') as probe:
+            bridge = assert_iverilog_clean(output=out/BRIDGE,
+                                           probe=Path(probe)/'pcie_bridge_check.vvp')
+    else:
+        bridge = assert_iverilog_clean()
+    sources += [str(bridge)] + [
+        str(ROOT/'.tools/verilog_pcie'/item)
+        for item in vendor_pin['rtl_modules'] if item != 'rtl/pcie_axi_master.v']
+    return sources
+
+
 def cocotb_command(name, plan_file):
     return [(name, [sys.executable, str(ROOT/'tools/sim_cocotb.py'), str(plan_file)])]
 
@@ -641,7 +700,7 @@ def seal_ddr_build(name, out, plan, test):
 
 
 def run_target(name, test, resolver, options):
-    canonical = uses_canonical_workspace(name, test)
+    canonical = uses_canonical_workspace(name, test, stage=options.stage)
     structural = test['engine'] in {'xezim-compile', 'verilator-lint'}
     relocated_boot = test.get('boot_relocate')
     canonical_ethernet = uses_canonical_ethernet_workspace(name, test)
@@ -650,14 +709,15 @@ def run_target(name, test, resolver, options):
     canonical_peakrdl = uses_canonical_peakrdl_reset_workspace(name, test)
     canonical_firmware = (canonical_ethernet or canonical_cpu_firmware
                           or canonical_scenario or canonical_peakrdl)
-    canonical_ddr = ddr_split.eligible(name, test)
+    canonical_combined = canonical and ddr_split.eligible_combined(name, test)
+    canonical_ddr = ddr_split.eligible(name, test) or canonical_combined
     if canonical_ddr and options.stage == 'run':
         from selected_rtl_provenance import verify_selected_archive
         from sim_cocotb import build_fingerprint
 
         out, identity, plan = ddr_split.prepare_continuation(
             ROOT, test, getattr(options, 'continue_run_id', None),
-            verify_archive=verify_selected_archive, fingerprint=build_fingerprint,
+            verify_archive=verify_selected_archive, fingerprint=build_fingerprint, target=name,
             command=lambda path: [[name, cocotb_command(name, path)[0][1]]])
         return execute_target(name, test, resolver, options, out, identity, plan, {}, canonical)
     if canonical_firmware and (options.stage == 'run' or test.get('reuse_build')):
@@ -691,7 +751,9 @@ def run_target(name, test, resolver, options):
 
             def materialize(directory):
                 nonlocal sources
-                if canonical_ddr:
+                if canonical_combined:
+                    sources = list(dict.fromkeys(select_combined_variant(directory, sources, runtime=True)))
+                elif canonical_ddr:
                     sources = select_ddr_variant(directory, sources)
                 if canonical_firmware:
                     if canonical_ethernet:
@@ -770,51 +832,8 @@ def run_target(name, test, resolver, options):
         sources = select_pcie_variant(test, out, sources)
     if not canonical_ddr and test.get('firmware_mode') == 'ddr_cpu_dma':
         sources = select_ddr_variant(out, sources)
-    if test.get('firmware_mode') == 'ethernet_ddr_pcie':
-        # Compose the three real opt-in source closures in one variant. In
-        # particular use the re-generated DDR NoCs, NOT default reserved
-        # attachments. No second firmware image or fabricated PHY/host RAM.
-        if str(ROOT) not in sys.path:
-            sys.path.insert(0, str(ROOT))
-        import ddr_chip
-        from cpu_dma_firmware import prepare as prepare_cpu_firmware
-        from dv.ethernet0.run_mac_gmii import fetch_pinned
-        from dv.pcie0.run_rtl_smoke import source_contract
-        from dv.pcie0.prepare_rtl import assert_iverilog_clean
-        cfg = yaml.safe_load((ROOT/'config/soc.yaml').read_text())
-        info = ddr_chip.prepare(cfg, out)
-        variant = out / 'variant'
-        prepare_cpu_firmware(info['variant_cfg'], info['noc_manifest'],
-                             info['noc_root'], variant,
-                             pcie_host_mode=True, ethernet_cpu_mode=True,
-                             real_ddr_mode=True, combined_mode=True,
-                             ddr_wb_base=info['wb_base'],
-                             ddr_wb_adr_bits=info['wb_bits'])
-        generated_root = ROOT/'gen/chip'
-        replacements = {'soc_top.sv', 'full_chip_tb.sv'}
-        sources = [str(variant/Path(filename).name)
-                   if Path(filename).parent == generated_root
-                   and Path(filename).name in replacements else filename
-                   for filename in sources]
-        sources = ddr_chip.source_closure(sources, info)
-        eth_rtl = ROOT/'rtl/io/ethernet0'
-        sources += [str(eth_rtl/name) for name in (
-            'ethernet0_axi_mvp.sv','ethernet0_mvp.v','ethernet0_rx_mvp.v',
-            'ethernet0_tx_mvp.v','ethernet0_rx_gmii_stager.v',
-            'ethernet0_mac_gmii.v','ethernet_rx_frame_stager.v',
-            'ethernet_rx_queue_engine.v','ethernet_queue_ctrl.sv',
-            'ethernet_rx_desc_fetch.v','ethernet_rx_dma.v',
-            'ethernet_tx_dma.v','ethernet_cq_axi_writer.v',
-            'ethernet_queue_axi_regs.sv')]
-        for directory,meta in fetch_pinned().values():
-            sources += [str(directory/name) for name in meta['modules']]
-        sources += [str(ROOT/'.tools/verilog_axi/rtl'/name)
-                    for name in ('axi_dma_rd.v','axi_dma_wr.v')]
-        vendor_pin = source_contract()
-        bridge = assert_iverilog_clean()
-        sources += [str(bridge)] + [
-            str(ROOT/'.tools/verilog_pcie'/item)
-            for item in vendor_pin['rtl_modules'] if item != 'rtl/pcie_axi_master.v']
+    if not canonical_combined and test.get('firmware_mode') == 'ethernet_ddr_pcie':
+        sources = select_combined_variant(out, sources)
     if not canonical_peakrdl and test.get('firmware_mode') == 'peakrdl_reset':
         sources = select_peakrdl_reset_variant(out, sources)
     if not canonical_scenario and test.get('firmware_mode') == 'scenario_bfm':
@@ -847,7 +866,7 @@ def run_target(name, test, resolver, options):
         if private_build != Path(test['build']) / identity['run_id']:
             raise ValueError('unsafe DDR private build path')
         plan['build'] = private_build.as_posix()
-        plan['report'] = ddr_split.plan_report(ROOT, out, test['report'])
+        plan['report'] = ddr_split.plan_report(ROOT, out, test['report'], target=name)
         if options.stage == 'build':
             # Bind the exact future command and plan before compiling. The
             # private build projection cannot be published as a test result.
@@ -894,6 +913,11 @@ def run_target(name, test, resolver, options):
         "compiler_input_sha256": selected_inputs["compiler_input_sha256"],
     }
     plan_file.write_text(json.dumps(plan, indent=2) + '\n')
+    if canonical_combined:
+        from combined_runtime_provenance import PROOF, verify_runtime_inputs
+
+        proof = verify_runtime_inputs(ROOT, out, selected_inputs)
+        ddr_split.write_once(ROOT, out/PROOF, (json.dumps(proof, sort_keys=True)+'\n').encode())
     if canonical_ddr and options.stage == 'build':
         return seal_ddr_build(name, out, plan, test)
     return execute_target(name, test, resolver, options, out, identity, plan, networks, canonical)
@@ -904,7 +928,7 @@ def execute_target(name, test, resolver, options, out, identity, plan, networks,
 
     filelist, plan_file = out/'sources.f', out/'plan.json'
     args = plan['args']
-    ddr_continuation = ddr_split.eligible(name, test) and options.stage == 'run'
+    ddr_continuation = ddr_split.eligible_runtime(name, test) and options.stage == 'run'
     # A separate source-fingerprinted *command dispatch envelope* is not
     # another INIT/RUN/CHECK scenario planner. The canonical intent remains
     # planned-flow.json and the original scenario-plan.json for SCN-2.
@@ -1169,7 +1193,7 @@ def main():
                      help='stop this suite at the first failing target (CI quick feedback)')
     cli.add_argument('--stage', choices=['files', 'build', 'run', 'all'], default='all')
     cli.add_argument('--continue-run-id',
-                     help='continue only the exact sealed chip-ddr4-real build (run stage)')
+                     help='continue one exact sealed DDR or combined DDR build (run stage)')
     cli.add_argument('--memory-config')
     cli.add_argument('--network', action='append', default=[])
     cli.add_argument('--arg', action='append', default=[])
@@ -1179,15 +1203,17 @@ def main():
     config = load_config(options.config)
     targets = expand(config, options.targets)
     if options.continue_run_id is not None and (
-            options.stage != 'run' or options.targets != [ddr_split.TARGET]
-            or not ddr_split.eligible(ddr_split.TARGET, config['tests'][ddr_split.TARGET])
+            options.stage != 'run' or len(options.targets) != 1 or len(targets) != 1
+            or options.targets[0] != targets[0]
+            or not ddr_split.eligible_runtime(targets[0], config['tests'][targets[0]])
             or options.config.resolve() != ROOT/'config/regression.yaml'
             or options.arg or options.network or options.memory_config
             or options.scenario_seed is not None or options.explain
             or options.list or options.check_noc):
         raise ValueError('--continue-run-id requires only the registered DDR run target and no overrides')
-    if options.stage == 'run' and ddr_split.TARGET in targets and not options.continue_run_id:
-        raise ValueError('use --continue-run-id from the exact chip-ddr4-real build')
+    if options.stage == 'run' and not options.continue_run_id and any(
+            name in (ddr_split.TARGET, ddr_split.COMBINED) for name in targets):
+        raise ValueError('use --continue-run-id from the exact registered DDR build')
     if options.scenario_seed is not None:
         if (not 0 <= options.scenario_seed <= 0xffffffff or
                 options.stage not in ('all','files') or

@@ -14,10 +14,12 @@ from pathlib import Path
 
 try:
     from .ddr_split_workspace import eligible as uses_canonical_ddr_split
+    from .ddr_split_workspace import eligible_combined
     from .test_identity import (IdentityError, bind_filelist, config_target, load, neutral_testname,
                                 relative_path, save, simulator, slug, validate)
 except ImportError:
     from ddr_split_workspace import eligible as uses_canonical_ddr_split
+    from ddr_split_workspace import eligible_combined
     from test_identity import (IdentityError, bind_filelist, config_target, load, neutral_testname,
                                relative_path, save, simulator, slug, validate)
 
@@ -75,8 +77,10 @@ def uses_canonical_generated_firmware_workspace(name, test):
             or uses_canonical_ddr_split(name, test))
 
 
-def uses_canonical_workspace(name, test):
-    """Select migrated families without a second per-target registry."""
+def uses_canonical_workspace(name, test, *, stage=None):
+    """Select migrated families; combined source-only consumers retain their exact replay."""
+    if stage in ('all', 'build', 'run') and eligible_combined(name, test):
+        return True
     if name == 'dma-rtl':
         return True
     return (test.get('engine') in {'xezim', 'xezim-compile', 'verilator-lint'}
