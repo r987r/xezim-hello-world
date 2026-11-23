@@ -9,7 +9,9 @@ const current={
   cache:new Map(),size:100
 };
 const candidates=D.entries.filter(e=>e.protocol_links?.sources?.length||e.protocols?.length);
-const label=e=>e.target+" · CI #"+e.run_id+"."+e.attempt+" · "+e.source_sha.slice(0,9);
+const runName=e=>e.canonical_id||(e.evidence_only?"Observed capture: ":"Historical: ")+e.target;
+const label=e=>runName(e)+" · CI #"+e.run_id+"."+e.attempt+" · "+e.source_sha.slice(0,9);
+const recordRuns=new WeakMap();
 const key=e=>e.run_id+"-"+e.attempt+"/"+e.target;
 const selectedRun=$("traffic-run");
 const selectors={
@@ -69,8 +71,9 @@ function preview(e){
   const records=[];
   for(const s of e.protocol_links?.sources||[]){
     for(const r of s.preview||[]){
-      records.push({...r,source:s.source,protocol:s.protocol,
-        run_id:e.run_id,target:e.target});
+      const row={...r,source:s.source,protocol:s.protocol,run_id:e.run_id,target:e.target};
+      recordRuns.set(row,e);
+      records.push(row);
     }
   }
   return records.sort((a,b)=>(a.start_ps??0)-(b.start_ps??0));
@@ -91,9 +94,9 @@ async function load(initial={}){
   current.entry=entry;current.all=preview(entry);current.preview=true;
   $("traffic-open-raw").disabled=false;
   $("traffic-provenance").textContent=
-    entry.target+" · tested "+entry.source_sha+" · CI run #"+entry.run_id+
+    runName(entry)+" · tested "+entry.source_sha+" · CI run #"+entry.run_id+
     " attempt "+entry.attempt+" · "+entry.workflow+
-    " · "+(entry.passed?"target PASS":"target NOT PASS");
+    " · "+(entry.evidence_only?"observations only":entry.passed?"target PASS":"target NOT PASS");
   $("traffic-notice").textContent="Loading full recorded protocol evidence; bounded previews are available.";
   refreshProtocols(initial);
   const path=rawPath(entry);
@@ -110,6 +113,7 @@ async function load(initial={}){
       if(payload.records.some(r=>ids.get(r.source)!==r.protocol))
         throw Error("source/protocol mismatch");
       records=payload.records;
+      for(const row of records)recordRuns.set(row,entry);
       current.cache.set(key(entry),records);
     }
     if(id!==current.request)return;
@@ -216,7 +220,8 @@ function render(){
   const start=current.page*current.size;
   for(const r of current.filtered.slice(start,start+current.size)){
     const tr=document.createElement("tr");tr.tabIndex=0;
-    const vals=[r.run_id??current.entry?.run_id??"—",psTime(r.end_ps??r.start_ps),r.protocol,r.source,r.operation,
+    const entry=recordRuns.get(r);
+    const vals=[entry?runName(entry):"—",psTime(r.end_ps??r.start_ps),r.protocol,r.source,r.operation,
       r.id??"—",r.status,...fields.map(k=>r.fields?.[k]??"—")];
     for(const val of vals){
       const str=typeof val==="object"?JSON.stringify(val):String(val);
@@ -271,17 +276,30 @@ function draw(){
   ctx.fillText("Simulation time: "+psTime(first)+"–"+psTime(last)+" ns",left+span/2,height-13);
 }
 function exportFiltered(ext){
-  const cols=["protocol","source","operation","id","start_ps","end_ps","status","fields"];
+  const cols=["protocol","source","operation","id","start_ps","end_ps","status","fields",
+              "canonical_id","run_id","attempt","source_sha","legacy_target"];
   const quote=x=>'"'+String(x??"").replaceAll('"','""')+'"';
-  const csv=[cols.join(","),...current.filtered.map(r=>
+  // Use the publisher's verified entry, not optional fields in a raw record.
+  // Keep the source capture intact and annotate only the exported copy.
+  const records=current.filtered.map(r=>{
+    const e=recordRuns.get(r);
+    return {...r,canonical_id:e.canonical_id??null,run_id:e.run_id,
+      attempt:e.attempt,source_sha:e.source_sha,
+      // Without a canonical ID the CI coordinates can cover multiple tests.
+      ...(e.canonical_id?{}:{legacy_target:e.target})};
+  });
+  const csv=[cols.join(","),...records.map(r=>
     cols.map(k=>quote(k==="fields"?JSON.stringify(r.fields||{}):r[k])).join(",")
   )].join("\r\n");
+  const entry=current.entry;
   const blob=ext==="json"
-    ?new Blob([JSON.stringify({run:current.entry?.target,
-      preview:current.preview,records:current.filtered},null,2)],{type:"application/json"})
+    ?new Blob([JSON.stringify({run:entry?.canonical_id||entry?.target,
+      preview:current.preview,records},null,2)],{type:"application/json"})
     :new Blob([csv],{type:"text/csv"});
+  const stem=entry?(entry.canonical_id?.replaceAll("/","-")||
+    "ci-"+entry.run_id+"-a"+entry.attempt+"-"+entry.target):"all-runs";
   const url=URL.createObjectURL(blob),a=document.createElement("a");
-  a.href=url;a.download="traffic-"+(current.entry?.target||"all-runs")+"."+ext;
+  a.href=url;a.download="traffic-"+stem+"."+ext;
   a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 // Used by the existing per-target list to open the integrated inspector.

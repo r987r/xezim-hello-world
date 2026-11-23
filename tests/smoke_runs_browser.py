@@ -6,6 +6,8 @@ published or represented as actual regression evidence.
 """
 from __future__ import annotations
 
+import csv
+import io
 import json
 import re
 from contextlib import contextmanager
@@ -101,15 +103,19 @@ def main():
         sample("chip-cpu-dma","PCIe0 supplemental CPU test"),
         sample("chip-cpu-dma","Full-chip CPU boot test"),
     ]
-    # Give only the Ethernet fixture archived canonical identity; the other
-    # fixture rows exercise unmodified historical URL/label behavior.
-    ethernet_identity="verilator/soc-ethernet-mvp/network-frame-transfer/ci-123-a1-012345abcdef"
-    ethernet_path="runs/"+ethernet_identity+"/report.html"
-    data["entries"][1].update(
-        canonical_id=ethernet_identity, canonical_url=ethernet_path,
-        simulator="verilator", config_target="soc-ethernet-mvp",
-        testname="network-frame-transfer", execution_id="ci-123-a1-012345abcdef",
-        path=ethernet_path)
+    # Two executions of the same target under one CI run, plus retained
+    # historical captures without a canonical identity.
+    ethernet_attempts=[data["entries"][1],sample("chip-ethernet","Ethernet0 integrated test","b"*40)]
+    for attempt,entry in enumerate(ethernet_attempts,1):
+        execution=f"ci-123-a{attempt}-012345abcdef"
+        identity=f"verilator/soc-ethernet-mvp/network-frame-transfer/{execution}"
+        route=f"runs/{identity}/report.html"
+        entry.update(canonical_id=identity,canonical_url=route,attempt=attempt,
+                     simulator="verilator",config_target="soc-ethernet-mvp",
+                     testname="network-frame-transfer",execution_id=execution,path=route)
+    data["entries"].append(ethernet_attempts[1])
+    ethernet_identity=ethernet_attempts[0]["canonical_id"]
+    ethernet_path=ethernet_attempts[0]["path"]
     manifest_name="selected-rtl-manifest.json"
     manifest_record={"path":manifest_name,"source_count":249}
     data["entries"][0].update(compiler_inputs=manifest_record,assets=[manifest_name])
@@ -134,6 +140,15 @@ def main():
         from run_page_chrome import decorate_run_pages
         path=Path(tmp)/"runs.html"
         path.write_text(page)
+        for entry in ethernet_attempts:
+            capture=(Path(tmp)/entry["path"]).with_name("protocol-transactions.json")
+            capture.parent.mkdir(parents=True)
+            source,=entry["protocol_links"]["sources"]
+            capture.write_text(json.dumps({
+                "schema_version":1,"run":{"target":entry["target"]},
+                "sources":[{"id":source["source"],"protocol":source["protocol"]}],
+                "records":[dict(source["preview"][0],protocol=source["protocol"])],
+            }))
         report_root=Path(tmp)/"runs/example"
         report_root.mkdir(parents=True)
         (report_root/manifest_name).write_text(
@@ -228,11 +243,69 @@ def main():
             wait.until(lambda d:"mem_read" in d.find_element(By.ID,"traffic-rows").text)
             assert "0x4000" in driver.find_element(By.ID,"traffic-rows").text
             assert "pcie" in driver.find_element(By.ID,"traffic-protocol").text
-            driver.execute_script(
-                """const sel=document.getElementById("traffic-run");
-                   const found=[...sel.options].find(x=>x.textContent.includes("chip-ethernet"));
-                   if(!found)throw new Error("missing Ethernet run");
-                   sel.value=found.value;sel.dispatchEvent(new Event("change"));""")
+            # The previously shared run query must still resolve the first
+            # archived attempt, while showing its existing canonical identity.
+            driver.get(fixture_url+"?run=123-1/chip-ethernet")
+            wait.until(lambda d:"Showing full" in d.find_element(By.ID,"traffic-notice").text)
+            assert ethernet_identity in driver.find_element(By.ID,"traffic-provenance").text
+
+            def export(ext):
+                # Capture the actual Blob from the button's download click;
+                # the test needs no persistent browser download permission.
+                return driver.execute_async_script("""
+                    const id=arguments[0], done=arguments[arguments.length-1];
+                    const click=HTMLAnchorElement.prototype.click;
+                    HTMLAnchorElement.prototype.click=function(){
+                        fetch(this.href).then(r=>r.text()).then(text=>done([this.download,text]));
+                    };
+                    try { document.getElementById(id).click(); }
+                    finally { HTMLAnchorElement.prototype.click=click; }
+                    """, "traffic-"+ext)
+
+            def provenance(row):
+                return row["canonical_id"],int(row["run_id"]),int(row["attempt"]),row["source_sha"]
+
+            def expected(e):
+                return e["canonical_id"],e["run_id"],e["attempt"],e["source_sha"]
+
+            filename,body=export("json")
+            assert filename=="traffic-"+ethernet_identity.replace("/","-")+".json"
+            selected=json.loads(body)
+            row,=selected["records"]
+            assert selected["run"]==ethernet_identity and selected["preview"] is False
+            assert provenance(row)==expected(ethernet_attempts[0])
+            raw=driver.execute_async_script("""
+                const path=arguments[0],done=arguments[arguments.length-1];
+                fetch(path).then(r=>r.json()).then(done);
+                """,ethernet_path.replace("report.html","protocol-transactions.json"))
+            assert "canonical_id" not in raw["records"][0] and "attempt" not in raw["records"][0]
+
+            driver.execute_script("""
+                const sel=document.getElementById("traffic-run");
+                sel.value="__all__";sel.dispatchEvent(new Event("change"));
+                """)
+            filename,body=export("csv")
+            assert filename=="traffic-all-runs.csv"
+            rows=list(csv.DictReader(io.StringIO(body)))
+            assert {provenance(r) for r in rows if r["protocol"]=="ethernet"}=={
+                expected(e) for e in ethernet_attempts}
+            legacy=next(r for r in rows if r["protocol"]=="dfi")
+            assert provenance(legacy)==("",123,1,"a"*40)
+            assert legacy["legacy_target"]=="chip-ddr4-real"
+            assert all(not r["legacy_target"] for r in rows if r["protocol"]=="ethernet")
+            _,body=export("json")
+            mixed=json.loads(body)
+            assert mixed["preview"] is True and "run" not in mixed
+            assert {provenance(r) for r in mixed["records"] if r["protocol"]=="ethernet"}=={
+                expected(e) for e in ethernet_attempts}
+            legacy=next(r for r in mixed["records"] if r["protocol"]=="dfi")
+            assert legacy["canonical_id"] is None and legacy["legacy_target"]=="chip-ddr4-real"
+            driver.execute_script("""
+                const sel=document.getElementById("traffic-run");
+                sel.value="123-2/chip-ethernet";sel.dispatchEvent(new Event("change"));
+                """)
+            wait.until(lambda d:"Showing full" in d.find_element(By.ID,"traffic-notice").text)
+            assert ethernet_attempts[1]["canonical_id"] in driver.find_element(By.ID,"traffic-provenance").text
             wait.until(lambda d:"frame_tx" in d.find_element(By.ID,"traffic-rows").text)
             assert "02:50:b6:00:00:22" in driver.find_element(By.ID,"traffic-rows").text
             assert "ethernet" in driver.find_element(By.ID,"traffic-protocol").text
@@ -287,7 +360,7 @@ def main():
             wait.until(lambda d:"test runs" in d.find_element(By.TAG_NAME,"h1").text.lower())
             assert driver.find_element(By.ID,"catalog")
             print("PASS: Test Runs click-through preserves global nav, protocol tabs and same-site back path")
-            print("PASS: unified Test Runs show source-native PCIe, Ethernet, DFI sample records")
+            print("PASS: unified Test Runs preserve source-native records and single/mixed export provenance")
 
 
 if __name__=="__main__":
