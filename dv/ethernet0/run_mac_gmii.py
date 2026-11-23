@@ -65,26 +65,17 @@ def main():
         *[ip["verilog_ethernet"][0] / x for x in ip["verilog_ethernet"][1]["modules"]],
         *[ip["verilog_axis"][0] / x for x in ip["verilog_axis"][1]["modules"]],
     ]
-    output = ROOT / ".tools" / "regression" / "ethernet0-gmii"
-    output.mkdir(parents=True, exist_ok=True)
     # Separate compile check gives a fast, explicit syntax/elaboration failure
     # even when Cocotb runner setup itself fails.
     subprocess.run(["iverilog", "-g2012", "-s", "ethernet0_mac_gmii",
                     "-t", "null", *[str(s) for s in sources]], check=True)
     print("PASS isolated real Ethernet GMII RTL elaboration", flush=True)
-    from cocotb_test.simulator import run
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
+    from dv.ethernet0.native_workspace import run_existing_icarus
+
     os.chdir(ROOT)
-    run(
-        simulator="icarus",
-        verilog_sources=[str(s) for s in sources],
-        toplevel="ethernet0_mac_gmii",
-        module="dv.ethernet0.tb_mac_gmii",
-        python_search=[str(ROOT)],
-        sim_build=str(output / "sim_build"),
-        timescale="1ns/1ps",
-        waves=False,
-        extra_env={"COCOTB_LOG_LEVEL": "INFO"},
-    )
+    run_existing_icarus("ethernet0-gmii", sources, extra_env={"COCOTB_LOG_LEVEL": "INFO"})
     print("PASS isolated real Ethernet GMII MAC and CDC traffic", flush=True)
 
 

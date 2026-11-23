@@ -23,14 +23,10 @@ def main():
     subprocess.run(["iverilog","-g2012","-s","ethernet0_rx_gmii_stager",
                     "-t","null",*[str(f) for f in files]],check=True)
     print("PASS real Ethernet GMII frame frontend RTL elaboration",flush=True)
-    from cocotb_test.simulator import run
+    from dv.ethernet0.native_workspace import run_existing_icarus
+
     os.chdir(ROOT)
-    run(simulator="icarus",verilog_sources=[str(f) for f in files],
-        toplevel="ethernet0_rx_gmii_stager",
-        module="dv.ethernet0.tb_gmii_frame_stager",
-        python_search=[str(ROOT)],
-        sim_build=str(ROOT/".tools/regression/ethernet0-gmii-stage"),
-        timescale="1ns/1ps",waves=False)
+    run_existing_icarus("ethernet0-gmii-stage", files)
     print("PASS real GMII->MAC->CDC->frame stage RTL and FCS negative",flush=True)
 
 if __name__=="__main__":

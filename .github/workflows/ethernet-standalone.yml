@@ -7,6 +7,9 @@ on:
       - 'rtl/io/ethernet0/**'
       - 'dv/ethernet0/**'
       - 'tests/test_ethernet_frame_contract.py'
+      - 'tests/test_ethernet_native_workspace.py'
+      - 'tools/test_identity.py'
+      - 'tools/run_workspace.py'
       - '.github/workflows/ethernet-standalone.yml'
   workflow_dispatch:
 
@@ -39,14 +42,15 @@ jobs:
           sudo apt-get install -y iverilog
           iverilog -V | head -3
       - name: Run golden reference frame/CRC contract tests
-        run: python3 -m unittest tests.test_ethernet_frame_contract -v
+        run: python3 -m unittest tests.test_ethernet_frame_contract tests.test_ethernet_native_workspace -v
       - name: Fetch immutable MIT RTL and run actual GMII RX/TX Cocotb regression
+        id: native-mac
         run: python3 dv/ethernet0/run_mac_gmii.py
       - name: Preserve actual RTL simulation outputs for review
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ethernet0-real-mac-${{ github.run_id }}-${{ github.run_attempt }}
-          path: .tools/regression/ethernet0-gmii/
+          path: '.tools/runs/*/ethernet-standalone-default/mac-gmii-rx-tx/${{ steps.native-mac.outputs.ethernet0_gmii_run_id || ''_no-native-run_'' }}/'
           include-hidden-files: true
           if-no-files-found: warn
