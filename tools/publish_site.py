@@ -17,6 +17,7 @@ import re
 import shutil
 import stat
 import subprocess
+import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -405,6 +406,13 @@ def discover_test_workflows(root=ROOT):
                                   "artifacts":artifacts}
     return producers
 
+def collection_run_key(run):
+    run_id,attempt=run.get('id'),run.get('run_attempt',1)
+    if type(run_id) is not int or type(attempt) is not int or min(run_id,attempt) < 1:
+        raise ValueError('invalid Actions run ID or attempt')
+    return f'{run_id}-{attempt}'
+
+
 def select_workflow_runs(client, producers, merged_heads, history, *, max_pages=10):
     """Collect recent trusted history for EACH test workflow independently.
 
@@ -417,6 +425,7 @@ def select_workflow_runs(client, producers, merged_heads, history, *, max_pages=
     selected={name:[] for name in producers}
     notes=[]
     for name in producers:
+        seen={}
         # The workflow file is a repository-controlled filename, not a URL
         # from an artifact or an Actions response.
         workflow_id=urllib.parse.quote(name, safe="")
@@ -433,6 +442,15 @@ def select_workflow_runs(client, producers, merged_heads, history, *, max_pages=
                 run=dict(raw)
                 if merged_pr is not None:
                     run["verified_merged_pr"]=merged_pr
+                # Offset pagination can repeat a run while more runs arrive.
+                # It still consumes one slot, never another cache directory.
+                identity=(collection_run_key(run),run.get("head_sha"),run.get("head_branch"),
+                          run.get("event"),merged_pr)
+                if run["id"] in seen:
+                    if seen[run["id"]] != identity:
+                        raise ValueError('conflicting duplicate Actions run identity')
+                    continue
+                seen[run["id"]]=identity
                 selected[name].append(run)
                 if len(selected[name]) >= history:
                     break
@@ -639,7 +657,7 @@ def collect_project_boot(client, config, folder, run, artifact, projects,
     if target.exists():
         shutil.rmtree(target)
     try:
-        raw=client.request(f'/repos/{client.repository}/actions/artifacts/{artifact_id}/zip',binary=True)
+        raw=download_current_artifact(client,artifact_id)
         target.mkdir()
         limits=dict(config, max_archive_mib=min(config['max_archive_mib'],8),
                     max_expanded_mib=min(config['max_expanded_mib'],32))
@@ -662,8 +680,93 @@ def collect_project_boot(client, config, folder, run, artifact, projects,
         raise
 
 
+class ArtifactUnavailable(ValueError):
+    """The provider no longer exposes an artifact it just listed."""
+
+
+def download_current_artifact(client, artifact_id):
+    try:
+        return client.request(f'/repos/{client.repository}/actions/artifacts/{artifact_id}/zip',
+                              binary=True)
+    except urllib.error.HTTPError as exc:
+        if exc.code in (404, 410):
+            raise ArtifactUnavailable('expired or removed during collection') from exc
+        raise
+
+
+def owned_collection_entry(path):
+    """Recognize this collector's cache metadata, not arbitrary numeric directories."""
+    def read_metadata(file):
+        if file.is_symlink() or not file.is_file():
+            return None
+        try:
+            data=json.loads(file.read_text())
+        except (ValueError, OSError):
+            return None
+        return data if isinstance(data, dict) else None
+
+    if path.name=='collection.json':
+        data=read_metadata(path)
+        return (data is not None and set(data)=={'notes'} and isinstance(data['notes'],list)
+                and all(isinstance(note,str) for note in data['notes']))
+    if path.is_symlink() or not path.is_dir() or not re.fullmatch(r'[1-9][0-9]*-[1-9][0-9]*',path.name):
+        return False
+    run=read_metadata(path/'run.json')
+    workflow=read_metadata(path/'workflow.json')
+    try:
+        run_key=collection_run_key(run) if run is not None else None
+    except ValueError:
+        return False
+    return (workflow is not None and path.name==run_key
+            and isinstance(workflow.get('file'),str)
+            and run.get('path')==f".github/workflows/{workflow['file']}"
+            and isinstance(workflow.get('label'),str)
+            and isinstance(workflow.get('artifacts'),list))
+
+
+def replace_collection_cache(destination, snapshot, backup):
+    """Commit one complete refresh; caller must keep concurrent cache readers quiescent."""
+    if destination.is_symlink():
+        raise ValueError('evidence cache must not be a symlink')
+    destination.mkdir(exist_ok=True)
+    owned={path.name:path for path in destination.iterdir() if owned_collection_entry(path)}
+    incoming=sorted(snapshot.iterdir(),key=lambda path:(path.name=='collection.json',path.name))
+    for source in incoming:
+        target=destination/source.name
+        if source.name not in owned and (target.exists() or target.is_symlink()):
+            raise ValueError(f'unowned path collides with evidence cache: {target}')
+    moved=[]
+    installed=[]
+    try:
+        for path in owned.values():
+            saved=path.rename(backup/path.name)
+            moved.append((saved,path))
+        for source in incoming:
+            target=source.rename(destination/source.name)
+            installed.append((target,source))
+    except OSError:
+        for target,source in reversed(installed):
+            target.rename(source)
+        for saved,path in reversed(moved):
+            saved.rename(path)
+        raise
+
+
 def collect(client,config,destination):
-    destination.mkdir(parents=True,exist_ok=True)
+    destination.parent.mkdir(parents=True,exist_ok=True)
+    # Collect outside the live cache. No API failure can partially change
+    # the preceding snapshot, and no expired/unselected artifact is reused.
+    with tempfile.TemporaryDirectory(prefix='.pages-evidence-',dir=destination.parent) as staging:
+        temp=Path(staging)
+        snapshot=temp/'snapshot'
+        backup=temp/'previous'
+        snapshot.mkdir()
+        backup.mkdir()
+        collect_snapshot(client,config,snapshot)
+        replace_collection_cache(destination,snapshot,backup)
+
+
+def collect_snapshot(client,config,destination):
     producers=discover_test_workflows()
     merged_heads=merged_main_pr_heads(client)
     selected,notes=select_workflow_runs(
@@ -677,10 +780,15 @@ def collect(client,config,destination):
 
     verified_cache={}
     boot_projects=None
+    selected_run_ids=set()
     for workflow in producers.values():
         for run in selected[workflow['file']]:
-            folder=destination/(str(run['id'])+'-'+str(run.get('run_attempt',1)))
-            folder.mkdir(parents=True,exist_ok=True)
+            run_key=collection_run_key(run)
+            if run['id'] in selected_run_ids:
+                raise ValueError('duplicate Actions run across selected workflows')
+            selected_run_ids.add(run['id'])
+            folder=destination/run_key
+            folder.mkdir()
             dump(folder/'workflow.json',workflow)
             if run['status']!='completed':
                 dump(folder/'run.json',run)
@@ -696,6 +804,8 @@ def collect(client,config,destination):
                     try:
                         collect_project_boot(client, config, folder, run, artifact,
                                              boot_projects, site_sha, tree_cache, verified_cache)
+                    except urllib.error.URLError:
+                        raise
                     except (ValueError, OSError, zipfile.BadZipFile) as exc:
                         notes.append(f'Run {run["id"]}, artifact {artifact["name"]}: '
                                      f'excluded unverified project boot evidence ({exc})')
@@ -711,12 +821,18 @@ def collect(client,config,destination):
                 if artifact['expired']:
                     notes.append(f'Run {run["id"]}: expired artifact {artifact["name"]}')
                     continue
-                target=folder/('artifact-'+str(artifact['id']))
-                if not (target/'.complete').exists():
-                    raw=client.request(f'/repos/{client.repository}/actions/artifacts/{artifact["id"]}/zip',binary=True)
-                    target.mkdir(exist_ok=True)
-                    extract_archive(raw,target,config,artifact.get('digest'),evidence_only=True)
-                    (target/'.complete').write_text('verified\n')
+                artifact_id=artifact['id']
+                if type(artifact_id) is not int or artifact_id < 1:
+                    raise ValueError('invalid Actions artifact ID')
+                target=folder/f'artifact-{artifact_id}'
+                try:
+                    raw=download_current_artifact(client,artifact_id)
+                except ArtifactUnavailable as exc:
+                    notes.append(f'Run {run["id"]}, artifact {artifact["name"]}: {exc}')
+                    continue
+                target.mkdir()
+                extract_archive(raw,target,config,artifact.get('digest'),evidence_only=True)
+                (target/'.complete').write_text('verified\n')
                 # A partially archived immutable run identity is not a
                 # publishable legacy result. Exclude that archive while
                 # retaining other independent, source-verified CI artifacts.

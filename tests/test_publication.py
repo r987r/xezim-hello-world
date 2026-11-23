@@ -9,6 +9,7 @@ import sys
 import tempfile
 import unittest
 from unittest.mock import patch
+from urllib.error import HTTPError
 from urllib.parse import unquote, urlsplit
 import zipfile
 
@@ -232,6 +233,27 @@ class PublicationTests(unittest.TestCase):
         self.assertEqual(len(calls),2)
         self.assertTrue(all("/actions/workflows/" in u for u in calls))
         self.assertTrue(all("/actions/runs?" not in u for u in calls))
+
+    def test_workflow_history_deduplicates_pagination_without_consuming_a_history_slot(self):
+        from unittest.mock import Mock
+        name="full-chip.yml"
+        run={"id":123,"run_attempt":1,"path":".github/workflows/"+name,
+             "head_branch":"main","head_sha":SHA,"event":"workflow_dispatch"}
+        duplicate=dict(run,updated_at="2026-11-22T22:22:22Z")
+        next_run=dict(run,id=124)
+        ignored=[dict(run,head_branch="unmerged",event="pull_request")]*99
+        client=Mock(repository="r987r/xezim-hello-world",request=Mock(
+            side_effect=[{"workflow_runs":[run,*ignored]},
+                         {"workflow_runs":[duplicate,next_run]}]))
+        selected,notes=site.select_workflow_runs(client,{name:{}},{},2)
+        self.assertEqual(selected[name],[run,next_run])
+        self.assertFalse(notes)
+        self.assertEqual(client.request.call_count,2)
+
+        # Different attempts from successive pages cannot share a snapshot.
+        client.request=Mock(return_value={"workflow_runs":[run,dict(run,run_attempt=2)]})
+        with self.assertRaisesRegex(ValueError,'conflicting duplicate Actions run identity'):
+            site.select_workflow_runs(client,{name:{}},{},2)
 
     def test_unmerged_pr_excluded_and_main_accepted_in_workflow_history(self):
         from unittest.mock import Mock
@@ -913,6 +935,132 @@ class PublicationTests(unittest.TestCase):
             self.assertEqual(entries[0]['target'],'chip-boot')
             self.assertTrue(entries[0]['passed'])
             self.assertIn('excluded unverified identity',index_notes[0])
+
+    def test_collection_refresh_expires_old_evidence_without_rewriting_retained_bytes(self):
+        from unittest.mock import Mock
+        from test_identity import relative_path, selected
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            evidence=root/'evidence'
+            evidence.mkdir()
+            # Neither a numeric name nor a symlink is evidence-cache ownership.
+            (evidence/'987-1').mkdir()
+            (evidence/'987-1'/'keep').write_text('unrelated')
+            (evidence/'988-1').symlink_to(evidence/'987-1',target_is_directory=True)
+            target='chip-boot'
+            source=b'/original/selected.sv\n'
+            (root/'sources.f').write_bytes(source)
+            plans={}
+            server={}
+            snapshots={}
+            downloads=[]
+
+            def records(run_id, canonical=False):
+                plan={'engine':'cocotb-verilator','sources':'noc','top':'full_chip_tb',
+                      'logical_test':'multicore-cold-boot'}
+                result={'target':target,'passed':True,'stage':'all'}
+                files={}
+                relative=Path(target)
+                if canonical:
+                    identity=selected(target,plan,filelist=root/'sources.f',
+                                      run_id=f'ci-{run_id}-a1-012345abcdef')
+                    relative=relative_path(identity)
+                    files['identity.json']=json.dumps(identity)
+                    plan['identity']=identity
+                    result.update(identity_sha256=identity['identity_sha256'],
+                                  canonical_id=relative.as_posix())
+                transcript=f'actual simulator log {run_id}\n'.encode()
+                files.update({'result.json':json.dumps(result),'plan.json':json.dumps(plan),
+                              'sources.f':source,'simulation.log':transcript})
+                buffer=io.BytesIO()
+                with zipfile.ZipFile(buffer,'w') as archive:
+                    for name,content in files.items():
+                        archive.writestr(str(relative/name),content)
+                payload=buffer.getvalue()
+                server[run_id]=payload
+                snapshots[run_id]=[{'id':run_id,'name':f'ci-{run_id}',
+                                    'size_in_bytes':len(payload),'expired':False}]
+                plans[run_id]=(transcript,
+                               Path('runs')/(relative if canonical else Path(f'{run_id}-1')/relative))
+                return {'id':run_id,'run_attempt':1,'head_sha':SHA,'head_branch':'main',
+                        'event':'workflow_dispatch','name':'Chip boot','status':'completed',
+                        'conclusion':'success','path':'.github/workflows/full-chip.yml',
+                        'created_at':'2026-11-04T00:00:00Z','updated_at':'2026-11-04T00:01:00Z',
+                        'html_url':f'https://github.com/r987r/xezim-hello-world/actions/runs/{run_id}'}
+
+            runs=[records(123),records(124),records(125),records(126),records(127),
+                  records(128,canonical=True)]
+            workflows={'full-chip.yml':{'file':'full-chip.yml','label':'Chip boot',
+                                       'artifacts':['ci-${{ github.run_id }}']}}
+            race={}
+
+            def request(path,binary=False):
+                if path.endswith('/artifacts?per_page=100'):
+                    return {'artifacts':snapshots[int(path.split('/')[-2])]}
+                if path.endswith('/zip') and binary:
+                    artifact_id=int(path.split('/')[-2])
+                    downloads.append(artifact_id)
+                    if artifact_id in race:
+                        raise HTTPError(path,race[artifact_id],'test provider response',{},None)
+                    return server[artifact_id]
+                raise AssertionError('unexpected network request: '+path)
+
+            client=Mock(repository='r987r/xezim-hello-world',request=Mock(side_effect=request))
+            out=root/'site'
+            with patch.object(site,'discover_test_workflows',return_value=workflows), \
+                 patch.object(site,'merged_main_pr_heads',return_value={}), \
+                 patch.object(site,'select_workflow_runs',
+                              return_value=({'full-chip.yml':runs},[])), \
+                 patch.object(site.subprocess,'check_output',return_value=(SHA+'\n').encode()):
+                site.collect(client,CONFIG,evidence)
+                first=site.build(out,evidence,client.repository,SHA,CONFIG)
+                self.assertEqual({e['run_id'] for e in first['entries']},set(plans))
+                for _,path in plans.values():
+                    self.assertTrue((out/path/'report.html').is_file())
+                old_notes=(evidence/'collection.json').read_bytes()
+
+                # A still-selected run with a provider-expired or deleted archive,
+                # an archive deleted after list(), and a run outside the window.
+                snapshots[123][0]['expired']=True
+                snapshots[124].clear()
+                race[125]=410
+                runs.remove(next(r for r in runs if r['id']==126))
+                # A non-retention API failure after earlier runs were processed
+                # must leave the prior committed evidence and notes intact.
+                race[128]=503
+                with self.assertRaises(HTTPError):
+                    site.collect(client,CONFIG,evidence)
+                self.assertEqual((evidence/'collection.json').read_bytes(),old_notes)
+                self.assertTrue((evidence/'123-1/artifact-123').is_dir())
+                self.assertTrue((evidence/'126-1/artifact-126').is_dir())
+
+                del race[128]
+                downloads.clear()
+                site.collect(client,CONFIG,evidence)
+                self.assertEqual(downloads,[125,127,128])
+                second=site.build(out,evidence,client.repository,SHA,CONFIG)
+                # An incoming run must not replace an unrelated symlink at
+                # its exact destination, nor disturb the committed snapshot.
+                notes=(evidence/'collection.json').read_bytes()
+                runs.append(records(988))
+                with self.assertRaisesRegex(ValueError,'unowned path collides'):
+                    site.collect(client,CONFIG,evidence)
+                self.assertEqual((evidence/'collection.json').read_bytes(),notes)
+
+            self.assertEqual({e['run_id'] for e in second['entries']},{127,128})
+            self.assertTrue(any('expired artifact ci-123' in note for note in second['notes']))
+            self.assertTrue(any('expired or removed during collection' in note for note in second['notes']))
+            for absent in (123,124,125,126):
+                self.assertFalse((evidence/f'{absent}-1'/f'artifact-{absent}').exists())
+                self.assertFalse((out/plans[absent][1]/'report.html').exists())
+            self.assertFalse((evidence/'126-1').exists())
+            for retained in (127,128):
+                raw,path=plans[retained]
+                self.assertTrue((out/path/'report.html').is_file())
+                self.assertEqual((out/path/'simulation.log').read_bytes(),raw)
+            self.assertEqual((evidence/'987-1'/'keep').read_text(),'unrelated')
+            self.assertTrue((evidence/'988-1').is_symlink())
 
     def test_quarantine_wrong_historical_provenance_keeps_other_artifacts(self):
         run={'id':123,'head_sha':SHA,'run_attempt':2}
