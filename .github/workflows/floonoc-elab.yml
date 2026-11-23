@@ -75,7 +75,6 @@ jobs:
         with:
           name: supernoc-real-axi-traffic
           path: |
-            .tools/regression/
             .tools/runs/verilator/
             gen/supernoc/manifest.json
           include-hidden-files: true
@@ -86,9 +85,9 @@ jobs:
         with:
           name: supernoc-axi-run-reports-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            .tools/regression/supernoc*/report.html
-            .tools/regression/supernoc*/axi-*.json*
-            .tools/regression/supernoc*/memory-operations.json
+            .tools/runs/verilator/**/report.html
+            .tools/runs/verilator/**/axi-*.json*
+            .tools/runs/verilator/**/memory-operations.json
           include-hidden-files: true
           if-no-files-found: warn
       - name: Download the checksum-verified pinned Xezim release

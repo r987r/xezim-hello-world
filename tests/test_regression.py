@@ -213,7 +213,8 @@ class RegressionTests(unittest.TestCase):
         # Check workspace routing only, not compiler/RTL behavior.
         originals = ('cpu-fetch', 'sram-synthesis', 'boot', 'boot-relocated',
                      'memory', 'memory-full', 'memory-sparse', 'memory-negative',
-                     'chip-xezim-compile', 'noc-xezim', 'noc-verilator', 'chip-ddr4-real')
+                     'chip-xezim-compile', 'noc-xezim', 'noc-verilator', 'chip-ddr4-real',
+                     'supernoc', 'supernoc-negative', 'supernoc-latency', 'chip-boot', 'chip-dma')
         for name in originals:
             with self.subTest(target=name):
                 self.assertTrue(regress.uses_canonical_workspace(
@@ -222,6 +223,22 @@ class RegressionTests(unittest.TestCase):
             with self.subTest(target=name):
                 self.assertFalse(regress.uses_canonical_workspace(
                     name, self.config['tests'][name]))
+
+    def test_supernoc_build_cache_is_independent_of_runtime_output(self):
+        from test_identity import selected, relative_path
+        catalog = self.config['tests']
+        names = ('supernoc', 'supernoc-negative', 'supernoc-latency')
+        plans = [copy.deepcopy(catalog[name]) for name in names]
+        self.assertEqual({p['build'] for p in plans}, {'.tools/supernoc-obj'})
+        self.assertFalse(plans[0].get('reuse_build', False))
+        self.assertTrue(all(p.get('reuse_build') for p in plans[1:]))
+        outputs = {relative_path(selected(name, p, run_id='local-012345abcdef'))
+                   for name, p in zip(names, plans)}
+        self.assertEqual(len(outputs), 3)
+        self.assertFalse(regress.uses_canonical_workspace('supernoc-other', plans[0]))
+        for change in ({'logical_test': 'different-test'}, {'firmware_mode': 'generated'},
+                       {'flow_plan': 'config/scenarios/custom.json'}):
+            self.assertFalse(regress.uses_canonical_workspace('supernoc', {**plans[0], **change}))
 
     def test_only_the_existing_static_chip_dma_selection_is_canonical(self):
         from test_identity import relative_path, selected
