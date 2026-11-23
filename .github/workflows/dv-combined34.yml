@@ -9,6 +9,12 @@ on:
       - 'config/stimulus/tests.yaml'
       - 'config/runtime_migration.yaml'
       - 'tools/regress.py'
+      - 'tools/ddr_split_workspace.py'
+      - 'tools/combined_runtime_provenance.py'
+      - 'tools/run_workspace.py'
+      - 'tools/test_identity.py'
+      - 'tools/sim_cocotb.py'
+      - 'tests/test_combined_runtime_provenance.py'
       - 'tools/build_hardware_variant.py'
       - 'tools/generate_combined_variant.py'
       - 'tests/test_generate_combined_variant.py'
@@ -52,7 +58,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m py_compile tools/generate_combined_variant.py tools/regress.py tools/cpu_dma_firmware.py tools/full_chip_gen.py dv/integration/test_combined.py dv/integration/combined34_scoreboard.py dv/pcie0/host_adapter.py dv/pcie0/tlp_trace.py dv/ethernet0/gmii_trace.py rtl/memory/ddr4/dfi_to_protocol.py
-          python3 -m unittest tests.test_generate_combined_variant tests.test_combined34 tests.test_regression tests.test_selected_source_reference -v
+          python3 -m unittest tests.test_generate_combined_variant tests.test_combined34 tests.test_regression tests.test_selected_source_reference tests.test_combined_runtime_provenance -v
           python3 tools/stimulus_catalog.py
           python3 tools/regress.py --list
           clang --target=riscv32-unknown-elf -march=rv32i -mabi=ilp32 -ffreestanding -fsyntax-only \
@@ -151,17 +157,45 @@ jobs:
           verilator --lint-only --timing -Wno-fatal --top-module full_chip_tb \
             -f gen/projects/xezim_soc_dv/variants/ethernet-ddr-pcie/compiler/sources.f
       - name: Elaborate exact-head Ethernet LiteDRAM iDMA PCIe chip
+        id: combined-build
         timeout-minutes: 35
-        run: python3 tools/regress.py chip-ethernet-ddr-pcie --stage build --fail-fast
-      - name: Execute same-chip actual GMII DDR/DFI DMA PCIe host test
-        timeout-minutes: 65
         run: |
           set -euo pipefail
-          python3 tools/regress.py chip-ethernet-ddr-pcie --stage run --fail-fast
+          build_exit=0
+          python3 tools/regress.py chip-ethernet-ddr-pcie --stage build --fail-fast \
+            | tee "$RUNNER_TEMP/combined-ddr-build.log" || build_exit=$?
+          mapfile -t records < <(awk '$1=="DDR_BUILD" && $2=="chip-ethernet-ddr-pcie" {print $3 " " $4}' "$RUNNER_TEMP/combined-ddr-build.log")
+          if (( ${#records[@]} == 1 )); then
+            read -r run_id run_dir <<< "${records[0]}"
+            [[ "$run_id" =~ ^ci-${GITHUB_RUN_ID}-a${GITHUB_RUN_ATTEMPT}-[a-f0-9]{12}$ ]]
+            [[ "$run_dir" == .tools/runs/verilator/soc-ethernet-ddr-pcie/multiprotocol-closure/"$run_id" ]]
+            printf 'run_id=%s\nrun_dir=%s\n' "$run_id" "$run_dir" >> "$GITHUB_OUTPUT"
+          fi
+          (( build_exit == 0 && ${#records[@]} == 1 ))
+          test -s "$run_dir/ddr-split-build.json"
+          test -s "$run_dir/combined-runtime-input-equivalence.json"
+          test -x ".tools/chip-ethernet-ddr-pcie-obj/$run_id/full_chip_tb"
+      - name: Execute same-chip actual GMII DDR/DFI DMA PCIe host test
+        timeout-minutes: 65
+        env:
+          DDR_RUN_ID: ${{ steps.combined-build.outputs.run_id }}
+          DDR_RUN_DIR: ${{ steps.combined-build.outputs.run_dir }}
+        run: |
+          set -euo pipefail
+          python3 tools/regress.py chip-ethernet-ddr-pcie --stage run --continue-run-id "$DDR_RUN_ID" --fail-fast
           python3 - <<'PY'
-          import json
+          import json, os
           from pathlib import Path
-          root=Path(".tools/regression/chip-ethernet-ddr-pcie")
+          root=Path(os.environ["DDR_RUN_DIR"])
+          assert (root/"ddr-split-run.claim").is_file()
+          plan=json.loads((root/"plan.json").read_text())
+          seal=json.loads((root/"ddr-split-build.json").read_text())
+          selected=json.loads((root/"selected-rtl-manifest.json").read_text())
+          equivalent=json.loads((root/"combined-runtime-input-equivalence.json").read_text())
+          assert plan["stage"]=="run" and plan["identity"]["run_id"]==os.environ["DDR_RUN_ID"]
+          assert seal["identity_sha256"]==plan["identity"]["identity_sha256"]
+          assert equivalent["source_count"]==312
+          assert equivalent["actual_compiler_input_sha256"]==selected["compiler_input_sha256"]
           result=json.loads((root/"result.json").read_text())
           evidence=json.loads((root/"combined34_evidence.json").read_text())
           protocol=json.loads((root/"protocol-transactions.json").read_text())
@@ -183,7 +217,7 @@ jobs:
         with:
           name: dv-combined34-single-chip-${{ github.run_id }}
           path: |
-            .tools/regression/chip-ethernet-ddr-pcie/
+            .tools/runs/verilator/soc-ethernet-ddr-pcie/multiprotocol-closure/${{ steps.combined-build.outputs.run_id || '_no-combined-build_' }}/
             .tools/rtl-review-staging/xezim_soc_dv/soc-ethernet-ddr-pcie/
             gen/projects/xezim_soc_dv/variants/ethernet-ddr-pcie/
             .tools/ddr4/litedram_sim/ddr4_manifest.json

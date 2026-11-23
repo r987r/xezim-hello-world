@@ -166,6 +166,33 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertNotIn(".tools/regression/", upload['path'])
         self.assertNotIn('steps.ddr-build.outputs.run_dir', upload['path'])
 
+    def test_combined_archive_keeps_source_replay_and_exact_run_separate(self):
+        from publish_site import discover_test_workflows
+        from test_identity import RUN, relative_path, selected
+
+        wf = 'dv-combined34.yml'
+        steps = yaml.load((ROOT/'.github/workflows'/wf).read_text(),
+                          Loader=yaml.BaseLoader)['jobs']['real-combined-rtl']['steps']
+        build = next(step for step in steps if step.get('id') == 'combined-build')
+        upload = next(step['with'] for step in steps
+                      if step.get('with', {}).get('name', '').startswith('dv-combined34-single-chip-'))
+        replay = next(step['run'] for step in steps if 'generate actual LiteDRAM' in step.get('name', ''))
+        self.assertIn('--stage files', replay)
+        self.assertIn('tools/selected_source_reference.py', replay)
+        self.assertIn('--stage build', build['run'])
+        self.assertIn('combined-runtime-input-equivalence.json', build['run'])
+        self.assertNotIn('.tools/regression/', upload['path'])
+        self.assertNotIn('.tools/chip-ethernet-ddr-pcie-obj/', upload['path'])
+        self.assertIn(upload['name'], discover_test_workflows(ROOT)[wf]['artifacts'])
+        target = 'chip-ethernet-ddr-pcie'
+        cfg = yaml.safe_load((ROOT/'config/regression.yaml').read_text())['tests'][target]
+        example = selected(target, cfg, run_id='local-012345abcdef')
+        prefix = f".tools/runs/{relative_path(example).parent.as_posix()}/"
+        canonical = [p for p in upload['path'].splitlines() if p.startswith('.tools/runs/')]
+        self.assertEqual(canonical, [
+            prefix + "${{ steps.combined-build.outputs.run_id || '_no-combined-build_' }}/"])
+        self.assertIsNone(RUN.fullmatch('_no-combined-build_'))
+
     def test_scenario_archives_exact_replay_pairs_under_the_original_name(self):
         from publish_site import discover_test_workflows
         path = ROOT / '.github/workflows/dv-scenario.yml'

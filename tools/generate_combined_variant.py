@@ -19,7 +19,10 @@ import tempfile
 
 import yaml
 
-from selected_rtl_provenance import verify_selected_archive
+try:
+    from .selected_rtl_provenance import verify_selected_archive
+except ImportError:
+    from selected_rtl_provenance import verify_selected_archive
 
 ROOT = Path(__file__).resolve().parents[1]
 PROFILE = "chip-ethernet-ddr-pcie"

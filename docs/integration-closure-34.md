@@ -79,7 +79,7 @@ the incoming Ethernet payload.
 python3 -m unittest tests.test_combined34 -v
 python3 tools/regress.py chip-ethernet-ddr-pcie --stage files --fail-fast
 python3 tools/regress.py chip-ethernet-ddr-pcie --stage build --fail-fast
-python3 tools/regress.py chip-ethernet-ddr-pcie --stage run --fail-fast
+python3 tools/regress.py chip-ethernet-ddr-pcie --stage run --continue-run-id <DDR_BUILD-run-id> --fail-fast
 ```
 
 Pinned upstream LiteDRAM, LiteX, FlooNoC, PULP iDMA, verilog-pcie, external
@@ -90,7 +90,10 @@ Verilator elaboration alone is not a regression PASS.**
 The same CI retains `variant/manifest.json`, `firmware.json`,
 `ddr_noc/`, `axi-events.jsonl`, `protocol-events.jsonl`,
 `ddr4_dfi_events.jsonl`, `test-flow-events.jsonl`, `result.json`,
-`report.html`, and `combined34_evidence.json`, if emitted.
+`report.html`, and `combined34_evidence.json`, if emitted. Continue only
+after the build succeeds using its exact `DDR_BUILD` run ID. The runtime
+artifact is under `.tools/runs/`; independent `--stage files` source replay
+retains its pinned review location and never produces execution evidence.
 Never publish an `unknown`/missing value as measured.
 
 ## Remaining closure gates / owners

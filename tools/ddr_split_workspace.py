@@ -1,4 +1,4 @@
-"""Strict same-checkout build/run continuation for the existing DDR-B regression."""
+"""Strict same-checkout continuation for the existing standalone and combined DDR runs."""
 from __future__ import annotations
 
 import json
@@ -11,6 +11,7 @@ except ImportError:
     from test_identity import IdentityError, RUN, load, relative_path, selected, sha
 
 TARGET = "chip-ddr4-real"
+COMBINED = "chip-ethernet-ddr-pcie"
 DDR_MONITOR_CATALOG = "ddr_noc/supernoc/axi_monitors.json"
 # Also consumed indirectly: the existing MRS checker reads the generated init
 # plan from its pinned source location, and the report uses the captured CSR map.
@@ -33,7 +34,7 @@ RUN_OUTPUTS = (
     CLAIM, "result.json", "results.xml", "simulation.log", "runner-events.json",
     "planned-flow.json", "selected-test-plan.json", "report.html",
     "axi-events.jsonl", "axi-transactions.json", "protocol-transactions.json",
-    "test-flow.json", "ddr4_fullchip_evidence.json", "ddr4_mrs_evidence.json",
+    "test-flow.json", "ddr4_fullchip_evidence.json", "combined34_evidence.json", "ddr4_mrs_evidence.json",
 )
 
 
@@ -47,20 +48,35 @@ def eligible(name, test):
                                             'memory_config', 'flow_plan')))
 
 
-def plan_report(root, out, report):
+def eligible_combined(name, test):
+    return (name == COMBINED and test.get('engine') == 'cocotb-verilator'
+            and test.get('sources') == 'noc' and test.get('firmware_mode') == 'ethernet_ddr_pcie'
+            and test.get('top') == 'full_chip_tb'
+            and test.get('module') == 'dv.integration.test_combined'
+            and test.get('bender_targets') == ['chip_boot', 'dma']
+            and not any(test.get(k) for k in ('reuse_build', 'boot_relocate',
+                                            'memory_config', 'flow_plan')))
+
+
+def eligible_runtime(name, test):
+    return eligible(name, test) or eligible_combined(name, test)
+
+
+def plan_report(root, out, report, *, target=TARGET):
     prefix = out.relative_to(root).as_posix()
     address = report['address_map']
     axi = report['axi']
+    declared_prefix = f'.tools/regression/{COMBINED}/' if target == COMBINED else ''
+    config, csr_map, catalog, actors = (
+        f'{prefix}/{item}' for item in (DDR_INPUTS[0], DDR_INPUTS[3], DDR_INPUTS[2], DDR_INPUTS[4]))
     if (address.get('variant') != 'ddr_real'
             or (address.get('config'), address.get('csr_map'),
                 axi.get('catalog'), axi.get('actors')) !=
-               (DDR_INPUTS[0], DDR_INPUTS[3], DDR_INPUTS[2], DDR_INPUTS[4])):
+               tuple(declared_prefix + item for item in (
+                   DDR_INPUTS[0], DDR_INPUTS[3], DDR_INPUTS[2], DDR_INPUTS[4]))):
         raise IdentityError('unreviewed DDR report input selection')
-    return {**report, 'address_map': {**address,
-                'config': f"{prefix}/{address['config']}",
-                'csr_map': f"{prefix}/{address['csr_map']}"},
-            'axi': {**axi, 'catalog': f"{prefix}/{axi['catalog']}",
-                           'actors': f"{prefix}/{axi['actors']}"}}
+    return {**report, 'address_map': {**address, 'config': config, 'csr_map': csr_map},
+            'axi': {**axi, 'catalog': catalog, 'actors': actors}}
 
 
 def _owned(root, path):
@@ -101,13 +117,25 @@ def _state(root, out, plan):
 
 def input_snapshot(root, out, plan):
     """Freeze collateral before build; mutable binary properties are added later."""
+    run_inputs, pins = DDR_INPUTS, PINNED_INPUTS
+    if plan.get('target') == COMBINED:
+        try:
+            from .combined_runtime_provenance import BUNDLE, PROOF
+        except ImportError:
+            from combined_runtime_provenance import BUNDLE, PROOF
+        run_inputs = (*run_inputs, PROOF)
+        pins = (*(p for p in pins if p != 'dv/full_chip/test_ddr_real.py'),
+                f'{BUNDLE}/manifest.json', f'{BUNDLE}/compiler/sources.f',
+                'config/selected-rtl-reference/ethernet-ddr-pcie.json',
+                'dv/integration/test_combined.py', 'dv/pcie0/upstream.lock.json',
+                'rtl/io/ethernet0/ip.lock.yml')
     return {
         'schema_version': 1,
         'identity_sha256': plan['identity']['identity_sha256'],
         'plan_sha256': sha(_data(root, out / 'plan.json')),
         'selected_manifest_sha256': sha(_data(root, out / 'selected-rtl-manifest.json')),
-        'inputs_sha256': {path: sha(_data(root, out / path)) for path in DDR_INPUTS},
-        'pinned_inputs_sha256': {path: sha(_data(root, root / path)) for path in PINNED_INPUTS},
+        'inputs_sha256': {path: sha(_data(root, out / path)) for path in run_inputs},
+        'pinned_inputs_sha256': {path: sha(_data(root, root / path)) for path in pins},
     }
 
 
@@ -118,42 +146,44 @@ def seal(root, out, plan, prepared):
     write_once(root, out / SEAL, (json.dumps(state, sort_keys=True) + '\n').encode())
 
 
-def bound_run_id(root, test, run_id):
+def bound_run_id(root, test, run_id, *, target=TARGET):
     if not isinstance(run_id, str) or not RUN.fullmatch(run_id):
         raise IdentityError('DDR continuation requires an exact build run ID')
-    partial = selected(TARGET, test, root=root, run_id=run_id)
+    if not eligible_runtime(target, test):
+        raise IdentityError('unreviewed DDR split target')
+    partial = selected(target, test, root=root, run_id=run_id)
     out = root / '.tools/runs' / relative_path(partial)
     data = _data(root, out / 'identity.json')
-    identity = load(out / 'identity.json', target=TARGET, plan=test)
+    identity = load(out / 'identity.json', target=target, plan=test)
     ci_run = os.environ.get('GITHUB_RUN_ID')
     ci_attempt = os.environ.get('GITHUB_RUN_ATTEMPT', '1')
     invocation = f'ci-{ci_run}-a{ci_attempt}-' if ci_run is not None else 'local-'
     if not run_id.startswith(invocation):
         raise IdentityError('DDR build ID belongs to a different CI attempt')
-    expected = selected(TARGET, test, root=root, run_id=run_id,
+    expected = selected(target, test, root=root, run_id=run_id,
                         filelist_bytes=_data(root, out / 'sources.f'))
     if identity != expected or json.loads(data) != identity:
         raise IdentityError('DDR build sources or checkout locks are stale')
     return out, identity
 
 
-def prepare_continuation(root, test, run_id, *, verify_archive, command, fingerprint):
+def prepare_continuation(root, test, run_id, *, verify_archive, command, fingerprint, target=TARGET):
     """Read and check the existing selection; never generate a fresh build."""
-    out, identity = bound_run_id(root, test, run_id)
+    out, identity = bound_run_id(root, test, run_id, target=target)
     plan = json.loads(_data(root, out / 'plan.json'))
-    if (plan.get('target') != TARGET or plan.get('stage') != 'run'
+    if (plan.get('target') != target or plan.get('stage') != 'run'
             or plan.get('identity') != identity
             or plan.get('commands') != command(out / 'plan.json')
             or plan.get('results_xml') != str(out / 'results.xml')
             or plan.get('build') != str(Path(test['build']) / run_id)
-            or plan.get('report') != plan_report(root, out, test['report'])):
+            or plan.get('report') != plan_report(root, out, test['report'], target=target)):
         raise IdentityError('foreign DDR split execution plan')
     if any((out / name).exists() or (out / name).is_symlink() for name in RUN_OUTPUTS):
         raise IdentityError('DDR continuation has already started or contains run evidence')
     stored = json.loads(_data(root, out / SEAL))
     if stored != _state(root, out, plan):
         raise IdentityError('sealed DDR build/inputs changed before continuation')
-    verify_archive(root, TARGET, test, directory=out)
+    verify_archive(root, target, test, directory=out)
     stamp = json.loads(_data(root, (root / plan['build']) / 'regression-build.json'))
     if stamp.get('signature') != fingerprint(plan):
         raise IdentityError('DDR compile inputs or simulator changed since build')

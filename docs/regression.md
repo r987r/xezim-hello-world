@@ -227,8 +227,11 @@ run ID from its `DDR_BUILD` line **only if compilation succeeds**. Continue usin
 The continuation accepts only its own sealed selection, tool fingerprint and
 executable on the original checkout/CI attempt, and will not overwrite a
 previous simulation. The default `make dv-chip-ddr4-real` still builds and
-runs together. Source-only preparation never produces PASS; the combined
-Ethernet/DDR/PCIe source replay and split workflow keep their existing paths.
+runs together. The existing combined Ethernet/DDR/PCIe simulation uses the
+same explicit split continuation. Its independent source-only replay retains
+the pinned review location; the canonical simulation must match the checked
+312-input portable bundle before building. Source-only preparation never
+produces PASS.
 
 The existing `chip-pcie-host`, `chip-cpu-dma`, `chip-ddr4-real` and `chip-ethernet-cpu` targets select **different RTL and model boundaries**. Run them through the same `tools/regress.py`, not by combining reports from different configurations. See [PCIe](pcie0-host-phases.md), [DMA](dma-bringup.md), [real DDR](../rtl/memory/ddr4/README.md) and [Ethernet](ethernet0-closure-gate.md).
 
