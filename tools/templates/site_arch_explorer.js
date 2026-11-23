@@ -399,6 +399,10 @@ function trafficRunsFor(owner){
   return linkRuns.filter(run=>(run.links?.sources||[])
     .some(source=>trafficOwner(source.source)===owner));
 }
+// Several tests can share one CI run and attempt. Unarchived entries keep
+// their unique published report path as the option key, not a guessed ID.
+const trafficRunKey=run=>run.canonical_id||run.axi_report_path;
+const trafficRunName=run=>run.canonical_id||(run.evidence_only?"Observed capture: ":"Historical: ")+run.target;
 function trafficOption(select,value,label){
   const o=document.createElement("option");o.value=value;o.textContent=label;select.append(o);
 }
@@ -413,7 +417,7 @@ function trafficLink(label,url){
 function trafficRender(){
   const owner=trafficHost.dataset.owner;
   const runs=trafficRunsFor(owner);
-  const run=runs.find(x=>String(x.run_id)+"-"+String(x.attempt)===trafficRun.value)||runs[0];
+  const run=runs.find(x=>trafficRunKey(x)===trafficRun.value)||runs[0];
   trafficSource.replaceChildren();trafficRows.replaceChildren();trafficActions.replaceChildren();
   if(!run)return;
   const sources=run.links.sources.filter(s=>trafficOwner(s.source)===owner);
@@ -431,7 +435,7 @@ function trafficDisplaySource(run){
   trafficCount.textContent=source.count+" observed "+source.protocol+" records · "+
     Object.entries(source.operations).map(([k,v])=>k+": "+v).join(" · ") +
     (run.links.capture_complete?" · capture complete":" · incomplete capture");
-  trafficContext.textContent="Source-verified "+run.target+" · "+run.workflow+" #"+run.run_id+
+  trafficContext.textContent="Source-verified "+trafficRunName(run)+" · "+run.workflow+" #"+run.run_id+
     " · tested "+run.source_sha.slice(0,12)+
     " · "+source.implementation+" · "+source.clock_domain;
   for(const record of source.preview){
@@ -466,11 +470,11 @@ function inspectTraffic(item){
   if(!runs.length)return;
   trafficHost.dataset.owner=owner;
   trafficRun.replaceChildren();
-  for(const run of runs)trafficOption(trafficRun,String(run.run_id)+"-"+String(run.attempt),
-    run.target+" · "+run.recorded_at+" · "+run.source_sha.slice(0,10));
+  for(const run of runs)trafficOption(trafficRun,trafficRunKey(run),
+    trafficRunName(run)+" · "+run.recorded_at+" · "+run.source_sha.slice(0,10));
   trafficRun.onchange=()=>{trafficSource.dataset.preferred="";trafficRender()};
   trafficSource.onchange=()=>trafficDisplaySource(
-    runs.find(x=>String(x.run_id)+"-"+String(x.attempt)===trafficRun.value)||runs[0]);
+    runs.find(x=>trafficRunKey(x)===trafficRun.value)||runs[0]);
   trafficSource.dataset.preferred="";
   trafficRender();
 }

@@ -8,9 +8,11 @@ and drilled-down router structures, not just static HTML presence.
 from __future__ import annotations
 
 import argparse
+from copy import deepcopy
 import json
 from pathlib import Path
 import tempfile
+from urllib.parse import parse_qs, urlsplit
 
 from selenium import webdriver
 from selenium.webdriver import ChromeOptions
@@ -149,7 +151,17 @@ def main():
                                  'id':None,'start_ps':45000,'end_ps':45000,
                                  'status':'observed',
                                  'fields':{'bank':2,'dfi_phase':3,'address':128}}]}]}}
-            copied.write_text(original[:start]+json.dumps([synthetic,synthetic_ddr])+
+            # A separate test in the same workflow attempt, with a capture
+            # owned by the same architecture node, must not select the first.
+            peer=deepcopy(synthetic)
+            peer_id="verilator/soc-pcie-outbound/endpoint-dma-write/ci-12345-a1-012345abcdef"
+            peer_path="runs/"+peer_id
+            peer.update(target="chip-pcie-outbound",canonical_id=peer_id,
+                        report_path=peer_path+"/protocols.html",
+                        axi_report_path=peer_path+"/report.html",
+                        raw_path=peer_path+"/protocol-transactions.json")
+            peer["links"]["sources"][0]["preview"][0]["fields"]["address"]="0x8000"
+            copied.write_text(original[:start]+json.dumps([synthetic,peer,synthetic_ddr])+
                               original[end:])
             driver.get(copied.as_uri())
             wait.until(lambda d:"SYSTEM-ON-CHIP" in d.find_element(By.ID,"arch-svg").text)
@@ -165,6 +177,30 @@ def main():
                 "#arch-traffic-actions a").get_attribute("href")
             assert "protocol=pcie" in detail and "source=pcie0.rx_req" in detail
             driver.save_screenshot(str(args.screenshots/"04-pcie-verified-tlp-link.png"))
+            select=driver.find_element(By.ID,"arch-traffic-run")
+            options=select.find_elements(By.TAG_NAME,"option")
+            assert len(options)==2
+            assert "Historical: chip-pcie-host" in options[0].text
+            assert peer_id in options[1].text
+            assert len({o.get_dom_attribute("value") for o in options})==2
+            driver.execute_script("""
+                const s=arguments[0];s.selectedIndex=1;s.dispatchEvent(new Event("change"));
+                // The monitor handler must resolve the same selected run.
+                document.getElementById("arch-traffic-source").dispatchEvent(new Event("change"));
+                """,select)
+            assert "0x8000" in driver.find_element(By.ID,"arch-traffic-rows").text
+            assert "0x4000" not in driver.find_element(By.ID,"arch-traffic-rows").text
+            assert peer_id in driver.find_element(By.ID,"arch-traffic-context").text
+            deep,raw,report=[a.get_attribute("href") for a in
+                              driver.find_elements(By.CSS_SELECTOR,"#arch-traffic-actions a")]
+            assert parse_qs(urlsplit(deep).query)=={
+                "run":["12345-1/chip-pcie-outbound"],"protocol":["pcie"],"source":["pcie0.rx_req"]}
+            assert raw.endswith(peer_path+"/protocol-transactions.json")
+            assert report.endswith(peer_path+"/report.html")
+            driver.execute_script("""
+                const s=arguments[0];s.selectedIndex=0;s.dispatchEvent(new Event("change"));
+                """,select)
+            assert "0x4000" in driver.find_element(By.ID,"arch-traffic-rows").text
             driver.get(copied.as_uri())
             wait.until(lambda d:"SYSTEM-ON-CHIP" in d.find_element(By.ID,"arch-svg").text)
             dblclick_by_label("memory0")

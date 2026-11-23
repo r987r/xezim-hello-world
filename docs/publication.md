@@ -9,6 +9,11 @@ The [verification hub](https://r987r.github.io/xezim-hello-world/) opens with a 
 - **Fabric Explorer:** source-derived route/NI/XY path inventory, outstanding budgets, read/write comparisons and original captures. Actual latency requires complete, clean, source-compatible **serial one-beat** AXI observations at each stated boundary. A route without suitable evidence is **unmeasured**, not zero.
 - **Address Map/CSR:** SoC physical apertures and source-owned register definitions, with selected real-DDR CSR layouts where qualified. DDR4 MR0–MR6 are labeled device-command definitions, not CPU-addressable registers. Executed register accesses and DDR MRS observations remain in test-specific reports.
 
+Filtered protocol exports retain the report's CI run ID, attempt, tested SHA,
+and archived canonical identity in each row. Captures without an archived
+canonical identity instead include their original target. Exports from the cross-run view
+remain bounded previews; the original raw capture is unchanged.
+
 Each test has an original **tested SHA** distinct from the currently deployed site SHA. A green old workflow or copied JSON is not proof the same RTL ran on today's main. The site presents genuine expected-negative, failed, and missing evidence without changing PASS semantics.
 
 ## Published page responsibilities
@@ -68,7 +73,7 @@ connectivity or a passing simulation; use the run result and captures for
 those claims.
 
 Source history is bounded by `config/publication.yaml` and provider artifact retention; Pages is **not archival storage**. A workflow with no target artifacts is workflow-only evidence. New public report URLs use
-`runs/<simulator>/<config_target>/<testname>/<run_id>/report.html`; immutable old captures retain original historical URLs for comparison. [#139](https://github.com/r987r/xezim-hello-world/issues/139) owns the remaining producer, upload and reader migration. On the audited revision, the runner reserves a canonical workspace for `smoke`, `sram`, `serv` and `dma-rtl`. A canonical public URL alone does not establish which writer produced its archive.
+`runs/<simulator>/<config_target>/<testname>/<run_id>/report.html`; immutable old captures retain original historical URLs for comparison. [#139](https://github.com/r987r/xezim-hello-world/issues/139) owns the remaining producer, upload and reader migration. A canonical public URL alone does not establish which writer produced its archive.
 
 ## Local preview and deployment
 

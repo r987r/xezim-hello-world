@@ -2100,6 +2100,7 @@ def build(output,evidence,repository,sha,config):
             link_runs = [
                 {'run_id': e['run_id'], 'attempt': e['attempt'],
                  'target': e['target'], 'recorded_at': e['recorded_at'],
+                 'canonical_id': e.get('canonical_id'), 'evidence_only': e.get('evidence_only', False),
                  'source_sha': e['source_sha'], 'passed': e['passed'],
                  'workflow': e['workflow'],
                  'report_path': e['path'].rsplit('/',1)[0] + '/protocols.html',
