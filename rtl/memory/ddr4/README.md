@@ -36,8 +36,13 @@ python3 tools/ip_fetch.py litedram
 python3 rtl/memory/ddr4/bringup.py generate
 python3 rtl/memory/ddr4/check_rtl.py --tool verilator
 python3 rtl/memory/ddr4/run_functional.py
-python3 rtl/memory/ddr4/report_html.py --dir .tools/ddr4/litedram_sim
 ```
+
+Generated gateware and the compile-only checks stay in `.tools/ddr4/litedram_sim/`.
+The functional runner prints its new immutable
+`.tools/runs/verilator/ddr4-standalone-default/ddr-command-observation/<run_id>/` path.
+Open that run's `ddr4-report.html` and original `results.xml`; its simulator
+binary is kept separately and is not part of the evidence archive.
 
 The pinned controller uses a 100 MHz simulation reference clock (10 ns). Wishbone/DFII initialization, controller-facing AXI read/write, low/middle/high geometry, 1/4/8/16-beat bursts, multiple IDs, byte-strobe preservation and concurrency submission have independent RTL tests. Storage is artificially bounded to **32 MiB** inside a larger **1 GiB architectural DDR aperture**; accesses outside the model must be rejected, not aliased. The standalone regression does **not** prove sustained multi-master saturation, long forced stalls, bank/row/refresh collisions, reset/reinitialization or a physical PHY; see [#35](https://github.com/r987r/xezim-hello-world/issues/35).
 

@@ -15,7 +15,11 @@ ROOT=Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:sys.path.insert(0,str(ROOT))
 if str(ROOT/"tools") not in sys.path:sys.path.insert(0,str(ROOT/"tools"))
 from dv.common.protocol_trace import ProtocolTrace
+from tools.run_workspace import canonical_artifact, verify_run
+from tools.test_identity import relative_path, sha
 import protocol_report
+
+TARGET = "ddr4-standalone"
 
 DFI="memory0.ddr0.dfi"
 BANK="memory0.ddr0.bankmodel"
@@ -79,7 +83,15 @@ def export_fullchip_probe(input_dir:Path, trace):
     return counts
 
 
-def convert(input_dir:Path,output_dir:Path):
+def standalone_plan(top=None):
+    plan = {"target": TARGET, "engine": "cocotb-verilator",
+            "report": {"protocols": {"sources": CATALOG, "max_events": 250000}}}
+    if top is not None:
+        plan.update(sources="ddr4-standalone", top=top, logical_test="ddr-command-observation")
+    return plan
+
+
+def convert(input_dir: Path, output_dir: Path, *, identity=None):
     input_dir,output_dir=Path(input_dir),Path(output_dir)
     summary=json.loads((input_dir/"ddr4_dfi_summary.json").read_text())
     result=json.loads((input_dir/"ddr4_functional_result.json").read_text())
@@ -94,10 +106,29 @@ def convert(input_dir:Path,output_dir:Path):
             last.get("kind")!="probe_end" or last.get("status")!="pass" or
             last.get("sampled_cycles")!=summary["sampled_cycles"]):
         raise ValueError("DFI probe start/end and summary disagree")
-    output_dir.mkdir(parents=True,exist_ok=True)
-    plan={"target":"ddr4-standalone","engine":"cocotb-verilator",
-          "report":{"protocols":{"sources":CATALOG,"max_events":250000}}}
-    (output_dir/"plan.json").write_text(json.dumps(plan,indent=2)+"\n")
+    if identity is None:
+        # Historical explicit conversion is still supported outside the
+        # canonical tree; it cannot overwrite a selected native run.
+        destination = output_dir.resolve()
+        if (input_dir.resolve() == destination or (output_dir / "identity.json").exists()
+                or {(ROOT / name).resolve() for name in (".tools/runs", ".tools/regression")}
+                & {destination, *destination.parents}):
+            raise ValueError("DDR4 canonical conversion requires its original run identity")
+        output_dir.mkdir(parents=True, exist_ok=True)
+        plan = standalone_plan()
+        (output_dir / "plan.json").write_text(json.dumps(plan, indent=2) + "\n")
+    else:
+        if input_dir.resolve() != output_dir.resolve():
+            raise ValueError("DDR4 conversion cannot use another run's capture")
+        plan = json.loads((output_dir / "plan.json").read_text())
+        verify_run(output_dir, identity, plan=plan)
+        if (plan != {**standalone_plan(result.get("top")), "identity": identity}
+                or identity["legacy_target"] != TARGET
+                or result.get("identity_sha256") != identity["identity_sha256"]
+                or sha((output_dir / "sources.f").read_bytes()) != identity["selection"]["filelist_sha256"]):
+            raise ValueError("DDR4 native result differs from selected run inputs")
+        for name in ("protocol-events.jsonl", "protocol-transactions.json", "protocols.html", "result.json"):
+            canonical_artifact(output_dir, name)
     counts={}
     trace=ProtocolTrace(output_dir/"protocol-events.jsonl",CATALOG,max_events=250000)
     try:
@@ -132,6 +163,11 @@ def convert(input_dir:Path,output_dir:Path):
     protocol=protocol_report.build(output_dir,plan)
     if not protocol or not protocol["capture_complete"]:
         raise ValueError("incomplete DFI protocol conversion")
+    if identity is not None:
+        if (result.get("source") != {k: protocol["run"][k] for k in
+                                    ("commit", "dirty", "workflow_run_id", "workflow_attempt")}
+                or not {"dfi_read", "dfi_write", "dfi_precharge", "dfi_refresh"} <= counts.keys()):
+            raise ValueError("DDR4 protocol source stamp or observed DFI coverage differs")
     # Historical and new test results must be evaluated only for their
     # original tested SHA. A successful standalone simulation is not a claim
     # of the same command probes in the integrated full-chip test.
@@ -142,8 +178,11 @@ def convert(input_dir:Path,output_dir:Path):
         from ddr_mr_report import read_evidence
         import shutil
         read_evidence(mrs_source, output_dir/"protocol-transactions.json")
-        shutil.copyfile(mrs_source,output_dir/"ddr4_mrs_evidence.json")
-    result_data={"target":"ddr4-standalone","passed":True,"stage":"run",
+        if identity is None:
+            shutil.copyfile(mrs_source, output_dir / "ddr4_mrs_evidence.json")
+    elif identity is not None:
+        raise ValueError("DDR4 native MRS evidence missing")
+    result_data={"target":TARGET,"passed":True,"stage":"run",
                  "engine":"cocotb-verilator",
                  "scope":"standalone_litedram_behavioral_dfi",
                  "protocol_observations":len(protocol["records"]),
@@ -157,7 +196,11 @@ def convert(input_dir:Path,output_dir:Path):
                  },
                  "dfi_act_coverage":"observed" if counts.get("dfi_activate",0)
                      else "not_observed"}
-    (output_dir/"result.json").write_text(json.dumps(result_data,indent=2)+"\n")
+    if identity is not None:
+        result_data.update(identity_sha256=identity["identity_sha256"],
+                           canonical_id=relative_path(identity).as_posix())
+    with (output_dir / "result.json").open("x" if identity is not None else "w") as output:
+        output.write(json.dumps(result_data, indent=2) + "\n")
     return protocol
 
 
