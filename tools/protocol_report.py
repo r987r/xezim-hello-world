@@ -246,7 +246,10 @@ def build(directory: Path, plan: dict, *, axi_payload=None):
 
 
 def render(data, path, *, capture_source=None, original_download=False):
-    from report_transport import asset_link, capture_template
+    if __package__:
+        from .report_transport import asset_link, capture_template
+    else:
+        from report_transport import asset_link, capture_template
     # Never let the JSON embedded in HTML terminate the script tag.
     template=(Path(__file__).resolve().parent/"templates/protocol_report.html").read_text()
     value="{}" if capture_source else json.dumps(data,separators=(",",":")).replace("<","\\u003c")

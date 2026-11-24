@@ -288,7 +288,10 @@ def write_report(directory, plan, result):
 
 
 def render_report(payload,path,*,capture_source=None):
-    from report_transport import capture_template
+    if __package__:
+        from .report_transport import capture_template
+    else:
+        from report_transport import capture_template
     if capture_source:
         # Extra independently verified MRS evidence is not present in the
         # byte-exact original AXI capture. Keep just that view overlay inline.

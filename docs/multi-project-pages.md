@@ -2,7 +2,7 @@
 
 The [verification site](https://r987r.github.io/xezim-hello-world/)
 opens with a **project picker**. Each project has its own architecture,
-addresses, selected top-RTL file browser, and test-result ledger.
+Fabric routes, addresses, selected top-RTL file browser, and test-result ledger.
 `config/projects/catalog.yaml` is the sole project inventory.
 The site and CI matrix enumerate the catalog; no project IDs or project count
 are hardcoded in the navigation or matrix implementation.
@@ -25,6 +25,12 @@ Pages routes are stable:
   owns the legacy `explorer.html`. All other designs use the same
   searchable, breadcrumbs-based source hierarchy; they never inherit
   another project's RTL modules, routers, or traffic data.
+- `projects/<id>/fabric.html` lists links, targets and network profiles for
+  that design only. Direct data links also show the local address decoder's
+  destination aperture, egress and next hop, not an exercised end-to-end path.
+  The default hierarchical SoC links to its existing
+  detailed route and latency matrix; other projects show configured routes
+  and unmeasured timing, never the default project's measurements.
 - `projects/<id>/address-map.html` is its address map.
 - `projects/<id>/files.html` indexes top RTL, NoC, filelist,
   manifests, boot products and their real source location.
@@ -36,7 +42,9 @@ The original SoC's historical `soc-overview.html`,
 `topology.html`, `explorer.html`,
 `fabric.html`, `address-map.html` and
 `runs.html` URLs remain valid; old run-report deep links stay
-available. An untagged legacy run is never assigned to a newly added project.
+available. The root Fabric, Addresses and Test Runs views refer to the
+default hierarchical SoC, not an aggregate across designs. An untagged
+legacy run is never assigned to a newly added project.
 
 ## Generated files: which output should I inspect?
 
