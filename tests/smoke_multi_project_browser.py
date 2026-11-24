@@ -156,7 +156,20 @@ def main():
             assert "connections" in graph_status, (pid, graph_status,
                 browser.find_element(By.ID, "arch-h-diagram-crumbs").text)
             browser.find_element(By.ID, "arch-h-fit").click()
-            browser.get((expected / "address-map.html").as_uri())
+            browser.find_element(By.CSS_SELECTOR, 'main .actions a[href="fabric.html"]').click()
+            assert browser.current_url.endswith("/projects/" + pid + "/fabric.html")
+            fabric = browser.find_element(By.ID, "project-fabric")
+            assert "Configured network inventory" in fabric.text
+            for target in source["memory_targets"]:
+                assert target["name"] in fabric.text
+            legacy_link = fabric.find_elements(By.CSS_SELECTOR,'a[href="../../fabric.html"]')
+            assert bool(legacy_link) == (item["config"] == "config/soc.yaml")
+            if not legacy_link:
+                assert "Unmeasured is not zero" in fabric.text
+                for link in source["networks"].get("direct_data",{}).get("links",[]):
+                    assert link["name"] in fabric.text
+            fabric.find_element(By.CSS_SELECTOR, 'a[href="address-map.html"]').click()
+            assert browser.current_url.endswith("/projects/" + pid + "/address-map.html")
             for target in source["memory_targets"]:
                 assert target["name"] in browser.find_element(By.TAG_NAME, "main").text
 
@@ -177,7 +190,7 @@ def main():
             browser.get((expected / "runs.html").as_uri())
             verify_boot(browser, expected, project_json)
             if not project_json["runs"]:
-                assert "No project-qualified run evidence" in (
+                assert "No project-qualified traffic-test rows" in (
                     browser.find_element(By.TAG_NAME, "main").text)
                 assert "Recorded PASS" not in browser.page_source
 
