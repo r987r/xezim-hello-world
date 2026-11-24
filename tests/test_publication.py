@@ -1406,6 +1406,32 @@ class PublicationTests(unittest.TestCase):
         self.assertIn('const key=identityKey+"|"+e.workflow',site_html)
         self.assertIn('e.config_target',site_html)
 
+    def test_isolated_outbound_artifact_is_not_a_regression_report_producer(self):
+        workflow = ".github/workflows/pcie-outbound.yml"
+        jobs = yaml.safe_load((ROOT / workflow).read_text())["jobs"]
+        archive = next(step for step in jobs["outbound-pcie-rtl"]["steps"]
+                       if step.get("uses", "").startswith("actions/upload-artifact@"))
+        self.assertEqual(archive["with"]["name"], "pcie-outbound-${{ github.run_id }}")
+        self.assertEqual(archive["with"]["path"].splitlines(), [
+            "dv/pcie0/upstream.lock.json", "${{ steps.native-outbound.outputs.archive_dir }}"])
+        self.assertIn("steps.native-outbound.outputs.archive_dir != ''", archive["if"])
+        # The prefix-based archive matcher must never collect this name:
+        # old native ZIPs under that name have a standalone scoreboard named
+        # result.json but it does not meet the shared regression schema.
+        discovered = site.discover_test_workflows(ROOT)["pcie-outbound.yml"]
+        self.assertEqual(discovered["artifacts"], [
+            "pcie-outbound-fullchip-${{ github.run_id }}"])
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            directory = fixture(root / "evidence")
+            (directory / "result.json").unlink()
+            (directory / "outbound-result.json").write_text('{"passed":true}')
+            runs, reports, notes = site.evidence_index(
+                root / "evidence", root / "site", "r987r/xezim-hello-world")
+            self.assertEqual(len(runs), 1)
+            self.assertEqual(reports, [])
+            self.assertEqual(notes, [])
+
     def test_archive_digest_and_traversal_are_checked(self):
         for name in ('../escape','/absolute','dir/../../escape','dir\\escape'):
             with self.subTest(name=name),tempfile.TemporaryDirectory() as tmp:
