@@ -28,6 +28,7 @@ import yaml
 
 from axi_report import render_report
 from run_page_chrome import decorate_run_pages
+from report_transport import asset_link, compressed_assets, compress_originals, reader as capture_reader
 import project_boot_evidence as boot_evidence
 from protocol_report import render as render_protocol_report
 from test_flow_report import render_summary as render_test_flow
@@ -1153,7 +1154,10 @@ def append_capture_only_entries(folder, run, verified_shas, output, entries, not
                 if item.is_file() and item.name in FILES:
                     shutil.copyfile(item,destination/item.name)
                     assets.append(item.name)
-            render_protocol_report(payload,destination/"protocols.html")
+            compressed=compressed_assets(destination,assets)
+            render_protocol_report(payload,destination/"protocols.html",
+                                   capture_source=compressed.get('protocol-transactions.json'),
+                                   original_download=bool(compressed.get('protocol-transactions.json')))
             # The source monitor is observed, not a conventional regression.
             # Even a successful workflow with other green jobs cannot upgrade
             # these standalone observations to a full-chip PASS.
@@ -1183,6 +1187,8 @@ def append_capture_only_entries(folder, run, verified_shas, output, entries, not
                 "protocol_links":protocol_link_catalog(payload),
                 "flow_steps":0, "identity_status":"capture_only_no_result_json",
             }
+            if compressed:
+                entry['compressed_assets']=compressed
             entries.append(entry)
         except (ValueError, TypeError, KeyError, OSError, UnicodeError) as exc:
             notes.append(
@@ -1277,6 +1283,7 @@ def evidence_index(evidence,output,repository,site_sha=None):
                 checked=validate_fabric(original,json.loads(selected_bench.read_text()))
                 if checked!=stored or stored.get('scope')!=target:
                     raise ValueError('archived latency benchmark proof disagrees with accepted AXI')
+            compressed=compressed_assets(destination,assets)
             trace_path=source_dir/'axi-transactions.json'
             trace=json.loads(trace_path.read_text()) if trace_path.exists() else None
             protocol_path=source_dir/'protocol-transactions.json'
@@ -1499,14 +1506,22 @@ def evidence_index(evidence,output,repository,site_sha=None):
                     visible_protocol = annotate_protocol(protocol_data, mr_view)
                     dump(destination/'protocol-transactions-decoded.json',
                          visible_protocol)
-                    entry['protocol_decode_href'] = (
-                        relative/'protocol-transactions-decoded.json').as_posix()
+                    compressed.update(compressed_assets(destination,['protocol-transactions-decoded.json']))
+                    decoded_name=compressed.get('protocol-transactions-decoded.json',
+                                                'protocol-transactions-decoded.json')
+                    entry['protocol_decode_href']=(relative/decoded_name).as_posix()
                 link_catalog = protocol_link_catalog(visible_protocol)
                 if link_catalog:
                     entry['protocol_links'] = link_catalog
                 # Do not publish artifact-supplied HTML. Render from verified
                 # protocol JSON; never mutate the original CI capture.
-                render_protocol_report(visible_protocol, destination/'protocols.html')
+                protocol_name=('protocol-transactions-decoded.json' if mr_view is not None
+                               else 'protocol-transactions.json')
+                render_protocol_report(visible_protocol, destination/'protocols.html',
+                                       capture_source=compressed.get(protocol_name),
+                                       original_download=bool(compressed.get('protocol-transactions.json')))
+            if compressed:
+                entry['compressed_assets']=compressed
             if variant_view is not None:
                 page=render_variant_html(variant_view,variant_graph)
                 (destination/'variant-architecture.html').write_text(
@@ -1538,7 +1553,8 @@ def evidence_index(evidence,output,repository,site_sha=None):
                     entry['verified_fabric_source_sha']=fabric_matches[tested_sha]
                 if mr_view is not None:
                     trace['sections']['ddr_mrs']=mr_view
-                render_report(trace,destination/'report.html')
+                render_report(trace,destination/'report.html',
+                              capture_source=compressed.get('axi-transactions.json'))
                 if memory_view is not None:
                     from scenario_memory_trace import embed_in_run_report
                     embed_in_run_report(destination/'report.html',memory_view)
@@ -1546,7 +1562,7 @@ def evidence_index(evidence,output,repository,site_sha=None):
                 up=os.path.relpath(output,destination).replace(os.sep,'/')
                 nav=f'<p style="margin:0 0 12px"><a href="{up}/index.html">Verification hub</a> · <a href="{up}/runs.html">All runs</a> · <a href="{escape(run["html_url"])}">CI evidence</a></p>'
                 nav+=compiler_note+'<details><summary>Original evidence: raw events, transactions, logs, plan and filelists</summary><ul>'
-                nav+=''.join(f'<li><a href="{escape(name)}">{escape(name)}</a></li>' for name in sorted(assets))+'</ul></details>'
+                nav+=''.join('<li>'+asset_link(name,compressed)+'</li>' for name in sorted(assets))+'</ul></details>'
                 if protocol_data:
                     # The canonical per-test landing page contains a visible
                     # read-only protocol viewer for *all* observed sources,
@@ -1560,7 +1576,7 @@ def evidence_index(evidence,output,repository,site_sha=None):
                           'This is the independently verified protocol capture, '
                           'not a synthetic combined trace.</p>'
                           '<p><a href="protocols.html">Open full protocol explorer</a>'
-                          ' · <a href="protocol-transactions.json">Raw protocol JSON</a></p>'
+                          ' · '+asset_link('protocol-transactions.json',compressed)+'</p>'
                           '<iframe src="protocols.html?embed=1" loading="lazy" '
                           'title="Source-verified per-test protocol observations" '
                           'style="display:block;width:100%;height:640px;'
@@ -1604,7 +1620,7 @@ def evidence_index(evidence,output,repository,site_sha=None):
                 body+=f'<p><strong>{label} {"PASS" if entry["passed"] else "FAIL"}</strong> · {escape(entry["engine"])} · tested SHA <code>{escape(entry["source_sha"])}</code></p>'
                 if entry['expected_failure']:body+='<p>Expected-failure case: '+escape(entry['expected_failure'])+'</p>'
                 body+='<pre>'+escape(json.dumps(result,indent=2))+'</pre>'
-                body+='<ul>'+''.join(f'<li><a href="{escape(name)}">{escape(name)}</a></li>' for name in assets)+'</ul>'
+                body+='<ul>'+''.join('<li>'+asset_link(name,compressed)+'</li>' for name in assets)+'</ul>'
                 (destination/'report.html').write_text(shell(target,body,relative/'report.html',repository,site_sha or run['head_sha']))
             # Original report now has a definition-only flow independently of
             # the optional validated test-flow evidence overlay.
@@ -2250,7 +2266,8 @@ def build(output,evidence,repository,sha,config):
                  'workflow': e['workflow'],
                  'report_path': e['path'].rsplit('/',1)[0] + '/protocols.html',
                  'axi_report_path': e['path'],
-                 'raw_path': e['path'].rsplit('/',1)[0] + '/protocol-transactions.json',
+                 'raw_path': (Path(e['path']).parent/e.get('compressed_assets',{}).get(
+                     'protocol-transactions.json','protocol-transactions.json')).as_posix(),
                  'links': e['protocol_links']}
                 for e in entries if e.get('protocol_links')
             ]
@@ -2279,7 +2296,7 @@ def build(output,evidence,repository,sha,config):
         if page=='runs':
             # Trusted static JavaScript, not CI-supplied executable HTML.
             traffic_js=(ROOT/'tools/templates/site_runs_traffic.js').read_text()
-            body=body.replace('__RUN_TRAFFIC_JS__',traffic_js)
+            body=capture_reader(body.replace('__RUN_TRAFFIC_JS__',traffic_js))
         if page=='fabric':
             fabric_data=json.dumps(fabric,separators=(',',':')).replace('<','\\u003c')
             body=body.replace('__FABRIC_DATA__',fabric_data)
@@ -2289,10 +2306,13 @@ def build(output,evidence,repository,sha,config):
     from project_catalog import projects
     project_pages(output, projects(ROOT), entries, repository, sha,
                   boots=boot_evidence.publish(evidence,output,sha))
-    if any(e.get('retained_legacy_comparison') for e in entries):
-        # Never replace the deployed site with a budget-truncated subset.
-        if sum(f.stat().st_size for f in output.rglob('*') if f.is_file())>1000**3:
-            raise ValueError('Pages size limit exceeded with retained legacy comparisons')
+    # All Python verification and rendering above saw the original bytes.
+    # This last step compresses storage only, without dropping report entries.
+    compress_originals(output,entries)
+    byte_count=sum(f.stat().st_size for f in output.rglob('*') if f.is_file())
+    if byte_count>1000**3:
+        raise ValueError(f'Pages size limit exceeded: {byte_count:,} bytes after lossless packing')
+    print(f'PAGES FILE BYTES: {byte_count:,}',flush=True)
     return dataset
 
 

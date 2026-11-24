@@ -52,7 +52,7 @@ function init(){
   $("traffic-next").onclick=()=>{if((current.page+1)*current.size<current.filtered.length){current.page++;render()}};
   $("traffic-csv").onclick=()=>exportFiltered("csv");
   $("traffic-json").onclick=()=>exportFiltered("json");
-  $("traffic-open-raw").onclick=()=>{if(current.entry)window.open(rawPath(current.entry),"_blank","noopener")};
+  $("traffic-open-raw").onclick=()=>{if(current.entry)window.open(rawPath(current.entry,false),"_blank","noopener")};
   const query=new URLSearchParams(location.search);
   const wanted=query.get("run")||query.get("test");
   if(wanted){
@@ -63,9 +63,10 @@ function init(){
   if(!selectedRun.value)selectedRun.value="__all__";
   load({protocol:query.get("protocol"),source:query.get("source")});
 }
-function rawPath(e){
-  return e.protocol_decode_href||
-    e.path.slice(0,e.path.lastIndexOf("/"))+"/protocol-transactions.json";
+function rawPath(e,decoded=true){
+  const filename=e.compressed_assets?.["protocol-transactions.json"]||"protocol-transactions.json";
+  return (decoded&&e.protocol_decode_href)||
+    e.path.slice(0,e.path.lastIndexOf("/"))+"/"+filename;
 }
 function preview(e){
   const records=[];
@@ -93,6 +94,8 @@ async function load(initial={}){
   if(!entry)return;
   current.entry=entry;current.all=preview(entry);current.preview=true;
   $("traffic-open-raw").disabled=false;
+  $("traffic-open-raw").textContent=rawPath(entry,false).endsWith(".gz")
+    ?"Download raw capture (.gz)":"Open raw capture";
   $("traffic-provenance").textContent=
     runName(entry)+" · tested "+entry.source_sha+" · CI run #"+entry.run_id+
     " attempt "+entry.attempt+" · "+entry.workflow+
@@ -103,9 +106,7 @@ async function load(initial={}){
   try{
     let records=current.cache.get(key(entry));
     if(!records){
-      const response=await fetch(path);
-      if(!response.ok)throw Error("HTTP "+response.status);
-      const payload=await response.json();
+      const payload=await loadReportCapture(path);
       if(payload.schema_version!==1||!Array.isArray(payload.records)||
          !Array.isArray(payload.sources)||payload.run?.target!==entry.target)
         throw Error("invalid protocol evidence");

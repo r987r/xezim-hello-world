@@ -818,6 +818,51 @@ class PublicationTests(unittest.TestCase):
             self.assertNotIn('<script>alert("injected")</script>',generated)
             self.assertIn('\\u003cimg',generated)
 
+    def test_bulky_public_captures_pack_losslessly_without_renaming_report_or_small_assets(self):
+        import gzip
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            target=fixture(root/'evidence',axi=True)
+            axi=json.loads((target/'axi-transactions.json').read_bytes())
+            note='large original evidence <not HTML> '*(1024**2//25)
+            axi['sections']['axi']['issues']=[note]
+            site.dump(target/'axi-transactions.json',axi)
+            site.dump(target/'protocol-transactions.json',{
+                'schema_version':1,'capture_complete':True,'issues':[],
+                'run':axi['run'],'sources':[{'id':'cpu','protocol':'axi4',
+                           'role':'initiator','clock_domain':'clk'}],
+                'records':[{'kind':'event','source':'cpu','protocol':'axi4',
+                            'operation':'read','start_ps':1,'end_ps':1,
+                            'status':'observed','fields':{'note':note}}]})
+            (target/'axi-events.jsonl').write_text(json.dumps({'exact':note})+'\n')
+            (target/'protocol-events.jsonl').write_text('{"small":"unchanged"}\n')
+            output=root/'site'
+            built=site.build(output,root/'evidence','r987r/xezim-hello-world',SHA,CONFIG)
+            entry,=built['entries']
+            self.assertEqual(entry['path'],'runs/123-1/chip-boot/report.html')
+            self.assertEqual(entry['source_sha'],SHA)
+            self.assertEqual(entry['protocol_observations'],1)
+            compressed=entry['compressed_assets']
+            self.assertEqual(set(compressed),{'axi-transactions.json','axi-events.jsonl',
+                                              'protocol-transactions.json'})
+            report=output/entry['path']
+            for name,packed in compressed.items():
+                self.assertFalse(report.with_name(name).exists())
+                self.assertEqual(gzip.decompress(report.with_name(packed).read_bytes()),
+                                 (target/name).read_bytes())
+                self.assertIn(f'href="{packed}"',report.read_text())
+            self.assertEqual(report.with_name('protocol-events.jsonl').read_bytes(),
+                             (target/'protocol-events.jsonl').read_bytes())
+            for name,source in [('report.html','axi-transactions.json.gz'),
+                                ('protocols.html','protocol-transactions.json.gz')]:
+                html=report.with_name(name).read_text()
+                self.assertIn(f'data-capture-source="{source}"',html)
+                self.assertNotIn('large original evidence',html)
+            explorer=(output/'explorer.html').read_text()
+            self.assertIn('runs/123-1/chip-boot/protocol-transactions.json.gz',explorer)
+            self.assertEqual(json.loads((output/'data/site.json').read_text())['entries'][0]
+                             ['compressed_assets'],compressed)
+
     def test_generic_only_report_keeps_provenance_and_page(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);target=fixture(root/'evidence')

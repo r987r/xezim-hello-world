@@ -245,11 +245,16 @@ def build(directory: Path, plan: dict, *, axi_payload=None):
     return result
 
 
-def render(data, path):
+def render(data, path, *, capture_source=None, original_download=False):
+    from report_transport import asset_link, capture_template
     # Never let the JSON embedded in HTML terminate the script tag.
     template=(Path(__file__).resolve().parent/"templates/protocol_report.html").read_text()
-    value=json.dumps(data,separators=(",",":")).replace("<","\\u003c")
-    html=template.replace("__PROTOCOL_DATA__",value)
+    value="{}" if capture_source else json.dumps(data,separators=(",",":")).replace("<","\\u003c")
+    html=capture_template(template,capture_source).replace("__PROTOCOL_DATA__",value)
+    if original_download:
+        name='protocol-transactions.json'
+        html=html.replace('<div id="warning"></div>','<div id="warning"></div><p>'+
+                          asset_link(name,{name:name+'.gz'})+'</p>',1)
     latency=data.get("latency")
     if latency:
         from pcie_latency_report import render_panel
