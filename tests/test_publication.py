@@ -1384,9 +1384,19 @@ class PublicationTests(unittest.TestCase):
         self.assertTrue(any("format('.tools/runs/{0}/', steps.pcie-host-execution" in path
                             for path in artifact_paths),
                         "PCIe CI must preserve the selected host regression evidence")
-        self.assertTrue(any(".tools/pcie0/noc_build/results.xml" in path
-                            for path in artifact_paths),
-                        "original standalone PCIe captures must still be retained")
+        for mode in ("legacy", "relocated"):
+            self.assertTrue(any(
+                f"steps.native-noc.outputs.{mode}_canonical_id != '' && "
+                f"format('.tools/runs/{{0}}/', steps.native-noc.outputs.{mode}_canonical_id)"
+                in path for path in artifact_paths),
+                "each original standalone PCIe execution must retain its native archive")
+        for path in artifact_paths:
+            if "steps.pcie-host-execution" in path:
+                # The real preflight source keeps .tools/ as the upload
+                # common root: do not strip the host's simulator component.
+                self.assertIn(".tools/pcie0/normalized/pcie_axi_master.v", path.splitlines())
+        self.assertNotIn(".tools/pcie0/noc-builds/", workflow)
+        self.assertNotIn("pcie_bridge_check.vvp", workflow)
         self.assertNotIn("            .tools/pcie0/full_chip_build/",workflow)
         self.assertGreaterEqual(CONFIG["max_archive_mib"],130)
         site_html=(ROOT/"tools/templates/site_runs.html").read_text()
