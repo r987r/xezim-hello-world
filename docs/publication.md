@@ -75,6 +75,17 @@ those claims.
 Source history is bounded by `config/publication.yaml` and provider artifact retention; Pages is **not archival storage**. A workflow with no target artifacts is workflow-only evidence. New public report URLs use
 `runs/<simulator>/<config_target>/<testname>/<run_id>/report.html`; immutable old captures retain original historical URLs for comparison. [#139](https://github.com/r987r/xezim-hello-world/issues/139) owns the remaining producer, upload and reader migration. A canonical public URL alone does not establish which writer produced its archive.
 
+The rolling discovery window is unchanged. The reviewed [legacy comparison
+inventory](../config/publication-legacy.yaml) carries up to four already-published
+DDR4 standalone reports beyond that window, only while their original GitHub
+Actions artifacts remain available. The inventory records the prior production
+run and exact source ZIP digests; the collector checks the original source,
+CI attempt and merge provenance again before reproducing the old route.
+Expired or removed originals are dropped. Transient provider errors and
+invalid or over-budget comparisons fail the publication rather than replacing
+the previous snapshot with partial results. This does not extend canonical
+run retention or create permanent links.
+
 ## Local preview and deployment
 
 ```sh
