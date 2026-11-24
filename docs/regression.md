@@ -135,7 +135,7 @@ built executable's hash. Changed RTL or a missing build is rejected.
 Python stimulus can be rerun without rebuilding unchanged RTL.
 
 Xezim simulations, structural NoC lint/compile, the Xezim chip compile,
-and `dma-rtl` retain independent runs at
+standalone `dma-rtl`, and the Cocotb SuperNoC family retain independent runs at
 `.tools/runs/<simulator>/<config_target>/<testname>/<run_id>/`. The runner
 prints the selected directory; there is no second target-named copy.
 The relocated boot variant's generated package, firmware, and filelist live
@@ -146,6 +146,10 @@ RTL is generated from that snapshot, not a second read of the caller's file.
 Checkout example names stay readable; custom files use a content-derived name
 without recording the original local path. The override and the modified YAML
 are local run inputs, not new test catalog entries.
+The positive, named negative, and latency SuperNoC profiles keep separate
+run evidence. They still share their separate source-keyed build cache,
+checked against the original sources, headers, tool versions and binary.
+
 The existing Ethernet GMII/CQ and real CPU Ethernet checks materialize and
 archive their generated RTL and actor manifests inside their own canonical
 run. A CPU `--stage files` preflight has a different identity from the live

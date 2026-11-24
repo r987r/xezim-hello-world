@@ -83,6 +83,20 @@ def uses_canonical_workspace(name, test, *, stage=None):
         return True
     if name == 'dma-rtl':
         return True
+    # The existing static SuperNoC runs share a compiled executable, but
+    # their reports have independent identities and never use the build path.
+    supernoc_logical_test = {
+        'supernoc': 'axi-noc-routing',
+        'supernoc-negative': 'axi-noc-route-errors',
+        'supernoc-latency': 'axi-noc-latency-baseline',
+    }.get(name)
+    if (supernoc_logical_test is not None and test.get('logical_test') == supernoc_logical_test
+            and test.get('engine') == 'cocotb-verilator'
+            and test.get('sources') == 'noc' and test.get('top') == 'supernoc_tb'
+            and test.get('bender_targets') == ['supernoc']
+            and not any(test.get(key) for key in
+                        ('memory_config', 'boot_relocate', 'firmware_mode', 'flow_plan'))):
+        return True
     return (test.get('engine') in {'xezim', 'xezim-compile', 'verilator-lint'}
             # Only Xezim memory materialization has a migrated producer.
             and (test.get('sources') != 'memory' or test['engine'] == 'xezim')
