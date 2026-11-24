@@ -287,7 +287,15 @@ def write_report(directory, plan, result):
             'overflow':overflow,'issues':len(issues)+len(correlation_issues)+len(memory_issues)}
 
 
-def render_report(payload,path):
+def render_report(payload,path,*,capture_source=None):
+    from report_transport import capture_template
+    if capture_source:
+        # Extra independently verified MRS evidence is not present in the
+        # byte-exact original AXI capture. Keep just that view overlay inline.
+        payload={'ddr_mrs':payload['sections'].get('ddr_mrs')}
     data=json.dumps(payload,separators=(',',':')).replace('<','\\u003c')
     template=(ROOT/'tools/templates/run_report.html').read_text()
-    Path(path).write_text(template.replace('__RUN_DATA__',data))
+    if capture_source:
+        template=template.replace('Self-contained run report · passive cocotbext-axi channel capture · no external assets or server required',
+                                  'Run report · passive cocotbext-axi channel capture · exact original capture loaded from this site')
+    Path(path).write_text(capture_template(template,capture_source).replace('__RUN_DATA__',data))

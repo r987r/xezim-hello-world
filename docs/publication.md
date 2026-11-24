@@ -86,6 +86,21 @@ invalid or over-budget comparisons fail the publication rather than replacing
 the previous snapshot with partial results. This does not extend canonical
 run retention or create permanent links.
 
+GitHub Pages keeps stable report URLs, exact run identities and all retained
+reports within its 1 GB site limit. Selected AXI/protocol capture files of
+at least 1 MiB are stored losslessly as `*.json.gz` or `*.jsonl.gz` rather
+than publishing a second copy inside the HTML. Compact assets, including
+the original DDR4 comparison captures, keep their existing file URLs.
+Browsers load the same-site compressed captures when opening a large
+report. On the command line, use `gzip -dc <capture>.gz` to obtain the
+original bytes. In the public index, `entries[].assets` lists logical
+original names; when an entry has `compressed_assets`, resolve that
+mapping for the delivered filename. Tools with old direct links to large
+raw captures must use the `.gz` suffix and decompress, or read the mapping. The independent DDR
+decoded view remains separate from the original capture. Local CI
+producer reports remain self-contained. The complete Pages snapshot
+fails closed if lossless packing is not enough to meet the size limit.
+
 ## Local preview and deployment
 
 ```sh

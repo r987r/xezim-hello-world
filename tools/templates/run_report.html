@@ -78,10 +78,16 @@ header{display:flex;justify-content:space-between;align-items:center;gap:18px}h1
 <p style="margin-top:20px">Self-contained run report · passive cocotbext-axi channel capture · no external assets or server required</p>
 </main>
 <div class="tip" id="tooltip"></div>
-<script type="application/json" id="run-data">__RUN_DATA__</script>
+<script type="application/json" id="run-data"__CAPTURE_SOURCE_ATTR__>__RUN_DATA__</script>
 <script>
 'use strict';
-const report=JSON.parse(document.getElementById('run-data').textContent), run=report.run, axi=report.sections.axi;
+__CAPTURE_READER__
+(async()=>{
+const embedded=document.getElementById('run-data'), supplemental=JSON.parse(embedded.textContent);
+const source=embedded.dataset.captureSource;
+const report=source?await loadReportCapture(source):supplemental;
+if(source&&supplemental.ddr_mrs)report.sections.ddr_mrs=supplemental.ddr_mrs;
+const run=report.run, axi=report.sections.axi;
 const $=id=>document.getElementById(id), rows=axi.transactions, size=100;
 const memory=report.sections.memory;
 const addressMap=report.sections.address_map;
@@ -267,5 +273,11 @@ function download(name,data,type){const url=URL.createObjectURL(new Blob([data],
 $('json').onclick=()=>download(run.target+'-axi-filtered.json',JSON.stringify({...report,sections:{axi:{...axi,transactions:filtered}}},null,2),'application/json');
 $('csv').onclick=()=>{const columns=['monitor','actor','role','plane','operation','region','epoch','axi_id','address','start_ps','end_ps','latency_ps','response','error_intent','expected_reason','status','data','strobes'];const quote=v=>'"'+String(v??'').replaceAll('"','""')+'"';const lines=[columns.join(','),...filtered.map(r=>{const v={...r,actor:r.actor?.label||'',error_intent:intent(r),data:r.beats.map(b=>b.data).join(' '),strobes:r.beats.map(b=>b.strb||'').join(' ')};return columns.map(c=>quote(v[c])).join(',');})];download(run.target+'-axi-filtered.csv',lines.join('\r\n'),'text/csv');};
 window.addEventListener('resize',draw);render();
+})().catch(error=>{
+  const notice=document.createElement("p");
+  notice.setAttribute("role","alert");
+  notice.textContent="Capture viewer unavailable: "+error.message+". Use the original evidence download.";
+  document.querySelector("main").prepend(notice);
+});
 </script>
 </html>

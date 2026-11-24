@@ -459,7 +459,8 @@ function trafficDisplaySource(run){
     trafficLink("Inspect traffic on Test Runs",
       "runs.html?run="+encodeURIComponent(run.run_id+"-"+run.attempt+"/"+run.target)+
       "&"+query.toString()),
-    trafficLink("Raw verified capture JSON",run.raw_path),
+    trafficLink(run.raw_path?.endsWith(".gz")?"Raw verified capture JSON (.gz)":"Raw verified capture JSON",
+      run.raw_path),
     trafficLink("AXI / NoC correlated report",run.axi_report_path)
   );
 }

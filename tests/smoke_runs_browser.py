@@ -7,6 +7,7 @@ published or represented as actual regression evidence.
 from __future__ import annotations
 
 import csv
+import gzip
 import io
 import json
 import re
@@ -114,6 +115,8 @@ def main():
                      simulator="verilator",config_target="soc-ethernet-mvp",
                      testname="network-frame-transfer",execution_id=execution,path=route)
     data["entries"].append(ethernet_attempts[1])
+    ethernet_attempts[1]['compressed_assets']={
+        'protocol-transactions.json':'protocol-transactions.json.gz'}
     ethernet_identity=ethernet_attempts[0]["canonical_id"]
     ethernet_path=ethernet_attempts[0]["path"]
     manifest_name="selected-rtl-manifest.json"
@@ -141,14 +144,16 @@ def main():
         path=Path(tmp)/"runs.html"
         path.write_text(page)
         for entry in ethernet_attempts:
-            capture=(Path(tmp)/entry["path"]).with_name("protocol-transactions.json")
+            packed=entry.get("compressed_assets",{}).get("protocol-transactions.json")
+            capture=(Path(tmp)/entry["path"]).with_name(packed or "protocol-transactions.json")
             capture.parent.mkdir(parents=True)
             source,=entry["protocol_links"]["sources"]
-            capture.write_text(json.dumps({
+            original=json.dumps({
                 "schema_version":1,"run":{"target":entry["target"]},
                 "sources":[{"id":source["source"],"protocol":source["protocol"]}],
                 "records":[dict(source["preview"][0],protocol=source["protocol"])],
-            }))
+            }).encode()
+            capture.write_bytes(gzip.compress(original,mtime=0) if packed else original)
         report_root=Path(tmp)/"runs/example"
         report_root.mkdir(parents=True)
         (report_root/manifest_name).write_text(
@@ -306,6 +311,7 @@ def main():
                 """)
             wait.until(lambda d:"Showing full" in d.find_element(By.ID,"traffic-notice").text)
             assert ethernet_attempts[1]["canonical_id"] in driver.find_element(By.ID,"traffic-provenance").text
+            assert driver.find_element(By.ID,"traffic-open-raw").text=="Download raw capture (.gz)"
             wait.until(lambda d:"frame_tx" in d.find_element(By.ID,"traffic-rows").text)
             assert "02:50:b6:00:00:22" in driver.find_element(By.ID,"traffic-rows").text
             assert "ethernet" in driver.find_element(By.ID,"traffic-protocol").text

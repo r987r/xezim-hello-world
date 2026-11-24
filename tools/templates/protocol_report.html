@@ -38,10 +38,13 @@ canvas{width:100%;display:block}pre{font-size:12px;white-space:pre-wrap;overflow
 <pre id="detail">Select an observation to inspect its payload and timestamps.</pre></div>
 <div class="card"><h2>Capture coverage</h2><p id="sources"></p><pre id="issues"></pre><small>These are records from existing protocol VIPs/testbenches. Unmeasured intervals, CDC, physical PHY/DRAM delays and bus-protocol compliance cannot be inferred from this report.</small></div>
 </main>
-<script type="application/json" id="protocol-data">__PROTOCOL_DATA__</script>
+<script type="application/json" id="protocol-data"__CAPTURE_SOURCE_ATTR__>__PROTOCOL_DATA__</script>
 <script>
 'use strict';
-const D=JSON.parse(document.getElementById('protocol-data').textContent);
+__CAPTURE_READER__
+(async()=>{
+const embedded=document.getElementById('protocol-data');
+const D=embedded.dataset.captureSource?await loadReportCapture(embedded.dataset.captureSource):JSON.parse(embedded.textContent);
 const $=id=>document.getElementById(id), N=x=>x==null?'—':(x/1000).toLocaleString(undefined,{maximumFractionDigits:3});
 const safe=(text)=>String(text??''),S=D.sources||[],R=D.records||[];
 $('run').textContent=(D.run.target||'unknown')+' · '+(D.run.engine||'unknown')+' · source '+(D.run.commit||'unrecorded');
@@ -150,5 +153,11 @@ for(const name of ['protocol','source','kind','status']){
 }
 if(params.get('search'))$('search').value=params.get('search');
 apply();
+})().catch(error=>{
+  const notice=document.createElement("p");
+  notice.setAttribute("role","alert");
+  notice.textContent="Capture viewer unavailable: "+error.message+". Use the original evidence download.";
+  document.querySelector("main").prepend(notice);
+});
 </script>
 </html>
