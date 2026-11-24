@@ -1664,7 +1664,82 @@ def evidence_index(evidence,output,repository,site_sha=None):
 
 
 
-def project_pages(output, projects, entries, repository, sha, *, boots=None):
+def default_project(projects):
+    """The compatibility reports describe the checked-in default SoC only."""
+    return next((p for p in projects if p['config']=='config/soc.yaml'),None)
+
+
+def project_entries(entries, project_id, default_id):
+    return [entry for entry in entries if entry.get('project_id',default_id)==project_id]
+
+
+def project_fabric_page(project, measured=None):
+    """Render declared project connectivity, never an inferred timing matrix."""
+    design=project['design']
+    nets=design['networks']
+    links=project['data_links']
+    data_network='direct_data' if 'direct_data' in nets else 'global_data'
+    ingress=nets.get(data_network,{})
+    rows=[('Data link',link['name'],
+           (' ↔ ' if link['duplex'] else ' → ').join(link['endpoints']),'—') for link in links]
+    if links:
+        from fabric_report import number, windows
+        # Name only exact address windows owned by this project. A link peer
+        # is a configured next hop, not necessarily the final target owner.
+        targets={(number(region['base']),number(region['size'])):region['name']
+                 for region in project['address_map']['data']}
+        for link in links:
+            a,b=link['endpoints']
+            directions=((a,b),(b,a)) if link['duplex'] else ((a,b),)
+            for source,peer in directions:
+                profile=design['noc_profiles'].get(source+'_local_data',{})
+                for endpoint in profile.get('endpoints',[]):
+                    if endpoint['name']!='to_'+peer:
+                        continue
+                    for window in windows(endpoint):
+                        base,size=number(window['base']),number(window['size'])
+                        target=targets.get((base,size),'Unnamed decode window')
+                        rows.append(('Data address decode',source,target,
+                                     f'{base:#x} via {endpoint["name"]} → {peer}'))
+    rows += [('Data target',output['name'],output['target'],'—')
+             for output in ingress.get('memory_outputs' if data_network=='direct_data' else 'outputs',[])]
+    rows += [('Configuration','global_config',target,'—')
+             for target in nets.get('global_config',{}).get('reachable_subsystems',[])]
+    def table(head, entries, empty):
+        if not entries:
+            return '<p class="muted">'+escape(empty)+'</p>'
+        return ('<div class="scroll"><table><thead><tr>'+
+                ''.join('<th>'+escape(cell)+'</th>' for cell in head)+
+                '</tr></thead><tbody>'+
+                ''.join('<tr>'+''.join('<td>'+escape(str(cell))+'</td>' for cell in row)+'</tr>'
+                        for row in entries)+'</tbody></table></div>')
+
+    timing = ('No published project-qualified Fabric latency. Unmeasured is not zero.')
+    detail=''
+    if measured is not None:
+        count=measured['current_measured_routes']
+        if count:
+            timing=f'{count} routes have qualified current-source latency for this project.'
+        detail=('<p><a href="../../fabric.html">Open this project’s detailed route matrix '
+                'and measured latency</a></p>')
+    networks=[(network['plane'],name,network['family'],len(network['endpoints']))
+              for name,network in design['noc_profiles'].items()]
+    return ('<section id="project-fabric"><h2>Fabric routes</h2>'
+            '<p id="project-fabric-timing" class="scope-note">'+escape(timing)+'</p>'+detail+
+            '<p>Connectivity below is declared by this project’s configuration and generator profiles. '
+            'An address decode shows the local egress and next hop, not measured traffic or a '
+            'proof of end-to-end reachability.</p>'
+            '<h3>Configured links and targets</h3>'+
+            table(('Purpose','Link, ingress or source','Configured target or endpoints','Address / egress → next hop'),rows,
+                  'No inter-subsystem links or targets declared.')+
+            '<h3>Configured network inventory</h3>'+
+            table(('Plane','Network','Family','Endpoint count'),networks,
+                  'No FlooGen networks configured.')+
+            '<p><a href="address-map.html">This project’s address map</a> · '
+            '<a href="runs.html">This project’s test results</a></p></section>')
+
+
+def project_pages(output, projects, entries, repository, sha, *, boots=None, default_fabric=None):
     """Publish a catalog-sized project workspace without sharing B's test PASS.
 
     This is deliberately driven by the catalog, not a special branch for two
@@ -1681,8 +1756,8 @@ def project_pages(output, projects, entries, repository, sha, *, boots=None):
         raise ValueError('run has unknown project identity: ' + str(sorted(unknown)))
     # Untagged historical evidence belongs only to the canonical default
     # SoC config, never to a newly cataloged project.
-    legacy_default = next((p['id'] for p in projects
-                           if p['config'] == 'config/soc.yaml'), None)
+    legacy=default_project(projects)
+    legacy_id=legacy['id'] if legacy else None
     cards = []
     for project in projects:
         pid = project['id']
@@ -1705,15 +1780,9 @@ def project_pages(output, projects, entries, repository, sha, *, boots=None):
         )
         base = output / 'projects' / pid
         (base / 'data').mkdir(parents=True, exist_ok=True)
-        # Old untagged captures are ONLY valid as legacy project A evidence;
-        # no other project may silently adopt them.
-        if published:
-            selected = [e for e in entries
-                        if e.get('project_id', legacy_default) == pid]
-        else:
-            selected = [e for e in entries if e.get('project_id') == pid]
-            if selected and qualification == 'source_contract_only':
-                raise ValueError('source-only project cannot have runtime evidence')
+        selected=project_entries(entries,pid,legacy_id)
+        if selected and qualification=='source_contract_only':
+            raise ValueError('source-only project cannot have runtime evidence')
         workflow_url = (f'https://github.com/{repository}/actions/workflows/'
                         'project-compile.yml')
         files = [
@@ -1802,6 +1871,7 @@ def project_pages(output, projects, entries, repository, sha, *, boots=None):
         nav = ('<div class="actions">'
                '<a href="index.html">Overview</a>'
                '<a href="' + architecture_href + '">Architecture</a>'
+               '<a href="fabric.html">Fabric routes</a>'
                '<a href="address-map.html">Addresses</a>'
                '<a href="files.html">RTL &amp; files</a>'
                '<a href="runs.html">Test runs</a></div>')
@@ -1873,12 +1943,12 @@ def project_pages(output, projects, entries, repository, sha, *, boots=None):
             )
             runs = ('<p class="scope-note">Per-run source, selected variant '
                     'and captured traffic are authoritative.</p>'
-                    '<ul class="list">' + run_rows + '</ul>'
-                    '<p><a href="../../runs.html">Full archived test viewer'
-                    '</a></p>')
+                    '<ul class="list">' + run_rows + '</ul>')
+            if pid==legacy_id:
+                runs+='<p><a href="../../runs.html">Full archived test viewer for this project</a></p>'
         else:
-            runs = ('<p class="empty">No project-qualified run evidence is '
-                    'available. No other project results are substituted.</p>')
+            runs = ('<p class="empty">No project-qualified traffic-test rows are published. '
+                    'Other project results are not substituted.</p>')
         runs = boot_status + runs
         # Every project uses the exact SAME architecture page and diagram
         # renderer. A project-owned detailed compiler-parsed explorer is an
@@ -1915,6 +1985,8 @@ def project_pages(output, projects, entries, repository, sha, *, boots=None):
         pages = {
             'index.html': overview,
             'architecture.html': architecture,
+            'fabric.html': info + nav + project_fabric_page(
+                project,default_fabric if pid==legacy_id else None),
             'address-map.html': info + nav + scope + addresses,
             'files.html': info + nav + scope + files_page,
             'runs.html': info + nav + scope + runs,
@@ -1947,6 +2019,7 @@ def shell(title,body,relative,repository,sha):
         navigation_items=[
             ('index.html','Projects'), (base+'index.html','Overview'),
             (base+'architecture.html','Architecture'),
+            (base+'fabric.html','Fabric routes'),
             (base+'address-map.html','Addresses'),
             (base+'files.html','RTL & files'),
             (base+'runs.html','Test runs'),
@@ -2145,6 +2218,20 @@ def build(output,evidence,repository,sha,config):
     for name in ('Bender.yml','Bender.lock'):shutil.copyfile(ROOT/name,output/name)
     docs=markdown_pages(output,repository,sha)
     runs,entries,notes=evidence_index(evidence,output,repository,site_sha=sha)
+    from project_catalog import projects
+    catalog_projects=projects(ROOT)
+    legacy=default_project(catalog_projects)
+    if legacy is None:
+        raise ValueError('default SoC required for compatibility reports')
+    legacy_id=legacy['id']
+    legacy_entries=project_entries(entries,legacy_id,legacy_id)
+    # The root reports and their compiled topology are the historical default
+    # project. Cross-project reports retain their own canonical URLs and project
+    # ledger but must not feed this project's views or timing attestation.
+    run_key=lambda entry:(entry['run_id'],entry['attempt'])
+    project_only={run_key(e) for e in entries if e.get('project_id',legacy_id)!=legacy_id}
+    project_only.difference_update(run_key(e) for e in legacy_entries)
+    legacy_runs=[run for run in runs if (run['id'],run['run_attempt']) not in project_only]
     import fabric_report
     fabric = fabric_report.load(ROOT)
     catalog=yaml.safe_load((ROOT/'config/regression.yaml').read_text())
@@ -2156,7 +2243,7 @@ def build(output,evidence,repository,sha,config):
     noc=json.loads((ROOT/'gen/noc/floonoc/manifest.json').read_text())
     chip=json.loads((ROOT/'gen/chip/manifest.json').read_text())
     monitors=json.loads((ROOT/'gen/supernoc/axi_monitors.json').read_text())
-    fabric_report.attach_one_beat_observations(fabric, entries, output, sha)
+    fabric_report.attach_one_beat_observations(fabric, legacy_entries, output, sha)
     coverage=fabric['latency_table']['evidence_coverage']
     print("FABRIC COVERAGE: " + json.dumps({
         'source_sha':sha,'status':coverage['status'],
@@ -2180,12 +2267,12 @@ def build(output,evidence,repository,sha,config):
     dump(output/'data/csr-source-coverage.json',source_coverage)
     dump(output/'data/soc-address-map.json',address_catalog)
     dump(output/'data/test-intents.json',flow_intents)
-    ddr_views = ddr_csr_views(entries, output)
+    ddr_views = ddr_csr_views(legacy_entries, output)
     dump(output/'data/ddr-csr-verified-runs.json', ddr_views)
     from ddr_mr_report import layout as mr_layout
     mr_catalog=mr_layout(ROOT/'csr/rdl/ddr4_mode_registers.rdl')
     dump(output/'data/ddr4-mr-definitions.json', mr_catalog)
-    ddr_mr_evidence=ddr_mr_views(entries, output)
+    ddr_mr_evidence=ddr_mr_views(legacy_entries, output)
     dump(output/'data/ddr4-mr-verified-runs.json', ddr_mr_evidence)
     (output/'data/soc-data-memories.rdl').write_text(address_map.memory_rdl_view(address_catalog))
     if csr_ready:
@@ -2237,7 +2324,7 @@ def build(output,evidence,repository,sha,config):
     dataset={'schema_version':1,'title':config['title'],'source_sha':sha,'repository':repository,
              'production_dma_header_sha256':(hashlib.sha256(
                  (output/'data/soc_dma_shim_regs.h').read_bytes()).hexdigest() if csr_ready else None),
-             'built_at':datetime.now(timezone.utc).isoformat(),'runs':runs,'entries':entries,
+             'built_at':datetime.now(timezone.utc).isoformat(),'runs':legacy_runs,'entries':legacy_entries,
              'notes':notes,'documents':docs,'networks':noc['networks'],'chip':chip,
              'monitors':monitors['monitors'],'fabric':fabric['summary'],'tests':catalog['tests'],
              'test_names':test_names,'test_intents':flow_intents}
@@ -2245,6 +2332,10 @@ def build(output,evidence,repository,sha,config):
     data=json.dumps(dataset,separators=(',',':')).replace('<','\\u003c')
     for page in ('index','topology','explorer','fabric','address-map','runs','docs','reference'):
         body=(ROOT/('tools/templates/site_'+page+'.html')).read_text().replace('__SITE_DATA__',data)
+        if page in ('fabric','runs','address-map'):
+            body=('<p class="scope-note">Chip design: <a href="projects/'+escape(legacy_id)+
+                  '/index.html">'+escape(legacy['title'])+'</a> only. '
+                  '<a href="index.html">Choose another chip design</a>.</p>')+body
         if page=='explorer':
             body = body.replace('__COMBINED_SOURCE_REVIEW__', combined_source_review(ROOT, output))
             graph_data = json.dumps(design_graph, separators=(',', ':')).replace('<','\\u003c')
@@ -2269,7 +2360,7 @@ def build(output,evidence,repository,sha,config):
                  'raw_path': (Path(e['path']).parent/e.get('compressed_assets',{}).get(
                      'protocol-transactions.json','protocol-transactions.json')).as_posix(),
                  'links': e['protocol_links']}
-                for e in entries if e.get('protocol_links')
+                for e in legacy_entries if e.get('protocol_links')
             ]
             protocol_links_json=json.dumps(link_runs,separators=(',',':')).replace('<','\\u003c')
             body=body.replace('__PROTOCOL_LINK_DATA__',protocol_links_json)
@@ -2303,9 +2394,8 @@ def build(output,evidence,repository,sha,config):
         published_page = 'soc-overview.html' if page == 'index' else page + '.html'
         (output/published_page).write_text(
             shell(config['title'], body, Path(published_page), repository, sha))
-    from project_catalog import projects
-    project_pages(output, projects(ROOT), entries, repository, sha,
-                  boots=boot_evidence.publish(evidence,output,sha))
+    project_pages(output,catalog_projects,entries,repository,sha,
+                  boots=boot_evidence.publish(evidence,output,sha),default_fabric=coverage)
     # All Python verification and rendering above saw the original bytes.
     # This last step compresses storage only, without dropping report entries.
     compress_originals(output,entries)

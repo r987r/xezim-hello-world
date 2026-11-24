@@ -11,6 +11,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 import project_catalog
+import publish_site
 from publish_site import project_pages
 
 ORIGINAL_PROJECT = "xezim_soc_dv"
@@ -44,15 +45,21 @@ class MultiProjectSiteTests(unittest.TestCase):
             (out / "data").mkdir()
             (out / "soc-overview.html").write_text("original overview")
             (out / "explorer.html").write_text("original interactive hierarchy")
+            (out / "fabric.html").write_text("original qualified default timing")
             entries = [{"target": "chip-ddr4-real", "passed": True,
                         "source_sha": "a"*40, "path": "runs/legacy/report.html"}]
-            project_pages(out, projects, entries, "r987r/xezim-hello-world", "a"*40)
+            project_pages(out, projects, entries, "r987r/xezim-hello-world", "a"*40,
+                          default_fabric={"current_measured_routes":64})
             index = (out / "index.html").read_text()
             self.assertIn("Choose a chip project", index)
             self.assertIn("projects/xezim_soc_dv/index.html", index)
             self.assertIn("projects/xezim_ethernet_cpu_ddr_pcie/index.html", index)
             new = out / "projects/xezim_ethernet_cpu_ddr_pcie"
             a = out / "projects/xezim_soc_dv"
+            self.assertIn("64 routes have qualified current-source latency",
+                          (a / "fabric.html").read_text())
+            self.assertIn("Unmeasured is not zero", (new / "fabric.html").read_text())
+            self.assertNotIn("64 routes", (new / "fabric.html").read_text())
             self.assertIn("No project-qualified", (new / "runs.html").read_text())
             self.assertNotIn("chip-ddr4-real", (new / "runs.html").read_text())
             self.assertIn("ci_generated_compiled", (new / "data/project.json").read_text())
@@ -118,6 +125,67 @@ class MultiProjectSiteTests(unittest.TestCase):
 
 
 
+    def test_fabric_addresses_and_runs_keep_their_selected_design(self):
+        from unittest.mock import patch
+        projects=project_catalog.projects(ROOT)
+        b=next(project for project in projects if project['id']==DIRECT_LINK_PROJECT)
+        a_row={'target':'historical-a-test','run_id':123,'attempt':1,
+               'source_sha':'a'*40,'path':'runs/original-a/report.html','passed':True}
+        b_row={'target':'b-owned-traffic-test','run_id':456,'attempt':1,
+               'source_sha':'b'*40,'path':'runs/original-b/report.html','passed':True,
+               'project_id':DIRECT_LINK_PROJECT}
+        runs=[{'id':e['run_id'],'run_attempt':e['attempt']} for e in (a_row,b_row)]
+        boot={'project_id':DIRECT_LINK_PROJECT, 'config_sha256':b['config_sha256'],
+              'tested_sha':'c'*40, 'current_source':False, 'status':'passed',
+              'run_url':'https://github.com/r987r/xezim-hello-world/actions/runs/789',
+              'logs':{}}
+        import fabric_report
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch.object(publish_site,'evidence_index',return_value=(runs,[a_row,b_row],[])), \
+             patch.object(publish_site.boot_evidence,'publish',return_value={DIRECT_LINK_PROJECT:boot}), \
+             patch.object(fabric_report,'attach_one_beat_observations',
+                          wraps=fabric_report.attach_one_beat_observations) as attach:
+            out=Path(tmp)/'public'
+            config=yaml.safe_load((ROOT/'config/publication.yaml').read_text())
+            dataset=publish_site.build(out,Path(tmp)/'evidence','r987r/xezim-hello-world','a'*40,config)
+            self.assertEqual(attach.call_args.args[1],[a_row])
+            self.assertEqual(dataset['entries'],[a_row])
+            self.assertEqual(dataset['runs'],[runs[0]])
+            a=out/'projects'/ORIGINAL_PROJECT
+            b=out/'projects'/DIRECT_LINK_PROJECT
+            a_fabric=(a/'fabric.html').read_text()
+            b_fabric=(b/'fabric.html').read_text()
+            for html in ((out/'fabric.html').read_text(),(out/'runs.html').read_text(),
+                         (out/'address-map.html').read_text()):
+                self.assertIn('Hierarchical SoC</a> only',html)
+            self.assertIn('memory0.hbm0',a_fabric)
+            self.assertIn('compute1_local_data',a_fabric)
+            self.assertIn('href="../../fabric.html"',a_fabric)
+            self.assertNotIn('id="fabric-data"',a_fabric) # no second measured dataset
+            for name in ('central_compute_memory','l0_ethernet_compute',
+                         'l0_ethernet_memory','l1_compute_pcie','memory0.ddr0'):
+                self.assertIn(name,b_fabric)
+            for unexpected in ('memory0.hbm0','compute1_local_data','href="../../fabric.html"',
+                               'qualified current-source latency','id="fabric-data"'):
+                self.assertNotIn(unexpected,b_fabric)
+            self.assertIn('Unmeasured is not zero',b_fabric)
+            for pair in (
+                    '<td>ethernet0</td><td>compute0.sram</td><td>0x10000000 via to_compute0 → compute0</td>',
+                    '<td>ethernet0</td><td>memory0.ddr0</td><td>0x140000000 via to_memory0 → memory0</td>'):
+                self.assertIn(pair,b_fabric)
+                self.assertNotIn(pair,a_fabric)
+            self.assertNotIn('<td>ethernet0</td><td>memory0.ddr0</td><td>0x140000000 via to_compute0',b_fabric)
+            self.assertIn('href="fabric.html"',(b/'index.html').read_text())
+            self.assertNotIn('memory0.hbm0',(b/'address-map.html').read_text())
+            a_tests=(a/'runs.html').read_text()
+            b_tests=(b/'runs.html').read_text()
+            self.assertIn('historical-a-test',a_tests)
+            self.assertNotIn('b-owned-traffic-test',a_tests)
+            self.assertIn('b-owned-traffic-test',b_tests)
+            self.assertIn('Historical source PASS',b_tests)
+            self.assertNotIn('historical-a-test',b_tests)
+            self.assertNotIn('href="../../runs.html"',b_tests)
+
     def test_ten_catalog_projects_generate_ten_isolated_navigation_pages(self):
         """Scale proof for catalog/publisher routing, not ten compiled chips."""
         from contextlib import redirect_stdout
@@ -139,6 +207,10 @@ class MultiProjectSiteTests(unittest.TestCase):
                 pid = f"chip_variant_{index:02d}"
                 cfg = copy.deepcopy(template)
                 cfg["name"] = pid
+                if index==1:
+                    ddr=next(region for region in cfg["address_map"]["data"]
+                             if region["name"]=="memory0.ddr0")
+                    ddr["base"]="0x180000000"
                 relative = f"config/projects/{pid}.yaml"
                 (root / relative).write_text(yaml.safe_dump(cfg, sort_keys=False))
                 baseline["projects"].append({
@@ -169,11 +241,18 @@ class MultiProjectSiteTests(unittest.TestCase):
             project_pages(out, catalog, [], "r987r/xezim-hello-world", "b"*40)
             index = (out / "index.html").read_text()
             self.assertEqual(index.count('class="project-card"'), 10)
+            direct_fixture='<td>ethernet0</td><td>memory0.ddr0</td><td>'
+            moved=(out/'projects/chip_variant_01/fabric.html').read_text()
+            ordinary=(out/'projects/chip_variant_02/fabric.html').read_text()
+            self.assertIn(direct_fixture+'0x180000000 via to_memory0 → memory0</td>',moved)
+            self.assertNotIn(direct_fixture+'0x140000000',moved)
+            self.assertIn(direct_fixture+'0x140000000 via to_memory0 → memory0</td>',ordinary)
+            self.assertNotIn(direct_fixture+'0x180000000',ordinary)
             for entry in catalog:
                 directory = out / "projects" / entry["id"]
                 for page in ("index.html", "architecture.html",
                              "address-map.html", "files.html",
-                             "runs.html", "data/project.json"):
+                             "runs.html", "fabric.html", "data/project.json"):
                     self.assertTrue((directory / page).is_file(), (entry["id"], page))
                 self.assertEqual(
                     json.loads((directory / "data/project.json").read_text())["runs"], [])
