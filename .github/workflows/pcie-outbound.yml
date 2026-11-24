@@ -22,6 +22,7 @@ on:
       - 'tests/test_axi_monitor_lifecycle.py'
       - 'dv/full_chip/test_boot.py'
       - 'tests/test_pcie_outbound_ownership.py'
+      - 'tests/test_pcie_outbound_workspace.py'
       - '.github/workflows/pcie-outbound.yml'
   workflow_dispatch:
 
@@ -46,21 +47,25 @@ jobs:
         with: {python-version: '3.12'}
       - name: Install pinned Cocotb and PCIe models
         run: |
-          python3 -m pip install 'cocotb==1.9.2' 'cocotb-test==0.2.4' 'cocotb-bus==0.2.1' 'cocotbext-pcie==0.2.14' 'cocotbext-axi==0.1.24'
+          python3 -m pip install 'PyYAML==6.0.3' 'cocotb==1.9.2' 'cocotb-test==0.2.4' 'cocotb-bus==0.2.1' 'cocotbext-pcie==0.2.14' 'cocotbext-axi==0.1.24'
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends iverilog
+      - name: Validate isolated workspace custody
+        run: python3 -m unittest tests.test_pcie_outbound_workspace -v
       - name: Compile and simulate pinned outbound PCIe requester
+        id: native-outbound
         run: python3 dv/pcie0/run_outbound_smoke.py
-      - name: Keep RTL source pin and host-memory evidence
-        if: always()
+      - name: Keep isolated original RTL and host-memory scoreboard (workflow status only)
+        if: always() && steps.native-outbound.outputs.archive_dir != ''
         uses: actions/upload-artifact@v4
         with:
           name: pcie-outbound-${{ github.run_id }}
+          # The runner selects an exact directory. No Pages report discovery
+          # marker: neither historic nor current isolated scores are the
+          # shared result schema. The pin also keeps the four ZIP path parts.
           path: |
-            .tools/pcie0/outbound/rtl-sources.json
-            .tools/pcie0/outbound/result.json
-            .tools/pcie0/outbound/sim_build/*results.xml
-            .tools/pcie0/outbound/sim_build/*.log
+            dv/pcie0/upstream.lock.json
+            ${{ steps.native-outbound.outputs.archive_dir }}
           include-hidden-files: true
           if-no-files-found: warn
 
