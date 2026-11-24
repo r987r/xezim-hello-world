@@ -1,0 +1,48 @@
+# Frozen original legacy routes from the independently verified production
+# Pages run below. No canonical routes or never-published history can enter.
+repository: r987r/xezim-hello-world
+production:
+  run_id: 45087979579
+  source_sha: 948786d316eeb945b2539c67740f928b3d1b9bf3
+  site_index_sha256: 1569b2b5c96c2c2d301894a49c669e23b2a510673ff2e336e6f9dc3260cbe4fe
+reports:
+- run_id: 43514920929
+  attempt: 1
+  workflow: .github/workflows/ddr4-foundation.yml
+  merged_pr: 247
+  head_sha: d5665d62f27528baed920e930be9b3725ef884e7
+  tested_sha: ab979087629d1f87afe1b72df86159652fcba3f9
+  report_path: runs/43514920929-1/ddr4-standalone/report.html
+  artifact_id: 14080462147
+  artifact_name: ddr4-standalone-dfi-protocol-43514920929
+  artifact_digest: sha256:ca8df15f66ad253b0c2ff0d7c24475ee9ee8f41fa1ad7aa3b374d08620378465
+- run_id: 43274623775
+  attempt: 1
+  workflow: .github/workflows/ddr4-foundation.yml
+  merged_pr: 234
+  head_sha: a3038e1af85aa9fb2ef1d3a581180ae45f5f6c77
+  tested_sha: eb0e17e1b2a6b53ed080a46689ff9946643a05c5
+  report_path: runs/43274623775-1/ddr4-standalone/report.html
+  artifact_id: 13970865199
+  artifact_name: ddr4-standalone-dfi-protocol-43274623775
+  artifact_digest: sha256:54484b039ac530cbba602672b97f7f207f96197002edd96fcdd20a72471c251c
+- run_id: 42914741479
+  attempt: 1
+  workflow: .github/workflows/ddr4-foundation.yml
+  merged_pr: 220
+  head_sha: dc9b571e2aeeae056ce94ca5b39b28879b65344d
+  tested_sha: 60e733ce2a2c5c455de79230141b0e268c017900
+  report_path: runs/42914741479-1/ddr4-standalone/report.html
+  artifact_id: 13809565562
+  artifact_name: ddr4-standalone-dfi-protocol-42914741479
+  artifact_digest: sha256:a3bacff7c1813e3ed7e8be9f6ebea4a6b870e9252f9dcc7cdcc69aec694f1c0b
+- run_id: 42743082136
+  attempt: 1
+  workflow: .github/workflows/ddr4-foundation.yml
+  merged_pr: 206
+  head_sha: b556f8b6c2fbe54d09f46b72c3fce439c8e36260
+  tested_sha: 7e2e714f04575ba7539caf44684d569b995e0c86
+  report_path: runs/42743082136-1/ddr4-standalone/report.html
+  artifact_id: 13730007213
+  artifact_name: ddr4-standalone-dfi-protocol-42743082136
+  artifact_digest: sha256:524c7f536e34c4d8b5cf4b78682a347a26b71b1648ba88429f830ae2a0072256

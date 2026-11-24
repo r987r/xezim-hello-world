@@ -752,7 +752,142 @@ def replace_collection_cache(destination, snapshot, backup):
         raise
 
 
-def collect(client,config,destination):
+def collect_legacy_comparisons(client, config, snapshot, seed, notes):
+    """Carry only the bounded, previously published original legacy routes."""
+    reports=seed['reports']
+    production=seed['production']
+    sha=re.compile(r'[a-f0-9]{40}')
+    digest=re.compile(r'sha256:[a-f0-9]{64}')
+    if (seed['repository']!=client.repository or type(production['run_id']) is not int
+            or production['run_id']<1 or not sha.fullmatch(production['source_sha'])
+            or not re.fullmatch(r'[a-f0-9]{64}',production['site_index_sha256'])
+            or not isinstance(reports,list) or len(reports)>4):
+        raise ValueError('invalid or oversized legacy comparison inventory')
+    run_keys=set()
+    artifact_ids=set()
+    result_rows=[]
+    for report in reports:
+        run_id,attempt,artifact_id=(report[k] for k in ('run_id','attempt','artifact_id'))
+        path=re.fullmatch(r'runs/([1-9][0-9]*)-([1-9][0-9]*)/([a-z][a-z0-9-]*)/report[.]html',
+                          report['report_path'])
+        if (not path or any(type(i) is not int or i<1 for i in
+                            (run_id,attempt,artifact_id,report['merged_pr']))
+                or path.group(1,2)!=(str(run_id),str(attempt))
+                or not re.fullmatch(r'[.]github/workflows/[a-zA-Z0-9_.-]+[.]yml',report['workflow'])
+                or not re.fullmatch(r'[a-zA-Z0-9_.-]+',report['artifact_name'])
+                or not sha.fullmatch(report['head_sha']) or not sha.fullmatch(report['tested_sha'])
+                or not digest.fullmatch(report['artifact_digest'])
+                or run_id in run_keys or artifact_id in artifact_ids):
+            raise ValueError('invalid or duplicate original legacy report coordinates')
+        run_keys.add(run_id)
+        artifact_ids.add(artifact_id)
+        folder=snapshot/f'{run_id}-{attempt}'
+        # A currently selected producer already admitted this exact digest.
+        metadata=folder/f'artifact-{artifact_id}.json'
+        if metadata.is_file():
+            if json.loads(metadata.read_text()).get('digest')!=report['artifact_digest']:
+                raise ValueError('current and retained legacy artifact digests disagree')
+            continue
+        result_rows.append((report,path[3],folder))
+    if not result_rows:
+        return
+    api=f'/repos/{client.repository}'
+    deployed=client.request(f'{api}/actions/runs/{production["run_id"]}')
+    if (deployed.get('id')!=production['run_id']
+            or deployed.get('path')!='.github/workflows/pages.yml'
+            or deployed.get('head_sha')!=production['source_sha']
+            or deployed.get('head_branch')!='main' or deployed.get('event')!='workflow_dispatch'
+            or deployed.get('status')!='completed' or deployed.get('conclusion')!='success'
+            or (deployed.get('repository') or {}).get('full_name')!=client.repository):
+        raise ValueError('legacy inventory is not from a verified production Pages run')
+    zip_bytes=0
+    expanded_bytes=0
+    for report,target,folder in result_rows:
+        run_id,attempt,artifact_id=(report[k] for k in ('run_id','attempt','artifact_id'))
+        try:
+            run=client.request(f'{api}/actions/runs/{run_id}/attempts/{attempt}')
+            artifact=client.request(f'{api}/actions/artifacts/{artifact_id}')
+        except urllib.error.HTTPError as exc:
+            if exc.code not in (404,410):
+                raise
+            notes.append(f'Legacy comparison {run_id}-{attempt}: original run or artifact no longer offered')
+            continue
+        if (run.get('id')!=run_id or run.get('run_attempt')!=attempt
+                or run.get('path')!=report['workflow'] or run.get('head_sha')!=report['head_sha']
+                or run.get('event')!='pull_request' or run.get('status')!='completed'
+                or (run.get('repository') or {}).get('full_name')!=client.repository
+                or (run.get('head_repository') or {}).get('full_name')!=client.repository
+                or artifact.get('id')!=artifact_id or artifact.get('name')!=report['artifact_name']
+                or artifact.get('digest')!=report['artifact_digest']
+                or (artifact.get('workflow_run') or {}).get('id')!=run_id):
+            raise ValueError('original legacy run or artifact identity mismatch')
+        if artifact.get('expired') is True:
+            notes.append(f'Legacy comparison {run_id}-{attempt}: original artifact expired')
+            continue
+        if artifact.get('expired') is not False:
+            raise ValueError('original legacy artifact expiry could not be verified')
+        size=artifact.get('size_in_bytes')
+        if type(size) is not int or not 0<size<=1024**2-zip_bytes:
+            raise ValueError('legacy comparison ZIP budget exceeded')
+        pr=client.request(f'{api}/pulls/{report["merged_pr"]}')
+        head=pr.get('head') or {}
+        base=pr.get('base') or {}
+        if (not pr.get('merged_at') or pr.get('number')!=report['merged_pr']
+                or head.get('sha')!=report['head_sha'] or head.get('ref')!=run.get('head_branch')
+                or base.get('ref')!='main'
+                or (base.get('repo') or {}).get('full_name')!=client.repository):
+            raise ValueError('original legacy run was not verified as merged to main')
+        run['verified_merged_pr']=report['merged_pr']
+        if not verified_pr_test_commit(client,run,report['tested_sha']):
+            raise ValueError('original legacy tested SHA is not attested by its merged PR')
+        run['verified_tested_shas']=[report['tested_sha']]
+        try:
+            raw=download_current_artifact(client,artifact_id)
+        except ArtifactUnavailable:
+            notes.append(f'Legacy comparison {run_id}-{attempt}: original artifact no longer offered')
+            continue
+        if len(raw)!=size:
+            raise ValueError('original legacy artifact size mismatch')
+        zip_bytes+=len(raw)
+        # The seed must refer to one original report, never a bundled artifact
+        # that could silently admit another test or a new canonical result.
+        path=folder/f'artifact-{artifact_id}'
+        path.mkdir(parents=True)
+        limits=dict(config,max_archive_mib=min(config['max_archive_mib'],1),
+                    max_expanded_mib=min(config['max_expanded_mib'],8))
+        extract_archive(raw,path,limits,report['artifact_digest'],evidence_only=True)
+        expanded_bytes+=sum(f.stat().st_size for f in path.rglob('*') if f.is_file())
+        if expanded_bytes>8*1024**2:
+            raise ValueError('legacy comparison expanded budget exceeded')
+        results=list(path.rglob('result.json'))
+        traces=list(path.rglob('protocol-transactions.json'))
+        if len(results)!=1 or len(traces)!=1 or results[0].parent!=traces[0].parent:
+            raise ValueError('legacy comparison archive must contain one original result and capture')
+        result=json.loads(results[0].read_text())
+        plan=json.loads((results[0].parent/'plan.json').read_text())
+        trace_run=json.loads(traces[0].read_text())['run']
+        if (result.get('target')!=target or trace_run.get('target')!=target
+                or trace_run.get('commit')!=report['tested_sha']
+                or results[0].parent.name not in (target,path.name)
+                or verify_archived_identity(results[0].parent,plan,result,target,run) is not None
+                or invalid_artifact_trace_provenance(path,run)):
+            raise ValueError('legacy comparison original capture failed source or route verification')
+        if not (folder/'run.json').is_file():
+            dump(folder/'run.json',run)
+            dump(folder/'workflow.json',{'file':Path(report['workflow']).name,
+                 'label':run['name'],'artifacts':[report['artifact_name']]})
+        else:
+            active=json.loads((folder/'run.json').read_text())
+            if (active.get('head_sha')!=run['head_sha']
+                    or active.get('verified_merged_pr')!=run['verified_merged_pr']):
+                raise ValueError('refresh disagrees with original legacy run provenance')
+            active['verified_tested_shas']=sorted(set(active.get('verified_tested_shas',[])) |
+                                                  {report['tested_sha']})
+            dump(folder/'run.json',active)
+        dump(folder/f'artifact-{artifact_id}.json',dict(artifact,retained_legacy_path=report['report_path']))
+
+
+def collect(client,config,destination,legacy_seed=None):
     destination.parent.mkdir(parents=True,exist_ok=True)
     # Collect outside the live cache. No API failure can partially change
     # the preceding snapshot, and no expired/unselected artifact is reused.
@@ -762,11 +897,11 @@ def collect(client,config,destination):
         backup=temp/'previous'
         snapshot.mkdir()
         backup.mkdir()
-        collect_snapshot(client,config,snapshot)
+        collect_snapshot(client,config,snapshot,legacy_seed)
         replace_collection_cache(destination,snapshot,backup)
 
 
-def collect_snapshot(client,config,destination):
+def collect_snapshot(client,config,destination,legacy_seed=None):
     producers=discover_test_workflows()
     merged_heads=merged_main_pr_heads(client)
     selected,notes=select_workflow_runs(
@@ -898,6 +1033,8 @@ def collect_snapshot(client,config,destination):
                         run.setdefault('verified_equivalent_fabric_shas',{})[tested_sha]=site_sha
                 dump(folder/('artifact-'+str(artifact['id'])+'.json'),artifact)
             dump(folder/'run.json',run)
+    if legacy_seed is not None:
+        collect_legacy_comparisons(client,config,destination,legacy_seed,notes)
     dump(destination/'collection.json',{'notes':notes})
 
 
@@ -1100,6 +1237,12 @@ def evidence_index(evidence,output,repository,site_sha=None):
             relative=(Path('runs')/canonical_path(selected_identity)
                       if selected_identity is not None else
                       Path('runs')/(str(run['id'])+'-'+str(run.get('run_attempt',1)))/target)
+            artifact_metadata=file.parent/(result_path.relative_to(file.parent).parts[0]+'.json')
+            retained_path=(json.loads(artifact_metadata.read_text()).get('retained_legacy_path')
+                           if artifact_metadata.is_file() else None)
+            if retained_path and (selected_identity is not None
+                                  or retained_path!=(relative/'report.html').as_posix()):
+                raise ValueError('retained legacy comparison cannot change identity or route')
             destination=output/relative
             if destination.exists():
                 raise ValueError('duplicate published canonical run or historical evidence path')
@@ -1329,6 +1472,8 @@ def evidence_index(evidence,output,repository,site_sha=None):
                    'planned_flow_intent':intended if declared_hash is not None else None,
                    'pcie_latency_measured':bool(latency_data and latency_data.get('passed')),
                    'result':result}
+            if retained_path:
+                entry['retained_legacy_comparison']=True
             if selected_identity is not None:
                 # No by-test alias or competing legacy report is emitted.
                 # The canonical hierarchy is the primary, single stored
@@ -2144,6 +2289,10 @@ def build(output,evidence,repository,sha,config):
     from project_catalog import projects
     project_pages(output, projects(ROOT), entries, repository, sha,
                   boots=boot_evidence.publish(evidence,output,sha))
+    if any(e.get('retained_legacy_comparison') for e in entries):
+        # Never replace the deployed site with a budget-truncated subset.
+        if sum(f.stat().st_size for f in output.rglob('*') if f.is_file())>1000**3:
+            raise ValueError('Pages size limit exceeded with retained legacy comparisons')
     return dataset
 
 
@@ -2160,7 +2309,10 @@ def main():
         site=client.pages();print('PAGES_URL='+site['html_url']);return
     config=yaml.safe_load((ROOT/'config/publication.yaml').read_text())
     if config['schema_version']!=1:raise ValueError('unsupported publication schema')
-    if args.collect:collect(client,config,args.evidence)
+    if args.collect:
+        legacy=(yaml.safe_load((ROOT/'config/publication-legacy.yaml').read_text())
+                if client.repository=='r987r/xezim-hello-world' else None)
+        collect(client,config,args.evidence,legacy)
     sha=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip()
     result=build(args.output,args.evidence,args.repository,sha,config)
     print(f'Built {len(result["documents"])} docs, {len(result["runs"])} CI runs, {len(result["entries"])} test-result pages at {args.output}')

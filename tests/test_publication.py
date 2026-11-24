@@ -955,6 +955,143 @@ class PublicationTests(unittest.TestCase):
             self.assertTrue(entries[0]['passed'])
             self.assertIn('excluded unverified identity',index_notes[0])
 
+    def test_previously_published_legacy_route_survives_rolling_window_until_provider_removes_it(self):
+        from unittest.mock import Mock
+
+        repo='r987r/xezim-hello-world'
+        workflow='ddr4-foundation.yml'
+        path='.github/workflows/'+workflow
+        target='ddr4-standalone'
+        old_report='runs/123-1/ddr4-standalone/report.html'
+        source_sha='b'*40
+        head_sha='a'*40
+        sha_before='d'*40
+        checked_repo={'full_name':repo}
+        old_run={'id':123,'run_attempt':1,'head_sha':head_sha,'head_branch':'legacy-ddr',
+                 'event':'pull_request','status':'completed','conclusion':'success',
+                 'name':'DDR4 foundation','path':path,'repository':checked_repo,
+                 'head_repository':checked_repo,'created_at':'2026-11-04T00:00:00Z',
+                 'updated_at':'2026-11-04T00:01:00Z',
+                 'html_url':f'https://github.com/{repo}/actions/runs/123',
+                 'verified_merged_pr':20}
+        new_run=dict(old_run,id=124,head_branch='main',event='workflow_dispatch',
+                     html_url=f'https://github.com/{repo}/actions/runs/124')
+        published=dict(new_run,id=100,path='.github/workflows/pages.yml',head_sha=sha_before)
+        trace={'schema_version':1,'run':{'target':target,'engine':'cocotb-verilator',
+            'commit':source_sha,'dirty':False,'workflow_run_id':'123','workflow_attempt':'1'},
+            'capture_complete':True,'issues':[],
+            'sources':[{'id':'memory0.ddr0.dfi','protocol':'dfi','role':'link',
+                        'clock_domain':'ddr_source_clk','implementation':'test_fixture'}],
+            'records':[{'kind':'event','source':'memory0.ddr0.dfi','protocol':'dfi',
+                        'operation':'rd','status':'observed','start_ps':100,
+                        'end_ps':200,'id':None,'fields':{'dfi_phase':2}}]}
+        plan={'target':target,'engine':'cocotb-verilator'}
+        result={'target':target,'passed':True,'stage':'run'}
+        trace_bytes=json.dumps(trace).encode()
+        result_bytes=json.dumps(result).encode()
+        archive=io.BytesIO()
+        with zipfile.ZipFile(archive,'w') as z:
+            z.writestr('result.json',result_bytes)
+            z.writestr('plan.json',json.dumps(plan))
+            z.writestr('protocol-transactions.json',trace_bytes)
+        original=archive.getvalue()
+        digest='sha256:'+hashlib.sha256(original).hexdigest()
+        artifact={'id':900,'name':'ddr4-dfi-123','expired':False,'size_in_bytes':len(original),
+                  'digest':digest,'workflow_run':{'id':123}}
+        seed={'repository':repo,'production':{'run_id':100,'source_sha':sha_before,
+              'site_index_sha256':'c'*64},'reports':[{'run_id':123,'attempt':1,
+              'workflow':path,'merged_pr':20,'head_sha':head_sha,'tested_sha':source_sha,
+              'report_path':old_report,'artifact_id':900,'artifact_name':artifact['name'],
+              'artifact_digest':digest}]}
+        selected=[old_run]
+        retained_fault={}
+
+        def request(url,binary=False):
+            if url.endswith('/123/artifacts?per_page=100'):
+                return {'artifacts':[artifact.copy()]}
+            if url.endswith('/124/artifacts?per_page=100'):
+                return {'artifacts':[]}
+            if url.endswith('/100'):
+                return published.copy()
+            if url.endswith('/123/attempts/1'):
+                return old_run.copy()
+            if url.endswith('/artifacts/900'):
+                if 'http' in retained_fault:
+                    raise HTTPError(url,retained_fault['http'],'fixture',{},None)
+                return dict(artifact,**retained_fault.get('metadata',{}))
+            if url.endswith('/pulls/20'):
+                return {'number':20,'merged_at':'2026-11-05T00:00:00Z',
+                        'head':{'sha':head_sha,'ref':'legacy-ddr'},
+                        'base':{'ref':'main','repo':checked_repo}}
+            if url.endswith('/git/commits/'+source_sha):
+                return {'parents':[{'sha':'c'*40},{'sha':head_sha}]}
+            if url.endswith('/artifacts/900/zip') and binary:
+                return retained_fault.get('zip',original)
+            raise AssertionError('unexpected API request: '+url)
+
+        client=Mock(repository=repo,request=Mock(side_effect=request))
+        producers={workflow:{'file':workflow,'label':old_run['name'],
+                             'artifacts':[artifact['name']]}}
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch.object(site,'discover_test_workflows',return_value=producers), \
+             patch.object(site,'merged_main_pr_heads',return_value={(head_sha,'legacy-ddr'):20}), \
+             patch.object(site,'select_workflow_runs',return_value=({workflow:selected},[])), \
+             patch.object(site,'verified_pr_tree_equivalent',return_value=False):
+            root=Path(tmp)
+            evidence=root/'evidence'
+            out=root/'site'
+            site.collect(client,CONFIG,evidence,seed)
+            first=site.build(out,evidence,repo,SHA,CONFIG)
+            self.assertEqual([e['path'] for e in first['entries']],[old_report])
+            self.assertNotIn('retained_legacy_comparison',first['entries'][0])
+            selected[:]=[new_run]
+            site.collect(client,CONFIG,evidence,seed)
+            second=site.build(out,evidence,repo,SHA,CONFIG)
+            kept,=second['entries']
+            self.assertEqual(kept['path'],old_report)
+            self.assertIsNone(kept['canonical_id'])
+            self.assertTrue(kept['retained_legacy_comparison'])
+            self.assertEqual(kept['source_sha'],source_sha)
+            self.assertNotIn('verified_site_source_sha',kept)
+            self.assertEqual((out/old_report).with_name('protocol-transactions.json').read_bytes(),
+                             trace_bytes)
+            self.assertEqual((out/old_report).with_name('result.json').read_bytes(),result_bytes)
+            notes=(evidence/'collection.json').read_bytes()
+            saved=(evidence/'123-1/artifact-900/protocol-transactions.json')
+
+            for fault,error in (
+                    ({'http':503}, HTTPError),
+                    ({'metadata':{'size_in_bytes':2*1024**2}}, ValueError),
+                    ({'zip':original[:-1]+bytes([original[-1]^1])}, ValueError)):
+                with self.subTest(fault=fault):
+                    retained_fault.clear()
+                    retained_fault.update(fault)
+                    with self.assertRaises(error):
+                        site.collect(client,CONFIG,evidence,seed)
+                    self.assertEqual(saved.read_bytes(),trace_bytes)
+                    self.assertEqual((evidence/'collection.json').read_bytes(),notes)
+            retained_fault.clear()
+            with self.assertRaisesRegex(ValueError,'oversized legacy comparison inventory'):
+                site.collect(client,CONFIG,evidence,dict(seed,reports=seed['reports']*5))
+            self.assertEqual(saved.read_bytes(),trace_bytes)
+            forged=dict(seed,production=dict(seed['production'],source_sha='e'*40))
+            with self.assertRaisesRegex(ValueError,'verified production Pages run'):
+                site.collect(client,CONFIG,evidence,forged)
+            self.assertEqual(saved.read_bytes(),trace_bytes)
+            for fault,reason in (({'metadata':{'expired':True}},'original artifact expired'),
+                                 ({'http':410},'original run or artifact no longer offered')):
+                with self.subTest(fault=fault):
+                    retained_fault.clear()
+                    site.collect(client,CONFIG,evidence,seed)
+                    self.assertTrue(saved.is_file())
+                    retained_fault.update(fault)
+                    site.collect(client,CONFIG,evidence,seed)
+                    after=site.build(out,evidence,repo,SHA,CONFIG)
+                    self.assertFalse(after['entries'])
+                    self.assertFalse((out/old_report).exists())
+                    self.assertFalse(saved.exists())
+                    self.assertTrue(any(reason in n for n in after['notes']))
+
     def test_collection_refresh_expires_old_evidence_without_rewriting_retained_bytes(self):
         from unittest.mock import Mock
         from test_identity import relative_path, selected
