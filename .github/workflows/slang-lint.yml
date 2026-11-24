@@ -112,10 +112,27 @@ jobs:
           make check-generated
           # One discovery contract for lint and Bender-resolved filelists.
           # Adding a new positive NoC/CPU RTL test cannot silently skip lint.
-          mapfile -t lint_profiles < <(python3 tools/lint_rtl.py --list)
-          test "${#lint_profiles[@]}" -gt 0
+          profiles=$(PYTHONPATH=tools python3 - <<'PYTHON'
+          from pathlib import Path
+          from lint_rtl import select_profiles
+          from regress import load_config
+          from run_workspace import uses_canonical_workspace
+
+          root = Path.cwd()
+          config = load_config(root / 'config/regression.yaml')
+          for target in select_profiles(root, []):
+              if not uses_canonical_workspace(target, config['tests'][target], stage='files'):
+                  raise SystemExit(f'{target}: Slang CI requires canonical selected sources')
+              print(target)
+          PYTHON
+          )
+          mapfile -t lint_profiles <<< "$profiles"
           printf 'Lint profiles: %s\n' "${lint_profiles[*]}"
           python3 tools/regress.py "${lint_profiles[@]}" --stage files
+          if [[ -e .tools/regression || -L .tools/regression ]]; then
+            echo "Legacy Slang source workspace unexpectedly written" >&2
+            exit 1
+          fi
           # Every selected source closure must remain explainable and
           # independently verifiable after Bender actually resolves it.
           python3 tools/regress.py "${lint_profiles[@]}" --explain > .tools/lint/selected-targets.json
@@ -128,10 +145,6 @@ jobs:
           name: slang-rtl-lint-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             .tools/lint/
-            .tools/regression/*/sources.f
-            .tools/regression/*/plan.json
-            .tools/regression/*/selected-rtl-manifest.json
-            .tools/regression/*/selected-rtl/** 
             .tools/runs/**/identity.json
             .tools/runs/**/plan.json
             .tools/runs/**/sources.f

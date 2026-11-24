@@ -94,7 +94,19 @@ jobs:
           chmod +x ".tools/bin/$XEZIM_ASSET_NAME"
           echo "XEZIM_BIN=$GITHUB_WORKSPACE/.tools/bin/$XEZIM_ASSET_NAME" >> "$GITHUB_ENV"
       - name: Run YAML-defined Xezim profiles and relocated cold boot
-        run: python3 tools/regress.py xezim diagnostics
+        run: |
+          set -euo pipefail
+          PYTHONPATH=tools python3 - <<'PYTHON'
+          from pathlib import Path
+          from regress import expand, load_config
+          from run_workspace import uses_canonical_workspace
+
+          config = load_config(Path('config/regression.yaml'))
+          for target in expand(config, ['xezim', 'diagnostics']):
+              if not uses_canonical_workspace(target, config['tests'][target], stage='all'):
+                  raise SystemExit(f'{target}: Xezim CI requires a canonical archive producer')
+          PYTHON
+          python3 tools/regress.py xezim diagnostics
       - name: Verify canonical Xezim simulations and source archives
         run: |
           python3 - <<'PY'
@@ -102,16 +114,15 @@ jobs:
           import sys
           sys.path.insert(0, 'tools')
           from regress import expand, load_config
-          from run_workspace import require_completed_xezim_run, uses_canonical_workspace
+          from run_workspace import require_completed_xezim_run
           config = load_config(Path('config/regression.yaml'))
           for target in expand(config, ['xezim', 'diagnostics']):
               test = config['tests'][target]
-              if not uses_canonical_workspace(target, test):
-                  continue
               result = require_completed_xezim_run(Path('.tools/runs'), target, test)
               print('PASS canonical Xezim producer:', result['canonical_id'], result['status'])
-              if (Path('.tools/regression') / target).exists():
-                  raise AssertionError('legacy test alias unexpectedly written: ' + target)
+          legacy = Path('.tools/regression')
+          if legacy.exists() or legacy.is_symlink():
+              raise SystemExit('legacy Xezim workspace unexpectedly written')
           PY
       - name: Retain resolved filelists, commands and results
         if: always()
@@ -119,7 +130,6 @@ jobs:
         with:
           name: heterogeneous-soc-results
           path: |
-            .tools/regression/
             .tools/runs/
             gen/boot/manifest.json
             gen/memory/manifest.json
