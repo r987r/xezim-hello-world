@@ -39,11 +39,12 @@ jobs:
       - name: Validate real RTL pins, test contracts and generated endpoints
         run: |
           python3 dv/pcie0/run_rtl_smoke.py --check-pin
-          python3 -m unittest tests.test_pcie_bar_contract tests.test_pcie_diagnostic_contract tests.test_test_flow tests.test_test_flow_cross_source tests.test_pcie_tlp_trace tests.test_pcie_latency_report tests.test_protocol_report tests.test_cpu_dma_firmware tests.test_pcie_endpoint_frontdoor tests.test_pcie_outbound_ownership -v
+          python3 -m unittest tests.test_pcie_noc_workspace tests.test_pcie_bar_contract tests.test_pcie_diagnostic_contract tests.test_test_flow tests.test_test_flow_cross_source tests.test_pcie_tlp_trace tests.test_pcie_latency_report tests.test_protocol_report tests.test_cpu_dma_firmware tests.test_pcie_endpoint_frontdoor tests.test_pcie_outbound_ownership -v
           python3 dv/pcie0/prepare_rtl.py
           python3 tools/regress.py --check-noc
           make check-generated
       - name: PCIe TLP -> PCIe0 FlooNoC -> real PULP SRAM
+        id: native-noc
         run: python3 dv/pcie0/run_noc_smoke.py
       - name: Real CPU iDMA DDR-model exchange with host PCIe BAR readback
         id: run-pcie-host
@@ -79,16 +80,14 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: pcie0-dedicated-noc-${{ github.run_id }}
-          # Preserve result/protocol/AXI/flow provenance, not 1+ GiB of
-          # reproducible Verilator object files and precompiled headers.
+          # Retain the existing pinned normalization preflight source (not its
+          # compiled probe). This also keeps .tools/ as the common archive
+          # root, so the unchanged host report retains runs/verilator/... .
           path: |
+            .tools/pcie0/normalized/pcie_axi_master.v
             ${{ steps.pcie-host-execution.outputs.canonical_id != '' && format('.tools/runs/{0}/', steps.pcie-host-execution.outputs.canonical_id) || '' }}
-            .tools/pcie0/noc_build/build.log
-            .tools/pcie0/noc_build/simulation.log
-            .tools/pcie0/noc_build/results.xml
-            .tools/pcie0/noc_relocated_build/build.log
-            .tools/pcie0/noc_relocated_build/simulation.log
-            .tools/pcie0/noc_relocated_build/results.xml
+            ${{ steps.native-noc.outputs.legacy_canonical_id != '' && format('.tools/runs/{0}/', steps.native-noc.outputs.legacy_canonical_id) || '' }}
+            ${{ steps.native-noc.outputs.relocated_canonical_id != '' && format('.tools/runs/{0}/', steps.native-noc.outputs.relocated_canonical_id) || '' }}
           include-hidden-files: true
           if-no-files-found: warn
 
