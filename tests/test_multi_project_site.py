@@ -176,7 +176,21 @@ class MultiProjectSiteTests(unittest.TestCase):
                 self.assertNotIn(pair,a_fabric)
             self.assertNotIn('<td>ethernet0</td><td>memory0.ddr0</td><td>0x140000000 via to_compute0',b_fabric)
             self.assertIn('href="fabric.html"',(b/'index.html').read_text())
-            self.assertNotIn('memory0.hbm0',(b/'address-map.html').read_text())
+            a_addresses=(a/'address-map.html').read_text()
+            b_addresses=(b/'address-map.html').read_text()
+            detailed_addresses='href="../../address-map.html"'
+            self.assertIn(detailed_addresses,a_addresses)
+            self.assertIn('PCIe and DDR register',a_addresses)
+            self.assertNotIn(detailed_addresses,b_addresses)
+            self.assertNotIn('memory0.hbm0',b_addresses)
+            self.assertIn('<code>memory0.ctrl</code></td><td><code>0x40030000</code>'
+                          '</td><td><code>0x1000</code>',b_addresses)
+            register_browser=(a/'../../address-map.html').read_text()
+            self.assertIn('Hierarchical SoC</a> only',register_browser)
+            self.assertIn('id="am-csr-browser"',register_browser)
+            for html in (a_addresses,b_addresses):
+                self.assertNotIn(a_row['path'],html)
+                self.assertNotIn(b_row['path'],html)
             a_tests=(a/'runs.html').read_text()
             b_tests=(b/'runs.html').read_text()
             self.assertIn('historical-a-test',a_tests)

@@ -1904,6 +1904,11 @@ def project_pages(output, projects, entries, repository, sha, *, boots=None, def
             ) + '</tbody></table></div>'
             '<p class="muted">Address allocation does not imply a qualified '
             'transaction or verified real memory controller.</p>')
+        if pid == legacy_id:
+            addresses += (
+                '<p><a href="../../address-map.html">Open PCIe and DDR register '
+                'definitions for this chip</a>. Observed accesses remain in '
+                '<a href="runs.html">individual test reports</a>.</p>')
         file_rows = ''.join(
             '<tr><td>' + escape(item['role']) + '</td>'
             '<td><code>' + escape(item['path']) + '</code></td>'
