@@ -2484,7 +2484,9 @@ def build(output,evidence,repository,sha,config):
     runs_data=json.dumps(dict(dataset,
         runs=[r for r in runs if (r['id'],r['run_attempt']) not in project_only
               or (r['id'],r['run_attempt']) in isolated_keys],
-        entries=sorted(legacy_entries+isolated_checks,key=lambda e:e['recorded_at'],reverse=True)),
+        # Retain the evidence index's order without changing project ownership.
+        entries=[e for e in entries if e.get('project_id',legacy_id)==legacy_id
+                 or e.get('evidence_scope')==connected.SCOPE]),
         separators=(',',':')).replace('<','\\u003c')
     for page in ('index','topology','explorer','fabric','address-map','runs','docs','reference'):
         body=(ROOT/('tools/templates/site_'+page+'.html')).read_text().replace('__SITE_DATA__',runs_data if page=='runs' else data)
