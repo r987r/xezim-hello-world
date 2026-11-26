@@ -56,6 +56,14 @@ def expand(config, names, stack=()):
     return list(dict.fromkeys(result))
 
 
+def require_registered_combined(name, test):
+    combined_definition = (name == ddr_split.COMBINED
+                           or test.get('firmware_mode') == 'ethernet_ddr_pcie')
+    if combined_definition and not ddr_split.eligible_combined(name, test):
+        raise ValueError(f'{name}: combined firmware requires the registered '
+                         f'{ddr_split.COMBINED} profile; no legacy producer')
+
+
 def load_config(path):
     # Direct `python tools/regress.py` starts with tools/ on sys.path; the
     # shared DV evidence ABI lives under repository root, not tools/.
@@ -87,6 +95,7 @@ def load_config(path):
             raise ValueError(f'{name}: opt_in must be boolean')
         if test.get('firmware_mode') not in (None, 'cpu_dma', 'pcie_host', 'pcie_dma_host', 'pcie_outbound', 'ethernet_mvp', 'ethernet_cpu', 'ddr_cpu_dma', 'cpu_dma_scenario', 'scenario_bfm', 'peakrdl_reset', 'ethernet_ddr_pcie'):
             raise ValueError(f'{name}: unknown compiled CPU firmware mode')
+        require_registered_combined(name, test)
         if 'flow_plan' in test:
             source=test['flow_plan']
             if (not isinstance(source,str)
@@ -613,7 +622,7 @@ def select_ddr_variant(out, sources):
     return ddr_chip.source_closure(sources, info)
 
 
-def select_combined_variant(out, sources, *, runtime=False):
+def select_combined_variant(out, sources):
     # Compose the three real opt-in source closures in one variant. In
     # particular use the re-generated DDR NoCs, NOT default reserved
     # attachments. No second firmware image or fabricated PHY/host RAM.
@@ -654,17 +663,14 @@ def select_combined_variant(out, sources, *, runtime=False):
     sources += [str(ROOT/'.tools/verilog_axi/rtl'/name)
                 for name in ('axi_dma_rd.v','axi_dma_wr.v')]
     vendor_pin = source_contract()
-    if runtime:
-        try:
-            from .combined_runtime_provenance import BRIDGE
-        except ImportError:
-            from combined_runtime_provenance import BRIDGE
-        # Only generated RTL remains in the archive, never Icarus's object.
-        with tempfile.TemporaryDirectory(prefix='combined-pcie-lint-') as probe:
-            bridge = assert_iverilog_clean(output=out/BRIDGE,
-                                           probe=Path(probe)/'pcie_bridge_check.vvp')
-    else:
-        bridge = assert_iverilog_clean()
+    try:
+        from .combined_runtime_provenance import BRIDGE
+    except ImportError:
+        from combined_runtime_provenance import BRIDGE
+    # Only generated RTL remains in the archive, never Icarus's object.
+    with tempfile.TemporaryDirectory(prefix='combined-pcie-lint-') as probe:
+        bridge = assert_iverilog_clean(output=out/BRIDGE,
+                                       probe=Path(probe)/'pcie_bridge_check.vvp')
     sources += [str(bridge)] + [
         str(ROOT/'.tools/verilog_pcie'/item)
         for item in vendor_pin['rtl_modules'] if item != 'rtl/pcie_axi_master.v']
@@ -700,11 +706,10 @@ def seal_ddr_build(name, out, plan, test):
 
 
 def run_target(name, test, resolver, options):
+    require_registered_combined(name, test)
     canonical = uses_canonical_workspace(
         name, test, stage=options.stage,
         canonical_combined_files=True)
-    if name == ddr_split.COMBINED and not ddr_split.eligible_combined(name, test):
-        raise ValueError('refusing a legacy combined producer; use the registered profile')
     structural = test['engine'] in {'xezim-compile', 'verilator-lint'}
     relocated_boot = test.get('boot_relocate')
     canonical_ethernet = uses_canonical_ethernet_workspace(name, test)
@@ -761,7 +766,7 @@ def run_target(name, test, resolver, options):
             def materialize(directory):
                 nonlocal sources
                 if canonical_combined:
-                    sources = list(dict.fromkeys(select_combined_variant(directory, sources, runtime=True)))
+                    sources = list(dict.fromkeys(select_combined_variant(directory, sources)))
                 elif canonical_ddr:
                     sources = select_ddr_variant(directory, sources)
                 if canonical_firmware:
@@ -841,8 +846,6 @@ def run_target(name, test, resolver, options):
         sources = select_pcie_variant(test, out, sources)
     if not canonical_ddr and test.get('firmware_mode') == 'ddr_cpu_dma':
         sources = select_ddr_variant(out, sources)
-    if not canonical_combined and test.get('firmware_mode') == 'ethernet_ddr_pcie':
-        sources = select_combined_variant(out, sources)
     if not canonical_peakrdl and test.get('firmware_mode') == 'peakrdl_reset':
         sources = select_peakrdl_reset_variant(out, sources)
     if not canonical_scenario and test.get('firmware_mode') == 'scenario_bfm':

@@ -330,6 +330,49 @@ class RegressionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'requires its own build'):
             regress.run_target(target, plan, None, types.SimpleNamespace(stage='run'))
 
+    def test_combined_alias_from_alternate_config_fails_before_allocation(self):
+        from runtime_contract import validate_migration_inventory
+
+        original = regress.ddr_split.COMBINED
+        alias = 'chip-ethernet'
+        config = copy.deepcopy(self.config)
+        tests = config['tests']
+        tests[alias], tests[original] = tests[original], tests[alias]
+        names = {alias: original, original: alias}
+        for suite, targets in config['suites'].items():
+            config['suites'][suite] = [names.get(name, name) for name in targets]
+        # Both names are registered as opaque stimulus. The general
+        # inventory cannot distinguish this swap from the original config.
+        self.assertEqual(validate_migration_inventory(config),
+                         validate_migration_inventory(self.config))
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config_path = root / 'alternate.yaml'
+            config_path.write_text(yaml.safe_dump(config, sort_keys=False))
+            legacy = root / '.tools' / 'regression' / alias
+            legacy.mkdir(parents=True)
+            prior = legacy / 'prior-report.json'
+            prior.write_text('retained original bytes')
+            with (patch.object(regress, 'capture') as generate,
+                  patch.object(regress, 'Resolver') as resolver,
+                  patch.object(regress, 'select_combined_variant') as materialize):
+                for stage in ('files', 'build', 'run', 'all'):
+                    with self.subTest(stage=stage):
+                        with patch.object(sys, 'argv', [
+                                'regress.py', alias, '--config', str(config_path), '--stage', stage]):
+                            with self.assertRaisesRegex(ValueError, 'combined firmware requires'):
+                                regress.main()
+                        with (patch.object(regress, 'ROOT', root),
+                              self.assertRaisesRegex(ValueError, 'combined firmware requires')):
+                            regress.run_target(alias, tests[alias], None,
+                                               types.SimpleNamespace(stage=stage))
+                generate.assert_not_called()
+                resolver.assert_not_called()
+                materialize.assert_not_called()
+            self.assertEqual(list((root/'.tools').iterdir()), [legacy.parent])
+            self.assertEqual(list(legacy.iterdir()), [prior])
+            self.assertEqual(prior.read_text(), 'retained original bytes')
+
     def test_new_cocotb_target_does_not_inherit_noc_wrapper(self):
         # An existing engine can be reused with a new Bender source target.
         # Only the NoC source provider is allowed to add NoC packages/wrapper.
