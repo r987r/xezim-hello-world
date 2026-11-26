@@ -82,7 +82,8 @@ copied as a supposedly cross-machine-stable generated manifest digest.
 The portable generated manifest instead fingerprints the relative ordered
 312-entry filelist, all actual pinned source/header SHA values, generated
 bytes, defines and source configuration. The original absolute-path
-fingerprint remains in the verified `.tools/regression/` run attestation.
+fingerprint remains in the original verified run attestation; older references
+retain their historical path coordinates.
 A test regenerates the same source under two different checkout directories
 and requires exact portable manifest and compiler filelist bytes. The
 portable copy is separately elaborated by Verilator in the existing CI, but

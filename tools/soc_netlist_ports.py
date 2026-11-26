@@ -55,9 +55,9 @@ def _strict_links(contract: dict) -> list[Link]:
 
 
 def audit(root: Path, profile: str, *, netlist: Path, meta: Path,
-          contract_path: Path) -> dict:
+          contract_path: Path, files_workspace: Path | None = None) -> dict:
     root = root.resolve()
-    selection = selected(root, profile)
+    selection = selected(root, profile, files_workspace=files_workspace)
     if selection["top"] not in ("full_chip_tb", "full_chip_dma_tb"):
         raise ConnectivityEvidenceError("SoC direct port proof requires full-chip selected top")
     metadata = json.loads(meta.read_text())
@@ -104,6 +104,7 @@ def audit(root: Path, profile: str, *, netlist: Path, meta: Path,
 def main() -> int:
     cli = argparse.ArgumentParser(description=__doc__)
     cli.add_argument("--profile", required=True)
+    cli.add_argument("--files-workspace", type=Path)
     cli.add_argument("--root", type=Path, default=ROOT)
     cli.add_argument("--netlist", required=True, type=Path)
     cli.add_argument("--meta", required=True, type=Path)
@@ -111,7 +112,7 @@ def main() -> int:
     cli.add_argument("--out", required=True, type=Path)
     args = cli.parse_args()
     result = audit(args.root, args.profile, netlist=args.netlist,
-                   meta=args.meta, contract_path=args.contract)
+                   meta=args.meta, contract_path=args.contract, files_workspace=args.files_workspace)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
     print(f"SOC BIT CONTRACT: {result['verified_direct_port_bindings']} direct links; "

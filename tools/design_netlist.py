@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fail-closed per-profile slang-netlist / slang-report export.
 
-Reuses .tools/regression/PROFILE/sources.f produced by tools/regress.py.
+Uses the attested compiler filelist produced by tools/regress.py.
 No floating toolchain download and no fallback to guessed connectivity.
 """
 from __future__ import annotations
@@ -20,11 +20,11 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def analyze(root: Path, profile: str, mode: str, output: Path,
             *, netlist_binary: str = "slang-netlist",
-            report_binary: str = "slang-report") -> dict:
+            report_binary: str = "slang-report", files_workspace: Path | None = None) -> dict:
     root = root.resolve()
     if mode not in ("netlist", "ports", "drivers", "variables"):
         raise ValueError(f"unsupported export mode: {mode}")
-    attested = selected(root, profile)
+    attested = selected(root, profile, files_workspace=files_workspace)
     source_list = attested["source_list"]
     executable = shutil.which(netlist_binary if mode == "netlist" else report_binary)
     if not executable:
@@ -70,6 +70,7 @@ def analyze(root: Path, profile: str, mode: str, output: Path,
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--profile", required=True)
+    parser.add_argument("--files-workspace", type=Path)
     parser.add_argument("--mode", choices=["netlist", "ports", "drivers", "variables"],
                         default="ports")
     parser.add_argument("--output", type=Path, required=True)
@@ -78,7 +79,8 @@ def main():
     parser.add_argument("--slang-report", default="slang-report")
     args = parser.parse_args()
     result = analyze(args.root, args.profile, args.mode, args.output,
-                     netlist_binary=args.slang_netlist, report_binary=args.slang_report)
+                     netlist_binary=args.slang_netlist, report_binary=args.slang_report,
+                     files_workspace=args.files_workspace)
     print(json.dumps(result, indent=2))
 
 

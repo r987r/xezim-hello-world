@@ -95,7 +95,7 @@ time/monitor chart and filterable table.
 A new PCIe, DDR/DFI, Ethernet or other monitor must use the **same**
 versioned `protocol-events.jsonl` / `protocol-transactions.json` exporter.
 The CI workflow must upload the original `protocol-transactions.json`
-explicitly (or use the canonical `.tools/regression/` artifact). The Pages
+explicitly (or retain the original canonical `.tools/runs/` workspace). The Pages
 collector discovers the filename in workflow YAML; there is **no list of
 controller or protocol names to update**. Adding a new protocol requires a
 source-verified run, not a new HTML renderer.
