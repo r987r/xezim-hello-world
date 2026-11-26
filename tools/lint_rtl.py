@@ -92,14 +92,15 @@ def parse_diagnostics(path: Path, root: Path, profile: str, mode: str) -> list[d
     return findings
 
 
-def verify_plan(root: Path, profile: str, top: str) -> Path:
+def verify_plan(root: Path, profile: str, top: str, *,
+                files_workspace: Path | None = None) -> Path:
     """Use the source-selected filelist and verify canonical archives in place."""
     try:
         from .run_workspace import selected_run_folder, uses_canonical_workspace
-        from .selected_rtl_provenance import verify_selected_archive
+        from .selected_rtl_provenance import explicit_files_review, verify_selected_archive
     except ImportError:
         from run_workspace import selected_run_folder, uses_canonical_workspace
-        from selected_rtl_provenance import verify_selected_archive
+        from selected_rtl_provenance import explicit_files_review, verify_selected_archive
     root = Path(root).resolve()
     cfg = yaml.safe_load((root / "config/regression.yaml").read_text())
     definition = cfg["tests"].get(profile)
@@ -111,6 +112,10 @@ def verify_plan(root: Path, profile: str, top: str) -> Path:
             or definition.get("bender_targets") != ["dma"]
             or not isinstance(definition.get("logical_test"), str)):
         raise ValueError("dma-rtl canonical lint producer selection changed")
+    explicit = explicit_files_review(root, profile, definition, files_workspace)
+    if explicit is not None:
+        directory, _ = explicit
+        return directory / "sources.f"
     canonical = uses_canonical_workspace(profile, definition)
     directory = selected_run_folder(root, profile, definition)
     if directory is None:
@@ -162,8 +167,9 @@ def annotate(findings: list[dict], limit: int = 40) -> None:
 
 
 def analyze(root: Path, profile: str, top: str, binary: str, outdir: Path,
-            *, enforce: bool = False, execute=subprocess.run) -> dict:
-    files = verify_plan(root, profile, top)
+            *, enforce: bool = False, execute=subprocess.run,
+            files_workspace: Path | None = None) -> dict:
+    files = verify_plan(root, profile, top, files_workspace=files_workspace)
     outdir.mkdir(parents=True, exist_ok=True)
     modes = ("lint", "elaborate")
     results = []
@@ -283,10 +289,13 @@ def main() -> int:
     cli.add_argument("--output", type=Path)
     cli.add_argument("--enforce", action="store_true")
     cli.add_argument("--list", action="store_true")
+    cli.add_argument("--files-workspace", type=Path)
     args = cli.parse_args()
     root = args.root.resolve()
     cfg = yaml.safe_load((root / "config/regression.yaml").read_text())
     profiles = select_profiles(root, args.profiles)
+    if args.files_workspace is not None and (args.list or "chip-ethernet-ddr-pcie" not in profiles):
+        cli.error("--files-workspace requires an explicit combined lint profile")
     if args.list:
         print("\n".join(profiles))
         return 0
@@ -300,7 +309,9 @@ def main() -> int:
     # Continue across design-level errors so all profiles have evidence.
     for profile in profiles:
         top = cfg["tests"][profile]["top"]
-        report = analyze(root, profile, top, binary, out / profile, enforce=args.enforce)
+        report = analyze(root, profile, top, binary, out / profile, enforce=args.enforce,
+                         files_workspace=(args.files_workspace
+                                          if profile == "chip-ethernet-ddr-pcie" else None))
         full_reports.append(report)
         reports.append({"profile": profile, "top": top,
                         "errors": report["summary"].get("error", 0),

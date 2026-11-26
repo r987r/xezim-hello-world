@@ -72,9 +72,10 @@ def audit_selected_hierarchy(root: Path, top: str, rows: list[dict],
         raise ValueError("selected elaboration omitted the required root top")
     return verified
 
-def analyze(root: Path, profile: str, binary: str = "slang-hier") -> dict:
+def analyze(root: Path, profile: str, binary: str = "slang-hier", *,
+            files_workspace: Path | None = None) -> dict:
     root = root.resolve()
-    attested = selected(root, profile)
+    attested = selected(root, profile, files_workspace=files_workspace)
     top = attested["top"]
     files = attested["source_list"]
     exe = shutil.which(binary)
@@ -108,11 +109,12 @@ def analyze(root: Path, profile: str, binary: str = "slang-hier") -> dict:
 def main():
     cli = argparse.ArgumentParser(description=__doc__)
     cli.add_argument("--profile", required=True)
+    cli.add_argument("--files-workspace", type=Path)
     cli.add_argument("--root", type=Path, default=ROOT)
     cli.add_argument("--slang-hier", default="slang-hier")
     cli.add_argument("--output", type=Path)
     args = cli.parse_args()
-    data = analyze(args.root, args.profile, args.slang_hier)
+    data = analyze(args.root, args.profile, args.slang_hier, files_workspace=args.files_workspace)
     result = json.dumps(data, indent=2) + "\n"
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)

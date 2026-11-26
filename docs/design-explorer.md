@@ -105,6 +105,8 @@ changes. Changed compiler contracts are separately labeled
 `compiler_source_selected_not_elaborated`; no port-level/CDC/AXI protocol
 success can be inferred from the comparison. Source archives are independently
 SHA-verified first, and modified, missing or foreign archives fail closed.
+For a combined profile, specify the parent of its printed `sources.f` via
+`--before-files-workspace` or `--after-files-workspace` on the matching side.
 These are comparison artifacts, not a second architecture dashboard.
 
 The detailed Architecture Explorer links the SHA-checked generated default

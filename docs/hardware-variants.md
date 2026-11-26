@@ -12,7 +12,9 @@ Uncompiled variants are explicitly `declared_only_not_compiled`.
 
 After preparing real source filelists with `regress.py --stage files`, run
 
-    python3 tools/hardware_variants.py --out .tools/variants/verified.json --require-resolved
+    # Set workspace to the parent of sources.f from the exact combined FILES output.
+    python3 tools/hardware_variants.py --out .tools/variants/verified.json \
+      --require-resolved --files-workspace "$workspace"
 
 to verify every source/identity/archive hash and check that two tests claiming
 one hardware variant actually select the same RTL `soc_top.sv` SHA. Missing,

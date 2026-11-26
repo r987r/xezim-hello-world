@@ -108,11 +108,12 @@ make dv-supernoc
 python3 tools/regress.py chip-boot --stage run
 ```
 
-Open `.tools/regression/<target>/report.html`. That directory also contains
-`axi-events.jsonl` (raw accepted handshakes), `axi-transactions.json`
+Open `report.html` in the exact workspace printed by the run:
+`.tools/runs/<simulator>/<config_target>/<testname>/<run_id>/`. It also
+contains `axi-events.jsonl` (raw accepted handshakes), `axi-transactions.json`
 (versioned run metadata and AXI observations), `result.json`, and the
-existing plans/logs/XML. Local attempts replace that target's prior output;
-CI artifacts preserve the workflow run and attempt.
+plans/logs/XML. Independent attempts keep separate run IDs; CI artifacts
+also retain their workflow run and attempt.
 
 The [GitHub Pages hub](https://r987r.github.io/xezim-hello-world/) publishes
 the topology, docs and trusted main CI results. See [publication](publication.md)

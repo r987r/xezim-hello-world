@@ -367,19 +367,23 @@ def source_text_diff(before: Path, after: Path, fromfile: str, tofile: str) -> d
 
 
 def selected_variant_diff(root_before: Path, profile_before: str,
-                          root_after: Path, profile_after: str) -> dict:
+                          root_after: Path, profile_after: str, *,
+                          before_workspace: Path | None = None,
+                          after_workspace: Path | None = None) -> dict:
     """Source-only comparison of two independently verified selected runs."""
-    from selected_rtl_provenance import verify_selected_archive
+    from selected_rtl_provenance import explicit_files_review, verify_selected_archive
 
-    def read(root, profile):
+    def read(root, profile, workspace):
         root = Path(root).resolve()
         tests = yaml.safe_load((root / "config/regression.yaml").read_text())["tests"]
         if profile not in tests:
             raise ValueError("unknown selected RTL profile")
-        return root, verify_selected_archive(root, profile, tests[profile])
+        explicit = explicit_files_review(root, profile, tests[profile], workspace)
+        verified = explicit[1] if explicit is not None else verify_selected_archive(root, profile, tests[profile])
+        return root, verified
 
-    root_a, a = read(root_before, profile_before)
-    root_b, b = read(root_after, profile_after)
+    root_a, a = read(root_before, profile_before, before_workspace)
+    root_b, b = read(root_after, profile_after, after_workspace)
 
     def hashes(field):
         before, after = a.get(field, {}), b.get(field, {})
@@ -469,16 +473,19 @@ def main():
     parser.add_argument("--selected-after", metavar="PROFILE")
     parser.add_argument("--before-root", type=Path)
     parser.add_argument("--after-root", type=Path)
+    parser.add_argument("--before-files-workspace", type=Path)
+    parser.add_argument("--after-files-workspace", type=Path)
     parser.add_argument("--format", choices=("json", "markdown"), default="json")
     parser.add_argument("--verification-report", action="append", default=[], metavar="PROFILE=JSON",
                         help="import hdl-kgraph query uvm --json output; do not treat as runtime truth")
     args = parser.parse_args()
-    if args.selected_before or args.selected_after:
+    if any((args.selected_before, args.selected_after, args.before_files_workspace, args.after_files_workspace)):
         if not args.selected_before or not args.selected_after or args.diff:
             parser.error("selected comparison needs two profiles without --diff")
         result = selected_variant_diff(
             args.before_root or args.root, args.selected_before,
-            args.after_root or args.root, args.selected_after)
+            args.after_root or args.root, args.selected_after,
+            before_workspace=args.before_files_workspace, after_workspace=args.after_files_workspace)
         output = (selected_variant_markdown(result) if args.format == "markdown"
                   else json.dumps(result, indent=2) + "\n")
         if args.output:

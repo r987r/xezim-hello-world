@@ -47,7 +47,9 @@ Resolve both profiles into source archives, then use the **existing** Architectu
 ```sh
 python3 tools/regress.py chip-boot --stage files
 python3 tools/regress.py chip-ethernet-ddr-pcie --stage files
-python3 tools/design_explorer.py --selected-before chip-boot --selected-after chip-ethernet-ddr-pcie --format markdown --output .tools/selected-rtl-diff.md
+# Set workspace to the parent of sources.f from the exact combined FILES output.
+python3 tools/design_explorer.py --selected-before chip-boot --selected-after chip-ethernet-ddr-pcie \
+  --after-files-workspace "$workspace" --format markdown --output .tools/selected-rtl-diff.md
 ```
 
 This compares source hashes and bounded text changes of the **selected generated** SystemVerilog tops, with source-integrity checks. It does not prove every elaborated pin connection, signal width, CDC path, or accepted AXI/TLP/GMII transaction. Cross-check bit-level work in [#46](https://github.com/r987r/xezim-hello-world/issues/46); do not relabel source-only edges as verified wiring.

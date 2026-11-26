@@ -10,18 +10,22 @@ import json
 from pathlib import Path
 import yaml
 from test_identity import config_target
-from selected_rtl_provenance import verify_selected_archive
+from selected_rtl_provenance import explicit_files_review, verify_selected_archive
+from combined_source_projection import PROFILE as COMBINED
 from run_workspace import selected_run_folder
 
 ROOT = Path(__file__).resolve().parents[1]
 CHIP_TOPS = frozenset(("full_chip_tb", "full_chip_dma_tb"))
 
 
-def catalog(root: Path, tests: dict, require_resolved: bool = False) -> dict:
+def catalog(root: Path, tests: dict, require_resolved: bool = False, *,
+            files_workspace: Path | None = None) -> dict:
     root = Path(root).resolve()
     soc = yaml.safe_load((root / "config/soc.yaml").read_text())
     if not isinstance(tests, dict) or not isinstance(soc.get("name"), str):
         raise ValueError("invalid SoC/test catalog")
+    if files_workspace is not None and tests.get(COMBINED, {}).get("top") not in CHIP_TOPS:
+        raise ValueError("--files-workspace requires the registered combined profile")
     variants = {}
     for profile, test in sorted(tests.items()):
         if test.get("top") not in CHIP_TOPS:
@@ -38,15 +42,20 @@ def catalog(root: Path, tests: dict, require_resolved: bool = False) -> dict:
                 or obj["source_target"] != test["sources"]):
             raise ValueError(name + ": incompatible selections use one hardware variant")
         obj["profiles"].append(profile)
-        folder = selected_run_folder(root, profile, test)
-        archive = folder / "selected-rtl-manifest.json" if folder else None
-        if archive and archive.is_symlink():
-            raise ValueError(profile + ": selected archive symlink is forbidden")
-        if archive is None or not archive.is_file():
-            if require_resolved:
-                raise ValueError(profile + ": missing selected RTL archive")
-            continue
-        verified = verify_selected_archive(root, profile, test)
+        if profile == COMBINED:
+            if files_workspace is None and not require_resolved:
+                continue  # Optional catalog remains declared-only, never a mirror.
+            _, verified = explicit_files_review(root, profile, test, files_workspace)
+        else:
+            folder = selected_run_folder(root, profile, test)
+            archive = folder / "selected-rtl-manifest.json" if folder else None
+            if archive and archive.is_symlink():
+                raise ValueError(profile + ": selected archive symlink is forbidden")
+            if archive is None or not archive.is_file():
+                if require_resolved:
+                    raise ValueError(profile + ": missing selected RTL archive")
+                continue
+            verified = verify_selected_archive(root, profile, test)
         path = verified.get("selected_soc_top")
         if not path or path not in verified.get("source_sha256", {}):
             raise ValueError(profile + ": selected source closure has no actual SoC top")
@@ -74,9 +83,10 @@ def main() -> int:
     cli.add_argument("--config", type=Path, default=ROOT / "config/regression.yaml")
     cli.add_argument("--out", type=Path, required=True)
     cli.add_argument("--require-resolved", action="store_true")
+    cli.add_argument("--files-workspace", type=Path)
     args = cli.parse_args()
     tests = yaml.safe_load(args.config.read_text())["tests"]
-    result = catalog(args.root, tests, args.require_resolved)
+    result = catalog(args.root, tests, args.require_resolved, files_workspace=args.files_workspace)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
     print(f"HARDWARE VARIANTS: {len(result['variants'])} (source only, no RTL PASS)")

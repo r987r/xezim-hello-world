@@ -21,6 +21,11 @@ on:
       - 'tests/test_generate_combined_variant.py'
       - 'Makefile'
       - 'tools/selected_source_reference.py'
+      - 'tools/selected_rtl_provenance.py'
+      - 'tools/design_explorer.py'
+      - 'tools/hardware_variants.py'
+      - 'tools/lint_rtl.py'
+      - 'tests/test_selected_variant_diff.py'
       - 'config/selected-rtl-reference/**'
       - 'tests/test_selected_source_reference.py'
       - 'tools/stage_selected_rtl.py'
@@ -59,7 +64,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m py_compile tools/generate_combined_variant.py tools/regress.py tools/cpu_dma_firmware.py tools/full_chip_gen.py dv/integration/test_combined.py dv/integration/combined34_scoreboard.py dv/pcie0/host_adapter.py dv/pcie0/tlp_trace.py dv/ethernet0/gmii_trace.py rtl/memory/ddr4/dfi_to_protocol.py
-          python3 -m unittest tests.test_generate_combined_variant tests.test_combined34 tests.test_regression tests.test_selected_source_reference tests.test_combined_runtime_provenance -v
+          python3 -m unittest tests.test_generate_combined_variant tests.test_combined34 tests.test_regression tests.test_selected_source_reference tests.test_combined_runtime_provenance tests.test_selected_variant_diff -v
           python3 tools/stimulus_catalog.py
           python3 tools/regress.py --list
           clang --target=riscv32-unknown-elf -march=rv32i -mabi=ilp32 -ffreestanding -fsyntax-only \
@@ -128,6 +133,10 @@ jobs:
           import sys
           import yaml
           from combined_source_projection import PROFILE, prepared_workspace
+          from design_explorer import selected_variant_diff
+          from hardware_variants import catalog
+          from lint_rtl import verify_plan
+          from selected_rtl_provenance import selected
 
           root = Path.cwd()
           definition = yaml.safe_load((root / "config/regression.yaml").read_text())["tests"][PROFILE]
@@ -138,6 +147,17 @@ jobs:
               [sys.executable, "tools/regress.py", PROFILE, "--explain", *args]))
           assert explanation["run_directory"] == folder.relative_to(root).as_posix()
           assert explanation["selected_inputs"]["source_count"] == 312
+          attested = selected(root, PROFILE, files_workspace=folder)
+          assert attested["source_list"] == folder / "sources.f"
+          assert attested["source_count"] == 312
+          assert verify_plan(root, PROFILE, "full_chip_tb", files_workspace=folder) == attested["source_list"]
+          review = catalog(root, {PROFILE: definition}, files_workspace=folder)
+          assert review["variants"][0]["verified_profiles"] == [PROFILE]
+          comparison = selected_variant_diff(root, PROFILE, root, PROFILE,
+                                             before_workspace=folder, after_workspace=folder)
+          assert not comparison["selected_soc_top_text"]["changed"]
+          assert comparison["before"]["sha"] == comparison["after"]["sha"]
+          print("PASS exact workspace for generic selected-source readers; no external tool executed")
           subprocess.run([sys.executable, "tools/selected_source_reference.py", "--profile", PROFILE, *args],
                          check=True)
           subprocess.run([sys.executable, "tools/stage_selected_rtl.py", "--profile", PROFILE, *args],

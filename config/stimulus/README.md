@@ -18,7 +18,7 @@ python3 tools/stimulus_catalog.py --show chip-ethernet-cpu
 | Source reviewable stimulus intent | **`config/stimulus/tests.yaml`** | Why it runs, INIT/RUN/CHECK outline and execution adoption |
 | Typed executable scenario DAG (today only SCN-2) | `config/scenarios/cpu-bfm-ddr-roundtrip.json` | Actual action parameters, dependencies, actors, seed |
 | Adapter implementation | `dv/`, `sw/`, `tools/` | Real Python/C/SV dispatch; must follow/validate the typed plan |
-| Selected run and evidence | `.tools/regression/…`, then canonical published run | Generated run-specific plan and actual passive/checker evidence |
+| Selected run and evidence | `.tools/runs/<simulator>/<config_target>/<testname>/<run_id>/`, then canonical published run | Generated run-specific plan and actual passive/checker evidence |
 | Generated RTL and architecture | `gen/` | Derived hardware outputs, not human-authored test stimulus |
 
 **Do not put authored stimulus into `gen/`**: generated code can be

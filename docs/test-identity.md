@@ -56,11 +56,9 @@ No later version of the YAML can relabel an archived test.
   `runs/<workflow-id>-<attempt>/<old-target>/` paths for explicit comparison.
   They cannot be silently relabeled with the latest catalog or presented as
   current canonical test results.
-- The on-runner `.tools/regression/<selection-key>` scratch directory is
-  still a private temporary compatibility detail for workflows that resolve
-  source filelists by selection key. This is **not** a second public naming
-  scheme. Migrating this private scratch resolver and all upload scripts is
-  tracked separately in [#139](https://github.com/r987r/xezim-hello-world/issues/139); do not delete historical build evidence. 
+- Current registered runs and source preparations use `.tools/runs/`.
+  Compatibility for custom local test definitions and old archived evidence
+  is not a second public naming scheme. Never rewrite historical receipts.
 - The physical memory aperture, CSR bases, NoC configuration and IP
   version still come from `config/soc.yaml`, pinned manifests and
   the actual selected source closure. Renaming a test cannot swap an IP.
@@ -84,12 +82,11 @@ after the selected filelist exists. Memory profiles archive and hash the
 effective YAML, including local overrides; custom config names use a content
 hash without exposing the caller's path. Static full-chip Verilator boot,
 its named-negative test, and boot latency use separate canonical run
-directories while sharing the verified compiled boot image. Nonmigrated
-Cocotb targets still use selection-key directories.
-[#139](https://github.com/r987r/xezim-hello-world/issues/139) owns migration
-of the remaining producers, CI uploads and readers together. Never silently redirect a test
-writer without moving its compiled source/verifier dependencies, and never
-relabel previous Actions artifacts as canonical. The selected path conveys no
+directories while sharing the verified compiled boot image. Registered
+combined source-only reviews take one explicit workspace, not the newest
+available run. Never silently redirect a test writer without moving its
+compiled source/verifier dependencies, and never relabel previous Actions
+artifacts as canonical. The selected path conveys no
 hardware PASS: real output still requires independent simulator/monitor
 evidence. Test with `python3 -m unittest tests.test_run_workspace -v`.
 

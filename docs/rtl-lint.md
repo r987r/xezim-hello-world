@@ -28,7 +28,10 @@ regression. The lint inventory is independent of the Xezim simulator.
 The profile inventory comes from `config/regression.yaml`: positive,
 elaboratable NoC/chip targets with full test top names. Current set includes
 `supernoc`, `dma-rtl`, `chip-dma`, and `chip-boot`. Newly registered
-positive profiles become available automatically.
+positive profiles become available automatically. An explicit
+`chip-ethernet-ddr-pcie` review requires `--files-workspace` with the parent
+of its original `sources.f` from `regress.py --stage files`. This selects
+compiler inputs only; it does not imply that the Slang run will pass.
 
 ~~~sh
 python3 tools/lint_rtl.py --list

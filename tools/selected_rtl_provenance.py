@@ -20,7 +20,23 @@ except ImportError:
     from run_workspace import selected_run_folder, uses_canonical_workspace
 
 
-def selected(root: Path, profile: str) -> dict:
+def explicit_files_review(root: Path, profile: str, definition: dict,
+                          files_workspace: Path | None) -> tuple[Path, dict] | None:
+    """Bind local combined review to one original source-only invocation."""
+    try:
+        from .combined_source_projection import PROFILE, verified_files_archive
+    except ImportError:
+        from combined_source_projection import PROFILE, verified_files_archive
+    if profile != PROFILE:
+        if files_workspace is not None:
+            raise ValueError("--files-workspace only applies to the combined profile")
+        return None
+    if files_workspace is None:
+        raise ValueError(f"{PROFILE}: pass --files-workspace from the exact FILES output")
+    return verified_files_archive(root, files_workspace, definition)
+
+
+def selected(root: Path, profile: str, *, files_workspace: Path | None = None) -> dict:
     root = Path(root).resolve()
     if not isinstance(profile, str) or not profile or "/" in profile or ".." in profile:
         raise ValueError("invalid regression profile")
@@ -28,11 +44,15 @@ def selected(root: Path, profile: str) -> dict:
     test = config.get("tests", {}).get(profile)
     if not isinstance(test, dict) or not isinstance(test.get("top"), str):
         raise ValueError(f"unknown or non-elaboratable profile: {profile}")
-    folder = selected_run_folder(root, profile, test)
-    if folder is None:
-        raise ValueError(f"{profile}: missing original resolved filelist/plan")
-    if uses_canonical_workspace(profile, test):
-        verify_selected_archive(root, profile, test, directory=folder)
+    explicit = explicit_files_review(root, profile, test, files_workspace)
+    if explicit is not None:
+        folder, _ = explicit
+    else:
+        folder = selected_run_folder(root, profile, test)
+        if folder is None:
+            raise ValueError(f"{profile}: missing original resolved filelist/plan")
+        if uses_canonical_workspace(profile, test):
+            verify_selected_archive(root, profile, test, directory=folder)
     source_list, plan_file = folder / "sources.f", folder / "plan.json"
     if not source_list.is_file() or not plan_file.is_file():
         raise ValueError(f"{profile}: missing original resolved filelist/plan")

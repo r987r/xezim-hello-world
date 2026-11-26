@@ -72,9 +72,10 @@ Read [project onboarding](project-onboarding.md) for the catalog/CI matrix.
 `gen/projects/xezim_soc_dv/variants/default/rtl/soc_top.sv` currently holds
 a **duplicate default review top**, not all the selectable opt-in builds.
 
-The real combined Ethernet/DDR/PCIe selected top can instead live under
-ignored `.tools/regression/<target>/`; it is only archived when actually
-staged with `tools/regress.py <target> --stage files`. Issue
+The runtime-selected combined Ethernet/DDR/PCIe top lives in its own
+`.tools/runs/<simulator>/<config_target>/<testname>/<run_id>/` workspace.
+For source-only review, use `tools/regress.py <target> --stage files` and
+keep the parent of the printed `sources.f`. Issue
 [#184](https://github.com/r987r/xezim-hello-world/issues/184) owns the
 separate task of safely promoting reproducible selected RTL to tracked
 `gen/projects/`. Never copy a passing testbench's temporary top over the
@@ -99,7 +100,8 @@ network parameters and manifest hashes. New/deleted paths remain explicit.
 This is a **source diff**, not a simulation or elaboration result.
 `make check-generated` is the exact reproducibility gate. An opt-in test
 also needs `tools/regress.py <target> --stage files` and
-`--explain` to inspect its real compiler sources. For hardware-semantic
+`--explain` to inspect its real compiler sources (for the combined target,
+pass its exact `--files-workspace`). For hardware-semantic
 variant review use the existing
 `tools/design_explorer.py --selected-before ... --selected-after ...`
 command after staging both targets. Do not claim physical link timing or
