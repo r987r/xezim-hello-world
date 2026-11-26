@@ -136,6 +136,39 @@ class WorkspaceTests(unittest.TestCase):
         with self.assertRaisesRegex(IdentityError, 'mirror forbidden'):
             snapshot_run_ids(checkout, target, plan, **scope)
 
+    def test_combined_explicit_files_archive_does_not_select_another_run(self):
+        from tools.combined_source_projection import SourceProjectionError, verified_files_archive
+
+        checkout = Path(self.temp.name)
+        profile = "chip-ethernet-ddr-pcie"
+        definition = self.catalog[profile]
+        def allocate(index, stage):
+            identity = selected(profile, definition, run_id=f"local-{index:012x}")
+            out = reserve_run(checkout / ".tools/runs", identity, plan=definition)
+            (out / "plan.json").write_text(json.dumps({"stage": stage, "identity": identity}))
+            return out
+
+        first, second, runtime = allocate(1, "files"), allocate(2, "files"), allocate(3, "run")
+        # The generic verifier already owns byte and manifest/staleness tests.
+        # Here check only the additional explicit files-selection contract.
+        with patch("tools.combined_source_projection.verify_selected_archive",
+                   return_value={"source_count": 312}) as verify:
+            self.assertEqual(verified_files_archive(checkout, first.relative_to(checkout), definition),
+                             (first, {"source_count": 312}))
+            verify.assert_called_once_with(checkout, profile, definition, directory=first)
+            self.assertEqual(verified_files_archive(checkout, second, definition)[0], second)
+            with self.assertRaisesRegex(SourceProjectionError, "files-only"):
+                verified_files_archive(checkout, runtime, definition)
+            with self.assertRaisesRegex(SourceProjectionError, "checkout-owned"):
+                verified_files_archive(checkout, checkout.parent / "foreign", definition)
+            (first / "ddr-split-build.json").write_text("{}")
+            with self.assertRaisesRegex(SourceProjectionError, "files-only"):
+                verified_files_archive(checkout, first, definition)
+            (checkout / ".tools/regression").mkdir()
+            (checkout / ".tools/regression" / profile).symlink_to(second, target_is_directory=True)
+            with self.assertRaisesRegex(SourceProjectionError, "mirror forbidden"):
+                verified_files_archive(checkout, second, definition)
+
     def test_replay_selects_only_one_new_invocation_never_latest(self):
         from tools.run_workspace import selected_run_folder, snapshot_run_ids
 

@@ -211,11 +211,20 @@ def main() -> int:
     cli.add_argument("--profile", required=True)
     cli.add_argument("--out", type=Path, default=ROOT / ".tools/rtl-review-staging")
     cli.add_argument("--replace", action="store_true")
+    cli.add_argument("--files-workspace", type=Path)
     args = cli.parse_args()
     root = args.root.resolve()
     data = yaml.safe_load((root / "config/regression.yaml").read_text())
     test = data["tests"][args.profile]
-    review = stage(root, args.profile, test, args.out, replace=args.replace)
+    from combined_source_projection import PROFILE as COMBINED, verified_files_archive
+    directory = None
+    if args.profile == COMBINED:
+        if args.files_workspace is None:
+            cli.error("combined review requires --files-workspace from the FILES output")
+        directory, _ = verified_files_archive(root, args.files_workspace, test)
+    elif args.files_workspace is not None:
+        cli.error("--files-workspace is only supported for the combined profile")
+    review = stage(root, args.profile, test, args.out, replace=args.replace, directory=directory)
     folder = args.out.resolve() / review["project"] / review["hardware_variant"]
     verify_stage(folder)
     print(json.dumps({"stage": str(folder), "top": review["selected_top"],

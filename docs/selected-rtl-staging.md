@@ -7,8 +7,10 @@ review area under `.tools/`, **never** into generator-owned `gen/`.
 
 ```sh
 python3 tools/regress.py chip-ethernet-ddr-pcie --stage files
-python3 tools/regress.py chip-ethernet-ddr-pcie --explain
-python3 tools/stage_selected_rtl.py --profile chip-ethernet-ddr-pcie
+# Set FILES_F to the exact sources.f path printed after FILES chip-ethernet-ddr-pcie:
+workspace="$(dirname "$FILES_F")"
+python3 tools/regress.py chip-ethernet-ddr-pcie --explain --files-workspace "$workspace"
+python3 tools/stage_selected_rtl.py --profile chip-ethernet-ddr-pcie --files-workspace "$workspace"
 ```
 
 The command writes

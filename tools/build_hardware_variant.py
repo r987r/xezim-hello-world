@@ -131,8 +131,8 @@ def rebuild(root: Path, profile: str, output: Path, *, check: bool = False,
     directory = None
     if canonical_combined_files:
         from combined_source_projection import PROFILE as COMBINED, prepared_workspace, verified_inputs
-        if profile != COMBINED or not check:
-            raise VariantBuildError("canonical combined files require the existing combined review check")
+        if profile != COMBINED:
+            raise VariantBuildError("canonical combined files require the combined profile")
         command.append("--canonical-combined-files")
         directory = prepared_workspace(root, definition, prepare)
     else:
@@ -176,7 +176,10 @@ def rebuild(root: Path, profile: str, output: Path, *, check: bool = False,
                     "review_stage": str(output_folder.relative_to(root)),
                     **({"files_workspace": directory.relative_to(root).as_posix()} if directory else {}),
                     "status": "selected_sources_rebuilt_exactly_not_simulated"}
-    generated = stage(root, profile, definition, output)
+    if directory is not None:
+        verified_inputs(root, directory, definition)
+    generated = stage(root, profile, definition, output,
+                      **({"directory": directory} if directory is not None else {}))
     if verify_stage(output_folder) != generated:
         raise VariantBuildError("freshly staged variant does not verify")
     return {"profile": profile, "variant": variant,
@@ -196,7 +199,8 @@ def main() -> int:
     cli.add_argument("--canonical-combined-files", action="store_true")
     args = cli.parse_args()
     result = rebuild(ROOT, args.profile, args.out, check=args.check,
-                     canonical_combined_files=args.canonical_combined_files)
+                     canonical_combined_files=(args.canonical_combined_files or
+                                               args.profile == "chip-ethernet-ddr-pcie"))
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0
 
