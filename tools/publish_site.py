@@ -1109,6 +1109,24 @@ def append_capture_only_entries(folder, run, verified_shas, output, entries, not
                     or str(capture_run.get("workflow_run_id"))!=str(run["id"])
                     or str(capture_run.get("workflow_attempt"))!=str(run.get("run_attempt",1))):
                 raise ValueError("capture-only tested source/run/attempt is unverified")
+            from test_identity import load as load_identity, relative_path as canonical_path
+            identity_path=source_dir/"identity.json"
+            selected_capture=None
+            if (identity_path.exists() or identity_path.is_symlink()
+                    or re.fullmatch(r"ci-[0-9]+-a[0-9]+-[a-f0-9]{12}",source_dir.name)):
+                plan=json.loads((source_dir/"plan.json").read_text())
+                selected_capture=load_identity(identity_path,target=target,plan=plan)
+                prefix=f"ci-{run['id']}-a{run.get('run_attempt',1)}-"
+                expected=selected_capture["selection"].get("filelist_sha256")
+                if (plan.get("identity")!=selected_capture or plan.get("target")!=target
+                        or plan.get("source_revision")!=sha
+                        or plan.get("evidence_scope")!="isolated_observation_only"
+                        or capture_run.get("engine")!=selected_capture["engine"]
+                        or not selected_capture["run_id"].startswith(prefix)
+                        or tuple(source_dir.parts[-4:])!=canonical_path(selected_capture).parts
+                        or not expected
+                        or hashlib.sha256((source_dir/"sources.f").read_bytes()).hexdigest()!=expected):
+                    raise ValueError("capture-only identity, compiler filelist or attempt mismatch")
             source_rows=payload.get("sources")
             records=payload.get("records")
             if (not isinstance(source_rows,list) or not source_rows
@@ -1142,7 +1160,8 @@ def append_capture_only_entries(folder, run, verified_shas, output, entries, not
             if not source_key.parts or not re.fullmatch(r"artifact-[0-9]+",source_key.parts[0]):
                 raise ValueError("unexpected archive scope for capture-only publication")
             digest=hashlib.sha256(source_key.as_posix().encode()).hexdigest()[:12]
-            relative=(Path("runs")/"capture-only"/
+            relative=(Path("runs")/canonical_path(selected_capture) if selected_capture else
+                      Path("runs")/"capture-only"/
                       (str(run["id"])+"-"+str(run.get("run_attempt",1)))/
                       source_key.parts[0]/(target+"-"+digest))
             destination=output/relative
@@ -1166,7 +1185,7 @@ def append_capture_only_entries(folder, run, verified_shas, output, entries, not
             notice=('<p class="warning"><strong>ISOLATED CAPTURE ONLY — NOT A '
                     'FULL-CHIP REGRESSION PASS.</strong> Source-verifiable '
                     'protocol observations from '+escape(target)+'. '
-                    'Workflow outcome: '+escape(status)+'. No canonical '
+                    'Workflow outcome: '+escape(status)+'. No regression '
                     'result.json, memory scoreboard or cross-domain path '
                     'latency is implied.</p>')
             (destination/"report.html").write_text(
@@ -1187,6 +1206,16 @@ def append_capture_only_entries(folder, run, verified_shas, output, entries, not
                 "protocol_links":protocol_link_catalog(payload),
                 "flow_steps":0, "identity_status":"capture_only_no_result_json",
             }
+            if selected_capture:
+                entry.update(
+                    canonical_id=canonical_path(selected_capture).as_posix(),
+                    canonical_url=(relative/"report.html").as_posix(),
+                    config_target=selected_capture["config_target"],
+                    testname=selected_capture["testname"],
+                    simulator=selected_capture["simulator"],
+                    execution_id=selected_capture["run_id"],
+                    identity_status="source_verified_capture_only",
+                )
             if compressed:
                 entry['compressed_assets']=compressed
             entries.append(entry)
