@@ -16,6 +16,7 @@ on:
       - 'tools/sim_cocotb.py'
       - 'tests/test_combined_runtime_provenance.py'
       - 'tools/build_hardware_variant.py'
+      - 'tools/combined_source_projection.py'
       - 'tools/generate_combined_variant.py'
       - 'tests/test_generate_combined_variant.py'
       - 'Makefile'
@@ -120,32 +121,59 @@ jobs:
           set -euo pipefail
           python3 rtl/memory/ddr4/bringup.py generate
           python3 dv/pcie0/run_rtl_smoke.py --check-pin
-          python3 tools/regress.py chip-ethernet-ddr-pcie --stage files --fail-fast
-          # Reuse this real selected source build as the review baseline. A
-          # second independent actual source preparation must reproduce the
-          # exact selected SV, firmware image, NoC and compiler source hashes.
-          python3 tools/stage_selected_rtl.py --profile chip-ethernet-ddr-pcie
-          python3 tools/build_hardware_variant.py --profile chip-ethernet-ddr-pcie --check
-          python3 tools/selected_source_reference.py --profile chip-ethernet-ddr-pcie
-          test -s .tools/regression/chip-ethernet-ddr-pcie/variant/cpu_dma.elf
-          test -s .tools/regression/chip-ethernet-ddr-pcie/variant/flash.hex
-          test -s .tools/regression/chip-ethernet-ddr-pcie/ddr_noc/ddr4_init_script.json
-          test -s .tools/regression/chip-ethernet-ddr-pcie/sources.f
+          PYTHONPATH=tools python3 - <<'PY'
+          import json
+          from pathlib import Path
+          import subprocess
+          import sys
+          import yaml
+          from combined_source_projection import PROFILE, prepared_workspace, verified_inputs
+          from selected_source_reference import compare
+          from stage_selected_rtl import stage
+
+          root = Path.cwd()
+          definition = yaml.safe_load((root / "config/regression.yaml").read_text())["tests"][PROFILE]
+          folder = prepared_workspace(root, definition, lambda: subprocess.run(
+              [sys.executable, "tools/regress.py", PROFILE, "--stage", "files", "--fail-fast",
+               "--canonical-combined-files"], check=True))
+          reference = json.loads((root / "config/selected-rtl-reference/ethernet-ddr-pcie.json").read_text())
+          proof = compare(reference, verified_inputs(root, folder, definition).reference)
+          print("PASS source-only reference comparison, not run evidence:", json.dumps(proof))
+          stage(root, PROFILE, definition, root / ".tools/rtl-review-staging", directory=folder)
+          for name in ("variant/cpu_dma.elf", "variant/flash.hex",
+                       "ddr_noc/ddr4_init_script.json", "sources.f"):
+              assert (folder / name).stat().st_size > 0, name
+          PY
+          python3 tools/build_hardware_variant.py --profile chip-ethernet-ddr-pcie --check --canonical-combined-files
           make check-generated
       - name: Independently replay checked-in portable Ethernet DDR PCIe RTL
         timeout-minutes: 40
         run: |
           set -euo pipefail
-          make check-generated-combined
+          python3 tools/generate_combined_variant.py --check --canonical-combined-files
           test -s gen/projects/xezim_soc_dv/variants/ethernet-ddr-pcie/rtl/soc_top.sv
           test -s gen/projects/xezim_soc_dv/variants/ethernet-ddr-pcie/controller/gateware/soc_ddr4_sim.v
           python3 - <<'PY'
+          import hashlib
           import json
           from pathlib import Path
+          from dv.pcie0.prepare_rtl import assert_iverilog_clean
           root=Path("gen/projects/xezim_soc_dv/variants/ethernet-ddr-pcie")
           manifest=json.loads((root/"manifest.json").read_text())
           assert manifest["source_count"]==312
           assert len(manifest["selected_source_sha256"])==312
+          # The unchanged portable filelist uses the independent pinned bridge
+          # coordinate, not the run-owned source used in each preflight.
+          bridge = assert_iverilog_clean()
+          assert hashlib.sha256(bridge.read_bytes()).hexdigest() == manifest[
+              "selected_source_sha256"][bridge.relative_to(Path.cwd()).as_posix()]
+          checkout = Path.cwd()
+          preflights = checkout / ".tools/runs/verilator/soc-ethernet-ddr-pcie/multiprotocol-closure"
+          plans = [json.loads(path.read_text()) for path in preflights.glob("*/plan.json")]
+          assert len(plans) == 3 and all(plan["stage"] == "files" for plan in plans)
+          assert len({plan["identity"]["run_id"] for plan in plans}) == 3
+          assert not any(preflights.glob("*/result.json"))
+          assert not (checkout / ".tools/regression/chip-ethernet-ddr-pcie").exists()
           assert "rtl/soc_top.sv" in manifest["files"]
           for name in ("rtl/soc_top.sv","rtl/full_chip_tb.sv","rtl/manifest.json"):
               data=(root/name).read_bytes()

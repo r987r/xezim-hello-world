@@ -56,7 +56,7 @@ def _path_in(root: Path, raw: str) -> Path:
 
 
 def stage(root: Path, profile: str, definition: dict,
-          out_root: Path, *, replace: bool = False) -> dict:
+          out_root: Path, *, replace: bool = False, directory: Path | None = None) -> dict:
     """Stage a byte-exact copy under .tools, never under generator-owned gen/.
 
     A source digest plus selected source inventory identify the build, not the
@@ -66,7 +66,10 @@ def stage(root: Path, profile: str, definition: dict,
     root = root.resolve()
     if not PROFILE.fullmatch(profile) or definition.get("top") not in TOPS:
         raise PromotionError("requires a selected full-chip test profile")
-    source_manifest = verify_selected_archive(root, profile, definition)
+    if directory is None:
+        source_manifest = verify_selected_archive(root, profile, definition)
+    else:
+        source_manifest = verify_selected_archive(root, profile, definition, directory=directory)
     source_root = root / source_manifest["archive"]
     selected = source_manifest.get("selected_soc_top")
     if (not isinstance(selected, str)

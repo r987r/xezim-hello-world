@@ -94,6 +94,48 @@ class WorkspaceTests(unittest.TestCase):
         with self.assertRaisesRegex(IdentityError, 'exactly one'):
             selected_run_folder(checkout, target, plan, stage='all')
 
+    def test_combined_files_qualification_selects_only_new_attested_stage(self):
+        from tools.run_workspace import selected_run_folder, snapshot_run_ids, uses_canonical_workspace
+
+        target = 'chip-ethernet-ddr-pcie'
+        plan = self.catalog[target]
+        checkout = Path(self.temp.name)
+        scope = {'stage': 'files', 'canonical_combined_files': True}
+        legacy = checkout / '.tools/regression' / target
+        self.assertFalse(uses_canonical_workspace(target, plan, stage='files'))
+        self.assertEqual(selected_run_folder(checkout, target, plan, stage='files'), legacy)
+        self.assertTrue(uses_canonical_workspace(target, plan, **scope))
+        self.assertFalse(uses_canonical_workspace(target, {**plan, 'top': 'other'}, **scope))
+        self.assertTrue(uses_canonical_workspace(target, plan, stage='run'))
+
+        def allocate(stage, suffix):
+            identity = selected(target, plan, run_id=f'local-{suffix:012x}')
+            work = reserve_run(checkout / '.tools/runs', identity, plan=plan)
+            (work / 'plan.json').write_text(json.dumps({'stage': stage, 'identity': identity}))
+            return work
+
+        old = allocate('files', 9)
+        baseline = snapshot_run_ids(checkout, target, plan, **scope)
+        self.assertEqual(baseline, {old.name})
+        execution = allocate('run', 8)
+        self.assertIsNone(selected_run_folder(checkout, target, plan,
+                                               prior_run_ids=baseline, **scope))
+        self.assertEqual(selected_run_folder(checkout, target, plan, stage='run'), execution)
+        first = allocate('files', 1)
+        self.assertEqual(selected_run_folder(checkout, target, plan,
+                                             prior_run_ids=baseline, **scope), first)
+        with self.assertRaisesRegex(IdentityError, 'exactly one'):
+            selected_run_folder(checkout, target, plan, **scope)
+        second_baseline = snapshot_run_ids(checkout, target, plan, **scope)
+        second = allocate('files', 2)
+        self.assertEqual(selected_run_folder(checkout, target, plan,
+                                             prior_run_ids=second_baseline, **scope), second)
+        with self.assertRaisesRegex(IdentityError, 'exactly one'):
+            selected_run_folder(checkout, target, plan, prior_run_ids=baseline, **scope)
+        legacy.mkdir(parents=True)
+        with self.assertRaisesRegex(IdentityError, 'mirror forbidden'):
+            snapshot_run_ids(checkout, target, plan, **scope)
+
     def test_replay_selects_only_one_new_invocation_never_latest(self):
         from tools.run_workspace import selected_run_folder, snapshot_run_ids
 

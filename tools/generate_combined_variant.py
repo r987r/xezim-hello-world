@@ -141,7 +141,7 @@ def portable_image_paths(source: bytes, project: str, relative: str) -> bytes:
 
 
 def portable_filelist(root: Path, original: dict, remapped: dict,
-                      project: str) -> bytes:
+                      project: str, *, projection=None) -> bytes:
     """Retain the compiler's original ordered 312 sources and pinned include paths.
 
     Normalize only checkout-absolute paths and replace the verified generated
@@ -149,9 +149,12 @@ def portable_filelist(root: Path, original: dict, remapped: dict,
     The returned -f file is resolved relative to the repository working dir.
     """
     filelist = root / SOURCE_ROOT / "sources.f"
-    if not filelist.is_file() or filelist.is_symlink():
-        raise CombinedGenerationError("original selected compiler filelist missing")
-    raw = filelist.read_bytes()
+    if projection is None:
+        if not filelist.is_file() or filelist.is_symlink():
+            raise CombinedGenerationError("original selected compiler filelist missing")
+        raw = filelist.read_bytes()
+    else:
+        raw = projection.reference_filelist
     if digest(raw) != original["filelist_sha256"]:
         raise CombinedGenerationError("original selected compiler filelist digest changed")
     out = []
@@ -165,13 +168,22 @@ def portable_filelist(root: Path, original: dict, remapped: dict,
         if not path or not Path(path).is_absolute():
             raise CombinedGenerationError("unexpected selected compiler filelist syntax")
         candidate = Path(path)
+        if not candidate.is_relative_to(root):
+            raise CombinedGenerationError("foreign compiler source/include")
+        relative = candidate.relative_to(root).as_posix()
+        if projection is not None and not is_include:
+            actual_path = projection.canonical_by_reference.get(relative)
+            if actual_path is None:
+                raise CombinedGenerationError("compiler source lacks an attested workspace binding")
+            candidate = root / actual_path
         if candidate.is_symlink() or not candidate.resolve().is_relative_to(root):
             raise CombinedGenerationError("foreign or symlink compiler source/include")
         if is_include and not candidate.is_dir():
             raise CombinedGenerationError("selected include directory missing")
         if not is_include and not candidate.is_file():
             raise CombinedGenerationError("selected compiler file missing")
-        relative = candidate.resolve().relative_to(root).as_posix()
+        if projection is None or is_include:
+            relative = candidate.resolve().relative_to(root).as_posix()
         if is_include:
             out.append("+incdir+" + relative)
         else:
@@ -186,7 +198,7 @@ def portable_filelist(root: Path, original: dict, remapped: dict,
     return ("\n".join(out) + "\n").encode("utf-8")
 
 
-def emit(root: Path, folder: Path, *, runner=None) -> dict:
+def emit(root: Path, folder: Path, *, runner=None, canonical_combined_files=False) -> dict:
     """Regenerate and verify selected sources, then export only actual bytes."""
     root = root.resolve()
     cfg = yaml.safe_load((root / "config/soc.yaml").read_text())
@@ -204,11 +216,35 @@ def emit(root: Path, folder: Path, *, runner=None) -> dict:
         def runner(argv, cwd):
             return subprocess.run(argv, cwd=cwd, text=True,
                                   capture_output=True, timeout=1800, check=False)
-    result = runner(command, root)
-    if result.returncode:
-        raise CombinedGenerationError(
-            "actual combined source generation failed: " + str(result.stderr)[-1800:])
-    original = verify_selected_archive(root, PROFILE, definition)
+    def prepare():
+        result = runner(command, root)
+        if result.returncode:
+            raise CombinedGenerationError(
+                "actual combined source generation failed: " + str(result.stderr)[-1800:])
+
+    projection = None
+    if canonical_combined_files:
+        try:
+            from .combined_source_projection import prepared_workspace, verified_inputs
+        except ImportError:
+            from combined_source_projection import prepared_workspace, verified_inputs
+        command.append("--canonical-combined-files")
+        directory = prepared_workspace(root, definition, prepare)
+        projection = verified_inputs(root, directory, definition)
+        original = projection.reference
+    else:
+        prepare()
+        original = verify_selected_archive(root, PROFILE, definition)
+
+    def review_bytes(name, sha):
+        if projection is None:
+            return source_bytes(root, name, sha)
+        if name in projection.normalized_bytes:
+            raw = projection.normalized_bytes[name]
+            if digest(raw) != sha:
+                raise CombinedGenerationError("projected source digest changed: " + name)
+            return raw
+        return source_bytes(root, projection.canonical_by_reference[name], sha)
     generated = original["generated_sha256"]
     sources = original["source_sha256"]
     if original.get("source_count") != 312 or len(sources) != 312:
@@ -229,7 +265,7 @@ def emit(root: Path, folder: Path, *, runner=None) -> dict:
             rel = suffix
         else:
             raise CombinedGenerationError("unreviewed generated source category: " + suffix)
-        raw = source_bytes(root, name, sha)
+        raw = review_bytes(name, sha)
         if suffix.startswith("variant/"):
             raw = portable_image_paths(raw, project, rel)
         output = folder / rel
@@ -242,7 +278,7 @@ def emit(root: Path, folder: Path, *, runner=None) -> dict:
         if not name.startswith(DDR_ROOT):
             continue
         rel = "controller/gateware/" + name[len(DDR_ROOT):]
-        raw = source_bytes(root, name, sha)
+        raw = review_bytes(name, sha)
         output = folder / rel
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_bytes(raw)
@@ -253,7 +289,7 @@ def emit(root: Path, folder: Path, *, runner=None) -> dict:
                       "controller/gateware/soc_ddr4_sim.v"):
         if mandatory not in copies:
             raise CombinedGenerationError("missing mandatory generated combined source: " + mandatory)
-    compiler_sources = portable_filelist(root, original, mapped, project)
+    compiler_sources = portable_filelist(root, original, mapped, project, projection=projection)
     (folder / "compiler").mkdir(parents=True, exist_ok=True)
     (folder / "compiler/sources.f").write_bytes(compiler_sources)
     # Original compiler-input/filelist hashes contain absolute checkout
@@ -307,7 +343,10 @@ def main() -> int:
     cli = argparse.ArgumentParser(description=__doc__)
     cli.add_argument("--root", type=Path, default=ROOT)
     cli.add_argument("--check", action="store_true")
+    cli.add_argument("--canonical-combined-files", action="store_true")
     args = cli.parse_args()
+    if args.canonical_combined_files and not args.check:
+        cli.error("canonical source preparation is qualification-only")
     root = args.root.resolve()
     destination = root / "gen/projects" / yaml.safe_load(
         (root / "config/soc.yaml").read_text())["name"] / "variants" / VARIANT
@@ -316,7 +355,7 @@ def main() -> int:
     destination.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=".combined-", dir=destination.parent) as tmp:
         fresh = Path(tmp) / "generated"
-        emit(root, fresh)
+        emit(root, fresh, canonical_combined_files=args.canonical_combined_files)
         if args.check:
             actual = tree(destination) if destination.is_dir() else {}
             expected = tree(fresh)
