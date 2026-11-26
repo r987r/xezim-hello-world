@@ -20,6 +20,7 @@ RUN = re.compile(r"(?:ci-[0-9]+-a[0-9]+|local)-[a-f0-9]{12}\Z")
 MEMORY_EXAMPLE = re.compile(r"config/examples/[a-z0-9-]+\.yaml\Z")
 MEMORY_CONFIG_SNAPSHOT = "memory-input/config.yaml"
 ENGINE_SIMULATOR = {
+    "verilator": "verilator",
     "xezim": "xezim",
     "xezim-compile": "xezim",
     "verilator-lint": "verilator",

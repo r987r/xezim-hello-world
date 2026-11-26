@@ -184,6 +184,60 @@ class PublicationTests(unittest.TestCase):
             self.assertIn('e.evidence_only?"OBSERVED"',ui)
             self.assertIn('e.evidence_only||(outcome==="pass")',ui)
 
+    def test_canonical_capture_uses_original_identity_and_no_regression_pass(self):
+        from test_identity import selected, relative_path
+
+        for fault in (None, "filelist", "identity", "dirty", "foreign-source"):
+            with self.subTest(fault=fault), tempfile.TemporaryDirectory() as temp:
+                root=Path(temp)
+                evidence=root/"evidence"
+                fixture(evidence)
+                original=b"src/original_openpcie.sv\n"
+                target="pcie-link-isolated"
+                plan={"engine":"verilator","target":target,"sources":"pcie-link",
+                      "logical_test":"link-training","top":"test",
+                      "source_revision":SHA,"evidence_scope":"isolated_observation_only"}
+                identity=selected(target,plan,root=ROOT,filelist_bytes=original,
+                                  run_id="ci-123-a1-123456789abc")
+                path=relative_path(identity)
+                report={"schema_version":1,"capture_complete":True,"issues":[],
+                        "run":{"commit":SHA,"dirty":fault=="dirty","workflow_run_id":"123",
+                               "workflow_attempt":"1","target":target,"engine":"verilator"},
+                        "sources":[{"id":"pcie.ltssm","protocol":"pcie","clock_domain":"pipe"}],
+                        "records":[{"kind":"event","source":"pcie.ltssm","protocol":"pcie",
+                                    "operation":"transition","start_ps":7,"end_ps":7,
+                                    "status":"observed","id":None,"fields":{}}]}
+                plan.update(identity=identity)
+                if fault=="foreign-source":
+                    plan["source_revision"]="b"*40
+                archive=io.BytesIO()
+                with zipfile.ZipFile(archive,"w") as z:
+                    z.writestr(str(path/"plan.json"),json.dumps(plan))
+                    z.writestr(str(path/"sources.f"),b"tampered" if fault=="filelist" else original)
+                    z.writestr(str(path/"protocol-transactions.json"),json.dumps(report))
+                    if fault!="identity":
+                        z.writestr(str(path/"identity.json"),json.dumps(identity))
+                site.extract_archive(archive.getvalue(),evidence/"123-1"/"artifact-101",
+                                     CONFIG,evidence_only=True)
+                output=root/"site"
+                output.mkdir()
+                _,entries,notes=site.evidence_index(evidence,output,"r987r/xezim-hello-world")
+                captures=[e for e in entries if e.get("evidence_only")]
+                if fault:
+                    self.assertFalse(captures)
+                    self.assertTrue(notes)
+                    continue
+                self.assertFalse(notes,notes)
+                [capture]=captures
+                self.assertEqual(capture["canonical_id"],path.as_posix())
+                self.assertEqual(capture["path"],f"runs/{path}/report.html")
+                self.assertIsNone(capture["passed"])
+                directory=output/"runs"/path
+                self.assertFalse((directory/"result.json").exists())
+                self.assertEqual((directory/"sources.f").read_bytes(),original)
+                self.assertEqual((directory/"protocol-transactions.json").read_text(),
+                                 json.dumps(report))
+
     def test_capture_only_quarantines_unqualified_and_missing_monitor_evidence(self):
         for label in ("dirty","wrong_sha","wrong_attempt","invalid_source",
                       "incomplete","no_observations"):

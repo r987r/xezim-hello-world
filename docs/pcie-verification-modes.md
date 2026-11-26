@@ -4,6 +4,13 @@
 [Stimulus scaling #152](https://github.com/r987r/xezim-hello-world/issues/152) ·
 [Merged real-link PR #232](https://github.com/r987r/xezim-hello-world/pull/232)
 
+The standalone digital-link matrix keeps its three mode-specific archives in
+`.tools/runs/<simulator>/<config_target>/<testname>/<run_id>/` and publishes
+clean, source-verified captures at that same canonical identity. These are
+isolated observations, not full-chip regression results. Their selected
+FuseSoC compiler filelist, plan and original logs remain separate from the
+private generated-source and compiler-object directories.
+
 ## Verified merge-review checkpoint — 2026-11-15 (PR #232)
 
 **Exact PR head `8b935a77d4ba4c61de944cc0de25c30b3a3e6cca`: 21/21 GitHub Actions workflows SUCCESS.**

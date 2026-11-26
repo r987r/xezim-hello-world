@@ -10,6 +10,9 @@ on:
       - 'tools/pcie_link.py'
       - 'tools/pcie_cfg_overlay.py'
       - 'tools/pcie_link_report.py'
+      - 'tools/pcie_link_workspace.py'
+      - 'tools/test_identity.py'
+      - 'tools/run_workspace.py'
       - 'tools/pcie_csrgen.py'
       - 'csr/rdl/pcie_endpoint_prelink_ctrl.rdl'
       - 'sw/pcie/pcie_endpoint_ctrl.h'
@@ -35,6 +38,7 @@ on:
       - 'tests/test_pcie_cfg_overlay.py'
       - 'tests/test_pcie_cfg_decode.py'
       - 'tests/test_pcie_link_report.py'
+      - 'tests/test_pcie_link_workspace.py'
       - 'tests/test_pcie_csrgen.py'
       - 'tests/fixtures/pcie_csr_headers_smoke.c'
       - 'tests/test_pcie_bar0_evidence.py'
@@ -75,7 +79,7 @@ jobs:
       - name: Compile real RDL and validate non-overlapping PCIe CSR source
         run: |
           set -euo pipefail
-          python3 -m unittest tests.test_pcie_csrgen -v
+          python3 -m unittest tests.test_pcie_csrgen tests.test_pcie_link_workspace -v
       - name: Generate deterministic AXI4-Lite RTL, C header and catalog
         run: |
           set -euo pipefail
@@ -518,6 +522,7 @@ jobs:
           verilator --version
           iverilog -V | head -n 2
       - name: Fetch and prepare original pinned endpoint plus GPL simulation host
+        id: prepare
         run: |
           set -euo pipefail
           python3 -m pip install 'PyYAML==6.0.2' 'fusesoc==2.4.4' 'edalize==0.6.1'
@@ -525,7 +530,8 @@ jobs:
           python3 tools/pcie_link.py --check --check-upstream --apply-selected-overlays
           python3 tools/pcie_cfg_overlay.py --checkout .tools/pcie_endpoint_openpcie
           fusesoc --cores-root=.tools/pcie_endpoint_openpcie \
-            run --setup --target=sim fusesoc:pcie:phy_core:1.0.0
+            run --setup --target=sim --build-root .tools/pcie-cross-fusesoc \
+            fusesoc:pcie:phy_core:1.0.0
           # The upstream host makefile requires this exact pinned VProc alias.
           test ! -e .tools/vproc
           ln -s pcie_host_vproc .tools/vproc
@@ -537,14 +543,16 @@ jobs:
           cp dv/pcie_link/host_link_vproc.cpp \
             "$host/testcross_x1/usercode/VUserMain0.cpp"
           # Exactly one canonical SCN scenario/plan, shared with Python/C/SV.
-          mkdir -p .tools/pcie-link/scenario
+          out="$(python3 tools/pcie_link_workspace.py "${{ matrix.mode }}" \
+            .tools/pcie-cross-fusesoc/fusesoc_pcie_phy_core_1.0.0/sim/fusesoc_pcie_phy_core_1.0.0.vc)"
+          echo "workspace=$out" >> "$GITHUB_OUTPUT"
           python3 tools/scenario_plan.py \
             --scenario "${{ matrix.scenario }}" \
             --soc config/soc.yaml \
-            --out .tools/pcie-link/scenario/scenario-plan.json \
+            --out "$out/scenario-plan.json" \
             --source-revision "$GITHUB_SHA"
           python3 tools/scenario_c.py \
-            --plan .tools/pcie-link/scenario/scenario-plan.json \
+            --plan "$out/scenario-plan.json" \
             --out "$host/testcross_x1/usercode/soc_scenario_contract.h"
           cp sw/common/soc_scn_action_adapter.h \
             "$host/testcross_x1/usercode/soc_scn_action_adapter.h"
@@ -555,18 +563,24 @@ jobs:
             vproc_lib NUM_VPROC=1 USER_C=VUserMain0.cpp \
             VPROC_TOP=../../../vproc
       - name: Compile and execute cross-connected real host/endpoint LTSSMs
+        env:
+          RUN_OUTPUT: ${{ steps.prepare.outputs.workspace }}
         run: |
           set -euo pipefail
           root="$GITHUB_WORKSPACE"
           host="$root/.tools/pcie_host_pcievhost/verilog"
           vproc="$root/.tools/pcie_host_vproc"
-          sim="$root/build/fusesoc_pcie_phy_core_1.0.0/sim"
+          out="$root/${RUN_OUTPUT:?canonical workspace is required}"
+          sim="$root/.tools/pcie-cross-fusesoc/fusesoc_pcie_phy_core_1.0.0/sim"
+          obj="$root/.tools/pcie-cross-obj/${out##*/}"
+          mkdir -p "$obj"
+          test -z "$(git status --porcelain)"
           cd "$sim"
           mem_probe=0
           if [[ "${{ matrix.mode }}" == "mem_ingress" ]]; then mem_probe=1; fi
           verilator --binary -sv --timing -Wno-fatal -DVPROC_SV \
             -I"$host/headers" -I"$host/testcross_x1" -I"$vproc" \
-            -f fusesoc_pcie_phy_core_1.0.0.vc \
+            -f "$out/sources.f" \
             "$host/lib/Serialiser.v" "$host/lib/clkmux.v" \
             "$host/pcieVHost/pcieVHostPipex1.v" \
             "$host/pcieVHost/pcieVHost.v" "$vproc/f_VProc.v" \
@@ -580,35 +594,35 @@ jobs:
             "$root/.tools/pcie_endpoint_openpcie/src/pcie_cfg/pcie_config_reg.sv" \
             "$root/.tools/pcie_endpoint_openpcie/src/pcie_cfg/pcie_cfg_wrapper.sv" \
             "$root/dv/pcie_link/tb_pcie_cross_link.sv" \
-            --top-module test -GSIM_FORCE_FAST_LTSSM=1 "-GVERIFY_MEM_INGRESS=$mem_probe" -Mdir "$root/.tools/pcie-cross-obj" \
+            --top-module test -GSIM_FORCE_FAST_LTSSM=1 "-GVERIFY_MEM_INGRESS=$mem_probe" -Mdir "$obj" \
             -CFLAGS '-std=c++17 -Wno-attributes' \
             -LDFLAGS "-Wl,-E -lrt -rdynamic -Wl,-whole-archive \
               -L$host/testcross_x1 -lvproc \
               -L$root/.tools/pcie_host_pcievhost/lib -lpcievhost \
               -Wl,-no-whole-archive -ldl" \
-            2>&1 | tee "$root/pcie-cross-build.log"
+            2>&1 | tee "$out/build.log"
           # The selected plan SHA is independently computed by the runner,
           # not copied from the same generated C header.
           export SOC_SELECTED_PLAN_SHA
-          SOC_SELECTED_PLAN_SHA="$(sha256sum "$root/.tools/pcie-link/scenario/scenario-plan.json" | cut -d' ' -f1)"
+          SOC_SELECTED_PLAN_SHA="$(sha256sum "$out/scenario-plan.json" | cut -d' ' -f1)"
           # The original OpenPCIe PHY descrambler is active. Disabling
           # scrambling in the RC's previous L0-only smoke allowed early
           # link_up_o but then entered Recovery rather than true ST_L0.
           # Both genuine-link modes MUST use the original pcievhost
           # Gen1 scrambler. 8b/10b remains handled by the PIPE K bits.
           export PCIE_HOST_SCRAMBLING=1
-          "$root/.tools/pcie-cross-obj/Vtop" 2>&1 | tee "$root/pcie-cross-run.log"
-          grep -q '^PCIE_RC_SCRAMBLE_MODE: ENABLED' "$root/pcie-cross-run.log"
+          "$obj/Vtop" 2>&1 | tee "$out/simulation.log"
+          grep -q '^PCIE_RC_SCRAMBLE_MODE: ENABLED' "$out/simulation.log"
           # Original TLP/AXI-Lite checkers run before publishing their
           # transactions. Never infer successful enumeration from L0.
           # Mode must be visibly selected, but success still requires genuine L0.
-          grep -q '^PCIE_SIM_FORCE_FAST_LTSSM: ENABLED override=512x' "$root/pcie-cross-run.log"
-          grep -q '^PCIE_EP_SIM_FAST_LTSSM: ENABLED timer_divider=512 min_tx_ts1=16' "$root/pcie-cross-run.log"
-          grep -Fq "PCIE_SCN_DRIVER: plan=$SOC_SELECTED_PLAN_SHA action=train_link stage=issued" "$root/pcie-cross-run.log"
-          grep -Fq "PCIE_SCN_DRIVER: plan=$SOC_SELECTED_PLAN_SHA action=train_link stage=driver_done" "$root/pcie-cross-run.log"
+          grep -q '^PCIE_SIM_FORCE_FAST_LTSSM: ENABLED override=512x' "$out/simulation.log"
+          grep -q '^PCIE_EP_SIM_FAST_LTSSM: ENABLED timer_divider=512 min_tx_ts1=16' "$out/simulation.log"
+          grep -Fq "PCIE_SCN_DRIVER: plan=$SOC_SELECTED_PLAN_SHA action=train_link stage=issued" "$out/simulation.log"
+          grep -Fq "PCIE_SCN_DRIVER: plan=$SOC_SELECTED_PLAN_SHA action=train_link stage=driver_done" "$out/simulation.log"
           # Require independently observed actual LTSSMs, not just $finish.
-          grep -q '^PCIE_HOST_L0:' "$root/pcie-cross-run.log"
-          grep -q '^PCIE_ENDPOINT_L0:' "$root/pcie-cross-run.log"
+          grep -q '^PCIE_HOST_L0:' "$out/simulation.log"
+          grep -q '^PCIE_ENDPOINT_L0:' "$out/simulation.log"
           # The BAR0 matrix lane is strictly stronger: independent host
           # ConfigRd0/CfgWr0 completions must return over the actual link.
           if [[ "${{ matrix.mode }}" == "bar0" || "${{ matrix.mode }}" == "mem_ingress" ]]; then
@@ -616,53 +630,45 @@ jobs:
             # endpoint RX payload, accepted AXI-Lite write and CplD return.
             # Fail even when final readback happened to match due to a
             # compensating byte swap elsewhere.
-            python3 "$root/tools/pcie_bar0_evidence.py" "$root/pcie-cross-run.log" \
-              --out "$root/.tools/pcie-link/observations"
-            grep -q '^PCIE_RC_CFG_PROBE_OK: BAR0 mask=fffff000' "$root/pcie-cross-run.log"
-            grep -q '^PCIE_RC_CFG_BAR_ASSIGNED: BAR0 bus=80001000' "$root/pcie-cross-run.log"
-            grep -q '^PCIE_RC_CFG_MSE_ENABLED:' "$root/pcie-cross-run.log"
+            python3 "$root/tools/pcie_bar0_evidence.py" "$out/simulation.log" \
+              --out "$out"
+            grep -q '^PCIE_RC_CFG_PROBE_OK: BAR0 mask=fffff000' "$out/simulation.log"
+            grep -q '^PCIE_RC_CFG_BAR_ASSIGNED: BAR0 bus=80001000' "$out/simulation.log"
+            grep -q '^PCIE_RC_CFG_MSE_ENABLED:' "$out/simulation.log"
             # CPU-side DBI alias must reflect the same host-owned hardware
             # BAR0/MSE state observed over TLP; never a TB-written duplicate.
-            grep -q '^PCIE_DEVICE_DBI_ALIAS: BAR0=80001000' "$root/pcie-cross-run.log"
-            grep -q '^PCIE_DEVICE_DBI_ALIAS: COMMAND=00000002' "$root/pcie-cross-run.log"
-            grep -Fq "PCIE_SCN_DRIVER: plan=$SOC_SELECTED_PLAN_SHA action=enumerate_bar0 stage=driver_done" "$root/pcie-cross-run.log"
+            grep -q '^PCIE_DEVICE_DBI_ALIAS: BAR0=80001000' "$out/simulation.log"
+            grep -q '^PCIE_DEVICE_DBI_ALIAS: COMMAND=00000002' "$out/simulation.log"
+            grep -Fq "PCIE_SCN_DRIVER: plan=$SOC_SELECTED_PLAN_SHA action=enumerate_bar0 stage=driver_done" "$out/simulation.log"
           fi
           if [[ "${{ matrix.mode }}" == "mem_ingress" ]]; then
-            grep -Fq "PCIE_SCN_DRIVER: plan=$SOC_SELECTED_PLAN_SHA action=write_bar0 stage=driver_done" "$root/pcie-cross-run.log"
-            grep -q '^PCIE_RC_BAR_MWR_TX: action=write_bar0 addr=80001100 data=a5c36e91' "$root/pcie-cross-run.log"
-            grep -q '^PCIE_EP_MEM_TLP_BACKPRESSURE: original endpoint valid ready=0' "$root/pcie-cross-run.log"
-            python3 "$root/tools/pcie_mem_ingress_evidence.py" "$root/pcie-cross-run.log" \
-              --out "$root/.tools/pcie-link/observations"
+            grep -Fq "PCIE_SCN_DRIVER: plan=$SOC_SELECTED_PLAN_SHA action=write_bar0 stage=driver_done" "$out/simulation.log"
+            grep -q '^PCIE_RC_BAR_MWR_TX: action=write_bar0 addr=80001100 data=a5c36e91' "$out/simulation.log"
+            grep -q '^PCIE_EP_MEM_TLP_BACKPRESSURE: original endpoint valid ready=0' "$out/simulation.log"
+            python3 "$root/tools/pcie_mem_ingress_evidence.py" "$out/simulation.log" \
+              --out "$out"
             # NO AXI transfer or completion asserted here; link ingress only.
           fi
           # Unified passive reporter sees only genuine endpoint LTSSM
           # timestamps, and for BAR lanes only checker-accepted original
           # ConfigRd/ConfigWr request + Cpl/CplD boundary timestamps.
           # No fake result.json, original non-config bridge or CPU boot PASS.
-          report_args=("$root/pcie-cross-run.log"
-                       --out "$root/.tools/pcie-link/observations"
+          report_args=("$out/simulation.log"
+                       --out "$out"
                        --mode "${{ matrix.mode }}"
                        --github-summary "$GITHUB_STEP_SUMMARY")
           if [[ "${{ matrix.mode }}" != "l0" ]]; then
-            report_args+=(--bar-evidence "$root/.tools/pcie-link/observations/pcie-bar0-evidence.json")
+            report_args+=(--bar-evidence "$out/pcie-bar0-evidence.json")
           fi
           python3 "$root/tools/pcie_link_report.py" "${report_args[@]}"
-          grep -q '^PCIE_TRACE: receiver-detect request' "$root/pcie-cross-run.log"
-          grep -q '^PCIE_TRACE: PHY receiver present' "$root/pcie-cross-run.log"
-      - name: Retain original commands, build and independent training logs
-        if: always()
+          grep -q '^PCIE_TRACE: receiver-detect request' "$out/simulation.log"
+          grep -q '^PCIE_TRACE: PHY receiver present' "$out/simulation.log"
+          test -z "$(git status --porcelain)"
+      - name: Retain original canonical build and isolated protocol evidence
+        if: ${{ always() && steps.prepare.outputs.workspace != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: pcie-cross-provider-${{ matrix.mode }}-${{ github.run_id }}
-          path: |
-            pcie-cross-build.log
-            pcie-cross-run.log
-            .tools/pcie-link/scenario/scenario-plan.json
-            .tools/pcie-link/observations/pcie-link-evidence.json
-            .tools/pcie-link/observations/pcie-bar0-evidence.json
-            .tools/pcie-link/observations/pcie-mem-ingress-evidence.json
-            .tools/pcie-link/observations/pcie-link-report.html
-            .tools/pcie-link/observations/protocol-events.jsonl
-            .tools/pcie-link/observations/protocol-transactions.json
-            .tools/pcie-link/observations/protocols.html
-          if-no-files-found: warn
+          path: .tools/runs/**
+          include-hidden-files: true
+          if-no-files-found: error
