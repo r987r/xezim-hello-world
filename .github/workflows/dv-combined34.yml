@@ -127,30 +127,32 @@ jobs:
           import subprocess
           import sys
           import yaml
-          from combined_source_projection import PROFILE, prepared_workspace, verified_inputs
-          from selected_source_reference import compare
-          from stage_selected_rtl import stage
+          from combined_source_projection import PROFILE, prepared_workspace
 
           root = Path.cwd()
           definition = yaml.safe_load((root / "config/regression.yaml").read_text())["tests"][PROFILE]
           folder = prepared_workspace(root, definition, lambda: subprocess.run(
-              [sys.executable, "tools/regress.py", PROFILE, "--stage", "files", "--fail-fast",
-               "--canonical-combined-files"], check=True))
-          reference = json.loads((root / "config/selected-rtl-reference/ethernet-ddr-pcie.json").read_text())
-          proof = compare(reference, verified_inputs(root, folder, definition).reference)
-          print("PASS source-only reference comparison, not run evidence:", json.dumps(proof))
-          stage(root, PROFILE, definition, root / ".tools/rtl-review-staging", directory=folder)
+              [sys.executable, "tools/regress.py", PROFILE, "--stage", "files", "--fail-fast"], check=True))
+          args = ["--files-workspace", str(folder)]
+          explanation = json.loads(subprocess.check_output(
+              [sys.executable, "tools/regress.py", PROFILE, "--explain", *args]))
+          assert explanation["run_directory"] == folder.relative_to(root).as_posix()
+          assert explanation["selected_inputs"]["source_count"] == 312
+          subprocess.run([sys.executable, "tools/selected_source_reference.py", "--profile", PROFILE, *args],
+                         check=True)
+          subprocess.run([sys.executable, "tools/stage_selected_rtl.py", "--profile", PROFILE, *args],
+                         check=True)
           for name in ("variant/cpu_dma.elf", "variant/flash.hex",
                        "ddr_noc/ddr4_init_script.json", "sources.f"):
               assert (folder / name).stat().st_size > 0, name
           PY
-          python3 tools/build_hardware_variant.py --profile chip-ethernet-ddr-pcie --check --canonical-combined-files
+          python3 tools/build_hardware_variant.py --profile chip-ethernet-ddr-pcie --check
           make check-generated
       - name: Independently replay checked-in portable Ethernet DDR PCIe RTL
         timeout-minutes: 40
         run: |
           set -euo pipefail
-          python3 tools/generate_combined_variant.py --check --canonical-combined-files
+          make check-generated-combined
           test -s gen/projects/xezim_soc_dv/variants/ethernet-ddr-pcie/rtl/soc_top.sv
           test -s gen/projects/xezim_soc_dv/variants/ethernet-ddr-pcie/controller/gateware/soc_ddr4_sim.v
           python3 - <<'PY'

@@ -14,8 +14,6 @@ import re
 
 import yaml
 
-from selected_rtl_provenance import verify_selected_archive
-
 ROOT = Path(__file__).resolve().parents[1]
 SHA = re.compile(r"[0-9a-f]{64}")
 PROFILE = "chip-ethernet-ddr-pcie"
@@ -171,6 +169,7 @@ def main() -> int:
     p.add_argument("--reference", type=Path,
                    default=ROOT / "config/selected-rtl-reference/ethernet-ddr-pcie.json")
     p.add_argument("--profile", default=PROFILE)
+    p.add_argument("--files-workspace", type=Path, required=True)
     args = p.parse_args()
     root = args.root.resolve()
     if args.profile != PROFILE:
@@ -182,8 +181,11 @@ def main() -> int:
     tests = yaml.safe_load((root / "config/regression.yaml").read_text())["tests"]
     if args.profile not in tests:
         raise ReferenceError("missing selected regression profile")
-    actual = verify_selected_archive(root, args.profile, tests[args.profile])
-    report = compare(lock, actual)
+    from combined_source_projection import verified_inputs
+    inputs = verified_inputs(root, args.files_workspace, tests[args.profile])
+    report = compare(lock, inputs.reference)
+    report["actual_source_manifest_sha256"] = inputs.actual_manifest_sha256
+    report["scope"] = "historical_reference_coordinates_not_actual_run_provenance"
     print("PASS: selected combined RTL matches exact pinned source digests; real RTL qualification remains separate")
     print(json.dumps(report, indent=2, sort_keys=True))
     return 0

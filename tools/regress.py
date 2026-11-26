@@ -702,7 +702,9 @@ def seal_ddr_build(name, out, plan, test):
 def run_target(name, test, resolver, options):
     canonical = uses_canonical_workspace(
         name, test, stage=options.stage,
-        canonical_combined_files=getattr(options, 'canonical_combined_files', False))
+        canonical_combined_files=True)
+    if name == ddr_split.COMBINED and not ddr_split.eligible_combined(name, test):
+        raise ValueError('refusing a legacy combined producer; use the registered profile')
     structural = test['engine'] in {'xezim-compile', 'verilator-lint'}
     relocated_boot = test.get('boot_relocate')
     canonical_ethernet = uses_canonical_ethernet_workspace(name, test)
@@ -1196,6 +1198,8 @@ def main():
     cli.add_argument('--list', action='store_true',
                      help='list configured simulator/config/test names and invocation selectors')
     cli.add_argument('--explain', action='store_true', help='read-only test/build and selected RTL provenance (no Bender or simulator)')
+    cli.add_argument('--files-workspace', type=Path,
+                     help='inspect one explicit combined files-only workspace with --explain')
     cli.add_argument('--check-noc', action='store_true')
     cli.add_argument('--fail-fast', action='store_true',
                      help='stop this suite at the first failing target (CI quick feedback)')
@@ -1220,6 +1224,11 @@ def main():
             or options.memory_config or options.scenario_seed is not None
             or options.explain or options.list or options.check_noc):
         cli.error('--canonical-combined-files requires the registered combined files target and no overrides')
+    if options.stage == 'files' and ddr_split.COMBINED in targets and (
+            options.config.resolve() != ROOT/'config/regression.yaml'
+            or options.arg or options.network or options.memory_config
+            or options.scenario_seed is not None):
+        cli.error('combined files preparation requires the registered profile with no overrides')
     if options.continue_run_id is not None and (
             options.stage != 'run' or len(options.targets) != 1 or len(targets) != 1
             or options.targets[0] != targets[0]
@@ -1238,13 +1247,18 @@ def main():
                 not targets or any(config['tests'][n].get('firmware_mode')
                                    not in ('cpu_dma_scenario','scenario_bfm') for n in targets)):
             raise ValueError('--scenario-seed needs uint32 and only SCN-2 RTL targets at stage all/files')
+    if options.files_workspace is not None and (
+            not options.explain or options.targets != [ddr_split.COMBINED]
+            or not ddr_split.eligible_combined(targets[0], config['tests'][targets[0]])):
+        cli.error('--files-workspace requires --explain and the registered combined profile')
     if options.explain:
         if (options.memory_config or options.network or options.arg
                 or options.stage != 'all' or options.list or options.check_noc
                 or options.scenario_seed is not None):
             raise ValueError('--explain is read-only; use --stage files for new exact inputs')
         from selected_rtl_provenance import explain_target
-        explanations = [explain_target(ROOT, name, config["tests"][name], config)
+        explanations = [explain_target(ROOT, name, config["tests"][name], config,
+                                       files_workspace=options.files_workspace)
                         for name in targets]
         print(json.dumps(explanations[0] if len(explanations) == 1
                          else explanations, indent=2))

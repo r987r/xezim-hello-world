@@ -45,9 +45,11 @@ Local selected source preparation (with locked Bender/FlooGen/LiteDRAM/LLVM):
 
 ```sh
 python3 tools/regress.py chip-ethernet-ddr-pcie --stage files --fail-fast
-python3 tools/stage_selected_rtl.py --profile chip-ethernet-ddr-pcie
+# Set FILES_F to the exact sources.f path printed after FILES chip-ethernet-ddr-pcie:
+workspace="$(dirname "$FILES_F")"
+python3 tools/stage_selected_rtl.py --profile chip-ethernet-ddr-pcie --files-workspace "$workspace"
 python3 tools/build_hardware_variant.py --profile chip-ethernet-ddr-pcie --check
-python3 tools/selected_source_reference.py --profile chip-ethernet-ddr-pcie
+python3 tools/selected_source_reference.py --profile chip-ethernet-ddr-pcie --files-workspace "$workspace"
 python3 -m unittest tests.test_selected_source_reference -v
 ```
 

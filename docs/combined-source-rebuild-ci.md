@@ -5,15 +5,16 @@ Ethernet+DDR+iDMA+PCIe integration workflow](../.github/workflows/dv-combined34.
 installs pinned FlooNoC, LiteDRAM, LiteX, PCIe and CPU toolchains, generates
 the actual selected full-chip source and runs real integration tests.
 
-Its pre-simulation step now runs the same exact source archive twice:
-first `regress.py chip-ethernet-ddr-pcie --stage files`, then
-`stage_selected_rtl.py --profile chip-ethernet-ddr-pcie`, and finally
-`build_hardware_variant.py --profile chip-ethernet-ddr-pcie --check`.
-The last step executes the *real selected-source generator again*, into
-temporary review staging, and rejects different selected SystemVerilog,
-firmware image, NoC collateral or compiler filelist/source closure. This
-is followed by the workflow's original `make check-generated`, actual
-combined chip compile and passive evidence checks.
+Before simulation, `regress.py chip-ethernet-ddr-pcie --stage files`
+creates a distinct source-only run directory. Each review CLI is given that
+exact `--files-workspace` (the parent of the printed `sources.f`). The
+rebuild command, `build_hardware_variant.py --profile chip-ethernet-ddr-pcie --check`,
+prepares a second workspace and verifies source equivalence against the
+first one's staged manifest. `make check-generated-combined` independently
+prepares a third workspace and compares the portable checked-in RTL
+and all collateral byte for byte. Neither step promotes a source-only
+workspace to runtime evidence. Portable Verilator lint and the original
+combined chip compile and passive evidence checks run separately.
 
 A passing source replay establishes that *that exact CI checkout* can
 regenerate the selected source inputs with pinned tools. It is not by

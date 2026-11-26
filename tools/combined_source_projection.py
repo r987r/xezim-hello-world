@@ -153,20 +153,39 @@ def project(root: Path, run_dir: Path, manifest: dict, plan: dict, *, read) -> R
     return ReviewInputs(reference, reference_filelist, by_reference, rewritten,
                         manifest.get("manifest_sha256"))
 
-def verified_inputs(root: Path, directory: Path, definition: dict) -> ReviewInputs:
-    """Read an explicit files invocation; keep historical comparison separate."""
+def verified_files_archive(root: Path, directory: Path, definition: dict) -> tuple[Path, dict]:
+    """Resolve and verify one explicit combined files invocation, never a mirror."""
+    try:
+        from .run_workspace import eligible_combined
+    except ImportError:
+        from run_workspace import eligible_combined
+    if not eligible_combined(PROFILE, definition):
+        raise SourceProjectionError("files review requires the registered combined profile")
     root = root.resolve()
     if not directory.is_absolute():
         directory = root / directory
     if '..' in directory.parts or not directory.is_relative_to(root / ".tools/runs"):
         raise SourceProjectionError("combined preflight needs a checkout-owned run path")
+    mirror = root / SOURCE_ROOT
+    if mirror.exists() or mirror.is_symlink():
+        raise SourceProjectionError("legacy combined producer mirror forbidden; select a new files workspace")
     manifest = verify_selected_archive(root, PROFILE, definition, directory=directory)
     plan = json.loads((directory / "plan.json").read_text())
     identity = json.loads((directory / "identity.json").read_text())
+    runtime_files = ("result.json", "ddr-split-build.json", "ddr-split-run.claim",
+                     "results.xml", "simulation.log")
     if (plan.get("stage") != "files" or plan.get("identity") != identity
-            or (directory / "result.json").exists()
-            or (directory / "result.json").is_symlink()):
+            or any((directory / name).exists() or (directory / name).is_symlink()
+                   for name in runtime_files)):
         raise SourceProjectionError("combined source review needs a files-only invocation")
+    return directory, manifest
+
+
+def verified_inputs(root: Path, directory: Path, definition: dict) -> ReviewInputs:
+    """Read an explicit files invocation; keep historical comparison separate."""
+    root = root.resolve()
+    directory, manifest = verified_files_archive(root, directory, definition)
+    plan = json.loads((directory / "plan.json").read_text())
 
     def read(name, expected):
         path = root / name

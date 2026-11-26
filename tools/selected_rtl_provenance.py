@@ -427,7 +427,7 @@ def verify_selected_archive(root: Path, profile: str, definition: dict, *, direc
 
 
 def explain_target(root: Path, name: str, definition: dict,
-                   regression_config: dict) -> dict:
+                   regression_config: dict, *, files_workspace: Path | None = None) -> dict:
     """Read-only reviewer entry point; never infer uncompiled RTL is active."""
     from stimulus_catalog import load as load_stimuli
     from runtime_contract import validate_migration_inventory
@@ -435,8 +435,15 @@ def explain_target(root: Path, name: str, definition: dict,
     stimulus = load_stimuli(regression_config)[name]
     adoption = validate_migration_inventory(regression_config, root=root)[name]
     mode = definition.get("firmware_mode")
+    try:
+        from .combined_source_projection import PROFILE as combined_profile, verified_files_archive
+    except ImportError:
+        from combined_source_projection import PROFILE as combined_profile, verified_files_archive
+    is_combined = name == combined_profile
+    if files_workspace is not None and not is_combined:
+        raise ValueError("explicit files review requires the combined profile")
     run_directory = (".tools/runs/<simulator>/<config_target>/<testname>/<run_id>"
-                     if uses_canonical_workspace(name, definition)
+                     if is_combined or uses_canonical_workspace(name, definition)
                      else f".tools/regression/{name}")
     hint = (f"{run_directory}/variant/soc_top.sv" if mode
             else "gen/chip/soc_top.sv" if definition.get("top") in
@@ -462,11 +469,20 @@ def explain_target(root: Path, name: str, definition: dict,
         "resolve_without_simulation": f"python3 tools/regress.py {name} --stage files",
         "run_directory": run_directory,
     }
-    folder = selected_run_folder(root, name, definition)
+    if is_combined:
+        # No implicit latest-run selection: without a path this is catalog-only,
+        # even when unrelated historical or native simulation workspaces exist.
+        if files_workspace is None:
+            return detail
+        folder, snapshot = verified_files_archive(root, files_workspace, definition)
+    else:
+        folder = selected_run_folder(root, name, definition)
+        snapshot = None
     selected_manifest = folder / "selected-rtl-manifest.json" if folder else None
     if selected_manifest is not None and (selected_manifest.is_file() or selected_manifest.is_symlink()):
         detail["run_directory"] = folder.relative_to(root).as_posix()
-        snapshot = verify_selected_archive(root, name, definition)
+        if snapshot is None:
+            snapshot = verify_selected_archive(root, name, definition)
         detail["selected_source_status"] = (
             "verified_selected_filelist_and_generated_bytes_not_elaborated")
         detail["selected_inputs"] = {

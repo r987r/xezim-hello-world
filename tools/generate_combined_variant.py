@@ -345,8 +345,6 @@ def main() -> int:
     cli.add_argument("--check", action="store_true")
     cli.add_argument("--canonical-combined-files", action="store_true")
     args = cli.parse_args()
-    if args.canonical_combined_files and not args.check:
-        cli.error("canonical source preparation is qualification-only")
     root = args.root.resolve()
     destination = root / "gen/projects" / yaml.safe_load(
         (root / "config/soc.yaml").read_text())["name"] / "variants" / VARIANT
@@ -355,7 +353,7 @@ def main() -> int:
     destination.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=".combined-", dir=destination.parent) as tmp:
         fresh = Path(tmp) / "generated"
-        emit(root, fresh, canonical_combined_files=args.canonical_combined_files)
+        emit(root, fresh, canonical_combined_files=True)
         if args.check:
             actual = tree(destination) if destination.is_dir() else {}
             expected = tree(fresh)
