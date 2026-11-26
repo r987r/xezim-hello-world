@@ -77,10 +77,11 @@ def uses_canonical_generated_firmware_workspace(name, test):
             or uses_canonical_ddr_split(name, test))
 
 
-def uses_canonical_workspace(name, test, *, stage=None):
-    """Select migrated families; combined source-only consumers retain their exact replay."""
-    if stage in ('all', 'build', 'run') and eligible_combined(name, test):
-        return True
+def uses_canonical_workspace(name, test, *, stage=None, canonical_combined_files=False):
+    """Keep legacy combined readers until explicitly qualifying files-only replay."""
+    if eligible_combined(name, test):
+        return stage in ('all', 'build', 'run') or (
+            stage == 'files' and canonical_combined_files)
     if name == 'dma-rtl':
         return True
     # The existing static SuperNoC runs share a compiled executable, but
@@ -129,21 +130,25 @@ def _run_identity_files(checkout: Path, target: str, plan: dict) -> list[Path]:
     return sorted(parent.glob("*/identity.json"))
 
 
-def snapshot_run_ids(checkout: Path, target: str, plan: dict) -> frozenset[str]:
+def snapshot_run_ids(checkout: Path, target: str, plan: dict, *, stage=None,
+                     canonical_combined_files=False) -> frozenset[str]:
     """Record earlier identities before a replay starts; no time/order guesses."""
     slug(target, "legacy target")
-    if not uses_canonical_workspace(target, plan):
+    if not uses_canonical_workspace(target, plan, stage=stage,
+                                    canonical_combined_files=canonical_combined_files):
         raise IdentityError("run snapshot needs a canonical target")
     return frozenset(path.parent.name for path in
                      _run_identity_files(Path(checkout).resolve(), target, plan))
 
 
 def selected_run_folder(checkout: Path, target: str, plan: dict, *,
-                        stage=None, prior_run_ids=frozenset()) -> Path | None:
+                        stage=None, prior_run_ids=frozenset(),
+                        canonical_combined_files=False) -> Path | None:
     """Resolve one selected workspace, optionally only one new invocation."""
     checkout = Path(checkout).resolve()
     slug(target, "legacy target")
-    if not uses_canonical_workspace(target, plan):
+    if not uses_canonical_workspace(target, plan, stage=stage,
+                                    canonical_combined_files=canonical_combined_files):
         if prior_run_ids:
             raise IdentityError("run snapshot needs a canonical target")
         return checkout / ".tools/regression" / target

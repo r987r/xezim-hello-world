@@ -700,7 +700,9 @@ def seal_ddr_build(name, out, plan, test):
 
 
 def run_target(name, test, resolver, options):
-    canonical = uses_canonical_workspace(name, test, stage=options.stage)
+    canonical = uses_canonical_workspace(
+        name, test, stage=options.stage,
+        canonical_combined_files=getattr(options, 'canonical_combined_files', False))
     structural = test['engine'] in {'xezim-compile', 'verilator-lint'}
     relocated_boot = test.get('boot_relocate')
     canonical_ethernet = uses_canonical_ethernet_workspace(name, test)
@@ -710,6 +712,11 @@ def run_target(name, test, resolver, options):
     canonical_firmware = (canonical_ethernet or canonical_cpu_firmware
                           or canonical_scenario or canonical_peakrdl)
     canonical_combined = canonical and ddr_split.eligible_combined(name, test)
+    if canonical_combined and options.stage == 'files':
+        from run_workspace import snapshot_run_ids
+
+        # Fail before any source generation if a retired producer is present.
+        snapshot_run_ids(ROOT, name, test, stage='files', canonical_combined_files=True)
     canonical_ddr = ddr_split.eligible(name, test) or canonical_combined
     if canonical_ddr and options.stage == 'run':
         from selected_rtl_provenance import verify_selected_archive
@@ -913,7 +920,7 @@ def run_target(name, test, resolver, options):
         "compiler_input_sha256": selected_inputs["compiler_input_sha256"],
     }
     plan_file.write_text(json.dumps(plan, indent=2) + '\n')
-    if canonical_combined:
+    if canonical_combined and options.stage != 'files':
         from combined_runtime_provenance import PROOF, verify_runtime_inputs
 
         proof = verify_runtime_inputs(ROOT, out, selected_inputs)
@@ -1193,6 +1200,8 @@ def main():
     cli.add_argument('--fail-fast', action='store_true',
                      help='stop this suite at the first failing target (CI quick feedback)')
     cli.add_argument('--stage', choices=['files', 'build', 'run', 'all'], default='all')
+    cli.add_argument('--canonical-combined-files', action='store_true',
+                     help='qualify one exact combined source-only workspace')
     cli.add_argument('--continue-run-id',
                      help='continue one exact sealed DDR or combined DDR build (run stage)')
     cli.add_argument('--memory-config')
@@ -1203,6 +1212,14 @@ def main():
     options = cli.parse_args()
     config = load_config(options.config)
     targets = expand(config, options.targets)
+    if options.canonical_combined_files and (
+            options.stage != 'files' or options.targets != [ddr_split.COMBINED]
+            or not ddr_split.eligible_combined(targets[0], config['tests'][targets[0]])
+            or options.config.resolve() != ROOT/'config/regression.yaml'
+            or options.continue_run_id is not None or options.arg or options.network
+            or options.memory_config or options.scenario_seed is not None
+            or options.explain or options.list or options.check_noc):
+        cli.error('--canonical-combined-files requires the registered combined files target and no overrides')
     if options.continue_run_id is not None and (
             options.stage != 'run' or len(options.targets) != 1 or len(targets) != 1
             or options.targets[0] != targets[0]

@@ -104,7 +104,7 @@ def _source_equivalent_stage(value: dict) -> dict:
 
 
 def rebuild(root: Path, profile: str, output: Path, *, check: bool = False,
-            runner=None) -> dict:
+            runner=None, canonical_combined_files=False) -> dict:
     """Recreate actual selected RTL, then check the full staged-source digest.
 
     This executes real Bender/FlooGen/clang source preparation, not the RTL
@@ -121,24 +121,52 @@ def rebuild(root: Path, profile: str, output: Path, *, check: bool = False,
         def runner(cmd, cwd):
             return subprocess.run(cmd, cwd=cwd, text=True,
                                   capture_output=True, check=False, timeout=1800)
-    completed = runner(command, cwd=root)
-    if completed.returncode:
-        raise VariantBuildError(
-            "selected variant source generation failed: " +
-            str(completed.stderr)[-1500:])
+    def prepare():
+        completed = runner(command, cwd=root)
+        if completed.returncode:
+            raise VariantBuildError(
+                "selected variant source generation failed: " +
+                str(completed.stderr)[-1500:])
+
+    directory = None
+    if canonical_combined_files:
+        from combined_source_projection import PROFILE as COMBINED, prepared_workspace, verified_inputs
+        if profile != COMBINED or not check:
+            raise VariantBuildError("canonical combined files require the existing combined review check")
+        command.append("--canonical-combined-files")
+        directory = prepared_workspace(root, definition, prepare)
+    else:
+        prepare()
     if check:
         (root / ".tools").mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(prefix="variant-rebuild-", dir=root / ".tools") as tmp:
             draft = Path(tmp)
-            expected = stage(root, profile, definition, draft)
+            stage_args = {"directory": directory} if directory is not None else {}
+            expected = stage(root, profile, definition, draft, **stage_args)
             fresh_folder = _review_folder(root, draft, variant)
             verified = verify_stage(fresh_folder)
             if expected != verified:
                 raise VariantBuildError("freshly regenerated review stage failed self-verification")
-            if _source_equivalent_stage(verified) != _source_equivalent_stage(baseline):
-                details = _stage_differences(
-                    _source_equivalent_stage(baseline),
-                    _source_equivalent_stage(verified))
+            if directory is not None:
+                # Both stage manifests are actual and verified. Only compare
+                # the historical coordinates in memory, never archive them.
+                original_filelist = Path(baseline["files"]["compiler/sources.f"]["original"])
+                if original_filelist.name != "sources.f":
+                    raise VariantBuildError("baseline lacks an owned compiler filelist")
+                baseline_dir = root / original_filelist.parent
+                if baseline_dir == directory:
+                    raise VariantBuildError("combined review reused its prior workspace")
+                baseline_inputs = verified_inputs(root, baseline_dir, definition)
+                fresh_inputs = verified_inputs(root, directory, definition)
+                if (baseline.get("source_manifest_sha256") != baseline_inputs.actual_manifest_sha256
+                        or verified.get("source_manifest_sha256") != fresh_inputs.actual_manifest_sha256):
+                    raise VariantBuildError("combined review stage and original manifest disagree")
+                left, right = baseline_inputs.reference, fresh_inputs.reference
+            else:
+                left = _source_equivalent_stage(baseline)
+                right = _source_equivalent_stage(verified)
+            if left != right:
+                details = _stage_differences(left, right)
                 raise VariantBuildError(
                     "regenerated selected RTL and compiler-input closure differs from review baseline; "
                     "changed paths (bounded): " + ", ".join(details))
@@ -146,6 +174,7 @@ def rebuild(root: Path, profile: str, output: Path, *, check: bool = False,
                     "selected_soc_top_sha256": baseline["selected_top_sha256"],
                     "compiler_input_sha256": baseline["compiler_input_sha256"],
                     "review_stage": str(output_folder.relative_to(root)),
+                    **({"files_workspace": directory.relative_to(root).as_posix()} if directory else {}),
                     "status": "selected_sources_rebuilt_exactly_not_simulated"}
     generated = stage(root, profile, definition, output)
     if verify_stage(output_folder) != generated:
@@ -164,8 +193,10 @@ def main() -> int:
                      default=ROOT / ".tools/rtl-review-staging")
     cli.add_argument("--check", action="store_true",
                      help="regenerate and compare exact selected RTL/source closure")
+    cli.add_argument("--canonical-combined-files", action="store_true")
     args = cli.parse_args()
-    result = rebuild(ROOT, args.profile, args.out, check=args.check)
+    result = rebuild(ROOT, args.profile, args.out, check=args.check,
+                     canonical_combined_files=args.canonical_combined_files)
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0
 

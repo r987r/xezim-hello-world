@@ -117,6 +117,89 @@ class CombinedGeneratorTests(unittest.TestCase):
         self.assertEqual(len([line for line in portable.splitlines()
                               if not line.startswith("+")]), 312)
 
+    def test_files_only_projection_preserves_portable_bytes_without_legacy_writer(self):
+        from combined_source_projection import (BRIDGE, LEGACY_BRIDGE, SourceProjectionError,
+                                                project)
+        from selected_rtl_provenance import _canonical_sha
+
+        root = self.root
+        legacy = root / publisher.SOURCE_ROOT
+        directory = root / ".tools/runs/verilator/soc-ethernet-ddr-pcie/multiprotocol-closure/local-000000000001"
+        prefix = directory.relative_to(root).as_posix() + "/"
+        old_list = legacy / "sources.f"
+        replaced_source = "rtl/third_party_000.sv"
+        bridge_bytes = (root / replaced_source).read_bytes()
+        bridge = root / LEGACY_BRIDGE
+        bridge.parent.mkdir(parents=True)
+        bridge.write_bytes(bridge_bytes)
+        old_raw = old_list.read_bytes().replace(replaced_source.encode(), LEGACY_BRIDGE.encode())
+        old_list.write_bytes(old_raw)
+        self.manifest["filelist_sha256"] = hashlib.sha256(old_raw).hexdigest()
+        sources = self.manifest["source_sha256"]
+        sources.pop(replaced_source)
+        sources[LEGACY_BRIDGE] = hashlib.sha256(bridge_bytes).hexdigest()
+        self.manifest["config_sha256"] = _canonical_sha(
+            {"filelist_sha256": self.manifest["filelist_sha256"]})
+        self.manifest.update(include_headers_sha256={}, network_filelists={})
+        legacy_output = self.generate()
+
+        def relocate(name):
+            if name == LEGACY_BRIDGE:
+                return prefix + BRIDGE
+            return name.replace(publisher.SOURCE_ROOT, prefix)
+
+        def sha(raw):
+            return hashlib.sha256(raw).hexdigest()
+
+        generated = {}
+        for name in self.manifest["generated_sha256"]:
+            raw = (root / name).read_bytes().replace(publisher.SOURCE_ROOT.encode(), prefix.encode())
+            actual = root / relocate(name)
+            actual.parent.mkdir(parents=True, exist_ok=True)
+            actual.write_bytes(raw)
+            generated[relocate(name)] = sha(raw)
+        actual_bridge = root / relocate(LEGACY_BRIDGE)
+        actual_bridge.parent.mkdir(parents=True, exist_ok=True)
+        actual_bridge.write_bytes(bridge_bytes)
+        generated[relocate(LEGACY_BRIDGE)] = sha(bridge_bytes)
+        raw = old_raw.replace(publisher.SOURCE_ROOT.encode(), prefix.encode()).replace(
+            LEGACY_BRIDGE.encode(), (prefix + BRIDGE).encode())
+        (directory / "sources.f").write_bytes(raw)
+        identity = {"selection": {"filelist_sha256": sha(raw)}, "identity_sha256": "a" * 64}
+        identity["config_sha256"] = _canonical_sha(identity["selection"])
+        entries = raw.decode().splitlines()
+        plan = {"identity": identity, "engine": "cocotb-verilator", "top": "full_chip_tb",
+                "source_target": "noc", "firmware_mode": "ethernet_ddr_pcie", "args": [],
+                "includes": [entries[0].removeprefix("+incdir+")],
+                "defines": [entries[1].removeprefix("+define+")], "sources": entries[2:]}
+        actual = {**self.manifest, "schema_version": 1, "profile": publisher.PROFILE,
+                  "compiled_top": plan["top"], "network_filelists": {}, "include_headers_sha256": {},
+                  "definition_sha256": None, "defines": None, "includes": None, "args": None,
+                  "selected_soc_top": prefix + "variant/soc_top.sv",
+                  "generated_sha256": generated, "filelist_sha256": sha(raw),
+                  "identity_sha256": identity["identity_sha256"], "config_sha256": identity["config_sha256"],
+                  "source_sha256": {relocate(key): generated.get(relocate(key), value)
+                                    for key, value in sources.items()}}
+
+        shutil.rmtree(legacy)
+        bridge.unlink()
+        projected = project(root, directory, actual, plan,
+                            read=lambda name, digest: publisher.source_bytes(root, name, digest))
+        self.assertEqual(projected.reference_filelist, old_raw)
+        self.assertNotEqual(projected.reference["filelist_sha256"], actual["filelist_sha256"])
+        with patch("combined_source_projection.prepared_workspace", return_value=directory), \
+                patch("combined_source_projection.verified_inputs", return_value=projected):
+            result = publisher.emit(root, root / "candidate", runner=self.runner,
+                                    canonical_combined_files=True)
+        self.assertEqual(legacy_output, result)
+        self.assertEqual(publisher.tree(root / "published"), publisher.tree(root / "candidate"))
+        self.assertFalse(legacy.exists())
+        foreign = {**actual, "source_sha256": {**actual["source_sha256"],
+                   ".tools/runs/another-run/foreign.sv": "f" * 64}}
+        with self.assertRaisesRegex(SourceProjectionError, "foreign run"):
+            project(root, directory, foreign, plan,
+                    read=lambda name, digest: publisher.source_bytes(root, name, digest))
+
     def test_portable_compiler_identity_is_stable_across_checkout_paths(self):
         first = self.generate()
         with tempfile.TemporaryDirectory() as other:
