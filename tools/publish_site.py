@@ -30,6 +30,7 @@ from axi_report import render_report
 from run_page_chrome import decorate_run_pages
 from report_transport import asset_link, compressed_assets, compress_originals, reader as capture_reader
 import project_boot_evidence as boot_evidence
+import pcie_connected_publication as connected
 from protocol_report import render as render_protocol_report
 from test_flow_report import render_summary as render_test_flow
 from test_intent import (catalog as intended_flow_catalog, plan as intended_flow_plan,
@@ -94,7 +95,7 @@ class GitHub:
 
 
 def extract_archive(data,destination,config,digest=None,*,evidence_only=False,
-                    allowed_files=None):
+                    allowed_files=None, flat_archive=True):
     """Verify CI ZIP provenance and safely extract only useful regression evidence.
 
     Simulator object directories can be >1 GiB even for a small test.
@@ -115,7 +116,7 @@ def extract_archive(data,destination,config,digest=None,*,evidence_only=False,
             if path.is_absolute() or '..' in path.parts or '\\' in info.filename or stat.S_ISLNK(mode):
                 raise ValueError('unsafe CI archive member')
             if allowed_files is not None:
-                if path.parts != (path.name,) or path.name not in allowed_files:
+                if (flat_archive and path.parts != (path.name,)) or path.name not in allowed_files:
                     raise ValueError('unexpected file in project boot archive')
                 if any(previous.filename == info.filename for previous in selected):
                     raise ValueError('duplicate file in project boot archive')
@@ -681,6 +682,47 @@ def collect_project_boot(client, config, folder, run, artifact, projects,
         raise
 
 
+def collect_connected(client, config, folder, run, artifact, jobs, verified_cache):
+    """Use the provider digest and original dedicated job, never a synthetic result."""
+    if (artifact.get('name') != f"pcie-connected-memory-{run['id']}"
+            or not (run.get('verified_merged_pr') or (
+                run.get('head_branch') == 'main' and run.get('event') == 'workflow_dispatch'
+                and (run.get('head_repository') or {}).get('full_name') == client.repository))):
+        raise ValueError('connected artifact is not from a trusted exact run')
+    digest = artifact.get('digest') or ''
+    expiry = datetime.fromisoformat(artifact.get('expires_at', '').replace('Z', '+00:00'))
+    if (artifact.get('expired') is not False or expiry <= datetime.now(timezone.utc)
+            or not 0 < artifact.get('size_in_bytes', 0) <= 1024**2
+            or not re.fullmatch(r'sha256:[0-9a-f]{64}', digest)):
+        raise ValueError('expired, oversized or unhashed connected artifact')
+    artifact_id = artifact.get('id')
+    if type(artifact_id) is not int or artifact_id < 1:
+        raise ValueError('invalid connected artifact ID')
+    job_id = connected.require_job(run, jobs)
+    def read_tracked(path, sha):
+        source = client.request(f'/repos/{client.repository}/contents/{path}?ref={sha}')
+        raw = base64.b64decode(''.join(source['content'].split()), validate=True)
+        if (source.get('type') != 'file' or source.get('path') != path
+                or source.get('encoding') != 'base64' or len(raw) > 1024**2
+                or hashlib.sha1(f'blob {len(raw)}\0'.encode()+raw).hexdigest() != source.get('sha')):
+            raise ValueError('unverified connected tracked inputs')
+        return raw
+    target = folder/f'connected-artifact-{artifact_id}'
+    raw = download_current_artifact(client, artifact_id)
+    target.mkdir()
+    try:
+        extract_archive(raw, target, dict(config, max_archive_mib=min(1, config['max_archive_mib']),
+                        max_expanded_mib=min(4, config['max_expanded_mib'])), digest,
+                        allowed_files=connected.FILES, flat_archive=False)
+        record = connected.validate(target, run, read_tracked, lambda sha: verified_pr_test_commit(
+            client, run, sha, verified_cache))
+        dump(target/'verified-connected.json', dict(record, job_id=job_id,
+             artifact_id=artifact_id, expires_at=expiry.isoformat(), archive_digest=digest))
+    except (ValueError, TypeError, KeyError, AttributeError, OSError, zipfile.BadZipFile):
+        shutil.rmtree(target, ignore_errors=True)
+        raise
+
+
 class ArtifactUnavailable(ValueError):
     """The provider no longer exposes an artifact it just listed."""
 
@@ -930,8 +972,27 @@ def collect_snapshot(client,config,destination,legacy_seed=None):
                 dump(folder/'run.json',run)
                 continue
             artifacts=client.request(f'/repos/{client.repository}/actions/runs/{run["id"]}/artifacts?per_page=100')['artifacts']
-            # Only collect named regression archives uploaded by this CI workflow.
+            # Only collect named archives uploaded by this CI workflow.
+            connected_jobs = None
             for artifact in artifacts:
+                if workflow['file'] == connected.WORKFLOW:
+                    if (artifact.get('name') != f"pcie-connected-memory-{run['id']}"
+                            or run.get('conclusion') != 'success' or artifact.get('expired') is not False):
+                        continue
+                    try:
+                        if connected_jobs is None:
+                            connected_jobs = client.request(
+                                f'/repos/{client.repository}/actions/runs/{run["id"]}'
+                                f'/attempts/{run.get("run_attempt", 1)}/jobs?per_page=100')['jobs']
+                        collect_connected(client, config, folder, run, artifact,
+                                          connected_jobs, verified_cache)
+                    except urllib.error.HTTPError as exc:
+                        if exc.code not in (404, 410):
+                            raise
+                        notes.append(f"Run {run['id']}: connected source or job no longer available")
+                    except (ValueError, TypeError, KeyError, OSError, AttributeError, zipfile.BadZipFile) as exc:
+                        notes.append(f"Run {run['id']}: excluded unverified connected archive ({exc})")
+                    continue
                 if (workflow['file'] == boot_evidence.WORKFLOW
                         and artifact['name'].startswith('project-boot-')):
                     if boot_projects is None:
@@ -1225,6 +1286,57 @@ def append_capture_only_entries(folder, run, verified_shas, output, entries, not
                 f"protocol archive {trace_file.relative_to(folder)} ({exc})")
 
 
+def append_connected_entries(folder, run, output, entries, notes, repository, site_sha):
+    for receipt in sorted(folder.glob('connected-artifact-*/verified-connected.json')):
+        try:
+            record = json.loads(receipt.read_text())
+            canonical = record['canonical_id']
+            tested = record['tested_sha']
+            if (run.get('conclusion') != 'success' or not connected.matches_run(canonical, run)
+                    or not re.fullmatch('[a-f0-9]{40}', tested)
+                    or not re.fullmatch('sha256:[a-f0-9]{64}', record['archive_digest'])
+                    or any(type(record[k]) is not int or record[k] < 1 for k in ('artifact_id', 'job_id', 'sources'))
+                    or receipt.parent.name != f"connected-artifact-{record['artifact_id']}"
+                    or datetime.fromisoformat(record['expires_at']) <= datetime.now(timezone.utc)):
+                raise ValueError('unverified or expired connected collection receipt')
+            source = receipt.parent/canonical
+            assets = sorted(connected.FILES)
+            for name in assets:
+                asset = source/name
+                if asset.is_symlink() or connected.digest(asset.read_bytes()) != record['files'][name]:
+                    raise ValueError('connected original bytes no longer match')
+            relative = Path('runs')/canonical
+            destination = output/relative
+            if destination.exists():
+                raise ValueError('duplicate canonical connected report')
+            destination.mkdir(parents=True)
+            for name in assets:
+                shutil.copyfile(source/name, destination/name)
+            job_url = f"https://github.com/{repository}/actions/runs/{run['id']}/job/{record['job_id']}"
+            archive_url = f"https://github.com/{repository}/actions/runs/{run['id']}/artifacts/{record['artifact_id']}"
+            body = ('<p><strong>ISOLATED HOST-TO-SRAM CHECK PASSED</strong>. Not a full-chip regression '
+                    'or a measured Fabric route. The original host wrote through the real PCIe bridge and '
+                    'generated NoC to SRAM and verified the returned bytes. No traffic trace or latency is inferred.</p>'
+                    f'<p>Tested SHA <code>{tested}</code> · {record["sources"]} compiler inputs · '
+                    f'<a href="{escape(job_url)}">Native CI job</a> · '
+                    f'<a href="{escape(archive_url)}">Original CI archive</a></p><ul>'
+                    + ''.join('<li>'+asset_link(name,{})+'</li>' for name in assets)+'</ul>')
+            page = (relative/'report.html').as_posix()
+            (destination/'report.html').write_text(shell('PCIe host-to-SRAM roundtrip', body,
+                                                         relative/'report.html', repository, site_sha or run['head_sha']))
+            entries.append(dict(target=connected.TARGET, suite='isolated-checker', project_id=None,
+                 evidence_only=True, evidence_scope=connected.SCOPE, passed=None, expected_failure=None,
+                 path=page, canonical_url=page, canonical_id=canonical, engine='verilator',
+                 simulator='verilator', config_target=canonical.split('/')[1],
+                 testname='host-to-sram-roundtrip', execution_id=canonical.split('/')[-1],
+                 source_sha=tested, run_id=run['id'], attempt=run.get('run_attempt', 1), workflow=run['label'],
+                 workflow_url=run['html_url'], workflow_conclusion=run['conclusion'],
+                 recorded_at=run['created_at'], assets=assets, axi=False, protocols=[], flow_steps=0,
+                 identity_status='source_verified_isolated_checker'))
+        except (ValueError, OSError, TypeError, KeyError, AttributeError) as exc:
+            notes.append(f"Run {run['id']}: omitted unverified connected report ({exc})")
+
+
 def evidence_index(evidence,output,repository,site_sha=None):
     runs,entries,notes=[],[],[]
     if (evidence/'collection.json').exists():notes=json.loads((evidence/'collection.json').read_text()).get('notes',[])
@@ -1242,6 +1354,9 @@ def evidence_index(evidence,output,repository,site_sha=None):
                 raise ValueError('publication cache contains unverified non-main run')
             run['merged_pr']=number
         runs.append(run)
+        if workflow.get('file') == connected.WORKFLOW:
+            append_connected_entries(file.parent, run, output, entries, notes, repository, site_sha)
+            continue
         found=set()
         for result_path in sorted(file.parent.glob('artifact-*/**/result.json')):
             result=json.loads(result_path.read_text())
@@ -2364,12 +2479,21 @@ def build(output,evidence,repository,sha,config):
              'test_names':test_names,'test_intents':flow_intents}
     dump(output/'data/site.json',dataset)
     data=json.dumps(dataset,separators=(',',':')).replace('<','\\u003c')
+    isolated_checks=[e for e in entries if e.get('evidence_scope')==connected.SCOPE]
+    isolated_keys={run_key(e) for e in isolated_checks}
+    runs_data=json.dumps(dict(dataset,
+        runs=[r for r in runs if (r['id'],r['run_attempt']) not in project_only
+              or (r['id'],r['run_attempt']) in isolated_keys],
+        entries=sorted(legacy_entries+isolated_checks,key=lambda e:e['recorded_at'],reverse=True)),
+        separators=(',',':')).replace('<','\\u003c')
     for page in ('index','topology','explorer','fabric','address-map','runs','docs','reference'):
-        body=(ROOT/('tools/templates/site_'+page+'.html')).read_text().replace('__SITE_DATA__',data)
+        body=(ROOT/('tools/templates/site_'+page+'.html')).read_text().replace('__SITE_DATA__',runs_data if page=='runs' else data)
         if page in ('fabric','runs','address-map'):
             body=('<p class="scope-note">Chip design: <a href="projects/'+escape(legacy_id)+
                   '/index.html">'+escape(legacy['title'])+'</a> only. '
-                  '<a href="index.html">Choose another chip design</a>.</p>')+body
+                  '<a href="index.html">Choose another chip design</a>.'+
+                  (' Isolated checker evidence is listed separately and is not chip-design coverage.'
+                   if page=='runs' and isolated_checks else '')+'</p>')+body
         if page=='explorer':
             body = body.replace('__COMBINED_SOURCE_REVIEW__', combined_source_review(ROOT, output))
             graph_data = json.dumps(design_graph, separators=(',', ':')).replace('<','\\u003c')
