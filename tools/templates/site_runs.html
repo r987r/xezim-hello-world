@@ -320,7 +320,9 @@ function render(){
     openFlow.textContent="View intended flow";openFlow.style.display="block";
     openFlow.disabled=Boolean(e.evidence_only);
     openFlow.onclick=()=>markFlow(e.target,e);
-    const named=e.evidence_only?
+    const connected=e.evidence_scope==="isolated_connected_memory_roundtrip";
+    const named=connected?text("div","Isolated host-to-SRAM checker · no chip-design coverage","muted"):
+      e.evidence_only?
       text("div","Isolated source-verified monitor capture · no regression result.json","muted"):
       !e.canonical_id?text("div","Historical run: canonical identity not archived","muted"):null;
     td(tr,testLink,...(named?[named]:[]),inspect,openFlow);
@@ -332,9 +334,9 @@ function render(){
     const manifestLink=compilerManifestLink(e);
     const manifestRow=text("div","","muted");
     if(manifestLink)manifestRow.append(manifestLink);
-    td(tr,text("span",e.evidence_only?"OBSERVED":e.passed?"PASS":"FAIL",
+    td(tr,text("span",connected?"ISOLATED CHECK":e.evidence_only?"OBSERVED":e.passed?"PASS":"FAIL",
                  e.evidence_only?"muted":e.passed?"good":"bad"),
-      text("div",e.evidence_only?"Capture only · "+(e.workflow_conclusion||"unknown")+
+      text("div",connected?"Original SRAM readback passed · no full-chip or traffic verdict":e.evidence_only?"Capture only · "+(e.workflow_conclusion||"unknown")+
            " workflow; never a full-chip PASS":
            e.acceptance_scope==="compile_only"?"Compile/lint only · no simulation":
            e.expected_failure?"Required negative check":"Positive regression","muted"),

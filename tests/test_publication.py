@@ -52,6 +52,61 @@ class Links(HTMLParser):
 
 
 class PublicationTests(unittest.TestCase):
+    def test_connected_checker_requires_final_dedicated_job_and_exact_attempt(self):
+        from copy import deepcopy
+        c=site.connected
+        run=dict(id=123,run_attempt=2,head_sha=SHA,status='completed',conclusion='success')
+        good=dict(id=7,name=c.JOB,run_id=123,run_attempt=2,head_sha=SHA,
+                  status='completed',conclusion='success',
+                  steps=[dict(name=name,status='completed',conclusion='success') for name in c.STEPS])
+        self.assertEqual(c.require_job(run,[good]),7)
+        for bad in (dict(good,conclusion='failure'),dict(good,run_attempt=1)):
+            with self.assertRaises(ValueError):
+                c.require_job(run,[bad])
+        bad=deepcopy(good)
+        bad['steps'][1]['conclusion']='failure'
+        with self.assertRaises(ValueError):
+            c.require_job(run,[bad])
+        base='verilator/pcie-connected-memory-default/host-to-sram-roundtrip/'
+        self.assertTrue(c.matches_run(base+'ci-123-a2-e6075aea7be1',run))
+        self.assertFalse(c.matches_run(base+'ci-123-a1-e6075aea7be1',run))
+
+    def test_connected_entry_is_filtered_out_of_every_chip_project(self):
+        c=site.connected
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp)
+            folder=root/'run'; out=root/'site'
+            artifact=folder/'connected-artifact-42'
+            run=dict(id=123,run_attempt=1,head_sha=SHA,conclusion='success',
+                     html_url='https://github.com/example/project/actions/runs/123',
+                     label='Isolated checker',created_at='2026-11-04T00:00:00Z')
+            canonical='verilator/pcie-connected-memory-default/host-to-sram-roundtrip/ci-123-a1-e6075aea7be1'
+            source=artifact/canonical
+            source.mkdir(parents=True)
+            for file in c.FILES:
+                (source/file).write_text(file)
+            record=dict(canonical_id=canonical,tested_sha=SHA,archive_digest='sha256:'+'a'*64,
+                        job_id=7,artifact_id=42,sources=281,expires_at='2099-01-01T00:00:00+00:00',
+                        files={f:c.digest((source/f).read_bytes()) for f in c.FILES})
+            site.dump(artifact/'verified-connected.json',record)
+            entries,notes=[],[]
+            site.append_connected_entries(folder,run,out,entries,notes,'example/project',SHA)
+            self.assertEqual(len(entries),1)
+            self.assertFalse(notes)
+            entry=entries[0]
+            self.assertIsNone(entry['passed'])
+            self.assertEqual(entry['protocols'],[])
+            self.assertFalse(entry['axi'])
+            self.assertEqual(site.project_entries(entries,'chip_a','chip_a'),[])
+            self.assertEqual(site.project_entries(entries,'chip_b','chip_a'),[])
+            self.assertIn('Not a full-chip regression',(out/entry['path']).read_text())
+            for file in c.FILES:
+                self.assertEqual((out/entry['path']).with_name(file).read_bytes(),(source/file).read_bytes())
+            (source/'sources.f').write_text('tampered')
+            site.append_connected_entries(folder,run,root/'other',entries,notes,'example/project',SHA)
+            self.assertEqual(len(entries),1)
+            self.assertIn('bytes no longer match',notes[-1])
+
     def test_ci_producer_discovery_includes_new_protocol_workflows(self):
         workflows=site.discover_test_workflows(ROOT)
         self.assertIn("ethernet-mvp.yml",workflows)
