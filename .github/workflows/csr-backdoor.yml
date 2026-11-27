@@ -6,6 +6,9 @@ on:
     paths:
       - 'tools/csr_runtime.py'
       - 'tools/run_csr_runtime_probe.py'
+      - 'tools/run_workspace.py'
+      - 'tools/test_identity.py'
+      - 'tests/test_csr_runtime_archive.py'
       - 'dv/csr_runtime/**'
       - 'tools/csr_backdoor.py'
       - 'tests/test_csr_runtime.py'
@@ -24,9 +27,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: '3.12'}
-      - name: Fail-closed live handle and logical-map unit tests
+      - name: Fail-closed live handle, logical-map and archive unit tests
         run: |
-          python3 -m unittest tests.test_csr_runtime tests.test_csr_backdoor -v
+          python3 -m unittest tests.test_csr_runtime tests.test_csr_backdoor tests.test_csr_runtime_archive -v
       - name: Verify no direct signal write API in runtime adapter
         run: |
           python3 - <<'PY'
@@ -47,15 +50,23 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y verilator
-          python3 -m pip install 'cocotb==1.9.2'
+          python3 -m pip install 'cocotb==1.9.2' 'PyYAML==6.0.3'
       - name: Resolve actual elaborated HDL signal and enforce safe quiescent read
+        id: csr-probe
         run: python3 tools/run_csr_runtime_probe.py
       - name: Verify true HDL snapshot stays source-selected and unqualified
+        env:
+          CSR_PROBE_DIR: ${{ steps.csr-probe.outputs.run_dir }}
         run: |
           python3 - <<'PY'
           import json
+          import os
           from pathlib import Path
-          data = json.loads(Path('.tools/csr-runtime/csr-backdoor-map.json').read_text())
+          evidence = Path(os.environ['CSR_PROBE_DIR'])
+          assert evidence.is_relative_to(Path('.tools/runs'))
+          data = json.loads((evidence / 'csr-backdoor-map.json').read_text())
+          plan = json.loads((evidence / 'plan.json').read_text())
+          assert data['build_sha256'] == plan['probe_build_sha256']
           assert data['schema_version'] == 1
           assert data['simulator'] == 'verilator'
           assert len(data['build_sha256']) == 64
@@ -68,8 +79,15 @@ jobs:
                      for x in data['fields']) == 1
           PY
       - uses: actions/upload-artifact@v4
-        if: always()
         with:
           name: csr-quiescent-hdl-source-evidence
-          path: .tools/csr-runtime/csr-backdoor-map.json
+          path: ${{ steps.csr-probe.outputs.run_dir }}
+          include-hidden-files: true
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: failure() && steps.csr-probe.outputs.run_dir != ''
+        with:
+          name: csr-quiescent-hdl-diagnostics
+          path: ${{ steps.csr-probe.outputs.run_dir }}
+          include-hidden-files: true
           if-no-files-found: warn
