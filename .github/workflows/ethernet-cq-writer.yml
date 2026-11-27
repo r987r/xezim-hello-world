@@ -5,6 +5,13 @@ on:
     paths:
       - 'rtl/io/ethernet0/ethernet_cq_axi_writer.v'
       - 'dv/ethernet0/cq_writer_tb.v'
+      - 'tools/ethernet_unit_workspace.py'
+      - 'tools/ethernet_frame_workspace.py'
+      - 'tools/run_workspace.py'
+      - 'tools/test_identity.py'
+      - 'tests/test_ethernet_unit_workspace.py'
+      - 'config/ip.lock.yaml'
+      - 'tools/ip_fetch.py'
       - '.github/workflows/ethernet-cq-writer.yml'
   workflow_dispatch:
 permissions:
@@ -21,11 +28,23 @@ jobs:
           sudo apt-get install -y iverilog
           python3 -m pip install 'PyYAML==6.0.3'
           python3 tools/ip_fetch.py verilog_axi
+      - name: Check archive source and transcript custody
+        run: python3 -m unittest tests.test_ethernet_unit_workspace -v
       - name: Elaborate and test real completion writes and AXI B ownership
-        run: |
-          set -euo pipefail
-          iverilog -g2012 -Wall -s ethernet_cq_axi_writer_tb -o /tmp/eth_cq             rtl/io/ethernet0/ethernet_cq_axi_writer.v \
-            dv/ethernet0/cq_writer_tb.v \
-            .tools/verilog_axi/rtl/axi_dma_wr.v \
-            .tools/verilog_axi/rtl/axi_ram.v
-          vvp /tmp/eth_cq
+        id: native-unit
+        run: python3 tools/ethernet_unit_workspace.py cq-writer
+      - name: Archive original isolated RTL unit evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: ethernet-cq-writer-native-${{ github.run_id }}-a${{ github.run_attempt }}
+          path: ${{ steps.native-unit.outputs.run_dir }}
+          include-hidden-files: true
+          if-no-files-found: error
+      - name: Archive failed RTL unit diagnostics separately
+        if: failure() && steps.native-unit.outputs.run_dir != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: ethernet-cq-writer-diagnostics-${{ github.run_id }}-a${{ github.run_attempt }}
+          path: ${{ steps.native-unit.outputs.run_dir }}
+          include-hidden-files: true
+          if-no-files-found: warn

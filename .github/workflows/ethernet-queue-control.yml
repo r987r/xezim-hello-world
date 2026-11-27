@@ -9,6 +9,12 @@ on:
       - 'tests/test_eth_queue_abi.py'
       - 'tools/ethernet_queue_api.py'
       - 'tests/test_ethernet_queue_api.py'
+      - 'tools/ethernet_unit_workspace.py'
+      - 'tools/ethernet_frame_workspace.py'
+      - 'tools/run_workspace.py'
+      - 'tools/test_identity.py'
+      - 'tests/test_ethernet_unit_workspace.py'
+      - 'config/ip.lock.yaml'
       - '.github/workflows/ethernet-queue-control.yml'
   workflow_dispatch:
 permissions:
@@ -27,11 +33,28 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y iverilog
+          python3 -m pip install 'PyYAML==6.0.3'
       - name: Compile queue driver
         run: cc -std=c11 -Wall -Wextra -Werror -pedantic -Isw/ethernet -c sw/ethernet/eth_queue.c -o /tmp/eth_queue.o
       - name: Check C and RTL ABI
         run: python3 -m unittest tests.test_eth_queue_abi tests.test_ethernet_queue_api -v
+      - name: Check archive source and transcript custody
+        run: python3 -m unittest tests.test_ethernet_unit_workspace -v
       - name: Run real queue-controller RTL test
-        run: |
-          iverilog -g2012 -Wall -s ethernet_queue_ctrl_tb -o /tmp/ethq rtl/io/ethernet0/ethernet_queue_ctrl.sv dv/ethernet0/queue_ctrl_tb.sv
-          vvp /tmp/ethq
+        id: native-unit
+        run: python3 tools/ethernet_unit_workspace.py queue-control
+      - name: Archive original isolated RTL unit evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: ethernet-queue-control-native-${{ github.run_id }}-a${{ github.run_attempt }}
+          path: ${{ steps.native-unit.outputs.run_dir }}
+          include-hidden-files: true
+          if-no-files-found: error
+      - name: Archive failed RTL unit diagnostics separately
+        if: failure() && steps.native-unit.outputs.run_dir != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: ethernet-queue-control-diagnostics-${{ github.run_id }}-a${{ github.run_attempt }}
+          path: ${{ steps.native-unit.outputs.run_dir }}
+          include-hidden-files: true
+          if-no-files-found: warn
