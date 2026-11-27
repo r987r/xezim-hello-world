@@ -5,6 +5,11 @@ on:
     paths:
       - 'dv/pcie_link/bar0_noc_translate.sv'
       - 'dv/pcie_link/tb_bar0_noc_translate.sv'
+      - 'tools/pcie_prelink_workspace.py'
+      - 'tools/run_workspace.py'
+      - 'tools/test_identity.py'
+      - 'tests/test_pcie_prelink_workspace.py'
+      - 'requirements.txt'
       - '.github/workflows/pcie-bar-window.yml'
   workflow_dispatch:
 
@@ -16,27 +21,27 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python3 -m pip install -r requirements.txt
       - uses: YosysHQ/setup-oss-cad-suite@v4
         with:
           version: '2026-11-10'
           github-token: ${{ github.token }}
+      - name: Verify PCIe unit transcript workspace contract
+        run: python3 -m unittest tests.test_pcie_prelink_workspace tests.test_test_identity -v
       - name: Real RTL simulation of BAR0 bounds and rejection
+        id: native
         run: |
           set -euo pipefail
           iverilog -V | head -n 2
-          mkdir -p .tools/pcie-bar-window
-          iverilog -g2012 -Wall -s tb_bar0_noc_translate \
-            -o .tools/pcie-bar-window/tb.vvp \
-            dv/pcie_link/bar0_noc_translate.sv \
-            dv/pcie_link/tb_bar0_noc_translate.sv
-          vvp .tools/pcie-bar-window/tb.vvp \
-            | tee .tools/pcie-bar-window/output.log
-          grep -q '^PASS: BAR0 bus/local-NoC complete-span mapping' \
-            .tools/pcie-bar-window/output.log
-      - name: Archive actual simulator transcript
-        if: always()
+          python3 tools/pcie_prelink_workspace.py bar0-complete-span
+      - name: Archive actual simulator transcripts and source provenance
+        if: always() && steps.native.outputs.execution_id != ''
         uses: actions/upload-artifact@v4
         with:
-          name: pcie-bar0-complete-span-${{ github.run_id }}
-          path: .tools/pcie-bar-window/
-          if-no-files-found: warn
+          name: pcie-bar0-complete-span-${{ github.run_id }}-a${{ github.run_attempt }}
+          path: '.tools/runs/*/pcie-bar-window-default/bar0-complete-span/${{ steps.native.outputs.execution_id }}/'
+          include-hidden-files: true
+          if-no-files-found: error
