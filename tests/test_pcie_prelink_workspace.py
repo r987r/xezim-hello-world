@@ -62,9 +62,10 @@ class PrelinkWorkspaceTests(unittest.TestCase):
             self.assertRegex(testbench.read_text(), rf"(?m)^module {top}\b")
 
     def test_three_distinct_transcript_workspaces_bind_sources_and_attempt(self):
-        dirs = [self.execute(lane) for lane in prelink.LANES]
+        lanes = ("device-prelink", "host-bar0", "phy-response")
+        dirs = [self.execute(lane) for lane in lanes]
         self.assertEqual(len(set(dirs)), 3)
-        for lane, out in zip(prelink.LANES, dirs):
+        for lane, out in zip(lanes, dirs):
             self.assertEqual(out.parent.relative_to(self.root).as_posix(),
                              f".tools/runs/icarus/pcie-prelink-default/{lane}")
             self.assertTrue(out.name.startswith("ci-14-a2-"))
@@ -82,6 +83,22 @@ class PrelinkWorkspaceTests(unittest.TestCase):
         self.assertEqual(self.output.read_text().splitlines(),
                          [f"execution_id={out.name}" for out in dirs])
         self.assertFalse((self.root / ".tools/pcie-prelink").exists())
+
+    def test_bar_window_stays_separate_and_keeps_original_compiler_order(self):
+        lane = "bar0-complete-span"
+        first = self.execute(lane)
+        second = self.execute(lane, env={**self.env, "GITHUB_RUN_ATTEMPT": "3"})
+        self.assertEqual(first.parent.relative_to(self.root).as_posix(),
+                         ".tools/runs/icarus/pcie-bar-window-default/bar0-complete-span")
+        self.assertTrue(first.name.startswith("ci-14-a2-"))
+        self.assertTrue(second.name.startswith("ci-14-a3-"))
+        expected = b"dv/pcie_link/bar0_noc_translate.sv\ndv/pcie_link/tb_bar0_noc_translate.sv\n"
+        self.assertEqual((first / "sources.f").read_bytes(), expected)
+        self.assertEqual((second / "sources.f").read_bytes(), expected)
+        self.assertNotEqual(first, second)
+        self.assertFalse((first / "result.json").exists())
+        self.assertEqual(list(first.glob("*.vvp")), [])
+        self.assertFalse((self.root / ".tools/pcie-bar-window").exists())
 
     def test_missing_stdout_marker_fails_and_preserves_native_transcripts(self):
         with self.assertRaisesRegex(ValueError, "missing original simulator PASS marker"):

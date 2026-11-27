@@ -26,6 +26,9 @@ LANES = {
     "phy-response": ("tb_pcie_phy_status_responder", ("phy_status_responder", "tb_phy_status_responder"), (
         b"PASS: Gen1 receiver-detect",
     )),
+    "bar0-complete-span": ("tb_bar0_noc_translate", ("bar0_noc_translate", "tb_bar0_noc_translate"), (
+        b"PASS: BAR0 bus/local-NoC complete-span mapping",
+    )),
 }
 
 
@@ -33,6 +36,7 @@ def execute(lane, *, root=ROOT, env=None):
     root = Path(root).resolve()
     env = os.environ if env is None else env
     top, source_names, markers = LANES[lane]
+    family = "pcie-bar-window" if lane == "bar0-complete-span" else "pcie-prelink"
     sources = [f"dv/pcie_link/{name}.sv" for name in source_names]
     revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
     dirty = bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=root))
@@ -40,17 +44,17 @@ def execute(lane, *, root=ROOT, env=None):
         if (dirty or env.get("GITHUB_SHA") != revision
                 or any(not (env.get(key, "").isdecimal() and int(env[key]) > 0)
                        for key in ("GITHUB_RUN_ID", "GITHUB_RUN_ATTEMPT"))):
-            raise ValueError("prelink CI requires a clean exact checkout, run, and attempt")
+            raise ValueError("PCIe unit CI requires a clean exact checkout, run, and attempt")
 
     filelist = ("\n".join(sources) + "\n").encode()
-    plan = {"target": f"pcie-prelink-{lane}", "logical_test": lane, "top": top,
-            "engine": "icarus", "sources": "pcie-prelink", "source_revision": revision,
+    plan = {"target": f"{family}-{lane}", "logical_test": lane, "top": top,
+            "engine": "icarus", "sources": family, "source_revision": revision,
             "checkout_dirty": dirty, "evidence_scope": "isolated_unit_transcripts_only",
             "source_sha256": {p: sha((root / p).read_bytes()) for p in sources}}
     identity = selected(plan["target"], plan, root=root, env=env, filelist_bytes=filelist)
     out = reserve_run(root / ".tools/runs", identity, plan=plan)
     (out / "sources.f").write_bytes(filelist)
-    with tempfile.TemporaryDirectory(prefix="pcie-prelink-") as tmp:
+    with tempfile.TemporaryDirectory(prefix=f"{family}-") as tmp:
         binary = str(Path(tmp) / "test.vvp")
         compile_argv = ["iverilog", "-g2012", "-Wall", "-s", top, "-o", binary, *sources]
         sim_argv = ["vvp", binary]
