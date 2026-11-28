@@ -1402,11 +1402,22 @@ def evidence_index(evidence,output,repository,site_sha=None):
             except (ValueError,KeyError,TypeError,OSError) as exc:
                 compiler_inputs=None
                 notes.append(f"Run {run['id']}, {target}: compiler manifest withheld ({exc})")
+            compiler_artifact=None
+            if compiler_inputs is not None:
+                artifact_folder=result_path.relative_to(file.parent).parts[0]
+                artifact_id=re.fullmatch(r'artifact-([1-9][0-9]*)',artifact_folder)
+                if (artifact_id and (file.parent/artifact_folder/'.complete').is_file()
+                        and type(run['id']) is int and run['id'] > 0):
+                    compiler_artifact=int(artifact_id[1])
             compiler_note=''
             if compiler_inputs is not None:
                 compiler_note=(f'<p><a href="{SELECTED_RTL_MANIFEST}">Archived compiler input manifest</a>'
                                f' · {compiler_inputs["source_count"]} selected RTL sources. '
                                'Source selection only, not execution or traffic proof.</p>')
+                if compiler_artifact is not None:
+                    compiler_note+=(f'<p><a href="https://github.com/{escape(repository, quote=True)}'
+                                    f'/actions/runs/{run["id"]}/artifacts/{compiler_artifact}">'
+                                    'Original selected RTL archive in CI</a> (subject to GitHub retention).</p>')
             for item in source_dir.iterdir():
                 if item.name==SELECTED_RTL_MANIFEST and compiler_inputs is None:
                     continue
@@ -1606,7 +1617,7 @@ def evidence_index(evidence,output,repository,site_sha=None):
                    'pr_head_sha':run['head_sha'],'merged_pr':run.get('merged_pr'),
                    'recorded_at':run['created_at'],'workflow':run['label'],'workflow_url':run['html_url'],
                    'path':str(relative/'report.html'),'assets':sorted(assets),
-                   'compiler_inputs':compiler_inputs,
+                   'compiler_inputs':compiler_inputs, 'compiler_artifact_id':compiler_artifact,
                    'axi':trace is not None,
                    'protocols':sorted({r['protocol'] for r in protocol_data.get('records',[])}) if protocol_data else [],
                    'protocol_observations':len(protocol_data['records']) if protocol_data else 0,
@@ -1817,6 +1828,43 @@ def default_project(projects):
 
 def project_entries(entries, project_id, default_id):
     return [entry for entry in entries if entry.get('project_id',default_id)==project_id]
+
+
+def architecture_compiler_links(entries, base, repository):
+    """Expose the newest available verified original selection per target."""
+    rows={}
+    for entry in entries:  # evidence_index already orders newest first
+        path=entry.get('path', '')
+        inputs=entry.get('compiler_inputs')
+        target=entry.get('target')
+        if (not target or target in rows or entry.get('evidence_only') or not inputs
+                or inputs.get('path')!=SELECTED_RTL_MANIFEST
+                or SELECTED_RTL_MANIFEST not in entry.get('assets', ())
+                or not re.fullmatch(r'runs/(?:[a-z0-9_-]+/)+report\.html',path)
+                or not entry.get('canonical_id')):
+            continue
+        run, attempt=entry.get('run_id'), entry.get('attempt')
+        if any(type(n) is not int or n < 1 for n in (run,attempt,inputs.get('source_count'))):
+            continue
+        prefix=escape(base,quote=True)
+        manifest=Path(path).with_name(SELECTED_RTL_MANIFEST).as_posix()
+        artifact=entry.get('compiler_artifact_id')
+        ci=f'https://github.com/{escape(repository,quote=True)}/actions/runs/{run}'
+        archive=(f' · <a href="{ci}/artifacts/{artifact}">Original RTL archive</a>'
+                 if type(artifact) is int and artifact > 0 else '')
+        rows[target]=(f'<li><code>{escape(target)}</code> · '
+                      f'<a href="{prefix}{escape(path,quote=True)}">Run {run}, attempt {attempt}</a> · '
+                      f'tested <code>{escape(str(entry.get("source_sha",""))[:12])}</code> · '
+                      f'<a href="{prefix}{escape(manifest,quote=True)}">Compiler manifest</a> '
+                      f'({inputs["source_count"]} inputs){archive}</li>')
+    details=('The newest available verified selection per target is shown here. '
+             'It may be older than this site; it does not prove a simulation passed. '
+             'GitHub archives are subject to retention.')
+    content=('<ul class="list">'+''.join(rows[k] for k in sorted(rows))+'</ul>'
+             if rows else '<p>No verified compiler manifests published for this chip design.</p>')
+    return ('<details id="arch-compiler-provenance" class="arch-signal-panel">'
+            '<summary>Original compiler inputs by test target</summary>'
+            f'<p class="muted">{details}</p>{content}</details>')
 
 
 def project_fabric_page(project, measured=None):
@@ -2132,7 +2180,7 @@ def project_pages(output, projects, entries, repository, sha, *, boots=None, def
                         template.replace('__PROJECT_HIERARCHY_JSON__', hierarchy)
                                 .replace('__PROJECT_TOPOLOGY_JS__', topology_js)
                                 .replace('__PROJECT_EVIDENCE_SCOPE__', scope) +
-                        detailed)
+                        detailed + architecture_compiler_links(selected, '../../', repository))
         pages = {
             'index.html': overview,
             'architecture.html': architecture,
@@ -2500,6 +2548,8 @@ def build(output,evidence,repository,sha,config):
                    if page=='runs' and isolated_checks else '')+'</p>')+body
         if page=='explorer':
             body = body.replace('__COMBINED_SOURCE_REVIEW__', combined_source_review(ROOT, output))
+            body = body.replace('__ARCH_COMPILER_PROVENANCE__',
+                                architecture_compiler_links(legacy_entries, '', repository))
             graph_data = json.dumps(design_graph, separators=(',', ':')).replace('<','\\u003c')
             body = body.replace('__GRAPH_DATA__',graph_data)
             signal_data = json.dumps(signal_inventory, separators=(',', ':')).replace('<','\\u003c')
