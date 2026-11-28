@@ -35,6 +35,13 @@ The generated SV package provides `soc_scenario_contract_pkg::scn_emit_driver(in
 
 The parser requires the exact plan SHA and scenario identity; it rejects unknown action IDs, phase mismatches, malformed records, duplicates, driver-DONE without issue, and time reversal within one action. Independently interleaved actions are legal. The output is **`kind: soc_scenario_sv_driver_events`, `status: driver_log_unverified`, `rtl_evidence: null`**. It is deliberately **not** a test pass or independent AXI/PCIe/GMII protocol proof.
 
+CI runs the same smoke via `python3 tools/scenario_sv_workspace.py`. The
+attempt-specific **scn3-sv-contract-native** artifact retains the original
+resolved plan, generated SV, simulator stdout and driver-only audit, plus the
+source and compiler provenance. Compiler build files are temporary. A failed
+attempt uploads its completed diagnostics separately; neither artifact is a
+public chip test result.
+
 ## Scope and next integration
 
 This adapter is not a general SV driver implementation. A component-specific SV BFM can dispatch based on `scn_action_kind()`, `scn_action_actor()`, `scn_action_phase()` and primitive args; it remains responsible for the proper bus protocol and RTL simulation lifecycle.
