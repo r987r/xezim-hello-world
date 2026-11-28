@@ -106,6 +106,7 @@ def _source_equivalent_stage(value: dict) -> dict:
 
 
 CPU_DMA = "chip-cpu-dma"
+CPU_DMA_TRACKED = Path("config/selected-rtl-reference/cpu-dma")
 CPU_DMA_IMAGES = {
     "variant/soc_top.sv": ("flash.hex", "bootrom.hex"),
     "variant/full_chip_tb.sv": ("compute0.hex", "compute1.hex"),
@@ -113,7 +114,7 @@ CPU_DMA_IMAGES = {
 }
 
 
-def _cpu_dma_reference(root: Path, directory: Path, manifest: dict, plan: dict, *, read):
+def _cpu_dma_reference(root: Path, directory: Path, manifest: dict, plan: dict, *, read, review_files=None):
     """Compare a verified CPU/iDMA source closure without rewriting the run."""
     from selected_rtl_provenance import _canonical_sha
     from test_identity import relative_path, validate
@@ -155,6 +156,8 @@ def _cpu_dma_reference(root: Path, directory: Path, manifest: dict, plan: dict, 
         if b".tools/runs/" in data or b".tools/regression/" in data:
             raise VariantBuildError("unreviewed run path in CPU/iDMA source")
         relocated[name] = hashlib.sha256(data).hexdigest()
+        if review_files is not None:
+            review_files[suffix] = data
 
     def inventory(values):
         return {coordinate(name): relocated.get(name, digest) for name, digest in values.items()}
@@ -164,14 +167,24 @@ def _cpu_dma_reference(root: Path, directory: Path, manifest: dict, plan: dict, 
     includes, defines, sources = plan["includes"], plan["defines"], plan["sources"]
     if tokens != (["+incdir+" + p for p in includes] + ["+define+" + p for p in defines] + sources):
         raise VariantBuildError("CPU/iDMA ordered compiler filelist disagrees with plan")
-    for name in sources:
+    def input_coordinate(name):
         path = Path(name)
-        if not path.is_absolute() or not path.is_relative_to(root):
+        if not path.is_absolute() or not path.is_relative_to(root) or ".." in path.parts:
             raise VariantBuildError("foreign CPU/iDMA compiler input")
-        coordinate(path.relative_to(root).as_posix())
+        return coordinate(path.relative_to(root).as_posix())
+
+    source_order = [input_coordinate(name) for name in sources]
     normalized = raw.replace(current.encode(), stable.encode())
     if b".tools/runs/" in normalized or b".tools/regression/" in normalized:
         raise VariantBuildError("unreviewed compiler path in CPU/iDMA filelist")
+    if review_files is not None:
+        # Only parsed include/source path arguments are rebased; flag order
+        # and every input digest remain intact. Not a runnable compiler list.
+        include_order = [input_coordinate(name) for name in includes]
+        portable_inputs = ["+incdir+" + p for p in include_order]
+        portable_inputs += ["+define+" + d for d in defines] + source_order
+        normalized = (json.dumps(portable_inputs, indent=2) + "\n").encode()
+        review_files["compiler-input-order.json"] = normalized
     list_sha = hashlib.sha256(normalized).hexdigest()
     ref = {k: manifest[k] for k in ("definition_sha256", "compiled_top", "source_count",
                                     "defines", "includes", "args")}
@@ -181,10 +194,28 @@ def _cpu_dma_reference(root: Path, directory: Path, manifest: dict, plan: dict, 
         include_headers_sha256=inventory(manifest["include_headers_sha256"]),
         selected_soc_top=coordinate(top), filelist_sha256=list_sha,
         config_sha256=_canonical_sha({**identity["selection"], "filelist_sha256": list_sha}))
+    if review_files is not None:
+        ref.update(includes=include_order, schema_version=1, profile=CPU_DMA,
+                   evidence="review_only_not_compiler_input_or_simulation_result")
+        review_files["reference.json"] = (json.dumps(ref, indent=2, sort_keys=True) + "\n").encode()
     return ref
 
 
-def _verified_cpu_dma_reference(root, folder, definition, *, staged=None):
+def _validate_cpu_dma_tracked(root, review_files):
+    directory = root / CPU_DMA_TRACKED
+    if any(p.is_symlink() for p in (*directory.parents, directory) if p.is_relative_to(root)):
+        raise VariantBuildError("unsafe CPU/iDMA tracked reference path")
+    actual = list(directory.rglob("*"))
+    if any(p.is_symlink() for p in actual):
+        raise VariantBuildError("unsafe CPU/iDMA tracked reference member")
+    if {p.relative_to(directory).as_posix() for p in actual if p.is_file()} != set(review_files):
+        raise VariantBuildError("CPU/iDMA tracked reference inventory differs")
+    for relative, expected in review_files.items():
+        if (directory / relative).read_bytes() != expected:
+            raise VariantBuildError("CPU/iDMA tracked reference changed: " + relative)
+
+
+def _verified_cpu_dma_reference(root, folder, definition, *, staged=None, review_files=None):
     from selected_rtl_provenance import verify_selected_archive
 
     m = verify_selected_archive(root, CPU_DMA, definition, directory=folder)
@@ -206,17 +237,19 @@ def _verified_cpu_dma_reference(root, folder, definition, *, staged=None):
         if hashlib.sha256(data).hexdigest() != digest:
             raise VariantBuildError("CPU/iDMA source changed after verification")
         return data
-    return _cpu_dma_reference(root, folder, m, plan, read=read)
+    return _cpu_dma_reference(root, folder, m, plan, read=read, review_files=review_files)
 
 
 def rebuild(root: Path, profile: str, output: Path, *, check: bool = False,
-            runner=None, canonical_combined_files=False) -> dict:
+            runner=None, canonical_combined_files=False, check_tracked=False) -> dict:
     """Recreate actual selected RTL, then check the full staged-source digest.
 
     This executes real Bender/FlooGen/clang source preparation, not the RTL
     simulator; a completed source build does not imply elaboration or PASS.
     """
     root = Path(root).resolve()
+    if check_tracked and (profile != CPU_DMA or check):
+        raise VariantBuildError("tracked reference check is only a fresh CPU/iDMA source selection")
     definition = selected_definition(root, profile)
     variant = config_target(definition)
     output_folder = _review_folder(root, output, variant)
@@ -296,7 +329,10 @@ def rebuild(root: Path, profile: str, output: Path, *, check: bool = False,
                     **({"files_workspace": directory.relative_to(root).as_posix()} if directory else {}),
                     "status": "selected_sources_rebuilt_exactly_not_simulated"}
     if profile == CPU_DMA:
-        _verified_cpu_dma_reference(root, directory, definition)
+        review_files = {} if check_tracked else None
+        _verified_cpu_dma_reference(root, directory, definition, review_files=review_files)
+        if check_tracked:
+            _validate_cpu_dma_tracked(root, review_files)
     elif directory is not None:
         verified_inputs(root, directory, definition)
     generated = stage(root, profile, definition, output,
@@ -308,7 +344,8 @@ def rebuild(root: Path, profile: str, output: Path, *, check: bool = False,
             "compiler_input_sha256": generated["compiler_input_sha256"],
             "review_stage": str(output_folder.relative_to(root)),
             **({"files_workspace": directory.relative_to(root).as_posix()} if directory else {}),
-            "status": "selected_sources_generated_not_simulated"}
+            "status": "selected_sources_generated_not_simulated",
+            **({"tracked_reference_verified": CPU_DMA_TRACKED.as_posix()} if check_tracked else {})}
 
 
 def main() -> int:
@@ -319,8 +356,10 @@ def main() -> int:
     cli.add_argument("--check", action="store_true",
                      help="regenerate and compare exact selected RTL/source closure")
     cli.add_argument("--canonical-combined-files", action="store_true")
+    cli.add_argument("--check-tracked", action="store_true",
+                     help="verify checked-in CPU/iDMA review bytes from fresh source selection")
     args = cli.parse_args()
-    result = rebuild(ROOT, args.profile, args.out, check=args.check,
+    result = rebuild(ROOT, args.profile, args.out, check=args.check, check_tracked=args.check_tracked,
                      canonical_combined_files=(args.canonical_combined_files or
                                                args.profile == "chip-ethernet-ddr-pcie"))
     print(json.dumps(result, indent=2, sort_keys=True))
