@@ -311,11 +311,14 @@ class FabricExplorerTests(unittest.TestCase):
             (folder/'axi-transactions.json').write_text(json.dumps(payload))
             entry={'axi':True,'passed':True,'assets':['axi-transactions.json'],
                    'path':'runs/9-1/noc/report.html','source_sha':sha,
-                   'target':'supernoc','engine':'cocotb-verilator'}
+                   'target':'supernoc','engine':'cocotb-verilator',
+                   'simulator':'verilator'}
             fabric_report.attach_one_beat_observations(data,[entry],Path(tmp),sha)
         obs=route['one_beat_stage_observations']
         self.assertEqual(len(obs),1)
         self.assertEqual(obs[0]['sample_count'],1)
+        self.assertEqual(obs[0]['simulator'],'verilator')
+        self.assertEqual(route['one_beat_observations'][0]['simulator'],'verilator')
         self.assertEqual(obs[0]['end_to_end']['median_cycles'],40)
         stages=obs[0]['stage_metrics']
         self.assertEqual(len(stages),4)

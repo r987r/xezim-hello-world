@@ -1257,7 +1257,6 @@ def append_capture_only_entries(folder, run, verified_shas, output, entries, not
                 "evidence_only":True, "evidence_scope":"isolated_observation_only",
                 "workflow_conclusion":run.get("conclusion"),
                 "passed":None, "expected_failure":None,
-                "engine":capture_run.get("engine","standalone"),
                 "run_id":run["id"], "attempt":run.get("run_attempt",1),
                 "source_sha":sha, "recorded_at":run["created_at"],
                 "workflow":run["label"], "workflow_url":run["html_url"],
@@ -1326,7 +1325,7 @@ def append_connected_entries(folder, run, output, entries, notes, repository, si
                                                          relative/'report.html', repository, site_sha or run['head_sha']))
             entries.append(dict(target=connected.TARGET, suite='isolated-checker', project_id=None,
                  evidence_only=True, evidence_scope=connected.SCOPE, passed=None, expected_failure=None,
-                 path=page, canonical_url=page, canonical_id=canonical, engine='verilator',
+                 path=page, canonical_url=page, canonical_id=canonical,
                  simulator='verilator', config_target=canonical.split('/')[1],
                  testname='host-to-sram-roundtrip', execution_id=canonical.split('/')[-1],
                  source_sha=tested, run_id=run['id'], attempt=run.get('run_attempt', 1), workflow=run['label'],
@@ -1593,7 +1592,7 @@ def evidence_index(evidence,output,repository,site_sha=None):
                 raise ValueError('PCIe latency evidence file missing')
             compile_only = (result.get('stage') == 'build' or plan.get('mode') == 'compile'
                             or plan.get('engine') in ('xezim-compile', 'verilator-lint'))
-            entry={'target':target,'engine':plan.get('engine','unknown'),'passed':result.get('passed') is True,
+            entry={'target':target,'passed':result.get('passed') is True,
                    'acceptance_scope':'compile_only' if compile_only else 'regression',
                    'fabric_scope':(plan.get('report') or {}).get('fabric_scope','unspecified'),
                    'expected_failure':plan.get('expect_failure'),'stage':result.get('stage'),
@@ -1761,7 +1760,10 @@ def evidence_index(evidence,output,repository,site_sha=None):
                 label = 'Compile/lint only' if compile_only else 'Regression'
                 if compile_only:
                     body += '<p>Compiler or lint outcome only. No simulation or protocol qualification.</p>'
-                body+=f'<p><strong>{label} {"PASS" if entry["passed"] else "FAIL"}</strong> · {escape(entry["engine"])} · tested SHA <code>{escape(entry["source_sha"])}</code></p>'
+                if selected_identity:
+                    body += ('<p><strong>Canonical run:</strong> <code>'+escape(entry['canonical_id'])+
+                             '</code> · <a href="identity.json">Immutable identity</a></p>')
+                body+=f'<p><strong>{label} {"PASS" if entry["passed"] else "FAIL"}</strong> · tested SHA <code>{escape(entry["source_sha"])}</code></p>'
                 if entry['expected_failure']:body+='<p>Expected-failure case: '+escape(entry['expected_failure'])+'</p>'
                 body+='<pre>'+escape(json.dumps(result,indent=2))+'</pre>'
                 body+='<ul>'+''.join('<li>'+asset_link(name,compressed)+'</li>' for name in assets)+'</ul>'

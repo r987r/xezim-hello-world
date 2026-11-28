@@ -15,7 +15,9 @@ xezim/boot-default/cpu-cold-boot/local-2c34a679e710
 - **simulator** is normalized from the actual regression `engine`; for
   example `cocotb-verilator` and Verilator lint use `verilator`, while
   native Xezim and compile-only Xezim use `xezim`. The Cocotb harness is
-  retained in the `engine` metadata, not treated as another simulator.
+  retained only in the original execution receipts, not as a second simulator
+  field in the public run index or a backend label in the report. Fabric
+  observations use the simulator from the same canonical identity.
 - **config_target** is derived from the resolved source scope, full-chip top,
   selected `firmware_mode`, boot relocation, synthesis define or alternate
   memory-config source. Its fingerprint includes the source-selected SoC,

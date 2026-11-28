@@ -85,6 +85,21 @@ class PublicSiteTests(unittest.TestCase):
         self.assertEqual(result["tests"], 1)
         self.assertEqual(result["real_fullchip_dfi_runs"], 0)
 
+    def test_public_entry_uses_only_canonical_simulator_identity(self):
+        canonical = "xezim/noc-default/noc-rtl-compile/ci-123-a1-012345abcdef"
+        entry = {"source_sha": self.sha, "simulator": "xezim",
+                 "config_target": "noc-default", "testname": "noc-rtl-compile",
+                 "execution_id": "ci-123-a1-012345abcdef", "canonical_id": canonical,
+                 "path": f"runs/{canonical}/report.html"}
+        site = {**self.site, "entries": [entry]}
+        self.check(site=site)
+        for mutation, error in [
+                ({"engine": "xezim-compile"}, "internal execution engine"),
+                ({"simulator": "xezim-compile"}, "canonical identity"),
+                ({"path": "runs/123-1/noc-xezim/report.html"}, "canonical identity")]:
+            with self.subTest(mutation=mutation), self.assertRaisesRegex(ValueError, error):
+                self.check(site={**site, "entries": [{**entry, **mutation}]})
+
     def test_valid_real_fullchip_dfi_is_reported_but_not_hardcoded(self):
         site = copy.deepcopy(self.site)
         site["entries"] = [{
