@@ -373,24 +373,24 @@ class RegressionTests(unittest.TestCase):
             self.assertEqual(list(legacy.iterdir()), [prior])
             self.assertEqual(prior.read_text(), 'retained original bytes')
 
-    def test_new_cocotb_target_does_not_inherit_noc_wrapper(self):
-        # An existing engine can be reused with a new Bender source target.
-        # Only the NoC source provider is allowed to add NoC packages/wrapper.
+    def test_unreviewed_cocotb_source_cannot_write_or_delete_legacy_output(self):
+        # A target name alone cannot authorize a different engine/source
+        # selection or an old target-scoped writer.
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            rtl = root/'other_tb.sv'
-            rtl.write_text('module other_tb; endmodule\n')
-            resolver = types.SimpleNamespace(sources=lambda test: ([str(rtl)], [], []))
-            options = types.SimpleNamespace(arg=[], memory_config=None, network=[], stage='files')
+            legacy = root/'.tools/regression/memory'
+            legacy.mkdir(parents=True)
+            prior = legacy/'original.log'
+            prior.write_bytes(b'original historical bytes')
+            options = types.SimpleNamespace(stage='files')
             test = {'engine': 'cocotb-verilator', 'sources': 'other', 'top': 'other_tb',
                     'logical_test': 'axi-routing-smoke'}
-            # New unregistered legacy targets must now fail P1's strict
-            # adapter-policy gate. Reuse an approved temporary legacy target
-            # to test source-closure behavior without overriding that gate.
             with patch.object(regress, 'ROOT', root):
-                self.assertTrue(regress.run_target('memory', test, resolver, options))
-            plan = json.loads((root/'.tools/regression/memory/plan.json').read_text())
-            self.assertEqual(plan['sources'], [str(rtl)])
+                with self.assertRaisesRegex(ValueError, 'no canonical workspace'):
+                    regress.run_target('memory', test, None, options)
+            self.assertEqual(list(legacy.iterdir()), [prior])
+            self.assertEqual(prior.read_bytes(), b'original historical bytes')
+            self.assertFalse((root/'.tools/runs').exists())
 
 
 if __name__ == '__main__':

@@ -57,8 +57,9 @@ No later version of the YAML can relabel an archived test.
   They cannot be silently relabeled with the latest catalog or presented as
   current canonical test results.
 - Current registered runs and source preparations use `.tools/runs/`.
-  Compatibility for custom local test definitions and old archived evidence
-  is not a second public naming scheme. Never rewrite historical receipts.
+  A source selection without a reviewed canonical producer is rejected before
+  writing any output, even if it reuses a known target name. Historical readers
+  remain read-only: never rewrite historical receipts.
 - The physical memory aperture, CSR bases, NoC configuration and IP
   version still come from `config/soc.yaml`, pinned manifests and
   the actual selected source closure. Renaming a test cannot swap an IP.

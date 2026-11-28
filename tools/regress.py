@@ -710,6 +710,8 @@ def run_target(name, test, resolver, options):
     canonical = uses_canonical_workspace(
         name, test, stage=options.stage,
         canonical_combined_files=True)
+    if not canonical:
+        raise ValueError(f'{name}: no canonical workspace for this source selection')
     structural = test['engine'] in {'xezim-compile', 'verilator-lint'}
     relocated_boot = test.get('boot_relocate')
     canonical_ethernet = uses_canonical_ethernet_workspace(name, test)
@@ -733,142 +735,103 @@ def run_target(name, test, resolver, options):
             ROOT, test, getattr(options, 'continue_run_id', None),
             verify_archive=verify_selected_archive, fingerprint=build_fingerprint, target=name,
             command=lambda path: [[name, cocotb_command(name, path)[0][1]]])
-        return execute_target(name, test, resolver, options, out, identity, plan, {}, canonical)
+        return execute_target(name, test, resolver, options, out, identity, plan, {})
     if canonical_firmware and (options.stage == 'run' or test.get('reuse_build')):
         raise ValueError('runtime firmware variant requires its own build; use --stage all')
-    canonical_memory = canonical and test['sources'] == 'memory'
-    identity = None
-    if canonical:
-        from test_identity import MEMORY_CONFIG_SNAPSHOT, selected as select_identity
-        from run_workspace import reserve_materialized_run, reserve_run
-        if (name == 'dma-rtl' and
-                (test['engine'] != 'cocotb-verilator' or test['sources'] != 'noc'
-                 or test.get('bender_targets') != ['dma'] or options.network
-                 or test.get('firmware_mode') or test.get('memory_config')
-                 or test.get('boot_relocate'))):
-            raise ValueError('unreviewed canonical Cocotb producer variant')
-        sources, includes, defines = resolver.sources(test)
-        args = list(test.get('args', [])) + options.arg
-        networks = noc_contracts() if test['sources'] == 'noc' else {}
-        network_base = (list(sources), list(includes), list(defines))
-        if not structural:
-            include_runtime_noc(sources, networks, ROOT/'gen/noc/floonoc')
-        append_pinned_dma_and_bender_sources(test, resolver, sources, includes, defines)
-        sources, includes, defines = [list(dict.fromkeys(items))
-                                      for items in (sources, includes, defines)]
-        selected_test = {**test, 'source_target': test['sources'], 'args': args}
-        if canonical_memory:
-            alternate, config_bytes, selected_test['memory_config_effective'] = (
-                select_memory_config(test, options.memory_config))
-        if relocated_boot or canonical_memory or canonical_firmware or canonical_ddr:
-            seed_identity = select_identity(name, selected_test, root=ROOT)
+    canonical_memory = test['sources'] == 'memory'
+    from test_identity import MEMORY_CONFIG_SNAPSHOT, selected as select_identity
+    from run_workspace import reserve_materialized_run, reserve_run
+    if (name == 'dma-rtl' and
+            (test['engine'] != 'cocotb-verilator' or test['sources'] != 'noc'
+             or test.get('bender_targets') != ['dma'] or options.network
+             or test.get('firmware_mode') or test.get('memory_config')
+             or test.get('boot_relocate'))):
+        raise ValueError('unreviewed canonical Cocotb producer variant')
+    sources, includes, defines = resolver.sources(test)
+    args = list(test.get('args', [])) + options.arg
+    networks = noc_contracts() if test['sources'] == 'noc' else {}
+    network_base = (list(sources), list(includes), list(defines))
+    if not structural:
+        include_runtime_noc(sources, networks, ROOT/'gen/noc/floonoc')
+    append_pinned_dma_and_bender_sources(test, resolver, sources, includes, defines)
+    sources, includes, defines = [list(dict.fromkeys(items))
+                                  for items in (sources, includes, defines)]
+    selected_test = {**test, 'source_target': test['sources'], 'args': args}
+    if canonical_memory:
+        alternate, config_bytes, selected_test['memory_config_effective'] = (
+            select_memory_config(test, options.memory_config))
+    if relocated_boot or canonical_memory or canonical_firmware or canonical_ddr:
+        seed_identity = select_identity(name, selected_test, root=ROOT)
 
-            def materialize(directory):
-                nonlocal sources
-                if canonical_combined:
-                    sources = list(dict.fromkeys(select_combined_variant(directory, sources)))
-                elif canonical_ddr:
-                    sources = select_ddr_variant(directory, sources)
-                if canonical_firmware:
-                    if canonical_ethernet:
-                        sources = select_ethernet_variant(test, directory, sources)
-                    elif test['firmware_mode'] in ('cpu_dma', 'cpu_dma_scenario'):
-                        sources = select_cpu_dma_variant(test, directory, sources, options)
-                    elif test['firmware_mode'] == 'scenario_bfm':
-                        materialize_bfm_scenario(test, directory, options)
-                    elif canonical_peakrdl:
-                        sources = select_peakrdl_reset_variant(directory, sources)
-                    else:
-                        sources = select_pcie_variant(
-                            test, directory, sources,
-                            private_build=_private_firmware_build(test, directory.name))
-                    sources = list(dict.fromkeys(sources))
-                if relocated_boot:
-                    select_relocated_boot(relocated_boot, directory, sources, args)
-                if canonical_memory:
-                    config_snapshot = directory/MEMORY_CONFIG_SNAPSHOT
-                    config_snapshot.parent.mkdir()
-                    config_snapshot.write_bytes(config_bytes)
-                    if alternate:
-                        capture([sys.executable, str(ROOT/'tools/socgen.py'), '--config',
-                                 str(config_snapshot), '--out', str(directory/'memory')])
-                        default_top = str(ROOT/'gen/memory/memory_tb.sv')
-                        if sources.count(default_top) != 1:
-                            raise ValueError('alternate memory requires exactly one selected memory top')
-                        sources[sources.index(default_top)] = str(directory/'memory/memory_tb.sv')
-                (directory/'sources.f').write_text(filelist_text(sources, includes, defines))
+        def materialize(directory):
+            nonlocal sources
+            if canonical_combined:
+                sources = list(dict.fromkeys(select_combined_variant(directory, sources)))
+            elif canonical_ddr:
+                sources = select_ddr_variant(directory, sources)
+            if canonical_firmware:
+                if canonical_ethernet:
+                    sources = select_ethernet_variant(test, directory, sources)
+                elif test['firmware_mode'] in ('cpu_dma', 'cpu_dma_scenario'):
+                    sources = select_cpu_dma_variant(test, directory, sources, options)
+                elif test['firmware_mode'] == 'scenario_bfm':
+                    materialize_bfm_scenario(test, directory, options)
+                elif canonical_peakrdl:
+                    sources = select_peakrdl_reset_variant(directory, sources)
+                else:
+                    sources = select_pcie_variant(
+                        test, directory, sources,
+                        private_build=_private_firmware_build(test, directory.name))
+                sources = list(dict.fromkeys(sources))
+            if relocated_boot:
+                select_relocated_boot(relocated_boot, directory, sources, args)
+            if canonical_memory:
+                config_snapshot = directory/MEMORY_CONFIG_SNAPSHOT
+                config_snapshot.parent.mkdir()
+                config_snapshot.write_bytes(config_bytes)
+                if alternate:
+                    capture([sys.executable, str(ROOT/'tools/socgen.py'), '--config',
+                             str(config_snapshot), '--out', str(directory/'memory')])
+                    default_top = str(ROOT/'gen/memory/memory_tb.sv')
+                    if sources.count(default_top) != 1:
+                        raise ValueError('alternate memory requires exactly one selected memory top')
+                    sources[sources.index(default_top)] = str(directory/'memory/memory_tb.sv')
+            (directory/'sources.f').write_text(filelist_text(sources, includes, defines))
 
-            out, identity = reserve_materialized_run(ROOT/'.tools/runs', seed_identity,
-                                                     materialize, plan=selected_test)
-        else:
-            identity = select_identity(name, selected_test,
-                filelist_bytes=filelist_text(sources, includes, defines).encode('utf-8'),
-                root=ROOT)
-            out = reserve_run(ROOT/'.tools/runs', identity, plan=selected_test)
+        out, identity = reserve_materialized_run(ROOT/'.tools/runs', seed_identity,
+                                                 materialize, plan=selected_test)
     else:
-        out = ROOT/'.tools/regression'/name
-        if out.exists():
-            shutil.rmtree(out)
-        out.mkdir(parents=True, exist_ok=True)
-        sources, includes, defines = resolver.sources(test)
-        args = list(test.get('args', [])) + options.arg
-    # Legacy runs replace prior artifacts. Canonical runs are exclusively
-    # reserved by immutable run_id and never delete another writer's output.
+        identity = select_identity(name, selected_test,
+            filelist_bytes=filelist_text(sources, includes, defines).encode('utf-8'),
+            root=ROOT)
+        out = reserve_run(ROOT/'.tools/runs', identity, plan=selected_test)
     if not canonical_memory and (test.get('memory_config') or options.memory_config):
         import socgen
         config = ROOT/(options.memory_config or test['memory_config'])
         capture([sys.executable, str(ROOT/'tools/socgen.py'), '--config', str(config), '--out', str(out/'memory')])
         sources = [str(out/'memory/memory_tb.sv') if p == str(ROOT/'gen/memory/memory_tb.sv') else p for p in sources]
-    if relocated_boot and not canonical:
-        select_relocated_boot(relocated_boot, out, sources, args)
-    if not canonical:
-        networks = noc_contracts() if test['sources'] == 'noc' else {}
     root = ROOT/'gen/noc/floonoc'
     if options.network and (not structural or set(options.network) - set(networks)):
         raise ValueError('--network requires known structural NoC network names')
-    per_network = network_base if canonical and not structural else (sources, includes, defines)
+    per_network = network_base if not structural else (sources, includes, defines)
     for network, entry in sorted(networks.items()):
         # Per-network lists are compiler inputs only for structural probes.
         # Keep the existing network diagnostics for other runners.
         (out/f'{network}.f').write_text(filelist_text(
             per_network[0] + [str(root/entry['package']), str(root/entry['top'])],
             per_network[1], per_network[2]))
-    if not canonical:
-        if not structural:
-            include_runtime_noc(sources, networks, root)
-        append_pinned_dma_and_bender_sources(test, resolver, sources, includes, defines)
-    if not (canonical_cpu_firmware or canonical_scenario) and test.get('firmware_mode') in (
-            'cpu_dma', 'cpu_dma_scenario'):
-        sources = select_cpu_dma_variant(test, out, sources, options)
-    if not canonical_ethernet and test.get('firmware_mode') in ('ethernet_mvp', 'ethernet_cpu'):
-        sources = select_ethernet_variant(test, out, sources)
-    if not canonical_cpu_firmware and test.get('firmware_mode') in ('pcie_host', 'pcie_dma_host', 'pcie_outbound'):
-        sources = select_pcie_variant(test, out, sources)
-    if not canonical_ddr and test.get('firmware_mode') == 'ddr_cpu_dma':
-        sources = select_ddr_variant(out, sources)
-    if not canonical_peakrdl and test.get('firmware_mode') == 'peakrdl_reset':
-        sources = select_peakrdl_reset_variant(out, sources)
-    if not canonical_scenario and test.get('firmware_mode') == 'scenario_bfm':
-        materialize_bfm_scenario(test, out, options)
     sources = list(dict.fromkeys(sources))
     includes = list(dict.fromkeys(includes))
     defines = list(dict.fromkeys(defines))
     filelist = out/'sources.f'
-    if not (canonical_memory or canonical_firmware or canonical_ddr or (canonical and relocated_boot)):
+    if not (canonical_memory or canonical_firmware or canonical_ddr or relocated_boot):
         filelist.write_text(filelist_text(sources, includes, defines))
-    # Capture the single source-selected identity before the RTL executor runs.
-    # Keep legacy target artifact paths stable while old CI consumers migrate.
-    from test_identity import selected as select_identity, save as save_identity
-    if canonical:
-        from run_workspace import verify_run
-        from test_identity import sha
-        if sha(filelist.read_bytes()) != identity['selection']['filelist_sha256']:
-            raise ValueError('canonical selected filelist changed after run reservation')
-        verify_run(out, identity, plan=selected_test)
-    else:
-        identity = select_identity(name, {**test, "source_target": test["sources"],
-                                         "args": args}, filelist=filelist)
-        save_identity(out/'identity.json', identity)
+    # The immutable identity must still bind the compiler input at dispatch.
+    from run_workspace import verify_run
+    from test_identity import sha
+    if sha(filelist.read_bytes()) != identity['selection']['filelist_sha256']:
+        raise ValueError('canonical selected filelist changed after run reservation')
+    verify_run(out, identity, plan=selected_test)
     plan = {**test, 'target': name, 'source_target': test['sources'],
             'sources': sources, 'includes': includes, 'defines': defines,
             'args': args, 'results_xml': str(out/'results.xml'), 'stage': options.stage,
@@ -919,7 +882,7 @@ def run_target(name, test, resolver, options):
     # substitutions. No simulator or elaborator has executed at this point.
     from selected_rtl_provenance import archive_selected_filelist
     selected_inputs = archive_selected_filelist(
-        ROOT, name, test, plan, filelist, directory=out if canonical else None)
+        ROOT, name, test, plan, filelist, directory=out)
     plan["selected_source_manifest"] = {
         "path": str((out/'selected-rtl-manifest.json').relative_to(ROOT)),
         "compiler_input_sha256": selected_inputs["compiler_input_sha256"],
@@ -932,10 +895,10 @@ def run_target(name, test, resolver, options):
         ddr_split.write_once(ROOT, out/PROOF, (json.dumps(proof, sort_keys=True)+'\n').encode())
     if canonical_ddr and options.stage == 'build':
         return seal_ddr_build(name, out, plan, test)
-    return execute_target(name, test, resolver, options, out, identity, plan, networks, canonical)
+    return execute_target(name, test, resolver, options, out, identity, plan, networks)
 
 
-def execute_target(name, test, resolver, options, out, identity, plan, networks, canonical):
+def execute_target(name, test, resolver, options, out, identity, plan, networks):
     from test_identity import relative_path
 
     filelist, plan_file = out/'sources.f', out/'plan.json'
@@ -1042,7 +1005,7 @@ def execute_target(name, test, resolver, options, out, identity, plan, networks,
         # merely when the runner resolved the filelists. This fails closed
         # if generated RTL, a third-party source or an include header changed.
         from selected_rtl_provenance import verify_selected_archive
-        verify_selected_archive(ROOT, name, test, directory=out if canonical else None)
+        verify_selected_archive(ROOT, name, test, directory=out)
         print(f'RUN {name}/{label} ({engine}, stage={options.stage})', flush=True)
         runner_events.append(dispatch_event(runtime_selected,label,status='started'))
         save_dispatch()
