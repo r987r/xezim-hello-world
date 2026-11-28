@@ -785,8 +785,15 @@ class PublicationTests(unittest.TestCase):
             self.assertEqual(entry['acceptance_scope'], 'compile_only')
             self.assertFalse(entry['axi'])
             self.assertEqual(entry['protocols'], [])
-            self.assertIn('Compile/lint only PASS', (out/entry['path']).read_text())
-            self.assertNotIn('Regression PASS', (out/entry['path']).read_text())
+            html = (out/entry['path']).read_text()
+            self.assertIn('Compile/lint only PASS', html)
+            self.assertIn(relative_path(identity).as_posix(), html)
+            self.assertNotIn('Regression PASS', html)
+            self.assertNotIn('xezim-compile', html)
+            self.assertNotIn('engine', entry)
+            self.assertEqual(entry['simulator'], 'xezim')
+            self.assertEqual((out/entry['path']).with_name('plan.json').read_bytes(),
+                             (run_dir/'plan.json').read_bytes())
 
     def test_ci_attempt_identity_cannot_be_published_under_other_run(self):
         from test_identity import selected,relative_path

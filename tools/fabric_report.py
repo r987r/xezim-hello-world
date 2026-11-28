@@ -750,7 +750,7 @@ def attach_one_beat_observations(report, entries, output, source_sha):
                 "source_equivalence": identity or "historical",
                 "test_scope": entry["target"],
                 "fabric_scope": entry.get("fabric_scope", "unspecified"),
-                "simulator": entry["engine"],
+                "simulator": entry.get("simulator"),
                 "run_report": entry["path"],
                 "scope": "initiator_end_to_end_B_or_RLAST_all_test_phases",
             })
@@ -837,7 +837,7 @@ def attach_one_beat_observations(report, entries, output, source_sha):
                 "source_equivalence": identity,
                 "test_scope": entry["target"],
                 "fabric_scope": entry.get("fabric_scope", "unspecified"),
-                "simulator": entry["engine"],
+                "simulator": entry.get("simulator"),
                 "run_report": entry["path"],
                 "scope": "serial_single_outstanding_AXI_tap_boundary_deltas",
             })

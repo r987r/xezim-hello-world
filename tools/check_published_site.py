@@ -14,6 +14,7 @@ import time
 import urllib.parse
 
 from check_published_csr import fetch
+from test_identity import RUN, SLUG
 
 
 SHA = re.compile(r"^[a-f0-9]{40}$")
@@ -126,6 +127,17 @@ def validate(expected_sha, site, fabric, graph, rtl, bindings, intents, html):
     # contract. Optional PRE/REF are never invented if not observed.
     dfi_runs = 0
     for entry in site.get("entries", []):
+        if 'engine' in entry:
+            raise ValueError("public result exposes an internal execution engine")
+        canonical = entry.get("canonical_id")
+        if canonical is not None:
+            parts = [entry.get(k) for k in ("simulator", "config_target", "testname", "execution_id")]
+            if (not all(isinstance(v, str) and SLUG.fullmatch(v) for v in parts[:3])
+                    or not isinstance(parts[3], str) or not parts[3].startswith("ci-")
+                    or not RUN.fullmatch(parts[3])
+                    or canonical != "/".join(parts)
+                    or entry.get("path") != f"runs/{canonical}/report.html"):
+                raise ValueError("public report does not match its canonical identity")
         if not SHA.fullmatch(str(entry.get("source_sha", ""))):
             raise ValueError("published regression entry lacks tested SHA")
         if entry.get("target") != "chip-ddr4-real":

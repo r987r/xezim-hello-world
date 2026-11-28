@@ -294,7 +294,7 @@ function render(){
   for(const e of D.entries){
     if(fam&&suite(e.target,e.workflow)!==fam)continue;
     if(protocolFilter.value&&!(e.protocols||[]).includes(protocolFilter.value))continue;
-    if(!matchesQuery([e.target,e.canonical_id,e.testname,e.config_target,e.simulator,e.execution_id,e.workflow,e.source_sha,e.engine,(e.protocols||[]).join(" ")],q))continue;
+    if(!matchesQuery([e.target,e.canonical_id,e.testname,e.config_target,e.simulator,e.execution_id,e.workflow,e.source_sha,(e.protocols||[]).join(" ")],q))continue;
     if(outcome&&(e.evidence_only||(outcome==="pass")!==e.passed))continue;
     if(kind==="axi"&&!e.axi)continue;
     if(kind==="protocol"&&!(e.protocols||[]).length)continue;
