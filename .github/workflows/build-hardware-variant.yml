@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - 'tools/build_hardware_variant.py'
+      - 'config/selected-rtl-reference/cpu-dma/**'
       - 'tools/regress.py'
       - 'tools/stage_selected_rtl.py'
       - 'tests/test_build_hardware_variant.py'
@@ -47,7 +48,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          python3 tools/build_hardware_variant.py --profile chip-cpu-dma | tee .tools/cpu-dma-source-baseline.json
+          python3 tools/build_hardware_variant.py --profile chip-cpu-dma --check-tracked | tee .tools/cpu-dma-source-baseline.json
           python3 tools/build_hardware_variant.py --profile chip-cpu-dma --check | tee .tools/cpu-dma-source-replay.json
           python3 - <<'PY'
           import json
@@ -56,6 +57,8 @@ jobs:
           original = json.loads(Path('.tools/cpu-dma-source-baseline.json').read_text())
           replay = json.loads(Path('.tools/cpu-dma-source-replay.json').read_text())
           assert replay['status'] == 'selected_sources_rebuilt_exactly_not_simulated'
+          assert original['tracked_reference_verified'] == 'config/selected-rtl-reference/cpu-dma'
+          assert original['status'] == 'selected_sources_generated_not_simulated'
           assert replay['files_workspace'] != original['files_workspace']
           workspace_root = Path('.tools/runs/verilator/soc-cpu-dma/cpu-dma-roundtrip')
           with open(os.environ['GITHUB_OUTPUT'], 'a') as outputs:
@@ -72,7 +75,7 @@ jobs:
           assert data['selected_top_sha256'] == original['selected_soc_top_sha256'] == replay['selected_soc_top_sha256']
           assert data['compiler_input_sha256'] == original['compiler_input_sha256'] == replay['compiler_input_sha256']
           assert not (Path('.tools/regression') / 'chip-cpu-dma').exists()
-          print('Distinct exact original archives; review comparison only, no simulation verdict')
+          print('Clean checkout matches tracked CPU/iDMA reference; distinct original archives, no simulation verdict')
           PY
       - name: Preserve source-only replay report and original review bytes
         uses: actions/upload-artifact@v4

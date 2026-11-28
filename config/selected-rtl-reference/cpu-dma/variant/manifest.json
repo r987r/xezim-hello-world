@@ -1,0 +1,225 @@
+{
+  "axi_actors": {
+    "compute0_local_config.cpu": {
+      "kind": "rtl_cpu",
+      "label": "picorv32 compute0 (RTL CPU)",
+      "short_label": "compute0 picorv32 (config)"
+    },
+    "compute0_local_config.dma_regs": {
+      "kind": "rtl_registers",
+      "label": "Real DMA CSR programmed by CPU firmware"
+    },
+    "compute0_local_config.reset_ctrl": {
+      "kind": "rtl_registers",
+      "label": "Reset register bank (RTL)"
+    },
+    "compute0_local_data.boot_flash": {
+      "kind": "rtl_model",
+      "label": "Upstream AXI SRAM/ROM model"
+    },
+    "compute0_local_data.boot_rom": {
+      "kind": "rtl_model",
+      "label": "Upstream AXI SRAM/ROM model"
+    },
+    "compute0_local_data.cpu": {
+      "kind": "rtl_cpu",
+      "label": "picorv32 compute0 (RTL CPU)",
+      "short_label": "compute0 picorv32 (data)"
+    },
+    "compute0_local_data.dma": {
+      "kind": "rtl_dma",
+      "label": "Real PULP iDMA driven by CPU firmware"
+    },
+    "compute0_local_data.sram": {
+      "kind": "rtl_model",
+      "label": "Upstream AXI SRAM/ROM model"
+    },
+    "compute1_local_config.cpu": {
+      "kind": "rtl_cpu",
+      "label": "serv compute1 (RTL CPU)",
+      "short_label": "compute1 serv (config)"
+    },
+    "compute1_local_config.dma_regs": {
+      "kind": "rtl_registers",
+      "label": "Real DMA CSR programmed by CPU firmware"
+    },
+    "compute1_local_data.cpu": {
+      "kind": "rtl_cpu",
+      "label": "serv compute1 (RTL CPU)",
+      "short_label": "compute1 serv (data)"
+    },
+    "compute1_local_data.dma": {
+      "kind": "rtl_dma",
+      "label": "Real PULP iDMA driven by CPU firmware"
+    },
+    "compute1_local_data.sram": {
+      "kind": "rtl_model",
+      "label": "Upstream AXI SRAM/ROM model"
+    },
+    "ethernet0_local_config.controller_regs": {
+      "kind": "reserved_error",
+      "label": "DECERR responder: controller/DMA registers not integrated"
+    },
+    "ethernet0_local_data.sram": {
+      "kind": "rtl_model",
+      "label": "Upstream AXI SRAM/ROM model"
+    },
+    "memory0_local_config.controller_regs": {
+      "kind": "reserved_error",
+      "label": "DECERR responder: controller/DMA registers not integrated"
+    },
+    "memory0_local_data.target_crossbar": {
+      "kind": "rtl_model",
+      "label": "Memory crossbar and bounded AXI SRAM stand-ins"
+    },
+    "pcie0_local_config.controller_regs": {
+      "kind": "reserved_error",
+      "label": "DECERR responder: controller/DMA registers not integrated"
+    },
+    "pcie0_local_data.sram": {
+      "kind": "rtl_model",
+      "label": "Upstream AXI SRAM/ROM model"
+    }
+  },
+  "cores": 2,
+  "cpu_dma_firmware": {
+    "allocation_plan": {
+      "compute0.sram.boot_scratch": {
+        "base": 268436576,
+        "cpu_visible": true,
+        "kind": "sram",
+        "modeled_bytes": 2976,
+        "name": "compute0.sram.boot_scratch",
+        "outstanding": []
+      },
+      "compute0.sram.descriptors": {
+        "base": 268439552,
+        "cpu_visible": true,
+        "kind": "sram",
+        "modeled_bytes": 4096,
+        "name": "compute0.sram.descriptors",
+        "outstanding": []
+      },
+      "compute0.sram.payload": {
+        "base": 268443648,
+        "cpu_visible": true,
+        "kind": "sram",
+        "modeled_bytes": 8192,
+        "name": "compute0.sram.payload",
+        "outstanding": []
+      },
+      "compute1.sram.boot_scratch": {
+        "base": 285212928,
+        "cpu_visible": true,
+        "kind": "sram",
+        "modeled_bytes": 3840,
+        "name": "compute1.sram.boot_scratch",
+        "outstanding": []
+      },
+      "compute1.sram.descriptors": {
+        "base": 285216768,
+        "cpu_visible": true,
+        "kind": "sram",
+        "modeled_bytes": 4096,
+        "name": "compute1.sram.descriptors",
+        "outstanding": []
+      },
+      "compute1.sram.payload": {
+        "base": 285220864,
+        "cpu_visible": true,
+        "kind": "sram",
+        "modeled_bytes": 8192,
+        "name": "compute1.sram.payload",
+        "outstanding": []
+      },
+      "memory0.ddr0": {
+        "base": 5368709376,
+        "cpu_visible": false,
+        "kind": "ddr",
+        "modeled_bytes": 65280,
+        "name": "memory0.ddr0",
+        "outstanding": []
+      },
+      "memory0.hbm0": {
+        "base": 4294967552,
+        "cpu_visible": false,
+        "kind": "hbm",
+        "modeled_bytes": 65280,
+        "name": "memory0.hbm0",
+        "outstanding": []
+      }
+    },
+    "bytes": 4773,
+    "csr_base_header_sha256": "1f113f2b690cba8464e602bbfdacff0d1ca76e8c7a079144832852946a09245a",
+    "entry": 536875008,
+    "file": "@selected-cpu-dma/variant/flash.hex",
+    "generated_dma_csr_enabled": true,
+    "generated_dma_csr_header_sha256": "2790fd4f9ec74fb693451f82879c12d2dc8de48e3c66fdc032112014ed4d55b0",
+    "sha256": "c9ee7b82fa9dacac0731e7f918a578ba061776050c555d7065708dedb2a2c482"
+  },
+  "dma": "PULP iDMA engines generated for each compute, enabled by DmaEnable=1; data ports route via local FlooNoCs and 32-bit CSRs via local/global config FlooNoCs; old boot defaults to disabled.",
+  "dma_configuration": "DmaEnable=1; real CPUs execute C DMA inside INIT/RUN/CHECK",
+  "dma_engines_instantiated": 2,
+  "dma_parameters_by_compute": {
+    "compute0": {
+      "buffer_depth": 3,
+      "descriptor_prefetch": 0,
+      "num_ax_in_flight": 2
+    },
+    "compute1": {
+      "buffer_depth": 3,
+      "descriptor_prefetch": 0,
+      "num_ax_in_flight": 2
+    }
+  },
+  "dma_testbench": "full_chip_dma_tb",
+  "fabric_core": "gen/supernoc/soc_noc.sv",
+  "firmware": "firmware.json",
+  "memory_controllers": "AXI slave SRAM models only; no physical HBM/DDR RTL",
+  "memory_crossbar_inputs": 1,
+  "memory_crossbar_outputs": 2,
+  "memory_models": [
+    {
+      "base": 4294967296,
+      "modeled_bytes": 65536,
+      "name": "memory0.hbm0"
+    },
+    {
+      "base": 5368709120,
+      "modeled_bytes": 65536,
+      "name": "memory0.ddr0"
+    }
+  ],
+  "networks": 12,
+  "peripheral_subsystems": [
+    {
+      "csr_attachment": "explicit_axi_error",
+      "ip": "verilog_pcie",
+      "local_config_noc": "pcie0_local_config",
+      "local_data_noc": "pcie0_local_data",
+      "name": "pcie0",
+      "rtl_attachment": "reserved_idle"
+    },
+    {
+      "csr_attachment": "explicit_axi_error",
+      "ip": "ethernet_queue_mac",
+      "local_config_noc": "ethernet0_local_config",
+      "local_data_noc": "ethernet0_local_data",
+      "name": "ethernet0",
+      "rtl_attachment": "reserved_idle"
+    }
+  ],
+  "reset_register_bytes": 8,
+  "testbench": "full_chip_tb",
+  "top": "soc_top",
+  "upstream": [
+    "PicoRV32",
+    "SERV",
+    "FlooNoC",
+    "PULP AXI",
+    "tech_cells_generic tc_sram",
+    "ZipCPU wbm2axilite",
+    "verilog-axi crossbar"
+  ],
+  "verification_probe": "No BFM drives CPU ports; real CPU0 issues DMA CSRs and checks SRAM through NoCs"
+}

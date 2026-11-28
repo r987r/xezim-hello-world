@@ -37,6 +37,28 @@ independent replay of the tracked combined variant and separate real combined
 simulation, see the [combined CI workflow](../.github/workflows/dv-combined34.yml)
 and the generator target below. Do not copy a one-time CI snapshot into `gen/`.
 
+## Tracked CPU/iDMA review reference (#163)
+
+The [CPU/iDMA reference](../config/selected-rtl-reference/cpu-dma/) shows the
+actual selected top, bench and metadata for review, alongside the ordered
+compiler input coordinates and hashes. These files are not runtime inputs.
+The existing source generator still selects its own immutable workspace.
+
+With the existing CPU/iDMA CI toolchain installed, run from a clean checkout:
+
+```sh
+python3 tools/build_hardware_variant.py --profile chip-cpu-dma --check-tracked
+python3 tools/build_hardware_variant.py --profile chip-cpu-dma --check
+```
+
+The first command compares all tracked bytes to a fresh files-only run.
+It removes the checkout prefix only from verified include/source coordinates
+and substitutes placeholders for the five known run-local image references.
+All other generated contents, input digests, flags and ordering still
+participate in the comparison. The second command independently rebuilds
+the original selection in another run directory. Neither command runs the
+simulator or rewrites the tracked reference.
+
 ## Generator-owned combined RTL (P0 #184)
 
 The canonical generator now has an **opt-in** publication target, built from

@@ -133,18 +133,23 @@ class HardwareVariantBuildTests(unittest.TestCase):
             (self.root / lock).write_text("source lock for fixture\n")
 
         def fixture(run_id, *, logic=b"assign hold = enable;", image=b"a5",
-                    foreign=False):
+                    foreign=False, checkout=None, view=None, reverse_order=False):
+            root = checkout or self.root
             definition = {"engine": "cocotb-verilator", "sources": "noc",
                           "firmware_mode": "cpu_dma", "top": "full_chip_tb",
                           "logical_test": "cpu-dma-roundtrip"}
-            initial = selected("chip-cpu-dma", definition, run_id=run_id, root=self.root)
+            initial = selected("chip-cpu-dma", definition, run_id=run_id, root=root)
             run_rel = (Path(".tools/runs") / relative_path(initial)).as_posix()
-            run_dir = self.root / run_rel
+            run_dir = root / run_rel
             paths = ["variant/soc_top.sv", "variant/full_chip_tb.sv"]
+            if reverse_order:
+                paths.reverse()
             sources = [str(run_dir / name) for name in paths]
-            filelist = ("\n".join(sources) + "\n").encode()
+            includes = [str(root / "rtl/include")]
+            import shlex
+            filelist = ("\n".join(shlex.quote(p) for p in ["+incdir+" + p for p in includes] + sources) + "\n").encode()
             identity = selected("chip-cpu-dma", definition, run_id=run_id,
-                                filelist_bytes=filelist, root=self.root)
+                                filelist_bytes=filelist, root=root)
             generated = {}
             for source, images in subject.CPU_DMA_IMAGES.items():
                 refs = [f'"{run_rel}/variant/{image}"'.encode() for image in images]
@@ -161,13 +166,13 @@ class HardwareVariantBuildTests(unittest.TestCase):
                  "filelist_sha256": sha256(filelist).hexdigest(),
                  "selected_soc_top": f"{run_rel}/variant/soc_top.sv", "generated_sha256": hashes,
                  "source_sha256": {f"{run_rel}/{name}": hashes[f"{run_rel}/{name}"] for name in paths},
-                 "include_headers_sha256": {}, "args": [], "defines": [], "includes": []}
-            plan = {**definition, "identity": identity, "includes": [], "defines": [],
+                 "include_headers_sha256": {}, "args": [], "defines": [], "includes": includes}
+            plan = {**definition, "identity": identity, "includes": includes, "defines": [],
                     "sources": sources}
             def read(name, digest):
                 self.assertEqual(digest, sha256(all_files[name]).hexdigest())
                 return all_files[name]
-            return subject._cpu_dma_reference(self.root, run_dir, m, plan, read=read)
+            return subject._cpu_dma_reference(root, run_dir, m, plan, read=read, review_files=view)
 
         left = fixture("local-0123456789ab")
         self.assertEqual(left, fixture("local-0123456789ac"))
@@ -175,6 +180,27 @@ class HardwareVariantBuildTests(unittest.TestCase):
         self.assertNotEqual(left, fixture("local-0123456789ac", image=b"a6"))
         with self.assertRaisesRegex(subject.VariantBuildError, "foreign CPU/iDMA run path"):
             fixture("local-0123456789ac", foreign=True)
+
+        another = self.root / "different checkout"
+        for lock in (*SOURCE_LOCKS, "config/soc.yaml"):
+            dst = another / lock
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            dst.write_bytes((self.root / lock).read_bytes())
+        view, rebased, reordered = {}, {}, {}
+        fixture("local-0123456789ab", view=view)
+        fixture("local-0123456789ac", checkout=another, view=rebased)
+        fixture("local-0123456789ac", checkout=another, view=reordered, reverse_order=True)
+        self.assertEqual(view, rebased)
+        self.assertNotEqual(view, reordered)
+        folder = self.root / subject.CPU_DMA_TRACKED
+        for rel, raw in view.items():
+            dest = folder / rel
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_bytes(raw)
+        subject._validate_cpu_dma_tracked(self.root, view)
+        (folder / "variant/soc_top.sv").write_bytes(b"changed")
+        with self.assertRaisesRegex(subject.VariantBuildError, "tracked reference changed"):
+            subject._validate_cpu_dma_tracked(self.root, view)
 
     def test_reject_unknown_or_default_only_profile_before_runner(self):
         for profile in ("bad/name", "missing", "chip-default"):
