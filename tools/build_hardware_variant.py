@@ -8,10 +8,12 @@ are review-only under .tools, not checked-in gen/ or an RTL simulator PASS.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
 import re
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -103,6 +105,110 @@ def _source_equivalent_stage(value: dict) -> dict:
             if k not in ("source_manifest_sha256", "manifest_sha256")}
 
 
+CPU_DMA = "chip-cpu-dma"
+CPU_DMA_IMAGES = {
+    "variant/soc_top.sv": ("flash.hex", "bootrom.hex"),
+    "variant/full_chip_tb.sv": ("compute0.hex", "compute1.hex"),
+    "variant/manifest.json": ("flash.hex",),
+}
+
+
+def _cpu_dma_reference(root: Path, directory: Path, manifest: dict, plan: dict, *, read):
+    """Compare a verified CPU/iDMA source closure without rewriting the run."""
+    from selected_rtl_provenance import _canonical_sha
+    from test_identity import relative_path, validate
+
+    identity = validate(plan["identity"], target=CPU_DMA)
+    if (directory != root / ".tools/runs" / relative_path(identity)
+            or manifest.get("profile") != CPU_DMA or plan.get("firmware_mode") != "cpu_dma"
+            or manifest.get("compiled_top") != "full_chip_tb"
+            or manifest.get("network_filelists") != {}
+            or manifest.get("identity_sha256") != identity["identity_sha256"]
+            or manifest.get("config_sha256") != identity["config_sha256"]
+            or manifest.get("filelist_sha256") != identity["selection"]["filelist_sha256"]):
+        raise VariantBuildError("foreign CPU/iDMA source selection")
+    current = directory.relative_to(root).as_posix() + "/"
+    stable = "@selected-cpu-dma/"
+    def coordinate(name):
+        if name.startswith(current):
+            return stable + name.removeprefix(current)
+        if name.startswith((".tools/runs/", ".tools/regression/", stable)):
+            raise VariantBuildError("foreign CPU/iDMA run path in source closure")
+        return name
+
+    top = current + "variant/soc_top.sv"
+    if manifest["selected_soc_top"] != top:
+        raise VariantBuildError("CPU/iDMA selected top not owned by replay")
+    generated = manifest["generated_sha256"]
+    relocated = {}
+    for suffix, images in CPU_DMA_IMAGES.items():
+        name = current + suffix
+        if name not in generated:
+            raise VariantBuildError("missing CPU/iDMA relocation source")
+        data = read(name, generated[name])
+        for image in images:
+            expected = current + "variant/" + image
+            literal = b'"' + expected.encode() + b'"'
+            if expected not in generated or data.count(literal) != 1:
+                raise VariantBuildError("missing or ambiguous CPU/iDMA image reference: " + image)
+            data = data.replace(literal, b'"' + coordinate(expected).encode() + b'"')
+        if b".tools/runs/" in data or b".tools/regression/" in data:
+            raise VariantBuildError("unreviewed run path in CPU/iDMA source")
+        relocated[name] = hashlib.sha256(data).hexdigest()
+
+    def inventory(values):
+        return {coordinate(name): relocated.get(name, digest) for name, digest in values.items()}
+
+    raw = read(current + "sources.f", manifest["filelist_sha256"])
+    tokens = shlex.split(raw.decode())
+    includes, defines, sources = plan["includes"], plan["defines"], plan["sources"]
+    if tokens != (["+incdir+" + p for p in includes] + ["+define+" + p for p in defines] + sources):
+        raise VariantBuildError("CPU/iDMA ordered compiler filelist disagrees with plan")
+    for name in sources:
+        path = Path(name)
+        if not path.is_absolute() or not path.is_relative_to(root):
+            raise VariantBuildError("foreign CPU/iDMA compiler input")
+        coordinate(path.relative_to(root).as_posix())
+    normalized = raw.replace(current.encode(), stable.encode())
+    if b".tools/runs/" in normalized or b".tools/regression/" in normalized:
+        raise VariantBuildError("unreviewed compiler path in CPU/iDMA filelist")
+    list_sha = hashlib.sha256(normalized).hexdigest()
+    ref = {k: manifest[k] for k in ("definition_sha256", "compiled_top", "source_count",
+                                    "defines", "includes", "args")}
+    ref.update(
+        source_sha256=inventory(manifest["source_sha256"]),
+        generated_sha256=inventory(generated),
+        include_headers_sha256=inventory(manifest["include_headers_sha256"]),
+        selected_soc_top=coordinate(top), filelist_sha256=list_sha,
+        config_sha256=_canonical_sha({**identity["selection"], "filelist_sha256": list_sha}))
+    return ref
+
+
+def _verified_cpu_dma_reference(root, folder, definition, *, staged=None):
+    from selected_rtl_provenance import verify_selected_archive
+
+    m = verify_selected_archive(root, CPU_DMA, definition, directory=folder)
+    if staged is not None and (
+            staged["source_manifest_sha256"] != m["manifest_sha256"]
+            or staged["selected_top"] != m["selected_soc_top"]
+            or staged["selected_top_sha256"] != m["generated_sha256"][m["selected_soc_top"]]
+            or staged["compiler_input_sha256"] != m["compiler_input_sha256"]
+            or staged["filelist_sha256"] != m["filelist_sha256"]):
+        raise VariantBuildError("CPU/iDMA review stage and source archive disagree")
+    plan = json.loads((folder / "plan.json").read_text())
+    if plan.get("stage") != "files":
+        raise VariantBuildError("CPU/iDMA review needs an exact files-only invocation")
+    def read(name, digest):
+        path = root / name
+        if path.is_symlink() or not path.resolve().is_relative_to(root):
+            raise VariantBuildError("unsafe CPU/iDMA source path")
+        data = path.read_bytes()
+        if hashlib.sha256(data).hexdigest() != digest:
+            raise VariantBuildError("CPU/iDMA source changed after verification")
+        return data
+    return _cpu_dma_reference(root, folder, m, plan, read=read)
+
+
 def rebuild(root: Path, profile: str, output: Path, *, check: bool = False,
             runner=None, canonical_combined_files=False) -> dict:
     """Recreate actual selected RTL, then check the full staged-source digest.
@@ -135,6 +241,13 @@ def rebuild(root: Path, profile: str, output: Path, *, check: bool = False,
             raise VariantBuildError("canonical combined files require the combined profile")
         command.append("--canonical-combined-files")
         directory = prepared_workspace(root, definition, prepare)
+    elif profile == CPU_DMA:
+        from run_workspace import selected_run_folder, snapshot_run_ids
+        earlier = snapshot_run_ids(root, profile, definition, stage="files")
+        prepare()
+        directory = selected_run_folder(root, profile, definition, stage="files", prior_run_ids=earlier)
+        if directory is None:
+            raise VariantBuildError("no new exact CPU/iDMA files-only workspace")
     else:
         prepare()
     if check:
@@ -147,7 +260,13 @@ def rebuild(root: Path, profile: str, output: Path, *, check: bool = False,
             verified = verify_stage(fresh_folder)
             if expected != verified:
                 raise VariantBuildError("freshly regenerated review stage failed self-verification")
-            if directory is not None:
+            if profile == CPU_DMA:
+                baseline_dir = root / Path(baseline["files"]["compiler/sources.f"]["original"]).parent
+                if baseline_dir == directory:
+                    raise VariantBuildError("CPU/iDMA review reused its prior workspace")
+                left = _verified_cpu_dma_reference(root, baseline_dir, definition, staged=baseline)
+                right = _verified_cpu_dma_reference(root, directory, definition, staged=verified)
+            elif directory is not None:
                 # Both stage manifests are actual and verified. Only compare
                 # the historical coordinates in memory, never archive them.
                 original_filelist = Path(baseline["files"]["compiler/sources.f"]["original"])
@@ -176,7 +295,9 @@ def rebuild(root: Path, profile: str, output: Path, *, check: bool = False,
                     "review_stage": str(output_folder.relative_to(root)),
                     **({"files_workspace": directory.relative_to(root).as_posix()} if directory else {}),
                     "status": "selected_sources_rebuilt_exactly_not_simulated"}
-    if directory is not None:
+    if profile == CPU_DMA:
+        _verified_cpu_dma_reference(root, directory, definition)
+    elif directory is not None:
         verified_inputs(root, directory, definition)
     generated = stage(root, profile, definition, output,
                       **({"directory": directory} if directory is not None else {}))
@@ -186,6 +307,7 @@ def rebuild(root: Path, profile: str, output: Path, *, check: bool = False,
             "selected_soc_top_sha256": generated["selected_top_sha256"],
             "compiler_input_sha256": generated["compiler_input_sha256"],
             "review_stage": str(output_folder.relative_to(root)),
+            **({"files_workspace": directory.relative_to(root).as_posix()} if directory else {}),
             "status": "selected_sources_generated_not_simulated"}
 
 

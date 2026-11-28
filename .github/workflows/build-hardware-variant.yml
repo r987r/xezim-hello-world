@@ -22,3 +22,75 @@ jobs:
       - run: python3 -m pip install 'PyYAML==6.0.3'
       - run: python3 -m unittest tests.test_build_hardware_variant tests.test_stage_selected_rtl -v
       - run: python3 -m py_compile tools/build_hardware_variant.py
+
+  cpu-dma-source-replay:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - uses: ./.github/actions/setup-bender
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Install existing CPU/iDMA source preparation tools
+        run: |
+          python3 -m pip install -r requirements.txt -r csr/requirements.txt \
+            'mako==1.3.10' 'hjson==3.1.0' 'peakrdl>=1.5.0' 'peakrdl-rawheader>=0.2.8'
+          python3 tools/ip_fetch.py floonoc pulp_idma
+          python3 -m pip install -e .tools/floonoc
+          sudo apt-get update -qq
+          sudo apt-get install -y clang llvm lld
+      - name: Replay the existing CPU/iDMA variant twice without simulation
+        id: cpu-dma-replay
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 tools/build_hardware_variant.py --profile chip-cpu-dma | tee .tools/cpu-dma-source-baseline.json
+          python3 tools/build_hardware_variant.py --profile chip-cpu-dma --check | tee .tools/cpu-dma-source-replay.json
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          original = json.loads(Path('.tools/cpu-dma-source-baseline.json').read_text())
+          replay = json.loads(Path('.tools/cpu-dma-source-replay.json').read_text())
+          assert replay['status'] == 'selected_sources_rebuilt_exactly_not_simulated'
+          assert replay['files_workspace'] != original['files_workspace']
+          workspace_root = Path('.tools/runs/verilator/soc-cpu-dma/cpu-dma-roundtrip')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as outputs:
+              for label, entry in (('baseline', original), ('replay', replay)):
+                  folder = Path(entry['files_workspace'])
+                  assert folder.parent == workspace_root
+                  assert not (folder / 'result.json').exists()
+                  plan = json.loads((folder / 'plan.json').read_text())
+                  assert plan['stage'] == 'files'
+                  print(f'{label}={folder.as_posix()}', file=outputs)
+          stage = Path(original['review_stage'])
+          assert stage.is_relative_to('.tools/rtl-review-staging')
+          data = json.loads((stage / 'manifest.json').read_text())
+          assert data['selected_top_sha256'] == original['selected_soc_top_sha256'] == replay['selected_soc_top_sha256']
+          assert data['compiler_input_sha256'] == original['compiler_input_sha256'] == replay['compiler_input_sha256']
+          assert not (Path('.tools/regression') / 'chip-cpu-dma').exists()
+          print('Distinct exact original archives; review comparison only, no simulation verdict')
+          PY
+      - name: Preserve source-only replay report and original review bytes
+        uses: actions/upload-artifact@v4
+        with:
+          name: cpu-dma-source-replay-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            .tools/cpu-dma-source-baseline.json
+            .tools/cpu-dma-source-replay.json
+            .tools/rtl-review-staging/xezim_soc_dv/soc-cpu-dma/
+            ${{ steps.cpu-dma-replay.outputs.baseline }}/identity.json
+            ${{ steps.cpu-dma-replay.outputs.baseline }}/plan.json
+            ${{ steps.cpu-dma-replay.outputs.baseline }}/sources.f
+            ${{ steps.cpu-dma-replay.outputs.baseline }}/selected-rtl-manifest.json
+            ${{ steps.cpu-dma-replay.outputs.baseline }}/selected-rtl/
+            ${{ steps.cpu-dma-replay.outputs.replay }}/identity.json
+            ${{ steps.cpu-dma-replay.outputs.replay }}/plan.json
+            ${{ steps.cpu-dma-replay.outputs.replay }}/sources.f
+            ${{ steps.cpu-dma-replay.outputs.replay }}/selected-rtl-manifest.json
+            ${{ steps.cpu-dma-replay.outputs.replay }}/selected-rtl/
+          include-hidden-files: true
+          if-no-files-found: error

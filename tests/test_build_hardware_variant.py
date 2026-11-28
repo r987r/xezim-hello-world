@@ -125,6 +125,57 @@ class HardwareVariantBuildTests(unittest.TestCase):
                 self.assertNotEqual(subject._source_equivalent_stage(baseline),
                                     subject._source_equivalent_stage(changed))
 
+    def test_cpu_dma_replay_normalizes_only_owned_source_coordinates(self):
+        from hashlib import sha256
+        from test_identity import SOURCE_LOCKS, relative_path, selected
+
+        for lock in SOURCE_LOCKS:
+            (self.root / lock).write_text("source lock for fixture\n")
+
+        def fixture(run_id, *, logic=b"assign hold = enable;", image=b"a5",
+                    foreign=False):
+            definition = {"engine": "cocotb-verilator", "sources": "noc",
+                          "firmware_mode": "cpu_dma", "top": "full_chip_tb",
+                          "logical_test": "cpu-dma-roundtrip"}
+            initial = selected("chip-cpu-dma", definition, run_id=run_id, root=self.root)
+            run_rel = (Path(".tools/runs") / relative_path(initial)).as_posix()
+            run_dir = self.root / run_rel
+            paths = ["variant/soc_top.sv", "variant/full_chip_tb.sv"]
+            sources = [str(run_dir / name) for name in paths]
+            filelist = ("\n".join(sources) + "\n").encode()
+            identity = selected("chip-cpu-dma", definition, run_id=run_id,
+                                filelist_bytes=filelist, root=self.root)
+            generated = {}
+            for source, images in subject.CPU_DMA_IMAGES.items():
+                refs = [f'"{run_rel}/variant/{image}"'.encode() for image in images]
+                generated[f"{run_rel}/{source}"] = b" ".join(refs + [logic])
+                generated.update({f"{run_rel}/variant/{name}": image for name in images})
+            if foreign:
+                generated[".tools/runs/verilator/foreign/borrowed.sv"] = b"foreign"
+            all_files = {**generated, f"{run_rel}/sources.f": filelist}
+            hashes = {name: sha256(data).hexdigest() for name, data in generated.items()}
+            m = {"profile": "chip-cpu-dma", "compiled_top": "full_chip_tb",
+                 "network_filelists": {}, "definition_sha256": "a" * 64,
+                 "identity_sha256": identity["identity_sha256"], "source_count": len(sources),
+                 "config_sha256": identity["config_sha256"],
+                 "filelist_sha256": sha256(filelist).hexdigest(),
+                 "selected_soc_top": f"{run_rel}/variant/soc_top.sv", "generated_sha256": hashes,
+                 "source_sha256": {f"{run_rel}/{name}": hashes[f"{run_rel}/{name}"] for name in paths},
+                 "include_headers_sha256": {}, "args": [], "defines": [], "includes": []}
+            plan = {**definition, "identity": identity, "includes": [], "defines": [],
+                    "sources": sources}
+            def read(name, digest):
+                self.assertEqual(digest, sha256(all_files[name]).hexdigest())
+                return all_files[name]
+            return subject._cpu_dma_reference(self.root, run_dir, m, plan, read=read)
+
+        left = fixture("local-0123456789ab")
+        self.assertEqual(left, fixture("local-0123456789ac"))
+        self.assertNotEqual(left, fixture("local-0123456789ac", logic=b"assign hold = 0;"))
+        self.assertNotEqual(left, fixture("local-0123456789ac", image=b"a6"))
+        with self.assertRaisesRegex(subject.VariantBuildError, "foreign CPU/iDMA run path"):
+            fixture("local-0123456789ac", foreign=True)
+
     def test_reject_unknown_or_default_only_profile_before_runner(self):
         for profile in ("bad/name", "missing", "chip-default"):
             with self.subTest(profile=profile), self.assertRaises(subject.VariantBuildError):
