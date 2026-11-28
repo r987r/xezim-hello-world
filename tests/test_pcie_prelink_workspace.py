@@ -28,16 +28,20 @@ class PrelinkWorkspaceTests(unittest.TestCase):
                     "GITHUB_RUN_ID": "14", "GITHUB_RUN_ATTEMPT": "2",
                     "GITHUB_OUTPUT": str(self.output)}
 
-    def execute(self, lane, *, omit=False, dirty=False, compile_failure=False, env=None):
+    def execute(self, lane, *, omit=False, dirty=False, compile_failure=False, env=None, provider=False):
         top, source_names, markers = prelink.LANES[lane]
+
+        if provider:
+            markers = (prelink.PROVIDER_MARKERS[lane],)
+        prefix = ["iverilog", "-g2012"] + ([] if provider else ["-Wall"]) + ["-s", top, "-o"]
 
         def simulate(argv, *, cwd, check, stdout, stderr):
             self.assertEqual(cwd, self.root)
             self.assertTrue(check)
             if argv[0] == "iverilog":
-                self.assertEqual(argv[:6], ["iverilog", "-g2012", "-Wall", "-s", top, "-o"])
-                self.assertEqual(argv[7:], [f"dv/pcie_link/{name}.sv" for name in source_names])
-                binary = Path(argv[6])
+                self.assertEqual(argv[:len(prefix)], prefix)
+                self.assertEqual(argv[len(prefix) + 1:], [f"dv/pcie_link/{name}.sv" for name in source_names])
+                binary = Path(argv[len(prefix)])
                 self.assertFalse(binary.is_relative_to(self.root))
                 binary.write_bytes(b"simulator product")
                 if compile_failure:
@@ -53,7 +57,8 @@ class PrelinkWorkspaceTests(unittest.TestCase):
 
         with patch.object(prelink.subprocess, "check_output", side_effect=[self.sha+"\n", b"M f" if dirty else b""]), \
              patch.object(prelink.subprocess, "run", side_effect=simulate):
-            return prelink.execute(lane, root=self.root, env=self.env if env is None else env)
+            return prelink.execute(lane, root=self.root, env=self.env if env is None else env,
+                                   provider=provider)
 
     def test_native_original_sources_and_selected_top_exist(self):
         for top, sources, _ in prelink.LANES.values():
@@ -120,3 +125,28 @@ class PrelinkWorkspaceTests(unittest.TestCase):
             with self.subTest(env=env, dirty=dirty), self.assertRaisesRegex(ValueError, "clean exact checkout"):
                 self.execute("phy-response", dirty=dirty, env=env)
         self.assertFalse((self.root / ".tools").exists())
+
+    def test_provider_mode_keeps_original_order_and_independent_workspaces(self):
+        expected = ("pipe-gen1-adapter", "phy-response", "device-prelink",
+                    "host-bar0", "bar0-complete-span")
+        self.assertEqual(tuple(prelink.PROVIDER_MARKERS), expected)
+        with patch("sys.argv", ["workspace", "--provider-contract"]), patch.object(
+                prelink, "execute") as execute:
+            prelink.main()
+        self.assertEqual([call.args for call in execute.call_args_list], [(lane,) for lane in expected])
+        self.assertTrue(all(call.kwargs == {"provider": True} for call in execute.call_args_list))
+        combined = [self.execute(lane, provider=True) for lane in expected]
+        self.assertEqual(len(set(combined)), 5)
+        for lane, out in zip(expected, combined):
+            plan = json.loads((out / "plan.json").read_text())
+            self.assertEqual(plan["execution_context"], "pcie-digital-link-provider-contract")
+            self.assertEqual(plan["logical_test"], lane)
+            self.assertEqual(plan["compile_argv"][0:3], ["iverilog", "-g2012", "-s"])
+            self.assertFalse(Path(plan["simulation_argv"][-1]).exists())
+            self.assertNotIn("result.json", {p.name for p in out.iterdir()})
+        self.assertEqual(combined[0].parent.relative_to(self.root).as_posix(),
+                         ".tools/runs/icarus/pcie-pipe-adapter-default/pipe-gen1-adapter")
+
+    def test_provider_mode_does_not_allow_stderr_to_supply_pass(self):
+        with self.assertRaisesRegex(ValueError, "missing original simulator PASS marker"):
+            self.execute("pipe-gen1-adapter", omit=True, provider=True)

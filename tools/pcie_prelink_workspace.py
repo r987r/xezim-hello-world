@@ -29,14 +29,32 @@ LANES = {
     "bar0-complete-span": ("tb_bar0_noc_translate", ("bar0_noc_translate", "tb_bar0_noc_translate"), (
         b"PASS: BAR0 bus/local-NoC complete-span mapping",
     )),
+
+    "pipe-gen1-adapter": ("tb_pcie_pipe_x1_adapter", ("pipe_x1_adapter", "tb_pipe_x1_adapter"), (
+        b"PASS: Gen1 x1",
+    )),
 }
 
 
-def execute(lane, *, root=ROOT, env=None):
+# Keep the original provider job order, compiler flags, and PASS prefixes.
+# These executions are distinct from the standalone workflow attempts.
+PROVIDER_MARKERS = {
+    "pipe-gen1-adapter": b"PASS: Gen1 x1",
+    "phy-response": b"PASS: Gen1 receiver-detect",
+    "device-prelink": b"PASS: device BAR size/target",
+    "host-bar0": b"PASS: real AXI-Lite host BAR0",
+    "bar0-complete-span": b"PASS: BAR0 bus/local-NoC",
+}
+
+
+def execute(lane, *, root=ROOT, env=None, provider=False):
     root = Path(root).resolve()
     env = os.environ if env is None else env
     top, source_names, markers = LANES[lane]
-    family = "pcie-bar-window" if lane == "bar0-complete-span" else "pcie-prelink"
+    if provider:
+        markers = (PROVIDER_MARKERS[lane],)
+    family = {"bar0-complete-span": "pcie-bar-window",
+              "pipe-gen1-adapter": "pcie-pipe-adapter"}.get(lane, "pcie-prelink")
     sources = [f"dv/pcie_link/{name}.sv" for name in source_names]
     revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
     dirty = bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=root))
@@ -51,12 +69,15 @@ def execute(lane, *, root=ROOT, env=None):
             "engine": "icarus", "sources": family, "source_revision": revision,
             "checkout_dirty": dirty, "evidence_scope": "isolated_unit_transcripts_only",
             "source_sha256": {p: sha((root / p).read_bytes()) for p in sources}}
+    if provider:
+        plan["execution_context"] = "pcie-digital-link-provider-contract"
     identity = selected(plan["target"], plan, root=root, env=env, filelist_bytes=filelist)
     out = reserve_run(root / ".tools/runs", identity, plan=plan)
     (out / "sources.f").write_bytes(filelist)
     with tempfile.TemporaryDirectory(prefix=f"{family}-") as tmp:
         binary = str(Path(tmp) / "test.vvp")
-        compile_argv = ["iverilog", "-g2012", "-Wall", "-s", top, "-o", binary, *sources]
+        options = [] if provider else ["-Wall"]
+        compile_argv = ["iverilog", "-g2012", *options, "-s", top, "-o", binary, *sources]
         sim_argv = ["vvp", binary]
         (out / "plan.json").write_text(json.dumps({
             **plan, "identity": identity, "cwd": ".", "compile_argv": compile_argv,
@@ -79,10 +100,16 @@ def execute(lane, *, root=ROOT, env=None):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("lane", choices=LANES)
+    modes = parser.add_mutually_exclusive_group(required=True)
+    modes.add_argument("lane", nargs="?", choices=LANES)
+    modes.add_argument("--provider-contract", action="store_true")
     args = parser.parse_args()
     try:
-        execute(args.lane)
+        if args.provider_contract:
+            for lane in PROVIDER_MARKERS:
+                execute(lane, provider=True)
+        else:
+            execute(args.lane)
     except (OSError, ValueError, subprocess.SubprocessError) as error:
         parser.exit(1, f"{error}\n")
 
