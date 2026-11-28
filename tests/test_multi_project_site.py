@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 import project_catalog
 import publish_site
-from publish_site import project_pages
+from publish_site import architecture_compiler_links, project_entries, project_pages
 
 ORIGINAL_PROJECT = "xezim_soc_dv"
 DIRECT_LINK_PROJECT = "xezim_ethernet_cpu_ddr_pcie"
@@ -134,6 +134,9 @@ class MultiProjectSiteTests(unittest.TestCase):
         b_row={'target':'b-owned-traffic-test','run_id':456,'attempt':1,
                'source_sha':'b'*40,'path':'runs/original-b/report.html','passed':True,
                'project_id':DIRECT_LINK_PROJECT}
+        for row in (a_row,b_row):
+            row.update(canonical_id=row['path'], assets=[publish_site.SELECTED_RTL_MANIFEST],
+                       compiler_inputs=dict(path=publish_site.SELECTED_RTL_MANIFEST,source_count=3))
         runs=[{'id':e['run_id'],'run_attempt':e['attempt']} for e in (a_row,b_row)]
         boot={'project_id':DIRECT_LINK_PROJECT, 'config_sha256':b['config_sha256'],
               'tested_sha':'c'*40, 'current_source':False, 'status':'passed',
@@ -153,6 +156,15 @@ class MultiProjectSiteTests(unittest.TestCase):
             self.assertEqual(dataset['runs'],[runs[0]])
             a=out/'projects'/ORIGINAL_PROJECT
             b=out/'projects'/DIRECT_LINK_PROJECT
+            name=publish_site.SELECTED_RTL_MANIFEST
+            for explorer, prefix, own, other in (
+                (out/'explorer.html','',a_row,b_row),
+                (a/'architecture.html','../../',a_row,b_row),
+                (b/'architecture.html','../../',b_row,a_row),
+            ):
+                body=explorer.read_text()
+                self.assertIn(f'href="{prefix}{Path(own["path"]).with_name(name).as_posix()}"',body)
+                self.assertNotIn(Path(other["path"]).with_name(name).as_posix(),body)
             a_fabric=(a/'fabric.html').read_text()
             b_fabric=(b/'fabric.html').read_text()
             for html in ((out/'fabric.html').read_text(),(out/'runs.html').read_text(),
@@ -328,6 +340,56 @@ class MultiProjectSiteTests(unittest.TestCase):
                 yaml.safe_dump(catalog))
             with self.assertRaisesRegex(ValueError, "duplicate project identity"):
                 project_catalog.projects(root)
+
+
+class ArchitectureCompilerLinks(unittest.TestCase):
+    def setUp(self):
+        self.manifest = 'selected-rtl-manifest.json'
+        self.entry = dict(
+            project_id='a', target='chip-boot', canonical_id='verilator/a/b/run-a',
+            run_id=123, attempt=2, source_sha='f' * 40, passed=False,
+            path='runs/verilator/a/b/run-a/report.html', assets=[self.manifest],
+            compiler_inputs=dict(path=self.manifest, source_count=279),
+            compiler_artifact_id=456,
+        )
+
+    def render(self, *entries, design='a', base='../../'):
+        return architecture_compiler_links(
+            project_entries(entries, design, 'a'), base, 'owner/test')
+
+    def test_same_run_manifest_original_archive_and_tested_source(self):
+        html = self.render(self.entry)
+        self.assertIn('href="../../runs/verilator/a/b/run-a/' + self.manifest, html)
+        self.assertIn('Run 123, attempt 2', html)
+        self.assertIn('https://github.com/owner/test/actions/runs/123/artifacts/456', html)
+        self.assertIn('ffffffffff', html)
+        self.assertNotIn('Recorded PASS', html)
+        self.assertIn('href="runs/verilator/', self.render(self.entry, base=''))
+
+    def test_newest_available_verified_per_target_and_project_only(self):
+        older = dict(self.entry, run_id=100, compiler_artifact_id=None)
+        other = dict(self.entry, project_id='b', target='chip-other')
+        unverified_latest = dict(self.entry, run_id=999, compiler_inputs=None)
+        html = self.render(other, unverified_latest, self.entry, older)
+        self.assertNotIn('chip-other', html)
+        self.assertNotIn('Run 100', html)
+        self.assertNotIn('Run 999', html)
+        self.assertIn('Run 123', html)
+        self.assertIn('Run 100', self.render(older))
+        self.assertNotIn('/artifacts/', self.render(older))
+
+    def test_observation_missing_asset_and_foreign_links_do_not_publish(self):
+        mutants = [
+            dict(self.entry, evidence_only=True),
+            dict(self.entry, assets=[]),
+            dict(self.entry, path='https://external.test/report.html'),
+            dict(self.entry, canonical_id=None),
+        ]
+        wrong = copy.deepcopy(self.entry)
+        wrong['compiler_inputs']['path'] = 'elsewhere.json'
+        html = self.render(*mutants, wrong)
+        self.assertIn('No verified compiler manifests published', html)
+        self.assertNotIn('<a ', html)
 
 
 if __name__ == "__main__":

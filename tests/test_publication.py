@@ -672,6 +672,7 @@ class PublicationTests(unittest.TestCase):
                     zip_file.write(value,value.relative_to(repo))
                 zip_file.writestr('unselected.sv','not web evidence')
             site.extract_archive(archive.getvalue(),original.parent,CONFIG,evidence_only=True)
+            (original.parent/'.complete').write_text('verified\n')
             extracted=original.parent/run_dir.relative_to(repo)
             self.assertTrue((extracted/site.SELECTED_RTL_MANIFEST).is_file())
             self.assertFalse((original.parent/'unselected.sv').exists())
@@ -708,11 +709,13 @@ class PublicationTests(unittest.TestCase):
                         self.assertEqual(e['compiler_inputs']['compiler_input_sha256'],
                                          manifest['compiler_input_sha256'])
                         self.assertIn('Archived compiler input manifest',report.read_text())
+                        self.assertIn('/actions/runs/123/artifacts/100',report.read_text())
                         self.assertEqual((report.parent/site.SELECTED_RTL_MANIFEST).read_bytes(),
                                          (run_dir/site.SELECTED_RTL_MANIFEST).read_bytes())
                     else:
                         self.assertIsNone(e['compiler_inputs'])
                         self.assertNotIn('Archived compiler input manifest',report.read_text())
+                        self.assertNotIn('/actions/runs/123/artifacts/100',report.read_text())
                         self.assertFalse((report.parent/site.SELECTED_RTL_MANIFEST).exists())
                         self.assertEqual(bool(notes),case!='missing')
 
