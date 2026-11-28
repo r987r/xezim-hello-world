@@ -38,6 +38,7 @@ def main() -> int:
                     default=ROOT/'.tools/pcie_endpoint_openpcie')
     ap.add_argument('--out', type=Path,
                     default=ROOT/'.tools/pcie-link/demux-backpressure')
+    ap.add_argument('--build-root', type=Path, help='keep disposable compiler files outside the evidence directory')
     ap.add_argument('--seed', type=int, action='append', default=[],
                     help='repeatable seed override; default uses fresh random seeds')
     opts = ap.parse_args()
@@ -67,7 +68,7 @@ def main() -> int:
     original_file.write_text(original)
 
     def compile_dut(demux:Path, label:str) -> Path:
-        build = out/(label+'-build')
+        build = (opts.build_root.resolve() if opts.build_root else out)/(label+'-build')
         c = ['verilator','--binary','--timing','-Wno-fatal',
              '--top-module','axis_demux_backpressure_tb','--Mdir',str(build),
              str(checkout/PKG),str(checkout/AXIS),str(demux),str(TB)]

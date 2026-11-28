@@ -23,6 +23,7 @@ on:
       - 'tools/pcie_bar0_evidence.py'
       - 'tools/pcie_mem_ingress_evidence.py'
       - 'tools/pcie_upstream_test_timing.py'
+      - 'tools/pcie_upstream_workspace.py'
       - 'tools/pcie_demux_backpressure.py'
       - 'dv/pcie_link/axis_demux_backpressure_tb.sv'
       - 'tools/pcie_native_pipe_capture.py'
@@ -236,10 +237,15 @@ jobs:
           echo "Selected cocotb-config: $(command -v cocotb-config)"
           echo "Selected pip Python: $(command -v python3)"
           echo "Pinned Cocotb libdir: $(cocotb-config --lib-dir)"
+      - name: Reserve exact endpoint evidence workspace
+        id: upstream-endpoint-workspace
+        run: python3 tools/pcie_upstream_workspace.py endpoint
       - name: Apply only source-pinned, reviewed LTSSM fix and run original verification target
+        env:
+          PCIE_EVIDENCE: ${{ steps.upstream-endpoint-workspace.outputs.run_dir }}
         run: |
           set -euo pipefail
-          mkdir -p .tools/pcie-link
+          test -d "$PCIE_EVIDENCE"
           python3 tools/pcie_link.py --check --check-upstream --apply-selected-overlays
           # The original upstream UVM test hardcodes 25us but normal Detect
           # takes 12ms. Explicitly accelerate ONLY this pinned FuseSoC sim
@@ -250,8 +256,10 @@ jobs:
           # Exercise actual pinned original AXIS skid-register RTL, with a
           # known original-upstream FAIL witness and three freshly generated
           # positive seeds. This is not a substitute for the original Cocotb
-          # byte oracle below; test logs/seed evidence remain in .tools/pcie-link.
-          python3 tools/pcie_demux_backpressure.py
+          # byte oracle below; test logs/seed evidence remain in this attempt workspace.
+          demux_build=$(mktemp -d)
+          trap 'rm -rf "$demux_build"' EXIT
+          python3 tools/pcie_demux_backpressure.py --out "$PCIE_EVIDENCE/demux-backpressure" --build-root "$demux_build"
           git -C .tools/pcie_endpoint_openpcie diff -- \
             pcie_phy.core verif/tests/test_pcie_core.py \
             verif/sequences/pcie_enumeration_seq.py \
@@ -259,15 +267,15 @@ jobs:
             src/dllp/tlp2dllp.sv \
             src/dllp/dllp_handler.sv \
             src/dllp/axis_user_demux.sv \
-            > .tools/pcie-link/openpcie-upstream-selftest-timing.diff
+            > "$PCIE_EVIDENCE/openpcie-upstream-selftest-timing.diff"
           # Includes the explicitly pinned A/B first-beat CplD handshake
           # probe. Original source+expected byte readback still gate CI.
           git -C .tools/pcie_endpoint_openpcie diff -- src/dllp/tlp2dllp.sv \
-            > .tools/pcie-link/openpcie-cpld-ready-ab.diff
-          test -s .tools/pcie-link/openpcie-cpld-ready-ab.diff
+            > "$PCIE_EVIDENCE/openpcie-cpld-ready-ab.diff"
+          test -s "$PCIE_EVIDENCE/openpcie-cpld-ready-ab.diff"
           grep -Fq '+        if (has_cplh_credit && has_cpld_credit && tlp_axis_tready && skid_axis_tvalid) begin' \
-            .tools/pcie-link/openpcie-cpld-ready-ab.diff
-          test -s .tools/pcie-link/openpcie-upstream-selftest-timing.diff
+            "$PCIE_EVIDENCE/openpcie-cpld-ready-ab.diff"
+          test -s "$PCIE_EVIDENCE/openpcie-upstream-selftest-timing.diff"
           # OpenPCIe's native phy_txdata/K TLP/DLLP decoder is enabled.
           # This proves the existing upstream monitor was instrumented,
           # not that all link packets have reached the far-end host.
@@ -302,8 +310,8 @@ jobs:
           # Standalone upstream FuseSoC must NOT be modified with BAR0 wrapper
           # hooks: that isolated source target lacks our BAR0 overlay module.
           git -C .tools/pcie_endpoint_openpcie diff -- src/ltssm/pcie_ltssm_downstream.sv \
-            > .tools/pcie-link/openpcie-reviewed-ltssm.diff
-          test -s .tools/pcie-link/openpcie-reviewed-ltssm.diff
+            > "$PCIE_EVIDENCE/openpcie-reviewed-ltssm.diff"
+          test -s "$PCIE_EVIDENCE/openpcie-reviewed-ltssm.diff"
           # Pinned Cocotb 1.9 initializes via the directly-linked Verilator
           # VPI library. GPI_USERS/--pygpi-entry-point is a Cocotb 2.x API;
           # using it here selects the wrong startup path.
@@ -320,23 +328,25 @@ jobs:
           python3 --version
           fusesoc --cores-root=.tools/pcie_endpoint_openpcie \
             run --target=sim fusesoc:pcie:phy_core:1.0.0 \
-            2>&1 | tee .tools/pcie-link/openpcie-upstream.log
+            2>&1 | tee "$PCIE_EVIDENCE/openpcie-upstream.log"
           # FuseSoC can exit zero even when Cocotb fails test-module import.
           # Require an actual completed, nonempty and entirely passing test table.
           # Proof the original LTSSM actually received the explicit test-only
           # 512x timing option; a source patch alone cannot pass qualification.
           grep -q '^PCIE_EP_SIM_FAST_LTSSM: ENABLED timer_divider=512 min_tx_ts1=16' \
-            .tools/pcie-link/openpcie-upstream.log
-          python3 tools/ci_require_cocotb.py .tools/pcie-link/openpcie-upstream.log
+            "$PCIE_EVIDENCE/openpcie-upstream.log"
+          python3 tools/ci_require_cocotb.py "$PCIE_EVIDENCE/openpcie-upstream.log"
       - name: Preserve genuine pinned Verilator FST waveform for credit debugging
-        if: always()
+        if: always() && steps.upstream-endpoint-workspace.outputs.run_dir != ''
+        env:
+          PCIE_EVIDENCE: ${{ steps.upstream-endpoint-workspace.outputs.run_dir }}
         run: |
           set -euo pipefail
-          mkdir -p .tools/pcie-link/waveforms
+          mkdir -p "$PCIE_EVIDENCE/waveforms"
           wave=build/fusesoc_pcie_phy_core_1.0.0/sim/pcie-credit-debug.fst
           if [[ -s "$wave" ]]; then
-            cp "$wave" .tools/pcie-link/waveforms/pcie-credit-debug.fst
-            du -h .tools/pcie-link/waveforms/pcie-credit-debug.fst
+            cp "$wave" "$PCIE_EVIDENCE/waveforms/pcie-credit-debug.fst"
+            du -h "$PCIE_EVIDENCE/waveforms/pcie-credit-debug.fst"
             echo "PCIE_CREDIT_FST_CAPTURE: available original_RTL=true"
           else
             echo "PCIE_CREDIT_FST_CAPTURE: missing or empty; fail original upstream qualification"
@@ -345,29 +355,29 @@ jobs:
       # Reuse the generic protocol capture schema after original Cocotb,
       # including when it fails. Capture integrity is NOT test PASS.
       - name: Adapt pinned OpenPCIe native TLP/DLLP capture into unified protocol view
-        if: always()
+        if: always() && steps.upstream-endpoint-workspace.outputs.run_dir != ''
+        env:
+          PCIE_EVIDENCE: ${{ steps.upstream-endpoint-workspace.outputs.run_dir }}
         run: |
           set -euo pipefail
-          if [[ -f .tools/pcie-link/openpcie-upstream.log ]]; then
+          if [[ -f "$PCIE_EVIDENCE/openpcie-upstream.log" ]]; then
             python3 tools/pcie_native_pipe_capture.py \
-              .tools/pcie-link/openpcie-upstream.log \
-              --out .tools/pcie-link/observations
-            test -s .tools/pcie-link/observations/protocol-events.jsonl
-            test -s .tools/pcie-link/observations/protocol-transactions.json
-            test -s .tools/pcie-link/observations/protocols.html
+              "$PCIE_EVIDENCE/openpcie-upstream.log" \
+              --out "$PCIE_EVIDENCE/observations"
+            test -s "$PCIE_EVIDENCE/observations/protocol-events.jsonl"
+            test -s "$PCIE_EVIDENCE/observations/protocol-transactions.json"
+            test -s "$PCIE_EVIDENCE/observations/protocols.html"
           else
             echo "No original upstream simulation log: no PIPE capture claim"
           fi
       - name: Preserve upstream endpoint run evidence and failures
-        if: always()
+        if: always() && steps.upstream-endpoint-workspace.outputs.run_dir != ''
         uses: actions/upload-artifact@v4
         with:
-          name: openpcie-upstream-rtl-${{ github.run_id }}
-          path: |
-            gen/pcie_link/
-            .tools/pcie-link/
+          name: openpcie-upstream-rtl-${{ github.run_id }}-a${{ github.run_attempt }}-${{ job.status }}
+          path: ${{ steps.upstream-endpoint-workspace.outputs.run_dir }}/**
           include-hidden-files: true
-          if-no-files-found: warn
+          if-no-files-found: error
 
   upstream-host:
     name: Original pcievhost x1 model smoke (NOT connected to OpenPCIe)
@@ -392,10 +402,15 @@ jobs:
           set -euo pipefail
           python3 -m pip install 'PyYAML==6.0.2'
           python3 tools/ip_fetch.py pcie_host_pcievhost pcie_host_vproc
+      - name: Reserve exact host evidence workspace
+        id: upstream-host-workspace
+        run: python3 tools/pcie_upstream_workspace.py host
       - name: Build/run upstream x1 self-test with pinned host backend
+        env:
+          PCIE_EVIDENCE: ${{ steps.upstream-host-workspace.outputs.run_dir }}
         run: |
           set -euo pipefail
-          mkdir -p .tools/pcie-link
+          test -d "$PCIE_EVIDENCE"
           # Upstream files.verilator hardcodes ../../../vproc/f_VProc.v;
           # makefile VPROC_TOP alone cannot override this ORIGINAL filelist.
           # Alias the verified exact-pinned tree (no source copy or fork).
@@ -405,17 +420,15 @@ jobs:
             "ae80e5b5cb43d4e9f82f9d45aa3b614e053f9df4"
           make -C .tools/pcie_host_pcievhost/verilog/testpipex1 \
             -f makefile.verilator run VPROC_TOP=../../../vproc \
-            2>&1 | tee .tools/pcie-link/pcievhost-upstream.log
+            2>&1 | tee "$PCIE_EVIDENCE/pcievhost-upstream.log"
       - name: Retain original upstream host build and test logs
-        if: always()
+        if: always() && steps.upstream-host-workspace.outputs.run_dir != ''
         uses: actions/upload-artifact@v4
         with:
-          name: pcievhost-upstream-bfm-${{ github.run_id }}
-          path: |
-            gen/pcie_link/
-            .tools/pcie-link/
+          name: pcievhost-upstream-bfm-${{ github.run_id }}-a${{ github.run_attempt }}-${{ job.status }}
+          path: ${{ steps.upstream-host-workspace.outputs.run_dir }}/**
           include-hidden-files: true
-          if-no-files-found: warn
+          if-no-files-found: error
 
   cross-provider-elaboration:
     name: Cross-connected real OpenPCIe RTL and independent pcievhost (elaboration ONLY)
