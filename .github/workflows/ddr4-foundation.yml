@@ -8,6 +8,8 @@ on:
       - 'rtl/memory/ddr4/**'
       - '.github/workflows/ddr4-foundation.yml'
       - 'tests/test_axi_monitor_lifecycle.py'
+      - 'tools/ddr_foundation_unit_workspace.py'
+      - 'tests/test_ddr_foundation_unit_workspace.py'
       - 'tools/run_workspace.py'
       - 'tools/test_identity.py'
   workflow_dispatch:
@@ -40,6 +42,7 @@ jobs:
           python3 -m pip install --disable-pip-version-check 'PyYAML==6.0.3'
           python3 -m unittest discover -s rtl/memory/ddr4 -p 'test_*.py' -v
           python3 rtl/memory/ddr4/bringup.py check
+          python3 -m unittest tests.test_ddr_foundation_unit_workspace -v
           python3 -m unittest discover -s tests -p "test_axi_monitor_lifecycle.py" -v
 
       - name: Fetch pinned LiteX and LiteDRAM generator dependencies
@@ -153,35 +156,35 @@ jobs:
           sudo apt-get install -y verilator
 
       - name: Simulate isolated DDR-B physical-address aperture guard RTL
-        run: |
-          set -euo pipefail
-          verilator --binary --timing --assert -Wno-fatal \
-            --top-module tb_ddr_litedram_aperture_guard \
-            --Mdir .tools/ddr4/guard_sim \
-            rtl/memory/ddr4/soc_aperture_guard.sv \
-            rtl/memory/ddr4/tb_soc_aperture_guard.sv
-          .tools/ddr4/guard_sim/Vtb_ddr_litedram_aperture_guard
+        id: ddr-aperture-guard
+        run: python3 tools/ddr_foundation_unit_workspace.py aperture-guard
 
       - name: Simulate DDR-B bounded AXI bridge and response protocol
-        run: |
-          set -euo pipefail
-          verilator --binary --timing --assert -Wno-fatal \
-            --top-module tb_ddr_litedram_axi_bridge \
-            --Mdir .tools/ddr4/bridge_sim \
-            rtl/memory/ddr4/soc_aperture_guard.sv \
-            rtl/memory/ddr4/soc_axi_bridge.sv \
-            rtl/memory/ddr4/tb_soc_axi_bridge.sv
-          .tools/ddr4/bridge_sim/Vtb_ddr_litedram_axi_bridge
+        id: ddr-axi-bridge
+        run: python3 tools/ddr_foundation_unit_workspace.py axi-bridge
 
       - name: Verify real DDR Config NoC AXI to LiteX Wishbone RTL bridge
-        run: |
-          set -euo pipefail
-          verilator --binary --timing --assert -Wno-fatal \
-            --top-module tb_ddr_litedram_axi_wishbone \
-            --Mdir .tools/ddr4/wishbone_bridge_sim \
-            rtl/memory/ddr4/soc_axi_wishbone_bridge.sv \
-            rtl/memory/ddr4/tb_soc_axi_wishbone_bridge.sv
-          .tools/ddr4/wishbone_bridge_sim/Vtb_ddr_litedram_axi_wishbone
+        id: ddr-axi-wishbone
+        run: python3 tools/ddr_foundation_unit_workspace.py axi-wishbone
+
+      - name: Upload original isolated DDR Foundation runtime evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: ddr4-foundation-unit-native-${{ github.run_id }}-a${{ github.run_attempt }}
+          path: .tools/runs/*/ddr-foundation-unit-default/**
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload failed DDR Foundation runtime diagnostics separately
+        if: failure() && (steps.ddr-aperture-guard.outcome == 'failure' || steps.ddr-axi-bridge.outcome == 'failure' || steps.ddr-axi-wishbone.outcome == 'failure')
+        uses: actions/upload-artifact@v4
+        with:
+          name: ddr4-foundation-unit-diagnostics-${{ github.run_id }}-a${{ github.run_attempt }}
+          path: .tools/runs/*/ddr-foundation-unit-default/**
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Lint actual generated DDR4 RTL
         run: python3 rtl/memory/ddr4/check_rtl.py --tool verilator --timeout 600
