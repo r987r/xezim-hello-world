@@ -462,9 +462,9 @@ def explain_target(root: Path, name: str, definition: dict,
     is_combined = name == combined_profile
     if files_workspace is not None and not is_combined:
         raise ValueError("explicit files review requires the combined profile")
-    run_directory = (".tools/runs/<simulator>/<config_target>/<testname>/<run_id>"
-                     if is_combined or uses_canonical_workspace(name, definition)
-                     else f".tools/regression/{name}")
+    if not (is_combined or uses_canonical_workspace(name, definition)):
+        raise ValueError(f'{name}: no canonical workspace for this source selection')
+    run_directory = ".tools/runs/<simulator>/<config_target>/<testname>/<run_id>"
     hint = (f"{run_directory}/variant/soc_top.sv" if mode
             else "gen/chip/soc_top.sv" if definition.get("top") in
             ("full_chip_tb", "full_chip_dma_tb") else None)
