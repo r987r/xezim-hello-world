@@ -307,6 +307,7 @@ def rebuild(root: Path, profile: str, output: Path, *, check: bool = False,
             "selected_soc_top_sha256": generated["selected_top_sha256"],
             "compiler_input_sha256": generated["compiler_input_sha256"],
             "review_stage": str(output_folder.relative_to(root)),
+            **({"files_workspace": directory.relative_to(root).as_posix()} if directory else {}),
             "status": "selected_sources_generated_not_simulated"}
 
 
